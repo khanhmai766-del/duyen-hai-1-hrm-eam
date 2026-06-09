@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
           onShift,
           todayShift,
           recentRepairs,
-          openRepairs: repairs.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS").reduce((a, r) => a + r._count, 0),
+          openRepairs: repairs.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS" || r.status === "WAITING_PARTS").reduce((a, r) => a + r._count, 0),
           devicesNormal: devices.find((d) => d.status === "NORMAL")?._count ?? 0,
         });
       }

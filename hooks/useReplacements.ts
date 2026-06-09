@@ -22,6 +22,26 @@ export interface ReplacementFilters {
   due?: string; // OVERDUE | DUE_SOON | OK | WARN | ALL
 }
 
+export interface ReplacementLogItem extends MaterialReplacementLog {
+  doneBy: { id: string; name: string; position: string | null };
+  replacement: {
+    location: string | null;
+    system: string | null;
+    intervalMonths: number;
+    intervalNote: string | null;
+    material: { id: string; code: string; name: string; unit: string; system: string | null };
+  } | null;
+}
+
+export function useReplacementHistory(filters: { q?: string } = {}) {
+  const qs = new URLSearchParams();
+  if (filters.q) qs.set("q", filters.q);
+  return useQuery({
+    queryKey: ["replacement-history", filters],
+    queryFn: () => apiGet<ReplacementLogItem[]>(`/api/material-replacements/history?${qs.toString()}`),
+  });
+}
+
 export interface ReplacementMeta {
   total: number;
   counts: { OVERDUE: number; DUE_SOON: number; OK: number };
@@ -60,6 +80,7 @@ export type ReplacementInput = Record<string, unknown>;
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["replacements"] });
+  qc.invalidateQueries({ queryKey: ["replacement-history"] });
   qc.invalidateQueries({ queryKey: ["materials"] });
 }
 

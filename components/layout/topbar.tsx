@@ -210,7 +210,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                   ) : notices.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                       <Bell className="h-7 w-7 text-muted-foreground/40" />
-                      <span className="text-sm text-muted-foreground">Không có cảnh báo vận hành</span>
+                      <span className="text-sm text-muted-foreground">Không có mệnh lệnh sản xuất mới</span>
                     </div>
                   ) : (
                     <ul className="max-h-80 divide-y divide-border overflow-y-auto">
@@ -233,7 +233,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                     </ul>
                   )}
                   <Link href="/notifications" onClick={() => setNotifOpen(false)} className="flex items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
-                    Xem tất cả thông báo <ChevronRight className="h-4 w-4" />
+                    Xem tất cả Mệnh lệnh sản xuất <ChevronRight className="h-4 w-4" />
                   </Link>
                 </>
               ) : (
@@ -249,7 +249,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                     <ul className="max-h-80 divide-y divide-border overflow-y-auto">
                       {replAlerts.slice(0, 8).map((a) => (
                         <li key={a.id}>
-                          <Link href="/materials" onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                          <Link href={`/materials?track=${a.materialId}`} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
                               <Repeat className="h-4 w-4" />
                             </span>
@@ -266,8 +266,8 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       ))}
                     </ul>
                   )}
-                  <Link href="/materials" onClick={() => setNotifOpen(false)} className="flex items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
-                    Mở quản lý vật tư <ChevronRight className="h-4 w-4" />
+                  <Link href="/replacements" onClick={() => setNotifOpen(false)} className="flex items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
+                    Mở lịch thay thế vật tư <ChevronRight className="h-4 w-4" />
                   </Link>
                 </>
               )}

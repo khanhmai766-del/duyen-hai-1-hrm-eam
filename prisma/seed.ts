@@ -21,6 +21,7 @@ async function main() {
 
   // ---- Clean (order matters for FKs) ----
   await prisma.operationEvent.deleteMany();
+  await prisma.defect.deleteMany();
   await prisma.maintenanceRecord.deleteMany();
   await prisma.maintenancePlan.deleteMany();
   await prisma.materialReplacementLog.deleteMany();

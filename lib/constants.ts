@@ -21,12 +21,13 @@ export const DEVICE_STATUS_ORDER: DeviceStatusKey[] = [
 export const REPAIR_STATUS = {
   OPEN: { label: "Mở", badge: "bg-slate-100 text-slate-700", dot: "#64748B", step: 0 },
   IN_PROGRESS: { label: "Đang xử lý", badge: "bg-blue-100 text-blue-800", dot: "#2563EB", step: 1 },
-  RESOLVED: { label: "Đã khắc phục", badge: "bg-green-100 text-green-800", dot: "#16A34A", step: 2 },
-  CLOSED: { label: "Đã đóng", badge: "bg-gray-100 text-gray-600", dot: "#6B7280", step: 3 },
+  WAITING_PARTS: { label: "Chờ vật tư", badge: "bg-amber-100 text-amber-800", dot: "#D97706", step: 2 },
+  RESOLVED: { label: "Đã khắc phục", badge: "bg-green-100 text-green-800", dot: "#16A34A", step: 3 },
+  CLOSED: { label: "Đã đóng", badge: "bg-gray-100 text-gray-600", dot: "#6B7280", step: 4 },
 } as const;
 
 export type RepairStatusKey = keyof typeof REPAIR_STATUS;
-export const REPAIR_STATUS_ORDER: RepairStatusKey[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+export const REPAIR_STATUS_ORDER: RepairStatusKey[] = ["OPEN", "IN_PROGRESS", "WAITING_PARTS", "RESOLVED", "CLOSED"];
 
 export const PRIORITY = {
   LOW: { label: "Thấp", badge: "bg-gray-100 text-gray-700" },
@@ -126,6 +127,39 @@ export const CHECKIN_STATUS = {
 } as const;
 
 export const DEVICE_CATEGORIES = ["ESP", "FGD", "I&C", "Boiler", "Turbine"] as const;
+
+// ---- Khiếm khuyết thiết bị (Defect) ----
+
+export const DEFECT_UNITS = ["S1", "S2"] as const;
+
+/** Mức độ khiếm khuyết (1–4). */
+export const DEFECT_SEVERITY = {
+  "1": "1 - Ảnh hưởng hệ số đáp ứng",
+  "2": "2 - Ảnh hưởng công suất",
+  "3": "3 - Hư hỏng xếp chồng, ảnh hưởng công suất",
+  "4": "4 - Không hư hỏng xếp chồng, ảnh hưởng công suất",
+} as const;
+export const DEFECT_SEVERITY_ORDER = ["1", "2", "3", "4"] as const;
+
+/** Điều kiện thực hiện. */
+export const DEFECT_CONDITION = {
+  A: "A - Cần ngừng máy",
+  B: "B - Không cần ngừng",
+} as const;
+export const DEFECT_CONDITION_ORDER = ["A", "B"] as const;
+
+/** Loại yêu cầu (chuyên môn). */
+export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "I&C", "Khác"] as const;
+
+/** Tình trạng khiếm khuyết. */
+export const DEFECT_STATUS = {
+  CHUA_XU_LY: { label: "Chưa xử lý", badge: "bg-slate-100 text-slate-700", dot: "#64748B" },
+  CO_PCT: { label: "Đang có PCT thực hiện", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
+  CHO_VAT_TU: { label: "Chờ vật tư", badge: "bg-amber-100 text-amber-800", dot: "#D97706" },
+  DA_XU_LY: { label: "Đã xử lý", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
+} as const;
+export type DefectStatusKey = keyof typeof DEFECT_STATUS;
+export const DEFECT_STATUS_ORDER: DefectStatusKey[] = ["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "DA_XU_LY"];
 
 /** Hệ thống thiết bị nhà máy — dùng cho phân loại vật tư. */
 export const MATERIAL_SYSTEMS = [
@@ -249,7 +283,8 @@ export const CAN = {
   deleteDevice: ["ADMIN"],
   manageMaterials: ["ADMIN", "SUPERVISOR"],
   manageMaintenance: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
-  manageReplacement: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
+  manageReplacement: ["ADMIN", "SUPERVISOR"],
+  manageDefect: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
 } as const;
 
 export function can(role: string | undefined, capability: keyof typeof CAN): boolean {

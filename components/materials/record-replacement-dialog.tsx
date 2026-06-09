@@ -11,7 +11,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { replDueText } from "@/components/materials/replacement-badge";
 import { useRecordReplacement, type ReplacementItem } from "@/hooks/useReplacements";
-import { replacementIntervalLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 
 /** Hộp thoại ghi nhận một lần thay thế vật tư → dời hạn kế tiếp. */
@@ -54,7 +53,7 @@ export function RecordReplacementDialog({ point, onClose }: { point: Replacement
               <div className="font-medium text-ink">{point.material.code} — {point.material.name}</div>
               <div className="text-xs text-muted-foreground">Áp dụng: {target}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Đến hạn hiện tại: {formatDate(point.nextDueAt)} · {replDueText(point.nextDueAt)}. Sau khi ghi nhận, hạn kế tiếp dời {replacementIntervalLabel(point.intervalMonths)}.
+                Đến hạn hiện tại: {formatDate(point.nextDueAt)} · {replDueText(point.nextDueAt)}. Sau khi xác nhận, điểm này được lưu vào <span className="font-medium text-ink">Lịch sử thay thế</span> và gỡ khỏi danh sách theo dõi.
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

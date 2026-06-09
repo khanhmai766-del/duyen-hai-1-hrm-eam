@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Plus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat } from "lucide-react";
@@ -42,10 +43,24 @@ export default function MaterialsPage() {
   const [bulkOpen, setBulkOpen] = React.useState(false);
   const [replMaterial, setReplMaterial] = React.useState<Material | null>(null);
 
+  // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
+  // (vd bấm cảnh báo thay thế trong chuông thông báo).
+  const router = useRouter();
+  const params = useSearchParams();
+  const trackId = params.get("track");
+  React.useEffect(() => {
+    if (!trackId) return;
+    const m = (data?.data ?? []).find((x) => x.id === trackId);
+    if (m) {
+      setReplMaterial(m);
+      router.replace("/materials", { scroll: false });
+    }
+  }, [trackId, data, router]);
+
   const total = data?.data?.length ?? 0;
   const materials = (data?.data ?? []).filter(
     (m) =>
-      (!q || `${m.code} ${m.name} ${m.supplier ?? ""}`.toLowerCase().includes(q.toLowerCase())) &&
+      (!q || `${m.code} ${m.name} ${m.location ?? ""}`.toLowerCase().includes(q.toLowerCase())) &&
       (systemFilter === "ALL" || m.system === systemFilter)
   );
   const isFiltered = q.trim() !== "" || systemFilter !== "ALL";
@@ -125,7 +140,7 @@ export default function MaterialsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchBar value={q} onChange={setQ} placeholder="Tìm vật tư theo mã, tên, nhà cung cấp..." className="sm:w-72" />
+          <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, vị trí thay thế..." className="sm:w-72" />
           <Select value={systemFilter} onValueChange={setSystemFilter}>
             <SelectTrigger className="sm:w-56" aria-label="Lọc theo hệ thống">
               <SelectValue />

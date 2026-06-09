@@ -2,15 +2,15 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useDevices } from "@/hooks/useDevices";
+import { useMaterials } from "@/hooks/useMaterials";
 import { useCreateReplacement, useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
-import { addMonths } from "@/lib/constants";
+import { addMonths, MATERIAL_SYSTEMS } from "@/lib/constants";
 
 function toDateInput(v: Date | string | null | undefined): string {
   if (!v) return "";
@@ -18,27 +18,45 @@ function toDateInput(v: Date | string | null | undefined): string {
   return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
-type TargetMode = "DEVICE" | "LOCATION";
+type LocMode = "EXISTING" | "CUSTOM";
+const NO_SYSTEM = "__none__";
 
 export function ReplacementPointForm({
   materialId,
   point,
+  defaultSystem,
+  lockedLocation,
   onDone,
 }: {
   materialId: string;
   point?: ReplacementItem | null;
+  /** Hệ thống mặc định khi tạo mới — lấy theo hệ thống của vật tư. */
+  defaultSystem?: string | null;
+  /**
+   * Khoá vị trí thay thế theo vật tư: khi có giá trị, trường vị trí cố định
+   * (bằng vị trí thay thế của vật tư) và không cho user chỉnh sửa.
+   */
+  lockedLocation?: string | null;
   onDone?: () => void;
 }) {
   const isEdit = !!point;
+  const lockedLoc = (lockedLocation ?? "").trim();
+  const isLocked = !!lockedLoc;
   const create = useCreateReplacement();
   const update = useUpdateReplacement();
-  const { data: devicesData } = useDevices({});
-  const devices = devicesData?.data ?? [];
+  const { data: materialsData } = useMaterials();
+  const materials = materialsData?.data ?? [];
 
-  const [mode, setMode] = React.useState<TargetMode>(point?.deviceId ? "DEVICE" : "LOCATION");
+  // (Chỉ dùng khi KHÔNG khoá) danh sách "Vị trí thay thế" có sẵn từ danh mục.
+  const knownLocations = React.useMemo(
+    () => Array.from(new Set(materials.map((m) => (m.location ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi")),
+    [materials]
+  );
+
+  const [mode, setMode] = React.useState<LocMode>(isEdit ? "CUSTOM" : "EXISTING");
   const [form, setForm] = React.useState({
-    deviceId: point?.deviceId ?? "",
-    location: point?.location ?? "",
+    location: isLocked ? lockedLoc : (point?.location ?? ""),
+    system: isEdit ? (point?.system ?? "") : (defaultSystem ?? ""),
     intervalMonths: String(point?.intervalMonths ?? 6),
     intervalNote: point?.intervalNote ?? "",
     lastReplacedAt: toDateInput(point?.lastReplacedAt),
@@ -50,35 +68,29 @@ export function ReplacementPointForm({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  // Gợi ý ngày đến hạn = (lần thay gần nhất hoặc hôm nay) + chu kỳ, khi đổi chu kỳ/lần thay.
   function recompute(next: typeof form) {
     const base = next.lastReplacedAt ? new Date(next.lastReplacedAt) : new Date();
     const months = Number(next.intervalMonths) || 0;
     return months > 0 ? toDateInput(addMonths(base, months)) : next.nextDueAt;
   }
   function onIntervalChange(v: string) {
-    setForm((f) => {
-      const next = { ...f, intervalMonths: v };
-      return { ...next, nextDueAt: recompute(next) };
-    });
+    setForm((f) => ({ ...f, intervalMonths: v, nextDueAt: recompute({ ...f, intervalMonths: v }) }));
   }
   function onLastChange(v: string) {
-    setForm((f) => {
-      const next = { ...f, lastReplacedAt: v };
-      return { ...next, nextDueAt: recompute(next) };
-    });
+    setForm((f) => ({ ...f, lastReplacedAt: v, nextDueAt: recompute({ ...f, lastReplacedAt: v }) }));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (mode === "DEVICE" && !form.deviceId) return toast.error("Vui lòng chọn thiết bị");
-    if (mode === "LOCATION" && !form.location.trim()) return toast.error("Vui lòng nhập vị trí thay thế");
+    const location = isLocked ? lockedLoc : form.location.trim();
+    if (!location) return toast.error("Vui lòng chọn / nhập vị trí thay thế");
     if (!form.nextDueAt) return toast.error("Vui lòng nhập ngày đến hạn");
 
     const payload = {
       materialId,
-      deviceId: mode === "DEVICE" ? form.deviceId : null,
-      location: mode === "LOCATION" ? form.location : null,
+      deviceId: null,
+      location,
+      system: form.system || null,
       intervalMonths: Number(form.intervalMonths),
       intervalNote: form.intervalNote,
       lastReplacedAt: form.lastReplacedAt || null,
@@ -99,31 +111,56 @@ export function ReplacementPointForm({
 
   return (
     <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {/* Target: device or free-text location */}
+      {/* Vị trí thay thế */}
       <div className="sm:col-span-2">
-        <Label className="mb-1.5 block">Áp dụng cho *</Label>
-        <div className="mb-2 inline-flex rounded-lg border border-border p-0.5 text-sm">
-          <button type="button" onClick={() => setMode("DEVICE")}
-            className={mode === "DEVICE" ? "rounded-md bg-navy px-3 py-1 text-white" : "px-3 py-1 text-muted-foreground"}>
-            Thiết bị
-          </button>
-          <button type="button" onClick={() => setMode("LOCATION")}
-            className={mode === "LOCATION" ? "rounded-md bg-navy px-3 py-1 text-white" : "px-3 py-1 text-muted-foreground"}>
-            Vị trí tự do
-          </button>
-        </div>
-        {mode === "DEVICE" ? (
-          <Select value={form.deviceId} onValueChange={(v) => set("deviceId", v)}>
-            <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-            <SelectContent>
-              {devices.map((d) => (
-                <SelectItem key={d.id} value={d.id}>{d.code} — {d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Label className="mb-1.5 block">Vị trí thay thế *</Label>
+        {isLocked ? (
+          <>
+            <div className="flex items-center gap-2 rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-ink">
+              <MapPin className="h-4 w-4 shrink-0 text-accent" />
+              <span className="font-medium">{lockedLoc}</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Theo vị trí thay thế của vật tư — không thể thay đổi.</p>
+          </>
         ) : (
-          <Input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="VD: Trạm dầu ĐCC Máy Nghiền" />
+          <>
+            <div className="mb-2 inline-flex rounded-lg border border-border p-0.5 text-sm">
+              <button type="button" onClick={() => setMode("EXISTING")}
+                className={mode === "EXISTING" ? "rounded-md bg-navy px-3 py-1 text-white" : "px-3 py-1 text-muted-foreground"}>
+                Vị trí có sẵn
+              </button>
+              <button type="button" onClick={() => setMode("CUSTOM")}
+                className={mode === "CUSTOM" ? "rounded-md bg-navy px-3 py-1 text-white" : "px-3 py-1 text-muted-foreground"}>
+                Vị trí tự do
+              </button>
+            </div>
+            {mode === "EXISTING" ? (
+              <Select value={form.location || undefined} onValueChange={(v) => set("location", v)}>
+                <SelectTrigger><SelectValue placeholder={knownLocations.length ? "Chọn vị trí thay thế" : "Chưa có vị trí — nhập ở 'Vị trí tự do'"} /></SelectTrigger>
+                <SelectContent>
+                  {knownLocations.map((loc) => (
+                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="VD: Trạm dầu ĐCC Máy Nghiền" />
+            )}
+          </>
         )}
+      </div>
+
+      <div className="sm:col-span-2">
+        <Label className="mb-1.5 block">Hệ thống</Label>
+        <Select value={form.system || NO_SYSTEM} onValueChange={(v) => set("system", v === NO_SYSTEM ? "" : v)}>
+          <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_SYSTEM}>— Không chọn —</SelectItem>
+            {MATERIAL_SYSTEMS.map((s) => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Field label="Chu kỳ thay thế (tháng) *">

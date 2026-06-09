@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { X, Plus, Pencil, Trash2, RefreshCw, History, Cpu, MapPin, CalendarClock, Repeat } from "lucide-react";
+import { X, Plus, Pencil, Trash2, RefreshCw, Cpu, MapPin, CalendarClock, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -12,7 +12,6 @@ import { ReplacementPointForm } from "@/components/materials/replacement-point-f
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import {
   useReplacements,
-  useReplacement,
   useDeleteReplacement,
   type ReplacementItem,
 } from "@/hooks/useReplacements";
@@ -24,7 +23,7 @@ export function ReplacementDrawer({
   role,
   onClose,
 }: {
-  material: { id: string; code: string; name: string } | null;
+  material: { id: string; code: string; name: string; system?: string | null; location?: string | null } | null;
   role?: string;
   onClose: () => void;
 }) {
@@ -39,7 +38,6 @@ export function ReplacementDrawer({
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
   const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
-  const [historyId, setHistoryId] = React.useState<string | null>(null);
 
   if (!material) return null;
 
@@ -94,6 +92,7 @@ export function ReplacementDrawer({
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Repeat className="h-3 w-3" /> {replacementIntervalLabel(p.intervalMonths, p.intervalNote)}</span>
+                      {(p.system ?? p.material.system) && <span>Hệ thống: {p.system ?? p.material.system}</span>}
                       <span>Lần gần nhất: {formatDate(p.lastReplacedAt)}</span>
                       <span>Đến hạn: {formatDate(p.nextDueAt)}</span>
                     </div>
@@ -109,9 +108,6 @@ export function ReplacementDrawer({
                       <RefreshCw className="h-3.5 w-3.5" /> Ghi nhận thay
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => setHistoryId(historyId === p.id ? null : p.id)}>
-                    <History className="h-3.5 w-3.5" /> Lịch sử ({p._count.logs})
-                  </Button>
                   {canManage && (
                     <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                   )}
@@ -119,8 +115,6 @@ export function ReplacementDrawer({
                     <Button size="sm" variant="ghost" className="text-destructive hover:bg-red-50" onClick={() => setDelTarget(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   )}
                 </div>
-
-                {historyId === p.id && <HistoryList id={p.id} />}
               </div>
             ))
           )}
@@ -131,7 +125,7 @@ export function ReplacementDrawer({
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Thêm điểm thay thế</DialogTitle></DialogHeader>
-          <ReplacementPointForm materialId={material.id} onDone={() => setFormOpen(false)} />
+          <ReplacementPointForm materialId={material.id} defaultSystem={material.system ?? null} lockedLocation={material.location ?? null} onDone={() => setFormOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -139,7 +133,7 @@ export function ReplacementDrawer({
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Sửa điểm thay thế</DialogTitle></DialogHeader>
-          {editTarget && <ReplacementPointForm materialId={material.id} point={editTarget} onDone={() => setEditTarget(null)} />}
+          {editTarget && <ReplacementPointForm materialId={material.id} point={editTarget} defaultSystem={material.system ?? null} lockedLocation={material.location ?? null} onDone={() => setEditTarget(null)} />}
         </DialogContent>
       </Dialog>
 
@@ -177,29 +171,3 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: stri
   );
 }
 
-function HistoryList({ id }: { id: string }) {
-  const { data, isLoading } = useReplacement(id);
-  const logs = data?.data?.logs ?? [];
-  return (
-    <div className="mt-2 rounded-lg border border-dashed border-border p-2">
-      {isLoading ? (
-        <p className="text-xs text-muted-foreground">Đang tải lịch sử…</p>
-      ) : logs.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Chưa có lịch sử thay thế.</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {logs.map((l) => (
-            <li key={l.id} className="flex items-start justify-between gap-2 text-xs">
-              <span className="text-ink">
-                {formatDate(l.replacedAt)}
-                {l.quantity != null && <span className="text-muted-foreground"> · SL {l.quantity}</span>}
-                {l.note && <span className="text-muted-foreground"> · {l.note}</span>}
-              </span>
-              <span className="shrink-0 text-muted-foreground">{l.doneBy.name}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}

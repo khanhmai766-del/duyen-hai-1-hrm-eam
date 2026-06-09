@@ -1,19 +1,17 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { addMonths } from "@/lib/constants";
 
 /**
- * Ghi nhận một lần thay thế vật tư tại điểm thay thế:
- *  - tạo MaterialReplacementLog (lịch sử),
- *  - cập nhật lastReplacedAt = thời điểm thay,
- *  - dời nextDueAt = thời điểm thay + chu kỳ (tháng),
+ * Ghi nhận một lần thay thế vật tư tại điểm thay thế (chỉ ADMIN/Trưởng ca):
+ *  - tạo MaterialReplacementLog (lưu vào "Lịch thay thế vật tư" → tab Lịch sử),
+ *  - GỠ điểm khỏi danh sách theo dõi (isActive = false) → hết cảnh báo đến hạn,
  *  - (tuỳ chọn) trừ tồn kho vật tư theo số lượng đã dùng.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "SUPERVISOR"]);
     const body = await req.json().catch(() => ({}));
 
     const point = await prisma.materialReplacement.findUnique({
@@ -36,17 +34,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           note: body.note?.trim() || null,
         },
       }),
+      // Gỡ điểm khỏi danh sách theo dõi (giữ lại để truy vết lịch sử).
       prisma.materialReplacement.update({
         where: { id: point.id },
-        data: { lastReplacedAt: replacedAt, nextDueAt: addMonths(replacedAt, point.intervalMonths) },
-        include: {
-          material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
-          device: { select: { id: true, code: true, name: true, location: true } },
-          _count: { select: { logs: true } },
-        },
+        data: { isActive: false, lastReplacedAt: replacedAt },
       }),
     ];
-    // Trừ tồn kho nếu có nhập số lượng và muốn trừ kho (mặc định có trừ).
+    // Trừ tồn kho nếu có nhập số lượng (mặc định có trừ).
     if (useQty && body.deductStock !== false) {
       ops.push(
         prisma.material.update({
@@ -56,9 +50,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
-    const result = await prisma.$transaction(ops);
-    const updated = result[1];
+    await prisma.$transaction(ops);
     await audit(user.id, "RECORD_REPLACEMENT", "MaterialReplacement", point.id, point.material.code);
-    return ok(updated);
+    return ok({ id: point.id, archived: true });
   });
 }

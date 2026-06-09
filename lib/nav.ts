@@ -34,7 +34,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Quản lý người dùng",
     items: [
       { label: "Overview", href: "/", icon: LayoutDashboard, keywords: "tong quan dashboard bang dieu khien" },
-      { label: "Thông báo", href: "/notifications", icon: Bell, keywords: "notification canh bao alert" },
+      { label: "Mệnh lệnh sản xuất", href: "/notifications", icon: Bell, keywords: "menh lenh san xuat production order thong bao notification bang tin canh bao" },
       { label: "Lịch làm việc", href: "/hr", icon: CalendarDays, keywords: "ca truc shift roster diem danh org chart so do" },
       {
         label: "Quản trị",

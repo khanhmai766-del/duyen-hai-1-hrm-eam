@@ -286,7 +286,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="THÔNG BÁO" description="Thông tin vận hành cần chú ý" />
+      <PageHeader title="MỆNH LỆNH SẢN XUẤT" description="Mệnh lệnh & thông tin vận hành cần chú ý" />
 
       {/* Bảng tin từ Ban quản trị (chỉ ADMIN đăng/sửa/xoá; mọi người đều xem) */}
       <section className="space-y-3">

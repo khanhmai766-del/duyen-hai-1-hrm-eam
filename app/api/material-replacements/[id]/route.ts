@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "SUPERVISOR"]);
     const body = await req.json();
 
     const intervalMonths = body.intervalMonths != null ? Number(body.intervalMonths) : undefined;
@@ -40,6 +40,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       data: {
         deviceId: body.deviceId !== undefined ? body.deviceId || null : undefined,
         location: body.location !== undefined ? body.location?.trim() || null : undefined,
+        system: body.system !== undefined ? body.system?.trim() || null : undefined,
         intervalMonths,
         intervalNote: body.intervalNote !== undefined ? body.intervalNote?.trim() || null : undefined,
         lastReplacedAt: body.lastReplacedAt ? new Date(body.lastReplacedAt) : undefined,

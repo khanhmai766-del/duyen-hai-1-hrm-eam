@@ -1,9 +1,8 @@
 "use client";
 
-import { Wrench, PackageX, AlertTriangle, type LucideIcon } from "lucide-react";
-import { useRepairLogs } from "@/hooks/useRepair";
-import { useMaterials } from "@/hooks/useMaterials";
-import { useDevices } from "@/hooks/useDevices";
+import { Megaphone, type LucideIcon } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useAnnouncements } from "@/hooks/useAnnouncements";
 
 export interface Notice {
   id: string;
@@ -16,55 +15,30 @@ export interface Notice {
 }
 
 /**
- * Builds the operational alert feed (open repairs, low/empty materials, faulty
- * devices) shared by the notifications page and the topbar bell popup.
+ * Builds the "Vận hành" alert feed for the topbar bell — CHỈ gồm Mệnh lệnh sản
+ * xuất mà người dùng hiện tại CHƯA xác nhận đọc. Không đưa các cảnh báo thuộc
+ * Quản lý thiết bị (thiết bị sự cố, lịch sử sửa chữa, vật tư tồn thấp...).
  */
 export function useNotifications() {
-  const repairs = useRepairLogs({});
-  const materials = useMaterials();
-  const devices = useDevices({ status: "FAULT" });
+  const { data: session } = useSession();
+  const myId = session?.user?.id;
+  const announcements = useAnnouncements();
 
-  const loading = repairs.isLoading || materials.isLoading || devices.isLoading;
+  const loading = announcements.isLoading;
 
-  const notices: Notice[] = [];
-
-  (repairs.data?.data ?? [])
-    .filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS")
-    .forEach((r) =>
-      notices.push({
-        id: "rep-" + r.id,
-        icon: Wrench,
-        tone: r.priority === "CRITICAL" || r.priority === "HIGH" ? "red" : "blue",
-        title: `Phiếu sửa chữa đang mở: ${r.title}`,
-        desc: `${r.device.code} · ${r.device.name}`,
-        href: "/repair-history",
-        date: r.startedAt as unknown as string,
-      })
-    );
-
-  (materials.data?.data ?? [])
-    .filter((m) => m.quantity <= m.minStock)
-    .forEach((m) =>
-      notices.push({
-        id: "mat-" + m.id,
-        icon: PackageX,
-        tone: m.quantity === 0 ? "red" : "amber",
-        title: `Vật tư ${m.quantity === 0 ? "đã hết" : "sắp hết"}: ${m.name}`,
-        desc: `Tồn ${m.quantity} / tối thiểu ${m.minStock} ${m.unit}`,
-        href: "/materials",
-      })
-    );
-
-  (devices.data?.data ?? []).forEach((d) =>
-    notices.push({
-      id: "dev-" + d.id,
-      icon: AlertTriangle,
-      tone: "red",
-      title: `Thiết bị sự cố: ${d.name}`,
-      desc: `${d.code} · ${d.location}`,
-      href: `/devices/${d.id}`,
-    })
-  );
+  const notices: Notice[] = (announcements.data?.data ?? [])
+    .filter((a) => !myId || !a.reads.some((r) => r.userId === myId))
+    .slice()
+    .sort((x, y) => Number(y.pinned) - Number(x.pinned) || +new Date(y.createdAt) - +new Date(x.createdAt))
+    .map((a) => ({
+      id: "ann-" + a.id,
+      icon: Megaphone,
+      tone: a.pinned ? "amber" : "blue",
+      title: `Mệnh lệnh sản xuất: ${a.title}`,
+      desc: [a.classification, a.orderedBy ? `Theo lệnh: ${a.orderedBy}` : a.body].filter(Boolean).join(" · ").slice(0, 80),
+      href: "/notifications",
+      date: a.createdAt,
+    }));
 
   return { notices, loading };
 }

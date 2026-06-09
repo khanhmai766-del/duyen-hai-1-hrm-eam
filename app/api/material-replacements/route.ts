@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "SUPERVISOR"]);
     const body = await req.json();
 
     if (!body.materialId || !body.intervalMonths) {
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
         materialId: body.materialId,
         deviceId: body.deviceId || null,
         location: body.location?.trim() || null,
+        system: body.system?.trim() || material.system || null,
         intervalMonths,
         intervalNote: body.intervalNote?.trim() || null,
         lastReplacedAt: body.lastReplacedAt ? new Date(body.lastReplacedAt) : null,
