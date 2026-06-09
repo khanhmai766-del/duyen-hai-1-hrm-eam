@@ -27,7 +27,6 @@ export default function DefectsPage() {
   const { data, isLoading } = useDefects();
   const del = useDeleteDefect();
   const defects = data?.data ?? [];
-  const suggestedCode = (data?.meta?.suggestedCode as string) ?? "";
 
   const chuaXuLy = defects.filter((d) => d.status === "CHUA_XU_LY").length;
   const coPct = defects.filter((d) => d.status === "CO_PCT").length;
@@ -44,16 +43,11 @@ export default function DefectsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Khiếm khuyết thiết bị" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
-        {canManage && (
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Thêm mới
-          </Button>
-        )}
         <ExportButton
           rows={defects.map((d) => ({
             id: d.code,
             unit: d.unit,
-            system: d.system ?? "",
+            cuongVi: d.system ?? "",
             severity: d.severity ? DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY] : "",
             requestType: d.requestType ?? "",
             content: d.content ?? "",
@@ -62,6 +56,11 @@ export default function DefectsPage() {
           }))}
           filename="khiem-khuyet-thiet-bi"
         />
+        {canManage && (
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" /> Thêm mới
+          </Button>
+        )}
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -87,7 +86,7 @@ export default function DefectsPage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead>Mã</TableHead>
                 <TableHead className="text-center">Tổ máy</TableHead>
-                <TableHead>Hệ thống</TableHead>
+                <TableHead>Cương vị</TableHead>
                 <TableHead>Nội dung</TableHead>
                 <TableHead className="text-center">Mức độ</TableHead>
                 <TableHead className="text-center">Tình trạng</TableHead>
@@ -150,7 +149,6 @@ export default function DefectsPage() {
             </div>
             <DefectForm
               defect={editTarget}
-              suggestedCode={suggestedCode}
               onDone={() => setFormOpen(false)}
               onCancel={() => setFormOpen(false)}
             />

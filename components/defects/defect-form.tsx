@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateDefect, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import {
-  MATERIAL_SYSTEMS,
   DEFECT_UNITS,
+  DEFECT_POSITIONS,
   DEFECT_SEVERITY,
   DEFECT_SEVERITY_ORDER,
   DEFECT_CONDITION,
@@ -32,12 +32,10 @@ const NONE = "__none__";
 
 export function DefectForm({
   defect,
-  suggestedCode,
   onDone,
   onCancel,
 }: {
   defect?: DefectItem | null;
-  suggestedCode?: string;
   onDone?: () => void;
   onCancel?: () => void;
 }) {
@@ -47,7 +45,6 @@ export function DefectForm({
   const [step, setStep] = React.useState<1 | 2>(1);
 
   const [form, setForm] = React.useState({
-    code: defect?.code ?? suggestedCode ?? "",
     unit: defect?.unit ?? "",
     system: defect?.system ?? "",
     severity: defect?.severity ?? "",
@@ -65,13 +62,11 @@ export function DefectForm({
   }
 
   function goNext() {
-    if (!form.code.trim()) return toast.error("Vui lòng nhập ID");
     if (!form.unit) return toast.error("Vui lòng chọn tổ máy");
     setStep(2);
   }
 
   async function submit() {
-    if (!form.code.trim()) { setStep(1); return toast.error("Vui lòng nhập ID"); }
     if (!form.unit) { setStep(1); return toast.error("Vui lòng chọn tổ máy"); }
     const payload = { ...form, detectedAt: form.detectedAt || null };
     try {
@@ -96,10 +91,7 @@ export function DefectForm({
 
       <div className="flex-1 overflow-y-auto p-5">
         {step === 1 ? (
-          <div className="mx-auto max-w-md space-y-5">
-            <Row label="ID *">
-              <Input value={form.code} onChange={(e) => set("code", e.target.value)} placeholder="KKTB//001" />
-            </Row>
+          <div className="mx-auto max-w-xl space-y-5">
             <Row label="Tổ Máy">
               <div className="grid grid-cols-2 gap-2">
                 {DEFECT_UNITS.map((u) => (
@@ -117,18 +109,18 @@ export function DefectForm({
                 ))}
               </div>
             </Row>
-            <Row label="Hệ Thống">
+            <Row label="Cương Vị">
               <Select value={form.system || NONE} onValueChange={(v) => set("system", v === NONE ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                  {MATERIAL_SYSTEMS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {DEFECT_POSITIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Row>
             <Row label="Mức Độ">
               <Select value={form.severity || NONE} onValueChange={(v) => set("severity", v === NONE ? "" : v)}>
-                <SelectTrigger className="h-auto min-h-10 [&>span]:whitespace-normal [&>span]:text-left"><SelectValue placeholder="Chọn mức độ" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Chọn mức độ" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
                   {DEFECT_SEVERITY_ORDER.map((s) => <SelectItem key={s} value={s}>{DEFECT_SEVERITY[s]}</SelectItem>)}
@@ -146,7 +138,7 @@ export function DefectForm({
             </Row>
           </div>
         ) : (
-          <div className="mx-auto max-w-md space-y-5">
+          <div className="mx-auto max-w-xl space-y-5">
             <Row label="Yêu Cầu">
               <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -221,8 +213,8 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[120px_1fr] items-start gap-3">
-      <Label className="pt-2.5 text-right text-muted-foreground">{label}</Label>
+    <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+      <Label className="whitespace-nowrap text-right text-muted-foreground">{label}</Label>
       <div>{children}</div>
     </div>
   );
