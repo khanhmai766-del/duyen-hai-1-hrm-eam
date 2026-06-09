@@ -1,0 +1,362 @@
+// PowerPlant HRM & EAM — Prisma schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  employeeId   String   @unique
+  email        String   @unique
+  phone        String?
+  avatarUrl    String?
+  passwordHash String
+  role         Role     @default(VIEWER)
+  position     String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
+  department   String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  checkIns         CheckIn[]
+  shiftAssignments ShiftAssignment[]
+  repairLogs       RepairLog[]       @relation("CreatedBy")
+  approvedLogs     RepairLog[]       @relation("ApprovedBy")
+  auditLogs        AuditLog[]
+  maintenancePlans    MaintenancePlan[]   @relation("PmCreatedBy")
+  maintenanceAssigned MaintenancePlan[]   @relation("PmAssignee")
+  maintenanceRecords  MaintenanceRecord[] @relation("PmDoneBy")
+  operationEvents  OperationEvent[]  @relation("OpCreatedBy")
+  hcGroups          HcGroup[]          @relation("HcGroupCreator")
+  hcCheckIns        HcCheckIn[]        @relation("HcCheckInUser")
+  announcements     Announcement[]     @relation("AnnouncementCreator")
+  announcementReads AnnouncementRead[] @relation("AnnouncementReader")
+  materialReplacements    MaterialReplacement[]    @relation("MrCreatedBy")
+  materialReplacementLogs MaterialReplacementLog[] @relation("MrDoneBy")
+}
+
+// Bảng tin nội bộ: bài đăng do Quản trị (ADMIN) tạo, mọi người chỉ xem.
+model Announcement {
+  id          String   @id @default(cuid())
+  category       String   @default("BULLETIN") // BULLETIN (bảng tin) | ORDER (mệnh lệnh sản xuất)
+  classification String? // phân loại: Vận hành | An toàn vệ sinh lao động
+  stt            String? // số thứ tự (tuỳ chọn), vd "01"
+  title       String
+  body        String
+  pinned      Boolean  @default(false)
+  orderedBy   String? // "Theo lệnh" — tên quản đốc / phó quản đốc ra lệnh
+  linkUrl     String? // optional website link
+  fileUrl     String? // optional attached PDF (public URL)
+  fileName    String? // original PDF file name
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User               @relation("AnnouncementCreator", fields: [createdById], references: [id])
+  reads     AnnouncementRead[]
+}
+
+// Xác nhận đã đọc thông báo / mệnh lệnh của từng user.
+model AnnouncementRead {
+  id             String   @id @default(cuid())
+  announcementId String
+  userId         String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation("AnnouncementReader", fields: [userId], references: [id])
+
+  @@unique([announcementId, userId])
+}
+
+model OperationEvent {
+  id          String   @id @default(cuid())
+  type        String // DRILL_INCIDENT, DRILL_FIRE, OTHER
+  title       String
+  date        DateTime
+  note        String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User @relation("OpCreatedBy", fields: [createdById], references: [id])
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  TECHNICIAN
+  VIEWER
+}
+
+model Shift {
+  id        String    @id @default(cuid())
+  date      DateTime
+  shiftType ShiftType
+  unit      String // "Vận hành 1", "Vận hành 2"
+
+  assignments ShiftAssignment[]
+  checkIns    CheckIn[]
+  handovers   ShiftHandover[]
+}
+
+enum ShiftType {
+  MORNING
+  AFTERNOON
+  NIGHT
+}
+
+model ShiftAssignment {
+  id            String  @id @default(cuid())
+  shiftId       String
+  userId        String
+  positionLabel String // display label in org chart
+  parentId      String? // for org chart hierarchy
+  isApproved    Boolean @default(false)
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+model CheckIn {
+  id         String    @id @default(cuid())
+  userId     String
+  shiftId    String
+  checkInAt  DateTime?
+  checkOutAt DateTime?
+  status     String // PRESENT, ABSENT, LATE
+  note       String?
+  approvedBy String?
+
+  user  User  @relation(fields: [userId], references: [id])
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+}
+
+model ShiftHandover {
+  id         String   @id @default(cuid())
+  shiftId    String
+  fromUserId String
+  toUserId   String
+  handoverAt DateTime
+  notes      String?
+  issues     String? // outstanding issues passed over
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+}
+
+model Device {
+  id            String       @id @default(cuid())
+  code          String       @unique // e.g. "ESP-S1-001"
+  name          String
+  category      String // ESP, FGD, I&C, Boiler, Turbine, etc.
+  location      String
+  manufacturer  String?
+  model         String?
+  serialNumber  String?
+  installDate   DateTime?
+  warrantyUntil DateTime?
+  status        DeviceStatus @default(NORMAL)
+  specs         Json? // flexible technical specs
+  imageUrl      String?
+  qrCodeData    String? // encoded URL
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  materials            DeviceMaterial[]
+  repairLogs           RepairLog[]
+  maintenancePlans     MaintenancePlan[]
+  materialReplacements MaterialReplacement[]
+}
+
+enum DeviceStatus {
+  NORMAL
+  MAINTENANCE
+  FAULT
+  DECOMMISSIONED
+  UNDER_REPAIR
+}
+
+model RepairLog {
+  id           String       @id @default(cuid())
+  deviceId     String
+  title        String
+  description  String
+  symptom      String?
+  cause        String?
+  action       String
+  result       String?
+  startedAt    DateTime
+  completedAt  DateTime?
+  status       RepairStatus @default(OPEN)
+  priority     Priority     @default(MEDIUM)
+  cost         Float?
+  downtime     Int? // minutes
+  createdById  String
+  approvedById String?
+  attachments  String[] // file URLs
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  device     Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  createdBy  User   @relation("CreatedBy", fields: [createdById], references: [id])
+  approvedBy User?  @relation("ApprovedBy", fields: [approvedById], references: [id])
+}
+
+enum RepairStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Material {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  unit      String
+  quantity  Int      @default(0)
+  minStock  Int      @default(0)
+  location  String?
+  system    String? // hệ thống thiết bị: Lò Hơi, Máy Nghiền, ESP, FGD...
+  imageUrl  String? // ảnh minh hoạ vật tư (public URL)
+  supplier  String? // tái dùng làm "Định kỳ thay thế"
+  unitPrice Float?
+  note      String? // "Ghi chú"
+  createdAt DateTime @default(now())
+
+  deviceMaterials DeviceMaterial[]
+  replacements    MaterialReplacement[]
+}
+
+// Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí
+// tự do) theo chu kỳ riêng. Dùng để theo dõi & cảnh báo thời điểm thay thế.
+model MaterialReplacement {
+  id             String    @id @default(cuid())
+  materialId     String
+  deviceId       String? // thiết bị chính thức (tuỳ chọn)
+  location       String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
+  intervalMonths Int // chu kỳ thay thế (tháng)
+  intervalNote   String? // ghi chú chu kỳ, vd "2500h"
+  lastReplacedAt DateTime? // lần thay gần nhất (user nhập)
+  nextDueAt      DateTime // ngày đến hạn kế tiếp
+  note           String?
+  isActive       Boolean   @default(true)
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  material  Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  device    Device?                  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  createdBy User                     @relation("MrCreatedBy", fields: [createdById], references: [id])
+  logs      MaterialReplacementLog[]
+}
+
+// Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.
+model MaterialReplacementLog {
+  id            String   @id @default(cuid())
+  replacementId String
+  replacedAt    DateTime @default(now())
+  doneById      String
+  quantity      Int?
+  note          String?
+
+  replacement MaterialReplacement @relation(fields: [replacementId], references: [id], onDelete: Cascade)
+  doneBy      User                @relation("MrDoneBy", fields: [doneById], references: [id])
+}
+
+model DeviceMaterial {
+  id         String   @id @default(cuid())
+  deviceId   String
+  materialId String
+  quantity   Int
+  usedAt     DateTime @default(now())
+  note       String?
+
+  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id])
+}
+
+// Kế hoạch bảo trì định kỳ (Preventive Maintenance) cho từng thiết bị.
+model MaintenancePlan {
+  id           String   @id @default(cuid())
+  deviceId     String
+  title        String // vd "Vệ sinh bộ lọc bụi tĩnh điện"
+  description  String?
+  intervalDays Int // chu kỳ lặp (ngày)
+  priority     Priority @default(MEDIUM)
+  lastDoneAt   DateTime? // lần thực hiện gần nhất
+  nextDueAt    DateTime // ngày đến hạn kế tiếp
+  assigneeId   String? // người phụ trách
+  isActive     Boolean  @default(true)
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  device    Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  assignee  User?               @relation("PmAssignee", fields: [assigneeId], references: [id])
+  createdBy User                @relation("PmCreatedBy", fields: [createdById], references: [id])
+  records   MaintenanceRecord[]
+}
+
+// Lịch sử mỗi lần thực hiện một kế hoạch bảo trì định kỳ.
+model MaintenanceRecord {
+  id       String   @id @default(cuid())
+  planId   String
+  doneAt   DateTime @default(now())
+  doneById String
+  note     String?
+  cost     Float?
+
+  plan   MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  doneBy User            @relation("PmDoneBy", fields: [doneById], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String // e.g. "CREATE_DEVICE", "DELETE_REPAIR"
+  entity    String // e.g. "Device", "RepairLog"
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// Chấm công hành chính: nhóm đi công tác hành chính (HC) theo ngày.
+model HcGroup {
+  id          String   @id @default(cuid())
+  date        DateTime // ngày chấm công
+  content     String   // nội dung đi hành chính
+  hours       Int      @default(8) // số giờ chấm công mặc định của nhóm
+  unit        String?
+  createdById String   // chủ trì
+  createdAt   DateTime @default(now())
+
+  createdBy User        @relation("HcGroupCreator", fields: [createdById], references: [id])
+  members   HcCheckIn[]
+}
+
+model HcCheckIn {
+  id         String   @id @default(cuid())
+  groupId    String
+  userId     String
+  hours      Int      @default(8)
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  group HcGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User    @relation("HcCheckInUser", fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}

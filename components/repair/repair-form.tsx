@@ -1,0 +1,170 @@
+"use client";
+
+import * as React from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useCreateRepair, useUpdateRepair } from "@/hooks/useRepair";
+import { useDevices } from "@/hooks/useDevices";
+import { PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
+import type { RepairLogWithRelations } from "@/types";
+
+export function RepairForm({
+  repair,
+  defaultDeviceId,
+  onDone,
+}: {
+  repair?: RepairLogWithRelations | null;
+  defaultDeviceId?: string;
+  onDone?: () => void;
+}) {
+  const create = useCreateRepair();
+  const update = useUpdateRepair();
+  const { data: devicesData } = useDevices({});
+  const devices = devicesData?.data ?? [];
+  const isEdit = !!repair;
+  const [deviceSearch, setDeviceSearch] = React.useState("");
+
+  const [form, setForm] = React.useState({
+    deviceId: repair?.deviceId ?? defaultDeviceId ?? "",
+    title: repair?.title ?? "",
+    symptom: repair?.symptom ?? "",
+    cause: repair?.cause ?? "",
+    action: repair?.action ?? "",
+    result: repair?.result ?? "",
+    description: repair?.description ?? "",
+    priority: repair?.priority ?? "MEDIUM",
+    status: repair?.status ?? "OPEN",
+    startedAt: repair?.startedAt ? new Date(repair.startedAt).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+    completedAt: repair?.completedAt ? new Date(repair.completedAt).toISOString().slice(0, 16) : "",
+    cost: repair?.cost?.toString() ?? "",
+    downtime: repair?.downtime?.toString() ?? "",
+  });
+
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
+    setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  const filteredDevices = devices.filter(
+    (d) => !deviceSearch || `${d.code} ${d.name}`.toLowerCase().includes(deviceSearch.toLowerCase())
+  );
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.deviceId) return toast.error("Vui lòng chọn thiết bị");
+    if (!form.title || !form.action) return toast.error("Nhập tiêu đề và hành động");
+    try {
+      const payload = {
+        ...form,
+        cost: form.cost ? Number(form.cost) : null,
+        downtime: form.downtime ? Number(form.downtime) : null,
+        completedAt: form.completedAt || null,
+      };
+      if (isEdit) await update.mutateAsync({ id: repair!.id, ...payload });
+      else await create.mutateAsync(payload as any);
+      toast.success(isEdit ? "Đã cập nhật phiếu" : "Đã tạo phiếu sửa chữa");
+      onDone?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  const pending = create.isPending || update.isPending;
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div>
+        <Label className="mb-1.5 block">Thiết bị *</Label>
+        {!isEdit && (
+          <Input
+            placeholder="Tìm thiết bị..."
+            value={deviceSearch}
+            onChange={(e) => setDeviceSearch(e.target.value)}
+            className="mb-2"
+          />
+        )}
+        <Select value={form.deviceId} onValueChange={(v) => set("deviceId", v)} disabled={isEdit}>
+          <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
+          <SelectContent>
+            {filteredDevices.slice(0, 50).map((d) => (
+              <SelectItem key={d.id} value={d.id}>{d.code} — {d.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="mb-1.5 block">Tiêu đề *</Label>
+        <Input value={form.title} onChange={(e) => set("title", e.target.value)} required />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <Label className="mb-1.5 block">Hiện tượng</Label>
+          <Textarea value={form.symptom} onChange={(e) => set("symptom", e.target.value)} rows={2} />
+        </div>
+        <div>
+          <Label className="mb-1.5 block">Nguyên nhân</Label>
+          <Textarea value={form.cause} onChange={(e) => set("cause", e.target.value)} rows={2} />
+        </div>
+      </div>
+
+      <div>
+        <Label className="mb-1.5 block">Hành động xử lý *</Label>
+        <Textarea value={form.action} onChange={(e) => set("action", e.target.value)} rows={2} required />
+      </div>
+      <div>
+        <Label className="mb-1.5 block">Kết quả</Label>
+        <Textarea value={form.result} onChange={(e) => set("result", e.target.value)} rows={2} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label className="mb-1.5 block">Mức ưu tiên</Label>
+          <Select value={form.priority} onValueChange={(v) => set("priority", v as any)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PRIORITY_ORDER.map((p) => <SelectItem key={p} value={p}>{PRIORITY[p].label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1.5 block">Trạng thái</Label>
+          <Select value={form.status} onValueChange={(v) => set("status", v as any)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {REPAIR_STATUS_ORDER.map((s) => <SelectItem key={s} value={s}>{REPAIR_STATUS[s].label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1.5 block">Bắt đầu</Label>
+          <Input type="datetime-local" value={form.startedAt} onChange={(e) => set("startedAt", e.target.value)} />
+        </div>
+        <div>
+          <Label className="mb-1.5 block">Hoàn thành</Label>
+          <Input type="datetime-local" value={form.completedAt} onChange={(e) => set("completedAt", e.target.value)} />
+        </div>
+        <div>
+          <Label className="mb-1.5 block">Chi phí (VND)</Label>
+          <Input type="number" value={form.cost} onChange={(e) => set("cost", e.target.value)} />
+        </div>
+        <div>
+          <Label className="mb-1.5 block">Thời gian dừng (phút)</Label>
+          <Input type="number" value={form.downtime} onChange={(e) => set("downtime", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="submit" disabled={pending}>
+          {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isEdit ? "Lưu thay đổi" : "Tạo phiếu"}
+        </Button>
+      </div>
+    </form>
+  );
+}

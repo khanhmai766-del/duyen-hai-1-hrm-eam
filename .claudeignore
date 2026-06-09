@@ -1,0 +1,47 @@
+# .claudeignore — danh sách bỏ qua cho công cụ/agent đọc mã nguồn.
+# Lưu ý: Claude Code (CLI chính thức) KHÔNG đọc file này — nó tôn trọng .gitignore
+# và permissions.deny trong .claude/settings.json. File này chỉ dự phòng cho các
+# công cụ/agent khác có hỗ trợ .claudeignore.
+
+# Phụ thuộc & build output
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Prisma client sinh tự động
+node_modules/.prisma/
+prisma/generated/
+prisma/dev.db
+
+# Cơ sở dữ liệu nhúng (PostgreSQL local) — rất nặng
+.pgdata/
+
+# File do người dùng tải lên (ảnh vật tư, tệp đính kèm...)
+public/uploads/
+
+# Biến môi trường & bí mật
+.env
+.env*.local
+*.pem
+*.key
+
+# Log & cache
+*.log
+.cache/
+.turbo/
+.vercel/
+
+# File hệ thống / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Type khai báo sinh tự động
+next-env.d.ts
+
+# Asset nhị phân lớn (tuỳ chọn — bỏ comment nếu muốn bỏ qua)
+# public/videos/
+# *.mp4

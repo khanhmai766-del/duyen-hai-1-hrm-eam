@@ -1,0 +1,752 @@
+[
+{
+"name": "Lê Viết Châu",
+"position": "Trưởng ca",
+"employeeId": "NĐDH0156"
+},
+{
+"name": "Nguyễn Lê Trung Việt",
+"position": "Trưởng ca",
+"employeeId": "NĐDH0153"
+},
+{
+"name": "Nguyễn Quang Đàm",
+"position": "Kỹ thuật viên",
+"employeeId": "NĐDH0224"
+},
+{
+"name": "Nguyễn Minh Trọng",
+"position": "Trưởng ca",
+"employeeId": "NĐDH0221"
+},
+{
+"name": "Nguyễn Ngọc Lễ",
+"position": "Trưởng ca",
+"employeeId": "NĐDH0130"
+},
+{
+"name": "Lê Hữu Nhân",
+"position": "TK Lò máy",
+"employeeId": "NĐDH0126"
+},
+{
+"name": "Nguyễn Văn Chiến",
+"position": "TK Lò máy",
+"employeeId": "NĐDH0087"
+},
+{
+"name": "Đinh Trung Kiên",
+"position": "TK Lò máy",
+"employeeId": "NĐDH0222"
+},
+{
+"name": "Trần Hoàng Đạt",
+"position": "TK Lò máy",
+"employeeId": "NĐDH0152"
+},
+{
+"name": "Lương Huệ Châu",
+"position": "TK Lò máy",
+"employeeId": "NĐDH0131"
+},
+{
+"name": "Nguyễn Thành Nam",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0136"
+},
+{
+"name": "Nguyễn Hải Quân",
+"position": "Lò trưởng",
+"employeeId": "NĐDH1196"
+},
+{
+"name": "Nguyễn Văn Sang",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0691"
+},
+{
+"name": "Đỗ Văn Luân",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0086"
+},
+{
+"name": "Lê Văn Chung",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0168"
+},
+{
+"name": "Phạm Xuân Long",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0159"
+},
+{
+"name": "Tiết Thanh Hải",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0623"
+},
+{
+"name": "Phạm Biên Thùy",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0671"
+},
+{
+"name": "Lê Văn Đạo",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0659"
+},
+{
+"name": "Thạch Nhâm",
+"position": "Lò trưởng",
+"employeeId": "NĐDH0206"
+},
+{
+"name": "Bùi Chí Tâm",
+"position": "Lò phó",
+"employeeId": "NĐDH1299"
+},
+{
+"name": "Nguyễn Quang Trạng",
+"position": "Lò phó",
+"employeeId": "NĐDH1323"
+},
+{
+"name": "Trần Văn Thạch",
+"position": "Lò phó",
+"employeeId": "NĐDH0247"
+},
+{
+"name": "Lê Văn Sơn",
+"position": "Lò phó",
+"employeeId": "NĐDH0245"
+},
+{
+"name": "Phạm Hoài Nam",
+"position": "Lò phó",
+"employeeId": "NĐDH0177"
+},
+{
+"name": "Trần Văn Phúc",
+"position": "Lò phó",
+"employeeId": "NĐDH0461"
+},
+{
+"name": "Từ Chí Thiện",
+"position": "Lò phó",
+"employeeId": "NĐDH0975"
+},
+{
+"name": "Nguyễn Văn Tèo",
+"position": "Lò phó",
+"employeeId": "NĐDH0246"
+},
+{
+"name": "Kiên Văn Chí Thanh",
+"position": "Lò phó",
+"employeeId": "NĐDH1530"
+},
+{
+"name": "Phan Thanh Truyền",
+"position": "Lò phó",
+"employeeId": "NĐDH0111"
+},
+{
+"name": "Phạm Thanh Điền",
+"position": "Lò phó",
+"employeeId": "NĐDH1181"
+},
+{
+"name": "Võ Chí Thịnh",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0434"
+},
+{
+"name": "Nguyễn Văn Trí",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0437"
+},
+{
+"name": "Lư Văn Lay Mol",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0231"
+},
+{
+"name": "Hà Thanh Xuyên",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0129"
+},
+{
+"name": "Bùi Quốc Tuấn",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0176"
+},
+{
+"name": "Nguyễn Văn Qươn",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0458"
+},
+{
+"name": "Phan Phú Quí",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0172"
+},
+{
+"name": "Cao Tấn Phát",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0083"
+},
+{
+"name": "Trần Văn Cương",
+"position": "Máy trưởng",
+"employeeId": "NĐDH1327"
+},
+{
+"name": "Tống Minh Thức",
+"position": "Máy trưởng",
+"employeeId": "NĐDH0109"
+},
+{
+"name": "Đỗ Xuân Ni",
+"position": "Trưởng ca",
+"employeeId": "NĐDH0226"
+},
+{
+"name": "Võ Minh Chánh",
+"position": "Trưởng kíp điện",
+"employeeId": "NĐDH0090"
+},
+{
+"name": "Trần Phước Nhân",
+"position": "Trưởng kíp điện",
+"employeeId": "NĐDH0185"
+},
+{
+"name": "Trần Văn Thừa",
+"position": "Trưởng kíp điện",
+"employeeId": "NĐDH0163"
+},
+{
+"name": "Đinh Ngọc Lâm",
+"position": "Trực chính Điện",
+"employeeId": "NĐDH0580"
+},
+{
+"name": "Sơn Thái",
+"position": "Trực chính Điện",
+"employeeId": "NĐDH0162"
+},
+{
+"name": "Nguyễn Hữu Trung Nhân",
+"position": "Trực chính điện",
+"employeeId": "NĐDH0509"
+},
+{
+"name": "Nguyễn Văn Tân",
+"position": "Trưởng kíp điện",
+"employeeId": "NĐDH0106"
+},
+{
+"name": "Huỳnh Duy Luân",
+"position": "Trưởng kíp điện",
+"employeeId": "NĐDH0249"
+},
+{
+"name": "Phan Thiện Nhân",
+"position": "Trực phụ điện",
+"employeeId": "NĐDH1422"
+},
+{
+"name": "Phan Thành Khoa",
+"position": "Trực phụ điện",
+"employeeId": "NĐDH0504"
+},
+{
+"name": "Huỳnh Đăng Vũ",
+"position": "Trực chính Điện",
+"employeeId": "NĐDH0075"
+},
+{
+"name": "Phạm Thanh Tùng",
+"position": "Trực phụ Điện",
+"employeeId": "NĐDH0145"
+},
+{
+"name": "Nguyễn Dương Dũng Hải",
+"position": "Trực chính Điện",
+"employeeId": "NĐDH1339"
+},
+{
+"name": "Đặng Tiến Phát",
+"position": "Trực phụ điện",
+"employeeId": "NĐDH0562"
+},
+{
+"name": "Lê Nhu",
+"position": "Trực phụ điện",
+"employeeId": "NĐDH0102"
+},
+{
+"name": "Nguyễn Hữu Danh",
+"position": "Trực phụ điện",
+"employeeId": "NĐDH1138"
+},
+{
+"name": "Triệu Hồng Phát",
+"position": "Trợ thủ",
+"employeeId": "NĐDH0197"
+},
+{
+"name": "Trương Quang Vinh",
+"position": "Trợ thủ",
+"employeeId": "NĐDH0165"
+},
+{
+"name": "Nguyễn Quốc Chiến",
+"position": "Trợ thủ",
+"employeeId": "NĐDH0124"
+},
+{
+"name": "Lê Tuấn An",
+"position": "Trợ thủ",
+"employeeId": "NĐDH1305"
+},
+{
+"name": "Lê Quang Huy",
+"position": "Trợ thủ",
+"employeeId": "NĐDH0239"
+},
+{
+"name": "Hà Duy Khương",
+"position": "Trợ thủ",
+"employeeId": "NĐDH0473"
+},
+{
+"name": "Nguyễn Trà Giang",
+"position": "Trợ thủ",
+"employeeId": "NĐDH1532"
+},
+{
+"name": "Trương Hoàng Nguyên",
+"position": "Trợ thủ",
+"employeeId": "NĐDH1410"
+},
+{
+"name": "Đỗ Hiếu Liêm",
+"position": "Máy phó",
+"employeeId": "NĐDH1324"
+},
+{
+"name": "Nguyễn Thành Tâm",
+"position": "Máy phó",
+"employeeId": "NĐDH1300"
+},
+{
+"name": "Trần Hoàng Tú",
+"position": "Máy phó",
+"employeeId": "NĐDH0146"
+},
+{
+"name": "Trần Tấn Đạt",
+"position": "Máy phó",
+"employeeId": "NĐDH0158"
+},
+{
+"name": "Đỗ Minh Luân",
+"position": "Máy phó",
+"employeeId": "NĐDH0135"
+},
+{
+"name": "Tài Duy Phúc",
+"position": "Máy phó",
+"employeeId": "NĐDH0094"
+},
+{
+"name": "Cao Văn Tèo",
+"position": "Máy phó",
+"employeeId": "NĐDH1322"
+},
+{
+"name": "Nguyễn Minh Trung",
+"position": "Máy phó",
+"employeeId": "NĐDH0214"
+},
+{
+"name": "Nguyễn Đức Huy",
+"position": "Trạm bơm tuần hoàn",
+"employeeId": "NĐDH0073"
+},
+{
+"name": "Phạm Quốc Đạt",
+"position": "VHV Máy phó",
+"employeeId": "NĐDH1461"
+},
+{
+"name": "Hà Hữu Hiệp",
+"position": "VHV Máy phó",
+"employeeId": "NĐDH1408"
+},
+{
+"name": "Lý Thanh Khoa",
+"position": "Máy nghiền",
+"employeeId": "NĐDH0694"
+},
+{
+"name": "Nguyễn Thành Đô",
+"position": "Máy nghiền",
+"employeeId": "NĐDH0703"
+},
+{
+"name": "Trần Trọng Tín",
+"position": "Máy nghiền",
+"employeeId": "NĐDH0572"
+},
+{
+"name": "Vương Chí Hiếu",
+"position": "Máy nghiền",
+"employeeId": "NĐDH1182"
+},
+{
+"name": "Trần Văn Hưởng",
+"position": "Máy nghiền",
+"employeeId": "NĐDH0134"
+},
+{
+"name": "Trần Lưu Bá Phúc",
+"position": "Máy nghiền",
+"employeeId": "NĐDH1384"
+},
+{
+"name": "Trương Hoàng Vũ",
+"position": "Máy nghiền",
+"employeeId": "NĐDH0113"
+},
+{
+"name": "Lê Hoài Thắng",
+"position": "Máy nghiền",
+"employeeId": "NĐDH1474"
+},
+{
+"name": "Mai Văn Minh Kha",
+"position": "Máy nghiền",
+"employeeId": "NĐDH1439"
+},
+{
+"name": "Cao Bá Huy",
+"position": "Máy nghiền",
+"employeeId": "NĐDH1383"
+},
+{
+"name": "Nguyễn Văn Thạch",
+"position": "Thải Xỉ",
+"employeeId": "NĐDH0248"
+},
+{
+"name": "Nguyễn Xuân Nhâm",
+"position": "Thải Xỉ",
+"employeeId": "NĐDH0137"
+},
+{
+"name": "Kim Duy Tính",
+"position": "Thải Xỉ",
+"employeeId": "NĐDH1302"
+},
+{
+"name": "Nguyễn Đình Nam",
+"position": "Thải Xỉ",
+"employeeId": "NĐDH0305"
+},
+{
+"name": "Đường Thái Sơn",
+"position": "Thải Xỉ",
+"employeeId": "NĐDH0104"
+},
+{
+"name": "Lê Phạm Minh Thông",
+"position": "ESP",
+"employeeId": "NĐDH0211"
+},
+{
+"name": "Nguyễn Thanh Lâm",
+"position": "ESP",
+"employeeId": "NĐDH0704"
+},
+{
+"name": "Nguyễn Thanh Liêm",
+"position": "ESP",
+"employeeId": "NĐDH1156"
+},
+{
+"name": "Nguyễn Ngọc Hùng",
+"position": "ESP",
+"employeeId": "NĐDH1228"
+},
+{
+"name": "Nguyễn Hoàng Thái",
+"position": "ESP",
+"employeeId": "NĐDH1450"
+},
+{
+"name": "Lê Thành Triệu",
+"position": "ESP",
+"employeeId": "NĐDH0175"
+},
+{
+"name": "Trần Thanh Long",
+"position": "ESP",
+"employeeId": "NĐDH1221"
+},
+{
+"name": "Nguyễn Tấn An",
+"position": "ESP",
+"employeeId": "NĐDH1220"
+},
+{
+"name": "Nguyễn Phương Hiếu",
+"position": "ESP",
+"employeeId": "NĐDH0132"
+},
+{
+"name": "Võ Hoàng Ân",
+"position": "ESP",
+"employeeId": "NĐDH1538"
+},
+{
+"name": "Nguyễn Trung Khánh",
+"position": "ESP",
+"employeeId": "NĐDH1552"
+},
+{
+"name": "Thạch Ly Qui",
+"position": "FGD",
+"employeeId": "NĐDH0698"
+},
+{
+"name": "Lâm Công Minh",
+"position": "FGD",
+"employeeId": "NĐDH1184"
+},
+{
+"name": "Nguyễn Nhựt Duy",
+"position": "FGD",
+"employeeId": "NĐDH0201"
+},
+{
+"name": "Dương Minh Phú",
+"position": "FGD",
+"employeeId": "NĐDH1225"
+},
+{
+"name": "Nguyễn Văn Thiện",
+"position": "FGD",
+"employeeId": "NĐDH0180"
+},
+{
+"name": "Thạch Út",
+"position": "FGD",
+"employeeId": "NĐDH1304"
+},
+{
+"name": "Lê Tấn Trung",
+"position": "FGD",
+"employeeId": "NĐDH0688"
+},
+{
+"name": "Trần Văn Đồi",
+"position": "FGD",
+"employeeId": "NĐDH1534"
+},
+{
+"name": "Nguyễn Thái An",
+"position": "Trạm bơm tuần hoàn",
+"employeeId": "NĐDH1551"
+},
+{
+"name": "Hoàng Vĩnh Phúc",
+"position": "Máy Phó",
+"employeeId": "NĐDH1602"
+},
+{
+"name": "Phạm Thế Hiển",
+"position": "XLN hỗn hợp",
+"employeeId": "NĐDH1599"
+},
+{
+"name": "Kim Như Quỳnh",
+"position": "XLN hỗn hợp",
+"employeeId": "NĐDH1612"
+},
+{
+"name": "Đinh Ngọc Nhường",
+"position": "NH3 - Lò hơi phụ",
+"employeeId": "NĐDH0236"
+},
+{
+"name": "Hồ Duy Tuyến",
+"position": "XLNT",
+"employeeId": "NĐDH0148"
+},
+{
+"name": "Huỳnh Minh Đầy",
+"position": "Khí Nén - Nhà Dầu",
+"employeeId": "NĐDH1436"
+},
+{
+"name": "Nguyễn Đông Phi",
+"position": "Khí Nén - Nhà Dầu",
+"employeeId": "NĐDH1438"
+},
+{
+"name": "Lê Hoàng Qui",
+"position": "Khí Nén - Nhà Dầu",
+"employeeId": "NĐDH1540"
+},
+{
+"name": "Cao Minh Nhựt",
+"position": "Khí Nén - Nhà Dầu",
+"employeeId": "NĐDH1155"
+},
+{
+"name": "Trần Hoàng Tuấn",
+"position": "NH3 - Lò hơi phụ",
+"employeeId": "NĐDH0098"
+},
+{
+"name": "Trương Quốc Hiếu",
+"position": "NH3 - Lò hơi phụ",
+"employeeId": "NĐDH0202"
+},
+{
+"name": "Đoàn Minh Hải",
+"position": "NH3 - Lò hơi phụ",
+"employeeId": "NĐDH0179"
+},
+{
+"name": "Tăng Vũ Lộc",
+"position": "NH3 - Lò hơi phụ",
+"employeeId": "NĐDH0244"
+},
+{
+"name": "Trương Trần Hoàng Huân",
+"position": "Quản đốc",
+"employeeId": "NĐDH1301"
+},
+{
+"name": "Nguyễn Văn Cường",
+"position": "Phó Quản đốc",
+"employeeId": "NĐDH1226"
+},
+{
+"name": "Nguyễn Ngọc Yên",
+"position": "Phó Quản đốc",
+"employeeId": "NĐDH1135"
+},
+{
+"name": "Phan Minh Hải",
+"position": "Kỹ thuật viên",
+"employeeId": "NĐDH0183"
+},
+{
+"name": "Nguyễn Khắc Bảo",
+"position": "Kỹ thuật viên",
+"employeeId": "NĐDH1306"
+},
+{
+"name": "Bùi Hoài Tâm",
+"position": "Kỹ thuật viên",
+"employeeId": "NĐDH0216"
+},
+{
+"name": "Vũ Văn Tiến",
+"position": "Kỹ thuật viên",
+"employeeId": "NĐDH0167"
+},
+{
+"name": "Hà Thị Mẫn",
+"position": "Thống kê",
+"employeeId": "NĐDH0182"
+},
+{
+"name": "Triệu Tuyết Nhung",
+"position": "Thống kê",
+"employeeId": "NĐDH1136"
+},
+{
+"name": "Đặng Hoàng Long",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH0170"
+},
+{
+"name": "Nguyễn Chí Linh",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH1543"
+},
+{
+"name": "Trần Duy Khang",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH1544"
+},
+{
+"name": "Châu Văn Khoa",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH0079"
+},
+{
+"name": "Hứa Văn Tài",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH0078"
+},
+{
+"name": "Lâm Quang Hiền",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH0096"
+},
+{
+"name": "Nguyễn Thanh Bá",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH1019"
+},
+{
+"name": "Nguyễn Văn Hiếu",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH0048"
+},
+{
+"name": "Phan Văn Sang",
+"position": "Thiết bị đo lường điều khiển",
+"employeeId": "NĐDH0151"
+},
+{
+"name": "Mai Đoàn Kim Khánh",
+"position": "Lò phó",
+"employeeId": "NĐDH0223"
+},
+{
+"name": "Nguyễn Lê Trường An",
+"position": "Trạm bơm nước thô",
+"employeeId": "NĐDH0049"
+},
+{
+"name": "Nguyễn Chí Công",
+"position": "Trạm bơm nước thô",
+"employeeId": "NĐDH0052"
+},
+{
+"name": "Phạm Việt Linh",
+"position": "Trạm bơm nước thô",
+"employeeId": "NĐDH0082"
+},
+{
+"name": "Hồ Minh Tình",
+"position": "Trạm bơm nước thô",
+"employeeId": "NĐDH0120"
+},
+{
+"name": "Lâm Văn Lạc",
+"position": "Trạm bơm nước thô",
+"employeeId": "NĐDH0813"
+},
+{
+"name": "Nguyễn Huy Hoàng",
+"position": "Trạm bơm nước thô",
+"employeeId": "NĐDH1209"
+}
+]

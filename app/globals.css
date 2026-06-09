@@ -1,0 +1,239 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 18% 96%;
+    --foreground: 240 24% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 24% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 24% 14%;
+    --primary: 213 51% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 33 43% 29%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 16% 93%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 222 24% 10%;
+    --foreground: 210 20% 92%;
+    --card: 222 22% 14%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 22% 14%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 213 51% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 33 43% 29%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 16% 20%;
+    --muted-foreground: 215 16% 64%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 14% 24%;
+    --input: 220 14% 24%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  ::selection {
+    @apply bg-accent/20;
+  }
+  /* Smooth the light↔dark flip without animating page transitions. */
+  html.theme-ready body,
+  html.theme-ready body * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-ready body,
+    html.theme-ready body * {
+      transition: none;
+    }
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Dark-mode bridge for literal brand utilities.
+   Several components use literal brand colors (text-navy, bg-warmwhite, bg-white)
+   and Tailwind slate/gray shades directly rather than semantic tokens. Rather
+   than rewrite every file, we remap the literal utilities under `.dark` so they
+   adapt. Opacity variants (e.g. bg-white/30, bg-ink/60 scrims) are separate
+   classes and are intentionally left untouched.
+   ─────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .dark .text-navy {
+    color: hsl(213 55% 72%);
+  }
+  .dark .text-ink {
+    color: hsl(var(--foreground));
+  }
+  .dark .bg-warmwhite {
+    background-color: hsl(var(--background));
+  }
+  .dark .bg-white {
+    background-color: hsl(var(--card));
+  }
+  /* Light-blue active states (sidebar items) → translucent accent on dark. */
+  .dark .bg-\[\#EFF6FF\] {
+    background-color: hsl(217 40% 22%);
+  }
+
+  /* Neutral slate/gray surfaces → dark surfaces */
+  .dark .bg-slate-50,
+  .dark .bg-slate-100,
+  .dark .bg-gray-50,
+  .dark .bg-gray-100 {
+    background-color: hsl(var(--muted));
+  }
+  .dark .bg-slate-200,
+  .dark .bg-gray-200 {
+    background-color: hsl(220 14% 26%);
+  }
+  /* Neutral slate/gray text → readable on dark */
+  .dark .text-slate-900,
+  .dark .text-slate-800,
+  .dark .text-slate-700,
+  .dark .text-gray-900,
+  .dark .text-gray-800,
+  .dark .text-gray-700 {
+    color: hsl(210 18% 88%);
+  }
+  .dark .text-slate-600,
+  .dark .text-slate-500,
+  .dark .text-gray-600,
+  .dark .text-gray-500 {
+    color: hsl(215 14% 62%);
+  }
+  .dark .text-slate-400,
+  .dark .text-gray-400 {
+    color: hsl(215 12% 52%);
+  }
+  /* Neutral slate/gray borders → dark borders */
+  .dark .border-slate-100,
+  .dark .border-slate-200,
+  .dark .border-gray-100,
+  .dark .border-gray-200 {
+    border-color: hsl(var(--border));
+  }
+}
+
+/* Subtle scrollbar for enterprise feel */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+
+/* 3D bar charts: soft drop shadow on each bar for depth */
+.chart-3d .recharts-bar-rectangle path {
+  filter: drop-shadow(0 6px 7px rgba(15, 23, 42, 0.22));
+}
+
+/* Recharts dark-mode: the tooltip uses inline white styles, and axis/grid
+   default to dark strokes — remap them so charts stay legible on dark. */
+.dark .recharts-default-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  border-color: hsl(var(--border)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+}
+.dark .recharts-tooltip-item,
+.dark .recharts-tooltip-label {
+  color: hsl(var(--popover-foreground)) !important;
+}
+.dark .recharts-cartesian-axis-tick-value tspan,
+.dark .recharts-text {
+  fill: hsl(var(--muted-foreground));
+}
+.dark .recharts-cartesian-grid line,
+.dark .recharts-cartesian-axis line {
+  stroke: hsl(var(--border));
+}
+
+/* Safety slogan ticker: floats up + fades in, holds ~6s at centre, then floats
+   up + fades out and stays hidden — appearing exactly once every 30s */
+@keyframes safety-run {
+  0%   { transform: translateY(10px);  opacity: 0; }
+  6%   { transform: translateY(0);     opacity: 1; }
+  26%  { transform: translateY(0);     opacity: 1; }
+  32%  { transform: translateY(-10px); opacity: 0; }
+  100% { transform: translateY(-10px); opacity: 0; }
+}
+.safety-marquee {
+  animation: safety-run 30s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .safety-marquee { animation: none; opacity: 1; }
+}
+
+/* 3D-style logo: layered drop-shadows (follow the transparent PNG shape, not a
+   box) + a subtle perspective tilt + gentle float, so a flat 2D mark reads 3D. */
+.logo-3d {
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.65))
+    drop-shadow(0 2px 2px rgba(15, 23, 42, 0.20))
+    drop-shadow(0 8px 14px rgba(15, 23, 42, 0.16))
+    drop-shadow(0 18px 26px rgba(15, 23, 42, 0.10));
+  transform: perspective(800px) rotateX(7deg);
+  animation: logo-float 4.5s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes logo-float {
+  0%, 100% { transform: perspective(800px) rotateX(7deg) translateY(0); }
+  50%      { transform: perspective(800px) rotateX(7deg) translateY(-7px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-3d { animation: none; transform: none; }
+}
+
+/* Print styles for QR + reports */
+@media print {
+  .no-print,
+  aside,
+  header {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  /* Reset the dashboard shell's left offset so printed content is centered */
+  main,
+  .lg\:pl-\[280px\] {
+    padding-left: 0 !important;
+  }
+}
