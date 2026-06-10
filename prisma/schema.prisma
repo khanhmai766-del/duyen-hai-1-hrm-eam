@@ -305,6 +305,7 @@ model DefectHistory {
   unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
   device          String? // Thiết bị (mã thiết bị) — đồng bộ danh mục Thiết bị
   system          String? // Cương vị (snapshot theo khiếm khuyết)
+  requestType     String? // PCT (loại yêu cầu: Cơ | Điện | Hóa | …) — đồng bộ "Yêu Cầu"
   workOrderNumber String? // Số phiếu công tác thực hiện
   performedAt     DateTime // Ngày thực hiện
   result          String? // Kết quả thực hiện

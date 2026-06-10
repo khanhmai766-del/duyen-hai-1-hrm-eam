@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         unit: body.unit,
         device: body.device?.trim() || null,
         system: body.system?.trim() || null,
+        requestType: body.requestType?.trim() || null,
         workOrderNumber: body.workOrderNumber?.trim() || null,
         performedAt: body.performedAt ? new Date(body.performedAt) : new Date(),
         result: body.result?.trim() || null,

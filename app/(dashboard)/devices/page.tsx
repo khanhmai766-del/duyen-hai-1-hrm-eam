@@ -16,7 +16,6 @@ import {
   Trash2,
   Plus,
   ClipboardPlus,
-  UserCheck,
   ArrowRight,
   FileSpreadsheet,
   ShieldAlert,
@@ -133,7 +132,7 @@ export default function DevicesPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {isAdmin && <QuickAction href="/devices?view=form" icon={Plus} label="Thêm thiết bị" />}
         <QuickAction href="/repair-history" icon={ClipboardPlus} label="Lịch sử sửa chữa" />
-        <QuickAction href="/hr/check-in" icon={UserCheck} label="Điểm danh ca" />
+        <QuickAction href="/defects" icon={ShieldAlert} label="Khiếm khuyết thiết bị" />
       </div>
 
       {/* View tabs */}

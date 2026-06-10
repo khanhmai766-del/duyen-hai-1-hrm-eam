@@ -17,6 +17,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         unit: body.unit !== undefined ? body.unit : undefined,
         device: body.device !== undefined ? body.device?.trim() || null : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
+        requestType: body.requestType !== undefined ? body.requestType?.trim() || null : undefined,
         workOrderNumber: body.workOrderNumber !== undefined ? body.workOrderNumber?.trim() || null : undefined,
         performedAt: body.performedAt !== undefined ? (body.performedAt ? new Date(body.performedAt) : undefined) : undefined,
         result: body.result !== undefined ? body.result?.trim() || null : undefined,

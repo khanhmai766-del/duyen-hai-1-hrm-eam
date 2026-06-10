@@ -43,6 +43,7 @@ export function useDeleteDefect() {
 
 export interface CompleteDefectInput {
   workOrderNumber?: string;
+  requestType?: string;
   performedAt?: string | null;
   result?: string;
   images?: string[];

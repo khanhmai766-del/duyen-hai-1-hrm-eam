@@ -7,9 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
+import { DEFECT_REQUEST_TYPES } from "@/lib/constants";
+
+const NONE = "__none__";
 
 function todayInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -25,14 +29,15 @@ export function CompleteDefectDialog({
   const complete = useCompleteDefect();
   const [form, setForm] = React.useState({
     workOrderNumber: "",
+    requestType: "",
     performedAt: todayInput(),
     result: "",
     images: [] as string[],
   });
 
-  // Reset mỗi khi mở cho một khiếm khuyết khác.
+  // Reset mỗi khi mở cho một khiếm khuyết khác. PCT mặc định = "Yêu Cầu" của khiếm khuyết.
   React.useEffect(() => {
-    if (defect) setForm({ workOrderNumber: "", performedAt: todayInput(), result: "", images: [] });
+    if (defect) setForm({ workOrderNumber: "", requestType: defect.requestType ?? "", performedAt: todayInput(), result: "", images: [] });
   }, [defect]);
 
   async function submit() {
@@ -42,6 +47,7 @@ export function CompleteDefectDialog({
       await complete.mutateAsync({
         id: defect.id,
         workOrderNumber: form.workOrderNumber,
+        requestType: form.requestType,
         performedAt: form.performedAt,
         result: form.result,
         images: form.images,
@@ -70,13 +76,24 @@ export function CompleteDefectDialog({
               <ReadOnly label="Cương vị" value={defect.system ?? "—"} />
             </div>
 
-            <Field label="Số phiếu công tác">
-              <Input
-                value={form.workOrderNumber}
-                onChange={(e) => setForm((f) => ({ ...f, workOrderNumber: e.target.value }))}
-                placeholder="VD: PCT-2026-001"
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Số phiếu công tác">
+                <Input
+                  value={form.workOrderNumber}
+                  onChange={(e) => setForm((f) => ({ ...f, workOrderNumber: e.target.value }))}
+                  placeholder="VD: PCT-2026-001"
+                />
+              </Field>
+              <Field label="PCT">
+                <Select value={form.requestType || NONE} onValueChange={(v) => setForm((f) => ({ ...f, requestType: v === NONE ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Chọn PCT" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>— Không chọn —</SelectItem>
+                    {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
             {/* Thiết bị — chỉ đọc, lấy theo khiếm khuyết đang chọn (như Tổ máy/Cương vị). */}
             <ReadOnly label="Thiết bị" value={defect.device || "—"} />
             <Field label="Ngày thực hiện *">

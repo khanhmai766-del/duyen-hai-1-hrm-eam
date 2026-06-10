@@ -120,6 +120,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                 <TableRow key={r.id}>
                   <TableCell>
                     <div className="font-medium text-ink">{r.workOrderNumber || "—"}</div>
+                    {r.requestType && <div className="text-[11px] text-muted-foreground">PCT: {r.requestType}</div>}
                     {r.requestNumber && <div className="text-[11px] text-muted-foreground">YC: {r.requestNumber}</div>}
                   </TableCell>
                   <TableCell className="text-center text-sm text-muted-foreground">{formatDate(r.performedAt)}</TableCell>

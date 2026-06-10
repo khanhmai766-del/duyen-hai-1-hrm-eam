@@ -27,6 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           unit: defect.unit,
           device: defect.device,
           system: defect.system,
+          requestType: body.requestType?.trim() || defect.requestType,
           content: defect.content,
           requestNumber: defect.requestNumber,
           workOrderNumber: body.workOrderNumber?.trim() || null,

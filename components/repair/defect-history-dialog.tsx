@@ -13,7 +13,7 @@ import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDefectHistory, useUpdateDefectHistory, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
-import { DEFECT_UNITS } from "@/lib/constants";
+import { DEFECT_UNITS, DEFECT_REQUEST_TYPES } from "@/lib/constants";
 
 function todayInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -25,7 +25,7 @@ function toDateInput(v: Date | string | null | undefined): string {
 }
 
 const NONE = "__none__";
-const EMPTY = { unit: "", device: "", system: "", workOrderNumber: "", performedAt: todayInput(), result: "", images: [] as string[] };
+const EMPTY = { unit: "", device: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), result: "", images: [] as string[] };
 
 /**
  * Hộp thoại Thêm mới / Chỉnh sửa một bản ghi lịch sử khiếm khuyết.
@@ -57,6 +57,7 @@ export function DefectHistoryDialog({
             unit: record.unit ?? "",
             device: record.device ?? "",
             system: record.system ?? "",
+            requestType: record.requestType ?? "",
             workOrderNumber: record.workOrderNumber ?? "",
             performedAt: toDateInput(record.performedAt),
             result: record.result ?? "",
@@ -127,9 +128,20 @@ export function DefectHistoryDialog({
             </Field>
           </div>
 
-          <Field label="Số phiếu công tác">
-            <Input value={form.workOrderNumber} onChange={(e) => set("workOrderNumber", e.target.value)} placeholder="VD: PCT-2026-001" />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Số phiếu công tác">
+              <Input value={form.workOrderNumber} onChange={(e) => set("workOrderNumber", e.target.value)} placeholder="VD: PCT-2026-001" />
+            </Field>
+            <Field label="PCT">
+              <Select value={form.requestType || NONE} onValueChange={(v) => set("requestType", v === NONE ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Chọn PCT" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Không chọn —</SelectItem>
+                  {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
           <Field label="Thiết bị">
             <Select value={form.device || NONE} onValueChange={(v) => set("device", v === NONE ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
