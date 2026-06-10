@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, requireUser, handle } from "@/lib/api";
+import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -31,5 +31,35 @@ export async function GET(req: NextRequest) {
       include: INCLUDE,
     });
     return ok(history, { total: history.length });
+  });
+}
+
+/** Thêm mới một bản ghi lịch sử khiếm khuyết thủ công (không qua phiếu khiếm khuyết). */
+export async function POST(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    const body = await req.json();
+
+    if (!body.unit) return fail("Vui lòng chọn tổ máy");
+
+    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
+    const history = await prisma.defectHistory.create({
+      data: {
+        unit: body.unit,
+        device: body.device?.trim() || null,
+        system: body.system?.trim() || null,
+        workOrderNumber: body.workOrderNumber?.trim() || null,
+        performedAt: body.performedAt ? new Date(body.performedAt) : new Date(),
+        result: body.result?.trim() || null,
+        content: body.content?.trim() || null,
+        requestNumber: body.requestNumber?.trim() || null,
+        images,
+        createdById: user.id,
+      },
+      include: INCLUDE,
+    });
+    await audit(user.id, "CREATE_DEFECT_HISTORY", "DefectHistory", history.id);
+    return ok(history);
   });
 }

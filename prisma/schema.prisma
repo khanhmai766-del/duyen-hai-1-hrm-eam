@@ -355,6 +355,7 @@ model DefectHistory {
   id              String   @id @default(cuid())
   defectId        String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
   unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
+  device          String? // Thiết bị (mã thiết bị) — đồng bộ danh mục Thiết bị
   system          String? // Cương vị (snapshot theo khiếm khuyết)
   workOrderNumber String? // Số phiếu công tác thực hiện
   performedAt     DateTime // Ngày thực hiện

@@ -1,7 +1,6 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { PageHeader } from "@/components/shared/page-header";
 import { DefectHistoryTab } from "@/components/repair/defect-history-tab";
 
 export default function RepairHistoryPage() {
@@ -10,10 +9,6 @@ export default function RepairHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Lịch sử sửa chữa"
-        description="Lịch sử khiếm khuyết thiết bị đã xử lý theo cương vị"
-      />
       <DefectHistoryTab role={role} />
     </div>
   );

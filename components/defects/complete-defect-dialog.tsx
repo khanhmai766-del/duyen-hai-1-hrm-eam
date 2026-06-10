@@ -77,6 +77,8 @@ export function CompleteDefectDialog({
                 placeholder="VD: PCT-2026-001"
               />
             </Field>
+            {/* Thiết bị — chỉ đọc, lấy theo khiếm khuyết đang chọn (như Tổ máy/Cương vị). */}
+            <ReadOnly label="Thiết bị" value={defect.device || "—"} />
             <Field label="Ngày thực hiện *">
               <Input
                 type="date"

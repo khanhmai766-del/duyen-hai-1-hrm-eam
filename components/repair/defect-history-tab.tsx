@@ -2,22 +2,25 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { ShieldCheck, Trash2, X } from "lucide-react";
+import { ShieldCheck, Trash2, X, Plus, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_UNITS, can } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 
 export function DefectHistoryTab({ role }: { role?: string }) {
+  const canManage = can(role, "manageDefect"); // ADMIN + SUPERVISOR + TECHNICIAN
   const canDelete = can(role, "approveRepair"); // ADMIN + SUPERVISOR
   const positions = usePositions();
   const [filters, setFilters] = React.useState<DefectHistoryFilters>({});
@@ -27,13 +30,34 @@ export function DefectHistoryTab({ role }: { role?: string }) {
 
   const [lightbox, setLightbox] = React.useState<string | null>(null);
   const [delTarget, setDelTarget] = React.useState<DefectHistoryItem | null>(null);
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<DefectHistoryItem | null>(null);
 
   function setFilter<K extends keyof DefectHistoryFilters>(k: K, v: string) {
     setFilters((f) => ({ ...f, [k]: v || undefined }));
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <PageHeader title="Lịch sử sửa chữa" description="Lịch sử khiếm khuyết thiết bị đã xử lý theo cương vị">
+        <ExportButton
+          rows={rows.map((r) => ({
+            workOrderNumber: r.workOrderNumber ?? "",
+            performedAt: formatDate(r.performedAt),
+            unit: r.unit,
+            cuongVi: r.system ?? "",
+            requestNumber: r.requestNumber ?? "",
+            content: r.content ?? "",
+            result: r.result ?? "",
+            doneBy: r.createdBy?.name ?? "",
+          }))}
+          filename="lich-su-khiem-khuyet"
+        />
+        {canManage && (
+          <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Thêm mới</Button>
+        )}
+      </PageHeader>
+
       <Card className="p-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div>
@@ -69,22 +93,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         </div>
       </Card>
 
-      <div className="flex justify-end">
-        <ExportButton
-          rows={rows.map((r) => ({
-            workOrderNumber: r.workOrderNumber ?? "",
-            performedAt: formatDate(r.performedAt),
-            unit: r.unit,
-            cuongVi: r.system ?? "",
-            requestNumber: r.requestNumber ?? "",
-            content: r.content ?? "",
-            result: r.result ?? "",
-            doneBy: r.createdBy?.name ?? "",
-          }))}
-          filename="lich-su-khiem-khuyet"
-        />
-      </div>
-
       {isLoading ? (
         <TableSkeleton rows={8} />
       ) : rows.length === 0 ? (
@@ -104,7 +112,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                 <TableHead>Cương vị</TableHead>
                 <TableHead>Kết quả thực hiện</TableHead>
                 <TableHead className="text-center">Ảnh</TableHead>
-                {canDelete && <TableHead className="text-center">Thao tác</TableHead>}
+                {(canManage || canDelete) && <TableHead className="text-center">Thao tác</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -135,12 +143,19 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                       )}
                     </div>
                   </TableCell>
-                  {canDelete && (
+                  {(canManage || canDelete) && (
                     <TableCell>
-                      <div className="flex items-center justify-center">
-                        <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(r)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        {canManage && (
+                          <Button variant="ghost" size="icon" title="Sửa" onClick={() => setEditTarget(r)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(r)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   )}
@@ -150,6 +165,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           </Table>
         </Card>
       )}
+
+      <DefectHistoryDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <DefectHistoryDialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)} record={editTarget} />
 
       {/* Lightbox xem ảnh lớn */}
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>

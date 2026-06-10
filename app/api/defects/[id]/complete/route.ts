@@ -25,6 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         data: {
           defectId: defect.id,
           unit: defect.unit,
+          device: defect.device,
           system: defect.system,
           content: defect.content,
           requestNumber: defect.requestNumber,

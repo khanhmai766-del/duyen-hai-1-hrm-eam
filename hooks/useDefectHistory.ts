@@ -26,6 +26,23 @@ export function useDefectHistory(filters: DefectHistoryFilters = {}) {
   });
 }
 
+export function useCreateDefectHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiMutate<DefectHistoryItem>("/api/defect-history", "POST", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["defect-history"] }),
+  });
+}
+
+export function useUpdateDefectHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Record<string, unknown> & { id: string }) =>
+      apiMutate<DefectHistoryItem>(`/api/defect-history/${id}`, "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["defect-history"] }),
+  });
+}
+
 export function useDeleteDefectHistory() {
   const qc = useQueryClient();
   return useMutation({
