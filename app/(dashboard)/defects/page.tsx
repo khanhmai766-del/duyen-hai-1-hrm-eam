@@ -3,19 +3,21 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DefectForm } from "@/components/defects/defect-form";
+import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
-import { DEFECT_STATUS, DEFECT_SEVERITY, can } from "@/lib/constants";
+import { usePositions } from "@/hooks/useUsers";
+import { DEFECT_STATUS, DEFECT_SEVERITY, DEFECT_REQUEST_TYPES, can } from "@/lib/constants";
 import { formatDate, cn } from "@/lib/utils";
 
 export default function DefectsPage() {
@@ -26,16 +28,46 @@ export default function DefectsPage() {
 
   const { data, isLoading } = useDefects();
   const del = useDeleteDefect();
-  const defects = data?.data ?? [];
+  const allDefects = data?.data ?? [];
 
+  // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng).
+  const positions = usePositions();
+
+  // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
+  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2">("ALL");
+  const [requestFilter, setRequestFilter] = React.useState("ALL");
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
+  const defects = allDefects.filter(
+    (d) =>
+      (unitFilter === "ALL" || d.unit === unitFilter) &&
+      (requestFilter === "ALL" || d.requestType === requestFilter) &&
+      (positionFilter === "ALL" || d.system === positionFilter)
+  );
+  // Lọc theo tình trạng khi bấm card KPI ("ALL" = tồn đọng = mọi tình trạng).
+  const [statusFilter, setStatusFilter] = React.useState("ALL");
+  const displayedDefects = statusFilter === "ALL" ? defects : defects.filter((d) => d.status === statusFilter);
+
+  const isFiltered = unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL";
+  function resetFilters() {
+    setUnitFilter("ALL");
+    setRequestFilter("ALL");
+    setPositionFilter("ALL");
+    setStatusFilter("ALL");
+  }
+
+  // KPI đếm theo bộ lọc (tổ máy/yêu cầu/cương vị), KHÔNG theo statusFilter.
   const chuaXuLy = defects.filter((d) => d.status === "CHUA_XU_LY").length;
   const coPct = defects.filter((d) => d.status === "CO_PCT").length;
   const choVatTu = defects.filter((d) => d.status === "CHO_VAT_TU").length;
   const tonDong = defects.filter((d) => d.status !== "DA_XU_LY").length;
+  function toggleStatus(s: string) {
+    setStatusFilter((cur) => (cur === s ? "ALL" : s));
+  }
 
   const [formOpen, setFormOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<DefectItem | null>(null);
+  const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
 
   function openCreate() { setEditTarget(null); setFormOpen(true); }
   function openEdit(d: DefectItem) { setEditTarget(d); setFormOpen(true); }
@@ -44,12 +76,13 @@ export default function DefectsPage() {
     <div className="space-y-6">
       <PageHeader title="Khiếm khuyết thiết bị" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
         <ExportButton
-          rows={defects.map((d) => ({
-            id: d.code,
+          rows={displayedDefects.map((d) => ({
             unit: d.unit,
+            device: d.device ?? "",
             cuongVi: d.system ?? "",
             severity: d.severity ? DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY] : "",
             requestType: d.requestType ?? "",
+            requestNumber: d.requestNumber ?? "",
             content: d.content ?? "",
             status: DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
             detectedAt: formatDate(d.detectedAt),
@@ -63,28 +96,88 @@ export default function DefectsPage() {
         )}
       </PageHeader>
 
+      {!isLoading && allDefects.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
+            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
+              {(["ALL", "S1", "S2"] as const).map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setUnitFilter(u)}
+                  className={cn(
+                    "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                    unitFilter === u ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
+                  )}
+                >
+                  {u === "ALL" ? "Tất cả" : u}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Yêu cầu:</span>
+            <Select value={requestFilter} onValueChange={setRequestFilter}>
+              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Cương vị:</span>
+            <Select value={positionFilter} onValueChange={setPositionFilter}>
+              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isFiltered && (
+            <button onClick={resetFilters} className="text-sm font-medium text-accent hover:underline">
+              Xoá bộ lọc
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tint="red" />
-        <StatCard label="Đang thực hiện" value={coPct} icon={Wrench} tint="blue" />
-        <StatCard label="Chờ vật tư" value={choVatTu} icon={Package} tint="amber" />
-        <StatCard label="Khiếm khuyết tồn đọng" value={tonDong} icon={CircleSlash} tint="navy" />
+        <DefectKpi label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tone="rose" active={statusFilter === "CHUA_XU_LY"} onClick={() => toggleStatus("CHUA_XU_LY")} />
+        <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
+        <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
+        <DefectKpi label="Khiếm khuyết tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "ALL"} onClick={() => setStatusFilter("ALL")} />
       </div>
 
       {isLoading ? (
         <TableSkeleton rows={6} />
-      ) : defects.length === 0 ? (
-        <EmptyState
-          icon={ShieldAlert}
-          title="Chưa có khiếm khuyết"
-          description="Nhấn “Thêm mới” để ghi nhận khiếm khuyết thiết bị."
-          action={canManage ? { label: "Thêm mới", onClick: openCreate } : undefined}
-        />
+      ) : displayedDefects.length === 0 ? (
+        allDefects.length === 0 ? (
+          <EmptyState
+            icon={ShieldAlert}
+            title="Chưa có khiếm khuyết"
+            description="Nhấn “Thêm mới” để ghi nhận khiếm khuyết thiết bị."
+            action={canManage ? { label: "Thêm mới", onClick: openCreate } : undefined}
+          />
+        ) : (
+          <EmptyState
+            icon={ShieldAlert}
+            title="Không có khiếm khuyết phù hợp"
+            description="Không có khiếm khuyết nào khớp bộ lọc. Thử bỏ bớt điều kiện."
+            action={{ label: "Xoá bộ lọc", onClick: resetFilters }}
+          />
+        )
       ) : (
         <Card className="overflow-hidden">
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead>Mã</TableHead>
+                <TableHead>Số yêu cầu</TableHead>
                 <TableHead className="text-center">Tổ máy</TableHead>
                 <TableHead>Cương vị</TableHead>
                 <TableHead>Nội dung</TableHead>
@@ -95,19 +188,19 @@ export default function DefectsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {defects.map((d) => (
+              {displayedDefects.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
                       {d.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={d.imageUrl} alt={d.code} className="h-9 w-9 shrink-0 rounded-md border border-border object-cover" />
+                        <img src={d.imageUrl} alt="Khiếm khuyết" className="h-9 w-9 shrink-0 rounded-md border border-border object-cover" />
                       ) : (
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent"><ShieldAlert className="h-4 w-4" /></span>
                       )}
                       <div className="min-w-0">
-                        <div className="font-mono text-xs font-medium text-navy">{d.code}</div>
-                        {d.requestType && <div className="text-[11px] text-muted-foreground">{d.requestType}{d.requestNumber ? ` · ${d.requestNumber}` : ""}</div>}
+                        <div className="truncate font-medium text-ink">{d.requestNumber || "—"}</div>
+                        {d.requestType && <div className="text-[11px] text-muted-foreground">{d.requestType}</div>}
                       </div>
                     </div>
                   </TableCell>
@@ -116,13 +209,16 @@ export default function DefectsPage() {
                   <TableCell className="max-w-[260px] truncate text-sm" title={d.content ?? undefined}>{d.content || "—"}</TableCell>
                   <TableCell className="text-center">
                     {d.severity ? (
-                      <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-ink">{d.severity}</span>
+                      <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
                     ) : "—"}
                   </TableCell>
                   <TableCell className="text-center"><DefectStatusBadge status={d.status} /></TableCell>
                   <TableCell className="text-center text-sm text-muted-foreground">{formatDate(d.detectedAt)}</TableCell>
                   <TableCell>
                     <div className="flex items-center justify-center gap-1">
+                      {canManage && d.status !== "DA_XU_LY" && (
+                        <Button variant="ghost" size="icon" title="Hoàn thành" className="text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={() => setCompleteTarget(d)}><CheckCircle2 className="h-4 w-4" /></Button>
+                      )}
                       {canManage && (
                         <Button variant="ghost" size="icon" title="Sửa" onClick={() => openEdit(d)}><Pencil className="h-4 w-4" /></Button>
                       )}
@@ -145,7 +241,7 @@ export default function DefectsPage() {
           <div className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-xl animate-in slide-in-from-right">
             <div className="flex items-center gap-2 border-b border-border p-4">
               <button onClick={() => setFormOpen(false)} className="rounded-md p-1.5 hover:bg-muted" aria-label="Đóng"><X className="h-5 w-5" /></button>
-              <h2 className="text-lg font-bold text-ink">{editTarget ? `Sửa khiếm khuyết · ${editTarget.code}` : "Nhập khiếm khuyết"}</h2>
+              <h2 className="text-lg font-bold text-ink">{editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}</h2>
             </div>
             <DefectForm
               defect={editTarget}
@@ -156,11 +252,13 @@ export default function DefectsPage() {
         </div>
       )}
 
+      <CompleteDefectDialog defect={completeTarget} onClose={() => setCompleteTarget(null)} />
+
       <ConfirmDialog
         open={!!delTarget}
         onOpenChange={(o) => !o && setDelTarget(null)}
         title="Xoá khiếm khuyết?"
-        description={delTarget ? `Xoá khiếm khuyết “${delTarget.code}”? Hành động này không thể hoàn tác.` : undefined}
+        description={delTarget ? `Xoá khiếm khuyết${delTarget.requestNumber ? ` “${delTarget.requestNumber}”` : ""}? Hành động này không thể hoàn tác.` : undefined}
         confirmLabel="Xoá"
         loading={del.isPending}
         onConfirm={async () => {
@@ -173,6 +271,75 @@ export default function DefectsPage() {
             toast.error((e as Error).message);
           }
         }}
+      />
+    </div>
+  );
+}
+
+// Màu mức độ khiếm khuyết: 1 đỏ · 2 cam · 3 vàng · 4 xám.
+const SEVERITY_TONE: Record<string, string> = {
+  "1": "bg-red-100 text-red-700",
+  "2": "bg-orange-100 text-orange-700",
+  "3": "bg-yellow-100 text-yellow-800",
+  "4": "bg-gray-100 text-gray-600",
+};
+
+const KPI_TONES = {
+  rose: { bg: "from-rose-50 to-rose-100", num: "text-rose-600", icon: "text-rose-400", shadow: "shadow-rose-500/25 hover:shadow-rose-500/40" },
+  sky: { bg: "from-sky-50 to-sky-100", num: "text-sky-600", icon: "text-sky-400", shadow: "shadow-sky-500/25 hover:shadow-sky-500/40" },
+  amber: { bg: "from-amber-50 to-amber-100", num: "text-amber-600", icon: "text-amber-400", shadow: "shadow-amber-500/25 hover:shadow-amber-500/40" },
+  violet: { bg: "from-violet-50 to-violet-100", num: "text-violet-600", icon: "text-violet-400", shadow: "shadow-violet-500/25 hover:shadow-violet-500/40" },
+} as const;
+
+/**
+ * KPI card 3D: nghiêng theo con trỏ (perspective tilt), phân lớp chiều sâu
+ * (số & icon nổi lên bằng translateZ), bóng màu + lớp bóng kính.
+ */
+function DefectKpi({ value, label, icon: Icon, tone, active, onClick }: { value: number; label: string; icon: any; tone: keyof typeof KPI_TONES; active?: boolean; onClick?: () => void }) {
+  const t = KPI_TONES[tone];
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = React.useState("perspective(900px)");
+
+  function onMove(e: React.MouseEvent) {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width;
+    const py = (e.clientY - r.top) / r.height;
+    const rx = (0.5 - py) * 9;
+    const ry = (px - 0.5) * 11;
+    setTilt(`perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale(1.035)`);
+  }
+
+  return (
+    <div
+      ref={ref}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
+      onMouseMove={onMove}
+      onMouseLeave={() => setTilt("perspective(900px) rotateX(0deg) rotateY(0deg) scale(1)")}
+      style={{ transform: tilt, transformStyle: "preserve-3d" }}
+      className={cn(
+        "group relative flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-gradient-to-br px-6 py-5 shadow-lg ring-1 transition-[transform,box-shadow] duration-200 will-change-transform hover:shadow-2xl focus:outline-none",
+        t.bg,
+        t.shadow,
+        active ? "ring-2 ring-navy ring-offset-2" : "ring-white/60"
+      )}
+    >
+      {/* lớp bóng kính ở trên */}
+      <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/60 via-transparent to-transparent opacity-70" />
+      <div className="relative min-w-0" style={{ transform: "translateZ(28px)" }}>
+        <div className={cn("text-[42px] font-extrabold leading-none tracking-tight", t.num)} style={{ textShadow: "0 2px 4px rgba(0,0,0,0.08)" }}>
+          {value}
+        </div>
+        <div className="mt-2.5 truncate text-sm font-semibold text-muted-foreground">{label}</div>
+      </div>
+      <Icon
+        className={cn("relative h-16 w-16 shrink-0 drop-shadow-md transition-transform duration-200 group-hover:scale-110", t.icon)}
+        strokeWidth={1.5}
+        style={{ transform: "translateZ(48px)" }}
       />
     </div>
   );

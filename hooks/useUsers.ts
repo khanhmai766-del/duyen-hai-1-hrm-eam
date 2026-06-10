@@ -1,11 +1,25 @@
 "use client";
 
+import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { SafeUser } from "@/types";
 
 export function useUsers() {
   return useQuery({ queryKey: ["users"], queryFn: () => apiGet<SafeUser[]>("/api/users") });
+}
+
+/** Danh sách "Chức vụ" phân biệt (bỏ trùng, đã sắp xếp) lấy từ người dùng. */
+export function usePositions(): string[] {
+  const { data } = useUsers();
+  return React.useMemo(() => {
+    const set = new Set<string>();
+    for (const u of data?.data ?? []) {
+      const p = (u.position ?? "").trim();
+      if (p) set.add(p);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
+  }, [data]);
 }
 
 export function useCreateUser() {

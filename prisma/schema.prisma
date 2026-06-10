@@ -38,6 +38,7 @@ model User {
   materialReplacements    MaterialReplacement[]    @relation("MrCreatedBy")
   materialReplacementLogs MaterialReplacementLog[] @relation("MrDoneBy")
   defects                 Defect[]                 @relation("DefectCreatedBy")
+  defectHistories         DefectHistory[]          @relation("DefectHistoryCreatedBy")
 }
 
 // Bảng tin nội bộ: bài đăng do Quản trị (ADMIN) tạo, mọi người chỉ xem.
@@ -327,9 +328,9 @@ model MaintenanceRecord {
 // Khiếm khuyết thiết bị (Defect) — phiếu ghi nhận khiếm khuyết theo tổ máy/hệ thống.
 model Defect {
   id            String    @id @default(cuid())
-  code          String    @unique // ID, vd "KKTB//001"
   unit          String // Tổ máy: S1 | S2
-  system        String? // Hệ thống
+  device        String? // Thiết bị (mã thiết bị)
+  system        String? // Cương vị (chức vụ phụ trách)
   severity      String? // Mức độ: "1".."4"
   condition     String? // Điều kiện thực hiện: A | B
   requestType   String? // Yêu cầu: Cơ | Điện | I&C | Khác
@@ -337,6 +338,7 @@ model Defect {
   content       String? // Nội dung
   status        String    @default("CHUA_XU_LY") // Tình trạng khiếm khuyết
   detectedAt    DateTime? // Ngày phát hiện
+  completedAt   DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
   note          String? // Ghi chú
   imageUrl      String? // Hình ảnh
   createdById   String
@@ -344,6 +346,26 @@ model Defect {
   updatedAt     DateTime  @updatedAt
 
   createdBy User @relation("DefectCreatedBy", fields: [createdById], references: [id])
+}
+
+// Lịch sử xử lý khiếm khuyết theo cương vị — sinh khi một khiếm khuyết được "Hoàn thành".
+// Tách rời vòng đời Defect (không đặt FK) để phiếu khiếm khuyết có thể bị ẩn/xoá sau 2 tuần
+// mà lịch sử vẫn được giữ lại.
+model DefectHistory {
+  id              String   @id @default(cuid())
+  defectId        String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
+  unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
+  system          String? // Cương vị (snapshot theo khiếm khuyết)
+  workOrderNumber String? // Số phiếu công tác thực hiện
+  performedAt     DateTime // Ngày thực hiện
+  result          String? // Kết quả thực hiện
+  content         String? // Nội dung khiếm khuyết (snapshot)
+  requestNumber   String? // Số yêu cầu (snapshot)
+  images          String[] // Hình ảnh (tối đa 3)
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  createdBy User @relation("DefectHistoryCreatedBy", fields: [createdById], references: [id])
 }
 
 model AuditLog {

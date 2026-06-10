@@ -40,3 +40,22 @@ export function useDeleteDefect() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["defects"] }),
   });
 }
+
+export interface CompleteDefectInput {
+  workOrderNumber?: string;
+  performedAt?: string | null;
+  result?: string;
+  images?: string[];
+}
+
+export function useCompleteDefect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: CompleteDefectInput & { id: string }) =>
+      apiMutate(`/api/defects/${id}/complete`, "POST", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["defects"] });
+      qc.invalidateQueries({ queryKey: ["defect-history"] });
+    },
+  });
+}

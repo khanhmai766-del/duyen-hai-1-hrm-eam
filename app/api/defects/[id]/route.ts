@@ -13,6 +13,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       where: { id: params.id },
       data: {
         unit: body.unit,
+        device: body.device !== undefined ? body.device || null : undefined,
         system: body.system !== undefined ? body.system || null : undefined,
         severity: body.severity !== undefined ? body.severity || null : undefined,
         condition: body.condition !== undefined ? body.condition || null : undefined,
@@ -26,7 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       },
       include: INCLUDE,
     });
-    await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id, defect.code);
+    await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id);
     return ok(defect);
   });
 }

@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useUsers";
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, usePositions } from "@/hooks/useUsers";
 import { apiGet } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -36,6 +36,7 @@ export default function AdminUsersPage() {
 
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [form, setForm] = React.useState({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
@@ -51,10 +52,13 @@ export default function AdminUsersPage() {
   }
 
   const users = data?.data ?? [];
+  const positions = usePositions();
   const nq = normalizeText(search.trim());
-  const filteredUsers = nq
-    ? users.filter((u) => normalizeText(`${u.name} ${u.employeeId}`).includes(nq))
-    : users;
+  const filteredUsers = users.filter(
+    (u) =>
+      (!nq || normalizeText(`${u.name} ${u.employeeId}`).includes(nq)) &&
+      (positionFilter === "ALL" || u.position === positionFilter)
+  );
   const auditRows = (audit.data?.data ?? []).slice(0, 20);
 
   async function createUser() {
@@ -80,7 +84,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Quản lý người dùng" description="Tài khoản & phân quyền hệ thống">
+      <PageHeader title="QUẢN LÝ NGƯỜI DÙNG" description="Tài khoản & phân quyền hệ thống">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -99,6 +103,13 @@ export default function AdminUsersPage() {
             </button>
           )}
         </div>
+        <Select value={positionFilter} onValueChange={setPositionFilter}>
+          <SelectTrigger className="h-9 w-52" aria-label="Lọc theo chức vụ"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tất cả chức vụ</SelectItem>
+            {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
       </PageHeader>
 
@@ -117,7 +128,7 @@ export default function AdminUsersPage() {
               {filteredUsers.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                    Không tìm thấy người dùng khớp “{search.trim()}”.
+                    Không tìm thấy người dùng phù hợp với điều kiện lọc.
                   </TableCell>
                 </TableRow>
               )}
@@ -223,7 +234,7 @@ export default function AdminUsersPage() {
             <Field label="Họ tên *" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email *"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
-            <Field label="Chức vụ"><Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></Field>
+            <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="Vai trò">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
@@ -309,7 +320,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
             <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Mã NV"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="SĐT"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-            <Field label="Chức vụ"><Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></Field>
+            <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="Vai trò">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
@@ -330,4 +341,22 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return <div className={className}><Label className="mb-1.5 block">{label}</Label>{children}</div>;
+}
+
+const NO_POSITION = "__none__";
+
+/** Dropdown chọn Chức vụ — lấy từ data chức vụ hiện có (bỏ trùng). */
+function PositionSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const positions = usePositions();
+  // Đảm bảo giá trị hiện tại (vd khi sửa) luôn có trong danh sách.
+  const options = value && !positions.includes(value) ? [value, ...positions] : positions;
+  return (
+    <Select value={value || NO_POSITION} onValueChange={(v) => onChange(v === NO_POSITION ? "" : v)}>
+      <SelectTrigger><SelectValue placeholder="Chọn chức vụ" /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_POSITION}>— Không chọn —</SelectItem>
+        {options.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
 }

@@ -148,26 +148,6 @@ export const DEFECT_CONDITION = {
 } as const;
 export const DEFECT_CONDITION_ORDER = ["A", "B"] as const;
 
-/** Cương vị (chức vụ) cho khiếm khuyết. */
-export const DEFECT_POSITIONS = [
-  "Lò Trưởng",
-  "Máy Trưởng",
-  "Lò Phó",
-  "Máy Nghiền",
-  "Thải Xỉ",
-  "ESP",
-  "FGD",
-  "Máy Phó",
-  "Trợ Thủ",
-  "Trạm Bơm Tuần Hoàn",
-  "XLNT",
-  "XLN Hỗn Hợp",
-  "Khí Nén - Nhà Dầu",
-  "NH3 - LHP",
-  "Trực phụ điện",
-  "Trực chính điện",
-] as const;
-
 /** Loại yêu cầu (chuyên môn). */
 export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "Hóa", "Hành Chính IT", "Khác"] as const;
 

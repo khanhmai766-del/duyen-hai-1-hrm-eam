@@ -6,21 +6,17 @@ export const dynamic = "force-dynamic";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true } } };
 
-/** Sinh mã khiếm khuyết kế tiếp dạng KKTB//001. */
-async function nextCode(): Promise<string> {
-  const last = await prisma.defect.findFirst({ orderBy: { createdAt: "desc" }, select: { code: true } });
-  const n = last?.code?.match(/(\d+)\s*$/)?.[1];
-  const seq = (n ? parseInt(n, 10) : 0) + 1;
-  return `KKTB//${String(seq).padStart(3, "0")}`;
-}
-
 export async function GET() {
   return handle(async () => {
     await requireUser();
-    const defects = await prisma.defect.findMany({ orderBy: { createdAt: "desc" }, include: INCLUDE });
-    // gợi ý mã kế tiếp cho form thêm mới
-    const suggestedCode = await nextCode();
-    return ok(defects, { total: defects.length, suggestedCode });
+    // Ẩn các phiếu đã xử lý quá 2 tuần khỏi danh sách (lịch sử vẫn giữ riêng).
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    const defects = await prisma.defect.findMany({
+      where: { NOT: { AND: [{ status: "DA_XU_LY" }, { completedAt: { lt: cutoff } }] } },
+      orderBy: { createdAt: "desc" },
+      include: INCLUDE,
+    });
+    return ok(defects, { total: defects.length });
   });
 }
 
@@ -31,15 +27,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
-    let code = body.code?.trim();
-    if (!code) code = await nextCode();
-    const exists = await prisma.defect.findUnique({ where: { code } });
-    if (exists) return fail("Mã khiếm khuyết đã tồn tại");
 
     const defect = await prisma.defect.create({
       data: {
-        code,
         unit: body.unit,
+        device: body.device || null,
         system: body.system || null,
         severity: body.severity || null,
         condition: body.condition || null,
@@ -54,7 +46,7 @@ export async function POST(req: NextRequest) {
       },
       include: INCLUDE,
     });
-    await audit(user.id, "CREATE_DEFECT", "Defect", defect.id, defect.code);
+    await audit(user.id, "CREATE_DEFECT", "Defect", defect.id);
     return ok(defect);
   });
 }
