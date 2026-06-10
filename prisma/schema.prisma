@@ -27,9 +27,6 @@ model User {
   repairLogs       RepairLog[]       @relation("CreatedBy")
   approvedLogs     RepairLog[]       @relation("ApprovedBy")
   auditLogs        AuditLog[]
-  maintenancePlans    MaintenancePlan[]   @relation("PmCreatedBy")
-  maintenanceAssigned MaintenancePlan[]   @relation("PmAssignee")
-  maintenanceRecords  MaintenanceRecord[] @relation("PmDoneBy")
   operationEvents  OperationEvent[]  @relation("OpCreatedBy")
   hcGroups          HcGroup[]          @relation("HcGroupCreator")
   hcCheckIns        HcCheckIn[]        @relation("HcCheckInUser")
@@ -169,7 +166,6 @@ model Device {
 
   materials            DeviceMaterial[]
   repairLogs           RepairLog[]
-  maintenancePlans     MaintenancePlan[]
   materialReplacements MaterialReplacement[]
 }
 
@@ -288,41 +284,6 @@ model DeviceMaterial {
 
   device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   material Material @relation(fields: [materialId], references: [id])
-}
-
-// Kế hoạch bảo trì định kỳ (Preventive Maintenance) cho từng thiết bị.
-model MaintenancePlan {
-  id           String   @id @default(cuid())
-  deviceId     String
-  title        String // vd "Vệ sinh bộ lọc bụi tĩnh điện"
-  description  String?
-  intervalDays Int // chu kỳ lặp (ngày)
-  priority     Priority @default(MEDIUM)
-  lastDoneAt   DateTime? // lần thực hiện gần nhất
-  nextDueAt    DateTime // ngày đến hạn kế tiếp
-  assigneeId   String? // người phụ trách
-  isActive     Boolean  @default(true)
-  createdById  String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  device    Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  assignee  User?               @relation("PmAssignee", fields: [assigneeId], references: [id])
-  createdBy User                @relation("PmCreatedBy", fields: [createdById], references: [id])
-  records   MaintenanceRecord[]
-}
-
-// Lịch sử mỗi lần thực hiện một kế hoạch bảo trì định kỳ.
-model MaintenanceRecord {
-  id       String   @id @default(cuid())
-  planId   String
-  doneAt   DateTime @default(now())
-  doneById String
-  note     String?
-  cost     Float?
-
-  plan   MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  doneBy User            @relation("PmDoneBy", fields: [doneById], references: [id])
 }
 
 // Khiếm khuyết thiết bị (Defect) — phiếu ghi nhận khiếm khuyết theo tổ máy/hệ thống.

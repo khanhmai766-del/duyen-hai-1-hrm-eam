@@ -22,8 +22,6 @@ async function main() {
   // ---- Clean (order matters for FKs) ----
   await prisma.operationEvent.deleteMany();
   await prisma.defect.deleteMany();
-  await prisma.maintenanceRecord.deleteMany();
-  await prisma.maintenancePlan.deleteMany();
   await prisma.materialReplacementLog.deleteMany();
   await prisma.materialReplacement.deleteMany();
   await prisma.deviceMaterial.deleteMany();
@@ -234,39 +232,6 @@ async function main() {
     ],
   });
   console.log("✓ device material usage");
-
-  // ---- Maintenance plans (preventive maintenance) ----
-  // nextDueAt spread across buckets: overdue / due-soon / on-track.
-  const daysFromNow = (n: number, hour = 8): Date => {
-    const d = new Date();
-    d.setDate(d.getDate() + n);
-    d.setHours(hour, 0, 0, 0);
-    return d;
-  };
-  const pmSeed = [
-    { deviceIdx: 0, title: "Vệ sinh & kiểm tra điện cực ESP", intervalDays: 90, priority: Priority.MEDIUM, lastDone: daysAgo(95), nextDue: daysFromNow(-5), assigneeIdx: 4 },
-    { deviceIdx: 4, title: "Kiểm tra bơm tuần hoàn FGD", intervalDays: 30, priority: Priority.HIGH, lastDone: daysAgo(25), nextDue: daysFromNow(5), assigneeIdx: 5 },
-    { deviceIdx: 9, title: "Kiểm tra van an toàn lò hơi", intervalDays: 30, priority: Priority.CRITICAL, lastDone: daysAgo(28), nextDue: daysFromNow(2), assigneeIdx: 6 },
-    { deviceIdx: 12, title: "Bảo dưỡng định kỳ tuabin (đo độ rung)", intervalDays: 180, priority: Priority.HIGH, lastDone: daysAgo(30), nextDue: daysFromNow(150), assigneeIdx: 5 },
-    { deviceIdx: 6, title: "Hiệu chuẩn tủ điều khiển DCS", intervalDays: 365, priority: Priority.LOW, lastDone: daysAgo(160), nextDue: daysFromNow(205), assigneeIdx: 8 },
-    { deviceIdx: 10, title: "Bôi trơn & kiểm tra quạt gió FD", intervalDays: 14, priority: Priority.MEDIUM, lastDone: daysAgo(13), nextDue: daysFromNow(1), assigneeIdx: 4 },
-    { deviceIdx: 13, title: "Kiểm tra cách điện máy phát", intervalDays: 90, priority: Priority.HIGH, lastDone: daysAgo(20), nextDue: daysFromNow(70), assigneeIdx: 7 },
-  ];
-  for (const p of pmSeed) {
-    await prisma.maintenancePlan.create({
-      data: {
-        deviceId: devices[p.deviceIdx].id,
-        title: p.title,
-        intervalDays: p.intervalDays,
-        priority: p.priority,
-        lastDoneAt: p.lastDone,
-        nextDueAt: p.nextDue,
-        assigneeId: users[p.assigneeIdx].id,
-        createdById: users[1].id,
-      },
-    });
-  }
-  console.log(`✓ ${pmSeed.length} maintenance plans`);
 
   // ---- Audit log sample ----
   await prisma.auditLog.createMany({

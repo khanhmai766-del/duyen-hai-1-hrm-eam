@@ -5,7 +5,6 @@ import {
   Settings,
   Cpu,
   Wrench,
-  CalendarClock,
   Package,
   Repeat,
   ShieldAlert,
@@ -53,8 +52,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Quản lý thiết bị",
     items: [
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, keywords: "device thiet bi may moc esp fgd boiler turbine" },
-      { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history" },
-      { label: "Bảo trì định kỳ", href: "/maintenance", icon: CalendarClock, keywords: "bao tri dinh ky preventive maintenance pm lich bao duong chu ky den han" },
+      { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
       { label: "Danh mục vật tư", href: "/materials", icon: Package, keywords: "material vat tu phu tung ton kho" },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
       { label: "Khiếm khuyết thiết bị", href: "/defects", icon: ShieldAlert, keywords: "defect su co fault khiem khuyet" },

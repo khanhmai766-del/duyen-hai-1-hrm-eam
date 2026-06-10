@@ -176,39 +176,7 @@ export const MATERIAL_SYSTEMS = [
   "XLN Hỗn hợp",
 ] as const;
 
-// ---- Bảo trì định kỳ (Preventive Maintenance) ----
-
-/** Preset chu kỳ bảo trì thường gặp (ngày). */
-export const MAINTENANCE_INTERVALS: { days: number; label: string }[] = [
-  { days: 7, label: "Hàng tuần" },
-  { days: 14, label: "2 tuần" },
-  { days: 30, label: "Hàng tháng" },
-  { days: 90, label: "Hàng quý" },
-  { days: 180, label: "6 tháng" },
-  { days: 365, label: "Hàng năm" },
-];
-
-export function intervalLabel(days: number): string {
-  return MAINTENANCE_INTERVALS.find((i) => i.days === days)?.label ?? `${days} ngày`;
-}
-
-/**
- * Trạng thái đến hạn của một kế hoạch bảo trì, suy ra từ nextDueAt:
- *  OVERDUE  — đã quá hạn (nextDue < hôm nay)
- *  DUE_SOON — đến hạn trong ≤ 7 ngày tới
- *  OK       — còn xa hạn
- */
-export const PM_DUE = {
-  OVERDUE: { label: "Quá hạn", badge: "bg-red-100 text-red-800", dot: "#DC2626" },
-  DUE_SOON: { label: "Sắp đến hạn", badge: "bg-amber-100 text-amber-800", dot: "#D97706" },
-  OK: { label: "Đúng kế hoạch", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
-} as const;
-
-export type PmDueKey = keyof typeof PM_DUE;
-export const PM_DUE_ORDER: PmDueKey[] = ["OVERDUE", "DUE_SOON", "OK"];
-
-/** Số ngày tới hạn được coi là "sắp đến hạn". */
-export const PM_DUE_SOON_DAYS = 7;
+// ---- Tiện ích thời gian dùng chung ----
 
 /** Số ngày còn lại đến hạn (âm = đã quá hạn). */
 export function daysUntilDue(nextDueAt: Date | string, now: Date = new Date()): number {
@@ -216,13 +184,6 @@ export function daysUntilDue(nextDueAt: Date | string, now: Date = new Date()): 
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate());
   return Math.round((startOfDue.getTime() - startOfToday.getTime()) / 86_400_000);
-}
-
-export function pmDueStatus(nextDueAt: Date | string, now: Date = new Date()): PmDueKey {
-  const d = daysUntilDue(nextDueAt, now);
-  if (d < 0) return "OVERDUE";
-  if (d <= PM_DUE_SOON_DAYS) return "DUE_SOON";
-  return "OK";
 }
 
 /** Cộng số ngày vào một mốc thời gian, giữ giờ 08:00 cho ngày đến hạn. */
@@ -282,7 +243,6 @@ export const CAN = {
   manageUsers: ["ADMIN"],
   deleteDevice: ["ADMIN"],
   manageMaterials: ["ADMIN", "SUPERVISOR"],
-  manageMaintenance: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
   manageReplacement: ["ADMIN", "SUPERVISOR"],
   manageDefect: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
 } as const;

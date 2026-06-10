@@ -6,22 +6,18 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { ArrowLeft, Cpu, Download, Pencil, Trash2, FileText, Package, CalendarClock, Plus, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Cpu, Download, Pencil, Trash2, FileText, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { StatusBadge, PriorityBadge } from "@/components/devices/status-badge";
+import { StatusBadge } from "@/components/devices/status-badge";
 import { RepairTimeline } from "@/components/repair/repair-timeline";
 import { DeviceForm } from "@/components/devices/device-form";
-import { DueBadge } from "@/components/maintenance/due-badge";
-import { PlanForm } from "@/components/maintenance/plan-form";
-import { CompleteDialog } from "@/components/maintenance/complete-dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useUpdateDevice, useDeleteDevice } from "@/hooks/useDevices";
-import { useMaintenancePlans, type MaintenancePlanItem } from "@/hooks/useMaintenance";
-import { DEVICE_STATUS_ORDER, DEVICE_STATUS, intervalLabel, can } from "@/lib/constants";
+import { DEVICE_STATUS_ORDER, DEVICE_STATUS, can } from "@/lib/constants";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
 export default function DeviceDetailPage() {
@@ -173,7 +169,6 @@ export default function DeviceDetailPage() {
               )}
             </CardContent>
           </Card>
-          <DeviceMaintenanceCard deviceId={id} canManage={can(session?.user?.role, "manageMaintenance")} />
 
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" /> Tài liệu</CardTitle></CardHeader>
@@ -218,65 +213,5 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium text-ink">{value}</span>
     </div>
-  );
-}
-
-function DeviceMaintenanceCard({ deviceId, canManage }: { deviceId: string; canManage: boolean }) {
-  const { data, isLoading } = useMaintenancePlans({ deviceId });
-  const plans = data?.data ?? [];
-  const [createOpen, setCreateOpen] = React.useState(false);
-  const [completeTarget, setCompleteTarget] = React.useState<MaintenancePlanItem | null>(null);
-
-  return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2"><CalendarClock className="h-4 w-4" /> Bảo trì định kỳ</CardTitle>
-        {canManage && (
-          <Button variant="ghost" size="icon" title="Thêm kế hoạch" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Đang tải...</p>
-        ) : plans.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Chưa có kế hoạch bảo trì.</p>
-        ) : (
-          plans.map((p) => (
-            <div key={p.id} className="rounded-lg border border-border p-3 text-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium text-ink">{p.title}</span>
-                    <PriorityBadge priority={p.priority} />
-                  </div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
-                    {intervalLabel(p.intervalDays)} · đến hạn {formatDate(p.nextDueAt)}
-                  </div>
-                </div>
-                {canManage && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" title="Đánh dấu đã làm" onClick={() => setCompleteTarget(p)}>
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  </Button>
-                )}
-              </div>
-              <div className="mt-1.5">
-                <DueBadge nextDueAt={p.nextDueAt} withText />
-              </div>
-            </div>
-          ))
-        )}
-      </CardContent>
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Tạo kế hoạch bảo trì</DialogTitle></DialogHeader>
-          <PlanForm deviceId={deviceId} onDone={() => setCreateOpen(false)} />
-        </DialogContent>
-      </Dialog>
-
-      <CompleteDialog plan={completeTarget} onClose={() => setCompleteTarget(null)} />
-    </Card>
   );
 }
