@@ -147,34 +147,21 @@ model ShiftHandover {
 }
 
 model Device {
-  id            String       @id @default(cuid())
-  code          String       @unique // e.g. "ESP-S1-001"
-  name          String
-  category      String // ESP, FGD, I&C, Boiler, Turbine, etc.
-  location      String
-  manufacturer  String?
-  model         String?
-  serialNumber  String?
-  installDate   DateTime?
-  warrantyUntil DateTime?
-  status        DeviceStatus @default(NORMAL)
-  specs         Json? // flexible technical specs
-  imageUrl      String?
-  qrCodeData    String? // encoded URL
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id               String   @id @default(cuid())
+  code             String   @unique // Mã thiết bị, vd "ESP-S1-001"
+  name             String // Tên thiết bị
+  system           String? // Hệ thống (nhập tự do) — thay cho "Loại thiết bị"
+  managingPosition String? // Cương vị quản lý (đồng bộ chức vụ người dùng)
+  images           String[] // Ảnh (tối đa 3) — base64 hoặc URL
+  attachedInfo     String? // Thông tin đính kèm theo
+  documentUrl      String? // Tài liệu đính kèm (link)
+  qrCodeData       String? // encoded URL (sinh từ mã)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   materials            DeviceMaterial[]
   repairLogs           RepairLog[]
   materialReplacements MaterialReplacement[]
-}
-
-enum DeviceStatus {
-  NORMAL
-  MAINTENANCE
-  FAULT
-  DECOMMISSIONED
-  UNDER_REPAIR
 }
 
 model RepairLog {

@@ -25,20 +25,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
+    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : undefined;
     const device = await prisma.device.update({
       where: { id: params.id },
       data: {
         name: body.name,
-        category: body.category,
-        location: body.location,
-        manufacturer: body.manufacturer ?? null,
-        model: body.model ?? null,
-        serialNumber: body.serialNumber ?? null,
-        status: body.status,
-        installDate: body.installDate ? new Date(body.installDate) : null,
-        warrantyUntil: body.warrantyUntil ? new Date(body.warrantyUntil) : null,
-        imageUrl: body.imageUrl ?? null,
-        specs: body.specs ?? undefined,
+        system: body.system !== undefined ? body.system?.trim() || null : undefined,
+        managingPosition: body.managingPosition !== undefined ? body.managingPosition?.trim() || null : undefined,
+        images,
+        attachedInfo: body.attachedInfo !== undefined ? body.attachedInfo?.trim() || null : undefined,
+        documentUrl: body.documentUrl !== undefined ? body.documentUrl?.trim() || null : undefined,
       },
     });
     await audit(user.id, "UPDATE_DEVICE", "Device", device.id, device.code);

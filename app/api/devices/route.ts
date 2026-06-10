@@ -8,18 +8,16 @@ export async function GET(req: NextRequest) {
     await requireUser();
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
-    const status = sp.get("status");
-    const category = sp.get("category");
+    const system = sp.get("system");
 
     const where: Prisma.DeviceWhereInput = {};
-    if (status && status !== "ALL") where.status = status as any;
-    if (category && category !== "ALL") where.category = category;
+    if (system && system !== "ALL") where.system = system;
     if (q) {
       where.OR = [
         { code: { contains: q, mode: "insensitive" } },
         { name: { contains: q, mode: "insensitive" } },
-        { location: { contains: q, mode: "insensitive" } },
-        { serialNumber: { contains: q, mode: "insensitive" } },
+        { system: { contains: q, mode: "insensitive" } },
+        { managingPosition: { contains: q, mode: "insensitive" } },
       ];
     }
 
@@ -32,48 +30,41 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // status counts for filter chips (ignores status filter, respects search/category)
-    const countWhere: Prisma.DeviceWhereInput = { ...where };
-    delete countWhere.status;
+    // Danh sách "Hệ thống" phân biệt (bỏ qua bộ lọc system) cho dropdown lọc.
     const grouped = await prisma.device.groupBy({
-      by: ["status"],
-      where: countWhere,
-      _count: true,
+      by: ["system"],
+      where: q ? { OR: where.OR } : {},
     });
-    const counts = grouped.reduce<Record<string, number>>((acc, g) => {
-      acc[g.status] = g._count;
-      return acc;
-    }, {});
+    const systems = grouped
+      .map((g) => g.system)
+      .filter((s): s is string => !!s)
+      .sort((a, b) => a.localeCompare(b, "vi"));
 
-    return ok(devices, { total: devices.length, counts });
+    return ok(devices, { total: devices.length, systems });
   });
 }
 
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN"]); // chỉ Quản trị viên được thêm thiết bị
     const body = await req.json();
-    if (!body.code || !body.name || !body.category || !body.location) {
-      return fail("Thiếu thông tin bắt buộc (mã, tên, loại, vị trí)");
+    if (!body.code || !body.name) {
+      return fail("Thiếu thông tin bắt buộc (mã, tên thiết bị)");
     }
     const exists = await prisma.device.findUnique({ where: { code: body.code } });
     if (exists) return fail("Mã thiết bị đã tồn tại");
 
+    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
     const device = await prisma.device.create({
       data: {
         code: body.code,
         name: body.name,
-        category: body.category,
-        location: body.location,
-        manufacturer: body.manufacturer || null,
-        model: body.model || null,
-        serialNumber: body.serialNumber || null,
-        status: body.status || "NORMAL",
-        installDate: body.installDate ? new Date(body.installDate) : null,
-        warrantyUntil: body.warrantyUntil ? new Date(body.warrantyUntil) : null,
-        imageUrl: body.imageUrl || null,
-        specs: body.specs ?? undefined,
+        system: body.system?.trim() || null,
+        managingPosition: body.managingPosition?.trim() || null,
+        images,
+        attachedInfo: body.attachedInfo?.trim() || null,
+        documentUrl: body.documentUrl?.trim() || null,
       },
     });
     await prisma.device.update({

@@ -11,7 +11,6 @@ import {
   FilePlus2,
   GalleryHorizontal,
   Cpu,
-  MapPin,
   QrCode,
   Eye,
   Trash2,
@@ -19,11 +18,11 @@ import {
   ClipboardPlus,
   UserCheck,
   ArrowRight,
+  FileSpreadsheet,
+  ShieldAlert,
+  UserCog,
 } from "lucide-react";
 import {
-  PieChart,
-  Pie,
-  Cell,
   BarChart,
   Bar,
   XAxis,
@@ -38,8 +37,8 @@ import { ExportButton } from "@/components/shared/export-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { StatusBadge } from "@/components/devices/status-badge";
 import { DeviceForm } from "@/components/devices/device-form";
+import { ImportDialog } from "@/components/devices/import-dialog";
 import { QRModal } from "@/components/devices/qr-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,16 +51,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
-import { DEVICE_STATUS, DEVICE_STATUS_ORDER, DEVICE_CATEGORIES } from "@/lib/constants";
 import { can } from "@/lib/constants";
 import { formatDate, cn } from "@/lib/utils";
 
 type ViewMode = "dashboard" | "table" | "detail" | "form" | "deck";
-const VIEWS: { key: ViewMode; label: string; icon: any }[] = [
+const VIEWS: { key: ViewMode; label: string; icon: any; adminOnly?: boolean }[] = [
   { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { key: "table", label: "Bảng", icon: Table2 },
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
-  { key: "form", label: "Thêm mới", icon: FilePlus2 },
+  { key: "form", label: "Thêm mới", icon: FilePlus2, adminOnly: true },
   { key: "deck", label: "Deck", icon: GalleryHorizontal },
 ];
 
@@ -69,48 +67,43 @@ export default function DevicesPage() {
   const router = useRouter();
   const params = useSearchParams();
   const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const view = (params.get("view") as ViewMode) || "table";
-  const statusFilter = params.get("status") || "ALL";
 
   const [q, setQ] = React.useState("");
   const [debouncedQ, setDebouncedQ] = React.useState("");
-  const [category, setCategory] = React.useState("ALL");
+  const [system, setSystem] = React.useState("ALL");
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
+  const [importOpen, setImportOpen] = React.useState(false);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const { data, isLoading } = useDevices({ q: debouncedQ, status: statusFilter, category });
+  const { data, isLoading } = useDevices({ q: debouncedQ, system: system === "ALL" ? undefined : system });
   const del = useDeleteDevice();
   const devices = data?.data ?? [];
-  const counts: Record<string, number> = data?.meta?.counts ?? {};
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const systems: string[] = (data?.meta?.systems as string[]) ?? [];
 
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
     sp.set("view", v);
     router.push(`/devices?${sp.toString()}`);
   }
-  function setStatus(s: string) {
-    const sp = new URLSearchParams(params.toString());
-    sp.set("status", s);
-    router.push(`/devices?${sp.toString()}`);
-  }
 
-  // `n` keyboard shortcut -> open form view
+  // `n` keyboard shortcut -> open form view (admin only)
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "n" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      if (e.key === "n" && isAdmin && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
         setView("form");
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  }, [params, isAdmin]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -123,22 +116,29 @@ export default function DevicesPage() {
     }
   }
 
+  const visibleViews = VIEWS.filter((v) => !v.adminOnly || isAdmin);
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Quản lý thiết bị" description="Lý lịch & tình trạng tài sản thiết bị nhà máy">
-        <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, category: d.category, location: d.location, status: d.status }))} filename="thiet-bi" />
+      <PageHeader title="Quản lý thiết bị" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
+        <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
+        {isAdmin && (
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileSpreadsheet className="h-4 w-4" /> Nhập CSV/Excel
+          </Button>
+        )}
       </PageHeader>
 
       {/* Quick actions */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <QuickAction href="/devices?view=form" icon={Plus} label="Thêm thiết bị" />
-        <QuickAction href="/repair-history" icon={ClipboardPlus} label="Ghi phiếu sửa chữa" />
+        {isAdmin && <QuickAction href="/devices?view=form" icon={Plus} label="Thêm thiết bị" />}
+        <QuickAction href="/repair-history" icon={ClipboardPlus} label="Lịch sử sửa chữa" />
         <QuickAction href="/hr/check-in" icon={UserCheck} label="Điểm danh ca" />
       </div>
 
       {/* View tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-        {VIEWS.map((v) => {
+        {visibleViews.map((v) => {
           const Icon = v.icon;
           return (
             <button
@@ -157,39 +157,32 @@ export default function DevicesPage() {
       </div>
 
       {view === "form" ? (
-        <DeviceForm onDone={() => setView("table")} />
+        isAdmin ? (
+          <DeviceForm onDone={() => setView("table")} />
+        ) : (
+          <Card><CardContent className="flex flex-col items-center gap-2 py-16 text-center">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+            <p className="font-medium text-ink">Bạn không có quyền thêm thiết bị</p>
+            <p className="text-sm text-muted-foreground">Chỉ Quản trị viên mới được thêm thiết bị mới.</p>
+          </CardContent></Card>
+        )
       ) : (
         <>
           {/* Controls */}
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, vị trí, serial... ( / )" className="lg:max-w-md" shortcut />
+            <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống, cương vị... ( / )" className="lg:max-w-md" shortcut />
             <div className="flex flex-wrap gap-2">
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                value={system}
+                onChange={(e) => setSystem(e.target.value)}
                 className="h-10 rounded-md border border-input bg-white px-3 text-sm"
               >
-                <option value="ALL">Tất cả loại</option>
-                {DEVICE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                <option value="ALL">Tất cả hệ thống</option>
+                {systems.map((s) => (
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
             </div>
-          </div>
-
-          {/* Status filter chips */}
-          <div className="flex flex-wrap gap-2">
-            <Chip active={statusFilter === "ALL"} onClick={() => setStatus("ALL")} label="Tất cả" count={total} />
-            {DEVICE_STATUS_ORDER.map((s) => (
-              <Chip
-                key={s}
-                active={statusFilter === s}
-                onClick={() => setStatus(s)}
-                label={DEVICE_STATUS[s].label}
-                count={counts[s] ?? 0}
-                dot={DEVICE_STATUS[s].dot}
-              />
-            ))}
           </div>
 
           {isLoading ? (
@@ -198,11 +191,11 @@ export default function DevicesPage() {
             <EmptyState
               icon={Cpu}
               title="Không có thiết bị"
-              description="Không tìm thấy thiết bị phù hợp. Thêm thiết bị mới để bắt đầu."
-              action={{ label: "Thêm thiết bị", onClick: () => setView("form") }}
+              description="Không tìm thấy thiết bị phù hợp."
+              action={isAdmin ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
           ) : view === "dashboard" ? (
-            <DashboardView devices={devices} counts={counts} />
+            <DashboardView devices={devices} />
           ) : view === "table" ? (
             <TableView
               devices={devices}
@@ -221,6 +214,7 @@ export default function DevicesPage() {
       {qrDevice && (
         <QRModal open={!!qrDevice} onOpenChange={(o) => !o && setQrDevice(null)} device={qrDevice} />
       )}
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
@@ -231,22 +225,6 @@ export default function DevicesPage() {
         onConfirm={handleDelete}
       />
     </div>
-  );
-}
-
-function Chip({ active, onClick, label, count, dot }: { active: boolean; onClick: () => void; label: string; count: number; dot?: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors",
-        active ? "border-navy bg-navy text-white" : "border-border bg-white text-ink hover:border-accent"
-      )}
-    >
-      {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />}
-      {label}
-      <span className={cn("rounded-full px-1.5 text-xs", active ? "bg-white/20" : "bg-muted")}>{count}</span>
-    </button>
   );
 }
 
@@ -287,9 +265,8 @@ function TableView({
           <TableRow>
             <TableHead>Mã</TableHead>
             <TableHead>Tên thiết bị</TableHead>
-            <TableHead>Loại</TableHead>
-            <TableHead>Vị trí</TableHead>
-            <TableHead>Trạng thái</TableHead>
+            <TableHead>Hệ thống</TableHead>
+            <TableHead>Cương vị quản lý</TableHead>
             <TableHead>Sửa chữa gần nhất</TableHead>
             <TableHead className="text-right">Thao tác</TableHead>
           </TableRow>
@@ -299,9 +276,8 @@ function TableView({
             <TableRow key={d.id}>
               <TableCell className="font-mono text-xs font-medium text-navy">{d.code}</TableCell>
               <TableCell className="font-medium">{d.name}</TableCell>
-              <TableCell>{d.category}</TableCell>
-              <TableCell className="text-muted-foreground">{d.location}</TableCell>
-              <TableCell><StatusBadge status={d.status} /></TableCell>
+              <TableCell className="text-muted-foreground">{d.system ?? "—"}</TableCell>
+              <TableCell className="text-muted-foreground">{d.managingPosition ?? "—"}</TableCell>
               <TableCell className="text-muted-foreground">{lastRepair(d)}</TableCell>
               <TableCell>
                 <div className="flex items-center justify-end gap-1">
@@ -332,9 +308,9 @@ function DetailView({ devices, onQr }: { devices: DeviceListItem[]; onQr: (d: De
       {devices.map((d) => (
         <Card key={d.id} className="break-inside-avoid overflow-hidden transition-shadow hover:shadow-md">
           <div className="flex h-32 items-center justify-center bg-gradient-to-br from-navy/5 to-accent/5">
-            {d.imageUrl ? (
+            {d.images?.[0] ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={d.imageUrl} alt={d.name} className="h-full w-full object-cover" />
+              <img src={d.images[0]} alt={d.name} className="h-full w-full object-cover" />
             ) : (
               <Cpu className="h-10 w-10 text-navy/30" />
             )}
@@ -342,14 +318,16 @@ function DetailView({ devices, onQr }: { devices: DeviceListItem[]; onQr: (d: De
           <CardContent className="space-y-2 p-4">
             <div className="flex items-center justify-between">
               <span className="font-mono text-xs font-semibold text-navy">{d.code}</span>
-              <StatusBadge status={d.status} />
+              {d.system && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{d.system}</span>}
             </div>
             <h3 className="font-semibold leading-tight text-ink">{d.name}</h3>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" /> {d.location}
-            </div>
+            {d.managingPosition && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <UserCog className="h-3 w-3" /> {d.managingPosition}
+              </div>
+            )}
             <div className="text-xs text-muted-foreground">
-              {d.category} · {d._count.repairLogs} lần sửa · gần nhất {lastRepair(d)}
+              {d._count.repairLogs} lần sửa · gần nhất {lastRepair(d)}
             </div>
             <div className="flex gap-2 pt-1">
               <Button asChild size="sm" variant="outline" className="flex-1">
@@ -376,17 +354,23 @@ function DeckView({ devices, onQr }: { devices: DeviceListItem[]; onQr: (d: Devi
               <span className="font-mono text-xs font-semibold text-navy">{d.code}</span>
               <CardTitle className="text-base">{d.name}</CardTitle>
             </div>
-            <StatusBadge status={d.status} />
+            {d.system && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{d.system}</span>}
           </CardHeader>
           <CardContent className="space-y-3">
+            {d.images?.[0] && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={d.images[0]} alt={d.name} className="h-36 w-full rounded-lg border border-border object-cover" />
+            )}
             <dl className="grid grid-cols-2 gap-2 text-sm">
-              <Info label="Loại" value={d.category} />
-              <Info label="Vị trí" value={d.location} />
-              <Info label="Hãng" value={d.manufacturer ?? "—"} />
-              <Info label="Model" value={d.model ?? "—"} />
-              <Info label="Lắp đặt" value={formatDate(d.installDate)} />
-              <Info label="Bảo hành" value={formatDate(d.warrantyUntil)} />
+              <Info label="Hệ thống" value={d.system ?? "—"} />
+              <Info label="Cương vị quản lý" value={d.managingPosition ?? "—"} />
             </dl>
+            {d.attachedInfo && (
+              <div className="rounded-lg bg-muted/50 p-3 text-sm">
+                <div className="text-xs font-medium uppercase text-muted-foreground">Thông tin đính kèm</div>
+                <div className="mt-1 line-clamp-3 text-ink">{d.attachedInfo}</div>
+              </div>
+            )}
             <div className="rounded-lg bg-muted/50 p-3 text-sm">
               <div className="text-xs font-medium uppercase text-muted-foreground">Lịch sử sửa chữa</div>
               <div className="mt-1 text-ink">
@@ -417,47 +401,46 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DashboardView({ devices, counts }: { devices: DeviceListItem[]; counts: Record<string, number> }) {
-  const statusData = DEVICE_STATUS_ORDER.map((s) => ({
-    name: DEVICE_STATUS[s].label,
-    value: counts[s] ?? 0,
-    fill: DEVICE_STATUS[s].dot,
-  })).filter((d) => d.value > 0);
+function DashboardView({ devices }: { devices: DeviceListItem[] }) {
+  const groupCount = (key: (d: DeviceListItem) => string | null | undefined) =>
+    Object.entries(
+      devices.reduce<Record<string, number>>((acc, d) => {
+        const k = key(d) || "(Chưa đặt)";
+        acc[k] = (acc[k] ?? 0) + 1;
+        return acc;
+      }, {})
+    ).map(([name, count]) => ({ name, count }));
 
-  const byCategory = Object.entries(
-    devices.reduce<Record<string, number>>((acc, d) => {
-      acc[d.category] = (acc[d.category] ?? 0) + 1;
-      return acc;
-    }, {})
-  ).map(([category, count]) => ({ category, count }));
+  const bySystem = groupCount((d) => d.system);
+  const byPosition = groupCount((d) => d.managingPosition);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card>
-        <CardHeader><CardTitle>Theo trạng thái</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Theo hệ thống</CardTitle></CardHeader>
         <CardContent>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={2}>
-                  {statusData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-                </Pie>
+              <BarChart data={bySystem}>
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                 <Tooltip />
-              </PieChart>
+                <Bar dataKey="count" fill="#2563EB" radius={[6, 6, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
       <Card>
-        <CardHeader><CardTitle>Theo nhóm thiết bị</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Theo cương vị quản lý</CardTitle></CardHeader>
         <CardContent>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byCategory}>
-                <XAxis dataKey="category" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+              <BarChart data={byPosition} layout="vertical" margin={{ left: 24 }}>
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="#2563EB" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill="#16A34A" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

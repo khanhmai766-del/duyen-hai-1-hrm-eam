@@ -6,42 +6,29 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { ArrowLeft, Cpu, Download, Pencil, Trash2, FileText, Package } from "lucide-react";
+import { ArrowLeft, Cpu, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { StatusBadge } from "@/components/devices/status-badge";
 import { RepairTimeline } from "@/components/repair/repair-timeline";
 import { DeviceForm } from "@/components/devices/device-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { CardSkeleton } from "@/components/shared/skeletons";
-import { useDevice, useUpdateDevice, useDeleteDevice } from "@/hooks/useDevices";
-import { DEVICE_STATUS_ORDER, DEVICE_STATUS, can } from "@/lib/constants";
-import { formatDate, formatCurrency } from "@/lib/utils";
+import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
+import { can } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
 
 export default function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = useSession();
   const { data, isLoading } = useDevice(id);
-  const update = useUpdateDevice();
   const del = useDeleteDevice();
   const [editOpen, setEditOpen] = React.useState(false);
   const [delOpen, setDelOpen] = React.useState(false);
 
   const device = data?.data;
   const url = typeof window !== "undefined" ? `${window.location.origin}/devices/${id}` : "";
-
-  async function changeStatus(status: string) {
-    if (!device) return;
-    try {
-      await update.mutateAsync({ ...device, id: device.id, status });
-      toast.success("Đã cập nhật trạng thái");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
 
   function downloadQr() {
     const svg = document.getElementById("device-qr");
@@ -67,10 +54,7 @@ export default function DeviceDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-ink">{device.name}</h1>
-            <StatusBadge status={device.status} />
-          </div>
+          <h1 className="text-2xl font-bold text-ink">{device.name}</h1>
           <p className="mt-1 font-mono text-sm text-navy">{device.code}</p>
         </div>
         <div className="flex gap-2">
@@ -86,35 +70,40 @@ export default function DeviceDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left: info + QR (30%) */}
+        {/* Left: info + images + QR */}
         <div className="space-y-6 lg:col-span-4">
           <Card>
             <CardHeader><CardTitle>Thông tin thiết bị</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <Row label="Loại" value={device.category} />
-              <Row label="Vị trí" value={device.location} />
-              <Row label="Nhà sản xuất" value={device.manufacturer ?? "—"} />
-              <Row label="Model" value={device.model ?? "—"} />
-              <Row label="Số serial" value={device.serialNumber ?? "—"} />
-              <Row label="Ngày lắp đặt" value={formatDate(device.installDate)} />
-              <Row label="Bảo hành đến" value={formatDate(device.warrantyUntil)} />
-              {device.specs && typeof device.specs === "object" &&
-                Object.entries(device.specs as Record<string, string>).map(([k, v]) => (
-                  <Row key={k} label={k} value={String(v)} />
-                ))}
-              <div className="pt-2">
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Đổi trạng thái</label>
-                <Select value={device.status} onValueChange={changeStatus}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DEVICE_STATUS_ORDER.map((s) => (
-                      <SelectItem key={s} value={s}>{DEVICE_STATUS[s].label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Row label="Hệ thống" value={device.system ?? "—"} />
+              <Row label="Cương vị quản lý" value={device.managingPosition ?? "—"} icon={UserCog} />
+              {device.attachedInfo && (
+                <div className="pt-1">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Thông tin đính kèm</div>
+                  <p className="mt-1 whitespace-pre-wrap text-ink">{device.attachedInfo}</p>
+                </div>
+              )}
+              {device.documentUrl && (
+                <a href={device.documentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 pt-1 text-accent hover:underline">
+                  <FileText className="h-4 w-4" /> Tài liệu đính kèm <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
             </CardContent>
           </Card>
+
+          {device.images?.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>Hình ảnh</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-3 gap-2">
+                {device.images.map((src, i) => (
+                  <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Ảnh ${i + 1}`} className="aspect-square w-full rounded-md border border-border object-cover transition-transform hover:scale-105" />
+                  </a>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader><CardTitle>Mã QR</CardTitle></CardHeader>
@@ -134,7 +123,7 @@ export default function DeviceDetailPage() {
           </Card>
         </div>
 
-        {/* Middle: repair timeline (45%) */}
+        {/* Middle: repair timeline */}
         <div className="lg:col-span-5">
           <Card className="h-full">
             <CardHeader className="flex-row items-center justify-between">
@@ -149,7 +138,7 @@ export default function DeviceDetailPage() {
           </Card>
         </div>
 
-        {/* Right: materials + docs (25%) */}
+        {/* Right: materials */}
         <div className="space-y-6 lg:col-span-3">
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Vật tư sử dụng</CardTitle></CardHeader>
@@ -167,13 +156,6 @@ export default function DeviceDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">Chưa có vật tư.</p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-4 w-4" /> Tài liệu</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Chưa có tài liệu đính kèm.</p>
             </CardContent>
           </Card>
         </div>
@@ -207,11 +189,13 @@ export default function DeviceDetailPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, icon: Icon }: { label: string; value: string; icon?: any }) {
   return (
     <div className="flex justify-between gap-4 border-b border-border/60 pb-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium text-ink">{value}</span>
+      <span className="inline-flex items-center gap-1.5 text-right font-medium text-ink">
+        {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}{value}
+      </span>
     </div>
   );
 }

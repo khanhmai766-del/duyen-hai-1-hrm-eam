@@ -12,8 +12,8 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
 
     switch (params.type) {
       case "summary": {
-        const [devices, repairs, materials, todayShift] = await Promise.all([
-          prisma.device.groupBy({ by: ["status"], _count: true }),
+        const [deviceCount, repairs, materials, todayShift] = await Promise.all([
+          prisma.device.count(),
           prisma.repairLog.groupBy({ by: ["status"], _count: true }),
           prisma.material.findMany(),
           (async () => {
@@ -38,14 +38,13 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
           include: { device: { select: { code: true, name: true } } },
         });
         return ok({
-          deviceStatus: devices.map((d) => ({ status: d.status, count: d._count })),
+          deviceCount,
           repairStatus: repairs.map((r) => ({ status: r.status, count: r._count })),
           lowStock,
           onShift,
           todayShift,
           recentRepairs,
           openRepairs: repairs.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS" || r.status === "WAITING_PARTS").reduce((a, r) => a + r._count, 0),
-          devicesNormal: devices.find((d) => d.status === "NORMAL")?._count ?? 0,
         });
       }
 
@@ -116,11 +115,12 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
       case "downtime-by-category": {
         const logs = await prisma.repairLog.findMany({
           where: dateFilter ? { startedAt: dateFilter } : undefined,
-          include: { device: { select: { category: true } } },
+          include: { device: { select: { system: true } } },
         });
         const map = new Map<string, number>();
         for (const l of logs) {
-          map.set(l.device.category, (map.get(l.device.category) ?? 0) + (l.downtime ?? 0));
+          const key = l.device.system || "(Chưa đặt)";
+          map.set(key, (map.get(key) ?? 0) + (l.downtime ?? 0));
         }
         return ok(Array.from(map.entries()).map(([category, downtime]) => ({ category, downtime })));
       }

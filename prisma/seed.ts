@@ -1,4 +1,4 @@
-import { PrismaClient, Role, ShiftType, DeviceStatus, RepairStatus, Priority } from "@prisma/client";
+import { PrismaClient, Role, ShiftType, RepairStatus, Priority } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -124,39 +124,32 @@ async function main() {
   console.log("✓ check-ins + handover");
 
   // ---- Devices ----
-  const deviceSeed: Array<{ code: string; name: string; category: string; location: string; status: DeviceStatus; manufacturer: string; model: string }> = [
-    { code: "ESP-S1-001", name: "Bộ lọc bụi tĩnh điện S1", category: "ESP", location: "Nhà lò 1 - Tầng 3", status: DeviceStatus.NORMAL, manufacturer: "Mitsubishi", model: "ESP-2400" },
-    { code: "ESP-S1-002", name: "Bộ lọc bụi tĩnh điện S2", category: "ESP", location: "Nhà lò 2 - Tầng 3", status: DeviceStatus.MAINTENANCE, manufacturer: "Mitsubishi", model: "ESP-2400" },
-    { code: "ESP-S2-003", name: "Búa gõ điện cực ESP", category: "ESP", location: "Nhà lò 1 - Tầng 4", status: DeviceStatus.NORMAL, manufacturer: "Alstom", model: "RAP-120" },
-    { code: "FGD-S1-001", name: "Hệ thống khử lưu huỳnh S1", category: "FGD", location: "Khu FGD - Block A", status: DeviceStatus.UNDER_REPAIR, manufacturer: "Doosan", model: "WFGD-500" },
-    { code: "FGD-S1-002", name: "Bơm tuần hoàn FGD 1A", category: "FGD", location: "Khu FGD - Block A", status: DeviceStatus.NORMAL, manufacturer: "KSB", model: "RPP-800" },
-    { code: "FGD-S2-003", name: "Bơm tuần hoàn FGD 1B", category: "FGD", location: "Khu FGD - Block B", status: DeviceStatus.FAULT, manufacturer: "KSB", model: "RPP-800" },
-    { code: "IC-S1-001", name: "Tủ điều khiển DCS lò 1", category: "I&C", location: "Phòng điều khiển trung tâm", status: DeviceStatus.NORMAL, manufacturer: "Siemens", model: "SPPA-T3000" },
-    { code: "IC-S1-002", name: "Cảm biến nhiệt độ hơi quá nhiệt", category: "I&C", location: "Nhà lò 1 - Tầng 5", status: DeviceStatus.NORMAL, manufacturer: "Endress+Hauser", model: "TR88" },
-    { code: "IC-S2-003", name: "Bộ truyền tín hiệu áp suất", category: "I&C", location: "Nhà máy 2 - Tầng 2", status: DeviceStatus.MAINTENANCE, manufacturer: "Yokogawa", model: "EJA530E" },
-    { code: "BLR-S1-001", name: "Lò hơi tổ máy 1", category: "Boiler", location: "Nhà lò 1", status: DeviceStatus.NORMAL, manufacturer: "Harbin", model: "HG-1025" },
-    { code: "BLR-S1-002", name: "Quạt gió chính FD 1A", category: "Boiler", location: "Nhà lò 1 - Tầng 1", status: DeviceStatus.NORMAL, manufacturer: "Howden", model: "FD-1200" },
-    { code: "BLR-S2-003", name: "Bộ hâm nước economizer", category: "Boiler", location: "Nhà lò 2 - Tầng 6", status: DeviceStatus.FAULT, manufacturer: "Harbin", model: "ECO-450" },
-    { code: "TBN-S1-001", name: "Tuabin hơi tổ máy 1", category: "Turbine", location: "Gian máy - Tầng 0", status: DeviceStatus.NORMAL, manufacturer: "Toshiba", model: "TC2F-33.5" },
-    { code: "TBN-S1-002", name: "Máy phát điện tổ máy 1", category: "Turbine", location: "Gian máy - Tầng 0", status: DeviceStatus.NORMAL, manufacturer: "Toshiba", model: "TAKW-300" },
-    { code: "TBN-S2-003", name: "Bơm dầu bôi trơn tuabin", category: "Turbine", location: "Gian máy - Tầng -1", status: DeviceStatus.DECOMMISSIONED, manufacturer: "Flowserve", model: "LOP-90" },
+  const deviceSeed: Array<{ code: string; name: string; system: string; managingPosition: string }> = [
+    { code: "ESP-S1-001", name: "Bộ lọc bụi tĩnh điện S1", system: "ESP", managingPosition: "Lò trưởng S1" },
+    { code: "ESP-S1-002", name: "Bộ lọc bụi tĩnh điện S2", system: "ESP", managingPosition: "Lò trưởng S1" },
+    { code: "ESP-S2-003", name: "Búa gõ điện cực ESP", system: "ESP", managingPosition: "Lò trưởng S1" },
+    { code: "FGD-S1-001", name: "Hệ thống khử lưu huỳnh S1", system: "FGD", managingPosition: "Máy trưởng S1" },
+    { code: "FGD-S1-002", name: "Bơm tuần hoàn FGD 1A", system: "FGD", managingPosition: "Máy trưởng S1" },
+    { code: "FGD-S2-003", name: "Bơm tuần hoàn FGD 1B", system: "FGD", managingPosition: "Máy trưởng S1" },
+    { code: "IC-S1-001", name: "Tủ điều khiển DCS lò 1", system: "I&C", managingPosition: "I&C" },
+    { code: "IC-S1-002", name: "Cảm biến nhiệt độ hơi quá nhiệt", system: "I&C", managingPosition: "I&C" },
+    { code: "IC-S2-003", name: "Bộ truyền tín hiệu áp suất", system: "I&C", managingPosition: "I&C" },
+    { code: "BLR-S1-001", name: "Lò hơi tổ máy 1", system: "Lò hơi", managingPosition: "Lò trưởng S1" },
+    { code: "BLR-S1-002", name: "Quạt gió chính FD 1A", system: "Lò hơi", managingPosition: "Trưởng kíp Lò - Máy" },
+    { code: "BLR-S2-003", name: "Bộ hâm nước economizer", system: "Lò hơi", managingPosition: "Trưởng kíp Lò - Máy" },
+    { code: "TBN-S1-001", name: "Tuabin hơi tổ máy 1", system: "Tuabin", managingPosition: "Máy trưởng S1" },
+    { code: "TBN-S1-002", name: "Máy phát điện tổ máy 1", system: "Máy phát", managingPosition: "Trưởng kíp điện" },
+    { code: "TBN-S2-003", name: "Bơm dầu bôi trơn tuabin", system: "Tuabin", managingPosition: "Máy trưởng S1" },
   ];
 
   const devices = [];
-  for (let i = 0; i < deviceSeed.length; i++) {
-    const d = deviceSeed[i];
-    devices.push(
-      await prisma.device.create({
-        data: {
-          ...d,
-          serialNumber: `SN-${d.code}-${1000 + i}`,
-          installDate: daysAgo(900 - i * 20),
-          warrantyUntil: daysAgo(-365 + i * 10),
-          qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/devices/__ID__`,
-          specs: { "Công suất": "300 MW", "Điện áp": "6.3 kV", "Năm SX": String(2015 + (i % 5)) },
-        },
-      })
-    );
+  for (const d of deviceSeed) {
+    const device = await prisma.device.create({ data: d });
+    await prisma.device.update({
+      where: { id: device.id },
+      data: { qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/devices/${device.id}` },
+    });
+    devices.push(device);
   }
   console.log(`✓ ${devices.length} devices`);
 

@@ -9,11 +9,10 @@ export interface DeviceListItem extends Device {
   _count: { repairLogs: number };
 }
 
-export function useDevices(params: { q?: string; status?: string; category?: string }) {
+export function useDevices(params: { q?: string; system?: string }) {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
-  if (params.status) qs.set("status", params.status);
-  if (params.category) qs.set("category", params.category);
+  if (params.system) qs.set("system", params.system);
   return useQuery({
     queryKey: ["devices", params],
     queryFn: () => apiGet<DeviceListItem[]>(`/api/devices?${qs.toString()}`),
@@ -55,6 +54,21 @@ export function useDeleteDevice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/devices/${id}`, "DELETE"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+  });
+}
+
+export interface ImportResult {
+  created: number;
+  updated: number;
+  skipped: string[];
+}
+
+export function useImportDevices() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: Array<{ code: string; name?: string; system?: string }>) =>
+      apiMutate<ImportResult>("/api/devices/import", "POST", { rows }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
   });
 }

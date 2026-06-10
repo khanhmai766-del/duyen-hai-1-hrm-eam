@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where: { id: params.id },
       include: {
         material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
-        device: { select: { id: true, code: true, name: true, location: true } },
+        device: { select: { id: true, code: true, name: true, system: true } },
         logs: {
           orderBy: { replacedAt: "desc" },
           include: { doneBy: { select: { id: true, name: true, position: true } } },
@@ -50,7 +50,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       },
       include: {
         material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
-        device: { select: { id: true, code: true, name: true, location: true } },
+        device: { select: { id: true, code: true, name: true, system: true } },
         _count: { select: { logs: true } },
       },
     });

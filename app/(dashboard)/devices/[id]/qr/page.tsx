@@ -39,8 +39,8 @@ export default function DeviceQrPage() {
           <div className="mt-6 space-y-1">
             <div className="font-mono text-lg font-bold text-navy">{device.code}</div>
             <div className="text-xl font-semibold text-ink">{device.name}</div>
-            <div className="text-muted-foreground">{device.category}</div>
-            <div className="text-sm text-muted-foreground">{device.location}</div>
+            {device.system && <div className="text-muted-foreground">{device.system}</div>}
+            {device.managingPosition && <div className="text-sm text-muted-foreground">{device.managingPosition}</div>}
           </div>
           <p className="mt-6 max-w-xs text-xs text-muted-foreground">
             Quét mã để xem lý lịch & lịch sử sửa chữa thiết bị

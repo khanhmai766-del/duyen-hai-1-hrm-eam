@@ -39,7 +39,7 @@ export interface DeviceWithRelations extends Device {
 }
 
 export interface RepairLogWithRelations extends RepairLog {
-  device: Pick<Device, "id" | "code" | "name" | "category" | "location">;
+  device: Pick<Device, "id" | "code" | "name" | "system">;
   createdBy: Pick<User, "id" | "name" | "position">;
   approvedBy: Pick<User, "id" | "name"> | null;
 }

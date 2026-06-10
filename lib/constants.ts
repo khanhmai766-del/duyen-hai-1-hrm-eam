@@ -1,23 +1,5 @@
 // Centralized domain constants: statuses, roles, shift types, and their UI metadata.
 
-export const DEVICE_STATUS = {
-  NORMAL: { label: "Bình thường", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
-  MAINTENANCE: { label: "Bảo trì", badge: "bg-amber-100 text-amber-800", dot: "#D97706" },
-  FAULT: { label: "Sự cố", badge: "bg-red-100 text-red-800", dot: "#DC2626" },
-  UNDER_REPAIR: { label: "Đang sửa", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
-  DECOMMISSIONED: { label: "Ngừng hoạt động", badge: "bg-gray-100 text-gray-600", dot: "#6B7280" },
-} as const;
-
-export type DeviceStatusKey = keyof typeof DEVICE_STATUS;
-
-export const DEVICE_STATUS_ORDER: DeviceStatusKey[] = [
-  "NORMAL",
-  "MAINTENANCE",
-  "FAULT",
-  "UNDER_REPAIR",
-  "DECOMMISSIONED",
-];
-
 export const REPAIR_STATUS = {
   OPEN: { label: "Mở", badge: "bg-slate-100 text-slate-700", dot: "#64748B", step: 0 },
   IN_PROGRESS: { label: "Đang xử lý", badge: "bg-blue-100 text-blue-800", dot: "#2563EB", step: 1 },
@@ -125,8 +107,6 @@ export const CHECKIN_STATUS = {
   LATE: { label: "Đi muộn", badge: "bg-amber-100 text-amber-800" },
   ABSENT: { label: "Vắng", badge: "bg-red-100 text-red-800" },
 } as const;
-
-export const DEVICE_CATEGORIES = ["ESP", "FGD", "I&C", "Boiler", "Turbine"] as const;
 
 // ---- Khiếm khuyết thiết bị (Defect) ----
 

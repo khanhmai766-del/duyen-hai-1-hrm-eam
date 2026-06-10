@@ -6,7 +6,7 @@ import type { Prisma } from "@prisma/client";
 
 const INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true, system: true } },
-  device: { select: { id: true, code: true, name: true, location: true } },
+  device: { select: { id: true, code: true, name: true, system: true } },
   _count: { select: { logs: true } },
 } satisfies Prisma.MaterialReplacementInclude;
 

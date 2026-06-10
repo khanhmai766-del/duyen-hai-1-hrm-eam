@@ -32,7 +32,7 @@ export default function DeviceRepairHistoryPage() {
         <Link href="/repair-history"><ArrowLeft className="h-4 w-4" /> Tất cả phiếu</Link>
       </Button>
 
-      <PageHeader title={`Lịch sử: ${device.name}`} description={`${device.code} · ${device.location}`}>
+      <PageHeader title={`Lịch sử: ${device.name}`} description={`${device.code}${device.system ? ` · ${device.system}` : ""}`}>
         <Button asChild variant="outline"><Link href={`/devices/${device.id}`}>Lý lịch thiết bị</Link></Button>
       </PageHeader>
 

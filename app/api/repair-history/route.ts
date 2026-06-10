@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { startedAt: "desc" },
       include: {
-        device: { select: { id: true, code: true, name: true, category: true, location: true } },
+        device: { select: { id: true, code: true, name: true, system: true } },
         createdBy: { select: { id: true, name: true, position: true } },
         approvedBy: { select: { id: true, name: true } },
       },

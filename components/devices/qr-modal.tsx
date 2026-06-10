@@ -13,7 +13,7 @@ export function QRModal({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  device: { id: string; code: string; name: string; location: string };
+  device: { id: string; code: string; name: string; system?: string | null };
 }) {
   const url = typeof window !== "undefined" ? `${window.location.origin}/devices/${device.id}` : `/devices/${device.id}`;
   return (
@@ -29,7 +29,7 @@ export function QRModal({
           <div className="text-center">
             <div className="font-bold text-ink">{device.code}</div>
             <div className="text-sm text-muted-foreground">{device.name}</div>
-            <div className="text-xs text-muted-foreground">{device.location}</div>
+            {device.system && <div className="text-xs text-muted-foreground">{device.system}</div>}
           </div>
           <Button asChild variant="outline" className="w-full">
             <Link href={`/devices/${device.id}/qr`}>
