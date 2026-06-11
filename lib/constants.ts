@@ -133,13 +133,13 @@ export const DEFECT_CONDITION_ORDER = ["A", "B"] as const;
 export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "Hóa", "Hành Chính IT", "Khác"] as const;
 
 /** Khối quản lý — suy ra từ cương vị quản lý theo quy tắc nghiệp vụ. */
-export const EQUIPMENT_BLOCKS = ["Khối Lò", "Khối Turbine", "Khối BOP"] as const;
+export const EQUIPMENT_BLOCKS = ["Khối Lò Hơi", "Khối Turbine", "Khối BOP"] as const;
 const BLOCK_LO_POSITIONS = ["lò trưởng", "lò phó", "máy nghiền", "thải xỉ", "esp", "fgd"];
 const BLOCK_TURBINE_POSITIONS = ["máy trưởng", "máy phó", "trợ thủ", "trạm bơm tuần hoàn"];
 
 /**
  * Mặc định Khối quản lý theo cương vị:
- *  - Lò Trưởng/Lò Phó/Máy Nghiền/Thải Xỉ/ESP/FGD → Khối Lò
+ *  - Lò Trưởng/Lò Phó/Máy Nghiền/Thải Xỉ/ESP/FGD → Khối Lò Hơi
  *  - Máy Trưởng/Máy Phó/Trợ Thủ/Trạm Bơm Tuần Hoàn → Khối Turbine
  *  - còn lại → Khối BOP
  * So khớp không phân biệt hoa/thường & dấu, theo chứa từ khoá (vd "Lò trưởng S1").
@@ -147,7 +147,7 @@ const BLOCK_TURBINE_POSITIONS = ["máy trưởng", "máy phó", "trợ thủ", "
 export function blockForPosition(position?: string | null): string {
   if (!position) return "Khối BOP";
   const p = normalizeText(position);
-  if (BLOCK_LO_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Lò";
+  if (BLOCK_LO_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Lò Hơi";
   if (BLOCK_TURBINE_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Turbine";
   return "Khối BOP";
 }
