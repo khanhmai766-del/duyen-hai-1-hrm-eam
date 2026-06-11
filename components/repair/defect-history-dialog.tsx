@@ -13,7 +13,7 @@ import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDefectHistory, useUpdateDefectHistory, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
-import { DEFECT_UNITS, DEFECT_REQUEST_TYPES } from "@/lib/constants";
+import { DEFECT_UNITS, DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
 
 function todayInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -127,6 +127,12 @@ export function DefectHistoryDialog({
               </Select>
             </Field>
           </div>
+
+          <Field label="Khối quản lý">
+            <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-ink">
+              {blockForPosition(form.system)}
+            </div>
+          </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Số phiếu công tác">

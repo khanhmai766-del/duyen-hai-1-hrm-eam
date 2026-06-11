@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
-import { DEFECT_REQUEST_TYPES } from "@/lib/constants";
+import { DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
 
 const NONE = "__none__";
 
@@ -75,6 +75,7 @@ export function CompleteDefectDialog({
               <ReadOnly label="Tổ máy" value={defect.unit} />
               <ReadOnly label="Cương vị" value={defect.system ?? "—"} />
             </div>
+            <ReadOnly label="Khối quản lý" value={blockForPosition(defect.system)} />
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Số phiếu công tác">

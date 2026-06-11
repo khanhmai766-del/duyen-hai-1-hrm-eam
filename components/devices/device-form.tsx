@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDevice, useUpdateDevice } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
+import { blockForPosition } from "@/lib/constants";
 import type { Device } from "@/types";
 
 const NONE = "__none__";
@@ -83,6 +84,11 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
                 {positionOptions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
+          </Field>
+          <Field label="Khối quản lý">
+            <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-ink">
+              {blockForPosition(form.managingPosition)}
+            </div>
           </Field>
           <Field label="Ảnh (tối đa 3)" className="md:col-span-2">
             <MultiImagePicker value={form.images} onChange={(v) => set("images", v)} max={3} allowUrl />
