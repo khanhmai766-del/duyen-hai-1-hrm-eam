@@ -266,7 +266,7 @@ function TableView({
             <TableHead>Tên thiết bị</TableHead>
             <TableHead>Hệ thống</TableHead>
             <TableHead>Cương vị quản lý</TableHead>
-            <TableHead>Sửa chữa gần nhất</TableHead>
+            <TableHead>Hình ảnh</TableHead>
             <TableHead className="text-right">Thao tác</TableHead>
           </TableRow>
         </TableHeader>
@@ -277,7 +277,14 @@ function TableView({
               <TableCell className="font-medium">{d.name}</TableCell>
               <TableCell className="text-muted-foreground">{d.system ?? "—"}</TableCell>
               <TableCell className="text-muted-foreground">{d.managingPosition ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{lastRepair(d)}</TableCell>
+              <TableCell>
+                {d.images?.[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={d.images[0]} alt={d.name} className="h-10 w-10 rounded-md border border-border object-cover" />
+                ) : (
+                  <span className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground"><Cpu className="h-4 w-4" /></span>
+                )}
+              </TableCell>
               <TableCell>
                 <div className="flex items-center justify-end gap-1">
                   <Button asChild variant="ghost" size="icon" title="Chi tiết">
