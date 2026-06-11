@@ -59,7 +59,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       </PageHeader>
 
       <Card className="p-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Cương vị</label>
             <select
@@ -89,6 +89,14 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Đến ngày</label>
             <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Số phiếu công tác</label>
+            <Input value={filters.workOrderNumber ?? ""} onChange={(e) => setFilter("workOrderNumber", e.target.value)} placeholder="Tìm số phiếu…" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Thiết bị</label>
+            <Input value={filters.device ?? ""} onChange={(e) => setFilter("device", e.target.value)} placeholder="Tìm mã thiết bị…" />
           </div>
         </div>
       </Card>

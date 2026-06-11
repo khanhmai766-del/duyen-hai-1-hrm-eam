@@ -11,6 +11,8 @@ export interface DefectHistoryItem extends DefectHistory {
 export interface DefectHistoryFilters {
   system?: string;
   unit?: string;
+  workOrderNumber?: string;
+  device?: string;
   from?: string;
   to?: string;
 }

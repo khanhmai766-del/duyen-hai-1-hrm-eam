@@ -12,12 +12,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const system = searchParams.get("system");
     const unit = searchParams.get("unit");
+    const workOrderNumber = searchParams.get("workOrderNumber");
+    const device = searchParams.get("device");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
 
     const where: Record<string, unknown> = {};
     if (system) where.system = system;
     if (unit) where.unit = unit;
+    if (workOrderNumber) where.workOrderNumber = { contains: workOrderNumber, mode: "insensitive" };
+    if (device) where.device = { contains: device, mode: "insensitive" };
     if (from || to) {
       where.performedAt = {
         ...(from ? { gte: new Date(from) } : {}),
