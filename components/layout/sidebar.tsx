@@ -43,12 +43,17 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
 
   return (
     <div className="flex h-full w-full flex-col bg-white">
-      {/* Logo */}
-      <div className={cn("flex h-16 items-center justify-center gap-2.5 border-b border-border", collapsed ? "px-2" : "px-5")}>
+      {/* Logo — bấm để về trang chủ (Overview) */}
+      <Link
+        href="/"
+        onClick={onNavigate}
+        aria-label="Về trang chủ"
+        className={cn("flex h-16 items-center justify-center gap-2.5 border-b border-border transition-colors hover:bg-muted/50", collapsed ? "px-2" : "px-5")}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/4.png" alt="EVNGENCO1" className="h-9 w-9 shrink-0 object-contain" />
         {!collapsed && <span className="text-lg font-bold leading-tight text-navy">VẬN HÀNH 1</span>}
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className={cn("flex-1 space-y-6 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>

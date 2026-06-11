@@ -14,9 +14,6 @@ import {
   QrCode,
   Eye,
   Trash2,
-  Plus,
-  ClipboardPlus,
-  ArrowRight,
   FileSpreadsheet,
   ShieldAlert,
   UserCog,
@@ -128,31 +125,41 @@ export default function DevicesPage() {
         )}
       </PageHeader>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {isAdmin && <QuickAction href="/devices?view=form" icon={Plus} label="Thêm thiết bị" />}
-        <QuickAction href="/repair-history" icon={ClipboardPlus} label="Lịch sử sửa chữa" />
-        <QuickAction href="/defects" icon={ShieldAlert} label="Khiếm khuyết thiết bị" />
-      </div>
-
-      {/* View tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-        {visibleViews.map((v) => {
-          const Icon = v.icon;
-          return (
-            <button
-              key={v.key}
-              onClick={() => setView(v.key)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                view === v.key ? "bg-navy text-white" : "text-muted-foreground hover:bg-muted hover:text-ink"
-              )}
+      {/* View tabs + (when listing) tìm kiếm & bộ lọc hệ thống căn phải */}
+      <div className="flex flex-col gap-3 border-b border-border pb-3 lg:flex-row lg:items-center">
+        <div className="flex flex-wrap items-center gap-2">
+          {visibleViews.map((v) => {
+            const Icon = v.icon;
+            return (
+              <button
+                key={v.key}
+                onClick={() => setView(v.key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  view === v.key ? "bg-navy text-white" : "text-muted-foreground hover:bg-muted hover:text-ink"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+        {view !== "form" && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
+            <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
+            <select
+              value={system}
+              onChange={(e) => setSystem(e.target.value)}
+              className="h-10 shrink-0 rounded-md border border-input bg-white px-3 text-sm"
             >
-              <Icon className="h-4 w-4" />
-              {v.label}
-            </button>
-          );
-        })}
+              <option value="ALL">Tất cả hệ thống</option>
+              {systems.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {view === "form" ? (
@@ -167,23 +174,6 @@ export default function DevicesPage() {
         )
       ) : (
         <>
-          {/* Controls */}
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống, cương vị... ( / )" className="lg:max-w-md" shortcut />
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={system}
-                onChange={(e) => setSystem(e.target.value)}
-                className="h-10 rounded-md border border-input bg-white px-3 text-sm"
-              >
-                <option value="ALL">Tất cả hệ thống</option>
-                {systems.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {isLoading ? (
             <TableSkeleton />
           ) : devices.length === 0 ? (
@@ -224,21 +214,6 @@ export default function DevicesPage() {
         onConfirm={handleDelete}
       />
     </div>
-  );
-}
-
-function QuickAction({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 rounded-lg border border-border bg-white px-4 py-3 text-sm font-medium text-ink transition-colors hover:border-accent hover:bg-accent/5"
-    >
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
-        <Icon className="h-4 w-4" />
-      </span>
-      {label}
-      <ArrowRight className="ml-auto h-4 w-4 text-muted-foreground" />
-    </Link>
   );
 }
 
