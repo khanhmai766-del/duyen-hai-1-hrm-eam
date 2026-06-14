@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronDown, Clock, LifeBuoy, Phone, ShieldCheck, Zap } from "lucide-react";
+import { ChevronDown, Clock, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
 import { NAV_SECTIONS as SECTIONS, type NavItem } from "@/lib/nav";
@@ -81,7 +81,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
                   Digital Operations
                 </span>
               </span>
-              <ElectricBoltMark />
+              <PowerGridMark />
             </>
           )}
         </Link>
@@ -193,18 +193,16 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   );
 }
 
-function ElectricBoltMark() {
+function PowerGridMark() {
   return (
     <span
-      className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[radial-gradient(circle_at_30%_18%,#ffffff_0%,#dff7ff_24%,#0ea5e9_56%,#173b73_100%)] text-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.78),inset_-6px_-8px_12px_rgba(15,23,42,0.30),0_14px_22px_-12px_rgba(14,165,233,0.95)] ring-1 ring-white/65 transition-transform duration-200 group-hover:scale-105 dark:ring-sky-200/25"
+      className="relative flex h-9 w-9 shrink-0 items-center justify-center text-amber-300 transition-transform duration-200 group-hover:scale-105"
       aria-hidden="true"
     >
-      <span className="absolute inset-0 rounded-2xl bg-[linear-gradient(145deg,rgba(255,255,255,0.38),transparent_45%,rgba(15,23,42,0.22))]" />
-      <span className="absolute -inset-1 rounded-[1.1rem] bg-cyan-300/20 blur-md" />
-      <span className="absolute bottom-1.5 h-2 w-5 rounded-full bg-sky-950/20 blur-[3px]" />
-      <span className="relative flex h-6 w-6 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#ffe66d,#fbbf24_58%,#f97316)] text-[#16315a] shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_7px_12px_-7px_rgba(251,191,36,0.95)] ring-1 ring-white/55">
-        <Zap className="h-4 w-4 fill-current drop-shadow-[0_1px_1px_rgba(255,255,255,0.65)]" />
-      </span>
+      <svg viewBox="0 0 36 36" className="h-8 w-8 drop-shadow-[0_1px_3px_rgba(15,23,42,0.55)]">
+        <polygon points="18,2.5 31.4,10.25 31.4,25.75 18,33.5 4.6,25.75 4.6,10.25" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
+        <polygon points="20,8 12,19 17.5,19 15,28.5 24,16 18.5,16" fill="currentColor" />
+      </svg>
     </span>
   );
 }
