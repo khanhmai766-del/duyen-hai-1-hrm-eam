@@ -242,8 +242,11 @@ export const CAN = {
   approveRepair: ["ADMIN", "SUPERVISOR"],
   approveCheckIn: ["ADMIN", "SUPERVISOR"],
   manageUsers: ["ADMIN"],
+  manageDevices: ["ADMIN"],
   deleteDevice: ["ADMIN"],
-  manageMaterials: ["ADMIN", "SUPERVISOR"],
+  manageMaterials: ["ADMIN"],
+  manageOperations: ["ADMIN", "SUPERVISOR"],
+  manageAnnouncements: ["ADMIN"],
   manageReplacement: ["ADMIN", "SUPERVISOR"],
   manageDefect: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
 } as const;

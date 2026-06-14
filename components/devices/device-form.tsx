@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -19,9 +20,11 @@ import type { Device } from "@/types";
 const NONE = "__none__";
 
 export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?: (d: Device) => void }) {
+  const { data: session } = useSession();
   const create = useCreateDevice();
   const update = useUpdateDevice();
   const isEdit = !!device;
+  const canEditCode = !isEdit || session?.user?.role === "ADMIN";
   const positions = usePositions();
 
   const [form, setForm] = React.useState({
@@ -68,7 +71,7 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
       <CardContent>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Mã thiết bị *">
-            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={isEdit} required placeholder="ESP-S1-001" />
+            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="ESP-S1-001" />
           </Field>
           <Field label="Tên thiết bị *">
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} required />

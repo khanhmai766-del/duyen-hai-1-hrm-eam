@@ -4,9 +4,24 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { addMonths, replacementDueStatus } from "@/lib/constants";
 import type { Prisma } from "@prisma/client";
 
+const DEVICE_SELECT = { id: true, code: true, name: true, system: true, managingPosition: true } satisfies Prisma.DeviceSelect;
+
 const INCLUDE = {
-  material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true, system: true } },
-  device: { select: { id: true, code: true, name: true, system: true } },
+  material: {
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      unit: true,
+      imageUrl: true,
+      system: true,
+      deviceMaterials: {
+        select: { device: { select: DEVICE_SELECT } },
+        orderBy: { usedAt: "desc" },
+      },
+    },
+  },
+  device: { select: DEVICE_SELECT },
   _count: { select: { logs: true } },
 } satisfies Prisma.MaterialReplacementInclude;
 
@@ -22,9 +37,10 @@ export async function GET(req: NextRequest) {
     if (materialId) where.materialId = materialId;
     if (q) {
       where.OR = [
-        { location: { contains: q, mode: "insensitive" } },
         { material: { is: { name: { contains: q, mode: "insensitive" } } } },
         { material: { is: { code: { contains: q, mode: "insensitive" } } } },
+        { material: { is: { deviceMaterials: { some: { device: { is: { code: { contains: q, mode: "insensitive" } } } } } } } },
+        { material: { is: { deviceMaterials: { some: { device: { is: { name: { contains: q, mode: "insensitive" } } } } } } } },
         { device: { is: { code: { contains: q, mode: "insensitive" } } } },
         { device: { is: { name: { contains: q, mode: "insensitive" } } } },
       ];
@@ -58,8 +74,8 @@ export async function POST(req: NextRequest) {
     if (!body.materialId || !body.intervalMonths) {
       return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");
     }
-    if (!body.deviceId && !body.location?.trim()) {
-      return fail("Chọn thiết bị hoặc nhập vị trí thay thế");
+    if (!body.deviceId) {
+      return fail("Chọn thiết bị");
     }
     const intervalMonths = Number(body.intervalMonths);
     if (!Number.isFinite(intervalMonths) || intervalMonths < 1) {
@@ -76,8 +92,8 @@ export async function POST(req: NextRequest) {
     const point = await prisma.materialReplacement.create({
       data: {
         materialId: body.materialId,
-        deviceId: body.deviceId || null,
-        location: body.location?.trim() || null,
+        deviceId: body.deviceId,
+        location: null,
         system: body.system?.trim() || material.system || null,
         intervalMonths,
         intervalNote: body.intervalNote?.trim() || null,
@@ -88,6 +104,15 @@ export async function POST(req: NextRequest) {
       },
       include: INCLUDE,
     });
+    const linked = await prisma.deviceMaterial.findFirst({
+      where: { materialId: body.materialId, deviceId: body.deviceId },
+      select: { id: true },
+    });
+    if (!linked) {
+      await prisma.deviceMaterial.create({
+        data: { materialId: body.materialId, deviceId: body.deviceId, quantity: 1 },
+      });
+    }
     await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, material.code);
     return ok(point);
   });

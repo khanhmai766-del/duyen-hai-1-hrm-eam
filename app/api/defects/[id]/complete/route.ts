@@ -2,6 +2,8 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 
+const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
+
 /**
  * Đánh dấu một khiếm khuyết đã thực hiện xong:
  *  - sinh một DefectHistory (lịch sử theo cương vị) với số phiếu công tác, ngày
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           device: defect.device,
           system: defect.system,
           requestType: body.requestType?.trim() || defect.requestType,
-          content: defect.content,
+          content: body.content?.trim() || defect.content,
           requestNumber: defect.requestNumber,
           workOrderNumber: body.workOrderNumber?.trim() || null,
           performedAt,
@@ -36,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           images,
           createdById: user.id,
         },
+        include: HISTORY_INCLUDE,
       }),
       prisma.defect.update({
         where: { id: defect.id },

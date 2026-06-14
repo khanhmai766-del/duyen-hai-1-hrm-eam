@@ -41,7 +41,7 @@ export function RecordReplacementDialog({ point, onClose }: { point: Replacement
     }
   }
 
-  const target = point?.device ? `${point.device.code} — ${point.device.name}` : point?.location ?? "—";
+  const target = point?.device ? `${point.device.code} — ${point.device.name}` : "Chưa chọn thiết bị";
 
   return (
     <Dialog open={!!point} onOpenChange={(o) => !o && onClose()}>

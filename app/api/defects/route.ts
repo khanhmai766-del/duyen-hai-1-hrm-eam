@@ -4,7 +4,7 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true } } };
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
 export async function GET() {
   return handle(async () => {
@@ -41,7 +41,6 @@ export async function POST(req: NextRequest) {
         status: body.status || "CHUA_XU_LY",
         detectedAt: body.detectedAt ? new Date(body.detectedAt) : null,
         note: body.note?.trim() || null,
-        imageUrl: body.imageUrl || null,
         createdById: user.id,
       },
       include: INCLUDE,

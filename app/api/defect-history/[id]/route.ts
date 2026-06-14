@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, requireRole, handle, audit } from "@/lib/api";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true } } };
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {

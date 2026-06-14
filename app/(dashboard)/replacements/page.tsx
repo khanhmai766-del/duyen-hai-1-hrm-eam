@@ -4,10 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, RefreshCw, Pencil, Trash2, Cpu, MapPin, History, CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
-import { ExportButton } from "@/components/shared/export-button";
+import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -24,16 +24,17 @@ import {
   useReplacementHistory,
   useDeleteReplacement,
   type ReplacementItem,
+  type ReplacementDevice,
+  type ReplacementLogItem,
 } from "@/hooks/useReplacements";
 import {
   REPL_DUE,
   REPL_DUE_ORDER,
   replacementDueStatus,
   replacementIntervalLabel,
-  MATERIAL_SYSTEMS,
   can,
 } from "@/lib/constants";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, cn, initials } from "@/lib/utils";
 
 type TabKey = "schedule" | "history";
 
@@ -69,7 +70,13 @@ export default function ReplacementsPage() {
   const { data, isLoading } = useReplacements({ q: debouncedQ });
   const del = useDeleteReplacement();
   const all = data?.data ?? [];
-  const systemOf = (p: ReplacementItem) => p.system ?? p.material.system ?? null;
+  const linkedDeviceOf = (p: { device: ReplacementDevice | null; material: { deviceMaterials?: Array<{ device: ReplacementDevice }> } }) =>
+    p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
+  const systemOf = (p: ReplacementItem) => linkedDeviceOf(p)?.system ?? null;
+  const systemOptions = React.useMemo(
+    () => Array.from(new Set(all.map((p) => systemOf(p)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
+    [all]
+  );
   const bySystem = system === "ALL" ? all : all.filter((p) => systemOf(p) === system);
   // Lọc theo tháng/năm: chỉ các điểm có NGÀY ĐẾN HẠN trong tháng đang chọn.
   const byMonth = bySystem.filter((p) => ym(p.nextDueAt) === month);
@@ -90,36 +97,95 @@ export default function ReplacementsPage() {
   // Chỉ các lần ghi nhận trong tháng/năm đang chọn (theo NGÀY THAY).
   const logsInMonth = logs.filter((l) => ym(l.replacedAt) === month);
   const filteredLogs = historyQ.trim()
-    ? logsInMonth.filter((l) => `${l.replacement?.material.code} ${l.replacement?.material.name} ${l.replacement?.location ?? ""} ${l.note ?? ""}`.toLowerCase().includes(historyQ.toLowerCase()))
+    ? logsInMonth.filter((l) => {
+        const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
+        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""}`.toLowerCase().includes(historyQ.toLowerCase());
+      })
     : logsInMonth;
+  const historyBackupRows = React.useMemo(() => {
+    const qText = historyQ.trim().toLowerCase();
+    if (!qText) return logs;
+    return logs.filter((l) => {
+      const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
+      return `${l.replacement?.material.code ?? ""} ${l.replacement?.material.name ?? ""} ${device?.code ?? ""} ${device?.name ?? ""} ${device?.system ?? ""} ${l.note ?? ""} ${l.doneBy.name}`.toLowerCase().includes(qText);
+    });
+  }, [historyQ, logs]);
+  const historyBackupColumns = React.useMemo(
+    () => [
+      { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: ReplacementLogItem, index: number) => index + 1 },
+      { key: "replacedAt", header: "Ngày thay", width: 14, align: "center" as const, value: (l: ReplacementLogItem) => formatDate(l.replacedAt) },
+      { key: "material", header: "Tên vật tư", width: 30, value: (l: ReplacementLogItem) => l.replacement?.material.name },
+      { key: "materialCode", header: "Mã vật tư", width: 24, value: (l: ReplacementLogItem) => l.replacement?.material.code },
+      {
+        key: "device",
+        header: "Thiết bị",
+        width: 32,
+        value: (l: ReplacementLogItem) => {
+          const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
+          return device ? `${device.code} - ${device.name}` : "";
+        },
+      },
+      {
+        key: "system",
+        header: "Hệ thống",
+        width: 28,
+        value: (l: ReplacementLogItem) => (l.replacement ? linkedDeviceOf(l.replacement)?.system ?? l.replacement.system : ""),
+      },
+      {
+        key: "quantity",
+        header: "Số lượng",
+        width: 14,
+        align: "center" as const,
+        value: (l: ReplacementLogItem) => (l.quantity != null ? `${l.quantity} ${l.replacement?.material.unit ?? ""}` : ""),
+      },
+      { key: "note", header: "Ghi chú", width: 34, value: (l: ReplacementLogItem) => l.note },
+      { key: "doneBy", header: "Người thực hiện", width: 24, value: (l: ReplacementLogItem) => l.doneBy.name },
+    ],
+    []
+  );
 
   /* ---- Nút Xuất dùng chung: xuất theo tab đang mở ---- */
   const exportRows =
     tab === "schedule"
-      ? points.map((p) => ({
-          material: `${p.material.code} — ${p.material.name}`,
-          target: p.device ? `${p.device.code} — ${p.device.name}` : p.location ?? "",
-          system: systemOf(p) ?? "",
-          interval: replacementIntervalLabel(p.intervalMonths, p.intervalNote),
-          lastReplaced: formatDate(p.lastReplacedAt),
-          nextDue: formatDate(p.nextDueAt),
-          status: REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
-        }))
-      : filteredLogs.map((l) => ({
-          material: `${l.replacement?.material.code ?? ""} — ${l.replacement?.material.name ?? ""}`,
-          location: l.replacement?.location ?? "",
-          system: l.replacement?.system ?? l.replacement?.material.system ?? "",
-          replacedAt: formatDate(l.replacedAt),
-          quantity: l.quantity ?? "",
-          note: l.note ?? "",
-          doneBy: l.doneBy.name,
-        }));
+      ? points.map((p) => {
+          const device = linkedDeviceOf(p);
+          return {
+            material: `${p.material.code} — ${p.material.name}`,
+            target: device ? `${device.code} — ${device.name}` : "",
+            system: device?.system ?? "",
+            interval: replacementIntervalLabel(p.intervalMonths, p.intervalNote),
+            lastReplaced: formatDate(p.lastReplacedAt),
+            nextDue: formatDate(p.nextDueAt),
+            status: REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
+          };
+        })
+      : filteredLogs.map((l) => {
+          const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
+          return {
+            material: `${l.replacement?.material.code ?? ""} — ${l.replacement?.material.name ?? ""}`,
+            device: device ? `${device.code} — ${device.name}` : "",
+            system: device?.system ?? "",
+            replacedAt: formatDate(l.replacedAt),
+            quantity: l.quantity ?? "",
+            note: l.note ?? "",
+            doneBy: l.doneBy.name,
+          };
+        });
   const exportFilename = tab === "schedule" ? "lich-thay-the-vat-tu" : "lich-su-thay-the-vat-tu";
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Lịch thay thế vật tư" description="Tổng hợp lịch thay thế & lịch sử ghi nhận thay thế vật tư">
-        <ExportButton rows={exportRows} filename={exportFilename} />
+      <PageHeader title="LỊCH THAY THẾ VẬT TƯ" description="Tổng hợp lịch thay thế & lịch sử ghi nhận thay thế vật tư">
+        {tab === "history" && (
+          <AnnualBackupExport
+            rows={historyBackupRows}
+            columns={historyBackupColumns}
+            dateAccessor={(row) => row.replacedAt}
+            title="LỊCH SỬ THAY THẾ VẬT TƯ"
+            subtitle="Báo cáo backup lịch sử ghi nhận thay thế vật tư theo năm"
+            filenamePrefix="lich-su-thay-the-vat-tu"
+          />
+        )}
       </PageHeader>
 
       {/* Tabs */}
@@ -133,12 +199,12 @@ export default function ReplacementsPage() {
           {/* Controls */}
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, vị trí..." className="sm:w-64" />
+              <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, thiết bị..." className="sm:w-64" />
               <Select value={system} onValueChange={setSystem}>
                 <SelectTrigger className="sm:w-48" aria-label="Lọc theo hệ thống"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả hệ thống</SelectItem>
-                  {MATERIAL_SYSTEMS.map((s) => (
+                  {systemOptions.map((s) => (
                     <SelectItem key={s} value={s}>{s}</SelectItem>
                   ))}
                 </SelectContent>
@@ -198,11 +264,11 @@ export default function ReplacementsPage() {
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1.5 text-sm">
-                          {p.device ? <Cpu className="h-3.5 w-3.5 text-navy" /> : <MapPin className="h-3.5 w-3.5 text-accent" />}
-                          {p.device ? (
-                            <Link href={`/devices/${p.device.id}`} className="hover:underline">{p.device.code} — {p.device.name}</Link>
+                          <Cpu className="h-3.5 w-3.5 text-navy" />
+                          {linkedDeviceOf(p) ? (
+                            <Link href={`/devices/${linkedDeviceOf(p)!.id}`} className="hover:underline">{linkedDeviceOf(p)!.code} — {linkedDeviceOf(p)!.name}</Link>
                           ) : (
-                            <span>{p.location}</span>
+                            <span>Chưa chọn thiết bị</span>
                           )}
                         </span>
                       </TableCell>
@@ -244,7 +310,7 @@ export default function ReplacementsPage() {
       ) : (
         <div className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <SearchBar value={historyQ} onChange={setHistoryQ} placeholder="Tìm theo vật tư, vị trí, ghi chú..." className="sm:w-72" />
+            <SearchBar value={historyQ} onChange={setHistoryQ} placeholder="Tìm theo vật tư, thiết bị, ghi chú..." className="sm:w-72" />
             <MonthFilter value={month} onChange={setMonth} />
           </div>
 
@@ -265,7 +331,7 @@ export default function ReplacementsPage() {
                 <TableHeader className="bg-muted/40">
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Vật tư</TableHead>
-                    <TableHead>Vị trí thay thế</TableHead>
+                    <TableHead>Thiết bị</TableHead>
                     <TableHead className="text-center">Hệ thống</TableHead>
                     <TableHead className="text-center">Ngày thay</TableHead>
                     <TableHead className="text-center">Số lượng</TableHead>
@@ -280,12 +346,16 @@ export default function ReplacementsPage() {
                         <div className="font-medium text-ink">{l.replacement?.material.name ?? "—"}</div>
                         <div className="font-mono text-xs text-navy">{l.replacement?.material.code ?? ""}</div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{l.replacement?.location ?? "—"}</TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">{l.replacement?.system ?? l.replacement?.material.system ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {l.replacement && linkedDeviceOf(l.replacement) ? `${linkedDeviceOf(l.replacement)!.code} — ${linkedDeviceOf(l.replacement)!.name}` : "—"}
+                      </TableCell>
+                      <TableCell className="text-center text-sm text-muted-foreground">{l.replacement && linkedDeviceOf(l.replacement)?.system ? linkedDeviceOf(l.replacement)!.system : "—"}</TableCell>
                       <TableCell className="text-center text-sm text-ink">{formatDate(l.replacedAt)}</TableCell>
                       <TableCell className="text-center text-sm">{l.quantity != null ? `${l.quantity} ${l.replacement?.material.unit ?? ""}` : "—"}</TableCell>
                       <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground" title={l.note ?? undefined}>{l.note || "—"}</TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">{l.doneBy.name}</TableCell>
+                      <TableCell className="text-center">
+                        <UserAvatar user={l.doneBy} />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -299,7 +369,7 @@ export default function ReplacementsPage() {
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Sửa điểm thay thế</DialogTitle></DialogHeader>
-          {editTarget && <ReplacementPointForm materialId={editTarget.materialId} point={editTarget} defaultSystem={editTarget.material.system} lockedLocation={editTarget.location} onDone={() => setEditTarget(null)} />}
+          {editTarget && <ReplacementPointForm materialId={editTarget.materialId} point={editTarget} defaultSystem={editTarget.material.system} onDone={() => setEditTarget(null)} />}
         </DialogContent>
       </Dialog>
 
@@ -367,6 +437,21 @@ function MonthFilter({ value, onChange }: { value: string; onChange: (v: string)
       <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => shift(1)} aria-label="Tháng sau">
         <ChevronRight className="h-4 w-4" />
       </Button>
+    </div>
+  );
+}
+
+function UserAvatar({ user }: { user: { name: string; position: string | null; avatarUrl: string | null } }) {
+  return (
+    <div className="flex justify-center" title={`${user.name}${user.position ? ` · ${user.position}` : ""}`} aria-label={user.name}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[11px] font-bold text-white shadow-sm ring-1 ring-border">
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+        ) : (
+          initials(user.name)
+        )}
+      </span>
     </div>
   );
 }

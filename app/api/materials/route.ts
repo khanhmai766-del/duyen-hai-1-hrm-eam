@@ -7,7 +7,15 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(async () => {
     await requireUser();
-    const materials = await prisma.material.findMany({ orderBy: { code: "asc" } });
+    const materials = await prisma.material.findMany({
+      orderBy: { code: "asc" },
+      include: {
+        deviceMaterials: {
+          include: { device: { select: { id: true, code: true, name: true, system: true, managingPosition: true } } },
+          orderBy: { usedAt: "desc" },
+        },
+      },
+    });
     return ok(materials, { total: materials.length });
   });
 }
@@ -27,12 +35,22 @@ export async function POST(req: NextRequest) {
         unit: body.unit,
         quantity: Number(body.quantity) || 0,
         minStock: Number(body.minStock) || 0,
-        location: body.location || null,
+        location: null,
         system: body.system || null,
         imageUrl: body.imageUrl || null,
         supplier: body.supplier || null,
         unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
         note: body.note || null,
+        ...(body.deviceId
+          ? {
+              deviceMaterials: {
+                create: {
+                  deviceId: body.deviceId,
+                  quantity: 1,
+                },
+              },
+            }
+          : {}),
       },
     });
     await audit(user.id, "CREATE_MATERIAL", "Material", m.id, m.code);
@@ -52,7 +70,7 @@ export async function PUT(req: NextRequest) {
         ...(body.name != null ? { name: body.name } : {}),
         ...(body.quantity != null ? { quantity: Number(body.quantity) } : {}),
         ...(body.minStock != null ? { minStock: Number(body.minStock) } : {}),
-        ...(body.location !== undefined ? { location: body.location } : {}),
+        location: null,
         ...(body.system !== undefined ? { system: body.system || null } : {}),
         ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl || null } : {}),
         ...(body.supplier !== undefined ? { supplier: body.supplier } : {}),
@@ -60,6 +78,18 @@ export async function PUT(req: NextRequest) {
         ...(body.note !== undefined ? { note: body.note || null } : {}),
       },
     });
+    if (body.deviceId !== undefined) {
+      await prisma.deviceMaterial.deleteMany({ where: { materialId: m.id } });
+      if (body.deviceId) {
+        await prisma.deviceMaterial.create({
+          data: {
+            materialId: m.id,
+            deviceId: body.deviceId,
+            quantity: 1,
+          },
+        });
+      }
+    }
     await audit(user.id, "UPDATE_MATERIAL", "Material", m.id, m.code);
     return ok(m);
   });

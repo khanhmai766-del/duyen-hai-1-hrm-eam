@@ -19,11 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials } from "@/hooks/useMaterials";
+import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices } from "@/hooks/useMaterials";
+import { useDevices } from "@/hooks/useDevices";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { MATERIAL_SYSTEMS, can } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
+
+const NO_DEVICE = "__none__";
 
 export default function MaterialsPage() {
   const { data: session } = useSession();
@@ -31,12 +34,14 @@ export default function MaterialsPage() {
   // Chỉ Quản trị (ADMIN) được thêm / sửa / xoá vật tư.
   const canManage = role === "ADMIN";
   const { data, isLoading } = useMaterials();
+  const { data: devicesData } = useDevices({});
+  const devices = devicesData?.data ?? [];
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
   const [systemFilter, setSystemFilter] = React.useState("ALL");
-  const [edit, setEdit] = React.useState<Partial<Material> | null>(null);
+  const [edit, setEdit] = React.useState<(Partial<Material> & { deviceId?: string | null; managingPosition?: string | null }) | null>(null);
   const [deleting, setDeleting] = React.useState<Material | null>(null);
   const [isNew, setIsNew] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -58,9 +63,22 @@ export default function MaterialsPage() {
   }, [trackId, data, router]);
 
   const total = data?.data?.length ?? 0;
+  const devicePositions = React.useMemo(
+    () => Array.from(new Set(devices.map((d) => d.managingPosition).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
+    [devices]
+  );
+  const deviceSystems = React.useMemo(
+    () => Array.from(new Set(devices.map((d) => d.system).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
+    [devices]
+  );
+  const deviceLabel = React.useCallback((m: MaterialWithDevices) => {
+    const linked = m.deviceMaterials?.map((dm) => dm.device).filter(Boolean) ?? [];
+    if (!linked.length) return "";
+    return linked.map((d) => d.name || d.code).join(", ");
+  }, []);
   const materials = (data?.data ?? []).filter(
     (m) =>
-      (!q || `${m.code} ${m.name} ${m.location ?? ""}`.toLowerCase().includes(q.toLowerCase())) &&
+      (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
       (systemFilter === "ALL" || m.system === systemFilter)
   );
   const isFiltered = q.trim() !== "" || systemFilter !== "ALL";
@@ -116,6 +134,24 @@ export default function MaterialsPage() {
     }
   }
 
+  function materialForEdit(m: MaterialWithDevices) {
+    const linkedDevice = m.deviceMaterials?.[0]?.device;
+    return {
+      ...m,
+      deviceId: m.deviceMaterials?.[0]?.deviceId ?? null,
+      managingPosition: linkedDevice?.managingPosition ?? null,
+    };
+  }
+
+  function syncDeviceFields(deviceId: string | null) {
+    const device = devices.find((d) => d.id === deviceId);
+    return {
+      deviceId,
+      managingPosition: device?.managingPosition ?? null,
+      system: device?.system ?? null,
+    };
+  }
+
   async function confirmDelete() {
     if (!deleting) return;
     try {
@@ -129,10 +165,10 @@ export default function MaterialsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Quản lý vật tư" description="Tồn kho phụ tùng & vật tư bảo trì">
-        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, quantity: m.quantity, minStock: m.minStock, location: m.location, system: m.system, supplier: m.supplier }))} filename="vat-tu" />
+      <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
+        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, quantity: m.quantity, minStock: m.minStock, device: deviceLabel(m), system: m.system, supplier: m.supplier }))} filename="vat-tu" />
         {canManage && (
-          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0 }); }}>
+          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, deviceId: null, managingPosition: null }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
           </Button>
         )}
@@ -140,7 +176,7 @@ export default function MaterialsPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, vị trí thay thế..." className="sm:w-72" />
+          <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="sm:w-72" />
           <Select value={systemFilter} onValueChange={setSystemFilter}>
             <SelectTrigger className="sm:w-56" aria-label="Lọc theo hệ thống">
               <SelectValue />
@@ -205,7 +241,7 @@ export default function MaterialsPage() {
                 <TableHead className="text-center">Tên vật tư</TableHead>
                 <TableHead className="text-center">ĐVT</TableHead>
                 <TableHead className="text-center">Số lượng</TableHead>
-                <TableHead className="text-center">Vị trí thay thế</TableHead>
+                <TableHead className="text-center">Thiết bị</TableHead>
                 <TableHead className="text-center">Định kỳ thay thế</TableHead>
                 <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
@@ -250,7 +286,9 @@ export default function MaterialsPage() {
                         <span className="font-semibold tabular-nums text-ink">{m.quantity}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center text-muted-foreground">{m.location ?? "—"}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">
+                      {deviceLabel(m) || "—"}
+                    </TableCell>
                     <TableCell className="text-center text-muted-foreground">{m.supplier ?? "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
@@ -259,7 +297,7 @@ export default function MaterialsPage() {
                         </Button>
                         {canManage && (
                           <>
-                            <Button variant="ghost" size="icon" title="Sửa" onClick={() => { setIsNew(false); setEdit(m); }}>
+                            <Button variant="ghost" size="icon" title="Sửa" onClick={() => { setIsNew(false); setEdit(materialForEdit(m)); }}>
                               <Pencil className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDeleting(m)}>
@@ -291,14 +329,50 @@ export default function MaterialsPage() {
               <Field label="Ảnh vật tư" className="col-span-2">
                 <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
               </Field>
-              <Field label="Tên *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-              <Field label="Vị trí thay thế" className="col-span-2"><Input value={edit.location ?? ""} onChange={(e) => setEdit({ ...edit, location: e.target.value })} /></Field>
+              <Field label="Cương vị" className="col-span-2">
+                <Select
+                  value={edit.managingPosition || "NONE"}
+                  onValueChange={(v) => {
+                    const nextPosition = v === "NONE" ? null : v;
+                    const selectedDevice = devices.find((device) => device.id === edit.deviceId);
+                    setEdit({
+                      ...edit,
+                      managingPosition: nextPosition,
+                      ...(selectedDevice && selectedDevice.managingPosition !== nextPosition ? { deviceId: null } : {}),
+                    });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">— Không chọn —</SelectItem>
+                    {devicePositions.map((position) => (
+                      <SelectItem key={position} value={position}>{position}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <Field label="Thiết bị" className="col-span-2">
+                <Select value={edit.deviceId || NO_DEVICE} onValueChange={(v) => setEdit({ ...edit, ...syncDeviceFields(v === NO_DEVICE ? null : v) })}>
+                  <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_DEVICE}>— Không chọn —</SelectItem>
+                    {devices
+                      .filter((device) => !edit.managingPosition || device.managingPosition === edit.managingPosition)
+                      .map((device) => (
+                      <SelectItem key={device.id} value={device.id}>
+                        {device.name} ({device.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Hệ thống" className="col-span-2">
                 <Select value={edit.system ?? "NONE"} onValueChange={(v) => setEdit({ ...edit, system: v === "NONE" ? null : v })}>
                   <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="NONE">— Không chọn —</SelectItem>
-                    {MATERIAL_SYSTEMS.map((s) => (
+                    {deviceSystems.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>

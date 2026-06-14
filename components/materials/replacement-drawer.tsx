@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { X, Plus, Pencil, Trash2, RefreshCw, Cpu, MapPin, CalendarClock, Repeat } from "lucide-react";
+import { X, Plus, Pencil, Trash2, RefreshCw, Cpu, CalendarClock, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -23,7 +23,7 @@ export function ReplacementDrawer({
   role,
   onClose,
 }: {
-  material: { id: string; code: string; name: string; system?: string | null; location?: string | null } | null;
+  material: { id: string; code: string; name: string; system?: string | null } | null;
   role?: string;
   onClose: () => void;
 }) {
@@ -83,11 +83,11 @@ export function ReplacementDrawer({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
-                      {p.device ? <Cpu className="h-3.5 w-3.5 text-navy" /> : <MapPin className="h-3.5 w-3.5 text-accent" />}
+                      <Cpu className="h-3.5 w-3.5 text-navy" />
                       {p.device ? (
                         <Link href={`/devices/${p.device.id}`} className="hover:underline">{p.device.code} — {p.device.name}</Link>
                       ) : (
-                        <span className="truncate">{p.location}</span>
+                        <span className="truncate">Chưa chọn thiết bị</span>
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -125,7 +125,7 @@ export function ReplacementDrawer({
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Thêm điểm thay thế</DialogTitle></DialogHeader>
-          <ReplacementPointForm materialId={material.id} defaultSystem={material.system ?? null} lockedLocation={material.location ?? null} onDone={() => setFormOpen(false)} />
+          <ReplacementPointForm materialId={material.id} defaultSystem={material.system ?? null} onDone={() => setFormOpen(false)} />
         </DialogContent>
       </Dialog>
 
@@ -133,7 +133,7 @@ export function ReplacementDrawer({
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Sửa điểm thay thế</DialogTitle></DialogHeader>
-          {editTarget && <ReplacementPointForm materialId={material.id} point={editTarget} defaultSystem={material.system ?? null} lockedLocation={material.location ?? null} onDone={() => setEditTarget(null)} />}
+          {editTarget && <ReplacementPointForm materialId={material.id} point={editTarget} defaultSystem={material.system ?? null} onDone={() => setEditTarget(null)} />}
         </DialogContent>
       </Dialog>
 
@@ -170,4 +170,3 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: stri
     </span>
   );
 }
-

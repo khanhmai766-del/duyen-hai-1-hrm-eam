@@ -4,7 +4,7 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true } } };
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
 export async function GET(req: NextRequest) {
   return handle(async () => {

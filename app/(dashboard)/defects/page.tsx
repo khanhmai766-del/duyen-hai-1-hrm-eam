@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -18,7 +18,7 @@ import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialo
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_STATUS, DEFECT_SEVERITY, DEFECT_REQUEST_TYPES, can } from "@/lib/constants";
-import { formatDate, cn } from "@/lib/utils";
+import { formatDate, initials, cn } from "@/lib/utils";
 
 export default function DefectsPage() {
   const { data: session } = useSession();
@@ -68,13 +68,17 @@ export default function DefectsPage() {
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<DefectItem | null>(null);
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
   function openCreate() { setEditTarget(null); setFormOpen(true); }
   function openEdit(d: DefectItem) { setEditTarget(d); setFormOpen(true); }
+  React.useEffect(() => {
+    setExpandedId(null);
+  }, [unitFilter, requestFilter, positionFilter, statusFilter]);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Khiếm khuyết thiết bị" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
+      <PageHeader title="KHIẾM KHUYẾT THIẾT BỊ" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
         <ExportButton
           rows={displayedDefects.map((d) => ({
             unit: d.unit,
@@ -174,63 +178,89 @@ export default function DefectsPage() {
         )
       ) : (
         <Card className="overflow-hidden">
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[950px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead>Số yêu cầu</TableHead>
-                <TableHead className="text-center">Tổ máy</TableHead>
-                <TableHead>Cương vị</TableHead>
-                <TableHead>Nội dung</TableHead>
-                <TableHead className="text-center">Mức độ</TableHead>
-                <TableHead className="text-center">Tình trạng</TableHead>
-                <TableHead className="text-center">Phát hiện</TableHead>
-                <TableHead className="text-center">Thao tác</TableHead>
+                <TableHead className="w-[210px] text-center">Số yêu cầu</TableHead>
+                <TableHead className="w-[90px] text-center">Tổ máy</TableHead>
+                <TableHead className="w-[180px] text-center">Cương vị</TableHead>
+                <TableHead className="w-[90px] text-center">Mức độ</TableHead>
+                <TableHead className="w-[140px] text-center">Tình trạng</TableHead>
+                <TableHead className="w-[120px] text-center">Phát hiện</TableHead>
+                <TableHead className="w-[110px] text-center">Người nhập</TableHead>
+                <TableHead className="w-[110px] text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayedDefects.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2.5">
-                      {d.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={d.imageUrl} alt="Khiếm khuyết" className="h-9 w-9 shrink-0 rounded-md border border-border object-cover" />
-                      ) : (
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent"><ShieldAlert className="h-4 w-4" /></span>
-                      )}
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-ink">{d.requestNumber || "—"}</div>
-                        {d.requestType && <div className="text-[11px] text-muted-foreground">{d.requestType}</div>}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center text-sm font-medium text-ink">{d.unit}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{d.system ?? "—"}</TableCell>
-                  <TableCell className="max-w-[260px] truncate text-sm" title={d.content ?? undefined}>{d.content || "—"}</TableCell>
-                  <TableCell className="text-center">
-                    {d.severity ? (
-                      <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
-                    ) : "—"}
-                  </TableCell>
-                  <TableCell className="text-center"><DefectStatusBadge status={d.status} /></TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">{formatDate(d.detectedAt)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center gap-1">
-                      {canManage && d.status !== "DA_XU_LY" && (
-                        <Button variant="ghost" size="icon" title="Hoàn thành" className="text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={() => setCompleteTarget(d)}><CheckCircle2 className="h-4 w-4" /></Button>
-                      )}
-                      {canManage && (
-                        <Button variant="ghost" size="icon" title="Sửa" onClick={() => openEdit(d)}><Pencil className="h-4 w-4" /></Button>
-                      )}
-                      {canDelete && (
-                        <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(d)}><Trash2 className="h-4 w-4" /></Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {displayedDefects.map((d) => {
+                const expanded = expandedId === d.id;
+                return (
+                  <React.Fragment key={d.id}>
+                    <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : d.id)}>
+                      <TableCell className="px-3 py-3 align-middle text-center">
+                        <div className="flex items-start justify-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedId(expanded ? null : d.id);
+                            }}
+                            className={cn(
+                              "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
+                              expanded ? "bg-rose-500" : "bg-emerald-500"
+                            )}
+                            title={expanded ? "Thu gọn" : "Mở chi tiết"}
+                          >
+                            {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                          </button>
+                          <div className="min-w-0 leading-tight">
+                            <div className="truncate text-[13px] font-semibold text-ink">{d.requestNumber || "—"}</div>
+                            {d.requestType && <div className="mt-0.5 text-[10.5px] text-muted-foreground">YC: {d.requestType}</div>}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] font-semibold text-ink">{d.unit}</TableCell>
+                      <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
+                        <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-center">
+                        {d.severity ? (
+                          <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-center"><DefectStatusBadge status={d.status} /></TableCell>
+                      <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] text-muted-foreground">{formatDate(d.detectedAt)}</TableCell>
+                      <TableCell className="px-3 py-3 text-center">
+                        <DefectUserAvatar user={d.createdBy} />
+                      </TableCell>
+                      <TableCell className="px-2 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          {canManage && d.status !== "DA_XU_LY" && (
+                            <Button variant="ghost" size="icon" title="Hoàn thành" className="text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); setCompleteTarget(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
+                          )}
+                          {canManage && (
+                            <Button variant="ghost" size="icon" title="Sửa" onClick={(e) => { e.stopPropagation(); openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(d); }}><Trash2 className="h-4 w-4" /></Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {expanded && (
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell colSpan={8} className="px-6 py-4">
+                          <DefectExpandedDetails defect={d} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </TableBody>
           </Table>
+          </div>
         </Card>
       )}
 
@@ -283,6 +313,66 @@ const SEVERITY_TONE: Record<string, string> = {
   "3": "bg-yellow-100 text-yellow-800",
   "4": "bg-gray-100 text-gray-600",
 };
+
+function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
+  const severity = defect.severity
+    ? DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] ?? defect.severity
+    : "—";
+  const status = DEFECT_STATUS[defect.status as keyof typeof DEFECT_STATUS]?.label ?? defect.status;
+  const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-3 shadow-sm";
+
+  return (
+    <div className="grid gap-5 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2">
+      <div className={detailCardClass}>
+        <DetailLine label="Số yêu cầu" value={defect.requestNumber || "—"} />
+        <DetailLine label="Yêu cầu" value={defect.requestType || "—"} />
+        <DetailLine label="Tổ máy" value={defect.unit || "—"} />
+        <DetailLine label="Cương vị" value={defect.system || "—"} />
+        <DetailLine label="Thiết bị" value={defect.device || "—"} />
+        <DetailLine label="Nội dung" value={defect.content || "—"} multiline />
+      </div>
+      <div className={detailCardClass}>
+        <DetailLine label="Mức độ" value={severity} />
+        <DetailLine label="Tình trạng" value={status} />
+        <DetailLine label="Ngày phát hiện" value={formatDate(defect.detectedAt)} />
+        <DetailLine label="Ghi chú" value={defect.note || "—"} multiline />
+        <DetailLine label="Người ghi nhận" value={defect.createdBy?.name || "—"} />
+      </div>
+    </div>
+  );
+}
+
+function DetailLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
+  return (
+    <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
+      <div className="whitespace-nowrap font-semibold text-ink">{label}:</div>
+      <div className={cn("min-w-0 text-ink", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function DefectUserAvatar({ user }: { user?: DefectItem["createdBy"] | null }) {
+  if (!user) return <span className="text-sm text-muted-foreground">—</span>;
+
+  return (
+    <div
+      className="flex justify-center"
+      title={`${user.name}${user.position ? ` · ${user.position}` : ""}`}
+      aria-label={`Người nhập khiếm khuyết: ${user.name}`}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[11px] font-bold text-white shadow-sm ring-1 ring-border">
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+        ) : (
+          initials(user.name)
+        )}
+      </span>
+    </div>
+  );
+}
 
 const KPI_TONES = {
   rose: { bg: "from-rose-50 to-rose-100", num: "text-rose-600", icon: "text-rose-400", shadow: "shadow-rose-500/25 hover:shadow-rose-500/40" },

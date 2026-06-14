@@ -31,15 +31,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (intervalMonths != null && (!Number.isFinite(intervalMonths) || intervalMonths < 1)) {
       return fail("Chu kỳ phải là số tháng hợp lệ (≥ 1)");
     }
-    if (body.deviceId !== undefined && !body.deviceId && !body.location?.trim()) {
-      return fail("Chọn thiết bị hoặc nhập vị trí thay thế");
+    if (body.deviceId !== undefined && !body.deviceId) {
+      return fail("Chọn thiết bị");
     }
 
     const point = await prisma.materialReplacement.update({
       where: { id: params.id },
       data: {
-        deviceId: body.deviceId !== undefined ? body.deviceId || null : undefined,
-        location: body.location !== undefined ? body.location?.trim() || null : undefined,
+        deviceId: body.deviceId !== undefined ? body.deviceId : undefined,
+        location: body.deviceId !== undefined ? null : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         intervalMonths,
         intervalNote: body.intervalNote !== undefined ? body.intervalNote?.trim() || null : undefined,
@@ -54,6 +54,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         _count: { select: { logs: true } },
       },
     });
+    if (body.deviceId) {
+      const linked = await prisma.deviceMaterial.findFirst({
+        where: { materialId: point.materialId, deviceId: body.deviceId },
+        select: { id: true },
+      });
+      if (!linked) {
+        await prisma.deviceMaterial.create({
+          data: { materialId: point.materialId, deviceId: body.deviceId, quantity: 1 },
+        });
+      }
+    }
     await audit(user.id, "UPDATE_REPLACEMENT", "MaterialReplacement", point.id);
     return ok(point);
   });

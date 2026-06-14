@@ -28,7 +28,7 @@ export default function DeviceDetailPage() {
   const [delOpen, setDelOpen] = React.useState(false);
 
   const device = data?.data;
-  const url = typeof window !== "undefined" ? `${window.location.origin}/devices/${id}` : "";
+  const url = typeof window !== "undefined" ? `${window.location.origin}/public/devices/${id}` : "";
 
   function downloadQr() {
     const svg = document.getElementById("device-qr");
@@ -148,9 +148,8 @@ export default function DeviceDetailPage() {
                   <div key={m.id} className="rounded-lg border border-border p-3 text-sm">
                     <div className="font-medium text-ink">{m.material.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {m.quantity} {m.material.unit} · {formatDate(m.usedAt)}
+                      Định kỳ thay thế: {m.material.supplier || "—"}
                     </div>
-                    {m.note && <div className="mt-1 text-xs text-muted-foreground">{m.note}</div>}
                   </div>
                 ))
               ) : (

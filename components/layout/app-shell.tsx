@@ -10,11 +10,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = React.useState(false);
 
   return (
-    <div className="flex min-h-screen bg-warmwhite">
+    <div className="flex min-h-screen bg-warmwhite dark:bg-background">
       {/* Desktop sidebar — elevated above the AppShell background; collapses to an icon rail */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden bg-white shadow-[6px_0_28px_-10px_rgba(15,23,42,0.22)] ring-1 ring-border/50 transition-[width] duration-300 lg:block",
+          "fixed inset-y-0 left-0 z-40 hidden bg-white shadow-[6px_0_28px_-10px_rgba(15,23,42,0.22)] ring-1 ring-border/50 transition-[width] duration-300 dark:bg-card dark:shadow-[8px_0_34px_-18px_rgba(0,0,0,0.75)] lg:block",
           collapsed ? "w-[76px]" : "w-[280px]"
         )}
       >
@@ -24,8 +24,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-ink/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[280px] border-r border-border shadow-xl">
+          <div className="absolute inset-0 bg-ink/40 dark:bg-black/60" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 w-[280px] border-r border-border bg-white shadow-xl dark:bg-card">
             <Sidebar onNavigate={() => setMobileOpen(false)} />
           </aside>
         </div>

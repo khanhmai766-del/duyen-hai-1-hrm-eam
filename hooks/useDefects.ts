@@ -5,7 +5,7 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { Defect } from "@prisma/client";
 
 export interface DefectItem extends Defect {
-  createdBy: { id: string; name: string; position: string | null };
+  createdBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
 }
 
 export function useDefects() {
@@ -45,6 +45,7 @@ export interface CompleteDefectInput {
   workOrderNumber?: string;
   requestType?: string;
   performedAt?: string | null;
+  content?: string;
   result?: string;
   images?: string[];
 }

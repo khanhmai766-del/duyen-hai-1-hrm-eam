@@ -4,14 +4,28 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { Material } from "@/types";
 
-export function useMaterials() {
-  return useQuery({ queryKey: ["materials"], queryFn: () => apiGet<Material[]>("/api/materials") });
+export interface MaterialWithDevices extends Material {
+  deviceMaterials?: Array<{
+    id: string;
+    deviceId: string;
+    materialId: string;
+    quantity: number;
+    usedAt: string | Date;
+    note: string | null;
+    device: { id: string; code: string; name: string; system: string | null; managingPosition: string | null };
+  }>;
 }
+
+export function useMaterials() {
+  return useQuery({ queryKey: ["materials"], queryFn: () => apiGet<MaterialWithDevices[]>("/api/materials") });
+}
+
+export type MaterialInput = Partial<Material> & { id?: string; deviceId?: string | null };
 
 export function useUpsertMaterial() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Partial<Material> & { id?: string }) =>
+    mutationFn: (body: MaterialInput) =>
       apiMutate<Material>("/api/materials", body.id ? "PUT" : "POST", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["materials"] }),
   });

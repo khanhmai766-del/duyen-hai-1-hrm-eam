@@ -4,16 +4,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { MaterialReplacement, MaterialReplacementLog } from "@prisma/client";
 
+export type ReplacementDevice = { id: string; code: string; name: string; system: string | null; managingPosition?: string | null };
+export type ReplacementMaterial = {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  imageUrl?: string | null;
+  system: string | null;
+  deviceMaterials?: Array<{ device: ReplacementDevice }>;
+};
+
 export interface ReplacementItem extends MaterialReplacement {
-  material: { id: string; code: string; name: string; unit: string; imageUrl: string | null; system: string | null };
-  device: { id: string; code: string; name: string; location: string } | null;
+  material: ReplacementMaterial & { imageUrl: string | null };
+  device: ReplacementDevice | null;
   _count: { logs: number };
 }
 
 export interface ReplacementDetail extends MaterialReplacement {
   material: { id: string; code: string; name: string; unit: string; imageUrl: string | null };
-  device: { id: string; code: string; name: string; location: string } | null;
-  logs: (MaterialReplacementLog & { doneBy: { id: string; name: string; position: string | null } })[];
+  device: ReplacementDevice | null;
+  logs: (MaterialReplacementLog & { doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null } })[];
 }
 
 export interface ReplacementFilters {
@@ -23,13 +34,13 @@ export interface ReplacementFilters {
 }
 
 export interface ReplacementLogItem extends MaterialReplacementLog {
-  doneBy: { id: string; name: string; position: string | null };
+  doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
   replacement: {
-    location: string | null;
     system: string | null;
     intervalMonths: number;
     intervalNote: string | null;
-    material: { id: string; code: string; name: string; unit: string; system: string | null };
+    device: ReplacementDevice | null;
+    material: ReplacementMaterial;
   } | null;
 }
 

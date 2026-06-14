@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     });
     await prisma.device.update({
       where: { id: device.id },
-      data: { qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || ""}/devices/${device.id}` },
+      data: { qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || ""}/public/devices/${device.id}` },
     });
     await audit(user.id, "CREATE_DEVICE", "Device", device.id, device.code);
     return ok(device);

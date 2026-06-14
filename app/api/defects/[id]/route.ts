@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true } } };
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -23,7 +23,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         status: body.status,
         detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? new Date(body.detectedAt) : null) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
-        imageUrl: body.imageUrl !== undefined ? body.imageUrl || null : undefined,
       },
       include: INCLUDE,
     });

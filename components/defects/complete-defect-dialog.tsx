@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
+import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
 
 const NONE = "__none__";
@@ -27,17 +28,23 @@ export function CompleteDefectDialog({
   onClose: () => void;
 }) {
   const complete = useCompleteDefect();
+  const { data: devicesData } = useDevices({});
+  const deviceNameByCode = React.useMemo(
+    () => new Map((devicesData?.data ?? []).map((d) => [d.code, d.name])),
+    [devicesData]
+  );
   const [form, setForm] = React.useState({
     workOrderNumber: "",
     requestType: "",
     performedAt: todayInput(),
+    content: "",
     result: "",
     images: [] as string[],
   });
 
   // Reset mỗi khi mở cho một khiếm khuyết khác. PCT mặc định = "Yêu Cầu" của khiếm khuyết.
   React.useEffect(() => {
-    if (defect) setForm({ workOrderNumber: "", requestType: defect.requestType ?? "", performedAt: todayInput(), result: "", images: [] });
+    if (defect) setForm({ workOrderNumber: "", requestType: defect.requestType ?? "", performedAt: todayInput(), content: "", result: "", images: [] });
   }, [defect]);
 
   async function submit() {
@@ -49,6 +56,7 @@ export function CompleteDefectDialog({
         workOrderNumber: form.workOrderNumber,
         requestType: form.requestType,
         performedAt: form.performedAt,
+        content: form.content,
         result: form.result,
         images: form.images,
       });
@@ -95,13 +103,21 @@ export function CompleteDefectDialog({
                 </Select>
               </Field>
             </div>
-            {/* Thiết bị — chỉ đọc, lấy theo khiếm khuyết đang chọn (như Tổ máy/Cương vị). */}
-            <ReadOnly label="Thiết bị" value={defect.device || "—"} />
+            {/* Tên thiết bị — đồng bộ từ danh mục thiết bị theo mã thiết bị của khiếm khuyết. */}
+            <ReadOnly label="Tên thiết bị" value={deviceNameByCode.get(defect.device ?? "") ?? defect.device ?? "—"} />
             <Field label="Ngày thực hiện *">
               <Input
                 type="date"
                 value={form.performedAt}
                 onChange={(e) => setForm((f) => ({ ...f, performedAt: e.target.value }))}
+              />
+            </Field>
+            <Field label="Nội dung thực hiện">
+              <Textarea
+                value={form.content}
+                onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                rows={3}
+                placeholder="Mô tả nội dung công việc thực hiện…"
               />
             </Field>
             <Field label="Kết quả thực hiện">

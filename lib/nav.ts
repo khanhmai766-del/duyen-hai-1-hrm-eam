@@ -11,6 +11,9 @@ import {
   BarChart3,
   Users,
   ShieldCheck,
+  MessagesSquare,
+  FileText,
+  Workflow,
 } from "lucide-react";
 
 export interface NavItem {
@@ -51,12 +54,20 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Quản lý thiết bị",
     items: [
+      { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics dashboard thiet bi" },
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, keywords: "device thiet bi may moc esp fgd boiler turbine" },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
       { label: "Danh mục vật tư", href: "/materials", icon: Package, keywords: "material vat tu phu tung ton kho" },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
       { label: "Khiếm khuyết thiết bị", href: "/defects", icon: ShieldAlert, keywords: "defect su co fault khiem khuyet" },
-      { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics" },
+    ],
+  },
+  {
+    title: "QUẢN LÝ TÀI LIỆU SỐ",
+    items: [
+      { label: "Danh mục quy trình vận hành", href: "/documents/procedures", icon: FileText, keywords: "danh muc quy trinh van hanh procedure sop tai lieu so" },
+      { label: "Danh mục sơ đồ P&ID", href: "/documents/pid", icon: Workflow, keywords: "danh muc so do pid p&id ban ve tai lieu ky thuat" },
+      { label: "Forum", href: "/forum", icon: MessagesSquare, keywords: "forum dien dan trao doi ky thuat tai lieu quy trinh so do ban ve" },
     ],
   },
 ];
@@ -65,7 +76,7 @@ export const NAV_SECTIONS: NavSection[] = [
 export function normalizeText(s: string): string {
   return s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
     .replace(/Đ/g, "D")
     .toLowerCase()

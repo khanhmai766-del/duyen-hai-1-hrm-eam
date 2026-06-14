@@ -17,6 +17,9 @@ import {
   FileSpreadsheet,
   ShieldAlert,
   UserCog,
+  Network,
+  Wrench,
+  type LucideIcon,
 } from "lucide-react";
 import {
   BarChart,
@@ -25,6 +28,7 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  CartesianGrid,
 } from "recharts";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -49,9 +53,10 @@ import {
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
 import { can } from "@/lib/constants";
 import { formatDate, cn } from "@/lib/utils";
+import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
 
 type ViewMode = "dashboard" | "table" | "detail" | "form" | "deck";
-const VIEWS: { key: ViewMode; label: string; icon: any; adminOnly?: boolean }[] = [
+const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
   { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { key: "table", label: "Bảng", icon: Table2 },
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
@@ -65,13 +70,21 @@ export default function DevicesPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const view = (params.get("view") as ViewMode) || "table";
+  const urlQ = params.get("q") ?? "";
+  const urlSystem = params.get("system") ?? "ALL";
 
-  const [q, setQ] = React.useState("");
-  const [debouncedQ, setDebouncedQ] = React.useState("");
-  const [system, setSystem] = React.useState("ALL");
+  const [q, setQ] = React.useState(urlQ);
+  const [debouncedQ, setDebouncedQ] = React.useState(urlQ);
+  const [system, setSystem] = React.useState(urlSystem);
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setQ(urlQ);
+    setDebouncedQ(urlQ);
+    setSystem(urlSystem);
+  }, [urlQ, urlSystem]);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
@@ -116,7 +129,7 @@ export default function DevicesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Quản lý thiết bị" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
+      <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
         <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
         {isAdmin && (
           <Button variant="outline" onClick={() => setImportOpen(true)}>
@@ -233,52 +246,54 @@ function TableView({
   onDelete: (d: DeviceListItem) => void;
 }) {
   return (
-    <Card>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Mã</TableHead>
-            <TableHead>Tên thiết bị</TableHead>
-            <TableHead>Hệ thống</TableHead>
-            <TableHead>Cương vị quản lý</TableHead>
-            <TableHead>Hình ảnh</TableHead>
-            <TableHead className="text-right">Thao tác</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {devices.map((d) => (
-            <TableRow key={d.id}>
-              <TableCell className="font-mono text-xs font-medium text-navy">{d.code}</TableCell>
-              <TableCell className="font-medium">{d.name}</TableCell>
-              <TableCell className="text-muted-foreground">{d.system ?? "—"}</TableCell>
-              <TableCell className="text-muted-foreground">{d.managingPosition ?? "—"}</TableCell>
-              <TableCell>
-                {d.images?.[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={d.images[0]} alt={d.name} className="h-10 w-10 rounded-md border border-border object-cover" />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground"><Cpu className="h-4 w-4" /></span>
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center justify-end gap-1">
-                  <Button asChild variant="ghost" size="icon" title="Chi tiết">
-                    <Link href={`/devices/${d.id}`}><Eye className="h-4 w-4" /></Link>
-                  </Button>
-                  <Button variant="ghost" size="icon" title="Mã QR" onClick={() => onQr(d)}>
-                    <QrCode className="h-4 w-4" />
-                  </Button>
-                  {canDelete && (
-                    <Button variant="ghost" size="icon" title="Xoá" onClick={() => onDelete(d)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
-                </div>
-              </TableCell>
+    <Card className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-center">Mã</TableHead>
+              <TableHead className="text-center">Tên thiết bị</TableHead>
+              <TableHead className="text-center">Hệ thống</TableHead>
+              <TableHead className="text-center">Cương vị quản lý</TableHead>
+              <TableHead className="text-center">Hình ảnh</TableHead>
+              <TableHead className="text-center">Thao tác</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {devices.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="text-center font-mono text-xs font-medium text-navy">{d.code}</TableCell>
+                <TableCell className="text-center font-medium">{d.name}</TableCell>
+                <TableCell className="text-center text-muted-foreground">{d.system ?? "—"}</TableCell>
+                <TableCell className="text-center text-muted-foreground">{d.managingPosition ?? "—"}</TableCell>
+                <TableCell>
+                  {d.images?.[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={d.images[0]} alt={d.name} className="mx-auto h-10 w-10 rounded-md border border-border object-cover" />
+                  ) : (
+                    <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground"><Cpu className="h-4 w-4" /></span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-center gap-1">
+                    <Button asChild variant="ghost" size="icon" title="Chi tiết">
+                      <Link href={`/devices/${d.id}`}><Eye className="h-4 w-4" /></Link>
+                    </Button>
+                    <Button variant="ghost" size="icon" title="Mã QR" onClick={() => onQr(d)}>
+                      <QrCode className="h-4 w-4" />
+                    </Button>
+                    {canDelete && (
+                      <Button variant="ghost" size="icon" title="Xoá" onClick={() => onDelete(d)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </Card>
   );
 }
@@ -390,40 +405,96 @@ function DashboardView({ devices }: { devices: DeviceListItem[] }) {
         acc[k] = (acc[k] ?? 0) + 1;
         return acc;
       }, {})
-    ).map(([name, count]) => ({ name, count }));
+    )
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
 
-  const bySystem = groupCount((d) => d.system);
-  const byPosition = groupCount((d) => d.managingPosition);
+  const bySystem = groupCount((d) => d.system).slice(0, 10);
+  const byPosition = groupCount((d) => d.managingPosition).slice(0, 10);
+  const repairHotlist = [...devices]
+    .filter((d) => d._count.repairLogs > 0)
+    .sort((a, b) => b._count.repairLogs - a._count.repairLogs)
+    .slice(0, 6);
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <Card>
-        <CardHeader><CardTitle>Theo hệ thống</CardTitle></CardHeader>
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+      <Card className="xl:col-span-3">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Network className="h-4 w-4 text-accent" /> Phân bổ theo hệ thống
+          </CardTitle>
+        </CardHeader>
         <CardContent>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={bySystem}>
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#2563EB" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="overflow-x-auto pb-1">
+            <div className="chart-3d h-[300px] min-w-[560px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={bySystem} barCategoryGap="24%" margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+                  {Bar3DDefs({ colors: ["#2563EB"] })}
+                  <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="4 4" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-18} textAnchor="end" height={58} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={32} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Thiết bị" fill={barFill("#2563EB")} radius={[5, 5, 0, 0]} maxBarSize={34} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader><CardTitle>Theo cương vị quản lý</CardTitle></CardHeader>
+      <Card className="xl:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wrench className="h-4 w-4 text-warning" /> Thiết bị sửa chữa nhiều
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {repairHotlist.length === 0 ? (
+            <div className="flex h-[236px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-center text-sm text-muted-foreground">
+              <Wrench className="h-8 w-8 text-muted-foreground/40" />
+              Chưa có lịch sử sửa chữa trong danh sách này.
+            </div>
+          ) : (
+            repairHotlist.map((d, index) => (
+              <Link
+                key={d.id}
+                href={`/devices/${d.id}`}
+                className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:border-accent/50 hover:bg-accent/5"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted font-mono text-xs font-bold text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-ink">{d.name}</span>
+                  <span className="block truncate font-mono text-xs text-muted-foreground">{d.code}</span>
+                </span>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  {d._count.repairLogs} phiếu
+                </span>
+              </Link>
+            ))
+          )}
+        </CardContent>
+      </Card>
+      <Card className="xl:col-span-5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserCog className="h-4 w-4 text-success" /> Theo cương vị quản lý
+          </CardTitle>
+        </CardHeader>
         <CardContent>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byPosition} layout="vertical" margin={{ left: 24 }}>
-                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-                <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#16A34A" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="overflow-x-auto pb-1">
+            <div className="chart-3d h-[320px] min-w-[620px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byPosition} layout="vertical" margin={{ top: 8, right: 16, left: 42, bottom: 8 }}>
+                  {Bar3DDefs({ colors: ["#16A34A"] })}
+                  <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="4 4" />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                  <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Thiết bị" fill={barFill("#16A34A")} radius={[0, 5, 5, 0]} maxBarSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </CardContent>
       </Card>

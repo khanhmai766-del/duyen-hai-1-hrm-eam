@@ -145,7 +145,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-6 lg:col-span-3">
           <ActivityCard />
           <div className="flex flex-1 [&>*]:h-full [&>*]:w-full">
-            <OperationInfoCard canManage={can(session?.user?.role, "manageMaterials")} />
+            <OperationInfoCard canManage={can(session?.user?.role, "manageOperations")} />
           </div>
         </div>
         <div className="flex flex-col gap-6 lg:col-span-2">

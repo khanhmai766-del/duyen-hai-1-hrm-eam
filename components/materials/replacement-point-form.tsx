@@ -2,15 +2,15 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, MapPin } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMaterials } from "@/hooks/useMaterials";
+import { useDevices } from "@/hooks/useDevices";
 import { useCreateReplacement, useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
-import { addMonths, MATERIAL_SYSTEMS } from "@/lib/constants";
+import { addMonths } from "@/lib/constants";
 
 function toDateInput(v: Date | string | null | undefined): string {
   if (!v) return "";
@@ -18,44 +18,35 @@ function toDateInput(v: Date | string | null | undefined): string {
   return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
-type LocMode = "EXISTING" | "CUSTOM";
 const NO_SYSTEM = "__none__";
+const NO_DEVICE = "__none__";
+const NO_POSITION = "__none__";
 
 export function ReplacementPointForm({
   materialId,
   point,
   defaultSystem,
-  lockedLocation,
   onDone,
 }: {
   materialId: string;
   point?: ReplacementItem | null;
   /** Hệ thống mặc định khi tạo mới — lấy theo hệ thống của vật tư. */
   defaultSystem?: string | null;
-  /**
-   * Khoá vị trí thay thế theo vật tư: khi có giá trị, trường vị trí cố định
-   * (bằng vị trí thay thế của vật tư) và không cho user chỉnh sửa.
-   */
-  lockedLocation?: string | null;
   onDone?: () => void;
 }) {
   const isEdit = !!point;
-  const lockedLoc = (lockedLocation ?? "").trim();
-  const isLocked = !!lockedLoc;
   const create = useCreateReplacement();
   const update = useUpdateReplacement();
-  const { data: materialsData } = useMaterials();
-  const materials = materialsData?.data ?? [];
-
-  // (Chỉ dùng khi KHÔNG khoá) danh sách "Vị trí thay thế" có sẵn từ danh mục.
-  const knownLocations = React.useMemo(
-    () => Array.from(new Set(materials.map((m) => (m.location ?? "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi")),
-    [materials]
+  const { data: devicesData } = useDevices({});
+  const devices = devicesData?.data ?? [];
+  const devicePositions = React.useMemo(
+    () => Array.from(new Set(devices.map((device) => device.managingPosition).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
+    [devices]
   );
 
-  const [mode, setMode] = React.useState<LocMode>(isEdit ? "CUSTOM" : "EXISTING");
   const [form, setForm] = React.useState({
-    location: isLocked ? lockedLoc : (point?.location ?? ""),
+    deviceId: point?.deviceId ?? "",
+    managingPosition: "",
     system: isEdit ? (point?.system ?? "") : (defaultSystem ?? ""),
     intervalMonths: String(point?.intervalMonths ?? 6),
     intervalNote: point?.intervalNote ?? "",
@@ -67,6 +58,74 @@ export function ReplacementPointForm({
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
+  const positionDevices = React.useMemo(
+    () => devices.filter((device) => !form.managingPosition || device.managingPosition === form.managingPosition),
+    [devices, form.managingPosition]
+  );
+  const deviceSystems = React.useMemo(
+    () => Array.from(new Set(positionDevices.map((device) => device.system).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
+    [positionDevices]
+  );
+  const filteredDevices = React.useMemo(
+    () => positionDevices.filter((device) => !form.system || device.system === form.system),
+    [positionDevices, form.system]
+  );
+  function setDevice(deviceId: string) {
+    setForm((f) => {
+      const nextDeviceId = deviceId === NO_DEVICE ? "" : deviceId;
+      const device = devices.find((d) => d.id === nextDeviceId);
+      return {
+        ...f,
+        deviceId: nextDeviceId,
+        managingPosition: device?.managingPosition ?? "",
+        system: device?.system ?? "",
+      };
+    });
+  }
+  function setPosition(position: string) {
+    setForm((f) => {
+      const managingPosition = position === NO_POSITION ? "" : position;
+      const selectedDevice = devices.find((d) => d.id === f.deviceId);
+      const positionDevices = devices.filter((d) => !managingPosition || d.managingPosition === managingPosition);
+      const keepSystem = !f.system || positionDevices.some((d) => d.system === f.system);
+      const nextSystem = keepSystem ? f.system : "";
+      const keepDevice =
+        !selectedDevice ||
+        ((!managingPosition || selectedDevice.managingPosition === managingPosition) &&
+          (!nextSystem || selectedDevice.system === nextSystem));
+      return {
+        ...f,
+        managingPosition,
+        deviceId: keepDevice ? f.deviceId : "",
+        system: nextSystem,
+      };
+    });
+  }
+  function setSystem(systemValue: string) {
+    setForm((f) => {
+      const system = systemValue === NO_SYSTEM ? "" : systemValue;
+      const selectedDevice = devices.find((d) => d.id === f.deviceId);
+      const keepDevice =
+        !selectedDevice ||
+        ((!f.managingPosition || selectedDevice.managingPosition === f.managingPosition) &&
+          (!system || selectedDevice.system === system));
+      return {
+        ...f,
+        system,
+        deviceId: keepDevice ? f.deviceId : "",
+      };
+    });
+  }
+
+  React.useEffect(() => {
+    if (!form.deviceId) return;
+    const device = devices.find((d) => d.id === form.deviceId);
+    if (!device) return;
+    const managingPosition = device.managingPosition ?? "";
+    const system = device.system ?? "";
+    if (form.managingPosition === managingPosition && form.system === system) return;
+    setForm((f) => ({ ...f, managingPosition, system }));
+  }, [devices, form.deviceId, form.managingPosition, form.system]);
 
   function recompute(next: typeof form) {
     const base = next.lastReplacedAt ? new Date(next.lastReplacedAt) : new Date();
@@ -82,14 +141,15 @@ export function ReplacementPointForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const location = isLocked ? lockedLoc : form.location.trim();
-    if (!location) return toast.error("Vui lòng chọn / nhập vị trí thay thế");
+    if (!form.managingPosition) return toast.error("Vui lòng chọn cương vị");
+    if (!form.system) return toast.error("Vui lòng chọn hệ thống");
+    if (!form.deviceId) return toast.error("Vui lòng chọn thiết bị");
     if (!form.nextDueAt) return toast.error("Vui lòng nhập ngày đến hạn");
 
     const payload = {
       materialId,
-      deviceId: null,
-      location,
+      deviceId: form.deviceId,
+      location: null,
       system: form.system || null,
       intervalMonths: Number(form.intervalMonths),
       intervalNote: form.intervalNote,
@@ -111,53 +171,39 @@ export function ReplacementPointForm({
 
   return (
     <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {/* Vị trí thay thế */}
-      <div className="sm:col-span-2">
-        <Label className="mb-1.5 block">Vị trí thay thế *</Label>
-        {isLocked ? (
-          <>
-            <div className="flex items-center gap-2 rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-ink">
-              <MapPin className="h-4 w-4 shrink-0 text-accent" />
-              <span className="font-medium">{lockedLoc}</span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Theo vị trí thay thế của vật tư — không thể thay đổi.</p>
-          </>
-        ) : (
-          <>
-            <div className="mb-2 inline-flex rounded-lg border border-border p-0.5 text-sm">
-              <button type="button" onClick={() => setMode("EXISTING")}
-                className={mode === "EXISTING" ? "rounded-md bg-navy px-3 py-1 text-white" : "px-3 py-1 text-muted-foreground"}>
-                Vị trí có sẵn
-              </button>
-              <button type="button" onClick={() => setMode("CUSTOM")}
-                className={mode === "CUSTOM" ? "rounded-md bg-navy px-3 py-1 text-white" : "px-3 py-1 text-muted-foreground"}>
-                Vị trí tự do
-              </button>
-            </div>
-            {mode === "EXISTING" ? (
-              <Select value={form.location || undefined} onValueChange={(v) => set("location", v)}>
-                <SelectTrigger><SelectValue placeholder={knownLocations.length ? "Chọn vị trí thay thế" : "Chưa có vị trí — nhập ở 'Vị trí tự do'"} /></SelectTrigger>
-                <SelectContent>
-                  {knownLocations.map((loc) => (
-                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="VD: Trạm dầu ĐCC Máy Nghiền" />
-            )}
-          </>
-        )}
+      <div>
+        <Label className="mb-1.5 block">Cương vị *</Label>
+        <Select value={form.managingPosition || NO_POSITION} onValueChange={setPosition}>
+          <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
+          <SelectContent>
+            {devicePositions.map((position) => (
+              <SelectItem key={position} value={position}>{position}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="mb-1.5 block">Hệ thống *</Label>
+        <Select value={form.system || NO_SYSTEM} onValueChange={setSystem}>
+          <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
+          <SelectContent>
+            {deviceSystems.map((s) => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="sm:col-span-2">
-        <Label className="mb-1.5 block">Hệ thống</Label>
-        <Select value={form.system || NO_SYSTEM} onValueChange={(v) => set("system", v === NO_SYSTEM ? "" : v)}>
-          <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
+        <Label className="mb-1.5 block">Thiết bị *</Label>
+        <Select value={form.deviceId || NO_DEVICE} onValueChange={setDevice}>
+          <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value={NO_SYSTEM}>— Không chọn —</SelectItem>
-            {MATERIAL_SYSTEMS.map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
+            {filteredDevices.map((device) => (
+              <SelectItem key={device.id} value={device.id}>
+                {device.name} ({device.code})
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

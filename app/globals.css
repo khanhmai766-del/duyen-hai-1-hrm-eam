@@ -100,6 +100,16 @@
   .dark .bg-white {
     background-color: hsl(var(--card));
   }
+  .dark .bg-white\/70 {
+    background-color: hsl(var(--card) / 0.72);
+  }
+  .dark .bg-white\/80 {
+    background-color: hsl(var(--card) / 0.82);
+  }
+  .dark .bg-white\/90,
+  .dark .bg-white\/95 {
+    background-color: hsl(var(--card) / 0.92);
+  }
   /* Light-blue active states (sidebar items) → translucent accent on dark. */
   .dark .bg-\[\#EFF6FF\] {
     background-color: hsl(217 40% 22%);
@@ -138,9 +148,18 @@
   /* Neutral slate/gray borders → dark borders */
   .dark .border-slate-100,
   .dark .border-slate-200,
+  .dark .border-blue-100,
   .dark .border-gray-100,
   .dark .border-gray-200 {
     border-color: hsl(var(--border));
+  }
+  .dark .ring-blue-100 {
+    --tw-ring-color: hsl(var(--border));
+  }
+  .dark .ring-white\/50,
+  .dark .ring-white\/60,
+  .dark .ring-white\/70 {
+    --tw-ring-color: hsl(210 40% 96% / 0.14);
   }
 }
 
@@ -154,6 +173,12 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-400;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background-color: hsl(220 14% 30%);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(217 18% 42%);
 }
 
 /* 3D bar charts: soft drop shadow on each bar for depth */
@@ -216,6 +241,294 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .logo-3d { animation: none; transform: none; }
+}
+
+/* Login brand badge: a small glass-and-enamel plinth that keeps the EVNGENCO1
+   mark readable over the moving control-room video. */
+.login-logo-stage {
+  position: relative;
+  display: inline-flex;
+  border-radius: 22px;
+  padding: 10px;
+  isolation: isolate;
+  transform: perspective(900px) rotateX(8deg) rotateY(-8deg);
+  animation: login-logo-drift 5.5s ease-in-out infinite;
+}
+.login-logo-stage::before {
+  content: "";
+  position: absolute;
+  inset: 11px 3px -9px 15px;
+  z-index: -2;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(12, 31, 58, 0.55), rgba(15, 23, 42, 0.18));
+  filter: blur(12px);
+  transform: skewX(-10deg);
+}
+.login-logo-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 24px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(219, 234, 254, 0.34) 46%, rgba(30, 58, 95, 0.32)),
+    radial-gradient(circle at 24% 14%, rgba(255, 255, 255, 0.9), transparent 38%);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset -10px -12px 18px rgba(30, 58, 95, 0.18),
+    0 16px 34px rgba(2, 8, 23, 0.34);
+}
+.login-logo-card {
+  position: relative;
+  display: grid;
+  min-height: 126px;
+  min-width: 216px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, #ffffff 0%, #ffffff 55%, #f2f6fc 100%);
+  border: 1px solid rgba(255, 255, 255, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -12px 20px rgba(30, 58, 95, 0.06),
+    0 4px 0 rgba(167, 183, 205, 0.68),
+    0 18px 32px rgba(2, 8, 23, 0.24);
+}
+.login-logo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.42), transparent 32%),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.035), transparent 38%, rgba(245, 158, 11, 0.035));
+  pointer-events: none;
+}
+.login-logo-card::after {
+  content: "";
+  position: absolute;
+  left: 13%;
+  right: 13%;
+  top: 8px;
+  height: 1px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.8);
+}
+.login-logo-mark {
+  position: relative;
+  z-index: 1;
+  height: 112px;
+  width: auto;
+  max-width: 194px;
+  object-fit: contain;
+  filter:
+    saturate(1.18)
+    contrast(1.16)
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.82))
+    drop-shadow(0 7px 10px rgba(30, 58, 95, 0.16));
+}
+.login-logo-stage-mobile {
+  transform: perspective(900px) rotateX(7deg);
+}
+@keyframes login-logo-drift {
+  0%, 100% { transform: perspective(900px) rotateX(8deg) rotateY(-8deg) translateY(0); }
+  50% { transform: perspective(900px) rotateX(8deg) rotateY(-8deg) translateY(-5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-logo-stage {
+    animation: none;
+  }
+}
+@media (max-width: 1023px) {
+  .login-logo-stage {
+    transform: perspective(900px) rotateX(7deg);
+  }
+  .login-logo-card {
+    min-height: 116px;
+    min-width: 198px;
+  }
+  .login-logo-mark {
+    height: 104px;
+    max-width: 180px;
+  }
+  @keyframes login-logo-drift {
+    0%, 100% { transform: perspective(900px) rotateX(7deg) translateY(0); }
+    50% { transform: perspective(900px) rotateX(7deg) translateY(-5px); }
+  }
+}
+
+/* Login access panel: clean white surface with a faint circuit-grid layer,
+   designed to feel technical without fighting the plant-pattern motif. */
+.login-access-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(203, 213, 225, 0.78);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.94)),
+    radial-gradient(circle at 14% 10%, rgba(59, 130, 246, 0.12), transparent 34%),
+    radial-gradient(circle at 92% 18%, rgba(20, 184, 166, 0.10), transparent 28%);
+  padding: 28px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 22px 70px rgba(15, 23, 42, 0.12),
+    0 6px 18px rgba(30, 58, 95, 0.08);
+}
+.login-access-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.15), transparent),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), transparent 42%);
+  opacity: 0.55;
+}
+.login-access-card::after {
+  content: "";
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.58), rgba(20, 184, 166, 0.42), transparent);
+}
+.login-access-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(rgba(30, 58, 95, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 58, 95, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(135deg, rgba(0, 0, 0, 0.9), transparent 68%);
+}
+.login-access-icon {
+  display: inline-flex;
+  height: 44px;
+  width: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  color: #fff;
+  background:
+    linear-gradient(145deg, #1e3a5f, #2563eb 58%, #0f766e);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 14px 24px rgba(37, 99, 235, 0.22);
+}
+.login-access-input {
+  height: 44px;
+  border-color: rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+.login-access-input:focus {
+  border-color: rgba(37, 99, 235, 0.82);
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.12),
+    0 8px 18px rgba(30, 58, 95, 0.08);
+}
+.login-access-button {
+  height: 46px;
+  border: 0;
+  background:
+    linear-gradient(135deg, #1e3a5f, #244a79 52%, #2563eb);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 14px 28px rgba(30, 58, 95, 0.22);
+}
+.login-access-button:hover {
+  filter: brightness(1.04);
+}
+.login-biometric-button {
+  height: 42px;
+  border-color: rgba(37, 99, 235, 0.24);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(239, 246, 255, 0.72));
+  color: #1e3a5f;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
+}
+.login-biometric-button:hover {
+  border-color: rgba(37, 99, 235, 0.42);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 1), rgba(219, 234, 254, 0.78));
+}
+.login-demo-panel {
+  border-radius: 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.7);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.74));
+  padding: 14px;
+}
+.login-demo-chip {
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(203, 213, 225, 0.86);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 9px 10px;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.login-demo-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.10);
+}
+.login-demo-chip span:last-child {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .login-access-card {
+    border-radius: 22px;
+    padding: 16px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.92) inset,
+      0 16px 42px rgba(15, 23, 42, 0.10),
+      0 4px 14px rgba(30, 58, 95, 0.07);
+  }
+  .login-access-card::after {
+    left: 18px;
+    right: 18px;
+  }
+  .login-access-grid {
+    background-size: 24px 24px;
+    opacity: 0.34;
+  }
+  .login-access-icon {
+    height: 38px;
+    width: 38px;
+    border-radius: 14px;
+  }
+  .login-access-input {
+    height: 40px;
+  }
+  .login-access-button {
+    height: 42px;
+  }
+  .login-biometric-button {
+    height: 38px;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 11px;
+  }
+  .login-demo-panel {
+    border-radius: 16px;
+    padding: 12px;
+  }
+  .login-demo-chip {
+    border-radius: 10px;
+    padding: 7px 8px;
+  }
 }
 
 /* Print styles for QR + reports */

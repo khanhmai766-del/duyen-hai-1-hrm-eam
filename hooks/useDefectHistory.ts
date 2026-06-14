@@ -5,7 +5,7 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { DefectHistory } from "@prisma/client";
 
 export interface DefectHistoryItem extends DefectHistory {
-  createdBy: { id: string; name: string; position: string | null };
+  createdBy: { id: string; name: string; position: string | null; avatarUrl?: string | null };
 }
 
 export interface DefectHistoryFilters {

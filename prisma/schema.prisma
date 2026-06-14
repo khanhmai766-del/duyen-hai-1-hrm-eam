@@ -36,6 +36,22 @@ model User {
   materialReplacementLogs MaterialReplacementLog[] @relation("MrDoneBy")
   defects                 Defect[]                 @relation("DefectCreatedBy")
   defectHistories         DefectHistory[]          @relation("DefectHistoryCreatedBy")
+  webAuthnCredentials     WebAuthnCredential[]
+  forumPosts              ForumPost[]              @relation("ForumPostAuthor")
+  forumReplies            ForumReply[]             @relation("ForumReplyAuthor")
+}
+
+model WebAuthnCredential {
+  id           String   @id @default(cuid())
+  credentialId String   @unique
+  publicKey    String
+  counter      Int      @default(0)
+  userId       String
+  deviceName   String?
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Bảng tin nội bộ: bài đăng do Quản trị (ADMIN) tạo, mọi người chỉ xem.
@@ -70,6 +86,34 @@ model AnnouncementRead {
   user         User         @relation("AnnouncementReader", fields: [userId], references: [id])
 
   @@unique([announcementId, userId])
+}
+
+model ForumPost {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  category    String   @default("DISCUSSION")
+  tags        String[]
+  attachments String[]
+  isPinned    Boolean  @default(false)
+  authorId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author  User         @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  replies ForumReply[]
+}
+
+model ForumReply {
+  id          String   @id @default(cuid())
+  postId      String
+  content     String
+  attachments String[]
+  authorId    String
+  createdAt   DateTime @default(now())
+
+  post   ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User      @relation("ForumReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 }
 
 model OperationEvent {

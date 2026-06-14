@@ -25,7 +25,7 @@ function toDateInput(v: Date | string | null | undefined): string {
 }
 
 const NONE = "__none__";
-const EMPTY = { unit: "", device: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), result: "", images: [] as string[] };
+const EMPTY = { unit: "", device: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), content: "", result: "", images: [] as string[] };
 
 /**
  * Hộp thoại Thêm mới / Chỉnh sửa một bản ghi lịch sử khiếm khuyết.
@@ -48,6 +48,10 @@ export function DefectHistoryDialog({
   const { data: devicesData } = useDevices({});
   const devices = devicesData?.data ?? [];
   const [form, setForm] = React.useState({ ...EMPTY });
+  const filteredDevices = React.useMemo(
+    () => devices.filter((d) => !form.system || d.managingPosition === form.system),
+    [devices, form.system]
+  );
 
   React.useEffect(() => {
     if (!open) return;
@@ -60,6 +64,7 @@ export function DefectHistoryDialog({
             requestType: record.requestType ?? "",
             workOrderNumber: record.workOrderNumber ?? "",
             performedAt: toDateInput(record.performedAt),
+            content: record.content ?? "",
             result: record.result ?? "",
             images: record.images ?? [],
           }
@@ -69,6 +74,18 @@ export function DefectHistoryDialog({
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  function setSystem(v: string) {
+    setForm((f) => {
+      const system = v === NONE ? "" : v;
+      const selectedDevice = devices.find((d) => d.code === f.device);
+      return {
+        ...f,
+        system,
+        device: selectedDevice && selectedDevice.managingPosition !== system ? "" : f.device,
+      };
+    });
   }
 
   const pending = create.isPending || update.isPending;
@@ -115,7 +132,7 @@ export function DefectHistoryDialog({
               </div>
             </Field>
             <Field label="Cương vị">
-              <Select value={form.system || NONE} onValueChange={(v) => set("system", v === NONE ? "" : v)}>
+              <Select value={form.system || NONE} onValueChange={setSystem}>
                 <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
@@ -153,12 +170,15 @@ export function DefectHistoryDialog({
               <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                {devices.map((d) => <SelectItem key={d.id} value={d.code}>{d.code} — {d.name}</SelectItem>)}
+                {filteredDevices.map((d) => <SelectItem key={d.id} value={d.code}>{d.code} — {d.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </Field>
           <Field label="Ngày thực hiện *">
             <Input type="date" value={form.performedAt} onChange={(e) => set("performedAt", e.target.value)} />
+          </Field>
+          <Field label="Nội dung thực hiện">
+            <Textarea value={form.content} onChange={(e) => set("content", e.target.value)} rows={3} placeholder="Mô tả nội dung công việc thực hiện…" />
           </Field>
           <Field label="Kết quả thực hiện">
             <Textarea value={form.result} onChange={(e) => set("result", e.target.value)} rows={3} placeholder="Mô tả kết quả xử lý…" />

@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCreateDefect, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
-import { ImagePicker } from "@/components/shared/image-picker";
 import {
   DEFECT_UNITS,
   DEFECT_SEVERITY,
@@ -64,10 +63,34 @@ export function DefectForm({
     status: defect?.status ?? "CHUA_XU_LY",
     detectedAt: toDateInput(defect?.detectedAt),
     note: defect?.note ?? "",
-    imageUrl: defect?.imageUrl ?? "",
   });
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+  const filteredDevices = React.useMemo(
+    () => devices.filter((d) => !form.system || d.managingPosition === form.system),
+    [devices, form.system]
+  );
+  function setSystem(v: string) {
+    setForm((f) => {
+      const system = v === NONE ? "" : v;
+      const selectedDevice = devices.find((d) => d.code === f.device);
+      return {
+        ...f,
+        system,
+        device: selectedDevice && selectedDevice.managingPosition !== system ? "" : f.device,
+      };
+    });
+  }
+  function setDevice(v: string) {
+    setForm((f) => {
+      const device = v === NONE ? null : devices.find((d) => d.code === v);
+      return {
+        ...f,
+        device: device?.code ?? "",
+        system: device?.managingPosition ?? f.system,
+      };
+    });
   }
 
   // Tab "Thông tin chung" bắt buộc chọn đủ; trả về tên thẻ còn thiếu (nếu có).
@@ -128,21 +151,21 @@ export function DefectForm({
                 ))}
               </div>
             </Row>
-            <Row label="Thiết Bị">
-              <Select value={form.device || NONE} onValueChange={(v) => set("device", v === NONE ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                  {devices.map((d) => <SelectItem key={d.id} value={d.code}>{d.code} — {d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </Row>
             <Row label="Cương Vị *">
-              <Select value={form.system || NONE} onValueChange={(v) => set("system", v === NONE ? "" : v)}>
+              <Select value={form.system || NONE} onValueChange={setSystem}>
                 <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
                   {positions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row label="Thiết Bị">
+              <Select value={form.device || NONE} onValueChange={setDevice}>
+                <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Không chọn —</SelectItem>
+                  {filteredDevices.map((d) => <SelectItem key={d.id} value={d.code}>{d.code} — {d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Row>
@@ -195,9 +218,6 @@ export function DefectForm({
             <Row label="Ghi Chú">
               <Textarea value={form.note} onChange={(e) => set("note", e.target.value)} rows={2} />
             </Row>
-            <Row label="Hình Ảnh">
-              <ImagePicker value={form.imageUrl} onChange={(v) => set("imageUrl", v)} />
-            </Row>
           </div>
         )}
       </div>
@@ -247,4 +267,3 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     </div>
   );
 }
-

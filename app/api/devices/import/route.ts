@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       } else {
         if (!name) { skipped.push(code); continue; } // tạo mới cần có tên
         const device = await prisma.device.create({ data: { code, name, system: system || null } });
-        await prisma.device.update({ where: { id: device.id }, data: { qrCodeData: `${base}/devices/${device.id}` } });
+        await prisma.device.update({ where: { id: device.id }, data: { qrCodeData: `${base}/public/devices/${device.id}` } });
         created++;
       }
     }
