@@ -18,3 +18,8 @@ public/videos
 
 # Cấu hình Claude theo máy (không chia sẻ)
 .claude/settings.local.json
+
+# Artifact tạm từ công cụ chạy thử (Codex): log dev-server, output test, video frames
+/codex-*.err
+/codex-*.txt
+/.codex-video-frames/
