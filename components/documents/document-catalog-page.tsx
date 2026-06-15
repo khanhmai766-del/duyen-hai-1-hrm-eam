@@ -28,7 +28,7 @@ import {
   useDocuments,
   useUpsertDocument,
 } from "@/hooks/useDocuments";
-import { blockForPosition } from "@/lib/constants";
+import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 type DocumentForm = {
@@ -93,7 +93,11 @@ export function DocumentCatalogPage({
   const positionOptions = React.useMemo(
     () =>
       Array.from(
-        new Set((devices.data?.data ?? []).map((device) => device.managingPosition).filter((value): value is string => !!value))
+        new Set(
+          (devices.data?.data ?? [])
+            .map((device) => device.managingPosition)
+            .filter((value): value is string => !!value && isSelectableManagingPosition(value))
+        )
       ).sort((a, b) => a.localeCompare(b, "vi")),
     [devices.data?.data]
   );

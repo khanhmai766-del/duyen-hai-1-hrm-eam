@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDevice, useUpdateDevice } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
-import { blockForPosition } from "@/lib/constants";
+import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import type { Device } from "@/types";
 
 const NONE = "__none__";
@@ -25,7 +25,7 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
   const update = useUpdateDevice();
   const isEdit = !!device;
   const canEditCode = !isEdit || session?.user?.role === "ADMIN";
-  const positions = usePositions();
+  const positions = usePositions().filter(isSelectableManagingPosition);
 
   const [form, setForm] = React.useState({
     code: device?.code ?? "",
