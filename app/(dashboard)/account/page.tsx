@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
+import { SignaturePad } from "@/components/shared/signature-pad";
 import { useUpdateProfile, useUsers } from "@/hooks/useUsers";
 import { apiGet } from "@/lib/fetcher";
 import { cn, initials } from "@/lib/utils";
@@ -126,6 +127,7 @@ function EditProfileDialog({
 
   const [form, setForm] = React.useState({
     avatarUrl: profile.avatarUrl ?? "",
+    signatureUrl: profile.signatureUrl ?? "",
     employeeId: profile.employeeId,
     phone: profile.phone ?? "",
     email: profile.email,
@@ -143,6 +145,7 @@ function EditProfileDialog({
     // Non-admin sends only the limited set; admin sends everything.
     const payload: Record<string, unknown> = {
       avatarUrl: form.avatarUrl,
+      signatureUrl: form.signatureUrl,
       employeeId: form.employeeId,
       phone: form.phone,
       email: form.email,
@@ -180,6 +183,9 @@ function EditProfileDialog({
           </EditField>
           <EditField label="Email" className="sm:col-span-2">
             <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+          </EditField>
+          <EditField label="Chữ ký số" className="sm:col-span-2">
+            <SignaturePad value={form.signatureUrl} onChange={(v) => set("signatureUrl", v)} />
           </EditField>
 
           {isAdmin && (

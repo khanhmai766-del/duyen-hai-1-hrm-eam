@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         position: body.position || null,
         department: body.department || null,
         avatarUrl: body.avatarUrl || null,
+        signatureUrl: body.signatureUrl || null,
         passwordHash: await bcrypt.hash(body.password || "password123", 10),
       },
     });
@@ -60,6 +61,7 @@ export async function PUT(req: NextRequest) {
     if (body.department !== undefined) data.department = body.department;
     if (body.phone !== undefined) data.phone = body.phone;
     if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
+    if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
     if (body.email) data.email = body.email;
     if (body.employeeId) data.employeeId = body.employeeId;
 
