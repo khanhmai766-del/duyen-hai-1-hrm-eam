@@ -8,11 +8,15 @@ import {
   FileText,
   Link2,
   MessageSquareText,
+  Pencil,
+  Pin,
+  PinOff,
   Plus,
   Search,
   Send,
   Trash2,
   Workflow,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -29,6 +33,8 @@ import {
   useDeleteForumPost,
   useDeleteForumReply,
   useForumPosts,
+  useUpdateForumPost,
+  useUpdateForumReply,
   type ForumAuthor,
   type ForumPost,
   type ForumReply,
@@ -54,9 +60,11 @@ const DEFAULT_FORM = {
 export default function ForumPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const currentUserId = session?.user?.id;
   const [category, setCategory] = React.useState("ALL");
   const [q, setQ] = React.useState("");
   const [composeOpen, setComposeOpen] = React.useState(false);
+  const [editingPost, setEditingPost] = React.useState<ForumPost | null>(null);
   const [form, setForm] = React.useState(DEFAULT_FORM);
   const [replyDrafts, setReplyDrafts] = React.useState<Record<string, string>>({});
   const [replyLinks, setReplyLinks] = React.useState<Record<string, string>>({});
@@ -65,29 +73,69 @@ export default function ForumPage() {
 
   const posts = useForumPosts({ category, q });
   const createPost = useCreateForumPost();
+  const updatePost = useUpdateForumPost();
   const createReply = useCreateForumReply();
   const deletePost = useDeleteForumPost();
   const deleteReply = useDeleteForumReply();
   const rows = posts.data?.data ?? [];
 
+  const postValid = form.title.trim().length > 0 && form.content.trim().length > 0;
+  const savingPost = createPost.isPending || updatePost.isPending;
+
+  function openCreate() {
+    setEditingPost(null);
+    setForm(DEFAULT_FORM);
+    setComposeOpen(true);
+  }
+
+  function openEditPost(post: ForumPost) {
+    setEditingPost(post);
+    setForm({
+      title: post.title,
+      content: post.content,
+      category: post.category,
+      tags: post.tags.join(", "),
+      attachments: post.attachments.join("\n"),
+    });
+    setComposeOpen(true);
+  }
+
   async function submitPost() {
+    if (!postValid) return;
     try {
-      await createPost.mutateAsync({
+      const payload = {
         title: form.title,
         content: form.content,
         category: form.category,
         tags: splitLines(form.tags),
         attachments: splitLines(form.attachments),
-      });
+      };
+      if (editingPost) {
+        await updatePost.mutateAsync({ id: editingPost.id, ...payload });
+        toast.success("Đã cập nhật chủ đề");
+      } else {
+        await createPost.mutateAsync(payload);
+        toast.success("Đã đăng chủ đề Forum");
+      }
       setForm(DEFAULT_FORM);
+      setEditingPost(null);
       setComposeOpen(false);
-      toast.success("Đã đăng chủ đề Forum");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function togglePin(post: ForumPost) {
+    try {
+      await updatePost.mutateAsync({ id: post.id, isPinned: !post.isPinned });
+      toast.success(post.isPinned ? "Đã bỏ ghim chủ đề" : "Đã ghim chủ đề");
     } catch (e) {
       toast.error((e as Error).message);
     }
   }
 
   async function submitReply(postId: string) {
+    if (!(replyDrafts[postId] ?? "").trim()) return;
     try {
       await createReply.mutateAsync({
         postId,
@@ -102,10 +150,14 @@ export default function ForumPage() {
     }
   }
 
+  function canManage(authorId: string) {
+    return isAdmin || (!!currentUserId && authorId === currentUserId);
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="FORUM KỸ THUẬT" description="Trao đổi kinh nghiệm, chia sẻ tài liệu, quy trình, sơ đồ và bản vẽ vận hành">
-        <Button onClick={() => setComposeOpen((v) => !v)}>
+        <Button onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
           <Plus className="h-4 w-4" /> Chủ đề mới
         </Button>
       </PageHeader>
@@ -145,6 +197,10 @@ export default function ForumPage() {
 
       {composeOpen && (
         <Card className="p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-bold text-ink">{editingPost ? "Sửa chủ đề" : "Tạo chủ đề mới"}</div>
+            <Button variant="ghost" size="icon" onClick={() => { setComposeOpen(false); setEditingPost(null); }}><X className="h-4 w-4" /></Button>
+          </div>
           <div className="grid gap-3 lg:grid-cols-[220px_1fr]">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Loại bài viết</label>
@@ -156,11 +212,11 @@ export default function ForumPage() {
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tiêu đề</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tiêu đề *</label>
               <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="VD: Chia sẻ quy trình xử lý rung quạt khói IDF..." />
             </div>
             <div className="lg:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Nội dung trao đổi</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Nội dung trao đổi *</label>
               <Textarea value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={4} placeholder="Nhập mô tả, kinh nghiệm xử lý, câu hỏi kỹ thuật..." />
             </div>
             <div>
@@ -173,9 +229,9 @@ export default function ForumPage() {
             </div>
           </div>
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setComposeOpen(false)}>Hủy</Button>
-            <Button onClick={submitPost} disabled={createPost.isPending}>
-              <Send className="h-4 w-4" /> Đăng chủ đề
+            <Button variant="outline" onClick={() => { setComposeOpen(false); setEditingPost(null); }}>Hủy</Button>
+            <Button onClick={submitPost} disabled={savingPost || !postValid}>
+              <Send className="h-4 w-4" /> {editingPost ? "Lưu thay đổi" : "Đăng chủ đề"}
             </Button>
           </div>
         </Card>
@@ -190,7 +246,7 @@ export default function ForumPage() {
           icon={MessageSquareText}
           title="Chưa có chủ đề Forum"
           description="Tạo chủ đề đầu tiên để chia sẻ tài liệu, quy trình hoặc câu hỏi kỹ thuật với ca/kíp."
-          action={{ label: "Tạo chủ đề", onClick: () => setComposeOpen(true) }}
+          action={{ label: "Tạo chủ đề", onClick: openCreate }}
         />
       ) : (
         <div className="space-y-4">
@@ -205,6 +261,11 @@ export default function ForumPage() {
               onReply={() => submitReply(post.id)}
               replying={createReply.isPending}
               isAdmin={isAdmin}
+              canManagePost={canManage(post.author.id)}
+              canManageReply={(authorId) => canManage(authorId)}
+              onEditPost={() => openEditPost(post)}
+              onTogglePin={() => togglePin(post)}
+              pinning={updatePost.isPending}
               onDeletePost={() => setDeletePostTarget(post)}
               onDeleteReply={(reply) => setDeleteReplyTarget(reply)}
             />
@@ -262,6 +323,11 @@ function ForumPostCard({
   onReply,
   replying,
   isAdmin,
+  canManagePost,
+  canManageReply,
+  onEditPost,
+  onTogglePin,
+  pinning,
   onDeletePost,
   onDeleteReply,
 }: {
@@ -273,18 +339,48 @@ function ForumPostCard({
   onReply: () => void;
   replying: boolean;
   isAdmin: boolean;
+  canManagePost: boolean;
+  canManageReply: (authorId: string) => boolean;
+  onEditPost: () => void;
+  onTogglePin: () => void;
+  pinning: boolean;
   onDeletePost: () => void;
   onDeleteReply: (reply: ForumReply) => void;
 }) {
   const category = CATEGORIES.find((c) => c.value === post.category) ?? CATEGORIES[1];
   const Icon = category.icon;
+  const updateReply = useUpdateForumReply();
+  const [editingReplyId, setEditingReplyId] = React.useState<string | null>(null);
+  const [editDraft, setEditDraft] = React.useState("");
+  const [editLinks, setEditLinks] = React.useState("");
+
+  function startEditReply(r: ForumReply) {
+    setEditingReplyId(r.id);
+    setEditDraft(r.content);
+    setEditLinks(r.attachments.join("\n"));
+  }
+  async function saveEditReply(id: string) {
+    if (!editDraft.trim()) return;
+    try {
+      await updateReply.mutateAsync({ id, content: editDraft, attachments: splitLines(editLinks) });
+      setEditingReplyId(null);
+      toast.success("Đã cập nhật phản hồi");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={cn("overflow-hidden", post.isPinned && "ring-1 ring-amber-300")}>
       <div className="border-b border-border bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
+              {post.isPinned && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
+                  <Pin className="h-3.5 w-3.5" /> Đã ghim
+                </span>
+              )}
               <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold", category.tone)}>
                 <Icon className="h-3.5 w-3.5" /> {category.label}
               </span>
@@ -294,12 +390,24 @@ function ForumPostCard({
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{post.content}</p>
           </div>
           <div className="flex shrink-0 items-start gap-2">
-            <AuthorBlock author={post.author} date={post.createdAt} />
-            {isAdmin && (
-              <Button variant="ghost" size="icon" title="Gỡ chủ đề" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={onDeletePost}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
+            <AuthorBlock author={post.author} date={post.createdAt} edited={post.updatedAt !== post.createdAt} />
+            <div className="flex items-center">
+              {isAdmin && (
+                <Button variant="ghost" size="icon" title={post.isPinned ? "Bỏ ghim" : "Ghim chủ đề"} className="text-muted-foreground hover:text-amber-600" onClick={onTogglePin} disabled={pinning}>
+                  {post.isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                </Button>
+              )}
+              {canManagePost && (
+                <Button variant="ghost" size="icon" title="Sửa chủ đề" className="text-muted-foreground hover:text-accent" onClick={onEditPost}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {canManagePost && (
+                <Button variant="ghost" size="icon" title="Gỡ chủ đề" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={onDeletePost}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         {post.attachments.length > 0 && <AttachmentList links={post.attachments} />}
@@ -311,21 +419,39 @@ function ForumPostCard({
           <div key={r.id} className="rounded-xl border border-border bg-white p-3">
             <div className="flex items-start justify-between gap-3">
               <AuthorInline author={r.author} date={r.createdAt} />
-              {isAdmin && (
-                <Button variant="ghost" size="icon" title="Gỡ phản hồi" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => onDeleteReply(r)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              {canManageReply(r.author.id) && editingReplyId !== r.id && (
+                <div className="flex items-center">
+                  <Button variant="ghost" size="icon" title="Sửa phản hồi" className="text-muted-foreground hover:text-accent" onClick={() => startEditReply(r)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="Gỡ phản hồi" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => onDeleteReply(r)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{r.content}</p>
-            {r.attachments.length > 0 && <AttachmentList links={r.attachments} compact />}
+            {editingReplyId === r.id ? (
+              <div className="mt-2 grid gap-2">
+                <Textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} rows={2} />
+                <Input value={editLinks} onChange={(e) => setEditLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingReplyId(null)}>Hủy</Button>
+                  <Button size="sm" onClick={() => saveEditReply(r.id)} disabled={updateReply.isPending || !editDraft.trim()}>Lưu</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{r.content}</p>
+                {r.attachments.length > 0 && <AttachmentList links={r.attachments} compact />}
+              </>
+            )}
           </div>
         ))}
         <div className="grid gap-2 rounded-xl border border-dashed border-border bg-white p-3">
           <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
           <Input value={replyLinks} onChange={(e) => setReplyLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
           <div className="flex justify-end">
-            <Button size="sm" onClick={onReply} disabled={replying}>
+            <Button size="sm" onClick={onReply} disabled={replying || !reply.trim()}>
               <Send className="h-4 w-4" /> Gửi phản hồi
             </Button>
           </div>
@@ -354,13 +480,13 @@ function AttachmentList({ links, compact = false }: { links: string[]; compact?:
   );
 }
 
-function AuthorBlock({ author, date }: { author: ForumAuthor; date: string }) {
+function AuthorBlock({ author, date, edited }: { author: ForumAuthor; date: string; edited?: boolean }) {
   return (
     <div className="flex shrink-0 items-center gap-2 rounded-xl bg-muted/40 px-3 py-2">
       <Avatar author={author} />
       <div className="min-w-0 text-right">
         <div className="truncate text-sm font-bold text-ink">{author.name}</div>
-        <div className="text-xs text-muted-foreground">{formatDateTime(date)}</div>
+        <div className="text-xs text-muted-foreground">{formatDateTime(date)}{edited ? " · đã sửa" : ""}</div>
       </div>
     </div>
   );

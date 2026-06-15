@@ -351,7 +351,7 @@ export function DocumentCatalogPage({
             <Button variant="outline" onClick={() => setFormOpen(false)}>
               Hủy
             </Button>
-            <Button onClick={submit} disabled={upsert.isPending}>
+            <Button onClick={submit} disabled={upsert.isPending || !form.title.trim() || !form.documentUrl.trim()}>
               {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Lưu thay đổi" : "Thêm mới"}
             </Button>

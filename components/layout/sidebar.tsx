@@ -200,7 +200,7 @@ function PowerGridMark() {
       aria-hidden="true"
     >
       <svg viewBox="0 0 36 36" className="h-8 w-8 drop-shadow-[0_1px_3px_rgba(15,23,42,0.55)]">
-        <polygon points="18,2.5 31.4,10.25 31.4,25.75 18,33.5 4.6,25.75 4.6,10.25" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" />
+        <polygon points="18,2.5 31.4,10.25 31.4,25.75 18,33.5 4.6,25.75 4.6,10.25" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
         <polygon points="20,8 12,19 17.5,19 15,28.5 24,16 18.5,16" fill="currentColor" />
       </svg>
     </span>

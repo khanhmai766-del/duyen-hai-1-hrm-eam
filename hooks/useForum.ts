@@ -73,6 +73,24 @@ export function useCreateForumReply() {
   });
 }
 
+export function useUpdateForumPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Partial<ForumPostInput> & { isPinned?: boolean }) =>
+      apiMutate<{ id: string }>(`/api/forum/${id}`, "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+  });
+}
+
+export function useUpdateForumReply() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, content, attachments }: { id: string; content: string; attachments?: string[] }) =>
+      apiMutate<{ id: string }>(`/api/forum/replies/${id}`, "PUT", { content, attachments }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+  });
+}
+
 export function useDeleteForumPost() {
   const qc = useQueryClient();
   return useMutation({
