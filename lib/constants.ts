@@ -152,6 +152,18 @@ export function blockForPosition(position?: string | null): string {
   return "Khối BOP";
 }
 
+/**
+ * Cương vị cấp quản lý/hành chính — KHÔNG hiện trong ô chọn "Cương vị quản lý"
+ * ở mục Quản lý thiết bị & Quản lý tài liệu số. So khớp không phân biệt hoa/thường
+ * & dấu, theo chứa từ khoá (loại cả biến thể, vd "Quản đốc phân xưởng", "Kỹ thuật viên I&C").
+ */
+const EXCLUDED_MANAGING_POSITION_KEYS = ["quan doc", "ky thuat vien", "thong ke"];
+export function isSelectableManagingPosition(position?: string | null): boolean {
+  if (!position) return false;
+  const p = normalizeText(position);
+  return !EXCLUDED_MANAGING_POSITION_KEYS.some((k) => p.includes(k));
+}
+
 /** Tình trạng khiếm khuyết. */
 export const DEFECT_STATUS = {
   CHUA_XU_LY: { label: "Chưa xử lý", badge: "bg-slate-100 text-slate-700", dot: "#64748B" },
