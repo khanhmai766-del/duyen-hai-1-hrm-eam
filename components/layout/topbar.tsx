@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { NAV_SECTIONS, normalizeText } from "@/lib/nav";
 import { apiMutate } from "@/lib/fetcher";
 import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
+import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard } from "@/hooks/useDashboard";
@@ -35,10 +36,15 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const [passwordOpen, setPasswordOpen] = React.useState(false);
   const profileRef = React.useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
+  // Cảnh báo thay thế vật tư đã được "xem" (lưu client theo khóa id:nextDueAt).
+  const [ackedReplKeys, setAckedReplKeys] = React.useState<Set<string>>(new Set());
   const { notices, loading: notifLoading } = useNotifications();
+  const markRead = useMarkAnnouncementRead();
   const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
   const replAlerts = alertsData?.data ?? [];
-  const totalAlerts = notices.length + replAlerts.length;
+  const replAlertKey = (a: (typeof replAlerts)[number]) => `${a.id}:${new Date(a.nextDueAt).getTime()}`;
+  const activeReplAlerts = replAlerts.filter((a) => !ackedReplKeys.has(replAlertKey(a)));
+  const totalAlerts = notices.length + activeReplAlerts.length;
   const { data: dash } = useMyDashboard();
   const avatarUrl = dash?.data?.avatarUrl ?? null;
 
@@ -59,6 +65,14 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     const onFs = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("repl-alert-acked");
+      if (raw) setAckedReplKeys(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      // bỏ qua nếu localStorage không khả dụng
+    }
   }, []);
 
   // Flatten nav (respecting admin-only) into searchable targets across both groups.
@@ -112,6 +126,36 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     e.preventDefault();
     if (results.length) go(results[0].href);
     else if (q.trim()) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
+  }
+
+  // "Xem tất cả" (tab Vận hành): đánh dấu đã đọc mọi mệnh lệnh đang hiển thị để
+  // badge cảnh báo reset, rồi mở trang Mệnh lệnh sản xuất.
+  async function handleViewAllOps() {
+    setNotifOpen(false);
+    const ids = notices.map((n) => n.id.replace(/^ann-/, ""));
+    if (ids.length) {
+      try {
+        await Promise.all(ids.map((id) => markRead.mutateAsync(id)));
+      } catch {
+        // Không chặn điều hướng nếu một vài lượt đánh dấu lỗi.
+      }
+    }
+    router.push("/notifications");
+  }
+
+  // "Mở lịch thay thế vật tư": đánh dấu đã xem mọi cảnh báo hiện tại (lưu client)
+  // để badge reset, rồi mở trang Lịch thay thế vật tư. Khi vật tư sang chu kỳ mới
+  // (nextDueAt đổi) cảnh báo sẽ xuất hiện lại.
+  function handleViewAllRepl() {
+    setNotifOpen(false);
+    const next = new Set(replAlerts.map(replAlertKey));
+    setAckedReplKeys(next);
+    try {
+      localStorage.setItem("repl-alert-acked", JSON.stringify([...next]));
+    } catch {
+      // bỏ qua nếu localStorage không khả dụng
+    }
+    router.push("/replacements");
   }
 
   return (
@@ -206,7 +250,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 {/* Tabs: tách biệt cảnh báo vận hành và cảnh báo thay thế vật tư */}
                 <div className="mt-2 flex gap-1">
                   <NotifTab active={notifTab === "ops"} onClick={() => setNotifTab("ops")} label="Vận hành" count={notices.length} />
-                  <NotifTab active={notifTab === "repl"} onClick={() => setNotifTab("repl")} label="Thay thế vật tư" count={replAlerts.length} />
+                  <NotifTab active={notifTab === "repl"} onClick={() => setNotifTab("repl")} label="Thay thế vật tư" count={activeReplAlerts.length} />
                 </div>
               </div>
 
@@ -239,22 +283,26 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       })}
                     </ul>
                   )}
-                  <Link href="/notifications" onClick={() => setNotifOpen(false)} className="flex items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
-                    Xem tất cả Mệnh lệnh sản xuất <ChevronRight className="h-4 w-4" />
-                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleViewAllOps}
+                    className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5"
+                  >
+                    Xem tất cả <ChevronRight className="h-4 w-4" />
+                  </button>
                 </>
               ) : (
                 <>
                   {alertsLoading ? (
                     <div className="px-4 py-6 text-center text-sm text-muted-foreground">Đang tải…</div>
-                  ) : replAlerts.length === 0 ? (
+                  ) : activeReplAlerts.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                       <Repeat className="h-7 w-7 text-muted-foreground/40" />
                       <span className="text-sm text-muted-foreground">Không có vật tư đến hạn thay thế</span>
                     </div>
                   ) : (
                     <ul className="max-h-80 divide-y divide-border overflow-y-auto">
-                      {replAlerts.slice(0, 8).map((a) => (
+                      {activeReplAlerts.slice(0, 8).map((a) => (
                         <li key={a.id}>
                           <Link href={`/materials?track=${a.materialId}`} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
@@ -273,9 +321,13 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       ))}
                     </ul>
                   )}
-                  <Link href="/replacements" onClick={() => setNotifOpen(false)} className="flex items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
+                  <button
+                    type="button"
+                    onClick={handleViewAllRepl}
+                    className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5"
+                  >
                     Mở lịch thay thế vật tư <ChevronRight className="h-4 w-4" />
-                  </Link>
+                  </button>
                 </>
               )}
             </div>

@@ -7,7 +7,7 @@ import type { DocumentCategory } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 
 type ArchiveTab = {
-  key: Extract<DocumentCategory, "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION">;
+  key: Extract<DocumentCategory, "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "MAJOR_REPAIR">;
   label: string;
   icon: React.ElementType;
   description: string;
@@ -40,6 +40,14 @@ const ARCHIVE_TABS: ArchiveTab[] = [
     emptyTitle: "Chưa có dữ liệu hiệu chỉnh lò",
     emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu hiệu chỉnh lò tại đây.",
   },
+  {
+    key: "MAJOR_REPAIR",
+    label: "Sửa chữa lớn",
+    icon: WrenchScrewdriverIcon,
+    description: "Lưu trữ đường dẫn tài liệu sửa chữa lớn phục vụ tra cứu và tổng hợp vận hành",
+    emptyTitle: "Chưa có dữ liệu sửa chữa lớn",
+    emptyDescription: "Admin có thể thêm tên thư mục và link tài liệu sửa chữa lớn tại đây.",
+  },
 ];
 const UNIT_TAGS = [
   { label: "S1", value: "S1" },
@@ -55,12 +63,13 @@ const BACKUP_FILENAME_PREFIX: Record<ArchiveTab["key"], string> = {
   GRID_SEPARATION: "backup-du-lieu-tach-luoi",
   STARTUP_DATA: "backup-du-lieu-khoi-dong",
   BOILER_CALIBRATION: "backup-du-lieu-hieu-chinh-lo",
+  MAJOR_REPAIR: "backup-sua-chua-lon",
 };
 
 export default function ArchiveDocumentsPage() {
   const [activeTab, setActiveTab] = React.useState<ArchiveTab["key"]>("GRID_SEPARATION");
   const activeConfig = ARCHIVE_TABS.find((item) => item.key === activeTab) ?? ARCHIVE_TABS[0];
-  const usesArchiveTimelineLayout = activeTab === "BOILER_CALIBRATION" || activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA";
+  const usesArchiveTimelineLayout = activeTab === "BOILER_CALIBRATION" || activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA" || activeTab === "MAJOR_REPAIR";
 
   return (
     <DocumentCatalogPage
@@ -78,7 +87,9 @@ export default function ArchiveDocumentsPage() {
             ? "Link xử lý (nếu có)"
             : activeTab === "STARTUP_DATA"
               ? "Ghi chú"
-              : "Link thư mục"
+              : activeTab === "MAJOR_REPAIR"
+                ? "Link tài liệu sửa chữa"
+                : "Link thư mục"
       }
       requireLink={activeTab !== "GRID_SEPARATION" && activeTab !== "STARTUP_DATA"}
       addLabel="Thêm thư mục"
@@ -123,7 +134,7 @@ export default function ArchiveDocumentsPage() {
       summaryField={activeTab === "GRID_SEPARATION" ? "reason" : undefined}
       attachmentLabel={activeTab === "BOILER_CALIBRATION" ? "Hình ảnh biên bản" : undefined}
       maxAttachments={activeTab === "BOILER_CALIBRATION" ? 2 : undefined}
-      defaultName={activeTab === "BOILER_CALIBRATION" ? "Hiệu chỉnh Lò" : activeTab === "STARTUP_DATA" ? "Khởi động tổ máy" : undefined}
+      defaultName={activeTab === "BOILER_CALIBRATION" ? "Hiệu chỉnh Lò" : activeTab === "STARTUP_DATA" ? "Khởi động tổ máy" : activeTab === "MAJOR_REPAIR" ? "Sửa chữa lớn" : undefined}
       yearLabel={usesArchiveTimelineLayout ? "Năm" : undefined}
       yearOptions={usesArchiveTimelineLayout ? ARCHIVE_YEAR_OPTIONS : undefined}
       requireYear={usesArchiveTimelineLayout}
@@ -147,6 +158,24 @@ export default function ArchiveDocumentsPage() {
         </div>
       }
     />
+  );
+}
+
+// Icon cờ lê + tua vít (Heroicons "wrench-screwdriver") — dùng cho tab Sửa chữa lớn.
+function WrenchScrewdriverIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
+    </svg>
   );
 }
 
