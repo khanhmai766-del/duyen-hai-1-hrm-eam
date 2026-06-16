@@ -15,6 +15,7 @@ model User {
   email        String   @unique
   phone        String?
   avatarUrl    String?
+  signatureUrl String? // chữ ký số: PNG nền trong suốt (base64) hoặc URL ngoài
   passwordHash String
   role         Role     @default(VIEWER)
   position     String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
@@ -400,4 +401,36 @@ model HcCheckIn {
   user  User    @relation("HcCheckInUser", fields: [userId], references: [id])
 
   @@unique([groupId, userId])
+}
+
+// Tài liệu số (quy trình, sơ đồ P&ID, lưu trữ…). Bảng được tạo/đồng bộ bằng raw
+// SQL trong app/api/documents/route.ts (ensureDigitalDocumentTable); khai báo ở
+// đây để db push không đề nghị xoá. attachmentUrls lưu JSON (mảng data URL) dạng text.
+model DigitalDocument {
+  id               String   @id
+  category         String
+  title            String
+  decisionNumber   String?
+  documentUrl      String
+  managingPosition String?
+  managementBlock  String?
+  reason           String?
+  progress         String?
+  note             String?
+  attachmentUrls   String?
+  createdById      String?
+  updatedById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+
+  @@index([category, updatedAt(sort: Desc)])
+}
+
+// Cấu hình ma trận phân quyền (RBAC) do ADMIN chỉnh trong /admin/roles. Bảng được
+// tạo bằng raw SQL trong app/api/rbac/route.ts; value lưu JSON cấu hình dạng text.
+model RbacConfig {
+  key         String   @id
+  value       String
+  updatedById String?
+  updatedAt   DateTime @default(now())
 }

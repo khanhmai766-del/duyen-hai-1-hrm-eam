@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
   Pie,
   PieChart,
@@ -13,17 +14,23 @@ import {
   YAxis,
 } from "recharts";
 import {
+  Activity,
   AlertTriangle,
+  Box,
   CalendarClock,
+  CheckCircle2,
   Factory,
   Gauge,
   Layers3,
   PackageCheck,
+  ShieldAlert,
   TimerReset,
+  TrendingUp,
   Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
@@ -35,6 +42,21 @@ import { daysUntilDue, replacementDueStatus } from "@/lib/constants";
 import { cn, formatDate } from "@/lib/utils";
 
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
+const DUYEN_HAI_3D_MODEL_URL =
+  "https://sketchfab.com/models/bdc122add7754c989a976fdd5b01012d/embed";
+
+type DeviceSignalRow = {
+  code: string;
+  name: string;
+  system: string;
+  managingPosition: string;
+  repairCount: number;
+  openDefectCount: number;
+  replacementWarn: number;
+  signalTotal: number;
+  riskScore: number;
+  recommendation: string;
+};
 
 export default function ReportsPage() {
   const [from, setFrom] = React.useState("");
@@ -124,13 +146,14 @@ export default function ReportsPage() {
       repairCountByDevice.set(row.device, (repairCountByDevice.get(row.device) ?? 0) + 1);
     });
 
-    const deviceSignalRows = devices
+    const allDeviceSignalRows = devices
       .map((device) => {
         const repairCount = repairCountByDevice.get(device.code) ?? device._count?.repairLogs ?? 0;
         const openDefectCount = openDefects.filter((defect) => defect.device === device.code).length;
         const replacementWarn = replacements.filter(
           (item) => item.device?.code === device.code && replacementDueStatus(item.nextDueAt) !== "OK"
         ).length;
+        const riskScore = repairCount + openDefectCount * 3 + replacementWarn * 2;
         return {
           code: device.code,
           name: device.name,
@@ -140,13 +163,22 @@ export default function ReportsPage() {
           openDefectCount,
           replacementWarn,
           signalTotal: repairCount + openDefectCount + replacementWarn,
+          riskScore,
+          recommendation:
+            openDefectCount > 0
+              ? "Ưu tiên xử lý khiếm khuyết"
+              : replacementWarn > 0
+                ? "Theo dõi vật tư đến hạn"
+                : repairCount > 1
+                  ? "Rà soát lặp lại sửa chữa"
+                  : repairCount > 0
+                    ? "Theo dõi sau sửa chữa"
+                    : "Ổn định",
         };
       })
-      .sort((a, b) => b.signalTotal - a.signalTotal)
-      .slice(0, 8);
-    const repairChartRows = [...deviceSignalRows]
-      .filter((device) => device.repairCount > 0)
-      .sort((a, b) => b.repairCount - a.repairCount)
+      .sort((a, b) => b.riskScore - a.riskScore || b.signalTotal - a.signalTotal);
+    const deviceSignalRows = allDeviceSignalRows
+      .filter((device) => device.signalTotal > 0)
       .slice(0, 8);
     const defectChartRows = [...deviceSignalRows]
       .filter((device) => device.openDefectCount > 0)
@@ -181,7 +213,6 @@ export default function ReportsPage() {
       positionRows,
       statusRows,
       deviceSignalRows,
-      repairChartRows,
       defectChartRows,
       replacementChartRows,
       upcomingReplacements,
@@ -193,24 +224,39 @@ export default function ReportsPage() {
       <PageHeader
         title="DASHBOARD QUẢN LÝ THIẾT BỊ"
         description="Tổng quan tài sản, khiếm khuyết, lịch sửa chữa và cảnh báo vật tư thay thế"
-      />
+      >
+        <Button asChild className="h-9 rounded-lg px-3 text-white">
+          <a href={DUYEN_HAI_3D_MODEL_URL} target="_blank" rel="noopener noreferrer">
+            <Box className="h-4 w-4" />
+            Mô phỏng 3D Duyên Hải 1
+          </a>
+        </Button>
+      </PageHeader>
 
-      <Card className="no-print border-slate-200 bg-white">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Từ ngày</label>
-              <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9 w-44" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Đến ngày</label>
-              <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-9 w-44" />
-            </div>
-            <div className="ml-auto flex min-h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-600">
-              Phạm vi lọc áp dụng cho khiếm khuyết và lịch sử sửa chữa
-            </div>
+      <Card className="no-print overflow-x-auto border-slate-200 bg-white p-2">
+        <div className="flex min-w-full items-center gap-3 whitespace-nowrap">
+          <div className="inline-flex shrink-0 items-center gap-2">
+            <label className="shrink-0 text-xs font-semibold text-muted-foreground">Từ ngày:</label>
+            <Input
+              type="date"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              className="h-9 w-40 shrink-0 rounded-lg bg-white text-sm shadow-none"
+            />
           </div>
-        </CardContent>
+          <div className="inline-flex shrink-0 items-center gap-2">
+            <label className="shrink-0 text-xs font-semibold text-muted-foreground">Đến ngày:</label>
+            <Input
+              type="date"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              className="h-9 w-40 shrink-0 rounded-lg bg-white text-sm shadow-none"
+            />
+          </div>
+          <div className="ml-auto inline-flex h-9 shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600">
+            Phạm vi lọc áp dụng cho khiếm khuyết và lịch sử sửa chữa
+          </div>
+        </div>
       </Card>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -383,43 +429,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.35fr_0.9fr]">
-        <Card className="overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Gauge className="h-4 w-4 text-blue-700" />
-              Tín hiệu bảo trì theo thiết bị
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <ChartSkeleton />
-            ) : dashboard.deviceSignalRows.some((row) => row.signalTotal > 0) ? (
-              <div className="h-[330px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboard.deviceSignalRows} layout="vertical" margin={{ top: 8, right: 20, left: 18, bottom: 8 }}>
-                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={126}
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(value) => shortLabel(String(value), 22)}
-                    />
-                    <Tooltip content={<DashboardTooltip />} />
-                    <Bar dataKey="repairCount" name="Sửa chữa" stackId="signal" fill="#1E3A5F" radius={[5, 0, 0, 5]} />
-                    <Bar dataKey="openDefectCount" name="Khiếm khuyết tồn đọng" stackId="signal" fill="#EF4444" />
-                    <Bar dataKey="replacementWarn" name="Cảnh báo thay thế" stackId="signal" fill="#F59E0B" radius={[0, 5, 5, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <EmptyPanel text="Chưa có tín hiệu bảo trì nổi bật theo thiết bị" />
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <SignalMiniChart
             icon={AlertTriangle}
             title="Top khiếm khuyết tồn đọng"
@@ -436,7 +446,6 @@ export default function ReportsPage() {
             color="#F59E0B"
             emptyText="Không có thiết bị cần cảnh báo thay thế"
           />
-        </div>
       </div>
     </div>
   );
@@ -508,6 +517,169 @@ function MetricCard({
         <div className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">{detail}</div>
       </CardContent>
     </Card>
+  );
+}
+
+function MaintenanceSignalPanel({
+  loading,
+  rows,
+  summary,
+}: {
+  loading?: boolean;
+  rows: DeviceSignalRow[];
+  summary: {
+    totalSignals: number;
+    devicesWithSignals: number;
+    openDefectDevices: number;
+    topRisk: DeviceSignalRow | null;
+  };
+}) {
+  const maxRisk = Math.max(...rows.map((row) => row.riskScore), 1);
+  const topRisk = summary.topRisk;
+  const chartRows = rows.map((row) => ({
+    ...row,
+    priorityRatio: Math.round((row.riskScore / maxRisk) * 100),
+  }));
+
+  return (
+    <Card className="overflow-hidden border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f7fbff_48%,#f8fff9_100%)] shadow-sm">
+      <CardHeader className="border-b border-slate-100 pb-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Gauge className="h-4 w-4 text-blue-700" />
+              Tín hiệu bảo trì theo thiết bị
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Xếp hạng theo điểm ưu tiên: khiếm khuyết tồn đọng, cảnh báo thay thế và lịch sử sửa chữa.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <SignalStat label="Tín hiệu" value={summary.totalSignals} tone="navy" />
+            <SignalStat label="Thiết bị" value={summary.devicesWithSignals} tone="teal" />
+            <SignalStat label="Tồn đọng" value={summary.openDefectDevices} tone="red" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-4">
+        {loading ? (
+          <ChartSkeleton />
+        ) : rows.length ? (
+          <div className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
+            <div className="relative overflow-hidden rounded-xl bg-slate-950 p-4 text-white shadow-lg">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 via-amber-400 to-cyan-400" />
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">
+                <ShieldAlert className="h-4 w-4 text-amber-300" />
+                Thiết bị ưu tiên
+              </div>
+              <div className="mt-4 text-2xl font-black leading-tight">{topRisk?.name}</div>
+              <div className="mt-1 text-sm text-slate-300">{topRisk?.code} · {topRisk?.system}</div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <SignalCounter label="Sửa chữa" value={topRisk?.repairCount ?? 0} color="#38BDF8" />
+                <SignalCounter label="Tồn đọng" value={topRisk?.openDefectCount ?? 0} color="#FB7185" />
+                <SignalCounter label="Thay thế" value={topRisk?.replacementWarn ?? 0} color="#FBBF24" />
+              </div>
+              <div className="mt-4 rounded-lg border border-white/10 bg-white/8 px-3 py-2">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <TrendingUp className="h-4 w-4 text-emerald-300" />
+                  {topRisk?.recommendation}
+                </div>
+                <div className="mt-1 text-xs leading-5 text-slate-300">
+                  Cương vị: {topRisk?.managingPosition}. Điểm ưu tiên {topRisk?.riskScore ?? 0}, dùng để sắp thứ tự kiểm tra và phân công xử lý.
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                    <span className="h-2 w-2 rounded-full bg-sky-500" /> Sửa chữa
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">
+                    <span className="h-2 w-2 rounded-full bg-rose-500" /> Khiếm khuyết
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" /> Thay thế
+                  </span>
+                </div>
+                <div className="text-xs font-semibold text-muted-foreground">Top {rows.length} thiết bị có tín hiệu</div>
+              </div>
+
+              <div className="h-[285px] rounded-lg bg-slate-50/70 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartRows}
+                    layout="vertical"
+                    margin={{ top: 8, right: 18, left: 10, bottom: 8 }}
+                    barCategoryGap={10}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="#94A3B8" />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={118}
+                      tick={{ fontSize: 11, fontWeight: 600 }}
+                      tickFormatter={(value) => shortLabel(String(value), 18)}
+                      stroke="#64748B"
+                    />
+                    <Tooltip content={<DashboardTooltip />} />
+                    <Bar dataKey="repairCount" name="Sửa chữa" stackId="signals" fill="#0EA5E9" radius={[6, 0, 0, 6]} />
+                    <Bar dataKey="openDefectCount" name="Khiếm khuyết tồn đọng" stackId="signals" fill="#F43F5E" />
+                    <Bar dataKey="replacementWarn" name="Cảnh báo thay thế" stackId="signals" fill="#F59E0B" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-3">
+                {chartRows.slice(0, 3).map((row, index) => (
+                  <div key={row.code} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-900 text-[11px] font-black text-white">
+                        {index + 1}
+                      </span>
+                      <span className="text-xs font-black text-blue-700">{row.priorityRatio}%</span>
+                    </div>
+                    <div className="mt-2 truncate text-sm font-bold text-ink" title={row.name}>{row.name}</div>
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      {row.recommendation}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+          </div>
+        ) : (
+          <EmptyPanel text="Chưa có tín hiệu bảo trì nổi bật theo thiết bị" />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SignalStat({ label, value, tone }: { label: string; value: number; tone: "navy" | "teal" | "red" }) {
+  const toneClass = {
+    navy: "bg-blue-50 text-blue-800 ring-blue-100",
+    teal: "bg-teal-50 text-teal-800 ring-teal-100",
+    red: "bg-rose-50 text-rose-800 ring-rose-100",
+  }[tone];
+  return (
+    <div className={cn("min-w-[72px] rounded-lg px-2 py-1.5 ring-1", toneClass)}>
+      <div className="text-lg font-black leading-none">{value}</div>
+      <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide">{label}</div>
+    </div>
+  );
+}
+
+function SignalCounter({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/10 px-2 py-2">
+      <div className="text-xl font-black leading-none" style={{ color }}>{value}</div>
+      <div className="mt-1 text-[11px] font-semibold text-slate-300">{label}</div>
+    </div>
   );
 }
 

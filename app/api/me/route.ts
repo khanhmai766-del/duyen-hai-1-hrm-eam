@@ -15,6 +15,7 @@ export async function PUT(req: NextRequest) {
 
     const data: Record<string, unknown> = {};
     if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
+    if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
     if (body.phone !== undefined) data.phone = body.phone || null;
     if (body.email) data.email = body.email;
     if (body.employeeId) data.employeeId = body.employeeId;

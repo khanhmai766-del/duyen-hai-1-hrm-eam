@@ -1,0 +1,148 @@
+TONG HOP LOGIC RBAC VA BACKUP THU MUC LUU TRU
+Cap nhat ngay: 16/06/2026
+
+1. Logic phan quyen da thuc hien
+
+- Page Phan quyen (RBAC) da bo sung cac dong rieng cho muc "Thu muc luu tru":
+  + Thu muc luu tru - tra cuu du lieu.
+  + Thu muc luu tru - them moi va xoa ho so.
+  + Thu muc luu tru - chinh sua ho so.
+  + Thu muc luu tru - backup Excel/PDF theo nam.
+
+- Quyen xem/tra cuu:
+  + ADMIN, SUPERVISOR, TECHNICIAN, VIEWER deu duoc xem du lieu luu tru.
+
+- Quyen them moi:
+  + Chi ADMIN duoc them moi ho so trong Thu muc luu tru.
+
+- Quyen chinh sua:
+  + ADMIN, SUPERVISOR, TECHNICIAN duoc chinh sua ho so luu tru da tao.
+  + VIEWER chi duoc xem, khong duoc thao tac chinh sua.
+
+- Quyen xoa:
+  + Chi ADMIN duoc xoa ho so trong Thu muc luu tru.
+
+- Quyen backup:
+  + Thanh cong cu backup theo nam gom: chon Nam, Excel, PDF.
+  + Chi ADMIN moi thay va thao tac duoc thanh cong cu backup.
+  + SUPERVISOR, TECHNICIAN, VIEWER khong thay thanh cong cu backup.
+
+2. Logic nghiep vu Thu muc luu tru da thuc hien
+
+- Thu muc luu tru gom 03 tab du lieu:
+  + Du lieu tach luoi.
+  + Du lieu khoi dong.
+  + Du lieu hieu chinh lo.
+
+- Du lieu tach luoi:
+  + Ten thu muc dang drop-down, gom "Tach luoi su co" va "Tach luoi co ke hoach".
+  + Co truong Nam, To may, Ngay ghi nhan co gio/phut.
+  + Co truong Nguyen nhan, Tien trinh tach luoi, Link xu ly (neu co), Ghi chu.
+  + Bang hien thi theo bo cuc dang lich su, co mo rong chi tiet.
+
+- Du lieu khoi dong:
+  + Ten thu muc mac dinh la "Khoi dong to may".
+  + Co truong Nam, To may, Ngay ghi nhan co gio/phut.
+  + Co truong Tien trinh khoi dong va Ghi chu.
+  + Bang hien thi va bo loc dong bo voi du lieu tach luoi / hieu chinh lo.
+
+- Du lieu hieu chinh lo:
+  + Ten thu muc mac dinh la "Hieu chinh Lo".
+  + Co truong Nam, To may, Ngay ghi nhan, Noi dung hieu chinh.
+  + Cho phep tai toi da 02 hinh anh bien ban.
+  + Luu nguoi cap nhat va hien thi avatar cua user cap nhat.
+
+- Bo loc chung:
+  + Tim kiem theo ten thu muc, so hieu, link/noi dung lien quan.
+  + Loc theo To may S1/S2.
+  + Loc theo Nam bang nut lui/tiến nam va o nam hien tai.
+
+- Mau hien thi To may:
+  + S1: nen xanh la.
+  + S2: nen cam.
+
+3. Logic backup file
+
+- Backup duoc thuc hien thu cong boi user ADMIN.
+- Backup theo tung nam, dua tren truong Nam cua ho so.
+- File Excel xuat theo dang bao cao co tieu de, nam bao cao, ngay xuat, so ban ghi va bang du lieu.
+- File PDF mo trang in bao cao, co bo cuc A4 ngang, bang co hang/cot can deu.
+- Backup xuat tat ca ban ghi cua nam duoc chon trong tab hien tai, khong chi rieng cac dong dang hien thi tren trang.
+
+Ten file backup:
+- Du lieu tach luoi: backup-du-lieu-tach-luoi-<nam>.xlsx
+- Du lieu khoi dong: backup-du-lieu-khoi-dong-<nam>.xlsx
+- Du lieu hieu chinh lo: backup-du-lieu-hieu-chinh-lo-<nam>.xlsx
+
+4. Thoi gian backup luu tru de xuat theo tung muc
+
+Luu y: hien tai he thong tao file backup de ADMIN tai ve/lap ho so; chua tu dong luu file backup tren server. Thoi gian luu tru ben duoi la quy tac de xuat khi luu file backup vao kho tai lieu noi bo.
+
+- Du lieu tach luoi:
+  + Chu ky backup: moi nam 01 lan, sau khi chot du lieu nam.
+  + Thoi gian luu file backup: toi thieu 05 nam.
+  + Khuyen nghi: luu lau dai neu du lieu lien quan su co lon, dieu tra su co hoac bao cao cap tren.
+
+- Du lieu khoi dong:
+  + Chu ky backup: moi nam 01 lan, sau khi chot du lieu nam.
+  + Thoi gian luu file backup: toi thieu 05 nam.
+  + Khuyen nghi: luu lau dai doi voi cac dot khoi dong bat thuong hoac co bien dong thong so lon.
+
+- Du lieu hieu chinh lo:
+  + Chu ky backup: moi nam 01 lan, sau khi chot du lieu nam.
+  + Thoi gian luu file backup: toi thieu 05 nam.
+  + Khuyen nghi: luu lau dai doi voi bien ban hieu chinh quan trong, co anh huong den thong so van hanh hoac danh gia hieu suat.
+
+5. Ghi chu van hanh
+
+- ADMIN nen tao thu muc backup theo cau truc:
+  + Backup/<nam>/Du-lieu-tach-luoi/
+  + Backup/<nam>/Du-lieu-khoi-dong/
+  + Backup/<nam>/Du-lieu-hieu-chinh-lo/
+
+- Nen luu song song 02 dinh dang:
+  + Excel: phuc vu loc, tong hop, chinh ly so lieu.
+  + PDF: phuc vu in an, ky xac nhan, luu ho so bao cao.
+
+- Neu sau nay can tu dong hoa backup server, nen bo sung lich chay hang nam va luu file vao object storage hoac NAS noi bo, dong thoi ghi audit log nguoi tao backup.
+
+6. Cap nhat cong cu chinh sua phan quyen
+
+- Page Phan quyen (RBAC) da bo sung bo cong cu quan tri, chi hien thi khi user dang nhap co role ADMIN:
+  + Chinh quyen: bat/tat che do chinh sua ma tran.
+  + Them phan quyen: khoi tao them mot phan quyen/cot quyen moi, vi du "Truong kip".
+  + Gan quyen user: gan vai tro he thong, phan quyen mo rong va/hoac quyen rieng cho tung user.
+  + Luu ma tran: luu cau hinh RBAC vao database.
+  + Mac dinh: dua ma tran ve cau hinh mac dinh.
+
+- Khi bat che do "Chinh quyen", cac cot Quản trị / Trưởng ca / Kỹ thuật viên / Người xem co the doi cap quyen:
+  + Toan quyen.
+  + Quan ly.
+  + Duyet.
+  + Tao.
+  + Cua minh.
+  + Chi xem.
+  + Khong.
+
+- Khi "Them phan quyen", ADMIN co the nhap:
+  + Ten phan quyen, vi du "Truong kip".
+  + Pham vi / chuc danh.
+  + Mo ta pham vi phan quyen.
+  + Cap quyen mac dinh cho tat ca chuc nang.
+  + Sau khi them, phan quyen moi se hien thanh mot cot moi trong bang ma tran RBAC.
+  + ADMIN bat "Chinh quyen" de dieu chinh chi tiet tung o cua cot moi: Toan quyen, Quan ly, Duyet, Tao, Cua minh, Chi xem, Khong.
+
+- Khi "Gan quyen user", ADMIN co the:
+  + Doi vai tro he thong cua user sang ADMIN / SUPERVISOR / TECHNICIAN / VIEWER.
+  + Gan user vao phan quyen mo rong nhu "Truong kip".
+  + Gan them mot quyen rieng theo tung hang trong ma tran RBAC.
+  + Ghi chu ly do gan quyen.
+
+- Cau hinh ma tran, danh sach phan quyen mo rong va quyen rieng duoc luu qua API /api/rbac vao bang RbacConfig trong database.
+- API /api/rbac:
+  + GET: user da dang nhap duoc doc cau hinh RBAC.
+  + PUT: chi ADMIN duoc cap nhat cau hinh RBAC.
+
+- Luu y ky thuat:
+  + Vai tro he thong cua user duoc cap nhat qua API /api/users va co tac dung voi cac luong RBAC hien dang enforce theo role.
+  + Cac quyen rieng theo user duoc luu trong cau hinh RBAC de quan tri theo doi/phan bo chi tiet tren page Phan quyen.

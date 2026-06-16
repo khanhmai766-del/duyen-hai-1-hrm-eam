@@ -4,14 +4,20 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin } from "lucide-react";
+import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { NAV_SECTIONS, normalizeText } from "@/lib/nav";
+import { apiMutate } from "@/lib/fetcher";
 import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard } from "@/hooks/useDashboard";
 import { cn, initials } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
@@ -26,6 +32,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const [gridOpen, setGridOpen] = React.useState(false);
   const gridRef = React.useRef<HTMLDivElement>(null);
   const [profileOpen, setProfileOpen] = React.useState(false);
+  const [passwordOpen, setPasswordOpen] = React.useState(false);
   const profileRef = React.useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const { notices, loading: notifLoading } = useNotifications();
@@ -380,6 +387,15 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 <button
                   onClick={() => {
                     setProfileOpen(false);
+                    setPasswordOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-muted"
+                >
+                  <KeyRound className="h-[18px] w-[18px] text-amber-600" /> Đổi mật khẩu
+                </button>
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
                     signOut({ callbackUrl: "/login" });
                   }}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-red-50"
@@ -391,7 +407,149 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           )}
         </div>
       </div>
+      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
     </header>
+  );
+}
+
+function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [newPasswordVisible, setNewPasswordVisible] = React.useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setNewPasswordVisible(false);
+      setConfirmPasswordVisible(false);
+      setLoading(false);
+    }
+  }, [open]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      toast.error("Mật khẩu mới cần tối thiểu 8 ký tự");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Xác nhận mật khẩu mới không khớp");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiMutate("/api/me/password", "PUT", {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+      toast.success("Đã đổi mật khẩu", {
+        description: "Bạn hãy dùng mật khẩu mới trong lần đăng nhập tiếp theo.",
+      });
+      onOpenChange(false);
+    } catch (error) {
+      toast.error("Không thể đổi mật khẩu", {
+        description: error instanceof Error ? error.message : "Vui lòng thử lại sau.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <KeyRound className="h-4 w-4" />
+            </span>
+            Đổi mật khẩu
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">Mật khẩu hiện tại</Label>
+            <Input
+              id="currentPassword"
+              type="text"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">Mật khẩu mới</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={newPasswordVisible ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="pr-16"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setNewPasswordVisible((visible) => !visible)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-navy focus:outline-none focus:ring-2 focus:ring-accent/30"
+                  aria-label={newPasswordVisible ? "Ẩn mật khẩu mới" : "Hiển thị mật khẩu mới"}
+                  aria-pressed={newPasswordVisible}
+                >
+                  {newPasswordVisible ? "Ẩn" : "Hiển thị"}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Nhập lại mật khẩu</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={confirmPasswordVisible ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pr-16"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setConfirmPasswordVisible((visible) => !visible)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-navy focus:outline-none focus:ring-2 focus:ring-accent/30"
+                  aria-label={confirmPasswordVisible ? "Ẩn nhập lại mật khẩu" : "Hiển thị nhập lại mật khẩu"}
+                  aria-pressed={confirmPasswordVisible}
+                >
+                  {confirmPasswordVisible ? "Ẩn" : "Hiển thị"}
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+            Mật khẩu mới cần tối thiểu 8 ký tự và không được trùng với mật khẩu hiện tại.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+              Hủy
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+              Cập nhật
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

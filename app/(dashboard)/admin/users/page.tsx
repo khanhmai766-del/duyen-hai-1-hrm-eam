@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
+import { SignaturePad } from "@/components/shared/signature-pad";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, usePositions } from "@/hooks/useUsers";
 import { apiGet } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
@@ -37,7 +38,7 @@ export default function AdminUsersPage() {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
-  const [form, setForm] = React.useState({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
 
@@ -67,7 +68,7 @@ export default function AdminUsersPage() {
       await create.mutateAsync(form);
       toast.success("Đã tạo người dùng");
       setOpen(false);
-      setForm({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "" });
+      setForm({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -120,6 +121,7 @@ export default function AdminUsersPage() {
               <TableRow className="[&_th]:whitespace-nowrap">
                 <TableHead className="text-center">Hình ảnh</TableHead>
                 <TableHead className="min-w-[200px]">Nhân viên</TableHead><TableHead>Mã NV</TableHead><TableHead>Email</TableHead>
+                <TableHead className="text-center">Chữ ký số</TableHead>
                 <TableHead>Phân quyền</TableHead><TableHead>Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
@@ -127,7 +129,7 @@ export default function AdminUsersPage() {
             <TableBody>
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                     Không tìm thấy người dùng phù hợp với điều kiện lọc.
                   </TableCell>
                 </TableRow>
@@ -150,6 +152,18 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell className="font-mono text-xs">{u.employeeId}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                  <TableCell className="text-center">
+                    {u.signatureUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={u.signatureUrl}
+                        alt={`Chữ ký ${u.name}`}
+                        className="mx-auto h-10 max-w-[120px] rounded bg-white object-contain px-1 ring-1 ring-border"
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Select value={u.role} onValueChange={(v) => changeRole(u.id, v)}>
                       <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
@@ -231,6 +245,9 @@ export default function AdminUsersPage() {
             <Field label="Hình ảnh" className="col-span-2">
               <AvatarPicker value={form.avatarUrl} onChange={(v) => setForm({ ...form, avatarUrl: v })} name={form.name} />
             </Field>
+            <Field label="Chữ ký số" className="col-span-2">
+              <SignaturePad value={form.signatureUrl} onChange={(v) => setForm({ ...form, signatureUrl: v })} />
+            </Field>
             <Field label="Họ tên *" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email *"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
@@ -292,6 +309,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         position: target.position ?? "",
         department: target.department ?? "",
         avatarUrl: target.avatarUrl ?? "",
+        signatureUrl: target.signatureUrl ?? "",
         role: target.role,
       });
   }, [target]);
@@ -315,6 +333,9 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
           <div className="grid grid-cols-2 gap-3">
             <Field label="Hình ảnh" className="col-span-2">
               <AvatarPicker value={form.avatarUrl} onChange={(v) => setForm({ ...form, avatarUrl: v })} name={form.name} />
+            </Field>
+            <Field label="Chữ ký số" className="col-span-2">
+              <SignaturePad value={form.signatureUrl} onChange={(v) => setForm({ ...form, signatureUrl: v })} />
             </Field>
             <Field label="Họ tên" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>

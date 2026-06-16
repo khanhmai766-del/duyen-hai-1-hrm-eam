@@ -32,9 +32,14 @@ function LoginInner() {
 
   const [email, setEmail] = React.useState("admin@powerplant.vn");
   const [password, setPassword] = React.useState("password123");
+  const [passwordVisible, setPasswordVisible] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
   const [biometricSupported, setBiometricSupported] = React.useState(false);
+
+  React.useEffect(() => {
+    document.documentElement.classList.remove("dark");
+  }, []);
 
   React.useEffect(() => {
     setBiometricSupported(typeof window !== "undefined" && !!window.PublicKeyCredential);
@@ -263,14 +268,26 @@ function LoginInner() {
                   <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                     Mật khẩu
                   </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="login-access-input"
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={passwordVisible ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="login-access-input pr-20"
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPasswordVisible((visible) => !visible)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-navy focus:outline-none focus:ring-2 focus:ring-accent/30"
+                      aria-label={passwordVisible ? "Ẩn mật khẩu" : "Hiển thị mật khẩu"}
+                      aria-pressed={passwordVisible}
+                    >
+                      {passwordVisible ? "Ẩn" : "Hiển thị"}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" className="login-access-button w-full" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}

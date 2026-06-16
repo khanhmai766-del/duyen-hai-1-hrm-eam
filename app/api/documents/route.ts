@@ -7,7 +7,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ADMIN_ONLY = ["ADMIN"];
-const CATEGORIES = new Set(["PROCEDURE", "PID"]);
+const CATEGORIES = new Set(["PROCEDURE", "PID", "ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION"]);
+const OPTIONAL_DOCUMENT_URL_CATEGORIES = new Set(["GRID_SEPARATION", "STARTUP_DATA"]);
+const ARCHIVE_EDIT_CATEGORIES = new Set(["ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION"]);
+const DOCUMENT_EDITOR_ROLES = new Set(["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
 
 async function ensureDigitalDocumentTable() {
   await prisma.$executeRawUnsafe(`
@@ -19,6 +22,10 @@ async function ensureDigitalDocumentTable() {
       "documentUrl" TEXT NOT NULL,
       "managingPosition" TEXT,
       "managementBlock" TEXT,
+      "reason" TEXT,
+      "progress" TEXT,
+      "note" TEXT,
+      "attachmentUrls" TEXT,
       "createdById" TEXT,
       "updatedById" TEXT,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -31,6 +38,10 @@ async function ensureDigitalDocumentTable() {
   `);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "managingPosition" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "managementBlock" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "reason" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "progress" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "note" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "attachmentUrls" TEXT`);
 }
 
 function normalizeCategory(value: string | null | undefined) {
@@ -39,12 +50,23 @@ function normalizeCategory(value: string | null | undefined) {
 }
 
 function normalizeBody(body: Record<string, unknown>) {
+  const attachmentUrls = Array.isArray(body.attachmentUrls)
+    ? body.attachmentUrls
+        .map((value) => String(value ?? "").trim())
+        .filter((value) => value.startsWith("data:image/"))
+        .slice(0, 2)
+    : [];
+
   return {
     title: String(body.title ?? "").trim(),
     decisionNumber: String(body.decisionNumber ?? "").trim() || null,
     documentUrl: String(body.documentUrl ?? "").trim(),
     managingPosition: String(body.managingPosition ?? "").trim() || null,
     managementBlock: String(body.managementBlock ?? "").trim() || null,
+    reason: String(body.reason ?? "").trim() || null,
+    progress: String(body.progress ?? "").trim() || null,
+    note: String(body.note ?? "").trim() || null,
+    attachmentUrls,
   };
 }
 
@@ -66,6 +88,10 @@ export async function GET(req: NextRequest) {
           d."documentUrl",
           d."managingPosition",
           d."managementBlock",
+          d."reason",
+          d."progress",
+          d."note",
+          COALESCE(NULLIF(d."attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls",
           d."createdAt",
           d."updatedAt",
           json_build_object(
@@ -105,14 +131,14 @@ export async function POST(req: NextRequest) {
 
     const payload = normalizeBody(body);
     if (!payload.title) return fail("Vui lòng nhập tên tài liệu");
-    if (!payload.documentUrl) return fail("Vui lòng nhập link tài liệu liên kết");
+    if (!OPTIONAL_DOCUMENT_URL_CATEGORIES.has(category) && !payload.documentUrl) return fail("Vui lòng nhập nội dung hoặc link tài liệu");
 
     const id = randomUUID();
     const rows = await prisma.$queryRawUnsafe(
       `
-        INSERT INTO "DigitalDocument" (id, category, title, "decisionNumber", "documentUrl", "managingPosition", "managementBlock", "createdById", "updatedById")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-        RETURNING id, category, title, "decisionNumber", "documentUrl", "managingPosition", "managementBlock", "createdAt", "updatedAt"
+        INSERT INTO "DigitalDocument" (id, category, title, "decisionNumber", "documentUrl", "managingPosition", "managementBlock", "reason", "progress", "note", "attachmentUrls", "createdById", "updatedById")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+        RETURNING id, category, title, "decisionNumber", "documentUrl", "managingPosition", "managementBlock", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
       `,
       id,
       category,
@@ -121,6 +147,10 @@ export async function POST(req: NextRequest) {
       payload.documentUrl,
       payload.managingPosition,
       payload.managementBlock,
+      payload.reason,
+      payload.progress,
+      payload.note,
+      JSON.stringify(payload.attachmentUrls),
       user.id
     );
 
@@ -132,7 +162,6 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
     await ensureDigitalDocumentTable();
 
     const body = (await req.json()) as Record<string, unknown>;
@@ -140,10 +169,13 @@ export async function PUT(req: NextRequest) {
     const category = normalizeCategory(String(body.category ?? ""));
     if (!id) return fail("Thiếu id tài liệu");
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
+    if (!DOCUMENT_EDITOR_ROLES.has(user.role) || (user.role !== "ADMIN" && !ARCHIVE_EDIT_CATEGORIES.has(category))) {
+      return fail("Bạn không có quyền chỉnh sửa tài liệu", 403);
+    }
 
     const payload = normalizeBody(body);
     if (!payload.title) return fail("Vui lòng nhập tên tài liệu");
-    if (!payload.documentUrl) return fail("Vui lòng nhập link tài liệu liên kết");
+    if (!OPTIONAL_DOCUMENT_URL_CATEGORIES.has(category) && !payload.documentUrl) return fail("Vui lòng nhập nội dung hoặc link tài liệu");
 
     const rows = await prisma.$queryRawUnsafe(
       `
@@ -154,10 +186,14 @@ export async function PUT(req: NextRequest) {
           "documentUrl" = $5,
           "managingPosition" = $6,
           "managementBlock" = $7,
-          "updatedById" = $8,
+          "reason" = $8,
+          "progress" = $9,
+          "note" = $10,
+          "attachmentUrls" = $11,
+          "updatedById" = $12,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE id = $1 AND category = $2
-        RETURNING id, category, title, "decisionNumber", "documentUrl", "managingPosition", "managementBlock", "createdAt", "updatedAt"
+        RETURNING id, category, title, "decisionNumber", "documentUrl", "managingPosition", "managementBlock", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
       `,
       id,
       category,
@@ -166,6 +202,10 @@ export async function PUT(req: NextRequest) {
       payload.documentUrl,
       payload.managingPosition,
       payload.managementBlock,
+      payload.reason,
+      payload.progress,
+      payload.note,
+      JSON.stringify(payload.attachmentUrls),
       user.id
     );
 
