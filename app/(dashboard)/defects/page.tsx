@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus, Search } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -11,6 +11,7 @@ import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DefectForm } from "@/components/defects/defect-form";
@@ -19,6 +20,7 @@ import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects
 import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_STATUS, DEFECT_SEVERITY, DEFECT_REQUEST_TYPES, can } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/nav";
 
 export default function DefectsPage() {
   const { data: session } = useSession();
@@ -47,12 +49,23 @@ export default function DefectsPage() {
   const [statusFilter, setStatusFilter] = React.useState("ALL");
   const displayedDefects = statusFilter === "ALL" ? defects : defects.filter((d) => d.status === statusFilter);
 
-  const isFiltered = unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL";
+  // Tìm nội dung trong bảng (không ảnh hưởng KPI) — so khớp không dấu.
+  const [tableSearch, setTableSearch] = React.useState("");
+  const searchedDefects = React.useMemo(() => {
+    const q = normalizeText(tableSearch.trim());
+    if (!q) return displayedDefects;
+    return displayedDefects.filter((d) =>
+      normalizeText([d.requestNumber, d.requestType, d.unit, d.system, d.device, d.content, d.note, d.createdBy?.name].filter(Boolean).join(" ")).includes(q)
+    );
+  }, [displayedDefects, tableSearch]);
+
+  const isFiltered = unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
     setUnitFilter("ALL");
     setRequestFilter("ALL");
     setPositionFilter("ALL");
     setStatusFilter("ALL");
+    setTableSearch("");
   }
 
   // KPI đếm theo bộ lọc (tổ máy/yêu cầu/cương vị), KHÔNG theo statusFilter.
@@ -74,13 +87,13 @@ export default function DefectsPage() {
   function openEdit(d: DefectItem) { setEditTarget(d); setFormOpen(true); }
   React.useEffect(() => {
     setExpandedId(null);
-  }, [unitFilter, requestFilter, positionFilter, statusFilter]);
+  }, [unitFilter, requestFilter, positionFilter, statusFilter, tableSearch]);
 
   return (
     <div className="space-y-6">
       <PageHeader title="KHIẾM KHUYẾT THIẾT BỊ" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
         <ExportButton
-          rows={displayedDefects.map((d) => ({
+          rows={searchedDefects.map((d) => ({
             unit: d.unit,
             device: d.device ?? "",
             cuongVi: d.system ?? "",
@@ -148,6 +161,16 @@ export default function DefectsPage() {
               Xoá bộ lọc
             </button>
           )}
+
+          <div className="relative ml-auto w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+              placeholder="Tìm trong bảng..."
+              className="h-9 pl-9"
+            />
+          </div>
         </div>
       )}
 
@@ -160,7 +183,7 @@ export default function DefectsPage() {
 
       {isLoading ? (
         <TableSkeleton rows={6} />
-      ) : displayedDefects.length === 0 ? (
+      ) : searchedDefects.length === 0 ? (
         allDefects.length === 0 ? (
           <EmptyState
             icon={ShieldAlert}
@@ -193,7 +216,7 @@ export default function DefectsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayedDefects.map((d) => {
+              {searchedDefects.map((d) => {
                 const expanded = expandedId === d.id;
                 return (
                   <React.Fragment key={d.id}>

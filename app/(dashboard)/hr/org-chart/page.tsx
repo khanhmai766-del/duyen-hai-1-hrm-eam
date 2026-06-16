@@ -131,7 +131,7 @@ export default function OrgChartPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Sơ đồ tổ chức ca vận hành" description="Phân công vị trí trực vận hành theo ca">
+      <PageHeader title="SƠ ĐỒ TỔ CHỨC CA VẬN HÀNH" description="Phân công vị trí trực vận hành theo ca">
         {assignments.length > 0 && (
           <Badge variant={approved === assignments.length ? "accent" : "secondary"} className="gap-1.5">
             <CheckCircle2 className="h-3.5 w-3.5" /> {approved}/{assignments.length} đã duyệt
@@ -240,7 +240,7 @@ export default function OrgChartPage() {
               type="date"
               value={date}
               onChange={(e) => { setDate(e.target.value); setAutoFollow(false); }}
-              className="h-9 w-36 shrink-0 bg-white text-sm"
+              className="h-9 w-44 shrink-0 bg-white text-sm"
             />
           </div>
           <div className="flex shrink-0 items-center gap-2">
