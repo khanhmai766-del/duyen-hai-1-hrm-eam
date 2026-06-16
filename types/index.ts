@@ -45,7 +45,7 @@ export interface RepairLogWithRelations extends RepairLog {
 }
 
 export interface ShiftAssignmentWithUser extends ShiftAssignment {
-  user: Pick<User, "id" | "name" | "phone" | "avatarUrl" | "position">;
+  user: Pick<User, "id" | "name" | "phone" | "avatarUrl" | "signatureUrl" | "position">;
 }
 
 export interface CheckInWithUser extends CheckIn {

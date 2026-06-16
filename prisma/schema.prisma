@@ -402,3 +402,35 @@ model HcCheckIn {
 
   @@unique([groupId, userId])
 }
+
+// Tài liệu số (quy trình, sơ đồ P&ID, lưu trữ…). Bảng được tạo/đồng bộ bằng raw
+// SQL trong app/api/documents/route.ts (ensureDigitalDocumentTable); khai báo ở
+// đây để db push không đề nghị xoá. attachmentUrls lưu JSON (mảng data URL) dạng text.
+model DigitalDocument {
+  id               String   @id
+  category         String
+  title            String
+  decisionNumber   String?
+  documentUrl      String
+  managingPosition String?
+  managementBlock  String?
+  reason           String?
+  progress         String?
+  note             String?
+  attachmentUrls   String?
+  createdById      String?
+  updatedById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+
+  @@index([category, updatedAt(sort: Desc)])
+}
+
+// Cấu hình ma trận phân quyền (RBAC) do ADMIN chỉnh trong /admin/roles. Bảng được
+// tạo bằng raw SQL trong app/api/rbac/route.ts; value lưu JSON cấu hình dạng text.
+model RbacConfig {
+  key         String   @id
+  value       String
+  updatedById String?
+  updatedAt   DateTime @default(now())
+}

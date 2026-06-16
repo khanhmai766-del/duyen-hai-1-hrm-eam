@@ -3,7 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
-export type DocumentCategory = "PROCEDURE" | "PID";
+export type DocumentCategory = "PROCEDURE" | "PID" | "ARCHIVE" | "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION";
+
+export interface DigitalDocumentUser {
+  id: string | null;
+  name: string | null;
+  position: string | null;
+  avatarUrl: string | null;
+}
 
 export interface DigitalDocument {
   id: string;
@@ -13,6 +20,12 @@ export interface DigitalDocument {
   documentUrl: string;
   managingPosition: string | null;
   managementBlock: string | null;
+  reason: string | null;
+  progress: string | null;
+  note: string | null;
+  attachmentUrls: string[];
+  createdBy?: DigitalDocumentUser | null;
+  updatedBy?: DigitalDocumentUser | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +38,10 @@ export interface DigitalDocumentInput {
   documentUrl: string;
   managingPosition?: string | null;
   managementBlock?: string | null;
+  reason?: string | null;
+  progress?: string | null;
+  note?: string | null;
+  attachmentUrls?: string[];
 }
 
 export function useDocuments(category: DocumentCategory) {

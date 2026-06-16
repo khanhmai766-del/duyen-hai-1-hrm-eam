@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useShift, useCheckInOrg, useRecallCheckIn, useApproveAttendance, useRemoveAssignment } from "@/hooks/useShifts";
 import { useUsers } from "@/hooks/useUsers";
@@ -140,7 +140,7 @@ export default function OrgChartPage() {
         {canApprove && (
           <Button
             onClick={() => setApproveOpen(true)}
-            className="bg-amber-400 text-amber-950 hover:bg-amber-500"
+            className="text-white"
           >
             <ClipboardCheck className="h-4 w-4" /> Duyệt chấm công
           </Button>
@@ -173,6 +173,9 @@ export default function OrgChartPage() {
         ) : (
           <Button variant="accent" onClick={() => setCheckInOpen(true)}><UserCheck className="h-4 w-4" /> Điểm danh</Button>
         )}
+        <Button variant="outline" onClick={openViewer}>
+          <Tv className="h-4 w-4" /> Viewer
+        </Button>
       </PageHeader>
 
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} date={date} shiftType={shiftType} unit={unit} />
@@ -229,63 +232,63 @@ export default function OrgChartPage() {
       )}
 
       {/* Controls */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Ngày</label>
+      <Card className="overflow-x-auto p-3">
+        <div className="flex min-w-full items-center gap-x-3 gap-y-2 whitespace-nowrap">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Ngày:</span>
             <Input
               type="date"
               value={date}
               onChange={(e) => { setDate(e.target.value); setAutoFollow(false); }}
-              className="w-44"
+              className="h-9 w-36 shrink-0 bg-white text-sm"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Ca</label>
-            <div className="flex gap-1 rounded-lg border border-border p-1">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Ca:</span>
+            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
               {SHIFT_TYPE_ORDER.map((s) => (
                 <button
                   key={s}
+                  type="button"
                   onClick={() => { setShiftType(s); setAutoFollow(false); }}
-                  className={cn("rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    shiftType === s ? "bg-navy text-white" : "text-muted-foreground hover:bg-muted")}
+                  className={cn("rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                    shiftType === s ? "bg-navy text-white" : "text-muted-foreground hover:text-ink")}
                 >
                   {SHIFT_TYPE[s].label}
                 </button>
               ))}
             </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Đơn vị</label>
-            <select value={unit} onChange={(e) => setUnit(e.target.value)} className="h-10 rounded-md border border-input bg-white px-3 text-sm">
-              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Đơn vị:</span>
+            <Select value={unit} onValueChange={setUnit}>
+              <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Real-time follow indicator / restore button */}
-          <div className="mb-0.5 self-end">
+          <div className="ml-auto flex shrink-0 items-center">
             {autoFollow ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+              <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                 </span>
-                Theo thời gian thực
+                <span className="whitespace-nowrap">Theo thời gian thực</span>
               </span>
             ) : (
               <button
                 onClick={() => setAutoFollow(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-ink"
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-ink"
                 title="Quay lại ca trực hiện tại theo giờ thực"
               >
                 <Clock className="h-3.5 w-3.5" /> Về ca hiện tại
               </button>
             )}
           </div>
-
-          <Button variant="outline" className="ml-auto" onClick={openViewer}>
-            <Tv className="h-4 w-4" /> Viewer
-          </Button>
         </div>
       </Card>
 
@@ -440,6 +443,255 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+const ATTENDANCE_FORM_ROWS = 34;
+
+function escapeHtml(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatPrintDate(date: string) {
+  const [year, month, day] = date.split("-");
+  return day && month && year ? `${day}/${month}/${year}` : date;
+}
+
+function approvedAttendanceRows(assignments: ShiftAssignmentWithUser[]) {
+  const order = new Map(ORG_SEAT_TITLES.map((title, index) => [title, index]));
+  return [...assignments]
+    .sort((a, b) => {
+      const bySeat = (order.get(a.positionLabel) ?? 999) - (order.get(b.positionLabel) ?? 999);
+      if (bySeat !== 0) return bySeat;
+      return a.user.name.localeCompare(b.user.name, "vi");
+    })
+    .slice(0, ATTENDANCE_FORM_ROWS);
+}
+
+function printAttendancePdf({
+  assignments,
+  date,
+  shiftType,
+  unit,
+  targetWindow,
+}: {
+  assignments: ShiftAssignmentWithUser[];
+  date: string;
+  shiftType: string;
+  unit: string;
+  targetWindow?: Window | null;
+}) {
+  const rows = approvedAttendanceRows(assignments);
+  const emptyRows = Math.max(0, ATTENDANCE_FORM_ROWS - rows.length);
+  const shiftLabel = SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? shiftType;
+  const titleShift = shiftLabel.toUpperCase();
+  const titleDate = `${formatPrintDate(date)} - ${unit}`;
+  const bodyRows = [
+    ...rows.map((assignment, index) => {
+      const signature = assignment.user.signatureUrl
+        ? `<img class="signature" src="${escapeHtml(assignment.user.signatureUrl)}" alt="Chữ ký ${escapeHtml(assignment.user.name)}" />`
+        : "";
+      return `
+        <tr>
+          <td class="stt-cell">${index + 1}</td>
+          <td>${escapeHtml(assignment.user.name)}</td>
+          <td>${escapeHtml(assignment.positionLabel)}</td>
+          <td class="signature-cell">${signature}</td>
+          <td></td>
+        </tr>
+      `;
+    }),
+    ...Array.from({ length: emptyRows }, () => "<tr><td></td><td></td><td></td><td></td><td></td></tr>"),
+  ].join("");
+
+  const html = `
+    <!doctype html>
+    <html lang="vi">
+      <head>
+        <meta charset="utf-8" />
+        <title>Danh sách phổ biến và sinh hoạt đầu ca - ${escapeHtml(titleShift)}</title>
+        <style>
+          @page { size: A4 portrait; margin: 10mm 12.7mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            color: #000;
+            background: #fff;
+            font-family: "Times New Roman", Times, serif;
+            font-size: 13pt;
+          }
+          .sheet { width: 100%; }
+          .document-header {
+            width: 100%;
+            margin-bottom: 10px;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .document-header td {
+            height: 28px;
+            border: 1px dotted #777;
+            padding: 1px 6px;
+            text-align: center;
+            vertical-align: middle;
+          }
+          .document-header .agency {
+            font-size: 11pt;
+            line-height: 1.18;
+          }
+          .document-header .agency strong,
+          .document-header .national strong {
+            font-weight: 700;
+          }
+          .document-header .national {
+            font-size: 10.5pt;
+            line-height: 1;
+          }
+          .document-header .national strong {
+            display: inline-block;
+            white-space: nowrap;
+          }
+          .document-header .national .motto {
+            display: inline-block;
+            margin-top: 0;
+            border-bottom: 1px solid #000;
+            font-weight: 700;
+            line-height: 1;
+          }
+          .document-header .place-date {
+            font-size: 13pt;
+            font-style: italic;
+          }
+          h1 {
+            margin: 0;
+            text-align: center;
+            font-size: 14pt;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+          .date-line {
+            margin: 3px 0 8px;
+            text-align: center;
+            font-size: 13pt;
+            font-weight: 700;
+          }
+          .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .attendance-table th,
+          .attendance-table td {
+            border: 1px solid #000;
+            height: 18px;
+            padding: 1px 5px;
+            vertical-align: middle;
+            font-size: 11pt;
+          }
+          .attendance-table th {
+            text-align: center;
+            font-size: 10pt;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .attendance-table td:nth-child(1),
+          .attendance-table td:nth-child(3),
+          .attendance-table td:nth-child(4) {
+            text-align: center;
+          }
+          .signature-cell {
+            padding: 0 4px;
+            text-align: center;
+          }
+          .signature {
+            display: inline-block;
+            max-width: 118px;
+            max-height: 16px;
+            object-fit: contain;
+            vertical-align: middle;
+          }
+          .sign-off {
+            margin-top: 10px;
+            padding-right: 14%;
+            text-align: right;
+            font-weight: 700;
+          }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="sheet">
+          <table class="document-header">
+            <colgroup>
+              <col style="width: 48%" />
+              <col style="width: 52%" />
+            </colgroup>
+            <tr>
+              <td>
+                <div class="agency">
+                  CÔNG TY NHIỆT ĐIỆN DUYÊN HẢI<br />
+                  <strong>PHÂN XƯỞNG VẬN HÀNH 1</strong>
+                </div>
+              </td>
+              <td>
+                <div class="national">
+                  <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br />
+                  <span class="motto">Độc lập Tự do Hạnh phúc</span>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td></td>
+              <td class="place-date">Vĩnh Long, ngày&nbsp;&nbsp;&nbsp;&nbsp;tháng&nbsp;&nbsp;&nbsp;&nbsp;năm</td>
+            </tr>
+          </table>
+          <h1>DANH SÁCH PHỔ BIẾN VÀ SINH HOẠT ĐẦU CA: ${escapeHtml(titleShift)}</h1>
+          <div class="date-line">NGÀY: ${escapeHtml(titleDate)}</div>
+          <table class="attendance-table">
+            <colgroup>
+              <col style="width: 6%" />
+              <col style="width: 36%" />
+              <col style="width: 25%" />
+              <col style="width: 20%" />
+              <col style="width: 13%" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>HỌ TÊN VẬN HÀNH VIÊN</th>
+                <th>CƯƠNG VỊ</th>
+                <th>CHỮ KÝ</th>
+                <th>GHI CHÚ</th>
+              </tr>
+            </thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+          <div class="sign-off">KÝ TÊN</div>
+        </main>
+        <script>
+          window.addEventListener("load", () => {
+            setTimeout(() => {
+              window.print();
+            }, 250);
+          });
+        </script>
+      </body>
+    </html>
+  `;
+
+  const printWindow = targetWindow ?? window.open("", "_blank", "width=900,height=1100");
+  if (!printWindow) {
+    toast.error("Trình duyệt đã chặn cửa sổ xuất PDF. Vui lòng cho phép popup rồi thử lại.");
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
 /* ---- Duyệt chấm công (ADMIN / Trưởng ca): full editable seat grid ---- */
 function ApproveAttendanceDialog({
   open,
@@ -460,6 +712,7 @@ function ApproveAttendanceDialog({
   const remove = useRemoveAssignment();
   const assign = useCheckInOrg();
   const [picker, setPicker] = React.useState<string | null>(null); // seat title being filled
+  const [confirmApproveOpen, setConfirmApproveOpen] = React.useState(false);
 
   const byTitle = React.useMemo(() => {
     const m = new Map<string, ShiftAssignmentWithUser[]>();
@@ -475,10 +728,19 @@ function ApproveAttendanceDialog({
   const pending = assignments.filter((a) => !a.isApproved).length;
 
   async function approveAll() {
+    const printWindow = window.open("", "_blank", "width=900,height=1100");
+    if (!printWindow) {
+      toast.error("Trình duyệt đã chặn cửa sổ xuất PDF. Vui lòng cho phép popup rồi thử lại.");
+      return;
+    }
+    printWindow.document.write("<p style=\"font-family:Arial,sans-serif;padding:24px\">Đang duyệt chấm công và chuẩn bị file PDF...</p>");
     try {
       const res: any = await approve.mutateAsync({ date, shiftType, unit });
       toast.success(`Đã duyệt ${res?.data?.approved ?? ""} chấm công`.trim());
+      setConfirmApproveOpen(false);
+      printAttendancePdf({ assignments, date, shiftType, unit, targetWindow: printWindow });
     } catch (e) {
+      printWindow.close();
       toast.error((e as Error).message);
     }
   }
@@ -510,53 +772,75 @@ function ApproveAttendanceDialog({
   const seatProps = { byTitle, onAdd: setPicker, onApprove: approveOne, onRemove: removeOne };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        {picker ? (
-          // Drill-in: choose a person for the selected seat (avoids nested dialogs).
-          <PersonnelPicker seat={picker} onBack={() => setPicker(null)} onPick={addUser} pending={assign.isPending} />
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>Duyệt chấm công</DialogTitle>
-            </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-5xl">
+          {picker ? (
+            // Drill-in: choose a person for the selected seat (avoids nested dialogs).
+            <PersonnelPicker seat={picker} onBack={() => setPicker(null)} onPick={addUser} pending={assign.isPending} />
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Duyệt chấm công</DialogTitle>
+              </DialogHeader>
 
-            <div className="text-sm text-muted-foreground">
-              Tổng <span className="font-semibold text-ink">{total}</span> điểm danh · còn{" "}
-              <span className="font-semibold text-warning">{pending}</span> chờ duyệt
-            </div>
-
-            <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
-              <EditableSeat title={ORG_CHIEF} tone="chief" {...seatProps} />
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
-                {ORG_LEADS.map((lead) => (
-                  <div key={lead.title} className="min-w-[260px] space-y-2" style={{ flex: lead.columns.length }}>
-                    <EditableSeat title={lead.title} tone={lead.tone} {...seatProps} />
-                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}>
-                      {lead.columns.map((col, i) => (
-                        <div key={i} className="flex flex-col gap-2">
-                          {col.map((seat) => (
-                            <EditableSeat key={seat} title={seat} tone={lead.tone} {...seatProps} />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+              <div className="text-sm text-muted-foreground">
+                Tổng <span className="font-semibold text-ink">{total}</span> điểm danh · còn{" "}
+                <span className="font-semibold text-warning">{pending}</span> chờ duyệt
               </div>
-            </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>
-              <Button onClick={approveAll} disabled={approve.isPending || pending === 0}>
-                {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                <CheckCircle2 className="h-4 w-4" /> Duyệt hết
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+              <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
+                <EditableSeat title={ORG_CHIEF} tone="chief" {...seatProps} />
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
+                  {ORG_LEADS.map((lead) => (
+                    <div key={lead.title} className="min-w-[260px] space-y-2" style={{ flex: lead.columns.length }}>
+                      <EditableSeat title={lead.title} tone={lead.tone} {...seatProps} />
+                      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}>
+                        {lead.columns.map((col, i) => (
+                          <div key={i} className="flex flex-col gap-2">
+                            {col.map((seat) => (
+                              <EditableSeat key={seat} title={seat} tone={lead.tone} {...seatProps} />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>
+                <Button onClick={() => setConfirmApproveOpen(true)} disabled={approve.isPending || total === 0}>
+                  {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <CheckCircle2 className="h-4 w-4" /> Duyệt hết
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmApproveOpen} onOpenChange={setConfirmApproveOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác nhận duyệt chấm công</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn duyệt toàn bộ {total} điểm danh của ca này và xuất file PDF danh sách phổ biến và sinh hoạt không?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmApproveOpen(false)} disabled={approve.isPending}>
+              Hủy
+            </Button>
+            <Button onClick={approveAll} disabled={approve.isPending || total === 0}>
+              {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Xác nhận và xuất PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

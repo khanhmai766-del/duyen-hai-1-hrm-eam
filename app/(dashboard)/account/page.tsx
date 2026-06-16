@@ -4,7 +4,7 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Loader2 } from "lucide-react";
+import { Pencil, Loader2, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,16 @@ export default function AccountPage() {
               <div>
                 <h2 className="text-2xl font-bold text-ink">{u?.name ?? "—"}</h2>
                 <p className="mt-0.5 text-muted-foreground">{profile?.position ?? "—"}</p>
-                <div className="mt-2">{u?.role && <RoleBadge role={u.role} />}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {u?.role && <RoleBadge role={u.role} />}
+                  <span
+                    className="inline-flex h-6 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 text-[11px] font-bold text-amber-700 shadow-sm"
+                    title="Mật khẩu được lưu bằng mã hóa một chiều, không hiển thị lại mật khẩu gốc"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Mật khẩu: đã mã hóa
+                  </span>
+                </div>
               </div>
               <Button onClick={() => setOpen(true)}>
                 <Pencil className="h-4 w-4" /> Chỉnh sửa thông tin

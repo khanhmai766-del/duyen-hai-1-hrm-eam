@@ -19,6 +19,8 @@ interface AnnualBackupExportProps<T> {
   rows: T[];
   columns: BackupColumn<T>[];
   dateAccessor: (row: T) => Date | string | null | undefined;
+  yearAccessor?: (row: T) => Date | string | number | null | undefined;
+  yearOptions?: Array<string | number>;
   title: string;
   subtitle?: string;
   filenamePrefix: string;
@@ -33,6 +35,19 @@ function toDate(value: Date | string | null | undefined) {
 
 function cellText(value: string | number | null | undefined) {
   return value == null || value === "" ? "-" : String(value).replace(/\s+/g, " ").trim();
+}
+
+function toYear(value: Date | string | number | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d{4}$/.test(trimmed)) return Number(trimmed);
+    return toDate(trimmed)?.getFullYear() ?? null;
+  }
+  if (value instanceof Date || value == null) {
+    return toDate(value)?.getFullYear() ?? null;
+  }
+  return null;
 }
 
 function escapeHtml(value: string | number | null | undefined) {
@@ -51,18 +66,22 @@ export function AnnualBackupExport<T>({
   rows,
   columns,
   dateAccessor,
+  yearAccessor,
+  yearOptions = [],
   title,
   subtitle,
   filenamePrefix,
   className,
 }: AnnualBackupExportProps<T>) {
   const years = React.useMemo(() => {
-    const values = rows
-      .map((row) => toDate(dateAccessor(row))?.getFullYear())
+    const values = [
+      ...yearOptions.map(toYear),
+      ...rows.map((row) => toYear(yearAccessor ? yearAccessor(row) : dateAccessor(row))),
+    ]
       .filter((year): year is number => typeof year === "number")
       .sort((a, b) => b - a);
     return Array.from(new Set(values));
-  }, [rows, dateAccessor]);
+  }, [rows, dateAccessor, yearAccessor, yearOptions]);
   const [year, setYear] = React.useState(() => years[0] ?? new Date().getFullYear());
 
   React.useEffect(() => {
@@ -70,8 +89,8 @@ export function AnnualBackupExport<T>({
   }, [year, years]);
 
   const annualRows = React.useMemo(
-    () => rows.filter((row) => toDate(dateAccessor(row))?.getFullYear() === year),
-    [rows, dateAccessor, year]
+    () => rows.filter((row) => toYear(yearAccessor ? yearAccessor(row) : dateAccessor(row)) === year),
+    [rows, dateAccessor, yearAccessor, year]
   );
 
   function assertRows() {

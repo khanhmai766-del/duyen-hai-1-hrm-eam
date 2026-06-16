@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
         },
         include: {
           assignments: {
-            include: { user: { select: { id: true, name: true, phone: true, avatarUrl: true, position: true } } },
+            include: { user: { select: { id: true, name: true, phone: true, avatarUrl: true, signatureUrl: true, position: true } } },
           },
           checkIns: {
             include: { user: { select: { id: true, name: true, position: true, avatarUrl: true } } },

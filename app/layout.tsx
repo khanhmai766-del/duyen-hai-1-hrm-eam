@@ -25,12 +25,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className={beVietnamPro.variable} suppressHydrationWarning>
       <head>
-        {/* Apply the saved (or system) theme before first paint to avoid a flash
-            of the wrong theme. `theme-ready` enables color transitions only
-            after the initial paint so the first load doesn't animate. */}
+        {/* Apply an explicit saved theme before first paint. Public login always
+            starts in light mode; dark mode is only available after sign-in via
+            the dashboard toggle. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;var e=document.documentElement;if(d)e.classList.add('dark');requestAnimationFrame(function(){e.classList.add('theme-ready');});}catch(e){}})();`,
+            __html: `(function(){try{var e=document.documentElement;var isLogin=location.pathname==='/login'||location.pathname.indexOf('/login/')===0;var d=!isLogin&&localStorage.getItem('theme')==='dark';e.classList.toggle('dark',d);requestAnimationFrame(function(){e.classList.add('theme-ready');});}catch(e){}})();`,
           }}
         />
       </head>
