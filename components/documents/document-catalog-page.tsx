@@ -212,7 +212,7 @@ export function DocumentCatalogPage({
     [devices.data?.data]
   );
   const blockOptions = React.useMemo(
-    () => Array.from(new Set(positionOptions.map((position) => blockForPosition(position)))).sort((a, b) => a.localeCompare(b, "vi")),
+    () => Array.from(new Set(positionOptions.map((position) => blockForPosition(position)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi")),
     [positionOptions]
   );
   const activeYearFilter = hasYearField ? yearFilter || yearOptions[0] || "" : "";

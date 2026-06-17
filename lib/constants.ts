@@ -133,22 +133,31 @@ export const DEFECT_CONDITION_ORDER = ["A", "B"] as const;
 export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "Hóa", "Hành Chính IT", "Khác"] as const;
 
 /** Khối quản lý — suy ra từ cương vị quản lý theo quy tắc nghiệp vụ. */
-export const EQUIPMENT_BLOCKS = ["Khối Lò Hơi", "Khối Turbine", "Khối BOP"] as const;
+export const EQUIPMENT_BLOCKS = ["Khối Lò Hơi", "Khối Turbine", "Khối BOP", "Khối Điện", "Khối I&C"] as const;
 const BLOCK_LO_POSITIONS = ["lò trưởng", "lò phó", "máy nghiền", "thải xỉ", "esp", "fgd"];
 const BLOCK_TURBINE_POSITIONS = ["máy trưởng", "máy phó", "trợ thủ", "trạm bơm tuần hoàn"];
+const BLOCK_DIEN_POSITIONS = ["trưởng kíp điện", "trực chính điện", "trực phụ điện"];
+const BLOCK_IC_POSITIONS = ["thiết bị đo lường điều khiển", "i&c"];
+// Cương vị điều hành/quản lý — KHÔNG gắn với khối thiết bị nào (hiển thị trống).
+const BLOCK_NONE_POSITIONS = ["TK Lò máy", "trưởng ca"];
 
 /**
- * Mặc định Khối quản lý theo cương vị:
+ * Khối quản lý theo cương vị (so khớp không phân biệt hoa/thường & dấu, theo chứa từ khoá):
  *  - Lò Trưởng/Lò Phó/Máy Nghiền/Thải Xỉ/ESP/FGD → Khối Lò Hơi
  *  - Máy Trưởng/Máy Phó/Trợ Thủ/Trạm Bơm Tuần Hoàn → Khối Turbine
- *  - còn lại → Khối BOP
- * So khớp không phân biệt hoa/thường & dấu, theo chứa từ khoá (vd "Lò trưởng S1").
+ *  - Trưởng kíp điện/Trực chính điện/Trực phụ điện → Khối Điện
+ *  - Thiết bị đo lường điều khiển / I&C → Khối I&C
+ *  - Trưởng kíp Lò máy/Trưởng ca → không thuộc khối (trả về "")
+ *  - còn lại (Trạm bơm nước thô, XLNT, XLN hỗn hợp, NH3 - Lò hơi phụ, Khí Nén - Nhà Dầu…) → Khối BOP
  */
 export function blockForPosition(position?: string | null): string {
   if (!position) return "Khối BOP";
   const p = normalizeText(position);
+  if (BLOCK_NONE_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "";
   if (BLOCK_LO_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Lò Hơi";
   if (BLOCK_TURBINE_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Turbine";
+  if (BLOCK_DIEN_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Điện";
+  if (BLOCK_IC_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối I&C";
   return "Khối BOP";
 }
 

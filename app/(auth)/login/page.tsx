@@ -40,6 +40,12 @@ function LoginInner() {
 
   React.useEffect(() => {
     document.documentElement.classList.remove("dark");
+    // Reset cờ "đã đóng" thông báo hệ thống để mỗi lần đăng nhập đều hiển thị lại.
+    try {
+      sessionStorage.removeItem("broadcast-dismissed");
+    } catch {
+      /* sessionStorage không khả dụng */
+    }
   }, []);
 
   React.useEffect(() => {

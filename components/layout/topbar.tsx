@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2 } from "lucide-react";
+import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,8 +16,9 @@ import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
 import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
-import { useMyDashboard } from "@/hooks/useDashboard";
-import { cn, initials } from "@/lib/utils";
+import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
+import { OPERATION_TYPE } from "@/lib/constants";
+import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 // Tông màu gradient nhẹ cho từng ô trong bảng truy cập nhanh (gán theo chỉ số).
@@ -46,7 +47,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const [open, setOpen] = React.useState(false);
   const boxRef = React.useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = React.useState(false);
-  const [notifTab, setNotifTab] = React.useState<"ops" | "repl">("ops");
+  const [notifTab, setNotifTab] = React.useState<"ops" | "repl" | "internal">("ops");
   const notifRef = React.useRef<HTMLDivElement>(null);
   const [gridOpen, setGridOpen] = React.useState(false);
   const gridRef = React.useRef<HTMLDivElement>(null);
@@ -59,6 +60,15 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const { notices, loading: notifLoading } = useNotifications();
   const markRead = useMarkAnnouncementRead();
   const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
+  const { data: opsData, isLoading: opsLoading } = useOperations();
+  // Thông báo nội bộ chỉ hiện trên chuông trong vòng 1 tháng kể từ ngày diễn ra;
+  // quá 1 tháng tự ẩn khỏi icon chuông (dữ liệu vẫn lưu, xem ở Dashboard).
+  const internalEvents = React.useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 1);
+    cutoff.setHours(0, 0, 0, 0);
+    return (opsData?.data ?? []).filter((e) => new Date(e.date) >= cutoff);
+  }, [opsData]);
   const replAlerts = alertsData?.data ?? [];
   const replAlertKey = (a: (typeof replAlerts)[number]) => `${a.id}:${new Date(a.nextDueAt).getTime()}`;
   const activeReplAlerts = replAlerts.filter((a) => !ackedReplKeys.has(replAlertKey(a)));
@@ -269,10 +279,11 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 <div className="mt-2 flex gap-1">
                   <NotifTab active={notifTab === "ops"} onClick={() => setNotifTab("ops")} label="Vận hành" count={notices.length} />
                   <NotifTab active={notifTab === "repl"} onClick={() => setNotifTab("repl")} label="Thay thế vật tư" count={activeReplAlerts.length} />
+                  <NotifTab active={notifTab === "internal"} onClick={() => setNotifTab("internal")} label="Nội bộ" count={internalEvents.length} />
                 </div>
               </div>
 
-              {notifTab === "ops" ? (
+              {notifTab === "ops" && (
                 <>
                   {notifLoading ? (
                     <div className="px-4 py-6 text-center text-sm text-muted-foreground">Đang tải…</div>
@@ -309,7 +320,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                     Xem tất cả <ChevronRight className="h-4 w-4" />
                   </button>
                 </>
-              ) : (
+              )}
+
+              {notifTab === "repl" && (
                 <>
                   {alertsLoading ? (
                     <div className="px-4 py-6 text-center text-sm text-muted-foreground">Đang tải…</div>
@@ -346,6 +359,41 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                   >
                     Mở lịch thay thế vật tư <ChevronRight className="h-4 w-4" />
                   </button>
+                </>
+              )}
+
+              {notifTab === "internal" && (
+                <>
+                  {opsLoading ? (
+                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">Đang tải…</div>
+                  ) : internalEvents.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                      <ClipboardList className="h-7 w-7 text-muted-foreground/40" />
+                      <span className="text-sm text-muted-foreground">Chưa có thông tin nội bộ</span>
+                    </div>
+                  ) : (
+                    <ul className="max-h-80 divide-y divide-border overflow-y-auto">
+                      {internalEvents.slice(0, 8).map((e) => {
+                        const meta = OPERATION_TYPE[e.type as keyof typeof OPERATION_TYPE] ?? OPERATION_TYPE.OTHER;
+                        return (
+                          <li key={e.id}>
+                            <Link href="/" onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                              <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", meta.badge)}>
+                                <ClipboardList className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-ink">{e.title}</span>
+                                <span className="block truncate text-xs text-muted-foreground">{meta.label} · {formatDate(e.date)}</span>
+                              </span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <Link href="/" onClick={() => setNotifOpen(false)} className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
+                    Xem tất cả <ChevronRight className="h-4 w-4" />
+                  </Link>
                 </>
               )}
             </div>

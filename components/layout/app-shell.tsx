@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
+import { BroadcastModal } from "@/components/shared/broadcast-modal";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Topbar onMenuClick={() => setMobileOpen(true)} onToggleSidebar={() => setCollapsed((c) => !c)} />
         <main className="flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">{children}</main>
       </div>
+
+      {/* Thông báo hệ thống giữa màn hình (do Quản trị phát) */}
+      <BroadcastModal />
     </div>
   );
 }
