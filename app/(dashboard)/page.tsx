@@ -620,7 +620,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
 
   return (
     <Card className="h-full">
-      <CardHeader className="flex-row items-center justify-between">
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle>Thông tin nội bộ</CardTitle>
         {canManage && (
           <Button size="sm" variant="outline" onClick={() => setOpen(true)}>

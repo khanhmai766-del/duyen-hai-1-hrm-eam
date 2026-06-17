@@ -11,7 +11,7 @@ const SESSION_COOKIES = [
   "__Secure-next-auth.session-token",
 ];
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webauthn", "/videos", "/public"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webauthn", "/api/public", "/videos", "/public"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
