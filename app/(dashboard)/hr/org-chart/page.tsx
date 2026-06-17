@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock } from "lucide-react";
+import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -139,6 +139,7 @@ export default function OrgChartPage() {
         )}
         {canApprove && (
           <Button
+            size="sm"
             onClick={() => setApproveOpen(true)}
             className="text-white"
           >
@@ -148,6 +149,7 @@ export default function OrgChartPage() {
         {isCheckedIn ? (
           recallLocked ? (
             <Button
+              size="sm"
               variant="outline"
               disabled
               className="cursor-not-allowed text-muted-foreground"
@@ -156,13 +158,14 @@ export default function OrgChartPage() {
               <Lock className="h-4 w-4" /> Đã duyệt — khoá thu hồi
             </Button>
           ) : (
-            <Button variant="destructive" onClick={handleRecall} disabled={recall.isPending}>
+            <Button size="sm" variant="destructive" onClick={handleRecall} disabled={recall.isPending}>
               {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
               Thu hồi điểm danh
             </Button>
           )
         ) : checkInLocked ? (
           <Button
+            size="sm"
             variant="outline"
             disabled
             className="cursor-not-allowed text-muted-foreground"
@@ -171,9 +174,9 @@ export default function OrgChartPage() {
             <Lock className="h-4 w-4" /> Đã duyệt — khoá điểm danh
           </Button>
         ) : (
-          <Button variant="accent" onClick={() => setCheckInOpen(true)}><UserCheck className="h-4 w-4" /> Điểm danh</Button>
+          <Button size="sm" variant="accent" onClick={() => setCheckInOpen(true)}><UserCheck className="h-4 w-4" /> Điểm danh</Button>
         )}
-        <Button variant="outline" onClick={openViewer}>
+        <Button size="sm" variant="outline" onClick={openViewer}>
           <Tv className="h-4 w-4" /> Viewer
         </Button>
       </PageHeader>
@@ -967,10 +970,10 @@ function PersonnelPicker({
  * renders; check-ins fill the seat whose title matches the chosen cương vị.
  * ------------------------------------------------------------------------- */
 
-const TONE_STYLES: Record<OrgTone | "chief", { bar: string; cell: string; title: string; block: string }> = {
-  chief: { bar: "bg-pink-50 border-pink-200", cell: "bg-pink-50/60 border-pink-200", title: "text-pink-700", block: "" },
-  blue: { bar: "bg-blue-50 border-blue-200", cell: "bg-blue-50/50 border-blue-200", title: "text-blue-700", block: "bg-blue-50/30" },
-  green: { bar: "bg-green-50 border-green-200", cell: "bg-green-50/50 border-green-200", title: "text-green-700", block: "bg-green-50/30" },
+const TONE_STYLES: Record<OrgTone | "chief", { bar: string; cell: string; title: string; block: string; filled: string }> = {
+  chief: { bar: "bg-pink-50 border-pink-200", cell: "bg-pink-50/60 border-pink-200", title: "text-pink-700", block: "", filled: "border-pink-300 shadow-[0_10px_24px_-10px_rgba(236,72,153,0.5)]" },
+  blue: { bar: "bg-blue-50 border-blue-200", cell: "bg-blue-50/50 border-blue-200", title: "text-blue-700", block: "bg-blue-50/30", filled: "border-blue-300 shadow-[0_10px_24px_-10px_rgba(37,99,235,0.5)]" },
+  green: { bar: "bg-green-50 border-green-200", cell: "bg-green-50/50 border-green-200", title: "text-green-700", block: "bg-green-50/30", filled: "border-emerald-300 shadow-[0_10px_24px_-10px_rgba(16,185,129,0.5)]" },
 };
 
 function OrgTemplateChart({ assignments }: { assignments: ShiftAssignmentWithUser[] }) {
@@ -1025,8 +1028,9 @@ function OrgTemplateChart({ assignments }: { assignments: ShiftAssignmentWithUse
 /** Full-width header bar for the chief / lead rows. */
 function SeatBar({ title, occupants, tone }: { title: string; occupants?: ShiftAssignmentWithUser[]; tone: OrgTone | "chief" }) {
   const s = TONE_STYLES[tone];
+  const filled = !!occupants?.length;
   return (
-    <div className={cn("rounded-lg border px-3 py-2 text-center", s.bar)}>
+    <div className={cn("group rounded-lg border px-3 py-2 text-center transition-all duration-300", s.bar, filled && s.filled)}>
       <div className={cn("text-xs font-semibold", s.title)}>{title}</div>
       <Occupants occupants={occupants} center />
     </div>
@@ -1036,10 +1040,18 @@ function SeatBar({ title, occupants, tone }: { title: string; occupants?: ShiftA
 /** A single member seat cell. */
 function Seat({ title, occupants, tone }: { title: string; occupants?: ShiftAssignmentWithUser[]; tone: OrgTone }) {
   const s = TONE_STYLES[tone];
+  const filled = !!occupants?.length;
   return (
-    <div className={cn("rounded-lg border px-2 py-2 text-center", s.cell)}>
+    <div
+      className={cn(
+        "group relative rounded-xl border px-2 py-2.5 text-center transition-all duration-300",
+        filled
+          ? cn("bg-white hover:-translate-y-0.5", s.filled)
+          : cn("border-dashed bg-muted/20 opacity-90", s.cell)
+      )}
+    >
       <div className={cn("text-[11px] font-semibold leading-tight", s.title)}>{title}</div>
-      {occupants?.length ? (
+      {filled ? (
         <Occupants occupants={occupants} />
       ) : (
         <div className="mt-1 text-[11px] text-muted-foreground/40">— trống —</div>
@@ -1053,18 +1065,48 @@ function Occupants({ occupants, center }: { occupants?: ShiftAssignmentWithUser[
     return center ? <div className="mt-0.5 text-[11px] text-muted-foreground/40">— trống —</div> : null;
   }
   return (
-    <div className="mt-1 space-y-1.5">
+    <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-2">
       {occupants.map((o) => (
-        <div key={o.id} className="flex flex-col items-center">
-          <div className="mb-0.5 flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-navy text-[10px] font-bold text-white">
-            {o.user.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={o.user.avatarUrl} alt={o.user.name} className="h-full w-full object-cover" />
-            ) : (
-              initials(o.user.name)
-            )}
+        <div
+          key={o.id}
+          className="flex flex-col items-center [perspective:600px] animate-in fade-in zoom-in-95 duration-500"
+        >
+          <div className="relative">
+            {/* Vầng sáng công nghệ phía sau (hiện rõ khi hover) */}
+            <span
+              aria-hidden
+              className={cn(
+                "absolute -inset-1.5 rounded-full opacity-50 blur-[7px] transition-opacity duration-300 group-hover:opacity-90",
+                o.isApproved ? "bg-emerald-400/40" : "bg-amber-400/40"
+              )}
+            />
+            {/* Ảnh user 3D: viền gradient + bóng nổi, nghiêng/phóng khi hover */}
+            <div
+              className={cn(
+                "relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy to-accent text-[11px] font-bold text-white shadow-[0_8px_18px_-6px_rgba(15,23,42,0.55)] ring-2 ring-white transition-transform duration-300 will-change-transform group-hover:scale-110 group-hover:[transform:rotateY(12deg)_rotateX(6deg)]"
+              )}
+            >
+              {o.user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={o.user.avatarUrl} alt={o.user.name} className="h-full w-full object-cover" />
+              ) : (
+                initials(o.user.name)
+              )}
+              {/* lớp bóng kính tạo chiều sâu 3D */}
+              <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/35 to-transparent" />
+            </div>
+            {/* Chấm trạng thái điểm danh */}
+            <span
+              className={cn(
+                "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white shadow ring-2 ring-white",
+                o.isApproved ? "bg-emerald-500" : "bg-amber-500"
+              )}
+              title={o.isApproved ? "Đã được duyệt" : "Chưa được duyệt"}
+            >
+              {o.isApproved ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+            </span>
           </div>
-          <span className={cn("text-xs font-bold leading-tight", o.isApproved ? "text-ink" : "text-warning")}>{o.user.name}</span>
+          <span className={cn("mt-1.5 text-xs font-bold leading-tight", o.isApproved ? "text-ink" : "text-warning")}>{o.user.name}</span>
           {o.user.phone && (
             <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
               <Phone className="h-2.5 w-2.5" /> {o.user.phone}
