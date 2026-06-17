@@ -15,6 +15,7 @@ import {
   FileText,
   Archive,
   Workflow,
+  BellRing,
 } from "lucide-react";
 
 export interface NavItem {
@@ -48,6 +49,7 @@ export const NAV_SECTIONS: NavSection[] = [
         children: [
           { label: "Người dùng", href: "/admin/users", icon: Users, keywords: "nguoi dung user account quan ly" },
           { label: "Phân quyền", href: "/admin/roles", icon: ShieldCheck, keywords: "phan quyen role rbac" },
+          { label: "Thông báo hệ thống", href: "/admin/broadcast", icon: BellRing, keywords: "thong bao he thong broadcast message box gui thong bao popup" },
         ],
       },
     ],

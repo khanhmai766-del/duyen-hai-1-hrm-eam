@@ -434,3 +434,17 @@ model RbacConfig {
   updatedById String?
   updatedAt   DateTime @default(now())
 }
+
+// Thông báo hệ thống (message box giữa màn hình do Quản trị phát). Bảng được
+// tạo/đồng bộ bằng raw SQL trong app/api/broadcast/route.ts; khai báo ở đây để
+// db push không đề nghị xoá.
+model SystemBroadcast {
+  id            String   @id
+  title         String
+  body          String
+  isActive      Boolean  @default(true)
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+}
