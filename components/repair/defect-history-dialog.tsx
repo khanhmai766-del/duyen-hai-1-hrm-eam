@@ -13,7 +13,7 @@ import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDefectHistory, useUpdateDefectHistory, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
-import { DEFECT_UNITS, DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
+import { DEFECT_UNITS, DEFECT_REQUEST_TYPES, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 
 function todayInput(): string {
   return new Date().toISOString().slice(0, 10);
@@ -43,7 +43,8 @@ export function DefectHistoryDialog({
   const isEdit = !!record;
   const create = useCreateDefectHistory();
   const update = useUpdateDefectHistory();
-  const positions = usePositions();
+  // Cương vị chọn được — loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
+  const positions = usePositions().filter(isSelectableManagingPosition);
   // Thiết bị — dùng chung danh mục với form khiếm khuyết.
   const { data: devicesData } = useDevices({});
   const devices = devicesData?.data ?? [];

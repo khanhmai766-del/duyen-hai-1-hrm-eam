@@ -20,6 +20,7 @@ import {
   DEFECT_REQUEST_TYPES,
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
+  isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -45,8 +46,9 @@ export function DefectForm({
   const update = useUpdateDefect();
   const [step, setStep] = React.useState<1 | 2>(1);
 
-  // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng).
-  const positions = usePositions();
+  // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng);
+  // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
+  const positions = usePositions().filter(isSelectableManagingPosition);
   // Thiết bị lấy từ module Thiết bị.
   const { data: devicesData } = useDevices({});
   const devices = devicesData?.data ?? [];
