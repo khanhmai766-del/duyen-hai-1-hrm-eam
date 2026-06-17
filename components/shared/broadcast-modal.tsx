@@ -61,10 +61,7 @@ export function BroadcastModal() {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30 backdrop-blur">
             <Megaphone className="h-5 w-5" />
           </span>
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-white/80">Thông báo hệ thống</div>
-            <div className="text-sm font-medium text-white/95">Từ Ban quản trị</div>
-          </div>
+          <div className="min-w-0 text-lg font-bold leading-tight text-white">Ban Quản Trị Thông Báo</div>
           <button
             onClick={dismiss}
             className="absolute right-3 top-3 rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
