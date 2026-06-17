@@ -20,6 +20,24 @@ import { useMyDashboard } from "@/hooks/useDashboard";
 import { cn, initials } from "@/lib/utils";
 import { toast } from "sonner";
 
+// Tông màu gradient nhẹ cho từng ô trong bảng truy cập nhanh (gán theo chỉ số).
+const GRID_TINTS = [
+  "bg-gradient-to-br from-sky-100 to-sky-200 text-sky-700",
+  "bg-gradient-to-br from-violet-100 to-violet-200 text-violet-700",
+  "bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-700",
+  "bg-gradient-to-br from-amber-100 to-amber-200 text-amber-700",
+  "bg-gradient-to-br from-rose-100 to-rose-200 text-rose-700",
+  "bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700",
+  "bg-gradient-to-br from-teal-100 to-teal-200 text-teal-700",
+  "bg-gradient-to-br from-orange-100 to-orange-200 text-orange-700",
+  "bg-gradient-to-br from-cyan-100 to-cyan-200 text-cyan-700",
+  "bg-gradient-to-br from-fuchsia-100 to-fuchsia-200 text-fuchsia-700",
+  "bg-gradient-to-br from-lime-100 to-lime-200 text-lime-700",
+  "bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700",
+  "bg-gradient-to-br from-pink-100 to-pink-200 text-pink-700",
+  "bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700",
+];
+
 export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -346,7 +364,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           {gridOpen && (
             <div className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-xl border border-border bg-white p-2 shadow-lg">
               <div className="grid grid-cols-3 gap-1.5">
-                {quickLinks.map((l) => {
+                {quickLinks.map((l, i) => {
                   const Icon = l.icon;
                   return (
                     <Link
@@ -355,7 +373,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       onClick={() => setGridOpen(false)}
                       className="flex flex-col items-center gap-1.5 rounded-lg p-2.5 text-center transition-colors hover:bg-muted"
                     >
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-black/5", GRID_TINTS[i % GRID_TINTS.length])}>
                         <Icon className="h-[18px] w-[18px]" />
                       </span>
                       <span className="line-clamp-2 text-[11px] font-medium leading-tight text-ink">{l.label}</span>

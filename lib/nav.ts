@@ -1,6 +1,6 @@
 import {
   LayoutDashboard,
-  Bell,
+  Megaphone,
   CalendarDays,
   Settings,
   Cpu,
@@ -37,7 +37,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Quản lý người dùng",
     items: [
       { label: "Overview", href: "/", icon: LayoutDashboard, keywords: "tong quan dashboard bang dieu khien" },
-      { label: "Mệnh lệnh sản xuất", href: "/notifications", icon: Bell, keywords: "menh lenh san xuat production order thong bao notification bang tin canh bao" },
+      { label: "Mệnh lệnh sản xuất", href: "/notifications", icon: Megaphone, keywords: "menh lenh san xuat production order thong bao notification bang tin canh bao loa" },
       { label: "Lịch làm việc", href: "/hr", icon: CalendarDays, keywords: "ca truc shift roster diem danh org chart so do" },
       {
         label: "Quản trị",

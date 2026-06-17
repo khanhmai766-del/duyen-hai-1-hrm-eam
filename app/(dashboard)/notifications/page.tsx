@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2 } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -28,6 +28,7 @@ import {
   type AnnouncementCategory,
 } from "@/hooks/useAnnouncements";
 import { formatDate, cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/nav";
 
 /** Ensure an outbound link has a scheme so it opens correctly in a new tab. */
 function normalizeUrl(u: string) {
@@ -97,13 +98,16 @@ export default function NotificationsPage() {
   const currentYear = new Date().getFullYear();
   const [yearFilter, setYearFilter] = React.useState(String(currentYear));
   const [classFilter, setClassFilter] = React.useState("ALL");
+  const [search, setSearch] = React.useState("");
   const years = Array.from(
     new Set([currentYear, ...bulletins.map((a) => new Date(a.createdAt).getFullYear())])
   ).sort((x, y) => y - x);
+  const nq = normalizeText(search.trim());
   const filtered = bulletins.filter(
     (a) =>
       (yearFilter === "ALL" || new Date(a.createdAt).getFullYear() === Number(yearFilter)) &&
-      (classFilter === "ALL" || a.classification === classFilter)
+      (classFilter === "ALL" || a.classification === classFilter) &&
+      (!nq || normalizeText([a.title, a.body, a.classification, a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
   );
   const isOrder = form.category === "ORDER";
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
@@ -290,44 +294,37 @@ export default function NotificationsPage() {
 
       {/* Bảng tin từ Ban quản trị (chỉ ADMIN đăng/sửa/xoá; mọi người đều xem) */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            <Megaphone className="h-4 w-4 text-accent" /> Mệnh lệnh sản xuất
-          </h2>
+        {/* Thanh tìm kiếm + bộ lọc (năm / phân loại) + đăng mệnh lệnh */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm mệnh lệnh..."
+              className="h-9 pl-9"
+            />
+          </div>
+          <Select value={yearFilter} onValueChange={setYearFilter}>
+            <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả năm</SelectItem>
+              {years.map((y) => <SelectItem key={y} value={String(y)}>Năm {y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={classFilter} onValueChange={setClassFilter}>
+            <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả phân loại</SelectItem>
+              {CLASSIFICATIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
           {isAdmin && (
-            <Button size="sm" onClick={() => openCreate("BULLETIN")}>
+            <Button size="sm" className="ml-auto shrink-0" onClick={() => openCreate("BULLETIN")}>
               <Plus className="h-4 w-4" /> Đăng mệnh lệnh
             </Button>
           )}
         </div>
-        {/* Bộ lọc tra cứu: theo năm + phân loại */}
-        {bulletins.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Lọc:</span>
-            <Select value={yearFilter} onValueChange={setYearFilter}>
-              <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả năm</SelectItem>
-                {years.map((y) => <SelectItem key={y} value={String(y)}>Năm {y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả phân loại</SelectItem>
-                {CLASSIFICATIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {(yearFilter !== String(currentYear) || classFilter !== "ALL") && (
-              <button
-                onClick={() => { setYearFilter(String(currentYear)); setClassFilter("ALL"); }}
-                className="text-xs font-medium text-accent hover:underline"
-              >
-                Về năm hiện tại
-              </button>
-            )}
-          </div>
-        )}
 
         {annLoading ? (
           <TableSkeleton rows={2} />

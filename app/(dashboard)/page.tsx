@@ -589,6 +589,23 @@ function ActivityCard() {
 }
 
 /* ---- Operation info (drills) ---- */
+// Tông màu thẻ diễn tập theo ngày: sắp tới (vàng) · đúng hôm nay (xanh) · đã qua (xám).
+const EVENT_TONES = {
+  future: { card: "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10", date: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200" },
+  today: { card: "border-emerald-300 bg-emerald-50 dark:border-emerald-500/40 dark:bg-emerald-500/10", date: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200" },
+  past: { card: "border-border", date: "bg-muted text-ink" },
+} as const;
+
+function eventDateTone(date: string | Date): keyof typeof EVENT_TONES {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  if (d.getTime() > today.getTime()) return "future";
+  if (d.getTime() === today.getTime()) return "today";
+  return "past";
+}
+
 function OperationInfoCard({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useOperations();
   const create = useCreateOperation();
@@ -644,11 +661,12 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
           <div className="max-h-[296px] space-y-2 overflow-y-auto pr-1">
             {events.map((e) => {
               const meta = OPERATION_TYPE[e.type as keyof typeof OPERATION_TYPE] ?? OPERATION_TYPE.OTHER;
+              const tone = EVENT_TONES[eventDateTone(e.date)];
               return (
-                <div key={e.id} className="group flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex w-12 shrink-0 flex-col items-center rounded-md bg-muted py-1.5">
-                    <span className="text-lg font-bold leading-none text-ink">{new Date(e.date).getDate()}</span>
-                    <span className="text-[10px] uppercase text-muted-foreground">Th{new Date(e.date).getMonth() + 1}</span>
+                <div key={e.id} className={cn("group flex items-start gap-3 rounded-lg border p-3", tone.card)}>
+                  <div className={cn("flex w-12 shrink-0 flex-col items-center rounded-md py-1.5", tone.date)}>
+                    <span className="text-lg font-bold leading-none">{new Date(e.date).getDate()}</span>
+                    <span className="text-[10px] uppercase opacity-70">Th{new Date(e.date).getMonth() + 1}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
