@@ -23,6 +23,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/shared/page-header";
@@ -150,47 +151,59 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         )}
       </PageHeader>
 
-      <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 p-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4 xl:max-w-[720px]">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Cương vị</label>
-              <select
-                value={filters.system ?? ""}
-                onChange={(e) => setFilter("system", e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
-              >
-                <option value="">Tất cả</option>
-                {positions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tổ máy</label>
-              <select
-                value={filters.unit ?? ""}
-                onChange={(e) => setFilter("unit", e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
-              >
-                <option value="">Tất cả</option>
-                {DEFECT_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Từ ngày</label>
-              <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Đến ngày</label>
-              <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} />
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Cương vị:</span>
+            <Select value={filters.system ?? "ALL"} onValueChange={(v) => setFilter("system", v === "ALL" ? "" : v)}>
+              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
+            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
+              {(["ALL", ...DEFECT_UNITS] as const).map((u) => {
+                const active = (filters.unit ?? "") === (u === "ALL" ? "" : u);
+                return (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setFilter("unit", u === "ALL" ? "" : u)}
+                    className={cn(
+                      "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                      active ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
+                    )}
+                  >
+                    {u === "ALL" ? "Tất cả" : u}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="relative w-full lg:w-80">
+
+          <div className="flex items-center gap-x-5 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Từ ngày:</span>
+              <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-9 w-44 bg-white" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Đến ngày:</span>
+              <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-9 w-44 bg-white" />
+            </div>
+          </div>
+
+          <div className="relative ml-auto w-full sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={tableSearch}
               onChange={(e) => setTableSearch(e.target.value)}
               placeholder="Tìm trong bảng..."
-              className="pl-9"
+              className="h-9 pl-9"
             />
           </div>
         </div>
@@ -206,49 +219,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         />
       ) : (
         <Card className="overflow-hidden">
-          <div className="hidden">
-            <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4 xl:max-w-[720px]">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Cương vị</label>
-                <select
-                  value={filters.system ?? ""}
-                  onChange={(e) => setFilter("system", e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
-                >
-                  <option value="">Tất cả</option>
-                  {positions.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Tổ máy</label>
-                <select
-                  value={filters.unit ?? ""}
-                  onChange={(e) => setFilter("unit", e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
-                >
-                  <option value="">Tất cả</option>
-                  {DEFECT_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Từ ngày</label>
-                <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Đến ngày</label>
-                <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} />
-              </div>
-            </div>
-            <div className="relative w-full lg:w-80">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={tableSearch}
-                onChange={(e) => setTableSearch(e.target.value)}
-                placeholder="Tìm trong bảng..."
-                className="pl-9"
-              />
-            </div>
-          </div>
           <div className="overflow-x-auto">
           <Table className="min-w-[980px] table-fixed">
             <TableHeader className="bg-muted/40">

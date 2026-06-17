@@ -43,7 +43,7 @@ export default function AdminAttendancePage() {
         <ArrowLeft className="h-4 w-4" /> Quản lý nhân sự / Ca vận hành
       </Link>
 
-      <PageHeader title="Chấm công hành chính" description="Chấm công theo nhóm cho khối hành chính (HC) — dữ liệu lưu 5 tháng gần nhất">
+      <PageHeader title="CHẤM CÔNG HÀNH CHÍNH" description="Chấm công theo nhóm cho khối hành chính (HC) — dữ liệu lưu 5 tháng gần nhất">
         <div className="flex items-center gap-2">
           <Label className="text-sm text-muted-foreground">Thời gian</Label>
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />

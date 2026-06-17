@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { OPERATION_TYPE, OPERATION_TYPE_ORDER, can, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
-import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS } from "@/lib/links";
+import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/lib/links";
 import { initials, cn } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
@@ -188,32 +188,57 @@ function SafetyTicker() {
 
 /* ---- Operation support links (from LinkDH1.xlsx) ---- */
 function SupportLinksCard() {
+  const [tab, setTab] = React.useState<SupportLinkGroup>("ops");
+  const links = SUPPORT_LINKS.filter((l) => l.group === tab);
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="flex items-center gap-2">
-          <Link2 className="h-4 w-4 text-accent" /> Danh mục LINK hỗ trợ vận hành
+          <Link2 className="h-4 w-4 text-accent" /> Danh mục LINK hỗ trợ
         </CardTitle>
+        <div className="inline-flex shrink-0 rounded-lg border border-border bg-white p-0.5">
+          <SupportLinkTab active={tab === "ops"} onClick={() => setTab("ops")} label="Vận hành" />
+          <SupportLinkTab active={tab === "personal"} onClick={() => setTab("personal")} label="Cá nhân" />
+        </div>
       </CardHeader>
       {/* Scroll area sized to ~8 entries; the rest scroll. */}
       <CardContent className="max-h-[404px] space-y-1.5 overflow-y-auto pr-1">
-        {SUPPORT_LINKS.map((l, i) => (
-          <a
-            key={l.href + i}
-            href={l.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5"
-          >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent">
-              {i + 1}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{l.name}</span>
-            <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
-          </a>
-        ))}
+        {links.length === 0 ? (
+          <p className="px-1 py-8 text-center text-sm text-muted-foreground">Chưa có đường link nào trong nhóm này.</p>
+        ) : (
+          links.map((l, i) => (
+            <a
+              key={l.href + i}
+              href={l.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{l.name}</span>
+              <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
+            </a>
+          ))
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function SupportLinkTab({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+        active ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
+      )}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -564,6 +589,23 @@ function ActivityCard() {
 }
 
 /* ---- Operation info (drills) ---- */
+// Tông màu thẻ diễn tập theo ngày: sắp tới (vàng) · đúng hôm nay (xanh) · đã qua (xám).
+const EVENT_TONES = {
+  future: { card: "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10", date: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200" },
+  today: { card: "border-emerald-300 bg-emerald-50 dark:border-emerald-500/40 dark:bg-emerald-500/10", date: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200" },
+  past: { card: "border-border", date: "bg-muted text-ink" },
+} as const;
+
+function eventDateTone(date: string | Date): keyof typeof EVENT_TONES {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  if (d.getTime() > today.getTime()) return "future";
+  if (d.getTime() === today.getTime()) return "today";
+  return "past";
+}
+
 function OperationInfoCard({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useOperations();
   const create = useCreateOperation();
@@ -595,7 +637,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
 
   return (
     <Card className="h-full">
-      <CardHeader className="flex-row items-center justify-between">
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle>Thông tin nội bộ</CardTitle>
         {canManage && (
           <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
@@ -619,11 +661,12 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
           <div className="max-h-[296px] space-y-2 overflow-y-auto pr-1">
             {events.map((e) => {
               const meta = OPERATION_TYPE[e.type as keyof typeof OPERATION_TYPE] ?? OPERATION_TYPE.OTHER;
+              const tone = EVENT_TONES[eventDateTone(e.date)];
               return (
-                <div key={e.id} className="group flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex w-12 shrink-0 flex-col items-center rounded-md bg-muted py-1.5">
-                    <span className="text-lg font-bold leading-none text-ink">{new Date(e.date).getDate()}</span>
-                    <span className="text-[10px] uppercase text-muted-foreground">Th{new Date(e.date).getMonth() + 1}</span>
+                <div key={e.id} className={cn("group flex items-start gap-3 rounded-lg border p-3", tone.card)}>
+                  <div className={cn("flex w-12 shrink-0 flex-col items-center rounded-md py-1.5", tone.date)}>
+                    <span className="text-lg font-bold leading-none">{new Date(e.date).getDate()}</span>
+                    <span className="text-[10px] uppercase opacity-70">Th{new Date(e.date).getMonth() + 1}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

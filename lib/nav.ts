@@ -1,6 +1,6 @@
 import {
   LayoutDashboard,
-  Bell,
+  Megaphone,
   CalendarDays,
   Settings,
   Cpu,
@@ -37,7 +37,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Quản lý người dùng",
     items: [
       { label: "Overview", href: "/", icon: LayoutDashboard, keywords: "tong quan dashboard bang dieu khien" },
-      { label: "Mệnh lệnh sản xuất", href: "/notifications", icon: Bell, keywords: "menh lenh san xuat production order thong bao notification bang tin canh bao" },
+      { label: "Mệnh lệnh sản xuất", href: "/notifications", icon: Megaphone, keywords: "menh lenh san xuat production order thong bao notification bang tin canh bao loa" },
       { label: "Lịch làm việc", href: "/hr", icon: CalendarDays, keywords: "ca truc shift roster diem danh org chart so do" },
       {
         label: "Quản trị",
@@ -68,7 +68,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Quy trình vận hành", href: "/documents/procedures", icon: FileText, keywords: "danh muc quy trinh van hanh procedure sop tai lieu so" },
       { label: "Sơ đồ P&ID", href: "/documents/pid", icon: Workflow, keywords: "danh muc so do pid p&id ban ve tai lieu ky thuat" },
-      { label: "Forum", href: "/forum", icon: MessagesSquare, keywords: "forum dien dan trao doi ky thuat tai lieu quy trinh so do ban ve" },
+      { label: "Forum kỹ thuật", href: "/forum", icon: MessagesSquare, keywords: "forum dien dan trao doi ky thuat tai lieu quy trinh so do ban ve" },
       { label: "Thư mục lưu trữ", href: "/documents/archive", icon: Archive, keywords: "thu muc luu tru archive folder tai lieu so kho du lieu" },
     ],
   },

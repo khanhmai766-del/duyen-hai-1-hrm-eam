@@ -36,9 +36,19 @@ function LoginInner() {
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
   const [biometricSupported, setBiometricSupported] = React.useState(false);
+  const [stats, setStats] = React.useState<{ devices: number; users: number } | null>(null);
 
   React.useEffect(() => {
     document.documentElement.classList.remove("dark");
+  }, []);
+
+  React.useEffect(() => {
+    let alive = true;
+    fetch("/api/public/stats")
+      .then((r) => r.json())
+      .then((j) => { if (alive && j?.data) setStats(j.data); })
+      .catch(() => {});
+    return () => { alive = false; };
   }, []);
 
   React.useEffect(() => {
@@ -185,7 +195,7 @@ function LoginInner() {
         </div>
         <div className="relative z-10 flex gap-8 text-sm text-white/70">
           <div>
-            <div className="text-2xl font-bold text-white">15+</div>
+            <div className="text-2xl font-bold text-white">{stats ? stats.devices : "—"}</div>
             Thiết bị quản lý
           </div>
           <div>
@@ -193,8 +203,8 @@ function LoginInner() {
             Giám sát ca kíp
           </div>
           <div>
-            <div className="text-2xl font-bold text-white">5</div>
-            Phân hệ chính
+            <div className="text-2xl font-bold text-white">{stats ? stats.users : "—"}</div>
+            Người dùng
           </div>
         </div>
       </div>
