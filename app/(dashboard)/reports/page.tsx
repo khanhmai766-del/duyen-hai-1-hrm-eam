@@ -2,10 +2,13 @@
 
 import * as React from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -202,6 +205,30 @@ export default function ReportsPage() {
       .sort((a, b) => a.daysLeft - b.daysLeft)
       .slice(0, 6);
 
+    // Xu hướng theo tháng (năm hiện tại): khiếm khuyết phát hiện vs lượt xử lý.
+    const currentYear = new Date().getFullYear();
+    const monthlyTrend = Array.from({ length: 12 }, (_, i) => ({ month: `Th${i + 1}`, detected: 0, handled: 0 }));
+    defects.forEach((defect) => {
+      const raw = defect.detectedAt ?? defect.createdAt;
+      const date = raw ? new Date(raw) : null;
+      if (date && !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear) monthlyTrend[date.getMonth()].detected += 1;
+    });
+    defectHistory.forEach((row) => {
+      const date = row.performedAt ? new Date(row.performedAt) : null;
+      if (date && !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear) monthlyTrend[date.getMonth()].handled += 1;
+    });
+    const hasMonthlyTrend = monthlyTrend.some((m) => m.detected > 0 || m.handled > 0);
+
+    // Lượt sửa chữa theo năm (từ lịch sử xử lý khiếm khuyết).
+    const yearMap = new Map<number, number>();
+    defectHistory.forEach((row) => {
+      const date = row.performedAt ? new Date(row.performedAt) : null;
+      if (date && !Number.isNaN(date.getTime())) yearMap.set(date.getFullYear(), (yearMap.get(date.getFullYear()) ?? 0) + 1);
+    });
+    const yearlyTrend = Array.from(yearMap.entries())
+      .map(([year, repairs]) => ({ year: String(year), repairs }))
+      .sort((a, b) => Number(a.year) - Number(b.year));
+
     return {
       systems,
       positions,
@@ -216,6 +243,10 @@ export default function ReportsPage() {
       defectChartRows,
       replacementChartRows,
       upcomingReplacements,
+      currentYear,
+      monthlyTrend,
+      hasMonthlyTrend,
+      yearlyTrend,
     };
   }, [dateRange, defectHistory, defects, devices, materials, replacements, systemPositionFilter]);
 
@@ -372,6 +403,83 @@ export default function ReportsPage() {
               </div>
             ) : (
               <EmptyPanel text="Chưa có dữ liệu cương vị quản lý" />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Xu hướng theo thời gian — biểu đồ vùng (area) */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendingUp className="h-4 w-4 text-violet-600" />
+              Xu hướng khiếm khuyết &amp; xử lý theo tháng · {dashboard.currentYear}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <ChartSkeleton />
+            ) : dashboard.hasMonthlyTrend ? (
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dashboard.monthlyTrend} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="areaDetected" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="areaHandled" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.32} />
+                        <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#EEF2F7" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} tickLine={false} axisLine={false} width={28} />
+                    <Tooltip content={<DashboardTooltip />} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 6 }} />
+                    <Area type="monotone" dataKey="detected" name="Khiếm khuyết phát hiện" stroke="#F59E0B" strokeWidth={2.5} fill="url(#areaDetected)" dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                    <Area type="monotone" dataKey="handled" name="Đã xử lý" stroke="#7C3AED" strokeWidth={2.5} fill="url(#areaHandled)" dot={{ r: 2.5 }} activeDot={{ r: 5 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <EmptyPanel text={`Chưa có dữ liệu khiếm khuyết / xử lý trong năm ${dashboard.currentYear}`} />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Activity className="h-4 w-4 text-cyan-600" />
+              Lượt sửa chữa theo năm
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <ChartSkeleton />
+            ) : dashboard.yearlyTrend.length ? (
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dashboard.yearlyTrend} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="areaYear" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0EA5E9" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#0EA5E9" stopOpacity={0.03} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#EEF2F7" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} tickLine={false} axisLine={false} width={28} />
+                    <Tooltip content={<DashboardTooltip />} />
+                    <Area type="monotone" dataKey="repairs" name="Lượt sửa chữa" stroke="#0EA5E9" strokeWidth={2.5} fill="url(#areaYear)" dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <EmptyPanel text="Chưa có lịch sử sửa chữa" />
             )}
           </CardContent>
         </Card>

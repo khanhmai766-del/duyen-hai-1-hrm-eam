@@ -114,6 +114,7 @@ export function useCheckInOrg() {
       positionLabel: string;
       hours?: number;
       swap?: boolean;
+      swapNote?: string; // ghi chú trực đổi ca (đổi với ai, kíp/ca nào)
       userId?: string; // admin/Trưởng ca assigning another user (the "Thêm" picker)
     }) => apiMutate("/api/shifts/assign", "POST", body),
     onSuccess: () => {
