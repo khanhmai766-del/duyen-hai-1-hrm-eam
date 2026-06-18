@@ -107,7 +107,8 @@ export async function POST(req: NextRequest) {
     });
 
     // Record the attendance (hours + swap) for the target user on this shift.
-    const note = `${body.hours ?? 8}h${body.swap ? " · trực đổi ca" : ""}`;
+    const swapNote = typeof body.swapNote === "string" ? body.swapNote.trim() : "";
+    const note = `${body.hours ?? 8}h${body.swap ? ` · trực đổi ca${swapNote ? `: ${swapNote}` : ""}` : ""}`;
     const existingCheckIn = await prisma.checkIn.findFirst({ where: { shiftId: shift.id, userId: targetUserId } });
     if (existingCheckIn) {
       await prisma.checkIn.update({

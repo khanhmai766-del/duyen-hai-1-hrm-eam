@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check } from "lucide-react";
+import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { ORG_CHIEF, ORG_LEADS, ORG_SEAT_TITLES, type OrgTone } from "@/lib/org-template";
 import { normalizeText } from "@/lib/nav";
 import { cn, initials } from "@/lib/utils";
-import type { ShiftAssignmentWithUser } from "@/types";
+import type { ShiftAssignmentWithUser, CheckInWithUser } from "@/types";
 
 const HOURS_OPTIONS = [4, 6, 8, 10, 12];
 
@@ -106,6 +106,7 @@ export default function OrgChartPage() {
   const { data, isLoading } = useShift({ date, shiftType, unit });
   const shift = data?.data;
   const assignments = (shift?.assignments ?? []) as ShiftAssignmentWithUser[];
+  const checkIns = shift?.checkIns ?? [];
   const approved = assignments.filter((a) => a.isApproved).length;
 
   // Whether the logged-in user already has a seat in this shift → toggles the
@@ -229,7 +230,7 @@ export default function OrgChartPage() {
             </div>
           </div>
           <div className="flex-1 text-[1.05rem]">
-            <OrgTemplateChart assignments={assignments} />
+            <OrgTemplateChart assignments={assignments} checkIns={checkIns} />
           </div>
         </div>
       )}
@@ -295,7 +296,7 @@ export default function OrgChartPage() {
         </div>
       </Card>
 
-      {isLoading ? <CardSkeleton /> : <OrgTemplateChart assignments={assignments} />}
+      {isLoading ? <CardSkeleton /> : <OrgTemplateChart assignments={assignments} checkIns={checkIns} />}
     </div>
   );
 }
@@ -326,6 +327,7 @@ function CheckInDialog({
   const [position, setPosition] = React.useState("");
   const [hours, setHours] = React.useState(8);
   const [swap, setSwap] = React.useState(false);
+  const [swapNote, setSwapNote] = React.useState("");
 
   // Default to the seat matching the user's chức danh, else the first seat.
   React.useEffect(() => {
@@ -334,6 +336,7 @@ function CheckInDialog({
       setPosition(positions.includes(own) ? own : positions[0]);
       setHours(8);
       setSwap(false);
+      setSwapNote("");
     }
   }, [open, me?.position, session?.user?.position, positions]);
 
@@ -343,7 +346,7 @@ function CheckInDialog({
   async function save() {
     if (!position) return toast.error("Vui lòng chọn cương vị");
     try {
-      await checkIn.mutateAsync({ date, shiftType, unit, positionLabel: position, hours, swap });
+      await checkIn.mutateAsync({ date, shiftType, unit, positionLabel: position, hours, swap, swapNote: swap ? swapNote : "" });
       toast.success(`Đã điểm danh: ${position}`);
       onOpenChange(false);
     } catch (e) {
@@ -401,6 +404,16 @@ function CheckInDialog({
               ))}
             </div>
           </Row>
+
+          {swap && (
+            <Row label="Ghi chú trực đổi ca">
+              <Input
+                value={swapNote}
+                onChange={(e) => setSwapNote(e.target.value)}
+                placeholder="Ghi chú đổi ca với ai, kíp nào - vào đây"
+              />
+            </Row>
+          )}
 
           <Row label="Vận hành viên">
             <span className="text-sm font-medium text-ink">{session?.user?.name ?? "—"}</span>
@@ -976,7 +989,7 @@ const TONE_STYLES: Record<OrgTone | "chief", { bar: string; cell: string; title:
   green: { bar: "bg-green-50 border-green-200", cell: "bg-green-50/50 border-green-200", title: "text-green-700", block: "bg-green-50/30", filled: "border-emerald-300 shadow-[0_10px_24px_-10px_rgba(16,185,129,0.5)]" },
 };
 
-function OrgTemplateChart({ assignments }: { assignments: ShiftAssignmentWithUser[] }) {
+function OrgTemplateChart({ assignments, checkIns }: { assignments: ShiftAssignmentWithUser[]; checkIns?: CheckInWithUser[] }) {
   // Group occupants by the exact seat title they checked into.
   const byTitle = React.useMemo(() => {
     const m = new Map<string, ShiftAssignmentWithUser[]>();
@@ -987,6 +1000,22 @@ function OrgTemplateChart({ assignments }: { assignments: ShiftAssignmentWithUse
     });
     return m;
   }, [assignments]);
+
+  // VHV trực đổi ca: lấy từ check-in có ghi chú "trực đổi ca" (kèm ghi chú đổi với ai/kíp nào).
+  const swapRows = React.useMemo(() => {
+    const seatByUser = new Map(assignments.map((a) => [a.userId, a.positionLabel]));
+    return (checkIns ?? [])
+      .filter((c) => /trực đổi ca/i.test(c.note ?? ""))
+      .map((c) => {
+        const match = (c.note ?? "").match(/trực đổi ca:\s*(.+)$/i);
+        return {
+          id: c.id,
+          name: c.user?.name ?? "—",
+          seat: seatByUser.get(c.userId) ?? "",
+          note: match ? match[1].trim() : "",
+        };
+      });
+  }, [assignments, checkIns]);
 
   return (
     <div className="space-y-4 overflow-x-auto rounded-xl border border-border bg-white p-4">
@@ -1021,6 +1050,24 @@ function OrgTemplateChart({ assignments }: { assignments: ShiftAssignmentWithUse
         <span className="font-semibold text-ink">Màu đen</span> = đã được duyệt;{" "}
         <span className="font-semibold text-warning">Họ &amp; tên màu cam</span> = chưa được duyệt.
       </div>
+
+      {/* VHV trực đổi ca */}
+      {swapRows.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700">
+            <Repeat className="h-3.5 w-3.5" /> VHV trực đổi ca
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {swapRows.map((r) => (
+              <div key={r.id} className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs shadow-sm">
+                <span className="font-semibold text-ink">{r.name}</span>
+                {r.seat && <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">{r.seat}</span>}
+                {r.note && <span className="text-muted-foreground">· {r.note}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

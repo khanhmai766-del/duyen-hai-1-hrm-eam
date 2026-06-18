@@ -35,7 +35,7 @@ import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_UNITS, can } from "@/lib/constants";
+import { DEFECT_UNITS, can, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
@@ -47,7 +47,8 @@ const PAGE_SIZES = [10, 25, 50, 100];
 export function DefectHistoryTab({ role }: { role?: string }) {
   const canManage = can(role, "manageDefect"); // ADMIN + SUPERVISOR + TECHNICIAN
   const canDelete = can(role, "approveRepair"); // ADMIN + SUPERVISOR
-  const positions = usePositions();
+  // Loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên khỏi bộ lọc cương vị.
+  const positions = usePositions().filter(isSelectableManagingPosition);
   const { data: devicesData } = useDevices({});
   const deviceNameByCode = React.useMemo(
     () => new Map((devicesData?.data ?? []).map((d) => [d.code, d.name])),
