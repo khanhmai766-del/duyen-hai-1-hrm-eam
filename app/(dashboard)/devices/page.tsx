@@ -14,6 +14,11 @@ import {
   QrCode,
   Eye,
   Trash2,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   FileSpreadsheet,
   ShieldAlert,
   UserCog,
@@ -50,6 +55,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
 import { can } from "@/lib/constants";
 import { formatDate, cn } from "@/lib/utils";
@@ -245,6 +258,39 @@ function TableView({
   onQr: (d: DeviceListItem) => void;
   onDelete: (d: DeviceListItem) => void;
 }) {
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
+  const positionOptions = React.useMemo(
+    () =>
+      Array.from(new Set(devices.map((device) => device.managingPosition).filter(Boolean) as string[])).sort((a, b) =>
+        a.localeCompare(b, "vi")
+      ),
+    [devices]
+  );
+  const filteredDevices = React.useMemo(
+    () => (positionFilter === "ALL" ? devices : devices.filter((device) => device.managingPosition === positionFilter)),
+    [devices, positionFilter]
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
+  const firstShown = filteredDevices.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, filteredDevices.length);
+  const pagedDevices = filteredDevices.slice((page - 1) * pageSize, page * pageSize);
+
+  React.useEffect(() => {
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [totalPages]);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [filteredDevices, pageSize]);
+
+  React.useEffect(() => {
+    if (positionFilter !== "ALL" && !positionOptions.includes(positionFilter)) {
+      setPositionFilter("ALL");
+    }
+  }, [positionFilter, positionOptions]);
+
   return (
     <Card className="overflow-hidden">
       <div className="overflow-x-auto">
@@ -254,13 +300,57 @@ function TableView({
               <TableHead className="text-center">Mã</TableHead>
               <TableHead className="text-center">Tên thiết bị</TableHead>
               <TableHead className="text-center">Hệ thống</TableHead>
-              <TableHead className="text-center">Cương vị quản lý</TableHead>
+              <TableHead className="w-[170px] text-center">
+                <div className="inline-flex h-8 items-center justify-center gap-1">
+                  <span className="whitespace-nowrap">Cương vị quản lý</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-6 w-6 rounded-full border border-transparent text-muted-foreground transition-colors hover:border-blue-100 hover:bg-blue-50 hover:text-blue-700",
+                          positionFilter !== "ALL" && "border-blue-200 bg-blue-50 text-blue-700 shadow-sm shadow-blue-100"
+                        )}
+                        title="Lọc theo cương vị quản lý"
+                        aria-label="Lọc theo cương vị quản lý"
+                      >
+                        <Filter className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Cương vị quản lý</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        className={cn("justify-between text-sm", positionFilter === "ALL" && "bg-blue-50 text-blue-700")}
+                        onClick={() => setPositionFilter("ALL")}
+                      >
+                        <span>Tất cả cương vị</span>
+                        {positionFilter === "ALL" && <span className="text-xs font-bold">✓</span>}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <div className="max-h-64 overflow-y-auto">
+                        {positionOptions.map((position) => (
+                          <DropdownMenuItem
+                            key={position}
+                            className={cn("justify-between gap-3 text-sm", positionFilter === position && "bg-blue-50 text-blue-700")}
+                            onClick={() => setPositionFilter(position)}
+                          >
+                            <span className="truncate">{position}</span>
+                            {positionFilter === position && <span className="text-xs font-bold">✓</span>}
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </TableHead>
               <TableHead className="text-center">Hình ảnh</TableHead>
               <TableHead className="text-center">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {devices.map((d) => (
+            {pagedDevices.map((d) => (
               <TableRow key={d.id}>
                 <TableCell className="text-center font-mono text-xs font-medium text-navy">{d.code}</TableCell>
                 <TableCell className="text-center font-medium">{d.name}</TableCell>
@@ -294,10 +384,69 @@ function TableView({
           </TableBody>
         </Table>
       </div>
+      <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          Hiển thị {firstShown}-{lastShown} trong tổng số {filteredDevices.length} bản ghi
+          {positionFilter !== "ALL" && (
+            <span className="ml-2 inline-flex max-w-[160px] align-middle rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+              <span className="truncate">{positionFilter}</span>
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <span>Hiển thị</span>
+          <select
+            value={pageSize}
+            onChange={(event) => setPageSize(Number(event.target.value))}
+            className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink shadow-none"
+            aria-label="Số dòng hiển thị"
+          >
+            {[10, 20, 50].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <span>dòng</span>
+          <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
+          <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} />
+          <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">
+            {page}/{totalPages}
+          </span>
+          <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} />
+          <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
+        </div>
+      </div>
     </Card>
   );
 }
 
+function PageButton({
+  icon: Icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="h-8 w-8 rounded-lg disabled:cursor-not-allowed disabled:opacity-45"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
+  );
+}
 function DetailView({ devices, onQr }: { devices: DeviceListItem[]; onQr: (d: DeviceListItem) => void }) {
   return (
     <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 [&>*]:mb-4">

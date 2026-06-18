@@ -7,10 +7,7 @@ export const dynamic = "force-dynamic";
 // và tổng người dùng. Chỉ trả về số đếm, không lộ dữ liệu chi tiết.
 export async function GET() {
   return handle(async () => {
-    const [devices, users] = await Promise.all([
-      prisma.device.count(),
-      prisma.user.count(),
-    ]);
-    return ok({ devices, users });
+    const devices = await prisma.device.count();
+    return ok({ devices });
   });
 }

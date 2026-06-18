@@ -41,7 +41,7 @@ import { useDefects } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { useMaterials } from "@/hooks/useMaterials";
 import { useReplacements } from "@/hooks/useReplacements";
-import { daysUntilDue, replacementDueStatus } from "@/lib/constants";
+import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
 import { cn, formatDate } from "@/lib/utils";
 
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
@@ -65,6 +65,8 @@ export default function ReportsPage() {
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
   const [systemPositionFilter, setSystemPositionFilter] = React.useState("ALL");
+  const [trendRequestFilter, setTrendRequestFilter] = React.useState("ALL");
+  const [repairYearFilter, setRepairYearFilter] = React.useState(() => String(new Date().getFullYear()));
 
   const dateRange = React.useMemo(() => makeDateRange(from, to), [from, to]);
   const devicesQuery = useDevices({});
@@ -208,12 +210,16 @@ export default function ReportsPage() {
     // Xu hướng theo tháng (năm hiện tại): khiếm khuyết phát hiện vs lượt xử lý.
     const currentYear = new Date().getFullYear();
     const monthlyTrend = Array.from({ length: 12 }, (_, i) => ({ month: `Th${i + 1}`, detected: 0, handled: 0 }));
-    defects.forEach((defect) => {
+    const trendDefects =
+      trendRequestFilter === "ALL" ? defects : defects.filter((defect) => defect.requestType === trendRequestFilter);
+    const trendDefectHistory =
+      trendRequestFilter === "ALL" ? defectHistory : defectHistory.filter((row) => row.requestType === trendRequestFilter);
+    trendDefects.forEach((defect) => {
       const raw = defect.detectedAt ?? defect.createdAt;
       const date = raw ? new Date(raw) : null;
       if (date && !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear) monthlyTrend[date.getMonth()].detected += 1;
     });
-    defectHistory.forEach((row) => {
+    trendDefectHistory.forEach((row) => {
       const date = row.performedAt ? new Date(row.performedAt) : null;
       if (date && !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear) monthlyTrend[date.getMonth()].handled += 1;
     });
@@ -225,9 +231,13 @@ export default function ReportsPage() {
       const date = row.performedAt ? new Date(row.performedAt) : null;
       if (date && !Number.isNaN(date.getTime())) yearMap.set(date.getFullYear(), (yearMap.get(date.getFullYear()) ?? 0) + 1);
     });
-    const yearlyTrend = Array.from(yearMap.entries())
-      .map(([year, repairs]) => ({ year: String(year), repairs }))
-      .sort((a, b) => Number(a.year) - Number(b.year));
+    const selectedRepairYear = Number(repairYearFilter) || currentYear;
+    const repairYearOptions = Array.from(new Set([currentYear, selectedRepairYear, ...Array.from(yearMap.keys())]))
+      .filter((year) => Number.isFinite(year))
+      .sort((a, b) => b - a)
+      .map(String);
+    const selectedYearRepairs = yearMap.get(selectedRepairYear) ?? 0;
+    const yearlyTrend = selectedYearRepairs > 0 ? [{ year: String(selectedRepairYear), repairs: selectedYearRepairs }] : [];
 
     return {
       systems,
@@ -246,9 +256,10 @@ export default function ReportsPage() {
       currentYear,
       monthlyTrend,
       hasMonthlyTrend,
+      repairYearOptions,
       yearlyTrend,
     };
-  }, [dateRange, defectHistory, defects, devices, materials, replacements, systemPositionFilter]);
+  }, [dateRange, defectHistory, defects, devices, materials, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
 
   return (
     <div className="space-y-5 print:space-y-4">
@@ -372,7 +383,7 @@ export default function ReportsPage() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <Layers3 className="h-4 w-4 text-teal-600" />
               Phân bổ thiết bị theo cương vị
@@ -411,11 +422,27 @@ export default function ReportsPage() {
       {/* Xu hướng theo thời gian — biểu đồ vùng (area) */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <TrendingUp className="h-4 w-4 text-violet-600" />
               Xu hướng khiếm khuyết &amp; xử lý theo tháng · {dashboard.currentYear}
             </CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="whitespace-nowrap text-xs font-semibold text-muted-foreground">Yêu cầu</span>
+              <Select value={trendRequestFilter} onValueChange={setTrendRequestFilter}>
+                <SelectTrigger className="h-8 w-[150px] rounded-lg bg-white text-xs shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
+                  {DEFECT_REQUEST_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -451,11 +478,23 @@ export default function ReportsPage() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <Activity className="h-4 w-4 text-cyan-600" />
               Lượt sửa chữa theo năm
             </CardTitle>
+            <Select value={repairYearFilter} onValueChange={setRepairYearFilter}>
+              <SelectTrigger className="h-8 w-[112px] rounded-lg bg-white text-xs shadow-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {dashboard.repairYearOptions.map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardHeader>
           <CardContent>
             {isLoading ? (

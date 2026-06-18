@@ -18,7 +18,7 @@ import { DefectForm } from "@/components/defects/defect-form";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_STATUS, DEFECT_SEVERITY, DEFECT_REQUEST_TYPES, can } from "@/lib/constants";
+import { DEFECT_STATUS, DEFECT_SEVERITY, DEFECT_REQUEST_TYPES, can, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
@@ -32,8 +32,9 @@ export default function DefectsPage() {
   const del = useDeleteDefect();
   const allDefects = data?.data ?? [];
 
-  // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng).
-  const positions = usePositions();
+  // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng);
+  // loại Quản đốc / Phó quản đốc / Kỹ thuật viên / Thống kê khỏi bộ lọc.
+  const positions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
   const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2">("ALL");
