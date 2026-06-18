@@ -36,7 +36,7 @@ function LoginInner() {
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
   const [biometricSupported, setBiometricSupported] = React.useState(false);
-  const [stats, setStats] = React.useState<{ devices: number; users: number } | null>(null);
+  const [stats, setStats] = React.useState<{ devices: number } | null>(null);
 
   React.useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -209,8 +209,8 @@ function LoginInner() {
             Giám sát ca kíp
           </div>
           <div>
-            <div className="text-2xl font-bold text-white">{stats ? stats.users : "—"}</div>
-            Người dùng
+            <div className="text-2xl font-bold text-white">5</div>
+            Ca/ Kíp vận hành
           </div>
         </div>
       </div>

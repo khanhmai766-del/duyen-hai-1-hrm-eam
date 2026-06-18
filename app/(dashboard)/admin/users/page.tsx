@@ -4,7 +4,7 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, ShieldAlert, History, Pencil, Trash2, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, History, Pencil, Plus, Search, ShieldAlert, Trash2, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -38,6 +38,8 @@ export default function AdminUsersPage() {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
   const [form, setForm] = React.useState({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
@@ -60,7 +62,19 @@ export default function AdminUsersPage() {
       (!nq || normalizeText(`${u.name} ${u.employeeId}`).includes(nq)) &&
       (positionFilter === "ALL" || u.position === positionFilter)
   );
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const firstShown = filteredUsers.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, filteredUsers.length);
+  const pagedUsers = filteredUsers.slice((page - 1) * pageSize, page * pageSize);
   const auditRows = (audit.data?.data ?? []).slice(0, 20);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [search, positionFilter, pageSize]);
+
+  React.useEffect(() => {
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [totalPages]);
 
   async function createUser() {
     if (!form.name || !form.email || !form.employeeId) return toast.error("Nhập đủ thông tin bắt buộc");
@@ -134,7 +148,7 @@ export default function AdminUsersPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {filteredUsers.map((u) => (
+              {pagedUsers.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell>
                     <div className="mx-auto flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-navy text-sm font-semibold text-white ring-1 ring-border">
@@ -205,6 +219,34 @@ export default function AdminUsersPage() {
               ))}
             </TableBody>
           </Table>
+          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              Hiển thị {firstShown}-{lastShown} trong tổng số {filteredUsers.length} bản ghi
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <span>Hiển thị</span>
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink shadow-none"
+                aria-label="Số dòng hiển thị"
+              >
+                {[10, 20, 50].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+              <span>dòng</span>
+              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
+              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} />
+              <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">
+                {page}/{totalPages}
+              </span>
+              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} />
+              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
+            </div>
+          </div>
         </Card>
       )}
 
@@ -292,6 +334,33 @@ export default function AdminUsersPage() {
         }}
       />
     </div>
+  );
+}
+
+function PageButton({
+  icon: Icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="h-8 w-8 rounded-lg disabled:cursor-not-allowed disabled:opacity-45"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
   );
 }
 
