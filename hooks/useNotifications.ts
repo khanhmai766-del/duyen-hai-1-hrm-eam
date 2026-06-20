@@ -3,6 +3,7 @@
 import { Megaphone, type LucideIcon } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
+import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 
 export interface Notice {
   id: string;
@@ -22,11 +23,12 @@ export interface Notice {
 export function useNotifications() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
+  const exemptFromReadConfirm = isAnnouncementReadExemptPosition(session?.user?.position);
   const announcements = useAnnouncements();
 
   const loading = announcements.isLoading;
 
-  const notices: Notice[] = (announcements.data?.data ?? [])
+  const notices: Notice[] = exemptFromReadConfirm ? [] : (announcements.data?.data ?? [])
     .filter((a) => !myId || !a.reads.some((r) => r.userId === myId))
     .slice()
     .sort((x, y) => Number(y.pinned) - Number(x.pinned) || +new Date(y.createdAt) - +new Date(x.createdAt))
