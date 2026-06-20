@@ -203,12 +203,13 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-          <Table className="min-w-[950px] table-fixed">
+          <Table className="min-w-[1130px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[210px] text-center">Số yêu cầu</TableHead>
-                <TableHead className="w-[90px] text-center">Tổ máy</TableHead>
+                <TableHead className="w-[160px] text-center">Số yêu cầu</TableHead>
+                <TableHead className="w-[80px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
                 <TableHead className="w-[180px] text-center">Cương vị</TableHead>
+                <TableHead className="w-[240px] text-center">Nội dung</TableHead>
                 <TableHead className="w-[90px] text-center">Mức độ</TableHead>
                 <TableHead className="w-[140px] text-center">Tình trạng</TableHead>
                 <TableHead className="w-[120px] text-center">Phát hiện</TableHead>
@@ -248,6 +249,9 @@ export default function DefectsPage() {
                       <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
                       </TableCell>
+                      <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
+                        <div className="truncate" title={d.content ?? undefined}>{d.content || "—"}</div>
+                      </TableCell>
                       <TableCell className="px-3 py-3 text-center">
                         {d.severity ? (
                           <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
@@ -274,7 +278,7 @@ export default function DefectsPage() {
                     </TableRow>
                     {expanded && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={8} className="px-6 py-4">
+                        <TableCell colSpan={9} className="px-6 py-4">
                           <DefectExpandedDetails defect={d} />
                         </TableCell>
                       </TableRow>

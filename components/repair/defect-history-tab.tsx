@@ -39,7 +39,7 @@ import { DEFECT_UNITS, can, isSelectableManagingPosition } from "@/lib/constants
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
-type SortKey = "workOrderNumber" | "performedAt" | "unit" | "system" | "device" | "createdBy";
+type SortKey = "workOrderNumber" | "performedAt" | "unit" | "content" | "system" | "device" | "createdBy";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -221,12 +221,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-          <Table className="min-w-[980px] table-fixed">
+          <Table className="min-w-[1050px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[230px] text-center"><SortHeader label="Số phiếu công tác" sortKey="workOrderNumber" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[110px] text-center"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[240px] text-center"><SortHeader label="Nội dung thực hiện" sortKey="content" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[130px] text-center"><SortHeader label="Ngày thực hiện" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[86px] text-center"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[150px] text-center"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[190px] text-center"><SortHeader label="Tên thiết bị" sortKey="device" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[130px] text-center"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
@@ -246,8 +246,8 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                   return (
                     <React.Fragment key={r.id}>
                       <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : r.id)}>
-                        <TableCell className="px-3 py-3 align-middle">
-                          <div className="flex items-start gap-2.5">
+                        <TableCell className="whitespace-nowrap px-3 py-3 text-[13px] font-semibold text-ink">
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -255,24 +255,20 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                                 setExpandedId(expanded ? null : r.id);
                               }}
                               className={cn(
-                                "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
+                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
                                 expanded ? "bg-rose-500" : "bg-emerald-500"
                               )}
                               title={expanded ? "Thu gọn" : "Mở chi tiết"}
                             >
                               {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                             </button>
-                            <div className="min-w-0 leading-tight">
-                              <div className="truncate text-[13px] font-semibold text-ink" title={r.workOrderNumber ?? undefined}>{r.workOrderNumber || "—"}</div>
-                              <div className="mt-0.5 flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
-                                {r.requestType && <span className="whitespace-nowrap text-[10.5px] text-muted-foreground">PCT: {r.requestType}</span>}
-                                {r.requestNumber && <span className="whitespace-nowrap text-[10.5px] text-muted-foreground">YC: {r.requestNumber}</span>}
-                              </div>
-                            </div>
+                            <span>{r.unit}</span>
                           </div>
                         </TableCell>
+                        <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
+                          <div className="truncate" title={r.content ?? undefined}>{r.content || "—"}</div>
+                        </TableCell>
                         <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] text-muted-foreground">{formatDate(r.performedAt)}</TableCell>
-                        <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] font-semibold text-ink">{r.unit}</TableCell>
                         <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
                           <div className="truncate" title={r.system ?? undefined}>{r.system ?? "—"}</div>
                         </TableCell>
@@ -401,6 +397,7 @@ function sortValue(row: DefectHistoryItem, key: SortKey, deviceNameByCode: Map<s
   if (key === "createdBy") return row.createdBy?.name ?? "";
   if (key === "workOrderNumber") return row.workOrderNumber ?? "";
   if (key === "unit") return row.unit ?? "";
+  if (key === "content") return row.content ?? "";
   if (key === "system") return row.system ?? "";
   return deviceNameByCode.get(row.device ?? "") ?? row.device ?? "";
 }
@@ -464,6 +461,14 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
   return (
     <div className="max-w-[760px] space-y-2 px-1 py-1 text-[13px] leading-5">
       <DetailLine label="Số Phiếu Công Tác" value={row.workOrderNumber || "—"} />
+        {(row.requestType || row.requestNumber) && (
+          <DetailLine
+            label="Loại / Số yêu cầu"
+            value={[row.requestType ? `PCT: ${row.requestType}` : null, row.requestNumber ? `YC: ${row.requestNumber}` : null]
+              .filter(Boolean)
+              .join("   ·   ")}
+          />
+        )}
         <DetailLine label="Nội dung thực hiện" value={row.content || "—"} multiline />
         <DetailLine label="Kết quả thực hiện" value={row.result || "—"} multiline />
       <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">

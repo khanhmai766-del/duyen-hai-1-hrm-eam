@@ -101,6 +101,12 @@ export default function ReportsPage() {
     const openDefects = defects.filter((defect) => defect.status !== "DA_XU_LY");
     const urgentDefects = openDefects.filter((defect) => defect.severity === "1" || defect.severity === "2");
     const totalMaterialQuantity = materials.reduce((sum, material) => sum + Number(material.quantity || 0), 0);
+    // Số cương vị (chức vụ quản lý) xuất hiện trong danh mục vật tư — lấy từ thiết bị liên kết.
+    const materialPositions = unique(
+      materials
+        .flatMap((material) => (material.deviceMaterials ?? []).map((dm) => dm.device?.managingPosition))
+        .filter(Boolean) as string[]
+    );
 
     const dueGroups = replacements.reduce(
       (acc, item) => {
@@ -245,6 +251,7 @@ export default function ReportsPage() {
       openDefects,
       urgentDefects,
       totalMaterialQuantity,
+      materialPositionCount: materialPositions.length,
       dueGroups,
       systemRows,
       positionRows,
@@ -330,7 +337,7 @@ export default function ReportsPage() {
           icon={PackageCheck}
           label="Số lượng vật tư"
           value={materials.length}
-          detail={`${dashboard.totalMaterialQuantity} tổng số lượng tồn kho`}
+          detail={`${dashboard.materialPositionCount} cương vị quản lý`}
           tone="green"
           loading={isLoading}
         />
