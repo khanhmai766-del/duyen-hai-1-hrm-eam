@@ -56,6 +56,9 @@ const CLASSIFICATIONS = ["Vận hành", "An toàn vệ sinh lao động"];
 const ORDER_AUTHORITIES = ["BGĐ", "LĐPX"] as const;
 type OrderAuthority = (typeof ORDER_AUTHORITIES)[number];
 
+// Cấp BGĐ ra lệnh: danh sách cố định. LĐPX lấy động từ DS Quản đốc / Phó quản đốc.
+const BGD_ORDERERS = ["Phó Giám Đốc Quản Lý Vận Hành", "Giám Đốc"];
+
 function splitOrderedBy(value?: string | null): { orderAuthority: OrderAuthority; orderedBy: string } {
   const trimmed = (value ?? "").trim();
   const match = trimmed.match(/^(BGĐ|LĐPX)(?:\s*-\s*(.*))?$/);
@@ -82,9 +85,9 @@ export default function NotificationsPage() {
 
   const { data: annData, isLoading: annLoading } = useAnnouncements();
   const announcements = annData?.data ?? [];
-  // Người có thể "ra lệnh": Quản đốc / Phó quản đốc.
   const { data: usersData } = useUsers();
   const allUsers = usersData?.data ?? [];
+  // Người ra lệnh cấp LĐPX: các Quản đốc / Phó quản đốc trong hệ thống.
   const managers = allUsers.filter((u) => (u.position ?? "").toLowerCase().includes("quản đốc"));
   // "Tất cả user" để tính đã đọc/chưa đọc = toàn bộ nhân sự đang hoạt động.
   const activeUsers = allUsers.filter((u) => u.isActive && !isAnnouncementReadExemptPosition(u.position));
@@ -104,6 +107,24 @@ export default function NotificationsPage() {
   const [readersOf, setReadersOf] = React.useState<Announcement | null>(null);
   const [form, setForm] = React.useState(EMPTY_FORM);
   const pending = create.isPending || update.isPending;
+
+  // Danh sách "Theo lệnh" theo cấp lệnh: BGĐ cố định, LĐPX lấy từ Quản đốc / Phó QĐ.
+  // Giữ lại giá trị cũ (vd dữ liệu cũ) nếu không nằm trong danh sách chuẩn.
+  const ordererOptions = React.useMemo(() => {
+    const base =
+      form.orderAuthority === "BGĐ"
+        ? BGD_ORDERERS.map((t) => ({ value: t, label: t }))
+        : managers.map((u) => ({ value: u.name, label: `${u.name}${u.position ? ` · ${u.position}` : ""}` }));
+    return form.orderedBy && !base.some((o) => o.value === form.orderedBy)
+      ? [...base, { value: form.orderedBy, label: form.orderedBy }]
+      : base;
+  }, [form.orderAuthority, form.orderedBy, managers]);
+  function setOrderAuthority(v: OrderAuthority) {
+    setForm((f) => {
+      const valid = v === "BGĐ" ? BGD_ORDERERS : managers.map((u) => u.name);
+      return { ...f, orderAuthority: v, orderedBy: valid.includes(f.orderedBy) ? f.orderedBy : "" };
+    });
+  }
 
   async function confirmRead(a: Announcement) {
     try {
@@ -446,11 +467,11 @@ export default function NotificationsPage() {
                   value={form.orderedBy || NO_ORDERER}
                   onValueChange={(v) => setForm({ ...form, orderedBy: v === NO_ORDERER ? "" : v })}
                 >
-                  <SelectTrigger><SelectValue placeholder="Chọn Quản đốc / Phó quản đốc" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Chọn người ra lệnh" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_ORDERER}>— Không chỉ định —</SelectItem>
-                    {managers.map((u) => (
-                      <SelectItem key={u.id} value={u.name}>{u.name} · {u.position}</SelectItem>
+                    {ordererOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -459,7 +480,7 @@ export default function NotificationsPage() {
                 <Label className="mb-1.5 block">Cấp lệnh</Label>
                 <Select
                   value={form.orderAuthority}
-                  onValueChange={(v) => setForm({ ...form, orderAuthority: v as OrderAuthority })}
+                  onValueChange={(v) => setOrderAuthority(v as OrderAuthority)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
