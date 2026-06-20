@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useAnnouncements";
 import { formatDate, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 
 /** Ensure an outbound link has a scheme so it opens correctly in a new tab. */
 function normalizeUrl(u: string) {
@@ -43,6 +44,7 @@ const EMPTY_FORM = {
   body: "",
   pinned: false,
   orderedBy: "",
+  orderAuthority: "LĐPX",
   linkUrl: "",
   fileUrl: "",
   fileName: "",
@@ -51,12 +53,30 @@ const EMPTY_FORM = {
 const NO_ORDERER = "__none__";
 const NO_CLASSIFICATION = "__none__";
 const CLASSIFICATIONS = ["Vận hành", "An toàn vệ sinh lao động"];
+const ORDER_AUTHORITIES = ["BGĐ", "LĐPX"] as const;
+type OrderAuthority = (typeof ORDER_AUTHORITIES)[number];
+
+function splitOrderedBy(value?: string | null): { orderAuthority: OrderAuthority; orderedBy: string } {
+  const trimmed = (value ?? "").trim();
+  const match = trimmed.match(/^(BGĐ|LĐPX)(?:\s*-\s*(.*))?$/);
+  if (!match) return { orderAuthority: "LĐPX", orderedBy: trimmed };
+  return { orderAuthority: match[1] as OrderAuthority, orderedBy: (match[2] ?? "").trim() };
+}
+
+function joinOrderedBy(orderAuthority: string, orderedBy: string) {
+  const authority = ORDER_AUTHORITIES.includes(orderAuthority as OrderAuthority)
+    ? (orderAuthority as OrderAuthority)
+    : "LĐPX";
+  const name = orderedBy.trim();
+  return name ? `${authority} - ${name}` : authority;
+}
 
 export default function NotificationsPage() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
+  const exemptFromReadConfirm = isAnnouncementReadExemptPosition(session?.user?.position);
   // ADMIN & Trưởng ca (SUPERVISOR) xem được ai đã/chưa đọc mệnh lệnh.
   const isManager = role === "ADMIN" || role === "SUPERVISOR";
 
@@ -67,7 +87,8 @@ export default function NotificationsPage() {
   const allUsers = usersData?.data ?? [];
   const managers = allUsers.filter((u) => (u.position ?? "").toLowerCase().includes("quản đốc"));
   // "Tất cả user" để tính đã đọc/chưa đọc = toàn bộ nhân sự đang hoạt động.
-  const activeUsers = allUsers.filter((u) => u.isActive);
+  const activeUsers = allUsers.filter((u) => u.isActive && !isAnnouncementReadExemptPosition(u.position));
+  const accountableUserIds = React.useMemo(() => new Set(activeUsers.map((u) => u.id)), [activeUsers]);
   const bulletins = announcements.filter((a) => a.category !== "ORDER");
 
   const create = useCreateAnnouncement();
@@ -118,6 +139,7 @@ export default function NotificationsPage() {
     setDialogOpen(true);
   }
   function openEdit(a: Announcement) {
+    const order = splitOrderedBy(a.orderedBy);
     setEditing(a);
     setForm({
       category: a.category,
@@ -126,7 +148,8 @@ export default function NotificationsPage() {
       title: a.title,
       body: a.body,
       pinned: a.pinned,
-      orderedBy: a.orderedBy ?? "",
+      orderedBy: order.orderedBy,
+      orderAuthority: order.orderAuthority,
       linkUrl: a.linkUrl ?? "",
       fileUrl: a.fileUrl ?? "",
       fileName: a.fileName ?? "",
@@ -151,12 +174,17 @@ export default function NotificationsPage() {
   }
   async function submit() {
     if (!form.title.trim() || !form.body.trim()) return toast.error("Nhập tiêu đề và nội dung");
+    const { orderAuthority, ...restForm } = form;
+    const payload = {
+      ...restForm,
+      orderedBy: joinOrderedBy(orderAuthority, form.orderedBy),
+    };
     try {
       if (editing) {
-        await update.mutateAsync({ id: editing.id, ...form });
+        await update.mutateAsync({ id: editing.id, ...payload });
         toast.success(`Đã cập nhật ${noun}`);
       } else {
-        await create.mutateAsync(form);
+        await create.mutateAsync(payload);
         toast.success(`Đã đăng ${noun}`);
       }
       setDialogOpen(false);
@@ -177,9 +205,10 @@ export default function NotificationsPage() {
 
   /** A single admin post card (bảng tin or mệnh lệnh). */
   function PostCard({ a }: { a: Announcement }) {
-    const readUserIds = new Set(a.reads.map((r) => r.userId));
+    const trackedReads = a.reads.filter((r) => accountableUserIds.has(r.userId));
+    const readUserIds = new Set(trackedReads.map((r) => r.userId));
     const readByMe = myId ? readUserIds.has(myId) : false;
-    const readCount = a.reads.length;
+    const readCount = trackedReads.length;
     const total = activeUsers.length;
     const allRead = total > 0 && readCount >= total;
     return (
@@ -262,6 +291,10 @@ export default function NotificationsPage() {
             {allRead ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
                 <CheckCircle2 className="h-4 w-4" /> Tất cả đã xác nhận đọc
+              </span>
+            ) : exemptFromReadConfirm ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Check className="h-4 w-4" /> Không thuộc diện cần xác nhận đọc
               </span>
             ) : readByMe ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -406,20 +439,36 @@ export default function NotificationsPage() {
               <Label className="mb-1.5 block">Nội dung</Label>
               <Textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={5} placeholder={`Nội dung ${noun}...`} />
             </div>
-            <div>
-              <Label className="mb-1.5 block">Theo lệnh</Label>
-              <Select
-                value={form.orderedBy || NO_ORDERER}
-                onValueChange={(v) => setForm({ ...form, orderedBy: v === NO_ORDERER ? "" : v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Chọn Quản đốc / Phó quản đốc" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_ORDERER}>— Không chỉ định —</SelectItem>
-                  {managers.map((u) => (
-                    <SelectItem key={u.id} value={u.name}>{u.name} · {u.position}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+              <div>
+                <Label className="mb-1.5 block">Theo lệnh</Label>
+                <Select
+                  value={form.orderedBy || NO_ORDERER}
+                  onValueChange={(v) => setForm({ ...form, orderedBy: v === NO_ORDERER ? "" : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Chọn Quản đốc / Phó quản đốc" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_ORDERER}>— Không chỉ định —</SelectItem>
+                    {managers.map((u) => (
+                      <SelectItem key={u.id} value={u.name}>{u.name} · {u.position}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">Cấp lệnh</Label>
+                <Select
+                  value={form.orderAuthority}
+                  onValueChange={(v) => setForm({ ...form, orderAuthority: v as OrderAuthority })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ORDER_AUTHORITIES.map((authority) => (
+                      <SelectItem key={authority} value={authority}>{authority}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {!isOrder && (
               <>
@@ -479,20 +528,21 @@ export default function NotificationsPage() {
             <DialogTitle>Tình trạng xác nhận đọc</DialogTitle>
           </DialogHeader>
           {readersOf && (() => {
-            const readSet = new Set(readersOf.reads.map((r) => r.userId));
+            const trackedReads = readersOf.reads.filter((r) => accountableUserIds.has(r.userId));
+            const readSet = new Set(trackedReads.map((r) => r.userId));
             const unread = activeUsers.filter((u) => !readSet.has(u.id));
             return (
               <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
                 <div className="truncate text-sm font-semibold text-ink">{readersOf.title}</div>
                 <div>
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                    <Check className="h-4 w-4" /> Đã đọc ({readersOf.reads.length})
+                    <Check className="h-4 w-4" /> Đã đọc ({trackedReads.length})
                   </div>
-                  {readersOf.reads.length === 0 ? (
+                  {trackedReads.length === 0 ? (
                     <p className="text-xs text-muted-foreground">Chưa có ai xác nhận đọc.</p>
                   ) : (
                     <ul className="space-y-1">
-                      {readersOf.reads.map((r) => (
+                      {trackedReads.map((r) => (
                         <li key={r.userId} className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-sm dark:bg-emerald-500/10">
                           <span className="min-w-0 truncate">
                             <span className="font-medium text-ink">{r.user.name}</span>

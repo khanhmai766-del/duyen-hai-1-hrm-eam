@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,8 +63,10 @@ export async function POST(req: NextRequest) {
         createdById: user.id,
       },
     });
-    // Người đăng được coi là đã đọc.
-    await prisma.announcementRead.create({ data: { announcementId: item.id, userId: user.id } });
+    // Người đăng chỉ được ghi nhận đã đọc nếu thuộc nhóm phải xác nhận đọc.
+    if (!isAnnouncementReadExemptPosition(user.position)) {
+      await prisma.announcementRead.create({ data: { announcementId: item.id, userId: user.id } });
+    }
     await audit(user.id, "CREATE_ANNOUNCEMENT", "Announcement", item.id, title.trim());
     return ok(item);
   });

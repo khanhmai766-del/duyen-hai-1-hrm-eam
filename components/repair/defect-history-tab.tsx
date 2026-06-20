@@ -152,12 +152,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         )}
       </PageHeader>
 
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <div className="flex items-center gap-2">
+      <Card className="p-3 md:p-4">
+        <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1 xl:overflow-visible xl:pb-0">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Cương vị:</span>
             <Select value={filters.system ?? "ALL"} onValueChange={(v) => setFilter("system", v === "ALL" ? "" : v)}>
-              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-40 md:w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả</SelectItem>
                 {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -165,9 +165,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
             </Select>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
-            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
+            <div className="inline-flex shrink-0 rounded-lg border border-border bg-white p-0.5">
               {(["ALL", ...DEFECT_UNITS] as const).map((u) => {
                 const active = (filters.unit ?? "") === (u === "ALL" ? "" : u);
                 return (
@@ -176,7 +176,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                     type="button"
                     onClick={() => setFilter("unit", u === "ALL" ? "" : u)}
                     className={cn(
-                      "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                       active ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
                     )}
                   >
@@ -187,18 +187,18 @@ export function DefectHistoryTab({ role }: { role?: string }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-x-5 gap-y-3">
+          <div className="flex shrink-0 items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Từ ngày:</span>
-              <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-9 w-44 bg-white" />
+              <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-9 w-40 bg-white" />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Đến ngày:</span>
-              <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-9 w-44 bg-white" />
+              <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-9 w-40 bg-white" />
             </div>
           </div>
 
-          <div className="relative ml-auto w-full sm:w-72">
+          <div className="relative ml-auto w-64 min-w-64 shrink-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={tableSearch}

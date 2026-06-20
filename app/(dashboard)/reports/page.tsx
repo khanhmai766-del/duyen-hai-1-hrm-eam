@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Area,
   AreaChart,
@@ -316,6 +317,7 @@ export default function ReportsPage() {
           detail={`${dashboard.systems.length} hệ thống · ${dashboard.positions.length} cương vị`}
           tone="blue"
           loading={isLoading}
+          href="/devices"
         />
         <MetricCard
           icon={AlertTriangle}
@@ -324,6 +326,7 @@ export default function ReportsPage() {
           detail={`${dashboard.urgentDefects.length} mức ưu tiên cao`}
           tone="red"
           loading={isLoading}
+          href="/defects"
         />
         <MetricCard
           icon={CalendarClock}
@@ -332,6 +335,7 @@ export default function ReportsPage() {
           detail={`${dashboard.dueGroups.OVERDUE} quá hạn · ${dashboard.dueGroups.DUE_SOON} sắp đến hạn`}
           tone="amber"
           loading={isLoading}
+          href="/replacements"
         />
         <MetricCard
           icon={PackageCheck}
@@ -340,6 +344,7 @@ export default function ReportsPage() {
           detail={`${dashboard.materialPositionCount} cương vị quản lý`}
           tone="green"
           loading={isLoading}
+          href="/materials"
         />
       </div>
 
@@ -612,6 +617,7 @@ function MetricCard({
   detail,
   tone,
   loading,
+  href,
 }: {
   icon: React.ElementType;
   label: string;
@@ -619,6 +625,7 @@ function MetricCard({
   detail: string;
   tone: "blue" | "red" | "amber" | "green";
   loading?: boolean;
+  href?: string;
 }) {
   const toneClass = {
     blue: {
@@ -647,8 +654,14 @@ function MetricCard({
     },
   }[tone];
 
-  return (
-    <Card className={cn("group relative overflow-hidden border-0 bg-gradient-to-br shadow-xl ring-1 transition-transform duration-200 hover:-translate-y-0.5", toneClass.card)}>
+  const card = (
+    <Card
+      className={cn(
+        "group relative h-full overflow-hidden border-0 bg-gradient-to-br shadow-xl ring-1 transition-all duration-200",
+        href && "cursor-pointer hover:-translate-y-0.5 hover:shadow-2xl",
+        toneClass.card
+      )}
+    >
       <div className={cn("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", toneClass.line)} />
       <div className="pointer-events-none absolute inset-0 opacity-[0.18] dark:opacity-[0.22]">
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(30,58,95,0.18)_1px,transparent_1px),linear-gradient(0deg,rgba(30,58,95,0.14)_1px,transparent_1px)] bg-[size:28px_28px]" />
@@ -671,6 +684,18 @@ function MetricCard({
         <div className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">{detail}</div>
       </CardContent>
     </Card>
+  );
+
+  if (!href) return card;
+
+  return (
+    <Link
+      href={href}
+      aria-label={`Mở ${label}`}
+      className="block h-full rounded-[8px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+    >
+      {card}
+    </Link>
   );
 }
 
