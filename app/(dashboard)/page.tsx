@@ -217,7 +217,7 @@ function SupportLinksCard() {
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent">
                 {i + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{l.name}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium uppercase text-ink">{l.name}</span>
               <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
             </a>
           ))
