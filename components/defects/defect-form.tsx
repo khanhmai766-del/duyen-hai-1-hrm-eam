@@ -20,9 +20,11 @@ import {
   DEFECT_REQUEST_TYPES,
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
+  DEFECT_COMMON_POSITIONS,
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/nav";
 
 function toDateInput(v: Date | string | null | undefined): string {
   if (!v) return "";
@@ -68,6 +70,21 @@ export function DefectForm({
   });
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+  // Khi Tổ máy = COMMON, chỉ cho chọn các cương vị dùng chung (so khớp không dấu/hoa-thường).
+  const commonAllowed = React.useMemo(() => new Set(DEFECT_COMMON_POSITIONS.map(normalizeText)), []);
+  const visiblePositions = React.useMemo(
+    () => (form.unit === "COMMON" ? positions.filter((p) => commonAllowed.has(normalizeText(p))) : positions),
+    [positions, form.unit, commonAllowed]
+  );
+  // Chọn tổ máy; nếu chuyển sang COMMON mà cương vị hiện tại không thuộc nhóm dùng chung thì bỏ chọn.
+  function selectUnit(u: string) {
+    setForm((f) => {
+      if (u === "COMMON" && f.system && !commonAllowed.has(normalizeText(f.system))) {
+        return { ...f, unit: u, system: "", device: "" };
+      }
+      return { ...f, unit: u };
+    });
   }
   const filteredDevices = React.useMemo(
     () => devices.filter((d) => !form.system || d.managingPosition === form.system),
@@ -137,12 +154,12 @@ export function DefectForm({
         {step === 1 ? (
           <div className="mx-auto max-w-xl space-y-5">
             <Row label="Tổ Máy *">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {DEFECT_UNITS.map((u) => (
                   <button
                     key={u}
                     type="button"
-                    onClick={() => set("unit", u)}
+                    onClick={() => selectUnit(u)}
                     className={cn(
                       "h-10 rounded-md border text-sm font-medium transition-colors",
                       form.unit === u ? "border-navy bg-navy text-white" : "border-input bg-muted/40 text-ink hover:border-accent"
@@ -158,7 +175,7 @@ export function DefectForm({
                 <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                  {positions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {visiblePositions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Row>

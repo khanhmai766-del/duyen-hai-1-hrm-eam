@@ -37,7 +37,7 @@ export default function DefectsPage() {
   const positions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
-  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2">("ALL");
+  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">("ALL");
   const [requestFilter, setRequestFilter] = React.useState("ALL");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const defects = allDefects.filter(
@@ -119,7 +119,7 @@ export default function DefectsPage() {
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
             <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
-              {(["ALL", "S1", "S2"] as const).map((u) => (
+              {(["ALL", "S1", "S2", "COMMON"] as const).map((u) => (
                 <button
                   key={u}
                   type="button"
