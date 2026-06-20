@@ -111,7 +111,26 @@ export const CHECKIN_STATUS = {
 
 // ---- Khiếm khuyết thiết bị (Defect) ----
 
-export const DEFECT_UNITS = ["S1", "S2"] as const;
+export const DEFECT_UNITS = ["S1", "S2", "COMMON"] as const;
+
+/**
+ * Khi Tổ máy = COMMON, dropdown Cương vị chỉ cho chọn các cương vị dùng chung này.
+ * So khớp với danh sách cương vị thực tế bằng normalizeText (bỏ qua hoa/thường & dấu),
+ * nên chính tả ở đây chỉ mang tính tham chiếu.
+ */
+export const DEFECT_COMMON_POSITIONS = [
+  "Khí Nén - Nhà Dầu",
+  "NH3 - Lò hơi phụ",
+  "Thiết bị đo lường điều khiển",
+  "Trạm bơm nước thô",
+  "TK Lò máy",
+  "XLNT",
+  "XLN hỗn hợp",
+  "Trưởng ca",
+  "Trưởng kíp điện",
+  "Trực chính Điện",
+  "Trực phụ điện",
+] as const;
 
 /** Mức độ khiếm khuyết (1–4). */
 export const DEFECT_SEVERITY = {
