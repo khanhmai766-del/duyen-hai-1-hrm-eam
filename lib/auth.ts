@@ -5,7 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { readLoginToken } from "@/lib/webauthn";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  // Phiên hết hạn sau 30 phút không hoạt động (cookie tự hết hạn khi tab đóng/mất mạng);
+  // updateAge để phiên "trượt" làm mới khi người dùng còn đang thao tác (xem refetchInterval ở SessionProvider).
+  session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 5 * 60 },
   trustHost: true,
   pages: {
     signIn: "/login",
