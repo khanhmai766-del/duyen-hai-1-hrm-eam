@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { ExportButton } from "@/components/shared/export-button";
 import { toast } from "sonner";
 import { useUsers } from "@/hooks/useUsers";
 import {
@@ -153,6 +154,21 @@ export default function NotificationsPage() {
   );
   const isOrder = form.category === "ORDER";
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
+
+  // Dữ liệu xuất PDF/Excel — theo đúng danh sách mệnh lệnh đang hiển thị.
+  const exportRows = filtered.map((a, i) => {
+    const { orderAuthority, orderedBy } = a.orderedBy
+      ? splitOrderedBy(a.orderedBy)
+      : { orderAuthority: "", orderedBy: "" };
+    return {
+      stt: a.stt || String(i + 1),
+      title: a.title,
+      classification: a.classification ?? "",
+      orderAuthority,
+      orderedBy,
+      content: a.body,
+    };
+  });
 
   function openCreate(category: AnnouncementCategory) {
     setEditing(null);
@@ -373,8 +389,13 @@ export default function NotificationsPage() {
               {CLASSIFICATIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
+          {isManager && (
+            <div className="ml-auto">
+              <ExportButton rows={exportRows} filename="menh-lenh-san-xuat" title="Mệnh lệnh sản xuất" />
+            </div>
+          )}
           {isAdmin && (
-            <Button size="sm" className="ml-auto shrink-0" onClick={() => openCreate("BULLETIN")}>
+            <Button size="sm" className={cn("shrink-0", !isManager && "ml-auto")} onClick={() => openCreate("BULLETIN")}>
               <Plus className="h-4 w-4" /> Đăng mệnh lệnh
             </Button>
           )}
