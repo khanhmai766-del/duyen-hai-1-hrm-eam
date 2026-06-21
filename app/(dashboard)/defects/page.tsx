@@ -203,11 +203,10 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-          <Table className="min-w-[1130px] table-fixed">
+          <Table className="min-w-[1040px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[160px] text-center">Số yêu cầu</TableHead>
-                <TableHead className="w-[80px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
+                <TableHead className="w-[96px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
                 <TableHead className="w-[180px] text-center">Cương vị</TableHead>
                 <TableHead className="w-[240px] text-center">Nội dung</TableHead>
                 <TableHead className="w-[90px] text-center">Mức độ</TableHead>
@@ -223,8 +222,8 @@ export default function DefectsPage() {
                 return (
                   <React.Fragment key={d.id}>
                     <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : d.id)}>
-                      <TableCell className="px-3 py-3 align-middle text-center">
-                        <div className="flex items-start justify-center gap-2.5">
+                      <TableCell className="whitespace-nowrap px-3 py-3 text-[13px] font-semibold text-ink">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -232,20 +231,16 @@ export default function DefectsPage() {
                               setExpandedId(expanded ? null : d.id);
                             }}
                             className={cn(
-                              "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
+                              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
                               expanded ? "bg-rose-500" : "bg-emerald-500"
                             )}
                             title={expanded ? "Thu gọn" : "Mở chi tiết"}
                           >
                             {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                           </button>
-                          <div className="min-w-0 leading-tight">
-                            <div className="truncate text-[13px] font-semibold text-ink">{d.requestNumber || "—"}</div>
-                            {d.requestType && <div className="mt-0.5 text-[10.5px] text-muted-foreground">YC: {d.requestType}</div>}
-                          </div>
+                          <span>{d.unit}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] font-semibold text-ink">{d.unit}</TableCell>
                       <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
                       </TableCell>
@@ -278,7 +273,7 @@ export default function DefectsPage() {
                     </TableRow>
                     {expanded && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={9} className="px-6 py-4">
+                        <TableCell colSpan={8} className="px-6 py-4">
                           <DefectExpandedDetails defect={d} />
                         </TableCell>
                       </TableRow>
