@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus, Search } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -14,13 +14,16 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DefectForm } from "@/components/defects/defect-form";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_STATUS, DEFECT_SEVERITY, DEFECT_REQUEST_TYPES, can, isSelectableManagingPosition } from "@/lib/constants";
+import { DEFECT_STATUS, DEFECT_STATUS_ORDER, DEFECT_SEVERITY, DEFECT_SEVERITY_ORDER, DEFECT_REQUEST_TYPES, can, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+
+const PAGE_SIZES = [10, 25, 50, 100];
 
 export default function DefectsPage() {
   const { data: session } = useSession();
@@ -46,12 +49,19 @@ export default function DefectsPage() {
       (requestFilter === "ALL" || d.requestType === requestFilter) &&
       (positionFilter === "ALL" || d.system === positionFilter)
   );
-  // Lọc theo tình trạng khi bấm card KPI ("ALL" = tồn đọng = mọi tình trạng).
+  // Lọc theo tình trạng (card KPI hoặc bộ lọc trên cột) và mức độ (bộ lọc trên cột).
   const [statusFilter, setStatusFilter] = React.useState("ALL");
-  const displayedDefects = statusFilter === "ALL" ? defects : defects.filter((d) => d.status === statusFilter);
+  const [severityFilter, setSeverityFilter] = React.useState("ALL");
+  const displayedDefects = defects.filter(
+    (d) =>
+      (statusFilter === "ALL" || d.status === statusFilter) &&
+      (severityFilter === "ALL" || d.severity === severityFilter)
+  );
 
   // Tìm nội dung trong bảng (không ảnh hưởng KPI) — so khớp không dấu.
   const [tableSearch, setTableSearch] = React.useState("");
+  const [pageSize, setPageSize] = React.useState(25);
+  const [page, setPage] = React.useState(1);
   const searchedDefects = React.useMemo(() => {
     const q = normalizeText(tableSearch.trim());
     if (!q) return displayedDefects;
@@ -60,12 +70,22 @@ export default function DefectsPage() {
     );
   }, [displayedDefects, tableSearch]);
 
-  const isFiltered = unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || tableSearch.trim() !== "";
+  // Phân trang bảng.
+  const totalPages = Math.max(1, Math.ceil(searchedDefects.length / pageSize));
+  const pagedDefects = searchedDefects.slice((page - 1) * pageSize, page * pageSize);
+  const firstShown = searchedDefects.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, searchedDefects.length);
+  React.useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const isFiltered = unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
     setUnitFilter("ALL");
     setRequestFilter("ALL");
     setPositionFilter("ALL");
     setStatusFilter("ALL");
+    setSeverityFilter("ALL");
     setTableSearch("");
   }
 
@@ -88,7 +108,8 @@ export default function DefectsPage() {
   function openEdit(d: DefectItem) { setEditTarget(d); setFormOpen(true); }
   React.useEffect(() => {
     setExpandedId(null);
-  }, [unitFilter, requestFilter, positionFilter, statusFilter, tableSearch]);
+    setPage(1);
+  }, [unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -203,21 +224,35 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-          <Table className="min-w-[1040px] table-fixed">
+          <Table className="min-w-[1100px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[96px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
                 <TableHead className="w-[180px] text-center">Cương vị</TableHead>
                 <TableHead className="w-[240px] text-center">Nội dung</TableHead>
-                <TableHead className="w-[90px] text-center">Mức độ</TableHead>
-                <TableHead className="w-[140px] text-center">Tình trạng</TableHead>
+                <TableHead className="w-[110px] text-center">
+                  <ColumnFilter
+                    label="Mức độ"
+                    value={severityFilter}
+                    options={DEFECT_SEVERITY_ORDER.map((s) => ({ value: s, label: DEFECT_SEVERITY[s] }))}
+                    onChange={setSeverityFilter}
+                  />
+                </TableHead>
+                <TableHead className="w-[150px] text-center">
+                  <ColumnFilter
+                    label="Tình trạng"
+                    value={statusFilter}
+                    options={DEFECT_STATUS_ORDER.map((s) => ({ value: s, label: DEFECT_STATUS[s].label }))}
+                    onChange={setStatusFilter}
+                  />
+                </TableHead>
                 <TableHead className="w-[120px] text-center">Phát hiện</TableHead>
                 <TableHead className="w-[110px] text-center">Người nhập</TableHead>
                 <TableHead className="w-[110px] text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {searchedDefects.map((d) => {
+              {pagedDefects.map((d) => {
                 const expanded = expandedId === d.id;
                 return (
                   <React.Fragment key={d.id}>
@@ -284,6 +319,35 @@ export default function DefectsPage() {
             </TableBody>
           </Table>
           </div>
+          <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <div>
+              Hiển thị {firstShown}-{lastShown} trong tổng số {searchedDefects.length} bản ghi
+              {isFiltered && <span> sau lọc</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink"
+                  aria-label="Số dòng mỗi trang"
+                >
+                  {PAGE_SIZES.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span>dòng</span>
+              </div>
+              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
+              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              <span className="mx-2 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-ink">
+                {page}/{totalPages}
+              </span>
+              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
+              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
+            </div>
+          </div>
         </Card>
       )}
 
@@ -329,6 +393,31 @@ export default function DefectsPage() {
   );
 }
 
+function PageButton({
+  icon: Icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40"
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
 // Màu mức độ khiếm khuyết: 1 đỏ · 2 cam · 3 vàng · 4 xám.
 const SEVERITY_TONE: Record<string, string> = {
   "1": "bg-red-100 text-red-700",
@@ -336,6 +425,67 @@ const SEVERITY_TONE: Record<string, string> = {
   "3": "bg-yellow-100 text-yellow-800",
   "4": "bg-gray-100 text-gray-600",
 };
+
+// Bộ lọc gắn trên tiêu đề cột (nút phễu + danh sách lựa chọn), giống bảng Thiết bị.
+function ColumnFilter({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  const active = value !== "ALL";
+  return (
+    <div className="inline-flex h-8 items-center justify-center gap-1">
+      <span className="whitespace-nowrap">{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-6 w-6 rounded-full border border-transparent text-muted-foreground transition-colors hover:border-blue-100 hover:bg-blue-50 hover:text-blue-700",
+              active && "border-blue-200 bg-blue-50 text-blue-700 shadow-sm shadow-blue-100"
+            )}
+            title={`Lọc theo ${label.toLowerCase()}`}
+            aria-label={`Lọc theo ${label.toLowerCase()}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Filter className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">{label}</DropdownMenuLabel>
+          <DropdownMenuItem
+            className={cn("justify-between text-sm", value === "ALL" && "bg-blue-50 text-blue-700")}
+            onClick={() => onChange("ALL")}
+          >
+            <span>Tất cả</span>
+            {value === "ALL" && <span className="text-xs font-bold">✓</span>}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <div className="max-h-64 overflow-y-auto">
+            {options.map((o) => (
+              <DropdownMenuItem
+                key={o.value}
+                className={cn("justify-between gap-3 text-sm", value === o.value && "bg-blue-50 text-blue-700")}
+                onClick={() => onChange(o.value)}
+              >
+                <span className="truncate">{o.label}</span>
+                {value === o.value && <span className="text-xs font-bold">✓</span>}
+              </DropdownMenuItem>
+            ))}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
   const severity = defect.severity
