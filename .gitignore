@@ -14,11 +14,9 @@ prisma/dev.db
 public/uploads
 
 # Tệp người dùng tải lên & video nền dung lượng lớn (cấp riêng khi triển khai)
-# Giữ riêng các video nền trang đăng nhập (bg*.mp4) để deploy cùng code.
+# Giữ riêng video nền trang đăng nhập (bg.mp4 — đã ghép bg1–bg3) để deploy cùng code.
 public/videos/*
-!public/videos/bg1.mp4
-!public/videos/bg2.mp4
-!public/videos/bg3.mp4
+!public/videos/bg.mp4
 
 # Cấu hình Claude theo máy (không chia sẻ)
 .claude/settings.local.json
