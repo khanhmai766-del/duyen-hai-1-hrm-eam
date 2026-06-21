@@ -64,11 +64,13 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
           onClick={onNavigate}
           aria-label="Về trang chủ"
           className={cn(
-            "group relative flex items-center overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#173b73_0%,#1d6fd6_58%,#f59e0b_135%)] text-white shadow-[0_18px_35px_-22px_rgba(15,23,42,0.9)] ring-1 ring-white/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_40px_-22px_rgba(29,78,216,0.9)] dark:ring-white/10",
-            collapsed ? "h-12 justify-center" : "gap-3 px-3 py-3"
+            "group relative flex items-center overflow-hidden rounded-2xl transition-all duration-200",
+            collapsed
+              ? "h-12 justify-center"
+              : "gap-3 px-3 py-3 bg-[linear-gradient(135deg,#173b73_0%,#1d6fd6_58%,#f59e0b_135%)] text-white shadow-[0_18px_35px_-22px_rgba(15,23,42,0.9)] ring-1 ring-white/70 hover:-translate-y-0.5 hover:shadow-[0_22px_40px_-22px_rgba(29,78,216,0.9)] dark:ring-white/10"
           )}
         >
-          <span className="absolute inset-x-0 top-0 h-1/2 bg-white/12" />
+          {!collapsed && <span className="absolute inset-x-0 top-0 h-1/2 bg-white/12" />}
           <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_20px_-12px_rgba(15,23,42,0.75)] ring-1 ring-white/70 dark:bg-slate-950 dark:ring-sky-300/30">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/4.png" alt="EVNGENCO1" className="h-8 w-8 object-contain" />

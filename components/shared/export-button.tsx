@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { printHtmlReport } from "@/lib/print-report";
 
 interface ExportButtonProps {
   rows: Record<string, unknown>[];
@@ -141,17 +142,11 @@ export function ExportButton({ rows, filename = "bao-cao", title }: ExportButton
   <h1>${escapeHtml(heading)}</h1>
   <div class="meta"><span>Ngày xuất: ${formatDate()}</span><span>Số bản ghi: ${rows.length}</span></div>
   <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
-  <script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 250); });</script>
 </body>
 </html>`;
-    const win = window.open("", "_blank", "noopener,noreferrer");
-    if (!win) {
-      toast.error("Trình duyệt đang chặn cửa sổ in PDF");
-      return;
+    if (!printHtmlReport(report)) {
+      toast.error("Không mở được trình in PDF");
     }
-    win.document.open();
-    win.document.write(report);
-    win.document.close();
   }
 
   return (

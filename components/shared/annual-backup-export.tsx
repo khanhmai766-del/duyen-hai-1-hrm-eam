@@ -6,6 +6,7 @@ import { CalendarDays, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { printHtmlReport } from "@/lib/print-report";
 
 export interface BackupColumn<T> {
   key: string;
@@ -177,17 +178,11 @@ export function AnnualBackupExport<T>({
     <thead><tr>${head}</tr></thead>
     <tbody>${body}</tbody>
   </table>
-  <script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 250); });</script>
 </body>
 </html>`;
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-    if (!reportWindow) {
-      toast.error("Trình duyệt đang chặn cửa sổ in PDF");
-      return;
+    if (!printHtmlReport(doc)) {
+      toast.error("Không mở được trình in PDF");
     }
-    reportWindow.document.open();
-    reportWindow.document.write(doc);
-    reportWindow.document.close();
   }
 
   return (
