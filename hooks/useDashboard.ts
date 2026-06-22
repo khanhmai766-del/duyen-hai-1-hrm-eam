@@ -61,6 +61,15 @@ export function useCreateOperation() {
   });
 }
 
+export function useUpdateOperation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { id: string; type: string; title: string; date: string; note?: string }) =>
+      apiMutate("/api/operations", "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["operations"] }),
+  });
+}
+
 export function useDeleteOperation() {
   const qc = useQueryClient();
   return useMutation({

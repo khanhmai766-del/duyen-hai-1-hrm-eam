@@ -53,6 +53,27 @@ export async function POST(req: NextRequest) {
   });
 }
 
+export async function PUT(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    const body = await req.json();
+    if (!body.id) return fail("Thiếu id");
+    if (!body.title || !body.date || !body.type) return fail("Thiếu loại, tiêu đề hoặc ngày");
+    const event = await prisma.operationEvent.update({
+      where: { id: body.id },
+      data: {
+        type: body.type,
+        title: body.title,
+        date: new Date(body.date),
+        note: body.note || null,
+      },
+    });
+    await audit(user.id, "UPDATE_OPERATION", "OperationEvent", event.id, event.title);
+    return ok(event);
+  });
+}
+
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
