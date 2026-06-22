@@ -24,6 +24,7 @@ import {
   Link2,
   CalendarDays,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
@@ -41,7 +42,7 @@ import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/l
 import { initials, cn } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
-import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useDeleteOperation, type MyDashboard } from "@/hooks/useDashboard";
+import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, type MyDashboard, type OperationEvent } from "@/hooks/useDashboard";
 import { toast } from "sonner";
 
 /** Tracks browser connectivity via `navigator.onLine` + online/offline events.
@@ -606,13 +607,33 @@ function eventDateTone(date: string | Date): keyof typeof EVENT_TONES {
   return "past";
 }
 
+// Định dạng ngày về YYYY-MM-DD theo giờ địa phương cho <input type="date">.
+function toDateInputValue(value: string | Date): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 function OperationInfoCard({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useOperations();
   const create = useCreateOperation();
+  const update = useUpdateOperation();
   const del = useDeleteOperation();
   const [open, setOpen] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({ type: "DRILL_INCIDENT", title: "", date: "", note: "" });
   const events = data?.data ?? [];
+
+  function openCreate() {
+    setEditingId(null);
+    setForm({ type: "DRILL_INCIDENT", title: "", date: "", note: "" });
+    setOpen(true);
+  }
+  function openEdit(ev: OperationEvent) {
+    setEditingId(ev.id);
+    setForm({ type: ev.type, title: ev.title, date: toDateInputValue(ev.date), note: ev.note ?? "" });
+    setOpen(true);
+  }
 
   async function remove(id: string) {
     try {
@@ -626,9 +647,15 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
   async function submit() {
     if (!form.title || !form.date) return toast.error("Nhập tiêu đề và ngày");
     try {
-      await create.mutateAsync(form);
-      toast.success("Đã thêm thông tin vận hành");
+      if (editingId) {
+        await update.mutateAsync({ id: editingId, ...form });
+        toast.success("Đã cập nhật thông tin vận hành");
+      } else {
+        await create.mutateAsync(form);
+        toast.success("Đã thêm thông tin vận hành");
+      }
       setOpen(false);
+      setEditingId(null);
       setForm({ type: "DRILL_INCIDENT", title: "", date: "", note: "" });
     } catch (e) {
       toast.error((e as Error).message);
@@ -640,7 +667,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle>Thông tin nội bộ</CardTitle>
         {canManage && (
-          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+          <Button size="sm" variant="outline" onClick={openCreate}>
             <Plus className="h-4 w-4" /> Thêm
           </Button>
         )}
@@ -676,13 +703,22 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
                     {e.note && <div className="text-xs text-muted-foreground">{e.note}</div>}
                   </div>
                   {canManage && (
-                    <button
-                      onClick={() => remove(e.id)}
-                      title="Xoá"
-                      className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-red-50 hover:text-destructive group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        onClick={() => openEdit(e)}
+                        title="Sửa"
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-ink"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => remove(e.id)}
+                        title="Xoá"
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-red-50 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -694,7 +730,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Thêm thông tin vận hành</DialogTitle>
+            <DialogTitle>{editingId ? "Sửa thông tin vận hành" : "Thêm thông tin vận hành"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -723,8 +759,8 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Huỷ</Button>
-            <Button onClick={submit} disabled={create.isPending}>
-              {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button onClick={submit} disabled={create.isPending || update.isPending}>
+              {(create.isPending || update.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
               Lưu
             </Button>
           </DialogFooter>

@@ -153,13 +153,14 @@ function EditProfileDialog({
   async function save() {
     // Non-admin sends only the limited set; admin sends everything.
     const payload: Record<string, unknown> = {
-      avatarUrl: form.avatarUrl,
       signatureUrl: form.signatureUrl,
       employeeId: form.employeeId,
       phone: form.phone,
       email: form.email,
     };
     if (isAdmin) {
+      // Chỉ quản trị viên mới được thay ảnh đại diện.
+      payload.avatarUrl = form.avatarUrl;
       payload.name = form.name;
       payload.position = form.position;
       payload.department = form.department;
@@ -182,7 +183,21 @@ function EditProfileDialog({
         </DialogHeader>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <EditField label="Hình ảnh" className="sm:col-span-2">
-            <AvatarPicker value={form.avatarUrl} onChange={(v) => set("avatarUrl", v)} name={form.name} />
+            {isAdmin ? (
+              <AvatarPicker value={form.avatarUrl} onChange={(v) => set("avatarUrl", v)} name={form.name} />
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-sm font-semibold text-white ring-1 ring-border">
+                  {form.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={form.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initials(form.name)
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">Chỉ quản trị viên mới được thay ảnh đại diện.</p>
+              </div>
+            )}
           </EditField>
           <EditField label="Mã nhân viên">
             <Input value={form.employeeId} onChange={(e) => set("employeeId", e.target.value)} />

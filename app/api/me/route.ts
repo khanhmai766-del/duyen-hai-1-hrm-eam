@@ -4,9 +4,9 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-// Self-service profile update. Everyone may edit avatar / employeeId / phone /
-// email on their own record; ADMIN may additionally edit name / position /
-// department / role.
+// Self-service profile update. Everyone may edit employeeId / phone / email /
+// signature on their own record; only ADMIN may change the avatar and the
+// name / position / department / role.
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -14,12 +14,13 @@ export async function PUT(req: NextRequest) {
     const isAdmin = user.role === "ADMIN";
 
     const data: Record<string, unknown> = {};
-    if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
     if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
     if (body.phone !== undefined) data.phone = body.phone || null;
     if (body.email) data.email = body.email;
     if (body.employeeId) data.employeeId = body.employeeId;
     if (isAdmin) {
+      // Chỉ quản trị viên mới được thay ảnh đại diện.
+      if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
       if (body.name) data.name = body.name;
       if (body.position !== undefined) data.position = body.position || null;
       if (body.department !== undefined) data.department = body.department || null;
