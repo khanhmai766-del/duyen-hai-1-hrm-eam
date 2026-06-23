@@ -16,6 +16,8 @@ interface ExportButtonProps {
   rows: Record<string, unknown>[];
   filename?: string;
   title?: string;
+  /** Gợi ý độ rộng cột PDF theo đơn vị ch (số ký tự). Cột không khai báo sẽ tự chia phần còn lại. */
+  widths?: Record<string, number>;
 }
 
 const LABELS: Record<string, string> = {
@@ -24,6 +26,8 @@ const LABELS: Record<string, string> = {
   unit: "Tổ máy",
   system: "Hệ thống",
   managingPosition: "Cương vị",
+  cuongVi: "Cương vị",
+  note: "Ghi chú",
   stt: "STT",
   title: "Tiêu đề",
   classification: "Phân loại",
@@ -83,7 +87,7 @@ function escapeHtml(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-export function ExportButton({ rows, filename = "bao-cao", title }: ExportButtonProps) {
+export function ExportButton({ rows, filename = "bao-cao", title, widths }: ExportButtonProps) {
   function assertRows() {
     if (!rows.length) {
       toast.error("Không có dữ liệu để xuất");
@@ -117,6 +121,9 @@ export function ExportButton({ rows, filename = "bao-cao", title }: ExportButton
     if (!assertRows()) return;
     const keys = keysOf(rows);
     const heading = reportTitle(filename, title);
+    const colgroup = keys
+      .map((key) => (widths?.[key] ? `<col style="width:${widths[key]}ch" />` : "<col />"))
+      .join("");
     const head = keys.map((key) => `<th>${escapeHtml(labelFor(key))}</th>`).join("");
     const body = rows
       .map((row) => `<tr>${keys.map((key) => `<td>${escapeHtml(row[key])}</td>`).join("")}</tr>`)
@@ -141,7 +148,7 @@ export function ExportButton({ rows, filename = "bao-cao", title }: ExportButton
 <body>
   <h1>${escapeHtml(heading)}</h1>
   <div class="meta"><span>Ngày xuất: ${formatDate()}</span><span>Số bản ghi: ${rows.length}</span></div>
-  <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+  <table><colgroup>${colgroup}</colgroup><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
 </body>
 </html>`;
     if (!printHtmlReport(report)) {

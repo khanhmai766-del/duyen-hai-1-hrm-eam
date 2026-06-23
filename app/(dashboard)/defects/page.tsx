@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { DefectForm } from "@/components/defects/defect-form";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
+import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_STATUS, DEFECT_STATUS_ORDER, DEFECT_SEVERITY, DEFECT_SEVERITY_ORDER, DEFECT_REQUEST_TYPES, can, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
@@ -34,6 +35,13 @@ export default function DefectsPage() {
   const { data, isLoading } = useDefects();
   const del = useDeleteDefect();
   const allDefects = data?.data ?? [];
+
+  // Tên thiết bị theo mã (để file xuất ghi rõ tên thay vì mã).
+  const { data: devicesData } = useDevices({});
+  const deviceNameByCode = React.useMemo(
+    () => new Map((devicesData?.data ?? []).map((dv) => [dv.code, dv.name])),
+    [devicesData]
+  );
 
   // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Kỹ thuật viên / Thống kê khỏi bộ lọc.
@@ -117,7 +125,7 @@ export default function DefectsPage() {
         <ExportButton
           rows={searchedDefects.map((d) => ({
             unit: d.unit,
-            device: d.device ?? "",
+            device: deviceNameByCode.get(d.device ?? "") ?? d.device ?? "",
             cuongVi: d.system ?? "",
             severity: d.severity ? DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY] : "",
             requestType: d.requestType ?? "",
@@ -125,7 +133,9 @@ export default function DefectsPage() {
             content: d.content ?? "",
             status: DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
             detectedAt: formatDate(d.detectedAt),
+            note: d.note ?? "",
           }))}
+          widths={{ unit: 8, cuongVi: 16, requestNumber: 12, status: 14 }}
           filename="khiem-khuyet-thiet-bi"
         />
         {canManage && (
