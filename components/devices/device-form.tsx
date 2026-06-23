@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDevice, useUpdateDevice } from "@/hooks/useDevices";
+import { useEquipmentTree } from "@/hooks/useEquipment";
+import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { usePositions } from "@/hooks/useUsers";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import type { Device } from "@/types";
@@ -26,11 +28,14 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
   const isEdit = !!device;
   const canEditCode = !isEdit || session?.user?.role === "ADMIN";
   const positions = usePositions().filter(isSelectableManagingPosition);
+  const { data: equipmentTreeData } = useEquipmentTree();
+  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
 
   const [form, setForm] = React.useState({
     code: device?.code ?? "",
     name: device?.name ?? "",
     system: device?.system ?? "",
+    systemSeq: "",
     managingPosition: device?.managingPosition ?? "",
     images: device?.images ?? [],
     attachedInfo: device?.attachedInfo ?? "",
@@ -46,10 +51,13 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
     form.managingPosition && !positions.includes(form.managingPosition)
       ? [form.managingPosition, ...positions]
       : positions;
+  // Seq đang chọn cho ô cây: ưu tiên systemSeq; nếu (sửa) chỉ có tên thì dò seq theo tên.
+  const systemSeqValue =
+    form.systemSeq || (form.system ? equipmentNodes.find((n) => n.name === form.system)?.seq ?? "" : "");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.code.trim() || !form.name.trim()) return toast.error("Nhập Mã và Tên thiết bị");
+    if (!form.code.trim() || !form.name.trim()) return toast.error("Nhập Số thứ tự và Tên thiết bị");
     try {
       const result = isEdit
         ? await update.mutateAsync({ id: device!.id, ...form })
@@ -70,14 +78,17 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Mã thiết bị *">
-            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="ESP-S1-001" />
+          <Field label="Số thứ tự *">
+            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="VD: 1.4.11.2.2" />
           </Field>
           <Field label="Tên thiết bị *">
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} required />
           </Field>
-          <Field label="Hệ thống">
-            <Input value={form.system} onChange={(e) => set("system", e.target.value)} placeholder="VD: Lò hơi, FGD, ESP…" />
+          <Field label="Hệ thống thiết bị">
+            <EquipmentTreePicker
+              value={systemSeqValue}
+              onChange={(node) => setForm((f) => ({ ...f, system: node?.name ?? "", systemSeq: node?.seq ?? "" }))}
+            />
           </Field>
           <Field label="Cương vị quản lý">
             <Select value={form.managingPosition || NONE} onValueChange={(v) => set("managingPosition", v === NONE ? "" : v)}>
@@ -108,7 +119,7 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
                 <QRCodeSVG value={form.code || "—"} size={96} level="M" />
               </div>
               <p className="text-sm text-muted-foreground">
-                Mã QR tự sinh theo Mã thiết bị. Sau khi lưu, QR sẽ liên kết tới trang chi tiết thiết bị.
+                Mã QR tự sinh theo Số thứ tự. Sau khi lưu, QR sẽ liên kết tới trang chi tiết thiết bị.
               </p>
             </div>
           </Field>

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import type { Prisma } from "@prisma/client";
+import { syncDeviceEquipmentNode } from "@/lib/equipment-node-sync";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -56,17 +57,22 @@ export async function POST(req: NextRequest) {
     if (exists) return fail("Mã thiết bị đã tồn tại");
 
     const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
+    const code = String(body.code).trim();
+    const name = String(body.name).trim();
+    const system = body.system?.trim() || null;
+    const systemSeq = typeof body.systemSeq === "string" ? body.systemSeq.trim() : null;
     const device = await prisma.device.create({
       data: {
-        code: body.code,
-        name: body.name,
-        system: body.system?.trim() || null,
+        code,
+        name,
+        system,
         managingPosition: body.managingPosition?.trim() || null,
         images,
         attachedInfo: body.attachedInfo?.trim() || null,
         documentUrl: body.documentUrl?.trim() || null,
       },
     });
+    await syncDeviceEquipmentNode(prisma, { seq: code, parentSeq: systemSeq, name });
     await prisma.device.update({
       where: { id: device.id },
       data: { qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || ""}/public/devices/${device.id}` },
