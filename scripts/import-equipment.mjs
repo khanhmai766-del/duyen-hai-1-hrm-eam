@@ -23,6 +23,22 @@ const parentOf = (seq) => {
   parts.pop();
   return parts.length ? parts.join(".") : null;
 };
+const normalizeEquipmentName = (seq, name) => {
+  if (
+    seq.startsWith("1.4.11.") &&
+    /bunker\s*than/i.test(name) &&
+    /than\s*nguyên|than\s*nguyen/i.test(name)
+  ) {
+    return "Bunker than nguyên";
+  }
+
+  return name;
+};
+
+// Node nhóm cha bổ sung (không có trong file nguồn) — gom các nhánh mồ côi lại.
+const EXTRA_NODES = [
+  { seq: "1.1", name: "HỆ THỐNG XỬ LÝ NƯỚC", drawing: "F4281Z" },
+];
 
 async function main() {
   const buf = readFileSync(file);
@@ -36,7 +52,7 @@ async function main() {
         seq,
         parentSeq: parentOf(seq),
         code: norm(r["Mã thiết bị"]),
-        name: norm(r["Tên thiết bị"]),
+        name: normalizeEquipmentName(seq, norm(r["Tên thiết bị"])),
         kks: norm(r["Mã KKS"]) || null,
         drawing: norm(r["Bản vẽ liên quan"]) || null,
         depth: seq.split(".").length,
@@ -45,6 +61,22 @@ async function main() {
     })
     // Bỏ nhánh "Tổ máy S2" (seq bắt đầu bằng "2").
     .filter((d) => d.seq && d.code && d.seq !== "2" && !d.seq.startsWith("2."));
+
+  // Thêm các node nhóm cha tổng hợp (nếu chưa có trong nguồn).
+  const present = new Set(data.map((d) => d.seq));
+  for (const e of EXTRA_NODES) {
+    if (present.has(e.seq)) continue;
+    data.push({
+      seq: e.seq,
+      parentSeq: parentOf(e.seq),
+      code: e.code ?? "",
+      name: e.name,
+      kks: e.kks ?? null,
+      drawing: e.drawing ?? null,
+      depth: e.seq.split(".").length,
+      sort: -1,
+    });
+  }
 
   console.log(`Đọc ${data.length} dòng từ ${file}`);
 

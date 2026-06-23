@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { syncDeviceEquipmentNode } from "@/lib/equipment-node-sync";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -42,6 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (exists && exists.id !== params.id) return fail("Mã thiết bị đã tồn tại");
     }
     const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : undefined;
+    const systemSeq = typeof body.systemSeq === "string" ? body.systemSeq.trim() : null;
     const device = await prisma.device.update({
       where: { id: params.id },
       data: {
@@ -53,6 +55,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         attachedInfo: body.attachedInfo !== undefined ? body.attachedInfo?.trim() || null : undefined,
         documentUrl: body.documentUrl !== undefined ? body.documentUrl?.trim() || null : undefined,
       },
+    });
+    await syncDeviceEquipmentNode(prisma, {
+      seq: device.code,
+      previousSeq: current.code,
+      parentSeq: systemSeq,
+      name: device.name,
     });
     await audit(user.id, "UPDATE_DEVICE", "Device", device.id, device.code);
     return ok(device);

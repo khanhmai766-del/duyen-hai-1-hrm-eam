@@ -46,16 +46,18 @@ export function EquipmentTreeView() {
     const childrenOf = new Map<string, EquipmentNode[]>();
     const roots: EquipmentNode[] = [];
     for (const n of nodes) {
-      const parts = n.seq.split(".");
-      parts.pop();
-      let parent: string | null = null;
-      while (parts.length) {
-        const p = parts.join(".");
-        if (bySeq.has(p)) {
-          parent = p;
-          break;
-        }
+      let parent: string | null = n.parentSeq && bySeq.has(n.parentSeq) ? n.parentSeq : null;
+      if (!parent) {
+        const parts = n.seq.split(".");
         parts.pop();
+        while (parts.length) {
+          const p = parts.join(".");
+          if (bySeq.has(p)) {
+            parent = p;
+            break;
+          }
+          parts.pop();
+        }
       }
       effParentOf.set(n.seq, parent);
       if (parent) {
@@ -252,7 +254,7 @@ export function EquipmentTreeView() {
         ) : (
           <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
             <Layers className="h-9 w-9 text-muted-foreground/40" />
-            Chọn một thiết bị trong cây để xem chi tiết.
+            Chọn thiết bị trong thư mục để xem chi tiết.
           </div>
         )}
       </Card>

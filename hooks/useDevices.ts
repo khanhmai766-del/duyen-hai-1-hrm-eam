@@ -34,7 +34,10 @@ export function useCreateDevice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: DeviceInput) => apiMutate<Device>("/api/devices", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["devices"] });
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+    },
   });
 }
 
@@ -46,6 +49,7 @@ export function useUpdateDevice() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["devices"] });
       qc.invalidateQueries({ queryKey: ["device", vars.id] });
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
     },
   });
 }
@@ -54,7 +58,10 @@ export function useDeleteDevice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/devices/${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["devices"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["devices"] });
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+    },
   });
 }
 
