@@ -43,7 +43,8 @@ async function main() {
         sort: i,
       };
     })
-    .filter((d) => d.seq && d.code);
+    // Bỏ nhánh "Tổ máy S2" (seq bắt đầu bằng "2").
+    .filter((d) => d.seq && d.code && d.seq !== "2" && !d.seq.startsWith("2."));
 
   console.log(`Đọc ${data.length} dòng từ ${file}`);
 

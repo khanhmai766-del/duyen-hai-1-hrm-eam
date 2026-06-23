@@ -83,7 +83,7 @@ export function EquipmentTreeView() {
     const searchExpanded = new Set<string>();
     let matchCount = 0;
     for (const n of nodes) {
-      const hay = normalizeText([n.seq, n.code, n.name, n.kks].filter(Boolean).join(" "));
+      const hay = normalizeText([n.seq, n.name].filter(Boolean).join(" "));
       if (hay.includes(q)) {
         matchCount++;
         visible.add(n.seq);
@@ -163,7 +163,7 @@ export function EquipmentTreeView() {
               ) : (
                 <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
               )}
-              <span className="min-w-0 flex-1 truncate" title={`${n.name} (${n.code})`}>
+              <span className="min-w-0 flex-1 truncate" title={n.name}>
                 {n.name}
               </span>
               {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kids.length}</span>}
@@ -184,7 +184,7 @@ export function EquipmentTreeView() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm theo tên, mã, KKS, số thứ tự…"
+              placeholder="Tìm theo tên, số thứ tự…"
               className="h-9 pl-9 pr-8"
             />
             {search && (
@@ -308,8 +308,6 @@ function DetailPanel({
       </div>
 
       <div className="space-y-2">
-        <DetailRow label="Mã thiết bị" value={node.code} mono />
-        <DetailRow label="Mã KKS" value={node.kks || "—"} mono={!!node.kks} />
         <DetailRow label="Bản vẽ liên quan" value={node.drawing || "—"} />
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${childCount} thiết bị con` : "Thiết bị"} />
       </div>

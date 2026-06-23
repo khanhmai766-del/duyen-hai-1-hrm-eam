@@ -9,7 +9,7 @@ export async function GET() {
     await requireUser();
     const nodes = await prisma.equipmentNode.findMany({
       orderBy: { sort: "asc" },
-      select: { seq: true, parentSeq: true, code: true, name: true, kks: true, drawing: true, depth: true },
+      select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true },
     });
     return ok(nodes);
   });
