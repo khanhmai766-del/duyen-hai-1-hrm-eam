@@ -448,3 +448,22 @@ model SystemBroadcast {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now())
 }
+
+// Cây danh mục thiết bị (nhập từ DM_ThietBi.xlsx). Phân cấp dựa trên "Số thứ tự"
+// dạng chấm (vd "1.1.1" là cha của "1.1.1.1"). Tách riêng khỏi Device vận hành:
+// khóa duy nhất là `seq` (mã thiết bị `code` có thể trùng giữa các node).
+model EquipmentNode {
+  id        String   @id @default(cuid())
+  seq       String   @unique // số thứ tự, vd "1.1.1.2"
+  parentSeq String? // seq cha (bỏ đoạn cuối); null nếu là gốc
+  code      String // mã thiết bị (KHÔNG duy nhất)
+  name      String // tên thiết bị
+  kks       String? // mã KKS
+  drawing   String? // bản vẽ liên quan
+  depth     Int // số đoạn của seq (1..n)
+  sort      Int // thứ tự ổn định theo file nguồn
+  createdAt DateTime @default(now())
+
+  @@index([parentSeq])
+  @@index([code])
+}
