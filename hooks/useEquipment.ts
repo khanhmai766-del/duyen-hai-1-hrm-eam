@@ -6,9 +6,7 @@ import { apiGet } from "@/lib/fetcher";
 export interface EquipmentNode {
   seq: string;
   parentSeq: string | null;
-  code: string;
   name: string;
-  kks: string | null;
   drawing: string | null;
   depth: number;
 }
