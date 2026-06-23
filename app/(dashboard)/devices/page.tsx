@@ -43,6 +43,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DeviceForm } from "@/components/devices/device-form";
+import { EquipmentTreeView } from "@/components/devices/equipment-tree";
 import { ImportDialog } from "@/components/devices/import-dialog";
 import { QRModal } from "@/components/devices/qr-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,8 +69,9 @@ import { can } from "@/lib/constants";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
 
-type ViewMode = "dashboard" | "table" | "detail" | "form" | "deck";
+type ViewMode = "tree" | "dashboard" | "table" | "detail" | "form" | "deck";
 const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
+  { key: "tree", label: "Cây thiết bị", icon: Network },
   { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { key: "table", label: "Bảng", icon: Table2 },
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
@@ -82,7 +84,7 @@ export default function DevicesPage() {
   const params = useSearchParams();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const view = (params.get("view") as ViewMode) || "table";
+  const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystem = params.get("system") ?? "ALL";
 
@@ -188,7 +190,9 @@ export default function DevicesPage() {
         )}
       </div>
 
-      {view === "form" ? (
+      {view === "tree" ? (
+        <EquipmentTreeView />
+      ) : view === "form" ? (
         isAdmin ? (
           <DeviceForm onDone={() => setView("table")} />
         ) : (
