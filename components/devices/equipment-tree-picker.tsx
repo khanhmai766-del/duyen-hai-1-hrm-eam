@@ -6,6 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
@@ -28,10 +29,12 @@ function compareSeq(a: string, b: string) {
 export function EquipmentTreePicker({
   value,
   onChange,
+  position,
   placeholder = "Chọn thư mục hệ thống",
 }: {
   value: string; // seq đang chọn ("" nếu chưa chọn)
   onChange: (node: EquipmentNode | null) => void;
+  position?: string | null; // cương vị quản lý đang chọn — lọc nhóm hệ thống theo cương vị
   placeholder?: string;
 }) {
   const { data, isLoading } = useEquipmentTree();
@@ -78,6 +81,20 @@ export function EquipmentTreePicker({
   const q = normalizeText(search.trim());
 
   const selectedNode = value ? bySeq.get(value) ?? null : null;
+
+  // Lọc nhóm gốc theo cương vị: tên chứa "COMMON" luôn hiện; chưa chọn cương vị → hiện tất cả;
+  // còn lại chỉ hiện khi cương vị nằm trong danh sách của hệ thống đó.
+  const filteredRoots = React.useMemo(() => {
+    const np = position ? normalizeText(position) : "";
+    return roots.filter((node) => {
+      const name = normalizeText(node.name);
+      if (name.includes("common")) return true;
+      if (!np) return true;
+      const rule = EQUIPMENT_SYSTEM_BY_POSITION.find((r) => name.includes(normalizeText(r.match)));
+      if (!rule) return true;
+      return rule.positions.some((p) => normalizeText(p) === np);
+    });
+  }, [roots, position]);
 
   // Khi mở popup, tự bung đường dẫn tới mục đang chọn để thấy ngay.
   React.useEffect(() => {
@@ -237,7 +254,7 @@ export function EquipmentTreePicker({
           ) : q && matchCount === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">Không tìm thấy thiết bị phù hợp.</div>
           ) : (
-            renderNodes(roots, 0)
+            renderNodes(filteredRoots, 0)
           )}
         </div>
       </PopoverContent>

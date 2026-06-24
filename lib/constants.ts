@@ -132,6 +132,31 @@ export const DEFECT_COMMON_POSITIONS = [
   "Trực phụ điện",
 ] as const;
 
+/**
+ * Lọc "Hệ thống thiết bị" theo "Cương vị quản lý" trong form thiết bị.
+ * - Nhóm gốc tên chứa "COMMON" luôn hiển thị cho mọi cương vị.
+ * - Các nhóm gốc khác chỉ hiện khi cương vị đang chọn nằm trong danh sách tương ứng.
+ * `match` so khớp với TÊN nhóm gốc; cương vị so khớp bằng normalizeText (bỏ qua hoa/thường & dấu).
+ */
+export const EQUIPMENT_SYSTEM_BY_POSITION: { match: string; positions: string[] }[] = [
+  {
+    match: "Lò hơi và thiết bị phụ",
+    positions: ["ESP", "FGD", "Máy nghiền", "Thải xỉ", "Lò phó", "Lò trưởng", "TK Lò máy", "Trưởng ca"],
+  },
+  {
+    match: "Tuabin và thiết bị phụ",
+    positions: ["Trạm bơm tuần hoàn", "Máy phó", "Trợ thủ", "Máy trưởng", "TK Lò máy", "Trưởng ca"],
+  },
+  {
+    match: "Phần điện",
+    positions: ["Trực phụ điện", "Trực chính điện", "Trưởng kíp điện", "Trưởng ca"],
+  },
+  {
+    match: "Hệ thống giám sát và điều khiển",
+    positions: ["Thiết bị đo lường điều khiển", "Trưởng ca"],
+  },
+];
+
 /** Mức độ khiếm khuyết (1–4). */
 export const DEFECT_SEVERITY = {
   "1": "1 - Ảnh hưởng hệ số đáp ứng",

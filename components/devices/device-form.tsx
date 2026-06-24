@@ -87,6 +87,7 @@ export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?
           <Field label="Hệ thống thiết bị">
             <EquipmentTreePicker
               value={systemSeqValue}
+              position={form.managingPosition || null}
               onChange={(node) => setForm((f) => ({ ...f, system: node?.name ?? "", systemSeq: node?.seq ?? "" }))}
             />
           </Field>
