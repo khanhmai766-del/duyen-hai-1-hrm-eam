@@ -71,7 +71,20 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]); // only ADMIN can delete devices
+    const device = await prisma.device.findUnique({ where: { id: params.id }, select: { code: true } });
     await prisma.device.delete({ where: { id: params.id } });
+    // Xóa kèm node trên cây thiết bị nếu node này do đồng bộ khi tạo thiết bị sinh ra
+    // (deviceSynced) và là node lá (không có con) — không đụng node danh mục nhập từ Excel.
+    if (device) {
+      const node = await prisma.equipmentNode.findUnique({
+        where: { seq: device.code },
+        select: { id: true, seq: true, deviceSynced: true },
+      });
+      if (node?.deviceSynced) {
+        const childCount = await prisma.equipmentNode.count({ where: { parentSeq: node.seq } });
+        if (childCount === 0) await prisma.equipmentNode.delete({ where: { id: node.id } });
+      }
+    }
     await audit(user.id, "DELETE_DEVICE", "Device", params.id);
     return ok({ id: params.id });
   });

@@ -39,6 +39,8 @@ export async function syncDeviceEquipmentNode(
     }
   }
 
+  // update KHÔNG đụng deviceSynced: node danh mục gốc (đã có sẵn) vẫn giữ deviceSynced=false,
+  // chỉ node được sinh ra lần đầu mới được đánh dấu là do đồng bộ thiết bị tạo.
   await prisma.equipmentNode.upsert({
     where: { seq },
     update: data,
@@ -47,6 +49,7 @@ export async function syncDeviceEquipmentNode(
       drawing: null,
       kks: null,
       sort: 999999,
+      deviceSynced: true,
     },
   });
 }

@@ -468,6 +468,9 @@ model EquipmentNode {
   attachedInfo String? // thông tin thêm
   documentUrl  String? // tài liệu đính kèm (link)
   imageUrl     String? // 1 hình ảnh (base64 hoặc URL)
+  // true nếu node do đồng bộ khi TẠO MỚI thiết bị sinh ra (seq không có trong danh mục gốc).
+  // Dùng để xóa node theo khi xóa Device, mà không đụng node danh mục nhập từ Excel.
+  deviceSynced Boolean @default(false)
   createdAt DateTime @default(now())
 
   @@index([parentSeq])
