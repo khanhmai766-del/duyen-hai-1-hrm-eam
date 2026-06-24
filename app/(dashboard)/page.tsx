@@ -128,7 +128,7 @@ export default function DashboardPage() {
             value={m?.workingDays ?? 0}
             icon={CalendarCheck}
             tint="green"
-            hint="Đã được Trưởng ca xác nhận"
+            hint="Quy đổi 8 giờ = 1 ngày công"
             bgCover="/brand/ngay-cong.jpg"
           />
         )}

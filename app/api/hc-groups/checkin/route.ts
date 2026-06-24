@@ -8,9 +8,11 @@ const MANAGER = ["ADMIN", "SUPERVISOR"];
 const HC_SELF_PERIODS = {
   FULL_DAY: { label: "Cả ngày", hours: 8 },
   MORNING: { label: "Buổi sáng", hours: 4 },
+  MORNING_OFF: { label: "Ra ca sáng", hours: 3 },
   AFTERNOON: { label: "Buổi chiều", hours: 4 },
 } as const;
 const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính - ${p.label}`);
+const DEFAULT_REGISTER_NOTE = "Chờ phân công";
 
 function dayRange(date: string | Date) {
   const base = new Date(date);
@@ -19,6 +21,22 @@ function dayRange(date: string | Date) {
   const end = new Date(base);
   end.setHours(23, 59, 59, 999);
   return { start, end };
+}
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function addCalendarDays(from: Date, days: number) {
+  const d = startOfDay(from);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function canRegisterForDate(target: Date, now = new Date()) {
+  return startOfDay(target).getTime() >= addCalendarDays(now, 2).getTime();
 }
 
 /** POST — current user checks themselves into a group, or registers HC directly. */
@@ -44,6 +62,34 @@ export async function POST(req: NextRequest) {
       if (Number.isNaN(start.getTime())) return fail("Ngày không hợp lệ");
       const hasNote = Object.prototype.hasOwnProperty.call(body, "note");
       const cleanNote = note?.trim() || null;
+      const registerNote = cleanNote ?? DEFAULT_REGISTER_NOTE;
+      const existingRegistration = await prisma.hcCheckIn.findFirst({
+        where: {
+          userId: user.id,
+          isRegistered: true,
+          group: {
+            date: { gte: start, lte: end },
+            content: { in: HC_SELF_CONTENTS },
+          },
+        },
+        include: { group: true },
+      });
+      if (!hasNote && existingRegistration) return fail("Ngày này đã có đăng ký đi hành chính, chỉ được cập nhật nội dung công việc");
+      if (hasNote) {
+        if (!existingRegistration && !canRegisterForDate(start)) {
+          return fail("Phải đăng ký trước tối thiểu 2 ngày");
+        }
+      }
+
+      if (existingRegistration) {
+        const checkIn = await prisma.hcCheckIn.update({
+          where: { id: existingRegistration.id },
+          data: { note: registerNote },
+        });
+        await audit(user.id, "HC_REGISTER_UPDATE", "HcCheckIn", checkIn.id, "Cập nhật nội dung đăng ký đi hành chính");
+        return ok(checkIn);
+      }
+
       const group =
         (await prisma.hcGroup.findFirst({
           where: {
@@ -73,14 +119,14 @@ export async function POST(req: NextRequest) {
 
       const checkIn = await prisma.hcCheckIn.upsert({
         where: { groupId_userId: { groupId: group.id, userId: user.id } },
-        update: { hours: option.hours, isApproved: true, ...(hasNote ? { note: cleanNote, isRegistered: true } : {}) },
+        update: { hours: option.hours, isApproved: !hasNote, ...(hasNote ? { note: registerNote, isRegistered: true } : {}) },
         create: {
           groupId: group.id,
           userId: user.id,
           hours: option.hours,
-          isApproved: true,
+          isApproved: !hasNote,
           isRegistered: hasNote,
-          ...(hasNote ? { note: cleanNote } : {}),
+          ...(hasNote ? { note: registerNote } : {}),
         },
       });
       await audit(
@@ -112,8 +158,23 @@ export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const groupId = req.nextUrl.searchParams.get("groupId");
+    const checkInId = req.nextUrl.searchParams.get("checkInId");
+    if (checkInId) {
+      requireRole(user, MANAGER);
+      const checkIn = await prisma.hcCheckIn.findUnique({
+        where: { id: checkInId },
+        include: { user: { select: { name: true } } },
+      });
+      if (!checkIn) return fail("Không tìm thấy đăng ký", 404);
+      if (!checkIn.isRegistered) return fail("Chỉ được hủy đăng ký đi hành chính");
+      await prisma.hcCheckIn.delete({ where: { id: checkInId } });
+      await audit(user.id, "HC_REGISTER_CANCEL", "HcCheckIn", checkInId, `Hủy đăng ký đi hành chính của ${checkIn.user.name}`);
+      return ok({ removed: 1 });
+    }
     if (!groupId) return fail("Thiếu nhóm");
-    await prisma.hcCheckIn.deleteMany({ where: { groupId, userId: user.id } });
+    const checkIn = await prisma.hcCheckIn.findUnique({ where: { groupId_userId: { groupId, userId: user.id } } });
+    if (checkIn?.isRegistered) return fail("Đăng ký đi hành chính không được tự hủy");
+    await prisma.hcCheckIn.deleteMany({ where: { groupId, userId: user.id, isRegistered: false } });
     await audit(user.id, "HC_RECALL", "HcCheckIn", groupId, "Thu hồi điểm danh hành chính");
     return ok({ removed: 1 });
   });
@@ -124,13 +185,29 @@ export async function DELETE(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, MANAGER);
     const body = await req.json();
-    const { groupId, ids } = body as { groupId: string; ids?: string[] };
+    const { groupId, ids, note, action } = body as { groupId: string; ids?: string[]; note?: string; action?: "APPROVE" | "NOTE" };
     if (!groupId) return fail("Thiếu nhóm");
     const where =
       Array.isArray(ids) && ids.length ? { id: { in: ids }, groupId } : { groupId };
-    const res = await prisma.hcCheckIn.updateMany({ where, data: { isApproved: true } });
+    const cleanNote = note?.trim();
+    if (action === "NOTE") {
+      if (!Array.isArray(ids) || ids.length !== 1) return fail("Thiếu đăng ký cần cập nhật");
+      const target = await prisma.hcCheckIn.findFirst({ where: { id: ids[0], groupId, isRegistered: true } });
+      if (!target) return fail("Không tìm thấy đăng ký", 404);
+      if (target.userId !== user.id && !MANAGER.includes(user.role)) return fail("Không đủ quyền truy cập", 403);
+      const res = await prisma.hcCheckIn.updateMany({
+        where: { ...where, isRegistered: true },
+        data: { note: cleanNote || null },
+      });
+      await audit(user.id, "HC_REGISTER_NOTE_UPDATE", "HcGroup", groupId, `Cập nhật nội dung đăng ký HC (${res.count})`);
+      return ok({ updated: res.count });
+    }
+    requireRole(user, MANAGER);
+    const res = await prisma.hcCheckIn.updateMany({
+      where,
+      data: { isApproved: true, ...(note !== undefined ? { note: cleanNote || null } : {}) },
+    });
     await audit(user.id, "HC_APPROVE", "HcGroup", groupId, `Duyệt chấm công HC (${res.count})`);
     return ok({ approved: res.count });
   });

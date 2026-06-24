@@ -4,6 +4,7 @@ import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
+import { isAnnouncementTargetForPosition } from "@/lib/announcement-targets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
       },
     });
     // Người đăng chỉ được ghi nhận đã đọc nếu thuộc nhóm phải xác nhận đọc.
-    if (!isAnnouncementReadExemptPosition(user.position)) {
+    if (!isAnnouncementReadExemptPosition(user.position) && isAnnouncementTargetForPosition(item.classification, user.position)) {
       await prisma.announcementRead.create({ data: { announcementId: item.id, userId: user.id } });
     }
     await audit(user.id, "CREATE_ANNOUNCEMENT", "Announcement", item.id, title.trim());

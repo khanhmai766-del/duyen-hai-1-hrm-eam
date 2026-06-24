@@ -22,11 +22,21 @@ export interface HcGroup {
   createdBy: { id: string; name: string };
   members: HcMember[];
 }
+export interface HcRegistration extends HcMember {
+  group: Omit<HcGroup, "members">;
+}
 
 export function useHcGroups(date: string) {
   return useQuery({
     queryKey: ["hc-groups", date],
     queryFn: () => apiGet<HcGroup[]>(`/api/hc-groups?date=${date}`),
+  });
+}
+
+export function useHcRegistrations(from: string) {
+  return useQuery({
+    queryKey: ["hc-registrations", from],
+    queryFn: () => apiGet<HcRegistration[]>(`/api/hc-registrations?from=${from}`),
   });
 }
 
@@ -57,9 +67,13 @@ export function useDeleteHcGroup() {
 export function useHcCheckIn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { groupId: string; hours: number } | { date: string; period: "FULL_DAY" | "MORNING" | "AFTERNOON"; note?: string }) =>
+    mutationFn: (body: { groupId: string; hours: number } | { date: string; period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON"; note?: string }) =>
       apiMutate("/api/hc-groups/checkin", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
   });
 }
 
@@ -67,14 +81,46 @@ export function useHcRecall() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (groupId: string) => apiMutate(`/api/hc-groups/checkin?groupId=${groupId}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
   });
 }
 
 export function useHcApprove() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { groupId: string; ids?: string[] }) => apiMutate("/api/hc-groups/checkin", "PUT", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
+    mutationFn: (body: { groupId: string; ids?: string[]; note?: string }) => apiMutate("/api/hc-groups/checkin", "PUT", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
+  });
+}
+
+export function useHcUpdateRegistrationNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { groupId: string; id: string; note: string }) =>
+      apiMutate("/api/hc-groups/checkin", "PUT", { groupId: body.groupId, ids: [body.id], note: body.note, action: "NOTE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
+  });
+}
+
+export function useHcCancelRegistration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (checkInId: string) => apiMutate(`/api/hc-groups/checkin?checkInId=${checkInId}`, "DELETE"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
   });
 }

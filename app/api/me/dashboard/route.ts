@@ -24,8 +24,7 @@ export async function GET(req: NextRequest) {
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    // Approved shift assignments for the month → working days + activity calendar.
-    // Each approved shift (duyệt chấm công by ADMIN / Trưởng ca) counts as a working day.
+    // Approved shift assignments for the month → activity calendar.
     const monthApproved = await prisma.shiftAssignment.findMany({
       where: {
         userId: user.id,
@@ -37,6 +36,7 @@ export async function GET(req: NextRequest) {
     const attendanceDays = Array.from(
       new Set(monthApproved.map((a) => a.shift.date.getDate()))
     ).sort((a, b) => a - b);
+    const shiftHours = monthApproved.length * 8;
 
     // Administrative (hành chính) attendance for the month → the second chart
     // series. Approved HC check-ins, keyed by day with their logged hours.
@@ -56,6 +56,8 @@ export async function GET(req: NextRequest) {
     const adminDays = Array.from(adminMap, ([day, hours]) => ({ day, hours })).sort(
       (a, b) => a.day - b.day
     );
+    const adminHours = adminDays.reduce((sum, entry) => sum + entry.hours, 0);
+    const workingDays = Math.round(((shiftHours + adminHours) / 8) * 100) / 100;
 
     // Cương vị trực ca = ca trực GẦN NHẤT CHƯA kết thúc của user (ca đang diễn ra
     // nếu có; nếu không thì ca sắp tới gần nhất đã điểm danh sớm). Ca đã hết giờ
@@ -86,7 +88,7 @@ export async function GET(req: NextRequest) {
 
     return ok({
       avatarUrl: dbUser?.avatarUrl ?? null,
-      workingDays: monthApproved.length, // each approved shift = 1 working day
+      workingDays,
       attendanceDays,
       adminDays,
       daysInMonth: monthEnd.getDate(),

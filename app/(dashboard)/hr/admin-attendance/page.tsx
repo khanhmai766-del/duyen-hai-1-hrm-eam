@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Textarea } from "@/components/ui/textarea";
 import {
   useHcGroups, useCreateHcGroup, useUpdateHcGroup, useDeleteHcGroup,
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
@@ -28,6 +27,7 @@ const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const HC_SELF_PERIODS = [
   { value: "FULL_DAY", label: "Cả ngày", hours: 8 },
   { value: "MORNING", label: "Buổi sáng", hours: 4 },
+  { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3 },
   { value: "AFTERNOON", label: "Buổi chiều", hours: 4 },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
@@ -48,7 +48,6 @@ export default function AdminAttendancePage() {
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [addOpen, setAddOpen] = React.useState(false);
   const [selfCheckInOpen, setSelfCheckInOpen] = React.useState(false);
-  const [registerOpen, setRegisterOpen] = React.useState(false);
 
   const { data, isLoading } = useHcGroups(date);
   const groups = data?.data ?? [];
@@ -61,7 +60,7 @@ export default function AdminAttendancePage() {
         <ArrowLeft className="h-4 w-4" /> Quản lý nhân sự / Ca vận hành
       </Link>
 
-      <PageHeader title="QUẢN LÝ HÀNH CHÍNH" description="Đăng ký và theo dõi nhân viên đi hành chính — dữ liệu lưu 5 tháng gần nhất">
+      <PageHeader title="QUẢN LÝ HÀNH CHÍNH" description="Theo dõi nhân viên đi hành chính — dữ liệu lưu 5 tháng gần nhất">
         <div className="flex items-center gap-2">
           <Label className="text-sm text-muted-foreground">Thời gian</Label>
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
@@ -80,7 +79,7 @@ export default function AdminAttendancePage() {
         <CardSkeleton />
       ) : (
         <div className="space-y-4">
-          <HanhChinhCard groups={selfHcGroups} onRegister={() => setRegisterOpen(true)} />
+          <HanhChinhCard groups={selfHcGroups} />
           {managedGroups.map((g) => (
             <GroupCard key={g.id} group={g} canManage={canManage} myId={myId} />
           ))}
@@ -95,28 +94,20 @@ export default function AdminAttendancePage() {
         groups={selfHcGroups}
         myId={myId}
       />
-      <AdministrativeRegisterDialog
-        open={registerOpen}
-        onOpenChange={setRegisterOpen}
-        date={date}
-        groups={selfHcGroups}
-        myId={myId}
-        onRegisteredDateChange={setDate}
-      />
     </div>
   );
 }
 
 /* ---- Daily administrative attendance summary ---- */
-function HanhChinhCard({ groups, onRegister }: { groups: HcGroup[]; onRegister: () => void }) {
+function HanhChinhCard({ groups }: { groups: HcGroup[] }) {
   const entries = groups.flatMap((group) =>
-    group.members.map((member) => ({
-      ...member,
-      groupId: group.id,
-      period: periodLabel(group.content),
-    }))
+    group.members
+      .map((member) => ({
+        ...member,
+        groupId: group.id,
+        period: periodLabel(group.content),
+      }))
   );
-  const registeredCount = entries.filter((member) => member.isRegistered).length;
 
   return (
     <Card className="overflow-hidden">
@@ -129,12 +120,6 @@ function HanhChinhCard({ groups, onRegister }: { groups: HcGroup[]; onRegister: 
           <Badge variant={entries.length > 0 ? "accent" : "secondary"} className="gap-1.5">
             <UserCheck className="h-3.5 w-3.5" /> {entries.length} đã ghi nhận
           </Badge>
-          <Badge variant={registeredCount > 0 ? "secondary" : "outline"} className="gap-1.5">
-            <Pencil className="h-3.5 w-3.5" /> {registeredCount} đăng ký
-          </Badge>
-          <Button size="sm" variant="outline" onClick={onRegister}>
-            <Plus className="h-4 w-4" /> Đăng ký đi hành chính
-          </Button>
         </div>
       </div>
       {entries.length === 0 ? (
@@ -165,14 +150,10 @@ function HanhChinhCard({ groups, onRegister }: { groups: HcGroup[]; onRegister: 
               </div>
               <div className="mt-1.5 line-clamp-2 text-xs font-medium text-ink">{m.user.name}</div>
               <div className="text-[11px] text-accent">{m.period}</div>
-              {m.isRegistered ? (
-                <div className="mt-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                  Đăng ký đi hành chính
-                </div>
-              ) : (
-                <div className="mt-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                  Theo lịch
-                </div>
+              {m.isRegistered && (
+                <Badge variant={m.isApproved ? "accent" : "secondary"} className="mt-1 text-[10px]">
+                  {m.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+                </Badge>
               )}
               {m.note && (
                 <div className="mt-2 w-full rounded-md bg-amber-50 px-2 py-1.5 text-left text-[11px] leading-4 text-amber-900">
@@ -459,99 +440,6 @@ function SelfAdministrativeCheckInDialog({
           {myCheckIn && (
             <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
               Bạn đã chấm công {periodLabel(myCheckIn.group.content).toLowerCase()}, có thể cập nhật lại.
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Huỷ</Button>
-          <Button onClick={save} disabled={checkIn.isPending}>
-            {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ---- Administrative registration from page action ---- */
-function AdministrativeRegisterDialog({
-  open, onOpenChange, date, groups, myId, onRegisteredDateChange,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  date: string;
-  groups: HcGroup[];
-  myId?: string;
-  onRegisteredDateChange: (date: string) => void;
-}) {
-  const checkIn = useHcCheckIn();
-  const [registerDate, setRegisterDate] = React.useState(date);
-  const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
-  const [note, setNote] = React.useState("");
-
-  const myCheckIn = React.useMemo(
-    () =>
-      registerDate === date
-        ? groups.flatMap((g) => g.members.map((m) => ({ member: m, group: g }))).find((entry) => entry.member.userId === myId)
-        : undefined,
-    [date, groups, myId, registerDate]
-  );
-
-  React.useEffect(() => {
-    if (!open) return;
-    setRegisterDate(date);
-    const current = myCheckIn
-      ? HC_SELF_PERIODS.find((p) => myCheckIn.group.content === `Hành chính - ${p.label}`)
-      : undefined;
-    setPeriod(current?.value ?? "FULL_DAY");
-    setNote(myCheckIn?.member.note ?? "");
-  }, [open, date, myCheckIn]);
-
-  async function save() {
-    try {
-      await checkIn.mutateAsync({ date: registerDate, period, note });
-      toast.success(myCheckIn ? "Đã cập nhật đăng ký đi hành chính" : "Đã đăng ký đi hành chính");
-      onRegisteredDateChange(registerDate);
-      onOpenChange(false);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Đăng ký đi hành chính</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <Row label="Ngày đăng ký">
-            <Input type="date" value={registerDate} onChange={(e) => setRegisterDate(e.target.value)} />
-          </Row>
-          <Row label="Buổi">
-            <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
-              <SelectTrigger><SelectValue placeholder="Chọn buổi" /></SelectTrigger>
-              <SelectContent>
-                {HC_SELF_PERIODS.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Row>
-          <div className="space-y-1.5">
-            <Label className="text-muted-foreground">Nội dung công việc (nếu có)</Label>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              placeholder="Nhập nội dung công việc..."
-            />
-          </div>
-          {myCheckIn && (
-            <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-              Bạn đã đăng ký {periodLabel(myCheckIn.group.content).toLowerCase()} cho ngày đang chọn, có thể cập nhật lại.
             </div>
           )}
         </div>

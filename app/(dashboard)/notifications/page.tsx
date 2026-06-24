@@ -31,6 +31,19 @@ import {
 import { formatDate, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
+import {
+  announcementPositionLabel,
+  announcementShiftRosterPositionOptions,
+  isAnnouncementShiftRosterPosition,
+} from "@/lib/positions";
+import {
+  ALL_ANNOUNCEMENT_POSITIONS,
+  announcementTargetLabel,
+  encodeAnnouncementTargets,
+  isAnnouncementTargetForPosition,
+  parseAnnouncementTargets,
+  targetsAllPositions,
+} from "@/lib/announcement-targets";
 
 /** Ensure an outbound link has a scheme so it opens correctly in a new tab. */
 function normalizeUrl(u: string) {
@@ -39,7 +52,7 @@ function normalizeUrl(u: string) {
 
 const EMPTY_FORM = {
   category: "BULLETIN" as AnnouncementCategory,
-  classification: "Vận hành",
+  classification: encodeAnnouncementTargets([ALL_ANNOUNCEMENT_POSITIONS]),
   stt: "",
   title: "MỆNH LỆNH SẢN XUẤT",
   body: "",
@@ -52,8 +65,6 @@ const EMPTY_FORM = {
 };
 
 const NO_ORDERER = "__none__";
-const NO_CLASSIFICATION = "__none__";
-const CLASSIFICATIONS = ["Vận hành", "An toàn vệ sinh lao động"];
 const ORDER_AUTHORITIES = ["BGĐ", "LĐPX"] as const;
 type OrderAuthority = (typeof ORDER_AUTHORITIES)[number];
 
@@ -91,8 +102,12 @@ export default function NotificationsPage() {
   // Người ra lệnh cấp LĐPX: các Quản đốc / Phó quản đốc trong hệ thống.
   const managers = allUsers.filter((u) => (u.position ?? "").toLowerCase().includes("quản đốc"));
   // "Tất cả user" để tính đã đọc/chưa đọc = toàn bộ nhân sự đang hoạt động.
-  const activeUsers = allUsers.filter((u) => u.isActive && !isAnnouncementReadExemptPosition(u.position));
-  const accountableUserIds = React.useMemo(() => new Set(activeUsers.map((u) => u.id)), [activeUsers]);
+  const activeUsers = allUsers.filter(
+    (u) => u.isActive && !isAnnouncementReadExemptPosition(u.position) && isAnnouncementShiftRosterPosition(u.position)
+  );
+  const positionOptions = React.useMemo(() => {
+    return announcementShiftRosterPositionOptions();
+  }, []);
   const bulletins = announcements.filter((a) => a.category !== "ORDER");
 
   const create = useCreateAnnouncement();
@@ -140,7 +155,7 @@ export default function NotificationsPage() {
   // năm cũ vẫn lưu trữ, tra cứu lại bằng bộ lọc năm.
   const currentYear = new Date().getFullYear();
   const [yearFilter, setYearFilter] = React.useState(String(currentYear));
-  const [classFilter, setClassFilter] = React.useState("ALL");
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [search, setSearch] = React.useState("");
   const years = Array.from(
     new Set([currentYear, ...bulletins.map((a) => new Date(a.createdAt).getFullYear())])
@@ -149,8 +164,8 @@ export default function NotificationsPage() {
   const filtered = bulletins.filter(
     (a) =>
       (yearFilter === "ALL" || new Date(a.createdAt).getFullYear() === Number(yearFilter)) &&
-      (classFilter === "ALL" || a.classification === classFilter) &&
-      (!nq || normalizeText([a.title, a.body, a.classification, a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
+      (positionFilter === "ALL" || isAnnouncementTargetForPosition(a.classification, positionFilter)) &&
+      (!nq || normalizeText([a.title, a.body, announcementTargetLabel(a.classification), a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
   );
   const isOrder = form.category === "ORDER";
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
@@ -163,7 +178,7 @@ export default function NotificationsPage() {
     return {
       stt: a.stt || String(i + 1),
       title: a.title,
-      classification: a.classification ?? "",
+      targetPositions: announcementTargetLabel(a.classification),
       orderAuthority,
       orderedBy,
       content: a.body,
@@ -194,6 +209,22 @@ export default function NotificationsPage() {
     setDialogOpen(true);
   }
 
+  function selectedTargetPositions() {
+    return parseAnnouncementTargets(form.classification);
+  }
+
+  function setTargetPositions(next: string[]) {
+    setForm((f) => ({ ...f, classification: encodeAnnouncementTargets(next) }));
+  }
+
+  function toggleTargetPosition(position: string, checked: boolean) {
+    const current = selectedTargetPositions().filter((p) => p !== ALL_ANNOUNCEMENT_POSITIONS);
+    const next = checked
+      ? Array.from(new Set([...current, position]))
+      : current.filter((p) => p !== position);
+    setTargetPositions(next);
+  }
+
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file
@@ -211,9 +242,11 @@ export default function NotificationsPage() {
   }
   async function submit() {
     if (!form.title.trim() || !form.body.trim()) return toast.error("Nhập tiêu đề và nội dung");
+    if (parseAnnouncementTargets(form.classification).length === 0) return toast.error("Chọn cương vị nhận mệnh lệnh");
     const { orderAuthority, ...restForm } = form;
     const payload = {
       ...restForm,
+      classification: encodeAnnouncementTargets(parseAnnouncementTargets(form.classification)),
       orderedBy: joinOrderedBy(orderAuthority, form.orderedBy),
     };
     try {
@@ -242,11 +275,14 @@ export default function NotificationsPage() {
 
   /** A single admin post card (bảng tin or mệnh lệnh). */
   function PostCard({ a }: { a: Announcement }) {
-    const trackedReads = a.reads.filter((r) => accountableUserIds.has(r.userId));
+    const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, u.position));
+    const targetUserIds = new Set(targetUsers.map((u) => u.id));
+    const trackedReads = a.reads.filter((r) => targetUserIds.has(r.userId));
     const readUserIds = new Set(trackedReads.map((r) => r.userId));
     const readByMe = myId ? readUserIds.has(myId) : false;
+    const mustReadByMe = !exemptFromReadConfirm && isAnnouncementTargetForPosition(a.classification, session?.user?.position);
     const readCount = trackedReads.length;
-    const total = activeUsers.length;
+    const total = targetUsers.length;
     const allRead = total > 0 && readCount >= total;
     return (
       <Card
@@ -270,7 +306,7 @@ export default function NotificationsPage() {
                 <h3 className="font-semibold text-ink">{a.title}</h3>
                 {a.classification && (
                   <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {a.classification}
+                    {announcementTargetLabel(a.classification)}
                   </span>
                 )}
               </div>
@@ -329,7 +365,7 @@ export default function NotificationsPage() {
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
                 <CheckCircle2 className="h-4 w-4" /> Tất cả đã xác nhận đọc
               </span>
-            ) : exemptFromReadConfirm ? (
+            ) : !mustReadByMe ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <Check className="h-4 w-4" /> Không thuộc diện cần xác nhận đọc
               </span>
@@ -382,11 +418,13 @@ export default function NotificationsPage() {
               {years.map((y) => <SelectItem key={y} value={String(y)}>Năm {y}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={classFilter} onValueChange={setClassFilter}>
-            <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+          <Select value={positionFilter} onValueChange={setPositionFilter}>
+            <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Cương vị" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Tất cả phân loại</SelectItem>
-              {CLASSIFICATIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+              {positionOptions.map((position) => (
+                <SelectItem key={position} value={position}>{position}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {isManager && (
@@ -420,7 +458,7 @@ export default function NotificationsPage() {
                 icon={Megaphone}
                 title="Không có mệnh lệnh"
                 description={
-                  yearFilter === String(currentYear) && classFilter === "ALL"
+                  yearFilter === String(currentYear)
                     ? "Chưa có mệnh lệnh nào trong năm nay. Chọn năm khác ở bộ lọc để xem mệnh lệnh các năm trước."
                     : "Không có mệnh lệnh nào khớp với bộ lọc đã chọn."
                 }
@@ -463,19 +501,39 @@ export default function NotificationsPage() {
               </div>
             </div>
             <div>
-              <Label className="mb-1.5 block">Phân loại</Label>
-              <Select
-                value={form.classification || NO_CLASSIFICATION}
-                onValueChange={(v) => setForm({ ...form, classification: v === NO_CLASSIFICATION ? "" : v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Chọn phân loại" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CLASSIFICATION}>— Không phân loại —</SelectItem>
-                  {CLASSIFICATIONS.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="mb-1.5 block">Cương vị nhận mệnh lệnh</Label>
+              <div className="rounded-lg border border-border p-3">
+                <label className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-ink hover:bg-muted/60">
+                  <Checkbox
+                    checked={targetsAllPositions(form.classification)}
+                    onCheckedChange={(checked) => setTargetPositions(checked ? [ALL_ANNOUNCEMENT_POSITIONS] : [])}
+                  />
+                  Tất cả cương vị
+                </label>
+                {!targetsAllPositions(form.classification) && (
+                  <div className="mt-2 grid max-h-44 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
+                    {positionOptions.length === 0 ? (
+                      <div className="px-2 py-3 text-sm text-muted-foreground">Chưa có dữ liệu cương vị.</div>
+                    ) : (
+                      positionOptions.map((position) => {
+                        const selected = selectedTargetPositions().some((p) => normalizeText(announcementPositionLabel(p)) === normalizeText(position));
+                        return (
+                          <label key={position} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-muted/60">
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={(checked) => toggleTargetPosition(position, !!checked)}
+                            />
+                            <span className="min-w-0 truncate">{position}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Chỉ nhân viên thuộc cương vị được chọn mới phải xác nhận đọc mệnh lệnh.
+                </div>
+              </div>
             </div>
             <div>
               <Label className="mb-1.5 block">Nội dung</Label>
@@ -570,12 +628,17 @@ export default function NotificationsPage() {
             <DialogTitle>Tình trạng xác nhận đọc</DialogTitle>
           </DialogHeader>
           {readersOf && (() => {
-            const trackedReads = readersOf.reads.filter((r) => accountableUserIds.has(r.userId));
+            const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(readersOf.classification, u.position));
+            const targetUserIds = new Set(targetUsers.map((u) => u.id));
+            const trackedReads = readersOf.reads.filter((r) => targetUserIds.has(r.userId));
             const readSet = new Set(trackedReads.map((r) => r.userId));
-            const unread = activeUsers.filter((u) => !readSet.has(u.id));
+            const unread = targetUsers.filter((u) => !readSet.has(u.id));
             return (
               <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
                 <div className="truncate text-sm font-semibold text-ink">{readersOf.title}</div>
+                <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  Cương vị nhận lệnh: <span className="font-medium text-ink">{announcementTargetLabel(readersOf.classification)}</span>
+                </div>
                 <div>
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                     <Check className="h-4 w-4" /> Đã đọc ({trackedReads.length})

@@ -33,6 +33,8 @@ import {
   useUpsertDocument,
 } from "@/hooks/useDocuments";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import { normalizeText } from "@/lib/nav";
+import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
 type DocumentForm = {
@@ -67,6 +69,16 @@ const PAGE_SIZE_OPTIONS = ["10", "20", "50"];
 
 function blockForDocumentPosition(position?: string | null): string {
   return position?.trim() === COMMON_POSITION ? COMMON_POSITION : blockForPosition(position);
+}
+
+function documentPositionLabel(position?: string | null): string {
+  const value = position?.trim();
+  if (!value) return "";
+  return value === COMMON_POSITION ? COMMON_POSITION : announcementPositionLabel(value);
+}
+
+function documentPositionMatches(position: string | null | undefined, filter: string) {
+  return normalizeText(documentPositionLabel(position)) === normalizeText(filter);
 }
 
 function documentManagementBlock(item: { managingPosition?: string | null; managementBlock?: string | null }): string {
@@ -216,14 +228,10 @@ export function DocumentCatalogPage({
 
   const positionOptions = React.useMemo(
     () =>
-      Array.from(
-        new Set(
-          [
-            ...(devices.data?.data ?? []).map((device) => device.managingPosition),
-            ...userPositions,
-          ].filter((value): value is string => !!value && value.trim() !== COMMON_POSITION && isSelectableManagingPosition(value))
-        )
-      ).sort((a, b) => a.localeCompare(b, "vi")),
+      announcementPositionOptions([
+        ...(devices.data?.data ?? []).map((device) => device.managingPosition),
+        ...userPositions,
+      ]).filter((value) => value !== COMMON_POSITION && isSelectableManagingPosition(value)),
     [devices.data?.data, userPositions]
   );
   const blockOptions = React.useMemo(
@@ -255,11 +263,11 @@ export function DocumentCatalogPage({
     return source.filter((item) => {
       if (hasYearField && activeYearFilter && item.managingPosition !== activeYearFilter) return false;
       if (hasTagField && tagFilter !== ALL_FILTER && item.decisionNumber !== tagFilter) return false;
-      if (showEquipmentScope && positionFilter !== ALL_FILTER && item.managingPosition !== positionFilter) return false;
+      if (showEquipmentScope && positionFilter !== ALL_FILTER && !documentPositionMatches(item.managingPosition, positionFilter)) return false;
       const itemBlock = documentManagementBlock(item);
       if (showEquipmentScope && blockFilter !== ALL_FILTER && itemBlock !== blockFilter) return false;
       if (!needle) return true;
-      return [item.title, item.decisionNumber, item.documentUrl, item.reason, item.progress, item.note, item.managingPosition, itemBlock]
+      return [item.title, item.decisionNumber, item.documentUrl, item.reason, item.progress, item.note, documentPositionLabel(item.managingPosition), itemBlock]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle));
     });
@@ -375,7 +383,7 @@ export function DocumentCatalogPage({
       reason: item.reason ?? "",
       progress: item.progress ?? "",
       note: item.note ?? "",
-      managingPosition: showEquipmentScope ? item.managingPosition ?? COMMON_POSITION : item.managingPosition ?? "",
+      managingPosition: showEquipmentScope ? documentPositionLabel(item.managingPosition) || COMMON_POSITION : item.managingPosition ?? "",
       recordDate: showEquipmentScope ? "" : normalizeRecordDateForInput(item.managementBlock, dateInputType),
       archiveYear: showEquipmentScope ? "" : item.managingPosition ?? "",
       attachmentUrls: item.attachmentUrls ?? [],
@@ -632,7 +640,7 @@ export function DocumentCatalogPage({
                   )}
                   {hasYearField && <TableCell className={cn("text-center font-semibold text-muted-foreground", historyTableLayout && "px-3 py-3 text-[13px]")}>{item.managingPosition || "—"}</TableCell>}
                   {showEquipmentScope && (
-                    <TableCell className="text-center text-muted-foreground">{item.managingPosition || "—"}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{documentPositionLabel(item.managingPosition) || "—"}</TableCell>
                   )}
                   {showEquipmentScope && (
                     <TableCell className="text-center text-muted-foreground">{documentManagementBlock(item)}</TableCell>

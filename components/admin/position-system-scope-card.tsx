@@ -7,21 +7,36 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEquipmentTree } from "@/hooks/useEquipment";
+import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
-import { isSelectableManagingPosition } from "@/lib/constants";
 import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
-import { rootAllowedForPosition, scopesForPosition } from "@/lib/position-system-scopes";
+import { selectableManagingPositionOptions } from "@/lib/positions";
+import { rootAllowedForPosition, scopesForPosition, type PositionSystemScope } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 
+const EMPTY_EQUIPMENT_NODES: EquipmentNode[] = [];
+const EMPTY_SCOPES: PositionSystemScope[] = [];
+
+function sameSeqSet(a: Set<string>, b: Set<string>) {
+  if (a.size !== b.size) return false;
+  for (const item of a) {
+    if (!b.has(item)) return false;
+  }
+  return true;
+}
+
 export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
-  const positions = usePositions().filter(isSelectableManagingPosition);
+  const allPositions = usePositions();
+  const positions = React.useMemo(
+    () => selectableManagingPositionOptions(allPositions),
+    [allPositions]
+  );
   const treeQuery = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
   const updateScopes = useUpdatePositionSystemScope();
-  const equipmentNodes = treeQuery.data?.data ?? [];
-  const scopes = scopesQuery.data?.data ?? [];
+  const equipmentNodes = treeQuery.data?.data ?? EMPTY_EQUIPMENT_NODES;
+  const scopes = scopesQuery.data?.data ?? EMPTY_SCOPES;
   const [position, setPosition] = React.useState("");
   const [selectedSeqs, setSelectedSeqs] = React.useState<Set<string>>(new Set());
 
@@ -31,7 +46,10 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   }, [equipmentNodes]);
 
   React.useEffect(() => {
-    if (!position && positions.length) setPosition(positions[0]);
+    if (!positions.length) return;
+    if (!position || !positions.includes(position)) {
+      setPosition(positions[0]);
+    }
   }, [position, positions]);
 
   React.useEffect(() => {
@@ -40,7 +58,8 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
     const fallback = roots
       .filter((root) => rootAllowedForPosition(root, position, []))
       .map((root) => root.seq);
-    setSelectedSeqs(new Set(saved.length ? saved : fallback));
+    const next = new Set(saved.length ? saved : fallback);
+    setSelectedSeqs((current) => (sameSeqSet(current, next) ? current : next));
   }, [position, roots, scopes]);
 
   const savedCount = React.useMemo(() => scopesForPosition(scopes, position).length, [scopes, position]);

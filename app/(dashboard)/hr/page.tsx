@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CalendarDays, UserCheck, Network, Users, ArrowRight, Phone, ChevronRight, Sunrise, Sunset, Moon } from "lucide-react";
+import { CalendarDays, UserCheck, Network, Users, ArrowRight, Phone, ChevronRight, Sunrise, Sunset, Moon, CalendarPlus } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,8 +18,8 @@ import { cn, initials } from "@/lib/utils";
 import type { SafeUser } from "@/types";
 
 const LINKS: { href: string; icon: typeof CalendarDays; title: string; desc: string; cover?: string }[] = [
-  { href: "/hr/shift-roster", icon: CalendarDays, title: "Lịch trực ca", desc: "Phân ca theo tháng", cover: "/brand/lich-truc-ca.jpg" },
   { href: "/hr/org-chart", icon: Network, title: "Nhân sự trực ca vận hành", desc: "Phân công vị trí trực", cover: "/brand/sodo-tochuc.webp" },
+  { href: "/hr/shift-roster", icon: CalendarDays, title: "Lịch trực ca", desc: "Phân ca theo tháng", cover: "/brand/lich-truc-ca.jpg" },
 ];
 
 // "Ca vận hành" background by real-time shift (Sáng / Chiều / Đêm).
@@ -81,16 +81,18 @@ export default function HrOverviewPage() {
         <Link href="/hr/admin-attendance" className="block h-full">
           <StatCard label="Quản lý hành chính" value={approvedHc} icon={Network} tint="blue" bgCover="/brand/cham-cong-hc.jpg" cta="Mở" />
         </Link>
-        <StatCard label="Ca vận hành" value={SHIFT_TYPE[curShift].label} icon={SHIFT_ICON[curShift]} tint="amber" bgCover={SHIFT_BG[curShift]} />
+        <Link href="/hr/admin-registration" className="block h-full">
+          <StatCard label="Đăng ký đi hành chính" value="HC" icon={CalendarPlus} tint="amber" bgCover="/brand/cham-cong-hc.jpg" cta="Đăng ký" />
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {LINKS.map((l) => {
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {LINKS.slice(0, 1).map((l) => {
           const Icon = l.icon;
           const cover = !!l.cover;
           return (
             <Link key={l.href} href={l.href} className="group">
-              <Card className={cn("relative h-full overflow-hidden transition-shadow hover:shadow-md", cover && "border-0 text-white")}>
+              <Card className={cn("relative h-full min-h-[132px] overflow-hidden transition-shadow hover:shadow-md", cover && "border-0 text-white")}>
                 {cover && (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -103,13 +105,44 @@ export default function HrOverviewPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
                   </>
                 )}
-                <CardContent className={cn("relative p-5", cover && "[text-shadow:0_1px_6px_rgba(0,0,0,0.6)]")}>
+                <CardContent className={cn("relative p-4", cover && "[text-shadow:0_1px_6px_rgba(0,0,0,0.6)]")}>
                   <div className={cn("flex h-11 w-11 items-center justify-center rounded-lg", cover ? "bg-white/20 text-white ring-1 ring-white/30 backdrop-blur" : "bg-accent/10 text-accent")}>
                     <Icon className="h-5 w-5" />
                   </div>
-                  <h3 className={cn("mt-3 font-semibold", cover ? "text-white" : "text-ink")}>{l.title}</h3>
+                  <h3 className={cn("mt-2 font-semibold", cover ? "text-white" : "text-ink")}>{l.title}</h3>
                   <p className={cn("text-sm", cover ? "text-white/85" : "text-muted-foreground")}>{l.desc}</p>
-                  <span className={cn("mt-3 inline-flex items-center gap-1 text-sm", cover ? "text-white" : "text-accent")}>Mở <ArrowRight className="h-3.5 w-3.5" /></span>
+                  <span className={cn("mt-2 inline-flex items-center gap-1 text-sm", cover ? "text-white" : "text-accent")}>Mở <ArrowRight className="h-3.5 w-3.5" /></span>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+        <ShiftOverviewCard shiftType={curShift} />
+        {LINKS.slice(1).map((l) => {
+          const Icon = l.icon;
+          const cover = !!l.cover;
+          return (
+            <Link key={l.href} href={l.href} className="group">
+              <Card className={cn("relative h-full min-h-[132px] overflow-hidden transition-shadow hover:shadow-md", cover && "border-0 text-white")}>
+                {cover && (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={l.cover}
+                      alt=""
+                      aria-hidden
+                      className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
+                  </>
+                )}
+                <CardContent className={cn("relative p-4", cover && "[text-shadow:0_1px_6px_rgba(0,0,0,0.6)]")}>
+                  <div className={cn("flex h-11 w-11 items-center justify-center rounded-lg", cover ? "bg-white/20 text-white ring-1 ring-white/30 backdrop-blur" : "bg-accent/10 text-accent")}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className={cn("mt-2 font-semibold", cover ? "text-white" : "text-ink")}>{l.title}</h3>
+                  <p className={cn("text-sm", cover ? "text-white/85" : "text-muted-foreground")}>{l.desc}</p>
+                  <span className={cn("mt-2 inline-flex items-center gap-1 text-sm", cover ? "text-white" : "text-accent")}>Mở <ArrowRight className="h-3.5 w-3.5" /></span>
                 </CardContent>
               </Card>
             </Link>
@@ -158,7 +191,32 @@ export default function HrOverviewPage() {
           )}
         </DialogContent>
       </Dialog>
+
     </div>
+  );
+}
+
+function ShiftOverviewCard({ shiftType }: { shiftType: ShiftTypeKey }) {
+  const Icon = SHIFT_ICON[shiftType];
+  return (
+    <Card className="relative h-full min-h-[132px] overflow-hidden border-0 text-white transition-shadow hover:shadow-md">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={SHIFT_BG[shiftType]}
+        alt=""
+        aria-hidden
+        className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 hover:scale-105"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
+      <CardContent className="relative p-4 [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">
+        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/20 text-white ring-1 ring-white/30 backdrop-blur">
+          <Icon className="h-5 w-5" />
+        </div>
+        <h3 className="mt-2 font-semibold text-white">Ca vận hành</h3>
+        <p className="text-sm text-white/85">{SHIFT_TYPE[shiftType].label}</p>
+        <span className="mt-2 inline-flex items-center gap-1 text-sm text-white">Theo thời gian thực</span>
+      </CardContent>
+    </Card>
   );
 }
 
