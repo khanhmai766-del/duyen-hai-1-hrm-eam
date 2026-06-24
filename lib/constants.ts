@@ -275,7 +275,7 @@ export function isSelectableManagingPosition(position?: string | null): boolean 
 /** Tình trạng khiếm khuyết. */
 export const DEFECT_STATUS = {
   CHUA_XU_LY: { label: "Chưa xử lý", badge: "bg-slate-100 text-slate-700", dot: "#64748B" },
-  CO_PCT: { label: "Đang có PCT thực hiện", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
+  CO_PCT: { label: "Đang thực hiện", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
   CHO_VAT_TU: { label: "Chờ vật tư", badge: "bg-amber-100 text-amber-800", dot: "#D97706" },
   DA_XU_LY: { label: "Đã xử lý", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
 } as const;
