@@ -8,6 +8,8 @@ export interface HcMember {
   userId: string;
   hours: number;
   isApproved: boolean;
+  note: string | null;
+  isRegistered: boolean;
   user: { id: string; name: string; position: string | null; avatarUrl: string | null; phone: string | null };
 }
 export interface HcGroup {
@@ -55,7 +57,8 @@ export function useDeleteHcGroup() {
 export function useHcCheckIn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { groupId: string; hours: number }) => apiMutate("/api/hc-groups/checkin", "POST", body),
+    mutationFn: (body: { groupId: string; hours: number } | { date: string; period: "FULL_DAY" | "MORNING" | "AFTERNOON"; note?: string }) =>
+      apiMutate("/api/hc-groups/checkin", "POST", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
   });
 }

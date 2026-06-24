@@ -210,7 +210,7 @@ export default function OrgChartPage() {
         <div className="fixed inset-0 z-[100] flex flex-col overflow-auto bg-white p-6">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-ink">Sơ đồ tổ chức ca vận hành</h2>
+              <h2 className="text-2xl font-bold text-ink">Nhân sự trực ca vận hành</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {caLabel} · {unit}
               </p>
