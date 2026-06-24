@@ -46,6 +46,50 @@ export function compareEquipmentSeq(a: string, b: string) {
   return 0;
 }
 
+function normalizeDuplicateText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export type DedupedEquipmentLeaf<T extends { seq: string; name: string }> = T & {
+  duplicateSeqs: string[];
+  duplicateCount: number;
+};
+
+export function dedupeEquipmentLeafNodes<
+  T extends { seq: string; name: string; parentSeq?: string | null; drawing?: string | null; deviceId?: string | null },
+>(
+  nodes: T[]
+): DedupedEquipmentLeaf<T>[] {
+  const grouped = new Map<string, DedupedEquipmentLeaf<T>>();
+
+  for (const node of nodes) {
+    const key = [node.parentSeq ?? "", normalizeDuplicateText(node.name) || node.seq].join("|");
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, {
+        ...node,
+        duplicateSeqs: [node.seq],
+        duplicateCount: 1,
+      });
+      continue;
+    }
+
+    existing.duplicateSeqs.push(node.seq);
+    existing.duplicateCount += 1;
+    if (!existing.drawing && node.drawing) existing.drawing = node.drawing;
+    if (!existing.deviceId && node.deviceId) existing.deviceId = node.deviceId;
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+}
+
 export function normalizeEquipmentNodeName(seq: string, name: string) {
   if (
     seq.startsWith("1.4.11.") &&

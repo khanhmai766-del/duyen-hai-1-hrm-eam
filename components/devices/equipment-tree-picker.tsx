@@ -31,12 +31,16 @@ export function EquipmentTreePicker({
   value,
   onChange,
   position,
+  rootSeq,
   placeholder = "Chọn thư mục hệ thống",
+  disabled = false,
 }: {
   value: string; // seq đang chọn ("" nếu chưa chọn)
   onChange: (node: EquipmentNode | null) => void;
   position?: string | null; // cương vị quản lý đang chọn — lọc nhóm hệ thống theo cương vị
+  rootSeq?: string | null; // chỉ duyệt trong nhánh con của node này (vd lọc thiết bị theo hệ thống)
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const { data, isLoading } = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();

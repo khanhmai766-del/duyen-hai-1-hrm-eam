@@ -26,3 +26,6 @@ public/videos/*
 /codex-*.txt
 /.codex-video-frames/
 /.codex-shdc-*/
+
+# Bản sao lưu do script dedupe thiết bị sinh ra (không đưa vào git)
+scripts/data/equipment-dedupe-backup-*.json

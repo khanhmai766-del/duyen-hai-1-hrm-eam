@@ -70,7 +70,7 @@ import {
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { can } from "@/lib/constants";
-import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
+import { buildEquipmentTreeIndex, compareEquipmentSeq, dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
@@ -87,12 +87,15 @@ const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boole
 
 type SystemTreeRow = {
   seq: string;
+  parentSeq: string | null;
   name: string;
   parentName: string;
   drawing: string | null;
   isGroup: boolean;
   childCount: number;
   deviceId: string | null;
+  duplicateSeqs?: string[];
+  duplicateCount?: number;
 };
 
 export default function DevicesPage() {
@@ -145,6 +148,7 @@ export default function DevicesPage() {
       const parent = parentSeq ? equipmentIndex.bySeq.get(parentSeq) ?? null : null;
       const row = {
         seq: node.seq,
+        parentSeq: parentSeq ?? null,
         name: node.name,
         parentName: parent?.name ?? "",
         drawing: node.drawing,
@@ -158,7 +162,14 @@ export default function DevicesPage() {
     }
     return rows.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
   }, [debouncedQ, equipmentIndex, selectedSystemNode]);
-  const systemLeafRows = React.useMemo(() => systemTreeRows.filter((row) => !row.isGroup), [systemTreeRows]);
+  const systemLeafRows = React.useMemo(
+    () => dedupeEquipmentLeafNodes(systemTreeRows.filter((row) => !row.isGroup)),
+    [systemTreeRows]
+  );
+  const systemDisplayRows = React.useMemo(() => {
+    const groupRows = systemTreeRows.filter((row) => row.isGroup);
+    return [...groupRows, ...systemLeafRows].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+  }, [systemLeafRows, systemTreeRows]);
 
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
@@ -264,7 +275,7 @@ export default function DevicesPage() {
             equipmentTreeLoading ? (
               <TableSkeleton />
             ) : (
-              <SystemTreeTableView rows={systemTreeRows} selectedSystemName={selectedSystemNode.name} />
+              <SystemTreeTableView rows={systemDisplayRows} selectedSystemName={selectedSystemNode.name} />
             )
           ) : (view === "detail" || view === "deck") && selectedSystemNode ? (
             equipmentTreeLoading ? (
@@ -322,7 +333,7 @@ function lastRepair(d: DeviceListItem) {
 }
 
 function systemRowQrValue(row: SystemTreeRow) {
-  const path = row.deviceId ? `/devices/${row.deviceId}` : `/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`;
+  const path = row.deviceId ? `/public/devices/${row.deviceId}` : `/public/equipment/${encodeURIComponent(row.seq)}`;
   if (typeof window === "undefined") return path;
   return `${window.location.origin}${path}`;
 }
@@ -366,6 +377,11 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
                   <h3 className="mt-1 line-clamp-2 font-semibold leading-tight text-ink" title={row.name}>
                     {row.name}
                   </h3>
+                  {(row.duplicateCount ?? 1) > 1 && (
+                    <div className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Gộp {row.duplicateCount} mã trùng
+                    </div>
+                  )}
                   <div className="mt-2 line-clamp-2 text-xs text-muted-foreground" title={row.parentName}>
                     {row.parentName || "Thư mục con cuối cùng"}
                   </div>
@@ -426,6 +442,11 @@ function SystemLeafDeckView({ rows, selectedSystemName }: { rows: SystemTreeRow[
                 <div className="min-w-0">
                   <div className="font-mono text-xs font-bold text-navy">{row.seq}</div>
                   <CardTitle className="mt-1 line-clamp-2 text-base leading-tight">{row.name}</CardTitle>
+                  {(row.duplicateCount ?? 1) > 1 && (
+                    <div className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Gộp {row.duplicateCount} mã trùng
+                    </div>
+                  )}
                 </div>
                 <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 shadow-sm">QR</span>
               </div>
@@ -518,6 +539,11 @@ function SystemTreeTableView({ rows, selectedSystemName }: { rows: SystemTreeRow
                           <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
                         )}
                         <span className="truncate font-medium text-ink" title={row.name}>{row.name}</span>
+                        {(row.duplicateCount ?? 1) > 1 && (
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            Gộp {row.duplicateCount}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-center text-muted-foreground">
