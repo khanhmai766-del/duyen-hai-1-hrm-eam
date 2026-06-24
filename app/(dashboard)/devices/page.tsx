@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
+import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
 import {
   LayoutGrid,
-  Table2,
   LayoutDashboard,
   FilePlus2,
   GalleryHorizontal,
@@ -69,7 +69,7 @@ import {
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { can } from "@/lib/constants";
-import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
+import { buildEquipmentTreeIndex, compareEquipmentSeq, dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
@@ -78,7 +78,6 @@ type ViewMode = "tree" | "dashboard" | "table" | "detail" | "form" | "deck";
 const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
   { key: "tree", label: "Cây thiết bị", icon: Network },
   { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
-  { key: "table", label: "Bảng", icon: Table2 },
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
   { key: "form", label: "Thêm mới", icon: FilePlus2, adminOnly: true },
   { key: "deck", label: "Deck", icon: GalleryHorizontal },
@@ -86,12 +85,15 @@ const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boole
 
 type SystemTreeRow = {
   seq: string;
+  parentSeq: string | null;
   name: string;
   parentName: string;
   drawing: string | null;
   isGroup: boolean;
   childCount: number;
   deviceId: string | null;
+  duplicateSeqs?: string[];
+  duplicateCount?: number;
 };
 
 export default function DevicesPage() {
@@ -109,6 +111,13 @@ export default function DevicesPage() {
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (view !== "table") return;
+    const sp = new URLSearchParams(params.toString());
+    sp.set("view", "dashboard");
+    router.replace(`/devices?${sp.toString()}`);
+  }, [params, router, view]);
 
   React.useEffect(() => {
     setQ(urlQ);
@@ -133,10 +142,11 @@ export default function DevicesPage() {
   }, [equipmentIndex]);
   const selectedSystemNode = systemSeq === "ALL" ? null : equipmentIndex.bySeq.get(systemSeq) ?? null;
   const systemTreeRows = React.useMemo(() => {
-    if (!selectedSystemNode) return [];
     const qText = normalizeText(debouncedQ.trim());
     const rows: SystemTreeRow[] = [];
-    const queue = [...(equipmentIndex.childrenOf.get(selectedSystemNode.seq) ?? [])];
+    const queue = selectedSystemNode
+      ? [...(equipmentIndex.childrenOf.get(selectedSystemNode.seq) ?? [])]
+      : [...systemOptions];
     while (queue.length) {
       const node = queue.shift()!;
       const childCount = (equipmentIndex.childrenOf.get(node.seq) ?? []).length;
@@ -144,6 +154,7 @@ export default function DevicesPage() {
       const parent = parentSeq ? equipmentIndex.bySeq.get(parentSeq) ?? null : null;
       const row = {
         seq: node.seq,
+        parentSeq: parentSeq ?? null,
         name: node.name,
         parentName: parent?.name ?? "",
         drawing: node.drawing,
@@ -156,8 +167,15 @@ export default function DevicesPage() {
       queue.push(...(equipmentIndex.childrenOf.get(node.seq) ?? []));
     }
     return rows.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-  }, [debouncedQ, equipmentIndex, selectedSystemNode]);
-  const systemLeafRows = React.useMemo(() => systemTreeRows.filter((row) => !row.isGroup), [systemTreeRows]);
+  }, [debouncedQ, equipmentIndex, selectedSystemNode, systemOptions]);
+  const systemLeafRows = React.useMemo(
+    () => dedupeEquipmentLeafNodes(systemTreeRows.filter((row) => !row.isGroup)),
+    [systemTreeRows]
+  );
+  const systemDisplayRows = React.useMemo(() => {
+    const groupRows = systemTreeRows.filter((row) => row.isGroup);
+    return [...groupRows, ...systemLeafRows].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+  }, [systemLeafRows, systemTreeRows]);
 
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
@@ -188,7 +206,7 @@ export default function DevicesPage() {
     }
   }
 
-  const visibleViews = VIEWS.filter((v) => !v.adminOnly || isAdmin);
+  const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || isAdmin));
 
   return (
     <div className="space-y-6">
@@ -221,7 +239,7 @@ export default function DevicesPage() {
             );
           })}
         </div>
-        {view !== "form" && (
+        {view !== "form" && view !== "table" && view !== "detail" && view !== "deck" && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
             <select
@@ -257,18 +275,22 @@ export default function DevicesPage() {
             <p className="text-sm text-muted-foreground">Chỉ Quản trị viên mới được thêm thiết bị mới.</p>
           </CardContent></Card>
         )
+      ) : view === "table" || view === "detail" || view === "deck" ? (
+        <Card className="min-h-[420px] border-dashed border-border bg-white">
+          <CardContent className="min-h-[420px]" />
+        </Card>
       ) : (
         <>
-          {view === "table" && selectedSystemNode ? (
+          {(view as ViewMode) === "table" ? (
             equipmentTreeLoading ? (
               <TableSkeleton />
             ) : (
-              <SystemTreeTableView rows={systemTreeRows} selectedSystemName={selectedSystemNode.name} />
+              <SystemTreeTableView rows={systemDisplayRows} selectedSystemName={selectedSystemNode?.name ?? "Tất cả hệ thống"} />
             )
-          ) : (view === "detail" || view === "deck") && selectedSystemNode ? (
+          ) : ((view as ViewMode) === "detail" || (view as ViewMode) === "deck") && selectedSystemNode ? (
             equipmentTreeLoading ? (
               <TableSkeleton />
-            ) : view === "detail" ? (
+            ) : (view as ViewMode) === "detail" ? (
               <SystemLeafCardView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
             ) : (
               <SystemLeafDeckView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
@@ -282,16 +304,9 @@ export default function DevicesPage() {
               description="Không tìm thấy thiết bị phù hợp."
               action={isAdmin ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
-          ) : view === "dashboard" ? (
+          ) : (view as ViewMode) === "dashboard" ? (
             <DashboardView devices={devices} />
-          ) : view === "table" ? (
-            <TableView
-              devices={devices}
-              canDelete={can(session?.user?.role, "deleteDevice")}
-              onQr={setQrDevice}
-              onDelete={setDeleteTarget}
-            />
-          ) : view === "detail" ? (
+          ) : (view as ViewMode) === "detail" ? (
             <DetailView devices={devices} onQr={setQrDevice} />
           ) : (
             <DeckView devices={devices} onQr={setQrDevice} />
@@ -321,12 +336,13 @@ function lastRepair(d: DeviceListItem) {
 }
 
 function systemRowQrValue(row: SystemTreeRow) {
-  const path = row.deviceId ? `/devices/${row.deviceId}` : `/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`;
+  const path = row.deviceId ? `/public/devices/${row.deviceId}` : `/public/equipment/${encodeURIComponent(row.seq)}`;
   if (typeof window === "undefined") return path;
   return `${window.location.origin}${path}`;
 }
 
 function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
+  const [editSeq, setEditSeq] = React.useState<string | null>(null);
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -348,7 +364,12 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {rows.map((row) => (
-          <Card key={row.seq} className="overflow-hidden transition-shadow hover:shadow-md">
+          <Card
+            key={row.seq}
+            onClick={() => setEditSeq(row.seq)}
+            title="Bấm để chỉnh sửa thẻ thiết bị"
+            className="cursor-pointer overflow-hidden transition-shadow hover:shadow-md hover:ring-1 hover:ring-accent/40"
+          >
             <CardContent className="p-4">
               <div className="flex items-start gap-4">
                 <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-border bg-white p-2 shadow-sm">
@@ -359,6 +380,11 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
                   <h3 className="mt-1 line-clamp-2 font-semibold leading-tight text-ink" title={row.name}>
                     {row.name}
                   </h3>
+                  {(row.duplicateCount ?? 1) > 1 && (
+                    <div className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Gộp {row.duplicateCount} mã trùng
+                    </div>
+                  )}
                   <div className="mt-2 line-clamp-2 text-xs text-muted-foreground" title={row.parentName}>
                     {row.parentName || "Thư mục con cuối cùng"}
                   </div>
@@ -368,7 +394,7 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
                 <InfoPill label="Bản vẽ" value={row.drawing || "—"} />
                 <InfoPill label="Loại" value={row.deviceId ? "Có lý lịch" : "Node cây"} />
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <Button asChild size="sm" variant="outline" className="flex-1">
                   <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>
                     <Network className="h-4 w-4" /> Trong cây
@@ -386,6 +412,7 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
           </Card>
         ))}
       </div>
+      <EquipmentCardEditDialog seq={editSeq} onOpenChange={(o) => !o && setEditSeq(null)} />
     </div>
   );
 }
@@ -418,6 +445,11 @@ function SystemLeafDeckView({ rows, selectedSystemName }: { rows: SystemTreeRow[
                 <div className="min-w-0">
                   <div className="font-mono text-xs font-bold text-navy">{row.seq}</div>
                   <CardTitle className="mt-1 line-clamp-2 text-base leading-tight">{row.name}</CardTitle>
+                  {(row.duplicateCount ?? 1) > 1 && (
+                    <div className="mt-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Gộp {row.duplicateCount} mã trùng
+                    </div>
+                  )}
                 </div>
                 <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 shadow-sm">QR</span>
               </div>
@@ -510,6 +542,11 @@ function SystemTreeTableView({ rows, selectedSystemName }: { rows: SystemTreeRow
                           <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
                         )}
                         <span className="truncate font-medium text-ink" title={row.name}>{row.name}</span>
+                        {(row.duplicateCount ?? 1) > 1 && (
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                            Gộp {row.duplicateCount}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-center text-muted-foreground">

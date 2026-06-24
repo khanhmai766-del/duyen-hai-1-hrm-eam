@@ -13,6 +13,7 @@ import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
+import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import {
   DEFECT_UNITS,
   DEFECT_SEVERITY,
@@ -22,12 +23,12 @@ import {
   DEFECT_REQUEST_TYPES,
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
-  DEFECT_COMMON_POSITIONS,
+  isPositionAllowedForDefectUnit,
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { normalizeText } from "@/lib/nav";
 import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
+import { dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 
 function toDateInput(v: Date | string | null | undefined): string {
   if (!v) return "";
@@ -36,6 +37,7 @@ function toDateInput(v: Date | string | null | undefined): string {
 }
 
 const NONE = "__none__";
+const YES_NO_OPTIONS = ["Có", "Không"] as const;
 
 export function DefectForm({
   defect,
@@ -65,9 +67,13 @@ export function DefectForm({
   const [form, setForm] = React.useState({
     unit: defect?.unit ?? "",
     device: defect?.device ?? "",
+    deviceSystem: "",
+    deviceSystemSeq: "",
     system: defect?.system ?? "",
     severity: defect?.severity ?? "",
     condition: defect?.condition ?? "",
+    fireSafetyImpact: defect?.fireSafetyImpact ?? "Không",
+    environmentSafetyImpact: defect?.environmentSafetyImpact ?? "Không",
     requestType: defect?.requestType ?? "Cơ",
     requestNumber: defect?.requestNumber ?? "",
     content: defect?.content ?? "",
@@ -78,45 +84,119 @@ export function DefectForm({
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
-  // Khi Tổ máy = COMMON, chỉ cho chọn các cương vị dùng chung (so khớp không dấu/hoa-thường).
-  const commonAllowed = React.useMemo(() => new Set(DEFECT_COMMON_POSITIONS.map(normalizeText)), []);
+  // Cương vị mặc định theo từng Tổ máy (S1/S2/COMMON).
   const visiblePositions = React.useMemo(
-    () => (form.unit === "COMMON" ? positions.filter((p) => commonAllowed.has(normalizeText(p))) : positions),
-    [positions, form.unit, commonAllowed]
+    () => positions.filter((p) => isPositionAllowedForDefectUnit(form.unit, p)),
+    [positions, form.unit]
   );
-  // Chọn tổ máy; nếu chuyển sang COMMON mà cương vị hiện tại không thuộc nhóm dùng chung thì bỏ chọn.
+  // Chọn tổ máy; nếu cương vị hiện tại không thuộc nhóm mặc định của tổ máy mới thì bỏ chọn.
   function selectUnit(u: string) {
     setForm((f) => {
-      if (u === "COMMON" && f.system && !commonAllowed.has(normalizeText(f.system))) {
-        return { ...f, unit: u, system: "", device: "" };
+      if (f.system && !isPositionAllowedForDefectUnit(u, f.system)) {
+        return { ...f, unit: u, system: "", deviceSystem: "", deviceSystemSeq: "", device: "" };
       }
       return { ...f, unit: u };
     });
   }
-  const filteredDevices = React.useMemo(
-    () => devices.filter((d) => !form.system || deviceAllowedForPosition(d, form.system, equipmentNodes, positionScopes)),
-    [devices, form.system, equipmentNodes, positionScopes]
+  const equipmentIndex = React.useMemo(() => {
+    const bySeq = new Map(equipmentNodes.map((node) => [node.seq, node]));
+    const parentOf = new Map<string, string | null>();
+    const childrenOf = new Map<string, typeof equipmentNodes>();
+
+    for (const node of equipmentNodes) {
+      let parent = node.parentSeq && bySeq.has(node.parentSeq) ? node.parentSeq : null;
+      if (!parent) {
+        const parts = node.seq.split(".");
+        parts.pop();
+        while (parts.length) {
+          const candidate = parts.join(".");
+          if (bySeq.has(candidate)) {
+            parent = candidate;
+            break;
+          }
+          parts.pop();
+        }
+      }
+      parentOf.set(node.seq, parent);
+      if (parent) {
+        const children = childrenOf.get(parent) ?? [];
+        children.push(node);
+        childrenOf.set(parent, children);
+      }
+    }
+
+    return { bySeq, parentOf, childrenOf };
+  }, [equipmentNodes]);
+  function leafNodesFor(systemSeq: string) {
+    if (!systemSeq) return [];
+    const result: typeof equipmentNodes = [];
+    const queue = [...(equipmentIndex.childrenOf.get(systemSeq) ?? [])];
+    while (queue.length) {
+      const node = queue.shift()!;
+      const children = equipmentIndex.childrenOf.get(node.seq) ?? [];
+      if (children.length === 0) {
+        result.push(node);
+      } else {
+        queue.push(...children);
+      }
+    }
+    return dedupeEquipmentLeafNodes(result);
+  }
+  function systemSeqOfDevice(device: (typeof devices)[number]) {
+    return device.systemSeq ?? equipmentIndex.parentOf.get(device.code) ?? "";
+  }
+  const deviceOptions = React.useMemo(
+    () => leafNodesFor(form.deviceSystemSeq),
+    [equipmentIndex, form.deviceSystemSeq]
   );
+  const selectedDeviceValue = React.useMemo(() => {
+    if (!form.device) return NONE;
+    return deviceOptions.find((node) => node.duplicateSeqs.includes(form.device))?.seq ?? form.device;
+  }, [deviceOptions, form.device]);
+  React.useEffect(() => {
+    if (!form.device || form.deviceSystemSeq || form.deviceSystem) return;
+    const selectedDevice = devices.find((d) => d.code === form.device);
+    if (!selectedDevice) return;
+    const systemSeq = systemSeqOfDevice(selectedDevice);
+    const systemName = systemSeq ? equipmentIndex.bySeq.get(systemSeq)?.name ?? selectedDevice.system ?? "" : selectedDevice.system ?? "";
+    if (!systemName && !systemSeq) return;
+    setForm((f) => (f.deviceSystemSeq || f.deviceSystem ? f : { ...f, deviceSystem: systemName, deviceSystemSeq: systemSeq }));
+  }, [devices, form.device, form.deviceSystem, form.deviceSystemSeq, equipmentIndex]);
   function setSystem(v: string) {
     setForm((f) => {
       const system = v === NONE ? "" : v;
       const selectedDevice = devices.find((d) => d.code === f.device);
+      const keepDevice =
+        !f.device ||
+        !selectedDevice ||
+        (!system || deviceAllowedForPosition(selectedDevice, system, equipmentNodes, positionScopes));
       return {
         ...f,
         system,
-        device:
-          selectedDevice && system && !deviceAllowedForPosition(selectedDevice, system, equipmentNodes, positionScopes)
-            ? ""
-            : f.device,
+        device: keepDevice ? f.device : "",
+      };
+    });
+  }
+  function setDeviceSystemNode(node: { seq: string; name: string } | null) {
+    setForm((f) => {
+      const deviceSystem = node?.name ?? "";
+      const deviceSystemSeq = node?.seq ?? "";
+      const nextDeviceSeqs = new Set(leafNodesFor(deviceSystemSeq).flatMap((leaf) => leaf.duplicateSeqs));
+      return {
+        ...f,
+        deviceSystem,
+        deviceSystemSeq,
+        device: f.device && !nextDeviceSeqs.has(f.device) ? "" : f.device,
       };
     });
   }
   function setDevice(v: string) {
     setForm((f) => {
       const device = v === NONE ? null : devices.find((d) => d.code === v);
+      const equipmentNode = v === NONE ? null : equipmentIndex.bySeq.get(v) ?? null;
       return {
         ...f,
-        device: device?.code ?? "",
+        device: equipmentNode?.seq ?? device?.code ?? "",
         system: device?.managingPosition ?? f.system,
       };
     });
@@ -139,7 +219,8 @@ export function DefectForm({
   async function submit() {
     const missing = missingGeneral();
     if (missing) { setStep(1); return toast.error(`Vui lòng chọn ${missing}`); }
-    const payload = { ...form, detectedAt: form.detectedAt || null };
+    const { deviceSystem: _deviceSystem, deviceSystemSeq: _deviceSystemSeq, ...defectForm } = form;
+    const payload = { ...defectForm, detectedAt: form.detectedAt || null };
     try {
       if (isEdit) await update.mutateAsync({ id: defect!.id, ...payload });
       else await create.mutateAsync(payload);
@@ -189,12 +270,22 @@ export function DefectForm({
                 </SelectContent>
               </Select>
             </Row>
+            <Row label="Hệ Thống">
+              <EquipmentTreePicker
+                value={form.deviceSystemSeq}
+                position={form.system || null}
+                onChange={setDeviceSystemNode}
+                placeholder="Chọn hệ thống thiết bị"
+              />
+            </Row>
             <Row label="Thiết Bị">
-              <Select value={form.device || NONE} onValueChange={setDevice}>
+              <Select value={selectedDeviceValue} onValueChange={setDevice}>
                 <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                  {filteredDevices.map((d) => <SelectItem key={d.id} value={d.code}>{d.code} — {d.name}</SelectItem>)}
+                  {deviceOptions.map((node) => (
+                    <SelectItem key={node.seq} value={node.seq}>{node.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </Row>
@@ -213,6 +304,22 @@ export function DefectForm({
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
                   {DEFECT_CONDITION_ORDER.map((c) => <SelectItem key={c} value={c}>{DEFECT_CONDITION[c]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row label="Ảnh hưởng PCCC">
+              <Select value={form.fireSafetyImpact} onValueChange={(v) => set("fireSafetyImpact", v)}>
+                <SelectTrigger><SelectValue placeholder="Chọn ảnh hưởng PCCC" /></SelectTrigger>
+                <SelectContent>
+                  {YES_NO_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </Row>
+            <Row label="Môi trường, ATVSLĐ">
+              <Select value={form.environmentSafetyImpact} onValueChange={(v) => set("environmentSafetyImpact", v)}>
+                <SelectTrigger><SelectValue placeholder="Chọn ảnh hưởng môi trường, ATVSLĐ" /></SelectTrigger>
+                <SelectContent>
+                  {YES_NO_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Row>

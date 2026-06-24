@@ -112,25 +112,80 @@ export const CHECKIN_STATUS = {
 // ---- Khiếm khuyết thiết bị (Defect) ----
 
 export const DEFECT_UNITS = ["S1", "S2", "COMMON"] as const;
+export type DefectUnit = (typeof DEFECT_UNITS)[number];
 
 /**
- * Khi Tổ máy = COMMON, dropdown Cương vị chỉ cho chọn các cương vị dùng chung này.
+ * Dropdown Cương vị trong form khiếm khuyết theo từng Tổ máy.
  * So khớp với danh sách cương vị thực tế bằng normalizeText (bỏ qua hoa/thường & dấu),
- * nên chính tả ở đây chỉ mang tính tham chiếu.
+ * nên chính tả ở đây chỉ mang tính tham chiếu. S1/S2 dùng chung một nhóm vị trí vận hành.
  */
+export const DEFECT_UNIT_POSITIONS: Record<DefectUnit, readonly string[]> = {
+  S1: [
+    "TK Lò máy",
+    "Trưởng kíp điện",
+    "Trực chính điện",
+    "Trực phụ điện",
+    "Lò Trưởng",
+    "Máy Trưởng",
+    "Máy Phó",
+    "Trợ Thủ",
+    "Trạm bơm tuần hoàn",
+    "Lò Phó",
+    "Máy Nghiền",
+    "Thải Xỉ",
+    "ESP",
+    "FGD",
+    "Thiết bị đo lường điều khiển",
+  ],
+  S2: [
+    "TK Lò máy",
+    "Trưởng kíp điện",
+    "Trực chính điện",
+    "Trực phụ điện",
+    "Lò Trưởng",
+    "Máy Trưởng",
+    "Máy Phó",
+    "Trợ Thủ",
+    "Trạm bơm tuần hoàn",
+    "Lò Phó",
+    "Máy Nghiền",
+    "Thải Xỉ",
+    "ESP",
+    "FGD",
+    "Thiết bị đo lường điều khiển",
+  ],
+  COMMON: [
+    "TK Lò máy",
+    "Trưởng kíp điện",
+    "XLNT",
+    "XLN hỗn hợp",
+    "Trạm bơm nước thô",
+    "Thiết bị đo lường điều khiển",
+    "NH3- Lò hơi phụ",
+    "Khí nén - Nhà dầu",
+  ],
+} as const;
+
 export const DEFECT_COMMON_POSITIONS = [
-  "Khí Nén - Nhà Dầu",
-  "NH3 - Lò hơi phụ",
-  "Thiết bị đo lường điều khiển",
-  "Trạm bơm nước thô",
-  "TK Lò máy",
-  "XLNT",
-  "XLN hỗn hợp",
-  "Trưởng ca",
-  "Trưởng kíp điện",
-  "Trực chính Điện",
-  "Trực phụ điện",
+  ...DEFECT_UNIT_POSITIONS.COMMON,
 ] as const;
+
+function normalizePositionKey(value: string) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isPositionAllowedForDefectUnit(unit: string | null | undefined, position: string) {
+  if (!unit || !DEFECT_UNITS.includes(unit as DefectUnit)) return true;
+  const allowed = DEFECT_UNIT_POSITIONS[unit as DefectUnit];
+  const positionKey = normalizePositionKey(position);
+  return allowed.some((item) => {
+    const allowedKey = normalizePositionKey(item);
+    return positionKey === allowedKey || positionKey.includes(allowedKey) || allowedKey.includes(positionKey);
+  });
+}
 
 /**
  * Lọc "Hệ thống thiết bị" theo "Cương vị quản lý" trong form thiết bị.
@@ -220,7 +275,7 @@ export function isSelectableManagingPosition(position?: string | null): boolean 
 /** Tình trạng khiếm khuyết. */
 export const DEFECT_STATUS = {
   CHUA_XU_LY: { label: "Chưa xử lý", badge: "bg-slate-100 text-slate-700", dot: "#64748B" },
-  CO_PCT: { label: "Đang có PCT thực hiện", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
+  CO_PCT: { label: "Đang thực hiện", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
   CHO_VAT_TU: { label: "Chờ vật tư", badge: "bg-amber-100 text-amber-800", dot: "#D97706" },
   DA_XU_LY: { label: "Đã xử lý", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
 } as const;

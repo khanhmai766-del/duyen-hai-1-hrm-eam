@@ -12,16 +12,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
-import { useCreateDevice, useUpdateDevice } from "@/hooks/useDevices";
+import { useCreateDevice, useUpdateDevice, type DeviceRecord } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { usePositions } from "@/hooks/useUsers";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
-import type { Device } from "@/types";
 
 const NONE = "__none__";
 
-export function DeviceForm({ device, onDone }: { device?: Device | null; onDone?: (d: Device) => void }) {
+export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; onDone?: (d: DeviceRecord) => void }) {
   const { data: session } = useSession();
   const create = useCreateDevice();
   const update = useUpdateDevice();

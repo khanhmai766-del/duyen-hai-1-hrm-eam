@@ -7,6 +7,9 @@ export interface NormalizedEquipmentNode {
   drawing: string | null;
   depth: number;
   deviceId?: string | null;
+  attachedInfo?: string | null;
+  documentUrl?: string | null;
+  imageUrl?: string | null;
 }
 
 const WATER_TREATMENT_ROOT = {
@@ -41,6 +44,50 @@ export function compareEquipmentSeq(a: string, b: string) {
     if (x !== y) return x - y;
   }
   return 0;
+}
+
+function normalizeDuplicateText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export type DedupedEquipmentLeaf<T extends { seq: string; name: string }> = T & {
+  duplicateSeqs: string[];
+  duplicateCount: number;
+};
+
+export function dedupeEquipmentLeafNodes<
+  T extends { seq: string; name: string; parentSeq?: string | null; drawing?: string | null; deviceId?: string | null },
+>(
+  nodes: T[]
+): DedupedEquipmentLeaf<T>[] {
+  const grouped = new Map<string, DedupedEquipmentLeaf<T>>();
+
+  for (const node of nodes) {
+    const key = [node.parentSeq ?? "", normalizeDuplicateText(node.name) || node.seq].join("|");
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, {
+        ...node,
+        duplicateSeqs: [node.seq],
+        duplicateCount: 1,
+      });
+      continue;
+    }
+
+    existing.duplicateSeqs.push(node.seq);
+    existing.duplicateCount += 1;
+    if (!existing.drawing && node.drawing) existing.drawing = node.drawing;
+    if (!existing.deviceId && node.deviceId) existing.deviceId = node.deviceId;
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
 }
 
 export function normalizeEquipmentNodeName(seq: string, name: string) {
@@ -81,7 +128,7 @@ export function normalizeEquipmentNodes(nodes: NormalizedEquipmentNode[]) {
 export async function getNormalizedEquipmentNodes(prisma: PrismaClient) {
   const nodes = await prisma.equipmentNode.findMany({
     orderBy: { sort: "asc" },
-    select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true },
+    select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true, attachedInfo: true, documentUrl: true, imageUrl: true },
   });
   return normalizeEquipmentNodes(nodes);
 }

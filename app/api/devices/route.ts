@@ -1,104 +1,137 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import type { Prisma } from "@prisma/client";
-import { syncDeviceEquipmentNode } from "@/lib/equipment-node-sync";
-import { buildEquipmentTreeIndex, getEquipmentDescendantSeqs, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
+import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import {
+  buildEquipmentTreeIndex,
+  compareEquipmentSeq,
+  getEquipmentDescendantSeqs,
+  getNormalizedEquipmentNodes,
+  type NormalizedEquipmentNode,
+} from "@/lib/equipment-tree";
+import { normalizeText } from "@/lib/nav";
+
+export const dynamic = "force-dynamic";
+
+function parentSeqOf(seq: string) {
+  const parts = seq.split(".");
+  parts.pop();
+  return parts.length ? parts.join(".") : null;
+}
+
+function publicEquipmentUrl(seq: string) {
+  const base = process.env.NEXT_PUBLIC_APP_URL || "";
+  return `${base}/public/equipment/${encodeURIComponent(seq)}`;
+}
+
+function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipmentNode | null) {
+  return {
+    id: node.seq,
+    code: node.seq,
+    name: node.name,
+    system: parent?.name ?? null,
+    systemSeq: parent?.seq ?? null,
+    managingPosition: null,
+    images: node.imageUrl ? [node.imageUrl] : [],
+    attachedInfo: node.attachedInfo ?? null,
+    documentUrl: node.documentUrl ?? null,
+    qrCodeData: publicEquipmentUrl(node.seq),
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+    repairLogs: [],
+    materials: [],
+    _count: { repairLogs: 0 },
+  };
+}
+
+async function getDeviceLikeRecords() {
+  const nodes = await getNormalizedEquipmentNodes(prisma);
+  const index = buildEquipmentTreeIndex(nodes);
+  const leafNodes = nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0);
+  return {
+    nodes,
+    index,
+    records: leafNodes.map((node) => {
+      const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
+      const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
+      return toDeviceRecord(node, parent);
+    }),
+  };
+}
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
     const sp = req.nextUrl.searchParams;
-    const q = sp.get("q")?.trim();
-    const system = sp.get("system");
+    const q = normalizeText(sp.get("q")?.trim() ?? "");
     const systemSeq = sp.get("systemSeq")?.trim();
+    const systemName = sp.get("system")?.trim();
 
-    const where: Prisma.DeviceWhereInput = {};
-    if (!systemSeq && system && system !== "ALL") where.system = system;
-    if (q) {
-      where.OR = [
-        { code: { contains: q, mode: "insensitive" } },
-        { name: { contains: q, mode: "insensitive" } },
-        { system: { contains: q, mode: "insensitive" } },
-        { managingPosition: { contains: q, mode: "insensitive" } },
-      ];
-    }
+    const { nodes, index, records } = await getDeviceLikeRecords();
+    const allowedSeqs = systemSeq ? getEquipmentDescendantSeqs(nodes, systemSeq) : null;
 
-    const rawDevices = await prisma.device.findMany({
-      where,
-      orderBy: { code: "asc" },
-      include: {
-        repairLogs: { orderBy: { startedAt: "desc" }, take: 1 },
-        _count: { select: { repairLogs: true } },
-      },
-    });
-
-    const equipmentNodes = await getNormalizedEquipmentNodes(prisma);
-    const { bySeq } = buildEquipmentTreeIndex(equipmentNodes);
-    const allowedSeqs = systemSeq ? getEquipmentDescendantSeqs(equipmentNodes, systemSeq) : null;
-    const allowedSystemNames = allowedSeqs
-      ? new Set(Array.from(allowedSeqs).map((seq) => bySeq.get(seq)?.name).filter((name): name is string => !!name))
-      : null;
-    const devices = rawDevices
+    const devices = records
       .filter((device) => {
-        if (!allowedSeqs) return true;
-        return allowedSeqs.has(device.code) || (!!device.system && allowedSystemNames?.has(device.system));
+        if (allowedSeqs && !allowedSeqs.has(device.code)) return false;
+        if (!allowedSeqs && systemName && systemName !== "ALL" && device.system !== systemName) return false;
+        if (!q) return true;
+        return normalizeText([device.code, device.name, device.system].filter(Boolean).join(" ")).includes(q);
       })
-      .map((device) => {
-        const treeNode = bySeq.get(device.code);
-        return {
-          ...device,
-          systemSeq: treeNode?.parentSeq ?? null,
-        };
-      });
+      .sort((a, b) => compareEquipmentSeq(a.code, b.code));
 
-    // Danh sách "Hệ thống" phân biệt (bỏ qua bộ lọc system) cho dropdown lọc.
-    const grouped = await prisma.device.groupBy({
-      by: ["system"],
-      where: q ? { OR: where.OR } : {},
+    const systems = Array.from(
+      new Set(
+        records
+          .map((device) => device.system)
+          .filter((name): name is string => !!name)
+      )
+    ).sort((a, b) => a.localeCompare(b, "vi"));
+
+    return ok(devices, {
+      total: devices.length,
+      systems,
+      rootSystems: index.roots.map((node) => ({ seq: node.seq, name: node.name })),
+      source: "equipment-node",
     });
-    const systems = grouped
-      .map((g) => g.system)
-      .filter((s): s is string => !!s)
-      .sort((a, b) => a.localeCompare(b, "vi"));
-
-    return ok(devices, { total: devices.length, systems });
   });
 }
 
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]); // chỉ Quản trị viên được thêm thiết bị
+    requireRole(user, ["ADMIN"]);
     const body = await req.json();
-    if (!body.code || !body.name) {
-      return fail("Thiếu thông tin bắt buộc (mã, tên thiết bị)");
-    }
-    const exists = await prisma.device.findUnique({ where: { code: body.code } });
-    if (exists) return fail("Mã thiết bị đã tồn tại");
+    const seq = String(body.code ?? body.seq ?? "").trim();
+    const name = String(body.name ?? "").trim();
+    if (!seq || !name) return fail("Thiếu số thứ tự hoặc tên thiết bị");
 
-    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
-    const code = String(body.code).trim();
-    const name = String(body.name).trim();
-    const system = body.system?.trim() || null;
-    const systemSeq = typeof body.systemSeq === "string" ? body.systemSeq.trim() : null;
-    const device = await prisma.device.create({
+    const existing = await prisma.equipmentNode.findUnique({ where: { seq } });
+    if (existing) return fail("Số thứ tự thiết bị đã tồn tại");
+
+    const parentSeq = String(body.systemSeq ?? "").trim() || parentSeqOf(seq);
+    const maxSort = await prisma.equipmentNode.aggregate({ _max: { sort: true } });
+    const imageUrl = Array.isArray(body.images) ? body.images.filter(Boolean)[0] ?? null : null;
+    const node = await prisma.equipmentNode.create({
       data: {
-        code,
+        seq,
+        code: seq,
         name,
-        system,
-        managingPosition: body.managingPosition?.trim() || null,
-        images,
-        attachedInfo: body.attachedInfo?.trim() || null,
-        documentUrl: body.documentUrl?.trim() || null,
+        parentSeq,
+        depth: seq.split(".").length,
+        sort: (maxSort._max.sort ?? 0) + 1,
+        drawing: null,
+        kks: null,
+        attachedInfo: typeof body.attachedInfo === "string" ? body.attachedInfo.trim() || null : null,
+        documentUrl: typeof body.documentUrl === "string" ? body.documentUrl.trim() || null : null,
+        imageUrl,
+        deviceSynced: true,
       },
     });
-    await syncDeviceEquipmentNode(prisma, { seq: code, parentSeq: systemSeq, name });
-    await prisma.device.update({
-      where: { id: device.id },
-      data: { qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || ""}/public/devices/${device.id}` },
-    });
-    await audit(user.id, "CREATE_DEVICE", "Device", device.id, device.code);
-    return ok(device);
+
+    const nodes = await getNormalizedEquipmentNodes(prisma);
+    const index = buildEquipmentTreeIndex(nodes);
+    const effectiveParentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
+    const parent = effectiveParentSeq ? index.bySeq.get(effectiveParentSeq) ?? null : null;
+    await audit(user.id, "CREATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
+    return ok(toDeviceRecord({ ...node, drawing: node.drawing, attachedInfo: node.attachedInfo, documentUrl: node.documentUrl, imageUrl: node.imageUrl }, parent));
   });
 }

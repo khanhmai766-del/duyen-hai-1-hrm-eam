@@ -28,7 +28,7 @@ export default function DeviceDetailPage() {
   const [delOpen, setDelOpen] = React.useState(false);
 
   const device = data?.data;
-  const url = typeof window !== "undefined" ? `${window.location.origin}/public/devices/${id}` : "";
+  const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
 
   function downloadQr() {
     const svg = document.getElementById("device-qr");
@@ -144,7 +144,7 @@ export default function DeviceDetailPage() {
             <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Vật tư sử dụng</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {device.materials.length ? (
-                device.materials.map((m) => (
+                device.materials.map((m: any) => (
                   <div key={m.id} className="rounded-lg border border-border p-3 text-sm">
                     <div className="font-medium text-ink">{m.material.name}</div>
                     <div className="text-xs text-muted-foreground">

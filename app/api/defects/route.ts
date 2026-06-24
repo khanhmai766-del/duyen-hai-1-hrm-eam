@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import {
+  ensureDefectImpactColumns,
+  normalizeImpactValue,
+  readDefectImpactFields,
+  updateDefectImpactFields,
+} from "@/lib/defect-impact-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +15,7 @@ const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, a
 export async function GET() {
   return handle(async () => {
     await requireUser();
+    await ensureDefectImpactColumns(prisma);
     // Ẩn các phiếu đã xử lý quá 2 tuần khỏi danh sách (lịch sử vẫn giữ riêng).
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const defects = await prisma.defect.findMany({
@@ -16,7 +23,9 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       include: INCLUDE,
     });
-    return ok(defects, { total: defects.length });
+    const impactById = await readDefectImpactFields(prisma, defects.map((defect) => defect.id));
+    const data = defects.map((defect) => ({ ...defect, ...impactById.get(defect.id) }));
+    return ok(data, { total: defects.length });
   });
 }
 
@@ -27,6 +36,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
+    await ensureDefectImpactColumns(prisma);
+    const impactFields = {
+      fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
+      environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
+    };
 
     const defect = await prisma.defect.create({
       data: {
@@ -45,7 +59,8 @@ export async function POST(req: NextRequest) {
       },
       include: INCLUDE,
     });
+    await updateDefectImpactFields(prisma, defect.id, impactFields);
     await audit(user.id, "CREATE_DEFECT", "Defect", defect.id);
-    return ok(defect);
+    return ok({ ...defect, ...impactFields });
   });
 }

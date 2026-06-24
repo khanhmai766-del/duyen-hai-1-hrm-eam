@@ -1,11 +1,9 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { ok, requireUser, handle } from "@/lib/api";
 import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { handle, ok, requireUser } from "@/lib/api";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 
-const DEVICE_SELECT = { id: true, code: true, name: true, system: true } satisfies Prisma.DeviceSelect;
-
-/** GET /api/material-replacements/history — lịch sử các lần ghi nhận thay thế. */
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
@@ -16,9 +14,9 @@ export async function GET(req: NextRequest) {
     if (q) {
       where.OR = [
         { note: { contains: q, mode: "insensitive" } },
-        { replacement: { is: { device: { is: { code: { contains: q, mode: "insensitive" } } } } } },
+        { replacement: { is: { device: { is: { seq: { contains: q, mode: "insensitive" } } } } } },
         { replacement: { is: { device: { is: { name: { contains: q, mode: "insensitive" } } } } } },
-        { replacement: { is: { material: { is: { deviceMaterials: { some: { device: { is: { code: { contains: q, mode: "insensitive" } } } } } } } } } },
+        { replacement: { is: { material: { is: { deviceMaterials: { some: { device: { is: { seq: { contains: q, mode: "insensitive" } } } } } } } } } },
         { replacement: { is: { material: { is: { deviceMaterials: { some: { device: { is: { name: { contains: q, mode: "insensitive" } } } } } } } } } },
         { replacement: { is: { material: { is: { name: { contains: q, mode: "insensitive" } } } } } },
         { replacement: { is: { material: { is: { code: { contains: q, mode: "insensitive" } } } } } },
@@ -35,7 +33,7 @@ export async function GET(req: NextRequest) {
             system: true,
             intervalMonths: true,
             intervalNote: true,
-            device: { select: DEVICE_SELECT },
+            device: { select: EQUIPMENT_DEVICE_SELECT },
             material: {
               select: {
                 id: true,
@@ -44,7 +42,7 @@ export async function GET(req: NextRequest) {
                 unit: true,
                 system: true,
                 deviceMaterials: {
-                  select: { device: { select: DEVICE_SELECT } },
+                  select: { device: { select: EQUIPMENT_DEVICE_SELECT } },
                   orderBy: { usedAt: "desc" },
                 },
               },
@@ -54,6 +52,24 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return ok(logs, { total: logs.length });
+    return ok(
+      logs.map((log: any) => ({
+        ...log,
+        replacement: log.replacement
+          ? {
+              ...log.replacement,
+              device: equipmentNodeToDevice(log.replacement.device),
+              material: {
+                ...log.replacement.material,
+                deviceMaterials: log.replacement.material.deviceMaterials?.map((dm: any) => ({
+                  ...dm,
+                  device: equipmentNodeToDevice(dm.device),
+                })),
+              },
+            }
+          : null,
+      })),
+      { total: logs.length }
+    );
   });
 }

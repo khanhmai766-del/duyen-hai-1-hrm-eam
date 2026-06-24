@@ -191,27 +191,9 @@ model ShiftHandover {
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 }
 
-model Device {
-  id               String   @id @default(cuid())
-  code             String   @unique // Mã thiết bị, vd "ESP-S1-001"
-  name             String // Tên thiết bị
-  system           String? // Hệ thống (nhập tự do) — thay cho "Loại thiết bị"
-  managingPosition String? // Cương vị quản lý (đồng bộ chức vụ người dùng)
-  images           String[] // Ảnh (tối đa 3) — base64 hoặc URL
-  attachedInfo     String? // Thông tin đính kèm theo
-  documentUrl      String? // Tài liệu đính kèm (link)
-  qrCodeData       String? // encoded URL (sinh từ mã)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  materials            DeviceMaterial[]
-  repairLogs           RepairLog[]
-  materialReplacements MaterialReplacement[]
-}
-
 model RepairLog {
   id           String       @id @default(cuid())
-  deviceId     String
+  deviceSeq    String
   title        String
   description  String
   symptom      String?
@@ -230,9 +212,11 @@ model RepairLog {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  device     Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  device     EquipmentNode @relation(fields: [deviceSeq], references: [seq], onDelete: Cascade)
   createdBy  User   @relation("CreatedBy", fields: [createdById], references: [id])
   approvedBy User?  @relation("ApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([deviceSeq])
 }
 
 enum RepairStatus {
@@ -265,7 +249,7 @@ model Material {
   note      String? // "Ghi chú"
   createdAt DateTime @default(now())
 
-  deviceMaterials DeviceMaterial[]
+  deviceMaterials EquipmentMaterial[]
   replacements    MaterialReplacement[]
 }
 
@@ -274,7 +258,7 @@ model Material {
 model MaterialReplacement {
   id             String    @id @default(cuid())
   materialId     String
-  deviceId       String? // thiết bị chính thức (tuỳ chọn)
+  deviceSeq      String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
   location       String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
   system         String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
   intervalMonths Int // chu kỳ thay thế (tháng)
@@ -288,9 +272,11 @@ model MaterialReplacement {
   updatedAt      DateTime  @updatedAt
 
   material  Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  device    Device?                  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  device    EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
   createdBy User                     @relation("MrCreatedBy", fields: [createdById], references: [id])
   logs      MaterialReplacementLog[]
+
+  @@index([deviceSeq])
 }
 
 // Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.
@@ -306,16 +292,19 @@ model MaterialReplacementLog {
   doneBy      User                @relation("MrDoneBy", fields: [doneById], references: [id])
 }
 
-model DeviceMaterial {
+model EquipmentMaterial {
   id         String   @id @default(cuid())
-  deviceId   String
+  deviceSeq  String
   materialId String
   quantity   Int
   usedAt     DateTime @default(now())
   note       String?
 
-  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  material Material @relation(fields: [materialId], references: [id])
+  device   EquipmentNode @relation(fields: [deviceSeq], references: [seq], onDelete: Cascade)
+  material Material      @relation(fields: [materialId], references: [id])
+
+  @@index([deviceSeq])
+  @@index([materialId])
 }
 
 // Khiếm khuyết thiết bị (Defect) — phiếu ghi nhận khiếm khuyết theo tổ máy/hệ thống.
@@ -326,6 +315,8 @@ model Defect {
   system        String? // Cương vị (chức vụ phụ trách)
   severity      String? // Mức độ: "1".."4"
   condition     String? // Điều kiện thực hiện: A | B
+  fireSafetyImpact       String? // Ảnh hưởng PCCC: Có | Không
+  environmentSafetyImpact String? // Môi trường, ATVSLĐ: Có | Không
   requestType   String? // Yêu cầu: Cơ | Điện | I&C | Khác
   requestNumber String? // Số yêu cầu
   content       String? // Nội dung
@@ -464,7 +455,18 @@ model EquipmentNode {
   drawing   String? // bản vẽ liên quan
   depth     Int // số đoạn của seq (1..n)
   sort      Int // thứ tự ổn định theo file nguồn
+  // Người dùng tự bổ sung khi sửa thẻ thiết bị (tách khỏi dữ liệu nhập từ Excel).
+  attachedInfo String? // thông tin thêm
+  documentUrl  String? // tài liệu đính kèm (link)
+  imageUrl     String? // 1 hình ảnh (base64 hoặc URL)
+  // true nếu node do đồng bộ khi TẠO MỚI thiết bị sinh ra (seq không có trong danh mục gốc).
+  // Dùng để xóa node theo khi xóa Device, mà không đụng node danh mục nhập từ Excel.
+  deviceSynced Boolean @default(false)
   createdAt DateTime @default(now())
+
+  repairLogs           RepairLog[]
+  deviceMaterials      EquipmentMaterial[]
+  materialReplacements MaterialReplacement[]
 
   @@index([parentSeq])
   @@index([code])

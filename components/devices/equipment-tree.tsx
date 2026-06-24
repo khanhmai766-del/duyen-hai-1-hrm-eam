@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronRight,
   Folder,
@@ -292,7 +291,14 @@ function DetailPanel({
   childCount: number;
   onSelect: (seq: string) => void;
 }) {
+  const router = useRouter();
   const isGroup = childCount > 0;
+
+  // Mở lý lịch của node lá trực tiếp theo số thứ tự cây thiết bị.
+  async function openRecord() {
+    router.push(`/devices/${encodeURIComponent(node.seq)}`);
+  }
+
   return (
     <div className="space-y-4">
       {ancestors.length > 0 && (
@@ -333,9 +339,9 @@ function DetailPanel({
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${childCount} thiết bị con` : "Thiết bị"} />
       </div>
 
-      {node.deviceId && (
-        <Button asChild className="w-full">
-          <Link href={`/devices/${node.deviceId}`}>Xem lý lịch thiết bị</Link>
+      {!isGroup && (
+        <Button className="w-full" onClick={openRecord}>
+          Xem lý lịch thiết bị
         </Button>
       )}
     </div>

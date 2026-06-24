@@ -1,21 +1,60 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { syncDeviceEquipmentNode } from "@/lib/equipment-node-sync";
+import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import {
+  buildEquipmentTreeIndex,
+  getNormalizedEquipmentNodes,
+  type NormalizedEquipmentNode,
+} from "@/lib/equipment-tree";
+
+export const dynamic = "force-dynamic";
+
+function parentSeqOf(seq: string) {
+  const parts = seq.split(".");
+  parts.pop();
+  return parts.length ? parts.join(".") : null;
+}
+
+function publicEquipmentUrl(seq: string) {
+  const base = process.env.NEXT_PUBLIC_APP_URL || "";
+  return `${base}/public/equipment/${encodeURIComponent(seq)}`;
+}
+
+function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipmentNode | null) {
+  return {
+    id: node.seq,
+    code: node.seq,
+    name: node.name,
+    system: parent?.name ?? null,
+    systemSeq: parent?.seq ?? null,
+    managingPosition: null,
+    images: node.imageUrl ? [node.imageUrl] : [],
+    attachedInfo: node.attachedInfo ?? null,
+    documentUrl: node.documentUrl ?? null,
+    qrCodeData: publicEquipmentUrl(node.seq),
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+    repairLogs: [],
+    materials: [],
+    _count: { repairLogs: 0 },
+  };
+}
+
+async function findEquipmentRecord(seq: string) {
+  const nodes = await getNormalizedEquipmentNodes(prisma);
+  const index = buildEquipmentTreeIndex(nodes);
+  const node = index.bySeq.get(seq);
+  if (!node) return null;
+  const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
+  const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
+  return toDeviceRecord(node, parent);
+}
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     await requireUser();
-    const device = await prisma.device.findUnique({
-      where: { id: params.id },
-      include: {
-        repairLogs: {
-          orderBy: { startedAt: "desc" },
-          include: { createdBy: { select: { id: true, name: true, position: true } } },
-        },
-        materials: { include: { material: true }, orderBy: { usedAt: "desc" } },
-      },
-    });
+    const seq = decodeURIComponent(params.id);
+    const device = await findEquipmentRecord(seq);
     if (!device) return fail("Không tìm thấy thiết bị", 404);
     return ok(device);
   });
@@ -25,44 +64,42 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    const currentSeq = decodeURIComponent(params.id);
     const body = await req.json();
-    const current = await prisma.device.findUnique({
-      where: { id: params.id },
-      select: { id: true, code: true },
-    });
+    const current = await prisma.equipmentNode.findUnique({ where: { seq: currentSeq } });
     if (!current) return fail("Không tìm thấy thiết bị", 404);
 
-    const nextCode = typeof body.code === "string" ? body.code.trim() : undefined;
-    if (body.code !== undefined && !nextCode) return fail("Mã thiết bị không được để trống");
-    const codeChanged = !!nextCode && nextCode !== current.code;
-    if (codeChanged && user.role !== "ADMIN") {
-      return fail("Chỉ Quản trị viên được chỉnh sửa mã thiết bị", 403);
+    const nextSeq = typeof body.code === "string" ? body.code.trim() : currentSeq;
+    const name = typeof body.name === "string" ? body.name.trim() : current.name;
+    if (!nextSeq || !name) return fail("Số thứ tự và tên thiết bị không được để trống");
+    if (nextSeq !== currentSeq && user.role !== "ADMIN") {
+      return fail("Chỉ Quản trị viên được chỉnh sửa số thứ tự thiết bị", 403);
     }
-    if (codeChanged) {
-      const exists = await prisma.device.findUnique({ where: { code: nextCode } });
-      if (exists && exists.id !== params.id) return fail("Mã thiết bị đã tồn tại");
+    if (nextSeq !== currentSeq) {
+      const exists = await prisma.equipmentNode.findUnique({ where: { seq: nextSeq } });
+      if (exists) return fail("Số thứ tự thiết bị đã tồn tại");
     }
-    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : undefined;
-    const systemSeq = typeof body.systemSeq === "string" ? body.systemSeq.trim() : null;
-    const device = await prisma.device.update({
-      where: { id: params.id },
+
+    const images = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
+    const parentSeq = typeof body.systemSeq === "string" && body.systemSeq.trim()
+      ? body.systemSeq.trim()
+      : parentSeqOf(nextSeq);
+    const node = await prisma.equipmentNode.update({
+      where: { seq: currentSeq },
       data: {
-        ...(codeChanged ? { code: nextCode } : {}),
-        name: body.name,
-        system: body.system !== undefined ? body.system?.trim() || null : undefined,
-        managingPosition: body.managingPosition !== undefined ? body.managingPosition?.trim() || null : undefined,
-        images,
-        attachedInfo: body.attachedInfo !== undefined ? body.attachedInfo?.trim() || null : undefined,
-        documentUrl: body.documentUrl !== undefined ? body.documentUrl?.trim() || null : undefined,
+        seq: nextSeq,
+        code: nextSeq,
+        name,
+        parentSeq,
+        depth: nextSeq.split(".").length,
+        attachedInfo: body.attachedInfo !== undefined ? String(body.attachedInfo || "").trim() || null : undefined,
+        documentUrl: body.documentUrl !== undefined ? String(body.documentUrl || "").trim() || null : undefined,
+        imageUrl: body.images !== undefined ? images[0] ?? null : undefined,
       },
     });
-    await syncDeviceEquipmentNode(prisma, {
-      seq: device.code,
-      previousSeq: current.code,
-      parentSeq: systemSeq,
-      name: device.name,
-    });
-    await audit(user.id, "UPDATE_DEVICE", "Device", device.id, device.code);
+
+    await audit(user.id, "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
+    const device = await findEquipmentRecord(node.seq);
     return ok(device);
   });
 }
@@ -70,9 +107,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]); // only ADMIN can delete devices
-    await prisma.device.delete({ where: { id: params.id } });
-    await audit(user.id, "DELETE_DEVICE", "Device", params.id);
-    return ok({ id: params.id });
+    requireRole(user, ["ADMIN"]);
+    const seq = decodeURIComponent(params.id);
+    const node = await prisma.equipmentNode.findUnique({ where: { seq } });
+    if (!node) return fail("Không tìm thấy thiết bị", 404);
+    const childCount = await prisma.equipmentNode.count({ where: { parentSeq: seq } });
+    if (childCount > 0) return fail("Không thể xóa thư mục/hệ thống đang có thiết bị con", 400);
+    await prisma.equipmentNode.delete({ where: { seq } });
+    await audit(user.id, "DELETE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
+    return ok({ id: seq, code: seq });
   });
 }

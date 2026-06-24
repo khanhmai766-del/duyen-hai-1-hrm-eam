@@ -1,4 +1,4 @@
-import { PrismaClient, Role, ShiftType, RepairStatus, Priority } from "@prisma/client";
+﻿import { PrismaClient, Role, ShiftType, RepairStatus, Priority } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -17,21 +17,20 @@ function atToday(hour: number, min = 0): Date {
 }
 
 async function main() {
-  console.log("🌱 Seeding PowerPlant EAM database...");
+  console.log("ðŸŒ± Seeding PowerPlant EAM database...");
 
   // ---- Clean (order matters for FKs) ----
   await prisma.operationEvent.deleteMany();
   await prisma.defect.deleteMany();
   await prisma.materialReplacementLog.deleteMany();
   await prisma.materialReplacement.deleteMany();
-  await prisma.deviceMaterial.deleteMany();
+  await prisma.equipmentMaterial.deleteMany();
   await prisma.repairLog.deleteMany();
   await prisma.checkIn.deleteMany();
   await prisma.shiftHandover.deleteMany();
   await prisma.shiftAssignment.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.shift.deleteMany();
-  await prisma.device.deleteMany();
   await prisma.material.deleteMany();
   await prisma.user.deleteMany();
 
@@ -39,16 +38,16 @@ async function main() {
 
   // ---- Users ----
   const usersData = [
-    { name: "Nguyễn Văn Hùng", employeeId: "NV001", email: "admin@powerplant.vn", phone: "0901234567", role: Role.ADMIN, position: "Quản đốc phân xưởng", department: "Vận hành" },
-    { name: "Trần Thị Mai", employeeId: "NV002", email: "supervisor@powerplant.vn", phone: "0902345678", role: Role.SUPERVISOR, position: "Trưởng ca", department: "Vận hành 1" },
-    { name: "Lê Minh Tuấn", employeeId: "NV003", email: "tech@powerplant.vn", phone: "0903456789", role: Role.TECHNICIAN, position: "Kỹ thuật viên I&C", department: "Kỹ thuật" },
-    { name: "Phạm Thu Hà", employeeId: "NV004", email: "viewer@powerplant.vn", phone: "0904567890", role: Role.VIEWER, position: "Nhân viên văn phòng", department: "Hành chính" },
-    { name: "Hoàng Đức Anh", employeeId: "NV005", email: "lotruong.s1@powerplant.vn", phone: "0905111222", role: Role.TECHNICIAN, position: "Lò trưởng S1", department: "Vận hành 1" },
-    { name: "Vũ Quốc Bảo", employeeId: "NV006", email: "maytruong.s1@powerplant.vn", phone: "0905222333", role: Role.TECHNICIAN, position: "Máy trưởng S1", department: "Vận hành 1" },
-    { name: "Đặng Văn Cường", employeeId: "NV007", email: "tktruong@powerplant.vn", phone: "0905333444", role: Role.SUPERVISOR, position: "Trưởng kíp Lò - Máy", department: "Vận hành 1" },
-    { name: "Bùi Thị Dung", employeeId: "NV008", email: "dien.kip@powerplant.vn", phone: "0905444555", role: Role.TECHNICIAN, position: "Trưởng kíp điện", department: "Điện" },
-    { name: "Ngô Văn Em", employeeId: "NV009", email: "ic1@powerplant.vn", phone: "0905555666", role: Role.TECHNICIAN, position: "I&C", department: "Kỹ thuật" },
-    { name: "Dương Thị Hoa", employeeId: "NV010", email: "vh2@powerplant.vn", phone: "0905666777", role: Role.TECHNICIAN, position: "Vận hành viên", department: "Vận hành 2" },
+    { name: "Nguyá»…n VÄƒn HÃ¹ng", employeeId: "NV001", email: "admin@powerplant.vn", phone: "0901234567", role: Role.ADMIN, position: "Quáº£n Ä‘á»‘c phÃ¢n xÆ°á»Ÿng", department: "Váº­n hÃ nh" },
+    { name: "Tráº§n Thá»‹ Mai", employeeId: "NV002", email: "supervisor@powerplant.vn", phone: "0902345678", role: Role.SUPERVISOR, position: "TrÆ°á»Ÿng ca", department: "Váº­n hÃ nh 1" },
+    { name: "LÃª Minh Tuáº¥n", employeeId: "NV003", email: "tech@powerplant.vn", phone: "0903456789", role: Role.TECHNICIAN, position: "Ká»¹ thuáº­t viÃªn I&C", department: "Ká»¹ thuáº­t" },
+    { name: "Pháº¡m Thu HÃ ", employeeId: "NV004", email: "viewer@powerplant.vn", phone: "0904567890", role: Role.VIEWER, position: "NhÃ¢n viÃªn vÄƒn phÃ²ng", department: "HÃ nh chÃ­nh" },
+    { name: "HoÃ ng Äá»©c Anh", employeeId: "NV005", email: "lotruong.s1@powerplant.vn", phone: "0905111222", role: Role.TECHNICIAN, position: "LÃ² trÆ°á»Ÿng S1", department: "Váº­n hÃ nh 1" },
+    { name: "VÅ© Quá»‘c Báº£o", employeeId: "NV006", email: "maytruong.s1@powerplant.vn", phone: "0905222333", role: Role.TECHNICIAN, position: "MÃ¡y trÆ°á»Ÿng S1", department: "Váº­n hÃ nh 1" },
+    { name: "Äáº·ng VÄƒn CÆ°á»ng", employeeId: "NV007", email: "tktruong@powerplant.vn", phone: "0905333444", role: Role.SUPERVISOR, position: "TrÆ°á»Ÿng kÃ­p LÃ² - MÃ¡y", department: "Váº­n hÃ nh 1" },
+    { name: "BÃ¹i Thá»‹ Dung", employeeId: "NV008", email: "dien.kip@powerplant.vn", phone: "0905444555", role: Role.TECHNICIAN, position: "TrÆ°á»Ÿng kÃ­p Ä‘iá»‡n", department: "Äiá»‡n" },
+    { name: "NgÃ´ VÄƒn Em", employeeId: "NV009", email: "ic1@powerplant.vn", phone: "0905555666", role: Role.TECHNICIAN, position: "I&C", department: "Ká»¹ thuáº­t" },
+    { name: "DÆ°Æ¡ng Thá»‹ Hoa", employeeId: "NV010", email: "vh2@powerplant.vn", phone: "0905666777", role: Role.TECHNICIAN, position: "Váº­n hÃ nh viÃªn", department: "Váº­n hÃ nh 2" },
   ];
 
   const users = [];
@@ -64,48 +63,48 @@ async function main() {
       })
     );
   }
-  console.log(`✓ ${users.length} users`);
+  console.log(`âœ“ ${users.length} users`);
 
   // ---- Shifts ----
   const shiftToday = await prisma.shift.create({
-    data: { date: daysAgo(0), shiftType: ShiftType.AFTERNOON, unit: "Vận hành 1" },
+    data: { date: daysAgo(0), shiftType: ShiftType.AFTERNOON, unit: "Váº­n hÃ nh 1" },
   });
   const shiftTomorrow = await prisma.shift.create({
-    data: { date: daysAgo(-1), shiftType: ShiftType.MORNING, unit: "Vận hành 2" },
+    data: { date: daysAgo(-1), shiftType: ShiftType.MORNING, unit: "Váº­n hÃ nh 2" },
   });
-  console.log("✓ 2 shifts");
+  console.log("âœ“ 2 shifts");
 
   // ---- Shift assignments (org chart hierarchy) for today's shift ----
   const tc = await prisma.shiftAssignment.create({
-    data: { shiftId: shiftToday.id, userId: users[1].id, positionLabel: "Trưởng ca", parentId: null, isApproved: true },
+    data: { shiftId: shiftToday.id, userId: users[1].id, positionLabel: "TrÆ°á»Ÿng ca", parentId: null, isApproved: true },
   });
   const tkip = await prisma.shiftAssignment.create({
-    data: { shiftId: shiftToday.id, userId: users[6].id, positionLabel: "Trưởng kíp Lò - Máy DH1", parentId: tc.id, isApproved: true },
+    data: { shiftId: shiftToday.id, userId: users[6].id, positionLabel: "TrÆ°á»Ÿng kÃ­p LÃ² - MÃ¡y DH1", parentId: tc.id, isApproved: true },
   });
   await prisma.shiftAssignment.createMany({
     data: [
-      { shiftId: shiftToday.id, userId: users[5].id, positionLabel: "Máy trưởng S1", parentId: tkip.id, isApproved: true },
-      { shiftId: shiftToday.id, userId: users[4].id, positionLabel: "Lò trưởng S1", parentId: tkip.id, isApproved: true },
+      { shiftId: shiftToday.id, userId: users[5].id, positionLabel: "MÃ¡y trÆ°á»Ÿng S1", parentId: tkip.id, isApproved: true },
+      { shiftId: shiftToday.id, userId: users[4].id, positionLabel: "LÃ² trÆ°á»Ÿng S1", parentId: tkip.id, isApproved: true },
       { shiftId: shiftToday.id, userId: users[8].id, positionLabel: "I&C", parentId: tkip.id, isApproved: false },
-      { shiftId: shiftToday.id, userId: users[9].id, positionLabel: "Vận hành viên Lò", parentId: tkip.id, isApproved: true },
+      { shiftId: shiftToday.id, userId: users[9].id, positionLabel: "Váº­n hÃ nh viÃªn LÃ²", parentId: tkip.id, isApproved: true },
     ],
   });
   const tdien = await prisma.shiftAssignment.create({
-    data: { shiftId: shiftToday.id, userId: users[7].id, positionLabel: "Trưởng kíp điện", parentId: tc.id, isApproved: true },
+    data: { shiftId: shiftToday.id, userId: users[7].id, positionLabel: "TrÆ°á»Ÿng kÃ­p Ä‘iá»‡n", parentId: tc.id, isApproved: true },
   });
   await prisma.shiftAssignment.create({
-    data: { shiftId: shiftToday.id, userId: users[2].id, positionLabel: "Kỹ thuật viên điện", parentId: tdien.id, isApproved: false },
+    data: { shiftId: shiftToday.id, userId: users[2].id, positionLabel: "Ká»¹ thuáº­t viÃªn Ä‘iá»‡n", parentId: tdien.id, isApproved: false },
   });
-  console.log("✓ shift assignments (org chart)");
+  console.log("âœ“ shift assignments (org chart)");
 
   // ---- Check-ins for today's shift ----
   await prisma.checkIn.createMany({
     data: [
       { userId: users[1].id, shiftId: shiftToday.id, checkInAt: atToday(13, 55), status: "PRESENT", approvedBy: users[0].id },
       { userId: users[6].id, shiftId: shiftToday.id, checkInAt: atToday(13, 58), status: "PRESENT", approvedBy: users[1].id },
-      { userId: users[5].id, shiftId: shiftToday.id, checkInAt: atToday(14, 12), status: "LATE", note: "Kẹt xe" },
+      { userId: users[5].id, shiftId: shiftToday.id, checkInAt: atToday(14, 12), status: "LATE", note: "Káº¹t xe" },
       { userId: users[4].id, shiftId: shiftToday.id, checkInAt: atToday(13, 50), status: "PRESENT", approvedBy: users[1].id },
-      { userId: users[8].id, shiftId: shiftToday.id, checkInAt: null, status: "ABSENT", note: "Nghỉ phép" },
+      { userId: users[8].id, shiftId: shiftToday.id, checkInAt: null, status: "ABSENT", note: "Nghá»‰ phÃ©p" },
       { userId: users[9].id, shiftId: shiftToday.id, checkInAt: atToday(13, 59), status: "PRESENT" },
     ],
   });
@@ -117,71 +116,90 @@ async function main() {
       fromUserId: users[1].id,
       toUserId: users[6].id,
       handoverAt: atToday(14, 0),
-      notes: "Tổ máy 1 vận hành ổn định, tải 300MW.",
-      issues: "Bơm cấp 1B có tiếng ồn nhẹ, cần theo dõi. Van FGD-S1 đang chờ phụ tùng.",
+      notes: "Tá»• mÃ¡y 1 váº­n hÃ nh á»•n Ä‘á»‹nh, táº£i 300MW.",
+      issues: "BÆ¡m cáº¥p 1B cÃ³ tiáº¿ng á»“n nháº¹, cáº§n theo dÃµi. Van FGD-S1 Ä‘ang chá» phá»¥ tÃ¹ng.",
     },
   });
-  console.log("✓ check-ins + handover");
+  console.log("âœ“ check-ins + handover");
 
   // ---- Devices ----
   const deviceSeed: Array<{ code: string; name: string; system: string; managingPosition: string }> = [
-    { code: "ESP-S1-001", name: "Bộ lọc bụi tĩnh điện S1", system: "ESP", managingPosition: "Lò trưởng S1" },
-    { code: "ESP-S1-002", name: "Bộ lọc bụi tĩnh điện S2", system: "ESP", managingPosition: "Lò trưởng S1" },
-    { code: "ESP-S2-003", name: "Búa gõ điện cực ESP", system: "ESP", managingPosition: "Lò trưởng S1" },
-    { code: "FGD-S1-001", name: "Hệ thống khử lưu huỳnh S1", system: "FGD", managingPosition: "Máy trưởng S1" },
-    { code: "FGD-S1-002", name: "Bơm tuần hoàn FGD 1A", system: "FGD", managingPosition: "Máy trưởng S1" },
-    { code: "FGD-S2-003", name: "Bơm tuần hoàn FGD 1B", system: "FGD", managingPosition: "Máy trưởng S1" },
-    { code: "IC-S1-001", name: "Tủ điều khiển DCS lò 1", system: "I&C", managingPosition: "I&C" },
-    { code: "IC-S1-002", name: "Cảm biến nhiệt độ hơi quá nhiệt", system: "I&C", managingPosition: "I&C" },
-    { code: "IC-S2-003", name: "Bộ truyền tín hiệu áp suất", system: "I&C", managingPosition: "I&C" },
-    { code: "BLR-S1-001", name: "Lò hơi tổ máy 1", system: "Lò hơi", managingPosition: "Lò trưởng S1" },
-    { code: "BLR-S1-002", name: "Quạt gió chính FD 1A", system: "Lò hơi", managingPosition: "Trưởng kíp Lò - Máy" },
-    { code: "BLR-S2-003", name: "Bộ hâm nước economizer", system: "Lò hơi", managingPosition: "Trưởng kíp Lò - Máy" },
-    { code: "TBN-S1-001", name: "Tuabin hơi tổ máy 1", system: "Tuabin", managingPosition: "Máy trưởng S1" },
-    { code: "TBN-S1-002", name: "Máy phát điện tổ máy 1", system: "Máy phát", managingPosition: "Trưởng kíp điện" },
-    { code: "TBN-S2-003", name: "Bơm dầu bôi trơn tuabin", system: "Tuabin", managingPosition: "Máy trưởng S1" },
+    { code: "ESP-S1-001", name: "Bá»™ lá»c bá»¥i tÄ©nh Ä‘iá»‡n S1", system: "ESP", managingPosition: "LÃ² trÆ°á»Ÿng S1" },
+    { code: "ESP-S1-002", name: "Bá»™ lá»c bá»¥i tÄ©nh Ä‘iá»‡n S2", system: "ESP", managingPosition: "LÃ² trÆ°á»Ÿng S1" },
+    { code: "ESP-S2-003", name: "BÃºa gÃµ Ä‘iá»‡n cá»±c ESP", system: "ESP", managingPosition: "LÃ² trÆ°á»Ÿng S1" },
+    { code: "FGD-S1-001", name: "Há»‡ thá»‘ng khá»­ lÆ°u huá»³nh S1", system: "FGD", managingPosition: "MÃ¡y trÆ°á»Ÿng S1" },
+    { code: "FGD-S1-002", name: "BÆ¡m tuáº§n hoÃ n FGD 1A", system: "FGD", managingPosition: "MÃ¡y trÆ°á»Ÿng S1" },
+    { code: "FGD-S2-003", name: "BÆ¡m tuáº§n hoÃ n FGD 1B", system: "FGD", managingPosition: "MÃ¡y trÆ°á»Ÿng S1" },
+    { code: "IC-S1-001", name: "Tá»§ Ä‘iá»u khiá»ƒn DCS lÃ² 1", system: "I&C", managingPosition: "I&C" },
+    { code: "IC-S1-002", name: "Cáº£m biáº¿n nhiá»‡t Ä‘á»™ hÆ¡i quÃ¡ nhiá»‡t", system: "I&C", managingPosition: "I&C" },
+    { code: "IC-S2-003", name: "Bá»™ truyá»n tÃ­n hiá»‡u Ã¡p suáº¥t", system: "I&C", managingPosition: "I&C" },
+    { code: "BLR-S1-001", name: "LÃ² hÆ¡i tá»• mÃ¡y 1", system: "LÃ² hÆ¡i", managingPosition: "LÃ² trÆ°á»Ÿng S1" },
+    { code: "BLR-S1-002", name: "Quáº¡t giÃ³ chÃ­nh FD 1A", system: "LÃ² hÆ¡i", managingPosition: "TrÆ°á»Ÿng kÃ­p LÃ² - MÃ¡y" },
+    { code: "BLR-S2-003", name: "Bá»™ hÃ¢m nÆ°á»›c economizer", system: "LÃ² hÆ¡i", managingPosition: "TrÆ°á»Ÿng kÃ­p LÃ² - MÃ¡y" },
+    { code: "TBN-S1-001", name: "Tuabin hÆ¡i tá»• mÃ¡y 1", system: "Tuabin", managingPosition: "MÃ¡y trÆ°á»Ÿng S1" },
+    { code: "TBN-S1-002", name: "MÃ¡y phÃ¡t Ä‘iá»‡n tá»• mÃ¡y 1", system: "MÃ¡y phÃ¡t", managingPosition: "TrÆ°á»Ÿng kÃ­p Ä‘iá»‡n" },
+    { code: "TBN-S2-003", name: "BÆ¡m dáº§u bÃ´i trÆ¡n tuabin", system: "Tuabin", managingPosition: "MÃ¡y trÆ°á»Ÿng S1" },
   ];
 
   const devices = [];
-  for (const d of deviceSeed) {
-    const device = await prisma.device.create({ data: d });
-    await prisma.device.update({
-      where: { id: device.id },
-      data: { qrCodeData: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/devices/${device.id}` },
-    });
-    devices.push(device);
+  for (let i = 0; i < deviceSeed.length; i++) {
+    const d = deviceSeed[i];
+    devices.push(
+      await prisma.equipmentNode.upsert({
+        where: { seq: d.code },
+        update: {
+          code: d.code,
+          name: d.name,
+          parentSeq: null,
+          depth: 1,
+          sort: 10_000 + i,
+          attachedInfo: `Há»‡ thá»‘ng: ${d.system}; CÆ°Æ¡ng vá»‹ quáº£n lÃ½: ${d.managingPosition}`,
+          deviceSynced: true,
+        },
+        create: {
+          seq: d.code,
+          code: d.code,
+          name: d.name,
+          parentSeq: null,
+          depth: 1,
+          sort: 10_000 + i,
+          attachedInfo: `Há»‡ thá»‘ng: ${d.system}; CÆ°Æ¡ng vá»‹ quáº£n lÃ½: ${d.managingPosition}`,
+          deviceSynced: true,
+        },
+      })
+    );
   }
-  console.log(`✓ ${devices.length} devices`);
+  console.log(`âœ“ ${devices.length} devices`);
 
   // ---- Materials ----
   const materialSeed = [
-    { code: "VT-001", name: "Vòng bi SKF 6320", unit: "Cái", quantity: 24, minStock: 10, location: "Kho A1", supplier: "SKF Vietnam", unitPrice: 2_500_000 },
-    { code: "VT-002", name: "Dầu bôi trơn ISO VG 46", unit: "Lít", quantity: 180, minStock: 50, location: "Kho hóa chất", supplier: "Shell", unitPrice: 85_000 },
-    { code: "VT-003", name: "Gioăng làm kín FGD", unit: "Bộ", quantity: 4, minStock: 8, location: "Kho B2", supplier: "Doosan Parts", unitPrice: 1_200_000 },
-    { code: "VT-004", name: "Điện cực ESP", unit: "Tấm", quantity: 0, minStock: 6, location: "Kho A3", supplier: "Mitsubishi", unitPrice: 4_800_000 },
-    { code: "VT-005", name: "Cảm biến nhiệt PT100", unit: "Cái", quantity: 15, minStock: 5, location: "Kho I&C", supplier: "Endress+Hauser", unitPrice: 950_000 },
-    { code: "VT-006", name: "Van bi DN100", unit: "Cái", quantity: 7, minStock: 4, location: "Kho B1", supplier: "KSB Vietnam", unitPrice: 3_100_000 },
-    { code: "VT-007", name: "Dây cáp điện lực 6.3kV", unit: "Mét", quantity: 320, minStock: 100, location: "Kho điện", supplier: "Cadivi", unitPrice: 220_000 },
-    { code: "VT-008", name: "Bộ lọc dầu tuabin", unit: "Cái", quantity: 9, minStock: 6, location: "Kho A2", supplier: "Flowserve", unitPrice: 1_650_000 },
-    { code: "VT-009", name: "Vật liệu chịu lửa lò hơi", unit: "Bao", quantity: 45, minStock: 20, location: "Kho vật tư", supplier: "Harbin", unitPrice: 380_000 },
-    { code: "VT-010", name: "Bộ truyền động van", unit: "Bộ", quantity: 3, minStock: 3, location: "Kho B3", supplier: "Siemens", unitPrice: 7_200_000 },
+    { code: "VT-001", name: "VÃ²ng bi SKF 6320", unit: "CÃ¡i", quantity: 24, minStock: 10, location: "Kho A1", supplier: "SKF Vietnam", unitPrice: 2_500_000 },
+    { code: "VT-002", name: "Dáº§u bÃ´i trÆ¡n ISO VG 46", unit: "LÃ­t", quantity: 180, minStock: 50, location: "Kho hÃ³a cháº¥t", supplier: "Shell", unitPrice: 85_000 },
+    { code: "VT-003", name: "GioÄƒng lÃ m kÃ­n FGD", unit: "Bá»™", quantity: 4, minStock: 8, location: "Kho B2", supplier: "Doosan Parts", unitPrice: 1_200_000 },
+    { code: "VT-004", name: "Äiá»‡n cá»±c ESP", unit: "Táº¥m", quantity: 0, minStock: 6, location: "Kho A3", supplier: "Mitsubishi", unitPrice: 4_800_000 },
+    { code: "VT-005", name: "Cáº£m biáº¿n nhiá»‡t PT100", unit: "CÃ¡i", quantity: 15, minStock: 5, location: "Kho I&C", supplier: "Endress+Hauser", unitPrice: 950_000 },
+    { code: "VT-006", name: "Van bi DN100", unit: "CÃ¡i", quantity: 7, minStock: 4, location: "Kho B1", supplier: "KSB Vietnam", unitPrice: 3_100_000 },
+    { code: "VT-007", name: "DÃ¢y cÃ¡p Ä‘iá»‡n lá»±c 6.3kV", unit: "MÃ©t", quantity: 320, minStock: 100, location: "Kho Ä‘iá»‡n", supplier: "Cadivi", unitPrice: 220_000 },
+    { code: "VT-008", name: "Bá»™ lá»c dáº§u tuabin", unit: "CÃ¡i", quantity: 9, minStock: 6, location: "Kho A2", supplier: "Flowserve", unitPrice: 1_650_000 },
+    { code: "VT-009", name: "Váº­t liá»‡u chá»‹u lá»­a lÃ² hÆ¡i", unit: "Bao", quantity: 45, minStock: 20, location: "Kho váº­t tÆ°", supplier: "Harbin", unitPrice: 380_000 },
+    { code: "VT-010", name: "Bá»™ truyá»n Ä‘á»™ng van", unit: "Bá»™", quantity: 3, minStock: 3, location: "Kho B3", supplier: "Siemens", unitPrice: 7_200_000 },
   ];
   const materials = [];
   for (const m of materialSeed) {
     materials.push(await prisma.material.create({ data: m }));
   }
-  console.log(`✓ ${materials.length} materials`);
+  console.log(`âœ“ ${materials.length} materials`);
 
   // ---- Repair logs (20, spanning last 3 months) ----
   const repairTemplates = [
-    { title: "Thay vòng bi bơm tuần hoàn", symptom: "Tiếng ồn bất thường, độ rung cao", cause: "Vòng bi mòn sau 8000h", action: "Thay vòng bi SKF mới, cân chỉnh đồng tâm", result: "Độ rung về mức cho phép", priority: Priority.HIGH, status: RepairStatus.CLOSED, downtime: 240 },
-    { title: "Vệ sinh điện cực ESP", symptom: "Hiệu suất lọc bụi giảm", cause: "Tích tụ bụi trên điện cực", action: "Vệ sinh điện cực, kiểm tra búa gõ", result: "Hiệu suất phục hồi 99.2%", priority: Priority.MEDIUM, status: RepairStatus.CLOSED, downtime: 480 },
-    { title: "Sửa rò rỉ van FGD", symptom: "Rò rỉ dung dịch tại mặt bích", cause: "Gioăng làm kín lão hóa", action: "Thay gioăng, siết lại bu lông", result: null, priority: Priority.HIGH, status: RepairStatus.IN_PROGRESS, downtime: null },
-    { title: "Hiệu chuẩn cảm biến áp suất", symptom: "Sai số đọc 3%", cause: "Trôi điểm zero", action: "Hiệu chuẩn lại theo chuẩn", result: "Sai số < 0.5%", priority: Priority.LOW, status: RepairStatus.CLOSED, downtime: 60 },
-    { title: "Khắc phục sự cố quạt FD", symptom: "Quá tải động cơ quạt", cause: "Kẹt cánh quạt do dị vật", action: "Dừng, loại bỏ dị vật, kiểm tra cân bằng", result: "Vận hành bình thường", priority: Priority.CRITICAL, status: RepairStatus.RESOLVED, downtime: 180 },
-    { title: "Bảo dưỡng định kỳ tuabin", symptom: "Bảo dưỡng theo kế hoạch", cause: "Định kỳ 4000h", action: "Kiểm tra bạc, thay dầu, đo độ rung", result: "Đạt yêu cầu", priority: Priority.MEDIUM, status: RepairStatus.CLOSED, downtime: 720 },
-    { title: "Thay bộ lọc dầu bôi trơn", symptom: "Áp suất dầu sau lọc giảm", cause: "Lọc tắc", action: "Thay bộ lọc mới", result: "Áp suất ổn định", priority: Priority.MEDIUM, status: RepairStatus.CLOSED, downtime: 90 },
-    { title: "Sửa lỗi tủ DCS", symptom: "Mất tín hiệu một số kênh AI", cause: "Card I/O lỗi", action: "Thay card I/O, cấu hình lại", result: "Khôi phục tín hiệu", priority: Priority.HIGH, status: RepairStatus.CLOSED, downtime: 120 },
+    { title: "Thay vÃ²ng bi bÆ¡m tuáº§n hoÃ n", symptom: "Tiáº¿ng á»“n báº¥t thÆ°á»ng, Ä‘á»™ rung cao", cause: "VÃ²ng bi mÃ²n sau 8000h", action: "Thay vÃ²ng bi SKF má»›i, cÃ¢n chá»‰nh Ä‘á»“ng tÃ¢m", result: "Äá»™ rung vá» má»©c cho phÃ©p", priority: Priority.HIGH, status: RepairStatus.CLOSED, downtime: 240 },
+    { title: "Vá»‡ sinh Ä‘iá»‡n cá»±c ESP", symptom: "Hiá»‡u suáº¥t lá»c bá»¥i giáº£m", cause: "TÃ­ch tá»¥ bá»¥i trÃªn Ä‘iá»‡n cá»±c", action: "Vá»‡ sinh Ä‘iá»‡n cá»±c, kiá»ƒm tra bÃºa gÃµ", result: "Hiá»‡u suáº¥t phá»¥c há»“i 99.2%", priority: Priority.MEDIUM, status: RepairStatus.CLOSED, downtime: 480 },
+    { title: "Sá»­a rÃ² rá»‰ van FGD", symptom: "RÃ² rá»‰ dung dá»‹ch táº¡i máº·t bÃ­ch", cause: "GioÄƒng lÃ m kÃ­n lÃ£o hÃ³a", action: "Thay gioÄƒng, siáº¿t láº¡i bu lÃ´ng", result: null, priority: Priority.HIGH, status: RepairStatus.IN_PROGRESS, downtime: null },
+    { title: "Hiá»‡u chuáº©n cáº£m biáº¿n Ã¡p suáº¥t", symptom: "Sai sá»‘ Ä‘á»c 3%", cause: "TrÃ´i Ä‘iá»ƒm zero", action: "Hiá»‡u chuáº©n láº¡i theo chuáº©n", result: "Sai sá»‘ < 0.5%", priority: Priority.LOW, status: RepairStatus.CLOSED, downtime: 60 },
+    { title: "Kháº¯c phá»¥c sá»± cá»‘ quáº¡t FD", symptom: "QuÃ¡ táº£i Ä‘á»™ng cÆ¡ quáº¡t", cause: "Káº¹t cÃ¡nh quáº¡t do dá»‹ váº­t", action: "Dá»«ng, loáº¡i bá» dá»‹ váº­t, kiá»ƒm tra cÃ¢n báº±ng", result: "Váº­n hÃ nh bÃ¬nh thÆ°á»ng", priority: Priority.CRITICAL, status: RepairStatus.RESOLVED, downtime: 180 },
+    { title: "Báº£o dÆ°á»¡ng Ä‘á»‹nh ká»³ tuabin", symptom: "Báº£o dÆ°á»¡ng theo káº¿ hoáº¡ch", cause: "Äá»‹nh ká»³ 4000h", action: "Kiá»ƒm tra báº¡c, thay dáº§u, Ä‘o Ä‘á»™ rung", result: "Äáº¡t yÃªu cáº§u", priority: Priority.MEDIUM, status: RepairStatus.CLOSED, downtime: 720 },
+    { title: "Thay bá»™ lá»c dáº§u bÃ´i trÆ¡n", symptom: "Ãp suáº¥t dáº§u sau lá»c giáº£m", cause: "Lá»c táº¯c", action: "Thay bá»™ lá»c má»›i", result: "Ãp suáº¥t á»•n Ä‘á»‹nh", priority: Priority.MEDIUM, status: RepairStatus.CLOSED, downtime: 90 },
+    { title: "Sá»­a lá»—i tá»§ DCS", symptom: "Máº¥t tÃ­n hiá»‡u má»™t sá»‘ kÃªnh AI", cause: "Card I/O lá»—i", action: "Thay card I/O, cáº¥u hÃ¬nh láº¡i", result: "KhÃ´i phá»¥c tÃ­n hiá»‡u", priority: Priority.HIGH, status: RepairStatus.CLOSED, downtime: 120 },
   ];
 
   let r = 0;
@@ -192,9 +210,9 @@ async function main() {
     const isClosed = tpl.status === RepairStatus.CLOSED || tpl.status === RepairStatus.RESOLVED;
     await prisma.repairLog.create({
       data: {
-        deviceId: device.id,
-        title: `${tpl.title} (${device.code})`,
-        description: `${tpl.symptom}. Thực hiện: ${tpl.action}.`,
+        deviceSeq: device.seq,
+        title: `${tpl.title} (${device.seq})`,
+        description: `${tpl.symptom}. Thá»±c hiá»‡n: ${tpl.action}.`,
         symptom: tpl.symptom,
         cause: tpl.cause,
         action: tpl.action,
@@ -212,26 +230,26 @@ async function main() {
     });
     r++;
   }
-  console.log(`✓ ${r} repair logs`);
+  console.log(`âœ“ ${r} repair logs`);
 
-  // ---- Device materials usage ----
-  await prisma.deviceMaterial.createMany({
+  // ---- Equipment materials usage ----
+  await prisma.equipmentMaterial.createMany({
     data: [
-      { deviceId: devices[4].id, materialId: materials[0].id, quantity: 2, note: "Thay vòng bi bơm" },
-      { deviceId: devices[5].id, materialId: materials[0].id, quantity: 2, note: "Thay vòng bi bơm 1B" },
-      { deviceId: devices[3].id, materialId: materials[2].id, quantity: 1, note: "Thay gioăng FGD" },
-      { deviceId: devices[12].id, materialId: materials[1].id, quantity: 40, note: "Thay dầu tuabin" },
-      { deviceId: devices[0].id, materialId: materials[3].id, quantity: 2, note: "Thay điện cực ESP" },
+      { deviceSeq: devices[4].seq, materialId: materials[0].id, quantity: 2, note: "Thay vÃ²ng bi bÆ¡m" },
+      { deviceSeq: devices[5].seq, materialId: materials[0].id, quantity: 2, note: "Thay vÃ²ng bi bÆ¡m 1B" },
+      { deviceSeq: devices[3].seq, materialId: materials[2].id, quantity: 1, note: "Thay gioÄƒng FGD" },
+      { deviceSeq: devices[12].seq, materialId: materials[1].id, quantity: 40, note: "Thay dáº§u tuabin" },
+      { deviceSeq: devices[0].seq, materialId: materials[3].id, quantity: 2, note: "Thay Ä‘iá»‡n cá»±c ESP" },
     ],
   });
-  console.log("✓ device material usage");
+  console.log("âœ“ equipment material usage");
 
   // ---- Audit log sample ----
   await prisma.auditLog.createMany({
     data: [
-      { userId: users[0].id, action: "CREATE_DEVICE", entity: "Device", entityId: devices[0].id, detail: "Thêm thiết bị ESP-S1-001" },
-      { userId: users[1].id, action: "APPROVE_REPAIR", entity: "RepairLog", detail: "Duyệt phiếu sửa chữa" },
-      { userId: users[2].id, action: "CREATE_REPAIR", entity: "RepairLog", detail: "Tạo phiếu sửa chữa FGD" },
+      { userId: users[0].id, action: "CREATE_EQUIPMENT_NODE", entity: "EquipmentNode", entityId: devices[0].id, detail: "ThÃªm thiáº¿t bá»‹ ESP-S1-001" },
+      { userId: users[1].id, action: "APPROVE_REPAIR", entity: "RepairLog", detail: "Duyá»‡t phiáº¿u sá»­a chá»¯a" },
+      { userId: users[2].id, action: "CREATE_REPAIR", entity: "RepairLog", detail: "Táº¡o phiáº¿u sá»­a chá»¯a FGD" },
     ],
   });
 
@@ -253,28 +271,28 @@ async function main() {
         checkInAt: at,
         checkOutAt: new Date(now.getFullYear(), now.getMonth(), d, 14, 0, 0),
         status: d % 7 === 0 ? "LATE" : "PRESENT",
-        approvedBy: users[1].id, // confirmed by Trưởng ca
+        approvedBy: users[1].id, // confirmed by TrÆ°á»Ÿng ca
       });
     }
     if (rows.length) await prisma.checkIn.createMany({ data: rows });
   }
-  console.log("✓ monthly attendance");
+  console.log("âœ“ monthly attendance");
 
-  // ---- Operation events (drills) entered by Trưởng ca for this month ----
+  // ---- Operation events (drills) entered by TrÆ°á»Ÿng ca for this month ----
   function dayThisMonth(d: number, h = 8) {
     return new Date(now.getFullYear(), now.getMonth(), d, h, 0, 0);
   }
   await prisma.operationEvent.createMany({
     data: [
-      { type: "DRILL_INCIDENT", title: "Diễn tập sự cố mất điện tự dùng", date: dayThisMonth(12, 9), note: "Toàn ca tham gia tại phòng điều khiển trung tâm.", createdById: users[1].id },
-      { type: "DRILL_FIRE", title: "Diễn tập PCCC khu vực kho dầu", date: dayThisMonth(20, 14), note: "Phối hợp với đội PCCC cơ sở.", createdById: users[1].id },
-      { type: "DRILL_INCIDENT", title: "Diễn tập xử lý sự cố bơm cấp", date: dayThisMonth(26, 9), note: "Tổ máy 1.", createdById: users[1].id },
-      { type: "OTHER", title: "Huấn luyện an toàn định kỳ", date: dayThisMonth(8, 8), note: "An toàn vệ sinh lao động.", createdById: users[1].id },
+      { type: "DRILL_INCIDENT", title: "Diá»…n táº­p sá»± cá»‘ máº¥t Ä‘iá»‡n tá»± dÃ¹ng", date: dayThisMonth(12, 9), note: "ToÃ n ca tham gia táº¡i phÃ²ng Ä‘iá»u khiá»ƒn trung tÃ¢m.", createdById: users[1].id },
+      { type: "DRILL_FIRE", title: "Diá»…n táº­p PCCC khu vá»±c kho dáº§u", date: dayThisMonth(20, 14), note: "Phá»‘i há»£p vá»›i Ä‘á»™i PCCC cÆ¡ sá»Ÿ.", createdById: users[1].id },
+      { type: "DRILL_INCIDENT", title: "Diá»…n táº­p xá»­ lÃ½ sá»± cá»‘ bÆ¡m cáº¥p", date: dayThisMonth(26, 9), note: "Tá»• mÃ¡y 1.", createdById: users[1].id },
+      { type: "OTHER", title: "Huáº¥n luyá»‡n an toÃ n Ä‘á»‹nh ká»³", date: dayThisMonth(8, 8), note: "An toÃ n vá»‡ sinh lao Ä‘á»™ng.", createdById: users[1].id },
     ],
   });
-  console.log("✓ operation events");
+  console.log("âœ“ operation events");
 
-  console.log("✅ Seed complete. Login with admin@powerplant.vn / password123");
+  console.log("âœ… Seed complete. Login with admin@powerplant.vn / password123");
 }
 
 main()
@@ -285,3 +303,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
