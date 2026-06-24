@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useDevices } from "@/hooks/useDevices";
+import { usePositions } from "@/hooks/useUsers";
 import {
   type DigitalDocument,
   type DigitalDocumentUser,
@@ -60,9 +61,19 @@ const EMPTY_FORM: DocumentForm = {
   attachmentUrls: [],
 };
 
-const NO_POSITION = "__NONE__";
+const COMMON_POSITION = "Chung";
 const ALL_FILTER = "__ALL__";
 const PAGE_SIZE_OPTIONS = ["10", "20", "50"];
+
+function blockForDocumentPosition(position?: string | null): string {
+  return position?.trim() === COMMON_POSITION ? COMMON_POSITION : blockForPosition(position);
+}
+
+function documentManagementBlock(item: { managingPosition?: string | null; managementBlock?: string | null }): string {
+  return item.managingPosition?.trim() === COMMON_POSITION
+    ? COMMON_POSITION
+    : item.managementBlock || blockForDocumentPosition(item.managingPosition);
+}
 
 interface DocumentCatalogPageProps {
   category: DocumentCategory;
@@ -107,6 +118,7 @@ interface DocumentCatalogPageProps {
   showAnnualBackupExport?: boolean;
   backupSubtitle?: string;
   backupFilenamePrefix?: string;
+  wideNameNarrowLinkLayout?: boolean;
 }
 
 export function DocumentCatalogPage({
@@ -152,6 +164,7 @@ export function DocumentCatalogPage({
   showAnnualBackupExport = false,
   backupSubtitle,
   backupFilenamePrefix,
+  wideNameNarrowLinkLayout = false,
 }: DocumentCatalogPageProps) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
@@ -161,6 +174,7 @@ export function DocumentCatalogPage({
   const hasActions = canEdit || canDelete;
   const docs = useDocuments(category);
   const devices = useDevices({});
+  const userPositions = usePositions();
   const upsert = useUpsertDocument();
   const remove = useDeleteDocument();
   const [q, setQ] = React.useState("");
@@ -175,7 +189,7 @@ export function DocumentCatalogPage({
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [pageSize, setPageSize] = React.useState(10);
   const [pageIndex, setPageIndex] = React.useState(1);
-  const managementBlock = showEquipmentScope ? blockForPosition(form.managingPosition) : "";
+  const managementBlock = showEquipmentScope ? blockForDocumentPosition(form.managingPosition) : "";
   const hasTagField = Boolean(tagLabel && tagOptions.length);
   const hasNameOptions = nameOptions.length > 0;
   const hasReasonField = Boolean(reasonLabel);
@@ -204,15 +218,16 @@ export function DocumentCatalogPage({
     () =>
       Array.from(
         new Set(
-          (devices.data?.data ?? [])
-            .map((device) => device.managingPosition)
-            .filter((value): value is string => !!value && isSelectableManagingPosition(value))
+          [
+            ...(devices.data?.data ?? []).map((device) => device.managingPosition),
+            ...userPositions,
+          ].filter((value): value is string => !!value && value.trim() !== COMMON_POSITION && isSelectableManagingPosition(value))
         )
       ).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices.data?.data]
+    [devices.data?.data, userPositions]
   );
   const blockOptions = React.useMemo(
-    () => Array.from(new Set(positionOptions.map((position) => blockForPosition(position)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi")),
+    () => Array.from(new Set(positionOptions.map((position) => blockForDocumentPosition(position)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi")),
     [positionOptions]
   );
   const activeYearFilter = hasYearField ? yearFilter || yearOptions[0] || "" : "";
@@ -241,7 +256,7 @@ export function DocumentCatalogPage({
       if (hasYearField && activeYearFilter && item.managingPosition !== activeYearFilter) return false;
       if (hasTagField && tagFilter !== ALL_FILTER && item.decisionNumber !== tagFilter) return false;
       if (showEquipmentScope && positionFilter !== ALL_FILTER && item.managingPosition !== positionFilter) return false;
-      const itemBlock = item.managementBlock || blockForPosition(item.managingPosition);
+      const itemBlock = documentManagementBlock(item);
       if (showEquipmentScope && blockFilter !== ALL_FILTER && itemBlock !== blockFilter) return false;
       if (!needle) return true;
       return [item.title, item.decisionNumber, item.documentUrl, item.reason, item.progress, item.note, item.managingPosition, itemBlock]
@@ -360,7 +375,7 @@ export function DocumentCatalogPage({
       reason: item.reason ?? "",
       progress: item.progress ?? "",
       note: item.note ?? "",
-      managingPosition: item.managingPosition ?? "",
+      managingPosition: showEquipmentScope ? item.managingPosition ?? COMMON_POSITION : item.managingPosition ?? "",
       recordDate: showEquipmentScope ? "" : normalizeRecordDateForInput(item.managementBlock, dateInputType),
       archiveYear: showEquipmentScope ? "" : item.managingPosition ?? "",
       attachmentUrls: item.attachmentUrls ?? [],
@@ -379,7 +394,7 @@ export function DocumentCatalogPage({
         reason: hasReasonField ? form.reason || null : null,
         progress: hasProgressField ? form.progress || null : null,
         note: hasNoteField ? form.note || null : null,
-        managingPosition: showEquipmentScope ? form.managingPosition : hasYearField ? form.archiveYear || null : null,
+        managingPosition: showEquipmentScope ? form.managingPosition || COMMON_POSITION : hasYearField ? form.archiveYear || null : null,
         managementBlock: showEquipmentScope ? managementBlock : hasDateField ? form.recordDate || null : null,
         attachmentUrls: hasAttachmentField ? form.attachmentUrls : [],
       });
@@ -517,14 +532,14 @@ export function DocumentCatalogPage({
       </Card>
 
       <Card className="overflow-hidden">
-        <div className={cn(historyTableLayout && "overflow-x-auto")}>
-        <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed")}>
+        <div className={cn((historyTableLayout || wideNameNarrowLinkLayout) && "overflow-x-auto")}>
+        <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed")}>
           <TableHeader className={cn(historyTableLayout && "bg-muted/40")}>
             <TableRow className={cn("bg-muted/40 hover:bg-muted/40 [&_th]:whitespace-nowrap [&_th]:text-center", historyTableLayout && "hover:bg-transparent")}>
               <TableHead className={cn("w-16 whitespace-nowrap text-center", historyTableLayout && "w-[170px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>
                 {historyTableLayout ? nameLabel : "STT"}
               </TableHead>
-              {!historyTableLayout && <TableHead className="whitespace-nowrap text-center">{nameLabel}</TableHead>}
+              {!historyTableLayout && <TableHead className={cn("whitespace-nowrap text-center", wideNameNarrowLinkLayout && "w-[390px]")}>{nameLabel}</TableHead>}
               {historyTableLayout && hasTagField && <TableHead className="w-[92px] text-center text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">{tagLabel}</TableHead>}
               {hasYearField && <TableHead className={cn("w-[110px] text-center", historyTableLayout && "w-[82px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>{yearLabel}</TableHead>}
               {showEquipmentScope && <TableHead className="w-[170px] text-center">Cương vị</TableHead>}
@@ -538,8 +553,8 @@ export function DocumentCatalogPage({
                 <TableHead className="w-[128px] text-center text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">Người cập nhật</TableHead>
               )}
               {!historyTableLayout && hasTagField && <TableHead className="w-[120px] text-center">{tagLabel}</TableHead>}
-              {showCodeField && <TableHead className="w-[180px] text-center">{codeLabel}</TableHead>}
-              {!historyTableLayout && <TableHead>{linkLabel}</TableHead>}
+              {showCodeField && <TableHead className={cn("w-[180px] text-center", wideNameNarrowLinkLayout && "w-[150px]")}>{codeLabel}</TableHead>}
+              {!historyTableLayout && <TableHead className={cn(wideNameNarrowLinkLayout && "w-[210px]")}>{linkLabel}</TableHead>}
               {!historyTableLayout && hasAttachmentField && <TableHead className="w-[160px] text-center">{attachmentLabel}</TableHead>}
               {hasActions && <TableHead className={cn("w-[120px] text-center", historyTableLayout && "w-[96px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>Thao tác</TableHead>}
             </TableRow>
@@ -592,12 +607,14 @@ export function DocumentCatalogPage({
                     )}
                   </TableCell>
                   {!historyTableLayout && (
-                    <TableCell>
-                      <div className="flex items-center gap-3">
+                    <TableCell className={cn(wideNameNarrowLinkLayout && "align-top")}>
+                      <div className="flex min-w-0 items-start gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-accent">
                           <FileText className="h-4 w-4" />
                         </div>
-                        <span className="font-semibold text-ink">{item.title}</span>
+                        <span className={cn("font-semibold text-ink", wideNameNarrowLinkLayout && "line-clamp-3 whitespace-normal leading-5")}>
+                          {item.title}
+                        </span>
                       </div>
                     </TableCell>
                   )}
@@ -618,7 +635,7 @@ export function DocumentCatalogPage({
                     <TableCell className="text-center text-muted-foreground">{item.managingPosition || "—"}</TableCell>
                   )}
                   {showEquipmentScope && (
-                    <TableCell className="text-center text-muted-foreground">{item.managementBlock || blockForPosition(item.managingPosition)}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{documentManagementBlock(item)}</TableCell>
                   )}
                   {hasDateField && (
                     <TableCell
@@ -658,9 +675,9 @@ export function DocumentCatalogPage({
                   )}
                   {showCodeField && <TableCell className="text-center text-muted-foreground">{item.decisionNumber || "—"}</TableCell>}
                   {!historyTableLayout && (
-                    <TableCell>
+                    <TableCell className={cn(wideNameNarrowLinkLayout && "align-top")}>
                       {contentMode === "text" ? (
-                        <span className="block max-w-[420px] whitespace-pre-wrap text-sm text-ink">{item.documentUrl}</span>
+                        <span className={cn("block max-w-[420px] whitespace-pre-wrap text-sm text-ink", wideNameNarrowLinkLayout && "max-w-full")}>{item.documentUrl}</span>
                       ) : !item.documentUrl ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
@@ -668,7 +685,10 @@ export function DocumentCatalogPage({
                           href={item.documentUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex max-w-[360px] items-center gap-2 truncate text-sm font-medium text-accent hover:underline"
+                          className={cn(
+                            "inline-flex max-w-[360px] items-center gap-2 truncate text-sm font-medium text-accent hover:underline",
+                            wideNameNarrowLinkLayout && "max-w-full"
+                          )}
                         >
                           <ExternalLink className="h-4 w-4 shrink-0" />
                           <span className="truncate">{item.documentUrl}</span>
@@ -1015,16 +1035,14 @@ export function DocumentCatalogPage({
                 <div className="grid gap-1.5">
                   <Label>Cương vị</Label>
                   <Select
-                    value={form.managingPosition || NO_POSITION}
-                    onValueChange={(value) =>
-                      setForm((state) => ({ ...state, managingPosition: value === NO_POSITION ? "" : value }))
-                    }
+                    value={form.managingPosition || COMMON_POSITION}
+                    onValueChange={(value) => setForm((state) => ({ ...state, managingPosition: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Chọn cương vị" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={NO_POSITION}>— Không chọn —</SelectItem>
+                      <SelectItem value={COMMON_POSITION}>Chung</SelectItem>
                       {positionOptions.map((position) => (
                         <SelectItem key={position} value={position}>
                           {position}

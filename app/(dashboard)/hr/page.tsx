@@ -19,7 +19,7 @@ import type { SafeUser } from "@/types";
 
 const LINKS: { href: string; icon: typeof CalendarDays; title: string; desc: string; cover?: string }[] = [
   { href: "/hr/shift-roster", icon: CalendarDays, title: "Lịch trực ca", desc: "Phân ca theo tháng", cover: "/brand/lich-truc-ca.jpg" },
-  { href: "/hr/org-chart", icon: Network, title: "Sơ đồ tổ chức ca vận hành", desc: "Phân công vị trí trực", cover: "/brand/sodo-tochuc.webp" },
+  { href: "/hr/org-chart", icon: Network, title: "Nhân sự trực ca vận hành", desc: "Phân công vị trí trực", cover: "/brand/sodo-tochuc.webp" },
 ];
 
 // "Ca vận hành" background by real-time shift (Sáng / Chiều / Đêm).
@@ -79,7 +79,7 @@ export default function HrOverviewPage() {
         <StatCard label="Tổng nhân sự" value={users.length} icon={Users} tint="navy" bgCover="/brand/1.jpg" />
         <StatCard label="Đang trực ca" value={onDuty} icon={UserCheck} tint="green" bgCover="/brand/duyenhai-card.jpg" />
         <Link href="/hr/admin-attendance" className="block h-full">
-          <StatCard label="Chấm công hành chính" value={approvedHc} icon={Network} tint="blue" bgCover="/brand/cham-cong-hc.jpg" cta="Mở" />
+          <StatCard label="Quản lý hành chính" value={approvedHc} icon={Network} tint="blue" bgCover="/brand/cham-cong-hc.jpg" cta="Mở" />
         </Link>
         <StatCard label="Ca vận hành" value={SHIFT_TYPE[curShift].label} icon={SHIFT_ICON[curShift]} tint="amber" bgCover={SHIFT_BG[curShift]} />
       </div>

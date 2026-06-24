@@ -395,6 +395,8 @@ model HcCheckIn {
   userId     String
   hours      Int      @default(8)
   isApproved Boolean  @default(false)
+  note       String?
+  isRegistered Boolean @default(false)
   createdAt  DateTime @default(now())
 
   group HcGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)

@@ -183,7 +183,7 @@ const BLOCK_TURBINE_POSITIONS = ["máy trưởng", "máy phó", "trợ thủ", "
 const BLOCK_DIEN_POSITIONS = ["trưởng kíp điện", "trực chính điện", "trực phụ điện"];
 const BLOCK_IC_POSITIONS = ["thiết bị đo lường điều khiển", "i&c"];
 // Cương vị điều hành/quản lý — KHÔNG gắn với khối thiết bị nào (hiển thị trống).
-const BLOCK_NONE_POSITIONS = ["TK Lò máy", "trưởng ca"];
+const BLOCK_NONE_POSITIONS = ["TK Lò máy", "trưởng ca", "chung"];
 
 /**
  * Khối quản lý theo cương vị (so khớp không phân biệt hoa/thường & dấu, theo chứa từ khoá):
