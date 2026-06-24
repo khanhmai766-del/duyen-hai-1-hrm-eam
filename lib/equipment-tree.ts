@@ -7,6 +7,9 @@ export interface NormalizedEquipmentNode {
   drawing: string | null;
   depth: number;
   deviceId?: string | null;
+  attachedInfo?: string | null;
+  documentUrl?: string | null;
+  imageUrl?: string | null;
 }
 
 const WATER_TREATMENT_ROOT = {
@@ -81,7 +84,7 @@ export function normalizeEquipmentNodes(nodes: NormalizedEquipmentNode[]) {
 export async function getNormalizedEquipmentNodes(prisma: PrismaClient) {
   const nodes = await prisma.equipmentNode.findMany({
     orderBy: { sort: "asc" },
-    select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true },
+    select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true, attachedInfo: true, documentUrl: true, imageUrl: true },
   });
   return normalizeEquipmentNodes(nodes);
 }

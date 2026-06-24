@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
+import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
 import {
   LayoutGrid,
   Table2,
@@ -327,6 +328,7 @@ function systemRowQrValue(row: SystemTreeRow) {
 }
 
 function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
+  const [editSeq, setEditSeq] = React.useState<string | null>(null);
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -348,7 +350,12 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {rows.map((row) => (
-          <Card key={row.seq} className="overflow-hidden transition-shadow hover:shadow-md">
+          <Card
+            key={row.seq}
+            onClick={() => setEditSeq(row.seq)}
+            title="Bấm để chỉnh sửa thẻ thiết bị"
+            className="cursor-pointer overflow-hidden transition-shadow hover:shadow-md hover:ring-1 hover:ring-accent/40"
+          >
             <CardContent className="p-4">
               <div className="flex items-start gap-4">
                 <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-border bg-white p-2 shadow-sm">
@@ -368,7 +375,7 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
                 <InfoPill label="Bản vẽ" value={row.drawing || "—"} />
                 <InfoPill label="Loại" value={row.deviceId ? "Có lý lịch" : "Node cây"} />
               </div>
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <Button asChild size="sm" variant="outline" className="flex-1">
                   <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>
                     <Network className="h-4 w-4" /> Trong cây
@@ -386,6 +393,7 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
           </Card>
         ))}
       </div>
+      <EquipmentCardEditDialog seq={editSeq} onOpenChange={(o) => !o && setEditSeq(null)} />
     </div>
   );
 }

@@ -462,6 +462,10 @@ model EquipmentNode {
   drawing   String? // bản vẽ liên quan
   depth     Int // số đoạn của seq (1..n)
   sort      Int // thứ tự ổn định theo file nguồn
+  // Người dùng tự bổ sung khi sửa thẻ thiết bị (tách khỏi dữ liệu nhập từ Excel).
+  attachedInfo String? // thông tin thêm
+  documentUrl  String? // tài liệu đính kèm (link)
+  imageUrl     String? // 1 hình ảnh (base64 hoặc URL)
   createdAt DateTime @default(now())
 
   @@index([parentSeq])
