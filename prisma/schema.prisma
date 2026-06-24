@@ -467,3 +467,16 @@ model EquipmentNode {
   @@index([parentSeq])
   @@index([code])
 }
+
+// Phạm vi hệ thống thiết bị được gán cho từng cương vị quản lý.
+// Dùng để lọc nhanh danh sách thiết bị khi tạo lịch sử sửa chữa, khiếm khuyết và vật tư.
+model PositionSystemScope {
+  id        String   @id @default(cuid())
+  position  String
+  systemSeq String
+  createdAt DateTime @default(now())
+
+  @@unique([position, systemSeq])
+  @@index([position])
+  @@index([systemSeq])
+}

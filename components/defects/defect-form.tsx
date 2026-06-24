@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCreateDefect, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
+import { useEquipmentTree } from "@/hooks/useEquipment";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import {
   DEFECT_UNITS,
   DEFECT_SEVERITY,
@@ -25,6 +27,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
 
 function toDateInput(v: Date | string | null | undefined): string {
   if (!v) return "";
@@ -53,7 +56,11 @@ export function DefectForm({
   const positions = usePositions().filter(isSelectableManagingPosition);
   // Thiết bị lấy từ module Thiết bị.
   const { data: devicesData } = useDevices({});
+  const { data: equipmentTreeData } = useEquipmentTree();
+  const scopesQuery = usePositionSystemScopes();
   const devices = devicesData?.data ?? [];
+  const equipmentNodes = equipmentTreeData?.data ?? [];
+  const positionScopes = scopesQuery.data?.data ?? [];
 
   const [form, setForm] = React.useState({
     unit: defect?.unit ?? "",
@@ -87,8 +94,8 @@ export function DefectForm({
     });
   }
   const filteredDevices = React.useMemo(
-    () => devices.filter((d) => !form.system || d.managingPosition === form.system),
-    [devices, form.system]
+    () => devices.filter((d) => !form.system || deviceAllowedForPosition(d, form.system, equipmentNodes, positionScopes)),
+    [devices, form.system, equipmentNodes, positionScopes]
   );
   function setSystem(v: string) {
     setForm((f) => {
@@ -97,7 +104,10 @@ export function DefectForm({
       return {
         ...f,
         system,
-        device: selectedDevice && selectedDevice.managingPosition !== system ? "" : f.device,
+        device:
+          selectedDevice && system && !deviceAllowedForPosition(selectedDevice, system, equipmentNodes, positionScopes)
+            ? ""
+            : f.device,
       };
     });
   }

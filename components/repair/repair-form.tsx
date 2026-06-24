@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateRepair, useUpdateRepair } from "@/hooks/useRepair";
 import { useDevices } from "@/hooks/useDevices";
-import { PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
+import { useEquipmentTree } from "@/hooks/useEquipment";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
+import { usePositions } from "@/hooks/useUsers";
+import { isSelectableManagingPosition, PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
+import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
 import type { RepairLogWithRelations } from "@/types";
 
 export function RepairForm({
@@ -24,10 +29,20 @@ export function RepairForm({
 }) {
   const create = useCreateRepair();
   const update = useUpdateRepair();
+  const { data: session } = useSession();
   const { data: devicesData } = useDevices({});
+  const { data: equipmentTreeData } = useEquipmentTree();
+  const scopesQuery = usePositionSystemScopes();
+  const positions = usePositions().filter(isSelectableManagingPosition);
   const devices = devicesData?.data ?? [];
+  const equipmentNodes = equipmentTreeData?.data ?? [];
+  const positionScopes = scopesQuery.data?.data ?? [];
   const isEdit = !!repair;
   const [deviceSearch, setDeviceSearch] = React.useState("");
+  const [selectedPosition, setSelectedPosition] = React.useState(() => {
+    const current = session?.user?.position ?? "";
+    return isSelectableManagingPosition(current) ? current : "";
+  });
 
   const [form, setForm] = React.useState({
     deviceId: repair?.deviceId ?? defaultDeviceId ?? "",
@@ -49,9 +64,19 @@ export function RepairForm({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  const filteredDevices = devices.filter(
-    (d) => !deviceSearch || `${d.code} ${d.name}`.toLowerCase().includes(deviceSearch.toLowerCase())
-  );
+  React.useEffect(() => {
+    const current = session?.user?.position ?? "";
+    if (!selectedPosition && isSelectableManagingPosition(current)) setSelectedPosition(current);
+  }, [session?.user?.position, selectedPosition]);
+
+  const filteredDevices = devices.filter((d) => {
+    const matchesSearch = !deviceSearch || `${d.code} ${d.name}`.toLowerCase().includes(deviceSearch.toLowerCase());
+    const matchesPosition =
+      !selectedPosition ||
+      d.id === form.deviceId ||
+      deviceAllowedForPosition(d, selectedPosition, equipmentNodes, positionScopes);
+    return matchesSearch && matchesPosition;
+  });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,6 +102,29 @@ export function RepairForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      <div>
+        <Label className="mb-1.5 block">Cương vị quản lý</Label>
+        <Select
+          value={selectedPosition || "NONE"}
+          onValueChange={(value) => {
+            const nextPosition = value === "NONE" ? "" : value;
+            setSelectedPosition(nextPosition);
+            const selectedDevice = devices.find((device) => device.id === form.deviceId);
+            if (selectedDevice && nextPosition && !deviceAllowedForPosition(selectedDevice, nextPosition, equipmentNodes, positionScopes)) {
+              set("deviceId", "");
+            }
+          }}
+          disabled={isEdit}
+        >
+          <SelectTrigger><SelectValue placeholder="Chọn cương vị để lọc thiết bị" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="NONE">— Không lọc —</SelectItem>
+            {positions.map((position) => (
+              <SelectItem key={position} value={position}>{position}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div>
         <Label className="mb-1.5 block">Thiết bị *</Label>
         {!isEdit && (

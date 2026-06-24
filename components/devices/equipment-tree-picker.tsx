@@ -6,8 +6,9 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
+import { rootAllowedForPosition } from "@/lib/position-system-scopes";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
 function compareSeq(a: string, b: string) {
@@ -38,7 +39,9 @@ export function EquipmentTreePicker({
   placeholder?: string;
 }) {
   const { data, isLoading } = useEquipmentTree();
+  const scopesQuery = usePositionSystemScopes();
   const nodes = React.useMemo(() => data?.data ?? [], [data]);
+  const scopes = scopesQuery.data?.data ?? [];
 
   // Chỉ mục: seq -> node, parentSeq hiệu lực -> con (đã sắp), danh sách gốc.
   const { bySeq, childrenOf, roots, effParentOf } = React.useMemo(() => {
@@ -86,17 +89,11 @@ export function EquipmentTreePicker({
   // Lọc nhóm gốc theo cương vị: tên chứa "COMMON" luôn hiện; chưa chọn cương vị → hiện tất cả;
   // còn lại chỉ hiện khi cương vị nằm trong danh sách của hệ thống đó.
   const filteredRoots = React.useMemo(() => {
-    const np = position ? normalizeText(position) : "";
     return roots.filter((node) => {
       if (!folderSeqs.has(node.seq)) return false;
-      const name = normalizeText(node.name);
-      if (name.includes("common")) return true;
-      if (!np) return true;
-      const rule = EQUIPMENT_SYSTEM_BY_POSITION.find((r) => name.includes(normalizeText(r.match)));
-      if (!rule) return true;
-      return rule.positions.some((p) => normalizeText(p) === np);
+      return rootAllowedForPosition(node, position, scopes);
     });
-  }, [roots, position, folderSeqs]);
+  }, [roots, position, folderSeqs, scopes]);
 
   // Khi mở popup, tự bung đường dẫn tới mục đang chọn để thấy ngay.
   React.useEffect(() => {

@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { RoleBadge } from "@/components/devices/status-badge";
+import { PositionSystemScopeCard } from "@/components/admin/position-system-scope-card";
 import { useUpdateUser, useUsers } from "@/hooks/useUsers";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { apiGet, apiMutate } from "@/lib/fetcher";
@@ -586,6 +587,8 @@ export default function RolesPage() {
           </CardContent>
         </Card>
       )}
+
+      <PositionSystemScopeCard isAdmin={isAdmin} />
 
       {isAdmin && userOverrides.length > 0 && (
         <Card className="overflow-hidden">
