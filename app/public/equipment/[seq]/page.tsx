@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, FileText, ImageIcon, Layers3, ShieldCheck, Zap } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -15,17 +14,9 @@ export default async function PublicEquipmentNodePage({ params }: { params: { se
   if (!node) notFound();
 
   const parent = node.parentSeq ? bySeq.get(parentOf.get(node.seq) ?? node.parentSeq) : null;
-  const device = await prisma.device.findUnique({
-    where: { code: node.seq },
-    include: {
-      repairLogs: { orderBy: { startedAt: "desc" }, take: 1 },
-      _count: { select: { repairLogs: true, materials: true, materialReplacements: true } },
-    },
-  });
-
-  const imageUrl = device?.images?.[0] ?? node.imageUrl ?? null;
-  const attachedInfo = device?.attachedInfo ?? node.attachedInfo;
-  const documentUrl = device?.documentUrl ?? node.documentUrl;
+  const imageUrl = node.imageUrl ?? null;
+  const attachedInfo = node.attachedInfo;
+  const documentUrl = node.documentUrl;
 
   return (
     <main className="min-h-screen bg-[#f4f7fb] text-slate-950">
@@ -102,25 +93,12 @@ export default async function PublicEquipmentNodePage({ params }: { params: { se
 
         <div className="space-y-5 lg:col-span-5">
           <Panel title="Dữ liệu lý lịch" icon={Layers3}>
-            {device ? (
-              <div className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Detail label="Mã lý lịch" value={device.code} mono />
-                  <Detail label="Cương vị quản lý" value={device.managingPosition || "Chưa cập nhật"} />
-                  <Detail label="Hệ thống" value={device.system || "Chưa cập nhật"} />
-                  <Detail label="Lượt sửa chữa" value={`${device._count.repairLogs}`} />
-                </div>
-                <Link
-                  href={`/public/devices/${device.id}`}
-                  className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Xem lý lịch công khai
-                </Link>
-              </div>
-            ) : (
-              <EmptyState text="Thiết bị này chưa liên kết bản ghi lý lịch chi tiết." />
-            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Detail label="Số thứ tự" value={node.seq} mono />
+              <Detail label="Thư mục" value={parent?.name || "Thư mục gốc"} />
+              <Detail label="Bản vẽ" value={node.drawing || "Chưa cập nhật"} />
+              <Detail label="Nguồn dữ liệu" value="Cây thiết bị" />
+            </div>
           </Panel>
         </div>
       </section>

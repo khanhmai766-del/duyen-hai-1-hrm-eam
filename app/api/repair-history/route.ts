@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import type { Prisma } from "@prisma/client";
+import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
     const to = sp.get("to");
 
     const where: Prisma.RepairLogWhereInput = {};
-    if (deviceId) where.deviceId = deviceId;
+    if (deviceId) where.deviceSeq = deviceId;
     if (status && status !== "ALL") where.status = status as any;
     if (priority && priority !== "ALL") where.priority = priority as any;
     if (technicianId && technicianId !== "ALL") where.createdById = technicianId;
@@ -29,12 +30,12 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { startedAt: "desc" },
       include: {
-        device: { select: { id: true, code: true, name: true, system: true } },
+        device: { select: EQUIPMENT_DEVICE_SELECT },
         createdBy: { select: { id: true, name: true, position: true } },
         approvedBy: { select: { id: true, name: true } },
       },
     });
-    return ok(logs, { total: logs.length });
+    return ok(logs.map(withDeviceAlias), { total: logs.length });
   });
 }
 
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
     const log = await prisma.repairLog.create({
       data: {
-        deviceId: body.deviceId,
+        deviceSeq: body.deviceId,
         title: body.title,
         description: body.description || "",
         symptom: body.symptom || null,

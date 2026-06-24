@@ -1,6 +1,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle } from "@/lib/api";
+import { fail, handle, ok, requireUser } from "@/lib/api";
+import { buildEquipmentTreeIndex, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
+
+async function getLeafEquipmentCount() {
+  const nodes = await getNormalizedEquipmentNodes(prisma);
+  const index = buildEquipmentTreeIndex(nodes);
+  return nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0).length;
+}
 
 export async function GET(req: NextRequest, { params }: { params: { type: string } }) {
   return handle(async () => {
@@ -13,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
     switch (params.type) {
       case "summary": {
         const [deviceCount, repairs, materials, todayShift] = await Promise.all([
-          prisma.device.count(),
+          getLeafEquipmentCount(),
           prisma.repairLog.groupBy({ by: ["status"], _count: true }),
           prisma.material.findMany(),
           (async () => {
@@ -35,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
         const recentRepairs = await prisma.repairLog.findMany({
           orderBy: { startedAt: "desc" },
           take: 5,
-          include: { device: { select: { code: true, name: true } } },
+          include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
         });
         return ok({
           deviceCount,
@@ -43,31 +51,32 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
           lowStock,
           onShift,
           todayShift,
-          recentRepairs,
-          openRepairs: repairs.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS" || r.status === "WAITING_PARTS").reduce((a, r) => a + r._count, 0),
+          recentRepairs: recentRepairs.map((row) => ({ ...row, device: equipmentNodeToDevice(row.device) })),
+          openRepairs: repairs
+            .filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS" || r.status === "WAITING_PARTS")
+            .reduce((a, r) => a + r._count, 0),
         });
       }
 
       case "repair-frequency": {
         const grouped = await prisma.repairLog.groupBy({
-          by: ["deviceId"],
+          by: ["deviceSeq"],
           where: dateFilter ? { startedAt: dateFilter } : undefined,
           _count: true,
         });
-        const devices = await prisma.device.findMany({
-          where: { id: { in: grouped.map((g) => g.deviceId) } },
-          select: { id: true, code: true, name: true },
+        const devices = await prisma.equipmentNode.findMany({
+          where: { seq: { in: grouped.map((g) => g.deviceSeq) } },
+          select: EQUIPMENT_DEVICE_SELECT,
         });
-        const map = new Map(devices.map((d) => [d.id, d]));
+        const map = new Map(devices.map((d) => [d.seq, d]));
         const data = grouped
-          .map((g) => ({ device: map.get(g.deviceId)?.code ?? "?", name: map.get(g.deviceId)?.name ?? "", count: g._count }))
+          .map((g) => ({ device: g.deviceSeq, name: map.get(g.deviceSeq)?.name ?? "", count: g._count }))
           .sort((a, b) => b.count - a.count);
         return ok(data);
       }
 
       case "mtbf": {
-        // Mean Time Between Failures per device (days), approximated from repair start dates.
-        const devices = await prisma.device.findMany({
+        const devices = await prisma.equipmentNode.findMany({
           include: { repairLogs: { orderBy: { startedAt: "asc" }, select: { startedAt: true, downtime: true } } },
         });
         const data = devices
@@ -81,7 +90,7 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
             }
             const totalDowntime = logs.reduce((a, l) => a + (l.downtime ?? 0), 0);
             return {
-              code: d.code,
+              code: d.seq,
               name: d.name,
               failures: logs.length,
               mtbfDays: Math.round(mtbf * 10) / 10,
@@ -115,18 +124,18 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
       case "downtime-by-category": {
         const logs = await prisma.repairLog.findMany({
           where: dateFilter ? { startedAt: dateFilter } : undefined,
-          include: { device: { select: { system: true } } },
+          include: { device: { select: { parentSeq: true } } },
         });
         const map = new Map<string, number>();
         for (const l of logs) {
-          const key = l.device.system || "(Chưa đặt)";
+          const key = l.device.parentSeq || "(Chưa đặt)";
           map.set(key, (map.get(key) ?? 0) + (l.downtime ?? 0));
         }
         return ok(Array.from(map.entries()).map(([category, downtime]) => ({ category, downtime })));
       }
 
       case "material-consumption": {
-        const used = await prisma.deviceMaterial.findMany({ include: { material: true } });
+        const used = await prisma.equipmentMaterial.findMany({ include: { material: true } });
         const map = new Map<string, { name: string; quantity: number; value: number }>();
         for (const u of used) {
           const e = map.get(u.materialId) ?? { name: u.material.name, quantity: 0, value: 0 };

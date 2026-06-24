@@ -1,8 +1,20 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 
 export const dynamic = "force-dynamic";
+
+function mapMaterial<T extends { deviceMaterials?: Array<any> }>(material: T) {
+  return {
+    ...material,
+    deviceMaterials: material.deviceMaterials?.map((dm) => ({
+      ...dm,
+      deviceId: dm.deviceSeq,
+      device: equipmentNodeToDevice(dm.device),
+    })),
+  };
+}
 
 export async function GET() {
   return handle(async () => {
@@ -11,12 +23,12 @@ export async function GET() {
       orderBy: { code: "asc" },
       include: {
         deviceMaterials: {
-          include: { device: { select: { id: true, code: true, name: true, system: true, managingPosition: true } } },
+          include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
           orderBy: { usedAt: "desc" },
         },
       },
     });
-    return ok(materials, { total: materials.length });
+    return ok(materials.map(mapMaterial), { total: materials.length });
   });
 }
 
@@ -45,7 +57,7 @@ export async function POST(req: NextRequest) {
           ? {
               deviceMaterials: {
                 create: {
-                  deviceId: body.deviceId,
+                  deviceSeq: body.deviceId,
                   quantity: 1,
                 },
               },
@@ -79,12 +91,12 @@ export async function PUT(req: NextRequest) {
       },
     });
     if (body.deviceId !== undefined) {
-      await prisma.deviceMaterial.deleteMany({ where: { materialId: m.id } });
+      await prisma.equipmentMaterial.deleteMany({ where: { materialId: m.id } });
       if (body.deviceId) {
-        await prisma.deviceMaterial.create({
+        await prisma.equipmentMaterial.create({
           data: {
             materialId: m.id,
-            deviceId: body.deviceId,
+            deviceSeq: body.deviceId,
             quantity: 1,
           },
         });
@@ -119,7 +131,7 @@ export async function DELETE(req: NextRequest) {
     const foundIds = materials.map((m) => m.id);
 
     // Gỡ liên kết tiêu hao (lịch sử dùng cho thiết bị) trước khi xoá vật tư.
-    await prisma.deviceMaterial.deleteMany({ where: { materialId: { in: foundIds } } });
+    await prisma.equipmentMaterial.deleteMany({ where: { materialId: { in: foundIds } } });
     const { count } = await prisma.material.deleteMany({ where: { id: { in: foundIds } } });
     await audit(user.id, "DELETE_MATERIAL", "Material", foundIds.join(","), materials.map((m) => m.code).join(", "));
     return ok({ ids: foundIds, count });

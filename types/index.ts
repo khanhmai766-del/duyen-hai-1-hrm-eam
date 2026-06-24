@@ -1,28 +1,40 @@
 import type {
-  User,
-  Device,
-  RepairLog,
+  AuditLog,
+  CheckIn,
+  EquipmentMaterial,
   Material,
+  RepairLog,
   Shift,
   ShiftAssignment,
-  CheckIn,
   ShiftHandover,
-  DeviceMaterial,
-  AuditLog,
+  User,
 } from "@prisma/client";
 
 export type {
-  User,
-  Device,
-  RepairLog,
+  AuditLog,
+  CheckIn,
+  EquipmentMaterial,
   Material,
+  RepairLog,
   Shift,
   ShiftAssignment,
-  CheckIn,
   ShiftHandover,
-  DeviceMaterial,
-  AuditLog,
+  User,
 };
+
+export interface Device {
+  id: string;
+  code: string;
+  name: string;
+  system: string | null;
+  managingPosition?: string | null;
+  images?: string[];
+  attachedInfo?: string | null;
+  documentUrl?: string | null;
+  qrCodeData?: string | null;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
 
 // Standard API envelope
 export interface ApiResponse<T> {
@@ -35,11 +47,12 @@ export type SafeUser = Omit<User, "passwordHash">;
 
 export interface DeviceWithRelations extends Device {
   repairLogs: RepairLog[];
-  materials: (DeviceMaterial & { material: Material })[];
+  materials: (EquipmentMaterial & { material: Material })[];
 }
 
 export interface RepairLogWithRelations extends RepairLog {
-  device: Pick<Device, "id" | "code" | "name" | "system">;
+  deviceId?: string;
+  device: Device;
   createdBy: Pick<User, "id" | "name" | "position">;
   approvedBy: Pick<User, "id" | "name"> | null;
 }

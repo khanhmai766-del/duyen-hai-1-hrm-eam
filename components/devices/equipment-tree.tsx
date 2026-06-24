@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import {
   ChevronRight,
   Folder,
@@ -21,7 +20,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
-import { useCreateDevice } from "@/hooks/useDevices";
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
 function compareSeq(a: string, b: string) {
@@ -294,30 +292,11 @@ function DetailPanel({
   onSelect: (seq: string) => void;
 }) {
   const router = useRouter();
-  const createDevice = useCreateDevice();
   const isGroup = childCount > 0;
-  const parent = ancestors.length ? ancestors[ancestors.length - 1] : null;
 
-  // Mở lý lịch của node lá; nếu chưa có Device thì tạo bản ghi kế thừa từ node rồi mở.
+  // Mở lý lịch của node lá trực tiếp theo số thứ tự cây thiết bị.
   async function openRecord() {
-    if (node.deviceId) {
-      router.push(`/devices/${node.deviceId}`);
-      return;
-    }
-    try {
-      const device = await createDevice.mutateAsync({
-        code: node.seq,
-        name: node.name,
-        system: parent?.name ?? null,
-        systemSeq: node.parentSeq ?? parent?.seq ?? null,
-        attachedInfo: node.attachedInfo ?? null,
-        documentUrl: node.documentUrl ?? null,
-        images: node.imageUrl ? [node.imageUrl] : [],
-      });
-      router.push(`/devices/${device.id}`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Không tạo được lý lịch thiết bị");
-    }
+    router.push(`/devices/${encodeURIComponent(node.seq)}`);
   }
 
   return (
@@ -361,14 +340,8 @@ function DetailPanel({
       </div>
 
       {!isGroup && (
-        <Button className="w-full" onClick={openRecord} disabled={createDevice.isPending}>
-          {createDevice.isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang mở lý lịch…
-            </>
-          ) : (
-            "Xem lý lịch thiết bị"
-          )}
+        <Button className="w-full" onClick={openRecord}>
+          Xem lý lịch thiết bị
         </Button>
       )}
     </div>

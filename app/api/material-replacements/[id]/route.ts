@@ -1,23 +1,40 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
+
+const DETAIL_INCLUDE = {
+  material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
+  device: { select: EQUIPMENT_DEVICE_SELECT },
+  logs: {
+    orderBy: { replacedAt: "desc" },
+    include: { doneBy: { select: { id: true, name: true, position: true, avatarUrl: true } } },
+  },
+} as const;
+
+const SUMMARY_INCLUDE = {
+  material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
+  device: { select: EQUIPMENT_DEVICE_SELECT },
+  _count: { select: { logs: true } },
+} as const;
+
+function mapPoint(point: any) {
+  return {
+    ...point,
+    deviceId: point.deviceSeq ?? null,
+    device: equipmentNodeToDevice(point.device),
+  };
+}
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     await requireUser();
     const point = await prisma.materialReplacement.findUnique({
       where: { id: params.id },
-      include: {
-        material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
-        device: { select: { id: true, code: true, name: true, system: true } },
-        logs: {
-          orderBy: { replacedAt: "desc" },
-          include: { doneBy: { select: { id: true, name: true, position: true } } },
-        },
-      },
+      include: DETAIL_INCLUDE,
     });
     if (!point) return fail("Không tìm thấy điểm thay thế", 404);
-    return ok(point);
+    return ok(mapPoint(point));
   });
 }
 
@@ -29,16 +46,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const intervalMonths = body.intervalMonths != null ? Number(body.intervalMonths) : undefined;
     if (intervalMonths != null && (!Number.isFinite(intervalMonths) || intervalMonths < 1)) {
-      return fail("Chu kỳ phải là số tháng hợp lệ (≥ 1)");
+      return fail("Chu kỳ phải là số tháng hợp lệ (>= 1)");
     }
-    if (body.deviceId !== undefined && !body.deviceId) {
-      return fail("Chọn thiết bị");
-    }
+    if (body.deviceId !== undefined && !body.deviceId) return fail("Chọn thiết bị");
 
     const point = await prisma.materialReplacement.update({
       where: { id: params.id },
       data: {
-        deviceId: body.deviceId !== undefined ? body.deviceId : undefined,
+        deviceSeq: body.deviceId !== undefined ? body.deviceId : undefined,
         location: body.deviceId !== undefined ? null : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         intervalMonths,
@@ -48,25 +63,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
         isActive: body.isActive,
       },
-      include: {
-        material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
-        device: { select: { id: true, code: true, name: true, system: true } },
-        _count: { select: { logs: true } },
-      },
+      include: SUMMARY_INCLUDE,
     });
     if (body.deviceId) {
-      const linked = await prisma.deviceMaterial.findFirst({
-        where: { materialId: point.materialId, deviceId: body.deviceId },
+      const linked = await prisma.equipmentMaterial.findFirst({
+        where: { materialId: point.materialId, deviceSeq: body.deviceId },
         select: { id: true },
       });
       if (!linked) {
-        await prisma.deviceMaterial.create({
-          data: { materialId: point.materialId, deviceId: body.deviceId, quantity: 1 },
+        await prisma.equipmentMaterial.create({
+          data: { materialId: point.materialId, deviceSeq: body.deviceId, quantity: 1 },
         });
       }
     }
     await audit(user.id, "UPDATE_REPLACEMENT", "MaterialReplacement", point.id);
-    return ok(point);
+    return ok(mapPoint(point));
   });
 }
 

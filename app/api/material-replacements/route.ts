@@ -1,10 +1,9 @@
 import type { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { addMonths, replacementDueStatus } from "@/lib/constants";
 import type { Prisma } from "@prisma/client";
-
-const DEVICE_SELECT = { id: true, code: true, name: true, system: true, managingPosition: true } satisfies Prisma.DeviceSelect;
+import { prisma } from "@/lib/prisma";
+import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { addMonths, replacementDueStatus } from "@/lib/constants";
+import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 
 const INCLUDE = {
   material: {
@@ -16,14 +15,32 @@ const INCLUDE = {
       imageUrl: true,
       system: true,
       deviceMaterials: {
-        select: { device: { select: DEVICE_SELECT } },
+        select: { id: true, deviceSeq: true, materialId: true, quantity: true, usedAt: true, note: true, device: { select: EQUIPMENT_DEVICE_SELECT } },
         orderBy: { usedAt: "desc" },
       },
     },
   },
-  device: { select: DEVICE_SELECT },
+  device: { select: EQUIPMENT_DEVICE_SELECT },
   _count: { select: { logs: true } },
 } satisfies Prisma.MaterialReplacementInclude;
+
+function mapPoint(point: any) {
+  return {
+    ...point,
+    deviceId: point.deviceSeq ?? null,
+    device: equipmentNodeToDevice(point.device),
+    material: point.material
+      ? {
+          ...point.material,
+          deviceMaterials: point.material.deviceMaterials?.map((dm: any) => ({
+            ...dm,
+            deviceId: dm.deviceSeq,
+            device: equipmentNodeToDevice(dm.device),
+          })),
+        }
+      : point.material,
+  };
+}
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -31,7 +48,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const materialId = sp.get("materialId");
-    const due = sp.get("due"); // OVERDUE | DUE_SOON | OK | WARN(=OVERDUE+DUE_SOON) | ALL
+    const due = sp.get("due");
 
     const where: Prisma.MaterialReplacementWhereInput = { isActive: true };
     if (materialId) where.materialId = materialId;
@@ -39,9 +56,9 @@ export async function GET(req: NextRequest) {
       where.OR = [
         { material: { is: { name: { contains: q, mode: "insensitive" } } } },
         { material: { is: { code: { contains: q, mode: "insensitive" } } } },
-        { material: { is: { deviceMaterials: { some: { device: { is: { code: { contains: q, mode: "insensitive" } } } } } } } },
+        { material: { is: { deviceMaterials: { some: { device: { is: { seq: { contains: q, mode: "insensitive" } } } } } } } },
         { material: { is: { deviceMaterials: { some: { device: { is: { name: { contains: q, mode: "insensitive" } } } } } } } },
-        { device: { is: { code: { contains: q, mode: "insensitive" } } } },
+        { device: { is: { seq: { contains: q, mode: "insensitive" } } } },
         { device: { is: { name: { contains: q, mode: "insensitive" } } } },
       ];
     }
@@ -61,7 +78,7 @@ export async function GET(req: NextRequest) {
       else filtered = points.filter((p) => replacementDueStatus(p.nextDueAt) === due);
     }
 
-    return ok(filtered, { total: filtered.length, counts, warn: counts.OVERDUE + counts.DUE_SOON });
+    return ok(filtered.map(mapPoint), { total: filtered.length, counts, warn: counts.OVERDUE + counts.DUE_SOON });
   });
 }
 
@@ -71,28 +88,21 @@ export async function POST(req: NextRequest) {
     requireRole(user, ["ADMIN", "SUPERVISOR"]);
     const body = await req.json();
 
-    if (!body.materialId || !body.intervalMonths) {
-      return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");
-    }
-    if (!body.deviceId) {
-      return fail("Chọn thiết bị");
-    }
+    if (!body.materialId || !body.intervalMonths) return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");
+    if (!body.deviceId) return fail("Chọn thiết bị");
     const intervalMonths = Number(body.intervalMonths);
-    if (!Number.isFinite(intervalMonths) || intervalMonths < 1) {
-      return fail("Chu kỳ phải là số tháng hợp lệ (≥ 1)");
-    }
+    if (!Number.isFinite(intervalMonths) || intervalMonths < 1) return fail("Chu kỳ phải là số tháng hợp lệ (>= 1)");
 
     const material = await prisma.material.findUnique({ where: { id: body.materialId } });
     if (!material) return fail("Không tìm thấy vật tư", 404);
 
-    // nextDue: dùng giá trị nhập, nếu trống thì tính từ lần thay gần nhất (hoặc hôm nay) + chu kỳ.
     const base = body.lastReplacedAt ? new Date(body.lastReplacedAt) : new Date();
     const nextDueAt = body.nextDueAt ? new Date(body.nextDueAt) : addMonths(base, intervalMonths);
 
     const point = await prisma.materialReplacement.create({
       data: {
         materialId: body.materialId,
-        deviceId: body.deviceId,
+        deviceSeq: body.deviceId,
         location: null,
         system: body.system?.trim() || material.system || null,
         intervalMonths,
@@ -104,16 +114,16 @@ export async function POST(req: NextRequest) {
       },
       include: INCLUDE,
     });
-    const linked = await prisma.deviceMaterial.findFirst({
-      where: { materialId: body.materialId, deviceId: body.deviceId },
+    const linked = await prisma.equipmentMaterial.findFirst({
+      where: { materialId: body.materialId, deviceSeq: body.deviceId },
       select: { id: true },
     });
     if (!linked) {
-      await prisma.deviceMaterial.create({
-        data: { materialId: body.materialId, deviceId: body.deviceId, quantity: 1 },
+      await prisma.equipmentMaterial.create({
+        data: { materialId: body.materialId, deviceSeq: body.deviceId, quantity: 1 },
       });
     }
     await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, material.code);
-    return ok(point);
+    return ok(mapPoint(point));
   });
 }

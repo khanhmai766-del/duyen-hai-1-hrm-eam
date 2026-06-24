@@ -12,7 +12,7 @@ export default function DeviceQrPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading } = useDevice(id);
   const device = data?.data;
-  const url = typeof window !== "undefined" ? `${window.location.origin}/public/devices/${id}` : "";
+  const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
 
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center">

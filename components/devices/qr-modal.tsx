@@ -17,8 +17,8 @@ export function QRModal({
 }) {
   const url =
     typeof window !== "undefined"
-      ? `${window.location.origin}/public/devices/${device.id}`
-      : `/public/devices/${device.id}`;
+      ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}`
+      : `/public/equipment/${encodeURIComponent(device.code)}`;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">

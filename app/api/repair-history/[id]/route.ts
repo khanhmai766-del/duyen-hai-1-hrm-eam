@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -8,13 +9,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const log = await prisma.repairLog.findUnique({
       where: { id: params.id },
       include: {
-        device: { select: { id: true, code: true, name: true, system: true } },
+        device: { select: EQUIPMENT_DEVICE_SELECT },
         createdBy: { select: { id: true, name: true, position: true } },
         approvedBy: { select: { id: true, name: true } },
       },
     });
     if (!log) return fail("Không tìm thấy phiếu sửa chữa", 404);
-    return ok(log);
+    return ok(withDeviceAlias(log));
   });
 }
 

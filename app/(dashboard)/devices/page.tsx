@@ -8,7 +8,6 @@ import { QRCodeSVG } from "qrcode.react";
 import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
 import {
   LayoutGrid,
-  Table2,
   LayoutDashboard,
   FilePlus2,
   GalleryHorizontal,
@@ -79,7 +78,6 @@ type ViewMode = "tree" | "dashboard" | "table" | "detail" | "form" | "deck";
 const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
   { key: "tree", label: "Cây thiết bị", icon: Network },
   { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
-  { key: "table", label: "Bảng", icon: Table2 },
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
   { key: "form", label: "Thêm mới", icon: FilePlus2, adminOnly: true },
   { key: "deck", label: "Deck", icon: GalleryHorizontal },
@@ -115,6 +113,13 @@ export default function DevicesPage() {
   const [importOpen, setImportOpen] = React.useState(false);
 
   React.useEffect(() => {
+    if (view !== "table") return;
+    const sp = new URLSearchParams(params.toString());
+    sp.set("view", "dashboard");
+    router.replace(`/devices?${sp.toString()}`);
+  }, [params, router, view]);
+
+  React.useEffect(() => {
     setQ(urlQ);
     setDebouncedQ(urlQ);
     setSystemSeq(urlSystemSeq);
@@ -137,10 +142,11 @@ export default function DevicesPage() {
   }, [equipmentIndex]);
   const selectedSystemNode = systemSeq === "ALL" ? null : equipmentIndex.bySeq.get(systemSeq) ?? null;
   const systemTreeRows = React.useMemo(() => {
-    if (!selectedSystemNode) return [];
     const qText = normalizeText(debouncedQ.trim());
     const rows: SystemTreeRow[] = [];
-    const queue = [...(equipmentIndex.childrenOf.get(selectedSystemNode.seq) ?? [])];
+    const queue = selectedSystemNode
+      ? [...(equipmentIndex.childrenOf.get(selectedSystemNode.seq) ?? [])]
+      : [...systemOptions];
     while (queue.length) {
       const node = queue.shift()!;
       const childCount = (equipmentIndex.childrenOf.get(node.seq) ?? []).length;
@@ -161,7 +167,7 @@ export default function DevicesPage() {
       queue.push(...(equipmentIndex.childrenOf.get(node.seq) ?? []));
     }
     return rows.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-  }, [debouncedQ, equipmentIndex, selectedSystemNode]);
+  }, [debouncedQ, equipmentIndex, selectedSystemNode, systemOptions]);
   const systemLeafRows = React.useMemo(
     () => dedupeEquipmentLeafNodes(systemTreeRows.filter((row) => !row.isGroup)),
     [systemTreeRows]
@@ -200,7 +206,7 @@ export default function DevicesPage() {
     }
   }
 
-  const visibleViews = VIEWS.filter((v) => !v.adminOnly || isAdmin);
+  const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || isAdmin));
 
   return (
     <div className="space-y-6">
@@ -233,7 +239,7 @@ export default function DevicesPage() {
             );
           })}
         </div>
-        {view !== "form" && (
+        {view !== "form" && view !== "table" && view !== "detail" && view !== "deck" && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
             <select
@@ -269,18 +275,22 @@ export default function DevicesPage() {
             <p className="text-sm text-muted-foreground">Chỉ Quản trị viên mới được thêm thiết bị mới.</p>
           </CardContent></Card>
         )
+      ) : view === "table" || view === "detail" || view === "deck" ? (
+        <Card className="min-h-[420px] border-dashed border-border bg-white">
+          <CardContent className="min-h-[420px]" />
+        </Card>
       ) : (
         <>
-          {view === "table" && selectedSystemNode ? (
+          {(view as ViewMode) === "table" ? (
             equipmentTreeLoading ? (
               <TableSkeleton />
             ) : (
-              <SystemTreeTableView rows={systemDisplayRows} selectedSystemName={selectedSystemNode.name} />
+              <SystemTreeTableView rows={systemDisplayRows} selectedSystemName={selectedSystemNode?.name ?? "Tất cả hệ thống"} />
             )
-          ) : (view === "detail" || view === "deck") && selectedSystemNode ? (
+          ) : ((view as ViewMode) === "detail" || (view as ViewMode) === "deck") && selectedSystemNode ? (
             equipmentTreeLoading ? (
               <TableSkeleton />
-            ) : view === "detail" ? (
+            ) : (view as ViewMode) === "detail" ? (
               <SystemLeafCardView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
             ) : (
               <SystemLeafDeckView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
@@ -294,16 +304,9 @@ export default function DevicesPage() {
               description="Không tìm thấy thiết bị phù hợp."
               action={isAdmin ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
-          ) : view === "dashboard" ? (
+          ) : (view as ViewMode) === "dashboard" ? (
             <DashboardView devices={devices} />
-          ) : view === "table" ? (
-            <TableView
-              devices={devices}
-              canDelete={can(session?.user?.role, "deleteDevice")}
-              onQr={setQrDevice}
-              onDelete={setDeleteTarget}
-            />
-          ) : view === "detail" ? (
+          ) : (view as ViewMode) === "detail" ? (
             <DetailView devices={devices} onQr={setQrDevice} />
           ) : (
             <DeckView devices={devices} onQr={setQrDevice} />

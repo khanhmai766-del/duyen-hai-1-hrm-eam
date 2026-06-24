@@ -16,12 +16,14 @@ export type ReplacementMaterial = {
 };
 
 export interface ReplacementItem extends MaterialReplacement {
+  deviceId?: string | null;
   material: ReplacementMaterial & { imageUrl: string | null };
   device: ReplacementDevice | null;
   _count: { logs: number };
 }
 
 export interface ReplacementDetail extends MaterialReplacement {
+  deviceId?: string | null;
   material: { id: string; code: string; name: string; unit: string; imageUrl: string | null };
   device: ReplacementDevice | null;
   logs: (MaterialReplacementLog & { doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null } })[];
