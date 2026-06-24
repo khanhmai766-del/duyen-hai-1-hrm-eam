@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   LayoutGrid,
   Table2,
@@ -11,6 +12,7 @@ import {
   FilePlus2,
   GalleryHorizontal,
   Cpu,
+  Folder,
   QrCode,
   Eye,
   Trash2,
@@ -65,7 +67,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
+import { useEquipmentTree } from "@/hooks/useEquipment";
 import { can } from "@/lib/constants";
+import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
+import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
 
@@ -79,6 +84,16 @@ const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boole
   { key: "deck", label: "Deck", icon: GalleryHorizontal },
 ];
 
+type SystemTreeRow = {
+  seq: string;
+  name: string;
+  parentName: string;
+  drawing: string | null;
+  isGroup: boolean;
+  childCount: number;
+  deviceId: string | null;
+};
+
 export default function DevicesPage() {
   const router = useRouter();
   const params = useSearchParams();
@@ -86,11 +101,11 @@ export default function DevicesPage() {
   const isAdmin = session?.user?.role === "ADMIN";
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
-  const urlSystem = params.get("system") ?? "ALL";
+  const urlSystemSeq = params.get("systemSeq") ?? "ALL";
 
   const [q, setQ] = React.useState(urlQ);
   const [debouncedQ, setDebouncedQ] = React.useState(urlQ);
-  const [system, setSystem] = React.useState(urlSystem);
+  const [systemSeq, setSystemSeq] = React.useState(urlSystemSeq);
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
@@ -98,18 +113,51 @@ export default function DevicesPage() {
   React.useEffect(() => {
     setQ(urlQ);
     setDebouncedQ(urlQ);
-    setSystem(urlSystem);
-  }, [urlQ, urlSystem]);
+    setSystemSeq(urlSystemSeq);
+  }, [urlQ, urlSystemSeq]);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const { data, isLoading } = useDevices({ q: debouncedQ, system: system === "ALL" ? undefined : system });
+  const { data, isLoading } = useDevices({ q: debouncedQ, systemSeq: systemSeq === "ALL" ? undefined : systemSeq });
+  const { data: equipmentTreeData, isLoading: equipmentTreeLoading } = useEquipmentTree();
   const del = useDeleteDevice();
   const devices = data?.data ?? [];
-  const systems: string[] = (data?.meta?.systems as string[]) ?? [];
+  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
+  const equipmentIndex = React.useMemo(() => buildEquipmentTreeIndex(equipmentNodes), [equipmentNodes]);
+  const systemOptions = React.useMemo(() => {
+    const { roots } = equipmentIndex;
+    return [...roots].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+  }, [equipmentIndex]);
+  const selectedSystemNode = systemSeq === "ALL" ? null : equipmentIndex.bySeq.get(systemSeq) ?? null;
+  const systemTreeRows = React.useMemo(() => {
+    if (!selectedSystemNode) return [];
+    const qText = normalizeText(debouncedQ.trim());
+    const rows: SystemTreeRow[] = [];
+    const queue = [...(equipmentIndex.childrenOf.get(selectedSystemNode.seq) ?? [])];
+    while (queue.length) {
+      const node = queue.shift()!;
+      const childCount = (equipmentIndex.childrenOf.get(node.seq) ?? []).length;
+      const parentSeq = equipmentIndex.parentOf.get(node.seq);
+      const parent = parentSeq ? equipmentIndex.bySeq.get(parentSeq) ?? null : null;
+      const row = {
+        seq: node.seq,
+        name: node.name,
+        parentName: parent?.name ?? "",
+        drawing: node.drawing,
+        isGroup: childCount > 0,
+        childCount,
+        deviceId: node.deviceId ?? null,
+      };
+      const haystack = normalizeText([row.seq, row.name, row.parentName, row.drawing].filter(Boolean).join(" "));
+      if (!qText || haystack.includes(qText)) rows.push(row);
+      queue.push(...(equipmentIndex.childrenOf.get(node.seq) ?? []));
+    }
+    return rows.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+  }, [debouncedQ, equipmentIndex, selectedSystemNode]);
+  const systemLeafRows = React.useMemo(() => systemTreeRows.filter((row) => !row.isGroup), [systemTreeRows]);
 
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
@@ -177,13 +225,13 @@ export default function DevicesPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
             <select
-              value={system}
-              onChange={(e) => setSystem(e.target.value)}
+              value={systemSeq}
+              onChange={(e) => setSystemSeq(e.target.value)}
               className="h-10 shrink-0 rounded-md border border-input bg-white px-3 text-sm"
             >
               <option value="ALL">Tất cả hệ thống</option>
-              {systems.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {systemOptions.map((node) => (
+                <option key={node.seq} value={node.seq}>{node.seq} · {node.name}</option>
               ))}
             </select>
           </div>
@@ -194,7 +242,14 @@ export default function DevicesPage() {
         <EquipmentTreeView />
       ) : view === "form" ? (
         isAdmin ? (
-          <DeviceForm onDone={() => setView("table")} />
+          <DeviceForm
+            onDone={(device) => {
+              const sp = new URLSearchParams(params.toString());
+              sp.set("view", "tree");
+              sp.set("focusSeq", device.code);
+              router.push(`/devices?${sp.toString()}`);
+            }}
+          />
         ) : (
           <Card><CardContent className="flex flex-col items-center gap-2 py-16 text-center">
             <ShieldAlert className="h-10 w-10 text-destructive" />
@@ -204,7 +259,21 @@ export default function DevicesPage() {
         )
       ) : (
         <>
-          {isLoading ? (
+          {view === "table" && selectedSystemNode ? (
+            equipmentTreeLoading ? (
+              <TableSkeleton />
+            ) : (
+              <SystemTreeTableView rows={systemTreeRows} selectedSystemName={selectedSystemNode.name} />
+            )
+          ) : (view === "detail" || view === "deck") && selectedSystemNode ? (
+            equipmentTreeLoading ? (
+              <TableSkeleton />
+            ) : view === "detail" ? (
+              <SystemLeafCardView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
+            ) : (
+              <SystemLeafDeckView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
+            )
+          ) : isLoading ? (
             <TableSkeleton />
           ) : devices.length === 0 ? (
             <EmptyState
@@ -249,6 +318,260 @@ export default function DevicesPage() {
 
 function lastRepair(d: DeviceListItem) {
   return d.repairLogs?.[0]?.startedAt ? formatDate(d.repairLogs[0].startedAt) : "—";
+}
+
+function systemRowQrValue(row: SystemTreeRow) {
+  const path = row.deviceId ? `/devices/${row.deviceId}` : `/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`;
+  if (typeof window === "undefined") return path;
+  return `${window.location.origin}${path}`;
+}
+
+function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={Cpu}
+        title="Không có thiết bị"
+        description="Không tìm thấy thiết bị ở thư mục con cuối cùng của hệ thống đã chọn."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-ink">{selectedSystemName}</div>
+          <div className="text-xs text-muted-foreground">Hiển thị {rows.length} thiết bị ở thư mục con cuối cùng để tra mã QR</div>
+        </div>
+        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">{rows.length} thiết bị</span>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {rows.map((row) => (
+          <Card key={row.seq} className="overflow-hidden transition-shadow hover:shadow-md">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-4">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-border bg-white p-2 shadow-sm">
+                  <QRCodeSVG value={systemRowQrValue(row)} size={76} includeMargin={false} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-xs font-bold text-navy">{row.seq}</div>
+                  <h3 className="mt-1 line-clamp-2 font-semibold leading-tight text-ink" title={row.name}>
+                    {row.name}
+                  </h3>
+                  <div className="mt-2 line-clamp-2 text-xs text-muted-foreground" title={row.parentName}>
+                    {row.parentName || "Thư mục con cuối cùng"}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                <InfoPill label="Bản vẽ" value={row.drawing || "—"} />
+                <InfoPill label="Loại" value={row.deviceId ? "Có lý lịch" : "Node cây"} />
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Button asChild size="sm" variant="outline" className="flex-1">
+                  <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>
+                    <Network className="h-4 w-4" /> Trong cây
+                  </Link>
+                </Button>
+                {row.deviceId && (
+                  <Button asChild size="sm" className="flex-1">
+                    <Link href={`/devices/${row.deviceId}`}>
+                      <Eye className="h-4 w-4" /> Lý lịch
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SystemLeafDeckView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={Cpu}
+        title="Không có thiết bị"
+        description="Không tìm thấy thiết bị ở thư mục con cuối cùng của hệ thống đã chọn."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-ink">{selectedSystemName}</div>
+          <div className="text-xs text-muted-foreground">Deck QR theo thiết bị ở thư mục con cuối cùng</div>
+        </div>
+        <span className="rounded-full bg-navy px-3 py-1 text-xs font-semibold text-white">{rows.length} thẻ QR</span>
+      </div>
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {rows.map((row) => (
+          <Card key={row.seq} className="w-[360px] shrink-0 overflow-hidden">
+            <CardHeader className="border-b border-border bg-gradient-to-br from-navy/5 to-sky-50">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-mono text-xs font-bold text-navy">{row.seq}</div>
+                  <CardTitle className="mt-1 line-clamp-2 text-base leading-tight">{row.name}</CardTitle>
+                </div>
+                <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-sky-700 shadow-sm">QR</span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <div className="flex justify-center rounded-xl border border-dashed border-border bg-white p-4">
+                <QRCodeSVG value={systemRowQrValue(row)} size={154} includeMargin />
+              </div>
+              <dl className="grid grid-cols-2 gap-2 text-sm">
+                <Info label="Thư mục" value={row.parentName || "—"} />
+                <Info label="Bản vẽ" value={row.drawing || "—"} />
+              </dl>
+              <div className="flex gap-2">
+                <Button asChild size="sm" variant="outline" className="flex-1">
+                  <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>Xem trong cây</Link>
+                </Button>
+                {row.deviceId && (
+                  <Button asChild size="sm" className="flex-1">
+                    <Link href={`/devices/${row.deviceId}`}>Lý lịch</Link>
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InfoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-muted/50 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className="mt-0.5 truncate font-medium text-ink" title={value}>{value}</div>
+    </div>
+  );
+}
+
+function SystemTreeTableView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(20);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const firstShown = rows.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, rows.length);
+  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
+
+  React.useEffect(() => {
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [totalPages]);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [rows, pageSize]);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-border px-4 py-3">
+        <div className="text-sm font-semibold text-ink">{selectedSystemName}</div>
+        <div className="text-xs text-muted-foreground">Danh sách thư mục và thiết bị thuộc hệ thống đã chọn</div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+          <Cpu className="h-9 w-9 text-muted-foreground/40" />
+          Không có dữ liệu phù hợp trong hệ thống này.
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[130px] text-center">Số thứ tự</TableHead>
+                  <TableHead className="min-w-[260px] text-center">Tên thư mục / thiết bị</TableHead>
+                  <TableHead className="min-w-[220px] text-center">Thuộc thư mục</TableHead>
+                  <TableHead className="w-[180px] text-center">Bản vẽ liên quan</TableHead>
+                  <TableHead className="w-[130px] text-center">Phân loại</TableHead>
+                  <TableHead className="w-[110px] text-center">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedRows.map((row) => (
+                  <TableRow key={row.seq}>
+                    <TableCell className="text-center font-mono text-xs font-semibold text-navy">{row.seq}</TableCell>
+                    <TableCell>
+                      <div className="flex min-w-0 items-center gap-2">
+                        {row.isGroup ? (
+                          <Folder className="h-4 w-4 shrink-0 text-amber-500" />
+                        ) : (
+                          <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
+                        )}
+                        <span className="truncate font-medium text-ink" title={row.name}>{row.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center text-muted-foreground">
+                      <span className="line-clamp-2" title={row.parentName}>{row.parentName || "—"}</span>
+                    </TableCell>
+                    <TableCell className="text-center text-muted-foreground">{row.drawing || "—"}</TableCell>
+                    <TableCell className="text-center">
+                      {row.isGroup ? (
+                        <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                          Nhóm · {row.childCount}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">Thiết bị</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button asChild variant="ghost" size="icon" title="Xem trong cây">
+                          <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>
+                            <Network className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        {row.deviceId && (
+                          <Button asChild variant="ghost" size="icon" title="Lý lịch thiết bị">
+                            <Link href={`/devices/${row.deviceId}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <div>Hiển thị {firstShown}-{lastShown} trong tổng số {rows.length} dòng</div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <span>Hiển thị</span>
+              <select
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink shadow-none"
+                aria-label="Số dòng hiển thị"
+              >
+                {[20, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+              <span>dòng</span>
+              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
+              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} />
+              <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">{page}/{totalPages}</span>
+              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} />
+              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
+            </div>
+          </div>
+        </>
+      )}
+    </Card>
+  );
 }
 
 function TableView({

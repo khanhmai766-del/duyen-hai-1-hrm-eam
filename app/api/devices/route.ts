@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import type { Prisma } from "@prisma/client";
 import { syncDeviceEquipmentNode } from "@/lib/equipment-node-sync";
+import { buildEquipmentTreeIndex, getEquipmentDescendantSeqs, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -10,9 +11,10 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const system = sp.get("system");
+    const systemSeq = sp.get("systemSeq")?.trim();
 
     const where: Prisma.DeviceWhereInput = {};
-    if (system && system !== "ALL") where.system = system;
+    if (!systemSeq && system && system !== "ALL") where.system = system;
     if (q) {
       where.OR = [
         { code: { contains: q, mode: "insensitive" } },
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const devices = await prisma.device.findMany({
+    const rawDevices = await prisma.device.findMany({
       where,
       orderBy: { code: "asc" },
       include: {
@@ -30,6 +32,25 @@ export async function GET(req: NextRequest) {
         _count: { select: { repairLogs: true } },
       },
     });
+
+    const equipmentNodes = await getNormalizedEquipmentNodes(prisma);
+    const { bySeq } = buildEquipmentTreeIndex(equipmentNodes);
+    const allowedSeqs = systemSeq ? getEquipmentDescendantSeqs(equipmentNodes, systemSeq) : null;
+    const allowedSystemNames = allowedSeqs
+      ? new Set(Array.from(allowedSeqs).map((seq) => bySeq.get(seq)?.name).filter((name): name is string => !!name))
+      : null;
+    const devices = rawDevices
+      .filter((device) => {
+        if (!allowedSeqs) return true;
+        return allowedSeqs.has(device.code) || (!!device.system && allowedSystemNames?.has(device.system));
+      })
+      .map((device) => {
+        const treeNode = bySeq.get(device.code);
+        return {
+          ...device,
+          systemSeq: treeNode?.parentSeq ?? null,
+        };
+      });
 
     // Danh sách "Hệ thống" phân biệt (bỏ qua bộ lọc system) cho dropdown lọc.
     const grouped = await prisma.device.groupBy({

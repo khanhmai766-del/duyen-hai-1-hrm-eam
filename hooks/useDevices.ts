@@ -5,14 +5,16 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { DeviceWithRelations, Device } from "@/types";
 
 export interface DeviceListItem extends Device {
+  systemSeq?: string | null;
   repairLogs: { startedAt: string }[];
   _count: { repairLogs: number };
 }
 
-export function useDevices(params: { q?: string; system?: string }) {
+export function useDevices(params: { q?: string; system?: string; systemSeq?: string }) {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
   if (params.system) qs.set("system", params.system);
+  if (params.systemSeq) qs.set("systemSeq", params.systemSeq);
   return useQuery({
     queryKey: ["devices", params],
     queryFn: () => apiGet<DeviceListItem[]>(`/api/devices?${qs.toString()}`),
