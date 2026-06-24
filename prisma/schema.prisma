@@ -326,6 +326,8 @@ model Defect {
   system        String? // Cương vị (chức vụ phụ trách)
   severity      String? // Mức độ: "1".."4"
   condition     String? // Điều kiện thực hiện: A | B
+  fireSafetyImpact       String? // Ảnh hưởng PCCC: Có | Không
+  environmentSafetyImpact String? // Môi trường, ATVSLĐ: Có | Không
   requestType   String? // Yêu cầu: Cơ | Điện | I&C | Khác
   requestNumber String? // Số yêu cầu
   content       String? // Nội dung

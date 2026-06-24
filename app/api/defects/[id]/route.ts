@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import {
+  ensureDefectImpactColumns,
+  normalizeImpactValue,
+  readDefectImpactFields,
+  updateDefectImpactFields,
+} from "@/lib/defect-impact-fields";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -9,6 +15,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
+    await ensureDefectImpactColumns(prisma);
     const defect = await prisma.defect.update({
       where: { id: params.id },
       data: {
@@ -26,8 +33,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       },
       include: INCLUDE,
     });
+    if (body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined) {
+      await updateDefectImpactFields(prisma, defect.id, {
+        fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
+        environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
+      });
+    }
+    const impactFields = await readDefectImpactFields(prisma, [defect.id]);
     await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id);
-    return ok(defect);
+    return ok({ ...defect, ...impactFields.get(defect.id) });
   });
 }
 

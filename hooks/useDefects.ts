@@ -6,6 +6,8 @@ import type { Defect } from "@prisma/client";
 
 export interface DefectItem extends Defect {
   createdBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
+  fireSafetyImpact: string | null;
+  environmentSafetyImpact: string | null;
 }
 
 export function useDefects() {

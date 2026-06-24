@@ -517,6 +517,8 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
       <div className={detailCardClass}>
         <DetailLine label="Mức độ" value={severity} />
         <DetailLine label="Tình trạng" value={status} />
+        <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
+        <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
         <DetailLine label="Ngày phát hiện" value={formatDate(defect.detectedAt)} />
         <DetailLine label="Ghi chú" value={defect.note || "—"} multiline />
         <DetailLine label="Người ghi nhận" value={defect.createdBy?.name || "—"} />
