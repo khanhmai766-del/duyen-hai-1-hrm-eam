@@ -21,8 +21,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices } from "@/hooks/useMaterials";
 import { useDevices } from "@/hooks/useDevices";
+import { useEquipmentTree } from "@/hooks/useEquipment";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { MATERIAL_SYSTEMS, can } from "@/lib/constants";
+import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
 
@@ -35,7 +38,11 @@ export default function MaterialsPage() {
   const canManage = role === "ADMIN";
   const { data, isLoading } = useMaterials();
   const { data: devicesData } = useDevices({});
+  const { data: equipmentTreeData } = useEquipmentTree();
+  const scopesQuery = usePositionSystemScopes();
   const devices = devicesData?.data ?? [];
+  const equipmentNodes = equipmentTreeData?.data ?? [];
+  const positionScopes = scopesQuery.data?.data ?? [];
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
@@ -338,7 +345,9 @@ export default function MaterialsPage() {
                     setEdit({
                       ...edit,
                       managingPosition: nextPosition,
-                      ...(selectedDevice && selectedDevice.managingPosition !== nextPosition ? { deviceId: null } : {}),
+                      ...(selectedDevice && nextPosition && !deviceAllowedForPosition(selectedDevice, nextPosition, equipmentNodes, positionScopes)
+                        ? { deviceId: null }
+                        : {}),
                     });
                   }}
                 >
@@ -358,7 +367,7 @@ export default function MaterialsPage() {
                   <SelectContent>
                     <SelectItem value={NO_DEVICE}>— Không chọn —</SelectItem>
                     {devices
-                      .filter((device) => !edit.managingPosition || device.managingPosition === edit.managingPosition)
+                      .filter((device) => !edit.managingPosition || deviceAllowedForPosition(device, edit.managingPosition, equipmentNodes, positionScopes))
                       .map((device) => (
                       <SelectItem key={device.id} value={device.id}>
                         {device.name} ({device.code})

@@ -9,6 +9,7 @@ export interface EquipmentNode {
   name: string;
   drawing: string | null;
   depth: number;
+  deviceId?: string | null;
 }
 
 /** Cây danh mục thiết bị (9k+ node) — tải một lần, cache lâu. */

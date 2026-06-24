@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ChevronRight,
   Folder,
@@ -13,6 +15,7 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -33,6 +36,8 @@ function compareSeq(a: string, b: string) {
 }
 
 export function EquipmentTreeView() {
+  const params = useSearchParams();
+  const focusSeq = params.get("focusSeq");
   const { data, isLoading } = useEquipmentTree();
   const nodes = React.useMemo(() => data?.data ?? [], [data]);
 
@@ -111,6 +116,20 @@ export function EquipmentTreeView() {
   }
 
   const selectedNode = selected ? bySeq.get(selected) ?? null : null;
+  React.useEffect(() => {
+    if (!focusSeq || !bySeq.has(focusSeq)) return;
+    setSelected(focusSeq);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      let parent = effParentOf.get(focusSeq) ?? null;
+      while (parent && bySeq.has(parent)) {
+        next.add(parent);
+        parent = effParentOf.get(parent) ?? null;
+      }
+      return next;
+    });
+  }, [focusSeq, bySeq, effParentOf]);
+
   const ancestors = React.useMemo(() => {
     if (!selectedNode) return [];
     const path: EquipmentNode[] = [];
@@ -313,6 +332,12 @@ function DetailPanel({
         <DetailRow label="Bản vẽ liên quan" value={node.drawing || "—"} />
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${childCount} thiết bị con` : "Thiết bị"} />
       </div>
+
+      {node.deviceId && (
+        <Button asChild className="w-full">
+          <Link href={`/devices/${node.deviceId}`}>Xem lý lịch thiết bị</Link>
+        </Button>
+      )}
     </div>
   );
 }

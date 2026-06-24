@@ -210,7 +210,7 @@ function LoginInner() {
         </div>
         <div className="relative z-10 flex gap-8 text-sm text-white/70">
           <div>
-            <div className="text-2xl font-bold text-white">{stats ? stats.devices : "—"}</div>
+            <div className="text-2xl font-bold text-white">{stats ? stats.devices.toLocaleString("vi-VN") : "—"}</div>
             Thiết bị quản lý
           </div>
           <div>

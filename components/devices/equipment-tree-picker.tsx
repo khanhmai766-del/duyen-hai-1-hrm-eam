@@ -6,8 +6,9 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
+import { rootAllowedForPosition } from "@/lib/position-system-scopes";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
 function compareSeq(a: string, b: string) {
@@ -38,7 +39,9 @@ export function EquipmentTreePicker({
   placeholder?: string;
 }) {
   const { data, isLoading } = useEquipmentTree();
+  const scopesQuery = usePositionSystemScopes();
   const nodes = React.useMemo(() => data?.data ?? [], [data]);
+  const scopes = scopesQuery.data?.data ?? [];
 
   // Chỉ mục: seq -> node, parentSeq hiệu lực -> con (đã sắp), danh sách gốc.
   const { bySeq, childrenOf, roots, effParentOf } = React.useMemo(() => {
@@ -81,20 +84,16 @@ export function EquipmentTreePicker({
   const q = normalizeText(search.trim());
 
   const selectedNode = value ? bySeq.get(value) ?? null : null;
+  const folderSeqs = React.useMemo(() => new Set(Array.from(childrenOf.entries()).filter(([, kids]) => kids.length > 0).map(([seq]) => seq)), [childrenOf]);
 
   // Lọc nhóm gốc theo cương vị: tên chứa "COMMON" luôn hiện; chưa chọn cương vị → hiện tất cả;
   // còn lại chỉ hiện khi cương vị nằm trong danh sách của hệ thống đó.
   const filteredRoots = React.useMemo(() => {
-    const np = position ? normalizeText(position) : "";
     return roots.filter((node) => {
-      const name = normalizeText(node.name);
-      if (name.includes("common")) return true;
-      if (!np) return true;
-      const rule = EQUIPMENT_SYSTEM_BY_POSITION.find((r) => name.includes(normalizeText(r.match)));
-      if (!rule) return true;
-      return rule.positions.some((p) => normalizeText(p) === np);
+      if (!folderSeqs.has(node.seq)) return false;
+      return rootAllowedForPosition(node, position, scopes);
     });
-  }, [roots, position]);
+  }, [roots, position, folderSeqs, scopes]);
 
   // Khi mở popup, tự bung đường dẫn tới mục đang chọn để thấy ngay.
   React.useEffect(() => {
@@ -117,6 +116,7 @@ export function EquipmentTreePicker({
     const searchExpanded = new Set<string>();
     let matchCount = 0;
     for (const n of nodes) {
+      if (!folderSeqs.has(n.seq)) continue;
       if (normalizeText([n.seq, n.name].filter(Boolean).join(" ")).includes(q)) {
         matchCount++;
         visible.add(n.seq);
@@ -129,7 +129,7 @@ export function EquipmentTreePicker({
       }
     }
     return { visible, searchExpanded, matchCount };
-  }, [q, nodes, bySeq, effParentOf]);
+  }, [q, nodes, bySeq, effParentOf, folderSeqs]);
 
   const isOpenNode = (seq: string) => (q ? searchExpanded!.has(seq) : expanded.has(seq));
   function toggle(seq: string) {
@@ -150,6 +150,7 @@ export function EquipmentTreePicker({
   function renderNodes(list: EquipmentNode[], depth: number): React.ReactNode {
     return list
       .filter((n) => !visible || visible.has(n.seq))
+      .filter((n) => folderSeqs.has(n.seq))
       .map((n) => {
         const kids = childrenOf.get(n.seq) ?? [];
         const hasKids = kids.length > 0;
@@ -158,15 +159,9 @@ export function EquipmentTreePicker({
           <React.Fragment key={n.seq}>
             <button
               type="button"
-              // Thư mục (có con): click để mở/thu + chọn, GIỮ popup mở để xem mục con.
-              // Thiết bị lá: click để chọn rồi đóng.
               onClick={() => {
-                if (hasKids) {
-                  onChange(n);
-                  toggle(n.seq);
-                } else {
-                  pick(n);
-                }
+                onChange(n);
+                toggle(n.seq);
               }}
               className={cn(
                 "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
