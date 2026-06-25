@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -40,6 +40,9 @@ export default function MaterialsPage() {
   const [q, setQ] = React.useState("");
   const [systemFilter, setSystemFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
   const [deleting, setDeleting] = React.useState<Material | null>(null);
   const [isNew, setIsNew] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -86,6 +89,18 @@ export default function MaterialsPage() {
       return next.size === prev.size ? prev : next;
     });
   }, [visibleKey]);
+
+  // Phân trang danh mục vật tư (theo phong cách bảng khiếm khuyết).
+  const totalPages = Math.max(1, Math.ceil(materials.length / pageSize));
+  const firstShown = materials.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, materials.length);
+  const pagedMaterials = materials.slice((page - 1) * pageSize, page * pageSize);
+  React.useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+  React.useEffect(() => {
+    setPage(1);
+  }, [visibleKey, pageSize]);
 
   const allChecked = materials.length > 0 && materials.every((m) => selected.has(m.id));
   const someChecked = selected.size > 0 && !allChecked;
@@ -203,17 +218,8 @@ export default function MaterialsPage() {
         />
       ) : (
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <span className="text-sm text-muted-foreground">
-              {isFiltered ? <>Hiển thị <span className="font-semibold text-ink">{materials.length}</span> / {total} vật tư</> : <><span className="font-semibold text-ink">{total}</span> vật tư trong kho</>}
-            </span>
-            {systemFilter !== "ALL" && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
-                {systemFilter}
-              </span>
-            )}
-          </div>
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[880px]">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 {canManage && (
@@ -235,12 +241,14 @@ export default function MaterialsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {materials.map((m) => {
+              {pagedMaterials.map((m) => {
                 const checked = selected.has(m.id);
+                const expanded = expandedId === m.id;
                 return (
-                  <TableRow key={m.id} data-state={checked ? "selected" : undefined} className={cn(checked && "bg-accent/5")}>
+                  <React.Fragment key={m.id}>
+                  <TableRow data-state={checked ? "selected" : undefined} className={cn("cursor-pointer hover:bg-muted/30", checked && "bg-accent/5")} onClick={() => setExpandedId(expanded ? null : m.id)}>
                     {canManage && (
-                      <TableCell className="w-10">
+                      <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           aria-label={`Chọn ${m.code}`}
                           checked={checked}
@@ -249,7 +257,17 @@ export default function MaterialsPage() {
                       </TableCell>
                     )}
                     <TableCell className="text-center">
-                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium text-navy">{m.code}</span>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setExpandedId(expanded ? null : m.id); }}
+                          className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors", expanded ? "bg-rose-500" : "bg-emerald-500")}
+                          title={expanded ? "Thu gọn" : "Mở chi tiết"}
+                        >
+                          {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                        </button>
+                        <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium text-navy">{m.code}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -283,7 +301,7 @@ export default function MaterialsPage() {
                     <TableCell className="text-center">
                       <NeedBadge totalNeed={m.totalNeed ?? 0} stock={m.quantity} shortfall={m.shortfall ?? 0} unit={m.unit} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
                           <Repeat className="h-4 w-4" />
@@ -301,10 +319,46 @@ export default function MaterialsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
+                  {expanded && (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colSpan={canManage ? 8 : 7} className="px-6 py-4">
+                        <MaterialExpandedDetails m={m} usageLabel={deviceLabel(m)} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </TableBody>
           </Table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <div>
+              Hiển thị {firstShown}-{lastShown} trong tổng số {materials.length} vật tư
+              {isFiltered && <span> sau lọc</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+              <div className="flex items-center gap-2">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink"
+                  aria-label="Số dòng mỗi trang"
+                >
+                  {[10, 25, 50, 100].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span>dòng</span>
+              </div>
+              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
+              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              <span className="mx-2 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-ink">{page}/{totalPages}</span>
+              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
+              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
+            </div>
+          </div>
         </Card>
       )}
 
@@ -455,5 +509,74 @@ function NeedBadge({ totalNeed, stock, shortfall, unit }: { totalNeed: number; s
         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Đủ tồn kho</span>
       )}
     </div>
+  );
+}
+
+/** Panel chi tiết khi bung một dòng vật tư (2 cột, theo phong cách bảng khiếm khuyết). */
+function MaterialExpandedDetails({ m, usageLabel }: { m: MaterialWithDevices; usageLabel: string }) {
+  const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-3 shadow-sm";
+  const points = m.replacements ?? [];
+  return (
+    <div className="grid gap-5 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2">
+      <div className={detailCardClass}>
+        <DetailLine label="Mã vật tư" value={m.code} />
+        <DetailLine label="Tên vật tư" value={m.name} multiline />
+        <DetailLine label="ĐVT" value={m.unit} />
+        <DetailLine label="Tồn kho" value={`${m.quantity} ${m.unit}`} />
+        <DetailLine label="Định mức tối thiểu" value={`${m.minStock} ${m.unit}`} />
+        <DetailLine label="Ghi chú" value={m.note || "—"} multiline />
+      </div>
+      <div className={detailCardClass}>
+        <DetailLine label="Điểm dùng" value={usageLabel || "—"} multiline />
+        <DetailLine label="Tổng nhu cầu" value={`${m.totalNeed ?? 0} ${m.unit}`} />
+        <DetailLine label="Đề xuất thêm" value={(m.shortfall ?? 0) > 0 ? `+${m.shortfall} ${m.unit}` : "Đủ tồn kho"} />
+        <div className="pt-1">
+          <div className="mb-1 font-semibold text-ink">Chi tiết điểm thay thế:</div>
+          {points.length === 0 ? (
+            <div className="text-muted-foreground">Chưa gán hệ thống/thiết bị.</div>
+          ) : (
+            <ul className="space-y-1">
+              {points.map((p) => (
+                <li key={p.id} className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                  <span className="min-w-0">
+                    <b className="text-ink">{p.device?.name || p.system || "—"}</b>
+                    <span className="text-muted-foreground"> · chu kỳ {p.intervalMonths} tháng · cần {p.quantity} {m.unit}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
+  return (
+    <div className="grid grid-cols-[140px_minmax(0,1fr)] items-start gap-3">
+      <div className="whitespace-nowrap font-semibold text-ink">{label}:</div>
+      <div className={cn("min-w-0 text-ink", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PageButton({ icon: Icon, label, disabled, onClick }: { icon: LucideIcon; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="h-8 w-8 rounded-lg disabled:cursor-not-allowed disabled:opacity-45"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
   );
 }
