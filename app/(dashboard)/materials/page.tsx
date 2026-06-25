@@ -235,8 +235,6 @@ export default function MaterialsPage() {
                 <TableHead className="text-center">Tên vật tư</TableHead>
                 <TableHead className="text-center">ĐVT</TableHead>
                 <TableHead className="text-center">Tồn kho</TableHead>
-                <TableHead className="text-center">Điểm dùng</TableHead>
-                <TableHead className="text-center">Nhu cầu / Đề xuất</TableHead>
                 <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
@@ -292,15 +290,6 @@ export default function MaterialsPage() {
                         <span className="font-semibold tabular-nums text-ink">{m.quantity}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      <span className="line-clamp-2 text-sm" title={deviceLabel(m)}>{deviceLabel(m) || "—"}</span>
-                      {(m.replacements?.length ?? 0) > 0 && (
-                        <span className="mt-0.5 block text-[11px] text-muted-foreground">{m.replacements!.length} điểm thay thế</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <NeedBadge totalNeed={m.totalNeed ?? 0} stock={m.quantity} shortfall={m.shortfall ?? 0} unit={m.unit} />
-                    </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
@@ -321,7 +310,7 @@ export default function MaterialsPage() {
                   </TableRow>
                   {expanded && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={canManage ? 8 : 7} className="px-6 py-4">
+                      <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
                         <MaterialExpandedDetails m={m} usageLabel={deviceLabel(m)} />
                       </TableCell>
                     </TableRow>
@@ -493,23 +482,6 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
     return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Sắp hết</span>;
   }
   return null;
-}
-
-/** Nhu cầu 1 chu kỳ vs tồn kho → đề xuất bổ sung phần thiếu hụt. */
-function NeedBadge({ totalNeed, stock, shortfall, unit }: { totalNeed: number; stock: number; shortfall: number; unit: string }) {
-  if (totalNeed <= 0) return <span className="text-sm text-muted-foreground">—</span>;
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <span className="text-xs text-muted-foreground">
-        Cần <b className="text-ink">{totalNeed}</b> · Tồn <b className="text-ink">{stock}</b> {unit}
-      </span>
-      {shortfall > 0 ? (
-        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">Đề xuất thêm +{shortfall} {unit}</span>
-      ) : (
-        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Đủ tồn kho</span>
-      )}
-    </div>
-  );
 }
 
 /** Panel chi tiết khi bung một dòng vật tư (2 cột, theo phong cách bảng khiếm khuyết). */
