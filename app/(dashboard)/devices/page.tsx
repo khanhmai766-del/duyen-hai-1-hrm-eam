@@ -362,6 +362,18 @@ function systemRowQrValue(row: SystemTreeRow) {
 
 function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[]; selectedSystemName: string }) {
   const [editSeq, setEditSeq] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(24);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const firstShown = rows.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, rows.length);
+  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
+  React.useEffect(() => {
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [totalPages]);
+  React.useEffect(() => {
+    setPage(1);
+  }, [rows, pageSize]);
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -382,7 +394,7 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
         <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">{rows.length} thiết bị</span>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {rows.map((row) => (
+        {pagedRows.map((row) => (
           <Card
             key={row.seq}
             onClick={() => setEditSeq(row.seq)}
@@ -431,6 +443,16 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
           </Card>
         ))}
       </div>
+      <CardGridPagination
+        firstShown={firstShown}
+        lastShown={lastShown}
+        total={rows.length}
+        page={page}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageSize={setPageSize}
+        onPage={setPage}
+      />
       <EquipmentCardEditDialog seq={editSeq} onOpenChange={(o) => !o && setEditSeq(null)} />
     </div>
   );
@@ -779,6 +801,18 @@ function DetailView({
   onDelete: (d: DeviceListItem) => void;
 }) {
   const router = useRouter();
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(24);
+  const totalPages = Math.max(1, Math.ceil(devices.length / pageSize));
+  const firstShown = devices.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, devices.length);
+  const pagedDevices = devices.slice((page - 1) * pageSize, page * pageSize);
+  React.useEffect(() => {
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [totalPages]);
+  React.useEffect(() => {
+    setPage(1);
+  }, [devices, pageSize]);
 
   if (devices.length === 0) {
     return (
@@ -813,7 +847,7 @@ function DetailView({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {devices.map((d) => (
+        {pagedDevices.map((d) => (
           <Card
             key={d.id}
             role="button"
@@ -900,6 +934,69 @@ function DetailView({
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <CardGridPagination
+        firstShown={firstShown}
+        lastShown={lastShown}
+        total={devices.length}
+        page={page}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageSize={setPageSize}
+        onPage={setPage}
+      />
+    </div>
+  );
+}
+
+function CardGridPagination({
+  firstShown,
+  lastShown,
+  total,
+  page,
+  totalPages,
+  pageSize,
+  onPageSize,
+  onPage,
+}: {
+  firstShown: number;
+  lastShown: number;
+  total: number;
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  onPageSize: (n: number) => void;
+  onPage: (updater: (current: number) => number) => void;
+}) {
+  if (total <= 0) return null;
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-white px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        Hiển thị {firstShown}-{lastShown} trong tổng số {total.toLocaleString("vi-VN")} thiết bị
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <span>Hiển thị</span>
+        <select
+          value={pageSize}
+          onChange={(event) => onPageSize(Number(event.target.value))}
+          className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink shadow-none"
+          aria-label="Số thẻ hiển thị"
+        >
+          {[12, 24, 48, 96].map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+        <span>thẻ</span>
+        <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => onPage(() => 1)} />
+        <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => onPage((current) => Math.max(1, current - 1))} />
+        <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">
+          {page}/{totalPages}
+        </span>
+        <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => onPage((current) => Math.min(totalPages, current + 1))} />
+        <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => onPage(() => totalPages)} />
       </div>
     </div>
   );
