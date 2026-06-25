@@ -311,7 +311,7 @@ export default function MaterialsPage() {
                   {expanded && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
-                        <MaterialExpandedDetails m={m} usageLabel={deviceLabel(m)} />
+                        <MaterialExpandedDetails m={m} />
                       </TableCell>
                     </TableRow>
                   )}
@@ -484,54 +484,39 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
   return null;
 }
 
-/** Panel chi tiết khi bung một dòng vật tư (2 cột, theo phong cách bảng khiếm khuyết). */
-function MaterialExpandedDetails({ m, usageLabel }: { m: MaterialWithDevices; usageLabel: string }) {
-  const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-3 shadow-sm";
+/** Panel bung: chỉ liệt kê chi tiết các điểm thay thế dạng bảng (hệ thống · chu kỳ · số lượng). */
+function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
   const points = m.replacements ?? [];
+  if (points.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-3 text-sm text-muted-foreground">
+        Chưa gán hệ thống/thiết bị cho vật tư này. Bấm <b>Sửa</b> để thêm điểm dùng / thay thế.
+      </div>
+    );
+  }
   return (
-    <div className="grid gap-5 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2">
-      <div className={detailCardClass}>
-        <DetailLine label="Mã vật tư" value={m.code} />
-        <DetailLine label="Tên vật tư" value={m.name} multiline />
-        <DetailLine label="ĐVT" value={m.unit} />
-        <DetailLine label="Tồn kho" value={`${m.quantity} ${m.unit}`} />
-        <DetailLine label="Định mức tối thiểu" value={`${m.minStock} ${m.unit}`} />
-        <DetailLine label="Ghi chú" value={m.note || "—"} multiline />
+    <div className="overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+      <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Chi tiết điểm thay thế ({points.length})
       </div>
-      <div className={detailCardClass}>
-        <DetailLine label="Điểm dùng" value={usageLabel || "—"} multiline />
-        <DetailLine label="Tổng nhu cầu" value={`${m.totalNeed ?? 0} ${m.unit}`} />
-        <DetailLine label="Đề xuất thêm" value={(m.shortfall ?? 0) > 0 ? `+${m.shortfall} ${m.unit}` : "Đủ tồn kho"} />
-        <div className="pt-1">
-          <div className="mb-1 font-semibold text-ink">Chi tiết điểm thay thế:</div>
-          {points.length === 0 ? (
-            <div className="text-muted-foreground">Chưa gán hệ thống/thiết bị.</div>
-          ) : (
-            <ul className="space-y-1">
-              {points.map((p) => (
-                <li key={p.id} className="flex items-start gap-2">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  <span className="min-w-0">
-                    <b className="text-ink">{p.device?.name || p.system || "—"}</b>
-                    <span className="text-muted-foreground"> · chu kỳ {p.intervalMonths} tháng · cần {p.quantity} {m.unit}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DetailLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
-  return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] items-start gap-3">
-      <div className="whitespace-nowrap font-semibold text-ink">{label}:</div>
-      <div className={cn("min-w-0 text-ink", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
-        {value}
-      </div>
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-border text-muted-foreground">
+            <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
+            <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
+            <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {points.map((p) => (
+            <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
+              <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.system || "—"}</td>
+              <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
+              <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity} {m.unit}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
