@@ -6,7 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { rootAllowedForPosition } from "@/lib/position-system-scopes";
+import { rootAllowedForPosition, scopesForPosition, strongerAccess, type NodeAccess } from "@/lib/position-system-scopes";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 
@@ -32,6 +32,7 @@ export function EquipmentTreePicker({
   onChange,
   position,
   rootSeq,
+  accessFilter,
   placeholder = "Chọn thư mục hệ thống",
   disabled = false,
 }: {
@@ -39,13 +40,14 @@ export function EquipmentTreePicker({
   onChange: (node: EquipmentNode | null) => void;
   position?: string | null; // cương vị quản lý đang chọn — lọc nhóm hệ thống theo cương vị
   rootSeq?: string | null; // chỉ duyệt trong nhánh con của node này (vd lọc thiết bị theo hệ thống)
+  accessFilter?: "edit"; // chỉ hiện hệ thống cương vị có quyền Sửa (mọi cấp); chưa cấu hình → hiện tất cả
   placeholder?: string;
   disabled?: boolean;
 }) {
   const { data, isLoading } = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
   const nodes = React.useMemo(() => data?.data ?? [], [data]);
-  const scopes = scopesQuery.data?.data ?? [];
+  const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
 
   // Chỉ mục: seq -> node, parentSeq hiệu lực -> con (đã sắp), danh sách gốc.
   const { bySeq, childrenOf, roots, effParentOf } = React.useMemo(() => {
@@ -90,14 +92,41 @@ export function EquipmentTreePicker({
   const selectedNode = value ? bySeq.get(value) ?? null : null;
   const folderSeqs = React.useMemo(() => new Set(Array.from(childrenOf.entries()).filter(([, kids]) => kids.length > 0).map(([seq]) => seq)), [childrenOf]);
 
-  // Lọc nhóm gốc theo cương vị: tên chứa "COMMON" luôn hiện; chưa chọn cương vị → hiện tất cả;
-  // còn lại chỉ hiện khi cương vị nằm trong danh sách của hệ thống đó.
+  // accessFilter="edit": chỉ hiện các hệ thống cương vị có quyền Sửa (kế thừa theo nhánh) + tổ tiên để duyệt.
+  // null = không lọc theo quyền (chưa cấu hình riêng, hoặc không bật accessFilter) → dùng rule gốc.
+  const editVisibleSeqs = React.useMemo(() => {
+    if (accessFilter !== "edit" || !position) return null;
+    const explicit = scopesForPosition(scopes, position);
+    if (!explicit.length) return null;
+    const accessBySeq = new Map(explicit.map((s) => [s.systemSeq, s.access === "edit" ? "edit" : "view"] as const));
+    const accessOf = (seq: string): NodeAccess => {
+      let best: NodeAccess = "none";
+      let cur: string | null | undefined = seq;
+      while (cur) {
+        const a = accessBySeq.get(cur);
+        if (a) best = strongerAccess(best, a);
+        cur = effParentOf.get(cur) ?? null;
+      }
+      return best;
+    };
+    const set = new Set<string>();
+    for (const n of nodes) {
+      if (accessOf(n.seq) === "edit") {
+        let cur: string | null | undefined = n.seq;
+        while (cur && !set.has(cur)) { set.add(cur); cur = effParentOf.get(cur) ?? null; }
+      }
+    }
+    return set;
+  }, [accessFilter, position, scopes, nodes, effParentOf]);
+
+  // Lọc nhóm gốc: nếu lọc theo quyền Sửa thì dùng editVisibleSeqs; ngược lại theo rule cương vị.
   const filteredRoots = React.useMemo(() => {
     return roots.filter((node) => {
       if (!folderSeqs.has(node.seq)) return false;
+      if (editVisibleSeqs) return editVisibleSeqs.has(node.seq);
       return rootAllowedForPosition(node, position, scopes);
     });
-  }, [roots, position, folderSeqs, scopes]);
+  }, [roots, position, folderSeqs, scopes, editVisibleSeqs]);
 
   // Khi mở popup, tự bung đường dẫn tới mục đang chọn để thấy ngay.
   React.useEffect(() => {
@@ -155,6 +184,7 @@ export function EquipmentTreePicker({
     return list
       .filter((n) => !visible || visible.has(n.seq))
       .filter((n) => folderSeqs.has(n.seq))
+      .filter((n) => !editVisibleSeqs || editVisibleSeqs.has(n.seq))
       .map((n) => {
         const kids = childrenOf.get(n.seq) ?? [];
         const hasKids = kids.length > 0;
