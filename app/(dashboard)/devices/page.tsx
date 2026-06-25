@@ -69,7 +69,8 @@ import {
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useEquipmentTree } from "@/hooks/useEquipment";
-import { can } from "@/lib/constants";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
+import { can, EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
 import { buildEquipmentTreeIndex, compareEquipmentSeq, dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
@@ -1003,6 +1004,11 @@ function CardGridPagination({
 }
 
 function DashboardView({ devices }: { devices: DeviceListItem[] }) {
+  const scopesQuery = usePositionSystemScopes();
+  const treeQuery = useEquipmentTree();
+  const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
+  const equipmentNodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
+
   const groupCount = (key: (d: DeviceListItem) => string | null | undefined) =>
     Object.entries(
       devices.reduce<Record<string, number>>((acc, d) => {
@@ -1015,7 +1021,52 @@ function DashboardView({ devices }: { devices: DeviceListItem[] }) {
       .sort((a, b) => b.count - a.count);
 
   const bySystem = groupCount((d) => d.system).slice(0, 10);
-  const byPosition = groupCount((d) => d.managingPosition).slice(0, 10);
+
+  // Số thiết bị mỗi cương vị "phải quản lý": ưu tiên phân quyền hệ thống (scope quyền Sửa),
+  // cương vị chưa cấu hình riêng thì theo rule mặc định EQUIPMENT_SYSTEM_BY_POSITION (theo hệ thống gốc).
+  const byPosition = React.useMemo(() => {
+    const index = buildEquipmentTreeIndex(equipmentNodes);
+    const { parentOf, bySeq } = index;
+    const norm = (s: string | null | undefined) => normalizeText(s ?? "");
+    const editPosBySeq = new Map<string, string[]>();
+    const configured = new Set<string>(); // cương vị (chuẩn hóa) đã có cấu hình riêng
+    for (const scope of scopes) {
+      configured.add(norm(scope.position));
+      if (scope.access === "edit") {
+        const arr = editPosBySeq.get(scope.systemSeq) ?? [];
+        arr.push(scope.position);
+        editPosBySeq.set(scope.systemSeq, arr);
+      }
+    }
+    const rootNameOf = (seq: string): string => {
+      let cur: string | null | undefined = seq;
+      while (cur) {
+        const p: string | null = parentOf.get(cur) ?? null;
+        if (!p) return bySeq.get(cur)?.name ?? "";
+        cur = p;
+      }
+      return "";
+    };
+    const counts = new Map<string, number>();
+    for (const d of devices) {
+      const managing = new Set<string>();
+      // Cương vị có quyền Sửa hệ thống chứa thiết bị (kế thừa theo nhánh cha).
+      let cur: string | null | undefined = d.code;
+      while (cur) {
+        for (const pos of editPosBySeq.get(cur) ?? []) managing.add(pos);
+        cur = parentOf.get(cur) ?? null;
+      }
+      // Rule mặc định cho cương vị chưa cấu hình riêng.
+      const rn = norm(rootNameOf(d.code));
+      const rule = rn ? EQUIPMENT_SYSTEM_BY_POSITION.find((r) => rn.includes(norm(r.match))) : undefined;
+      if (rule) for (const pos of rule.positions) if (!configured.has(norm(pos))) managing.add(pos);
+      for (const pos of managing) counts.set(pos, (counts.get(pos) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [devices, scopes, equipmentNodes]);
   const repairHotlist = [...devices]
     .filter((d) => d._count.repairLogs > 0)
     .sort((a, b) => b._count.repairLogs - a._count.repairLogs)
