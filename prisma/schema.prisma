@@ -476,6 +476,7 @@ model PositionSystemScope {
   id        String   @id @default(cuid())
   position  String
   systemSeq String
+  access    String   @default("view") // Mức quyền của cương vị với hệ thống: "view" | "edit"
   createdAt DateTime @default(now())
 
   @@unique([position, systemSeq])

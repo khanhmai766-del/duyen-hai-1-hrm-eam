@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { assertSeqEditable } from "@/lib/server-access";
 import { addMonths, replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
 
     if (!body.materialId || !body.intervalMonths) return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");
     if (!body.deviceId) return fail("Chọn thiết bị");
+    await assertSeqEditable(user, String(body.deviceId));
     const intervalMonths = Number(body.intervalMonths);
     if (!Number.isFinite(intervalMonths) || intervalMonths < 1) return fail("Chu kỳ phải là số tháng hợp lệ (>= 1)");
 

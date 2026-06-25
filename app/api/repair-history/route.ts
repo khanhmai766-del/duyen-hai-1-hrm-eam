@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { assertSeqEditable } from "@/lib/server-access";
 import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     if (!body.deviceId || !body.title || !body.action) {
       return fail("Thiếu thông tin bắt buộc (thiết bị, tiêu đề, hành động)");
     }
+    await assertSeqEditable(user, String(body.deviceId));
     const log = await prisma.repairLog.create({
       data: {
         deviceSeq: body.deviceId,

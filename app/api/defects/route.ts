@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { assertSeqEditable } from "@/lib/server-access";
 import {
   ensureDefectImpactColumns,
   normalizeImpactValue,
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
+    if (body.device) await assertSeqEditable(user, String(body.device));
     await ensureDefectImpactColumns(prisma);
     const impactFields = {
       fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),

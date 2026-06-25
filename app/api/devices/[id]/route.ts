@@ -6,6 +6,7 @@ import {
   getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
+import { assertSeqEditable } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,27 @@ async function findEquipmentRecord(seq: string) {
   if (!node) return null;
   const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
   const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-  return toDeviceRecord(node, parent);
+  const [repairLogs, materials] = await Promise.all([
+    prisma.repairLog.findMany({
+      where: { deviceSeq: node.seq },
+      orderBy: { startedAt: "desc" },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        approvedBy: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.equipmentMaterial.findMany({
+      where: { deviceSeq: node.seq },
+      orderBy: { usedAt: "desc" },
+      include: { material: true },
+    }),
+  ]);
+  return {
+    ...toDeviceRecord(node, parent),
+    repairLogs,
+    materials,
+    _count: { repairLogs: repairLogs.length },
+  };
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -65,6 +86,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const currentSeq = decodeURIComponent(params.id);
+    await assertSeqEditable(user, currentSeq);
     const body = await req.json();
     const current = await prisma.equipmentNode.findUnique({ where: { seq: currentSeq } });
     if (!current) return fail("Không tìm thấy thiết bị", 404);
