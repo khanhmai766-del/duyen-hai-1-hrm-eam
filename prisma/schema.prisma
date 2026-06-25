@@ -261,6 +261,7 @@ model MaterialReplacement {
   deviceSeq      String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
   location       String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
   system         String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
+  quantity       Int      @default(1) // số lượng cần thay tại điểm này (theo ĐVT của vật tư)
   intervalMonths Int // chu kỳ thay thế (tháng)
   intervalNote   String? // ghi chú chu kỳ, vd "2500h"
   lastReplacedAt DateTime? // lần thay gần nhất (user nhập)

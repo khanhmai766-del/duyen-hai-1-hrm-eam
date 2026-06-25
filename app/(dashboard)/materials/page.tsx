@@ -19,17 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices } from "@/hooks/useMaterials";
-import { useDevices } from "@/hooks/useDevices";
-import { useEquipmentTree } from "@/hooks/useEquipment";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
+import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
+import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { MATERIAL_SYSTEMS, can } from "@/lib/constants";
-import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
 
-const NO_DEVICE = "__none__";
+type MaterialEdit = Partial<Material> & { id?: string; replacements?: MaterialReplacementInput[] };
 
 export default function MaterialsPage() {
   const { data: session } = useSession();
@@ -37,18 +34,12 @@ export default function MaterialsPage() {
   // Chỉ Quản trị (ADMIN) được thêm / sửa / xoá vật tư.
   const canManage = role === "ADMIN";
   const { data, isLoading } = useMaterials();
-  const { data: devicesData } = useDevices({});
-  const { data: equipmentTreeData } = useEquipmentTree();
-  const scopesQuery = usePositionSystemScopes();
-  const devices = devicesData?.data ?? [];
-  const equipmentNodes = equipmentTreeData?.data ?? [];
-  const positionScopes = scopesQuery.data?.data ?? [];
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
   const [systemFilter, setSystemFilter] = React.useState("ALL");
-  const [edit, setEdit] = React.useState<(Partial<Material> & { deviceId?: string | null; managingPosition?: string | null }) | null>(null);
+  const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
   const [deleting, setDeleting] = React.useState<Material | null>(null);
   const [isNew, setIsNew] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -70,18 +61,12 @@ export default function MaterialsPage() {
   }, [trackId, data, router]);
 
   const total = data?.data?.length ?? 0;
-  const devicePositions = React.useMemo(
-    () => Array.from(new Set(devices.map((d) => d.managingPosition).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices]
-  );
-  const deviceSystems = React.useMemo(
-    () => Array.from(new Set(devices.map((d) => d.system).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices]
-  );
+  // Nhãn "điểm dùng" = danh sách hệ thống/thiết bị mà vật tư này được gán (từ các điểm thay thế).
   const deviceLabel = React.useCallback((m: MaterialWithDevices) => {
-    const linked = m.deviceMaterials?.map((dm) => dm.device).filter(Boolean) ?? [];
-    if (!linked.length) return "";
-    return linked.map((d) => d.name || d.code).join(", ");
+    const names = Array.from(
+      new Set((m.replacements ?? []).map((r) => r.device?.name || r.system || "").filter(Boolean))
+    );
+    return names.join(", ");
   }, []);
   const materials = (data?.data ?? []).filter(
     (m) =>
@@ -141,21 +126,17 @@ export default function MaterialsPage() {
     }
   }
 
-  function materialForEdit(m: MaterialWithDevices) {
-    const linkedDevice = m.deviceMaterials?.[0]?.device;
+  function materialForEdit(m: MaterialWithDevices): MaterialEdit {
     return {
       ...m,
-      deviceId: m.deviceMaterials?.[0]?.deviceId ?? null,
-      managingPosition: linkedDevice?.managingPosition ?? null,
-    };
-  }
-
-  function syncDeviceFields(deviceId: string | null) {
-    const device = devices.find((d) => d.id === deviceId);
-    return {
-      deviceId,
-      managingPosition: device?.managingPosition ?? null,
-      system: device?.system ?? null,
+      replacements: (m.replacements ?? []).map((r) => ({
+        deviceSeq: r.deviceSeq,
+        system: r.system,
+        quantity: r.quantity,
+        intervalMonths: r.intervalMonths,
+        intervalNote: r.intervalNote,
+        lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
+      })),
     };
   }
 
@@ -173,9 +154,9 @@ export default function MaterialsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
-        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, quantity: m.quantity, minStock: m.minStock, device: deviceLabel(m), system: m.system, supplier: m.supplier }))} filename="vat-tu" />
+        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, tonKho: m.quantity, dinhMucToiThieu: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
         {canManage && (
-          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, deviceId: null, managingPosition: null }); }}>
+          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
           </Button>
         )}
@@ -247,9 +228,9 @@ export default function MaterialsPage() {
                 <TableHead className="text-center">Mã vật tư</TableHead>
                 <TableHead className="text-center">Tên vật tư</TableHead>
                 <TableHead className="text-center">ĐVT</TableHead>
-                <TableHead className="text-center">Số lượng</TableHead>
-                <TableHead className="text-center">Thiết bị</TableHead>
-                <TableHead className="text-center">Định kỳ thay thế</TableHead>
+                <TableHead className="text-center">Tồn kho</TableHead>
+                <TableHead className="text-center">Điểm dùng</TableHead>
+                <TableHead className="text-center">Nhu cầu / Đề xuất</TableHead>
                 <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
@@ -294,9 +275,14 @@ export default function MaterialsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center text-muted-foreground">
-                      {deviceLabel(m) || "—"}
+                      <span className="line-clamp-2 text-sm" title={deviceLabel(m)}>{deviceLabel(m) || "—"}</span>
+                      {(m.replacements?.length ?? 0) > 0 && (
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">{m.replacements!.length} điểm thay thế</span>
+                      )}
                     </TableCell>
-                    <TableCell className="text-center text-muted-foreground">{m.supplier ?? "—"}</TableCell>
+                    <TableCell className="text-center">
+                      <NeedBadge totalNeed={m.totalNeed ?? 0} stock={m.quantity} shortfall={m.shortfall ?? 0} unit={m.unit} />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
@@ -323,73 +309,35 @@ export default function MaterialsPage() {
       )}
 
       <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader><DialogTitle>{isNew ? "Thêm vật tư" : `Cập nhật: ${edit?.name}`}</DialogTitle></DialogHeader>
           {edit && (
             <div className="grid grid-cols-2 gap-3">
               {isNew && (
                 <>
                   <Field label="Mã *"><Input value={edit.code ?? ""} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>
-                  <Field label="ĐVT *"><Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} /></Field>
+                  <Field label="ĐVT *"><Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="Cái / Lít / Bộ…" /></Field>
                 </>
               )}
               <Field label="Ảnh vật tư" className="col-span-2">
                 <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
               </Field>
-              <Field label="Cương vị" className="col-span-2">
-                <Select
-                  value={edit.managingPosition || "NONE"}
-                  onValueChange={(v) => {
-                    const nextPosition = v === "NONE" ? null : v;
-                    const selectedDevice = devices.find((device) => device.id === edit.deviceId);
-                    setEdit({
-                      ...edit,
-                      managingPosition: nextPosition,
-                      ...(selectedDevice && nextPosition && !deviceAllowedForPosition(selectedDevice, nextPosition, equipmentNodes, positionScopes)
-                        ? { deviceId: null }
-                        : {}),
-                    });
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">— Không chọn —</SelectItem>
-                    {devicePositions.map((position) => (
-                      <SelectItem key={position} value={position}>{position}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
               <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-              <Field label="Thiết bị" className="col-span-2">
-                <Select value={edit.deviceId || NO_DEVICE} onValueChange={(v) => setEdit({ ...edit, ...syncDeviceFields(v === NO_DEVICE ? null : v) })}>
-                  <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_DEVICE}>— Không chọn —</SelectItem>
-                    {devices
-                      .filter((device) => !edit.managingPosition || deviceAllowedForPosition(device, edit.managingPosition, equipmentNodes, positionScopes))
-                      .map((device) => (
-                      <SelectItem key={device.id} value={device.id}>
-                        {device.name} ({device.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Hệ thống" className="col-span-2">
-                <Select value={edit.system ?? "NONE"} onValueChange={(v) => setEdit({ ...edit, system: v === "NONE" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">— Không chọn —</SelectItem>
-                    {deviceSystems.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Số lượng"><Input type="number" value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
-              <Field label="Định kỳ thay thế"><Input value={edit.supplier ?? ""} onChange={(e) => setEdit({ ...edit, supplier: e.target.value })} placeholder="VD: 6 tháng / 8.000 giờ" /></Field>
+              <Field label="Tồn kho hiện có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
+              <Field label="Định mức tối thiểu"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
               <Field label="Ghi chú" className="col-span-2"><Input value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
+              <div className="col-span-2 mt-1">
+                <Label className="text-sm font-semibold text-ink">Điểm dùng / thay thế</Label>
+                <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+                  Một mã vật tư có thể dùng cho nhiều hệ thống/thiết bị với chu kỳ và số lượng cần thay khác nhau.
+                  Tổng số lượng các điểm = nhu cầu 1 chu kỳ để so với tồn kho.
+                </p>
+                <ReplacementPointsEditor
+                  value={edit.replacements ?? []}
+                  unit={edit.unit ?? undefined}
+                  onChange={(rows) => setEdit({ ...edit, replacements: rows })}
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -491,4 +439,21 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
     return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Sắp hết</span>;
   }
   return null;
+}
+
+/** Nhu cầu 1 chu kỳ vs tồn kho → đề xuất bổ sung phần thiếu hụt. */
+function NeedBadge({ totalNeed, stock, shortfall, unit }: { totalNeed: number; stock: number; shortfall: number; unit: string }) {
+  if (totalNeed <= 0) return <span className="text-sm text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span className="text-xs text-muted-foreground">
+        Cần <b className="text-ink">{totalNeed}</b> · Tồn <b className="text-ink">{stock}</b> {unit}
+      </span>
+      {shortfall > 0 ? (
+        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">Đề xuất thêm +{shortfall} {unit}</span>
+      ) : (
+        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Đủ tồn kho</span>
+      )}
+    </div>
+  );
 }
