@@ -67,6 +67,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
+import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { can } from "@/lib/constants";
 import { buildEquipmentTreeIndex, compareEquipmentSeq, dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
@@ -100,6 +101,7 @@ export default function DevicesPage() {
   const params = useSearchParams();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const access = useSystemAccess();
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
@@ -132,13 +134,33 @@ export default function DevicesPage() {
   const { data, isLoading } = useDevices({ q: debouncedQ, systemSeq: systemSeq === "ALL" ? undefined : systemSeq });
   const { data: equipmentTreeData, isLoading: equipmentTreeLoading } = useEquipmentTree();
   const del = useDeleteDevice();
-  const devices = data?.data ?? [];
+  const rawDevices = data?.data ?? [];
   const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
   const equipmentIndex = React.useMemo(() => buildEquipmentTreeIndex(equipmentNodes), [equipmentNodes]);
+  // Tập seq người dùng được Xem (gồm tổ tiên để vẫn thấy đường dẫn). null = không giới hạn (admin/cương vị chưa cấu hình).
+  const visibleSeqs = React.useMemo(() => {
+    if (access.isAdmin) return null;
+    const set = new Set<string>();
+    let restricted = false;
+    for (const node of equipmentNodes) {
+      if (access.accessForSeq(node.seq) !== "none") {
+        let cur: string | null | undefined = node.seq;
+        while (cur && !set.has(cur)) { set.add(cur); cur = equipmentIndex.parentOf.get(cur) ?? null; }
+      } else {
+        restricted = true;
+      }
+    }
+    return restricted ? set : null;
+  }, [access.isAdmin, access.accessForSeq, equipmentNodes, equipmentIndex]);
+  // Lọc danh sách thẻ/lý lịch theo quyền Xem của cương vị (giống cây thiết bị).
+  const devices = React.useMemo(
+    () => (visibleSeqs ? rawDevices.filter((d) => visibleSeqs.has(d.code)) : rawDevices),
+    [rawDevices, visibleSeqs]
+  );
   const systemOptions = React.useMemo(() => {
-    const { roots } = equipmentIndex;
-    return [...roots].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-  }, [equipmentIndex]);
+    const roots = [...equipmentIndex.roots].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+    return visibleSeqs ? roots.filter((root) => visibleSeqs.has(root.seq)) : roots;
+  }, [equipmentIndex, visibleSeqs]);
   const selectedSystemNode = systemSeq === "ALL" ? null : equipmentIndex.bySeq.get(systemSeq) ?? null;
   const systemTreeRows = React.useMemo(() => {
     const qText = normalizeText(debouncedQ.trim());
@@ -162,11 +184,12 @@ export default function DevicesPage() {
         deviceId: node.deviceId ?? null,
       };
       const haystack = normalizeText([row.seq, row.name, row.parentName, row.drawing].filter(Boolean).join(" "));
-      if (!qText || haystack.includes(qText)) rows.push(row);
+      const visible = !visibleSeqs || visibleSeqs.has(row.seq);
+      if ((!qText || haystack.includes(qText)) && visible) rows.push(row);
       queue.push(...(equipmentIndex.childrenOf.get(node.seq) ?? []));
     }
     return rows.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-  }, [debouncedQ, equipmentIndex, selectedSystemNode, systemOptions]);
+  }, [debouncedQ, equipmentIndex, selectedSystemNode, systemOptions, visibleSeqs]);
   const systemLeafRows = React.useMemo(
     () => dedupeEquipmentLeafNodes(systemTreeRows.filter((row) => !row.isGroup)),
     [systemTreeRows]
