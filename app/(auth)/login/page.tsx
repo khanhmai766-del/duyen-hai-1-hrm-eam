@@ -278,11 +278,11 @@ function LoginInner() {
               <form onSubmit={onSubmit} className="space-y-3 sm:space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Email
+                    Email hoặc User
                   </Label>
                   <Input
                     id="email"
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="login-access-input"

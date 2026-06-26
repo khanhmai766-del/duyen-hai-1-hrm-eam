@@ -16,21 +16,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "Email hoặc user", type: "text" },
         password: { label: "Password", type: "password" },
         biometricToken: { label: "Biometric Token", type: "text" },
       },
       async authorize(credentials) {
-        const email = credentials?.email as string | undefined;
+        const login = (credentials?.email as string | undefined)?.trim();
         const password = credentials?.password as string | undefined;
         const biometricToken = credentials?.biometricToken as string | undefined;
-        if (!email || (!password && !biometricToken)) return null;
+        if (!login || (!password && !biometricToken)) return null;
 
         if (biometricToken) {
           const token = readLoginToken(biometricToken);
-          if (!token || token.email !== email) return null;
+          if (!token || token.email !== login) return null;
           const user = await prisma.user.findUnique({ where: { id: token.userId } });
-          if (!user || !user.isActive || user.email !== email) return null;
+          if (!user || !user.isActive || user.email !== login) return null;
           return {
             id: user.id,
             name: user.name,
@@ -41,7 +41,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findFirst({
+          where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
+        });
         if (!user || !user.isActive) return null;
         if (!password) return null;
 

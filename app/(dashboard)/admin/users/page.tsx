@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, History, Pencil, Plus, Search, ShieldAlert, Trash2, X, type LucideIcon } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileSpreadsheet, History, ImageUp, Pencil, PenLine, Plus, Search, ShieldAlert, Trash2, UploadCloud, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -40,7 +40,7 @@ export default function AdminUsersPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [form, setForm] = React.useState({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
 
@@ -59,7 +59,7 @@ export default function AdminUsersPage() {
   const nq = normalizeText(search.trim());
   const filteredUsers = users.filter(
     (u) =>
-      (!nq || normalizeText(`${u.name} ${u.employeeId}`).includes(nq)) &&
+      (!nq || normalizeText(`${u.name} ${u.employeeId} ${u.username ?? ""}`).includes(nq)) &&
       (positionFilter === "ALL" || u.position === positionFilter)
   );
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
@@ -82,7 +82,7 @@ export default function AdminUsersPage() {
       await create.mutateAsync(form);
       toast.success("Đã tạo người dùng");
       setOpen(false);
-      setForm({ name: "", email: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+      setForm({ name: "", email: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -128,13 +128,15 @@ export default function AdminUsersPage() {
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
       </PageHeader>
 
+      <AdminUserUploadPanel />
+
       {isLoading ? <TableSkeleton /> : (
         <Card>
           <Table>
             <TableHeader>
               <TableRow className="[&_th]:whitespace-nowrap">
                 <TableHead className="text-center">Hình ảnh</TableHead>
-                <TableHead className="min-w-[200px]">Nhân viên</TableHead><TableHead>Mã NV</TableHead><TableHead>Email</TableHead>
+                <TableHead className="min-w-[200px]">Nhân viên</TableHead><TableHead>Mã NV</TableHead><TableHead>User</TableHead><TableHead>Email</TableHead>
                 <TableHead className="text-center">Chữ ký số</TableHead>
                 <TableHead>Phân quyền</TableHead><TableHead>Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
@@ -143,7 +145,7 @@ export default function AdminUsersPage() {
             <TableBody>
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                     Không tìm thấy người dùng phù hợp với điều kiện lọc.
                   </TableCell>
                 </TableRow>
@@ -165,6 +167,7 @@ export default function AdminUsersPage() {
                     <div className="text-xs text-muted-foreground">{u.position}</div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{u.employeeId}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{u.username ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
                   <TableCell className="text-center">
                     {u.signatureUrl ? (
@@ -292,6 +295,7 @@ export default function AdminUsersPage() {
             </Field>
             <Field label="Họ tên *" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email *"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="User"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
@@ -364,6 +368,265 @@ function PageButton({
   );
 }
 
+type ImportReport = {
+  preview: boolean;
+  mode: string;
+  import_key: string | null;
+  total_rows: number;
+  success_rows: number;
+  error_rows: number;
+  created: number;
+  updated: number;
+  rows: Array<{
+    row: number;
+    employee_code: string | null;
+    email: string | null;
+    action: string;
+    status: string;
+    errors: string[];
+  }>;
+};
+
+type ZipReport = {
+  total_files: number;
+  success_files: number;
+  error_files: number;
+  errors: Array<{ file: string; reason: string }>;
+};
+
+async function postForm<T>(url: string, formData: FormData): Promise<T> {
+  const res = await fetch(url, { method: "POST", body: formData });
+  const json = await res.json();
+  if (!res.ok || json.error) throw new Error(json.error || "Thao tác thất bại");
+  return json.data as T;
+}
+
+function AdminUserUploadPanel() {
+  const enabled = process.env.NEXT_PUBLIC_USER_IMPORT_ENABLED === "true";
+  const qc = useQueryClient();
+  const [mode, setMode] = React.useState("upsert");
+  const [employeeCode, setEmployeeCode] = React.useState("");
+  const [importFile, setImportFile] = React.useState<File | null>(null);
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [signatureFile, setSignatureFile] = React.useState<File | null>(null);
+  const [avatarZip, setAvatarZip] = React.useState<File | null>(null);
+  const [signatureZip, setSignatureZip] = React.useState<File | null>(null);
+  const [importReport, setImportReport] = React.useState<ImportReport | null>(null);
+  const [zipReport, setZipReport] = React.useState<ZipReport | null>(null);
+  const [busy, setBusy] = React.useState<string | null>(null);
+
+  async function refreshAfterMutation() {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["users"] }),
+      qc.invalidateQueries({ queryKey: ["audit"] }),
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] }),
+    ]);
+  }
+
+  async function submitImport(preview: boolean) {
+    if (!importFile) return toast.error("Chọn file Excel hoặc CSV trước khi import");
+    const fd = new FormData();
+    fd.append("file", importFile);
+    fd.append("mode", mode);
+    fd.append("preview", String(preview));
+    setBusy(preview ? "preview" : "import");
+    try {
+      const report = await postForm<ImportReport>("/admin/import-users", fd);
+      setImportReport(report);
+      toast.success(preview ? "Đã đọc thử file import" : "Đã import người dùng");
+      if (!preview) await refreshAfterMutation();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function submitSingle(kind: "avatar" | "signature") {
+    const file = kind === "avatar" ? avatarFile : signatureFile;
+    if (!employeeCode.trim()) return toast.error("Nhập mã nhân viên để map file");
+    if (!file) return toast.error(kind === "avatar" ? "Chọn ảnh đại diện" : "Chọn file chữ ký");
+    const fd = new FormData();
+    fd.append("employee_code", employeeCode.trim());
+    fd.append("file", file);
+    setBusy(kind);
+    try {
+      await postForm(kind === "avatar" ? "/admin/upload-avatar" : "/admin/upload-signature", fd);
+      toast.success(kind === "avatar" ? "Đã upload ảnh đại diện" : "Đã upload chữ ký");
+      await refreshAfterMutation();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function submitZip(kind: "avatar" | "signature") {
+    const file = kind === "avatar" ? avatarZip : signatureZip;
+    if (!file) return toast.error(kind === "avatar" ? "Chọn avatar.zip" : "Chọn signature.zip");
+    const fd = new FormData();
+    fd.append("file", file);
+    setBusy(`${kind}-zip`);
+    try {
+      const report = await postForm<ZipReport>(kind === "avatar" ? "/admin/upload-avatars-zip" : "/admin/upload-signatures-zip", fd);
+      setZipReport(report);
+      toast.success(`Đã xử lý ${report.success_files}/${report.total_files} file`);
+      await refreshAfterMutation();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Card className="overflow-hidden border-sky-200/70">
+      <CardHeader className="border-b bg-[linear-gradient(135deg,#f8fbff_0%,#eef8f5_100%)]">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UploadCloud className="h-4 w-4 text-navy" />
+          Nhập liệu & lưu trữ S3
+        </CardTitle>
+      </CardHeader>
+      {!enabled ? (
+        <CardContent className="p-4">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
+            Chức năng import/upload người dùng đang tắt trên môi trường này.
+          </div>
+        </CardContent>
+      ) : (
+      <CardContent className="grid gap-4 p-4 lg:grid-cols-[1.25fr_1fr]">
+        <div className="space-y-3 rounded-lg border border-border bg-white p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-ink">Import người dùng từ Excel/CSV</p>
+              <p className="text-xs text-muted-foreground">Preview trước khi ghi database, file gốc lưu vào S3 khi import thật.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => window.open("/admin/import-users?format=xlsx", "_blank")}>
+              <Download className="h-4 w-4" /> Tải mẫu
+            </Button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-[1fr_180px]">
+            <Input type="file" accept=".xlsx,.csv" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+            <Select value={mode} onValueChange={setMode}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="create">Chỉ thêm mới</SelectItem>
+                <SelectItem value="update">Chỉ cập nhật</SelectItem>
+                <SelectItem value="upsert">Thêm mới/cập nhật</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => submitImport(true)} disabled={!!busy}>
+              <Eye className="h-4 w-4" /> Xem trước
+            </Button>
+            <Button type="button" onClick={() => submitImport(false)} disabled={!!busy}>
+              <FileSpreadsheet className="h-4 w-4" /> Import
+            </Button>
+          </div>
+          {importReport && <ImportReportView report={importReport} />}
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-border bg-white p-3">
+          <div>
+            <p className="text-sm font-semibold text-ink">Upload ảnh/chữ ký theo mã nhân viên</p>
+            <p className="text-xs text-muted-foreground">File thật lên S3, database chỉ lưu key.</p>
+          </div>
+          <Input value={employeeCode} onChange={(e) => setEmployeeCode(e.target.value)} placeholder="Mã nhân viên, ví dụ NV001" />
+          <MediaUploadRow icon={ImageUp} label="Ảnh đại diện" accept=".jpg,.jpeg,.png,.webp" onFile={setAvatarFile} onSubmit={() => submitSingle("avatar")} busy={busy === "avatar"} />
+          <MediaUploadRow icon={PenLine} label="Chữ ký" accept=".png,.jpg,.jpeg,.pdf" onFile={setSignatureFile} onSubmit={() => submitSingle("signature")} busy={busy === "signature"} />
+          <div className="grid gap-2 border-t pt-3 md:grid-cols-2">
+            <ZipUploadBox label="avatar.zip" onFile={setAvatarZip} onSubmit={() => submitZip("avatar")} busy={busy === "avatar-zip"} />
+            <ZipUploadBox label="signature.zip" onFile={setSignatureZip} onSubmit={() => submitZip("signature")} busy={busy === "signature-zip"} />
+          </div>
+          {zipReport && <ZipReportView report={zipReport} />}
+        </div>
+      </CardContent>
+      )}
+    </Card>
+  );
+}
+
+function MediaUploadRow({ icon: Icon, label, accept, onFile, onSubmit, busy }: { icon: LucideIcon; label: string; accept: string; onFile: (file: File | null) => void; onSubmit: () => void; busy: boolean }) {
+  return (
+    <div className="grid gap-2 rounded-md bg-muted/40 p-2 md:grid-cols-[auto_1fr_auto] md:items-center">
+      <div className="flex items-center gap-2 text-sm font-medium text-ink"><Icon className="h-4 w-4 text-navy" /> {label}</div>
+      <Input type="file" accept={accept} onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
+      <Button type="button" size="sm" onClick={onSubmit} disabled={busy}>
+        <UploadCloud className="h-4 w-4" /> Upload
+      </Button>
+    </div>
+  );
+}
+
+function ZipUploadBox({ label, onFile, onSubmit, busy }: { label: string; onFile: (file: File | null) => void; onSubmit: () => void; busy: boolean }) {
+  return (
+    <div className="space-y-2 rounded-md bg-muted/40 p-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-ink"><Archive className="h-4 w-4 text-navy" /> {label}</div>
+      <Input type="file" accept=".zip" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
+      <Button type="button" variant="outline" size="sm" onClick={onSubmit} disabled={busy} className="w-full">
+        <UploadCloud className="h-4 w-4" /> Upload ZIP
+      </Button>
+    </div>
+  );
+}
+
+function ImportReportView({ report }: { report: ImportReport }) {
+  const errorRows = report.rows.filter((row) => row.status === "error").slice(0, 8);
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Metric label="Tổng dòng" value={report.total_rows} />
+        <Metric label="Thành công" value={report.success_rows} />
+        <Metric label="Tạo mới" value={report.created} />
+        <Metric label="Lỗi" value={report.error_rows} tone={report.error_rows ? "danger" : "normal"} />
+      </div>
+      {errorRows.length > 0 && (
+        <div className="mt-3 max-h-44 overflow-auto rounded border bg-white">
+          {errorRows.map((row) => (
+            <div key={row.row} className="border-b px-3 py-2 last:border-b-0">
+              <span className="font-mono text-xs">Dòng {row.row}</span>
+              <span className="ml-2 text-xs text-muted-foreground">{row.employee_code ?? "Chưa có mã"}</span>
+              <p className="mt-1 text-xs text-destructive">{row.errors.join("; ")}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ZipReportView({ report }: { report: ZipReport }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Metric label="Tổng file" value={report.total_files} />
+        <Metric label="Thành công" value={report.success_files} />
+        <Metric label="Lỗi" value={report.error_files} tone={report.error_files ? "danger" : "normal"} />
+      </div>
+      {report.errors.length > 0 && (
+        <div className="mt-3 max-h-36 overflow-auto rounded border bg-white">
+          {report.errors.slice(0, 8).map((item) => (
+            <div key={item.file} className="border-b px-3 py-2 text-xs last:border-b-0">
+              <span className="font-mono">{item.file}</span>
+              <span className="ml-2 text-destructive">{item.reason}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value, tone = "normal" }: { label: string; value: number; tone?: "normal" | "danger" }) {
+  return (
+    <div className="rounded-md bg-white px-3 py-2 ring-1 ring-border">
+      <div className="text-[11px] uppercase text-muted-foreground">{label}</div>
+      <div className={tone === "danger" ? "text-lg font-bold text-destructive" : "text-lg font-bold text-ink"}>{value}</div>
+    </div>
+  );
+}
+
 function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose: () => void }) {
   const update = useUpdateUser();
   const [form, setForm] = React.useState<any>(null);
@@ -373,6 +636,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
       setForm({
         name: target.name,
         email: target.email,
+        username: target.username ?? "",
         employeeId: target.employeeId,
         phone: target.phone ?? "",
         position: target.position ?? "",
@@ -408,6 +672,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
             </Field>
             <Field label="Họ tên" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
             <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="User"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="SĐT"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
             <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
