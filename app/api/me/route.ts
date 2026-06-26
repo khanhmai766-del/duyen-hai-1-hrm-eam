@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { userWithSignedMedia } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,6 @@ export async function PUT(req: NextRequest) {
     const updated = await prisma.user.update({ where: { id: user.id }, data });
     await audit(user.id, "UPDATE_PROFILE", "User", user.id);
     const { passwordHash, ...safe } = updated;
-    return ok(safe);
+    return ok(await userWithSignedMedia(safe));
   });
 }

@@ -2,19 +2,20 @@ import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { userWithSignedMedia } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
-function safe<T extends { passwordHash?: string }>(u: T) {
+async function safe<T extends { passwordHash?: string; avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(u: T) {
   const { passwordHash, ...rest } = u;
-  return rest;
+  return userWithSignedMedia(rest);
 }
 
 export async function GET() {
   return handle(async () => {
     await requireUser();
     const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" } });
-    return ok(users.map(safe));
+    return ok(await Promise.all(users.map(safe)));
   });
 }
 
@@ -24,14 +25,16 @@ export async function POST(req: NextRequest) {
     requireRole(user, ["ADMIN"]);
     const body = await req.json();
     if (!body.name || !body.email || !body.employeeId) return fail("Thiếu thông tin bắt buộc");
+    const username = String(body.username ?? "").trim() || null;
     const exists = await prisma.user.findFirst({
-      where: { OR: [{ email: body.email }, { employeeId: body.employeeId }] },
+      where: { OR: [{ email: body.email }, { employeeId: body.employeeId }, ...(username ? [{ username }] : [])] },
     });
-    if (exists) return fail("Email hoặc mã nhân viên đã tồn tại");
+    if (exists) return fail("Email, user hoặc mã nhân viên đã tồn tại");
     const created = await prisma.user.create({
       data: {
         name: body.name,
         email: body.email,
+        username,
         employeeId: body.employeeId,
         phone: body.phone || null,
         role: body.role || "VIEWER",
@@ -39,11 +42,13 @@ export async function POST(req: NextRequest) {
         department: body.department || null,
         avatarUrl: body.avatarUrl || null,
         signatureUrl: body.signatureUrl || null,
+        avatarKey: body.avatarKey || null,
+        signatureKey: body.signatureKey || null,
         passwordHash: await bcrypt.hash(body.password || "password123", 10),
       },
     });
     await audit(user.id, "CREATE_USER", "User", created.id, created.name);
-    return ok(safe(created));
+    return ok(await safe(created));
   });
 }
 
@@ -62,7 +67,10 @@ export async function PUT(req: NextRequest) {
     if (body.phone !== undefined) data.phone = body.phone;
     if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
     if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
+    if (body.avatarKey !== undefined) data.avatarKey = body.avatarKey || null;
+    if (body.signatureKey !== undefined) data.signatureKey = body.signatureKey || null;
     if (body.email) data.email = body.email;
+    if (body.username !== undefined) data.username = String(body.username || "").trim() || null;
     if (body.employeeId) data.employeeId = body.employeeId;
 
     if (data.email) {
@@ -73,10 +81,14 @@ export async function PUT(req: NextRequest) {
       const ex = await prisma.user.findFirst({ where: { employeeId: data.employeeId, NOT: { id: body.id } } });
       if (ex) return fail("Mã nhân viên đã tồn tại");
     }
+    if (data.username) {
+      const ex = await prisma.user.findFirst({ where: { username: data.username as string, NOT: { id: body.id } } });
+      if (ex) return fail("User đã tồn tại");
+    }
 
     const updated = await prisma.user.update({ where: { id: body.id }, data });
     await audit(user.id, "UPDATE_USER", "User", updated.id, updated.name);
-    return ok(safe(updated));
+    return ok(await safe(updated));
   });
 }
 

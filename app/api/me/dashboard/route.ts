@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
+import { signedS3Url } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -83,11 +84,12 @@ export async function GET(req: NextRequest) {
     // Avatar lives in the DB (not the session token) — surface it here.
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { avatarUrl: true },
+      select: { avatarUrl: true, avatarKey: true },
     });
+    const avatarUrl = dbUser?.avatarKey ? await signedS3Url(dbUser.avatarKey).catch(() => null) : dbUser?.avatarUrl ?? null;
 
     return ok({
-      avatarUrl: dbUser?.avatarUrl ?? null,
+      avatarUrl,
       workingDays,
       attendanceDays,
       adminDays,
