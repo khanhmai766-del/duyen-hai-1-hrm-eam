@@ -10,13 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoginBackground } from "@/components/auth/login-background";
 
-const DEMO_ACCOUNTS = [
-  { role: "Admin", email: "admin@powerplant.vn" },
-  { role: "Trưởng ca", email: "supervisor@powerplant.vn" },
-  { role: "Kỹ thuật", email: "tech@powerplant.vn" },
-  { role: "Người xem", email: "viewer@powerplant.vn" },
-];
-
 export default function LoginPage() {
   return (
     <React.Suspense fallback={null}>
@@ -30,8 +23,8 @@ function LoginInner() {
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") || "/";
 
-  const [email, setEmail] = React.useState("admin@powerplant.vn");
-  const [password, setPassword] = React.useState("password123");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [passwordVisible, setPasswordVisible] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
@@ -348,27 +341,6 @@ function LoginInner() {
                 </p>
               )}
 
-              <div className="login-demo-panel">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Tài khoản demo · mật khẩu password123
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {DEMO_ACCOUNTS.map((account) => (
-                    <button
-                      key={account.email}
-                      type="button"
-                      onClick={() => {
-                        setEmail(account.email);
-                        setPassword("password123");
-                      }}
-                      className="login-demo-chip"
-                    >
-                      <span className="block font-semibold text-ink">{account.role}</span>
-                      <span className="text-muted-foreground">{account.email}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </div>

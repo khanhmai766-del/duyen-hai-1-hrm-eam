@@ -460,33 +460,6 @@
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 1), rgba(219, 234, 254, 0.78));
 }
-.login-demo-panel {
-  border-radius: 18px;
-  border: 1px dashed rgba(148, 163, 184, 0.7);
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.74));
-  padding: 14px;
-}
-.login-demo-chip {
-  min-width: 0;
-  border-radius: 12px;
-  border: 1px solid rgba(203, 213, 225, 0.86);
-  background: rgba(255, 255, 255, 0.78);
-  padding: 9px 10px;
-  text-align: left;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-.login-demo-chip:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.45);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.10);
-}
-.login-demo-chip span:last-child {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 @media (max-width: 640px) {
   .login-access-card {
     border-radius: 22px;
@@ -520,14 +493,6 @@
     padding-left: 8px;
     padding-right: 8px;
     font-size: 11px;
-  }
-  .login-demo-panel {
-    border-radius: 16px;
-    padding: 12px;
-  }
-  .login-demo-chip {
-    border-radius: 10px;
-    padding: 7px 8px;
   }
 }
 
