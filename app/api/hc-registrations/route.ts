@@ -1,10 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
+import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
-const MANAGER = ["ADMIN", "SUPERVISOR"];
+const APPROVE_PERMISSION_ID = "shift-approve";
+const MANAGER = ["ADMIN", "TECHNICIAN"];
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Ra ca sáng", "Hành chính - Buổi chiều"];
 
 function dayStart(date: string | null) {
@@ -17,7 +19,7 @@ function dayStart(date: string | null) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const canManage = MANAGER.includes(user.role);
+    const canManage = MANAGER.includes(user.role) || (await hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID));
     const from = dayStart(req.nextUrl.searchParams.get("from"));
 
     const registrations = await prisma.hcCheckIn.findMany({

@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileText, Loader2, Minus, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import * as XLSX from "xlsx";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, Loader2, Minus, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -40,6 +41,7 @@ import { cn, formatDate, formatDateTime } from "@/lib/utils";
 type DocumentForm = {
   title: string;
   decisionNumber: string;
+  issueDate: string;
   documentUrl: string;
   reason: string;
   progress: string;
@@ -53,6 +55,7 @@ type DocumentForm = {
 const EMPTY_FORM: DocumentForm = {
   title: "",
   decisionNumber: "",
+  issueDate: "",
   documentUrl: "",
   reason: "",
   progress: "",
@@ -66,6 +69,14 @@ const EMPTY_FORM: DocumentForm = {
 const COMMON_POSITION = "Chung";
 const ALL_FILTER = "__ALL__";
 const PAGE_SIZE_OPTIONS = ["10", "20", "50"];
+
+type ProcedureImportRow = {
+  title: string;
+  managingPosition: string;
+  decisionNumber: string;
+  issueDate: string;
+  documentUrl: string;
+};
 
 function blockForDocumentPosition(position?: string | null): string {
   return position?.trim() === COMMON_POSITION ? COMMON_POSITION : blockForPosition(position);
@@ -181,8 +192,11 @@ export function DocumentCatalogPage({
   const { data: session } = useSession();
   const userRole = session?.user?.role;
   const isAdmin = userRole === "ADMIN";
-  const canEdit = isAdmin || (allowStaffEdit && (userRole === "SUPERVISOR" || userRole === "TECHNICIAN"));
-  const canDelete = isAdmin;
+  const canManageOperationDocument = (category === "PROCEDURE" || category === "PID") && (isAdmin || userRole === "TECHNICIAN");
+  const canImportProcedure = category === "PROCEDURE" && (isAdmin || userRole === "TECHNICIAN");
+  const canCreate = isAdmin || (canManageOperationDocument && userRole === "TECHNICIAN");
+  const canEdit = canManageOperationDocument || (allowStaffEdit && (userRole === "SUPERVISOR" || userRole === "TECHNICIAN"));
+  const canDelete = isAdmin || (canManageOperationDocument && userRole === "TECHNICIAN");
   const hasActions = canEdit || canDelete;
   const docs = useDocuments(category);
   const devices = useDevices({});
@@ -201,6 +215,8 @@ export function DocumentCatalogPage({
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [pageSize, setPageSize] = React.useState(10);
   const [pageIndex, setPageIndex] = React.useState(1);
+  const [procedureImporting, setProcedureImporting] = React.useState(false);
+  const procedureImportInputRef = React.useRef<HTMLInputElement>(null);
   const managementBlock = showEquipmentScope ? blockForDocumentPosition(form.managingPosition) : "";
   const hasTagField = Boolean(tagLabel && tagOptions.length);
   const hasNameOptions = nameOptions.length > 0;
@@ -210,6 +226,8 @@ export function DocumentCatalogPage({
   const hasDateField = Boolean(dateLabel);
   const hasAttachmentField = Boolean(attachmentLabel && maxAttachments > 0);
   const hasYearField = Boolean(yearLabel && yearOptions.length);
+  const hasIssueDateField = category === "PROCEDURE" || category === "PID";
+  const hasProcedureValidity = category === "PROCEDURE";
   const isCompactArchiveForm = hasNameOptions && hasYearField && hasTagField && hasDateField;
   const useHistoryFormLayout = historyTableLayout && !isCompactArchiveForm;
   const baseColumnCount = historyTableLayout ? 1 : 3;
@@ -220,6 +238,8 @@ export function DocumentCatalogPage({
     (hasActions ? 1 : 0) +
     (showEquipmentScope ? 2 : 0) +
     (showCodeField ? 1 : 0) +
+    (hasIssueDateField ? 1 : 0) +
+    (hasProcedureValidity ? 1 : 0) +
     (hasTagField ? 1 : 0) +
     (hasDateField ? 1 : 0) +
     visibleContentColumns +
@@ -267,11 +287,18 @@ export function DocumentCatalogPage({
       const itemBlock = documentManagementBlock(item);
       if (showEquipmentScope && blockFilter !== ALL_FILTER && itemBlock !== blockFilter) return false;
       if (!needle) return true;
-      return [item.title, item.decisionNumber, item.documentUrl, item.reason, item.progress, item.note, documentPositionLabel(item.managingPosition), itemBlock]
+      const validity = hasProcedureValidity ? procedureValidity(item.issueDate).label : "";
+      return [item.title, item.decisionNumber, item.issueDate, validity, item.documentUrl, item.reason, item.progress, item.note, documentPositionLabel(item.managingPosition), itemBlock]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle));
+    }).sort((a, b) => {
+      if (!hasProcedureValidity) return 0;
+      const aValidity = procedureValidity(a.issueDate);
+      const bValidity = procedureValidity(b.issueDate);
+      if (aValidity.expired !== bValidity.expired) return aValidity.expired ? -1 : 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [docs.data?.data, q, hasYearField, activeYearFilter, hasTagField, tagFilter, showEquipmentScope, positionFilter, blockFilter]);
+  }, [docs.data?.data, q, hasYearField, activeYearFilter, hasTagField, tagFilter, showEquipmentScope, positionFilter, blockFilter, hasProcedureValidity]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(pageIndex, pageCount);
@@ -299,6 +326,24 @@ export function DocumentCatalogPage({
         width: dateInputType === "datetime-local" ? 20 : 16,
         align: "center",
         value: (item) => formatArchiveRecordDate(item.managementBlock, dateInputType),
+      });
+    }
+    if (hasIssueDateField) {
+      columns.push({
+        key: "issueDate",
+        header: "Ngày ban hành",
+        width: 16,
+        align: "center",
+        value: (item) => (item.issueDate ? formatDate(item.issueDate) : "-"),
+      });
+    }
+    if (hasProcedureValidity) {
+      columns.push({
+        key: "validity",
+        header: "Tình trạng",
+        width: 16,
+        align: "center",
+        value: (item) => procedureValidity(item.issueDate).label,
       });
     }
     if (hasReasonField) {
@@ -342,6 +387,8 @@ export function DocumentCatalogPage({
     hasDateField,
     dateLabel,
     dateInputType,
+    hasIssueDateField,
+    hasProcedureValidity,
     hasReasonField,
     reasonLabel,
     hasProgressField,
@@ -369,9 +416,90 @@ export function DocumentCatalogPage({
       ...EMPTY_FORM,
       title: defaultName || nameOptions[0]?.value || "",
       decisionNumber: hasTagField ? tagOptions[0]?.value ?? "" : "",
+      issueDate: "",
       archiveYear: hasYearField ? yearOptions[0] ?? "" : "",
     });
     setFormOpen(true);
+  }
+
+  function downloadProcedureImportTemplate() {
+    const columns = ["STT", "Tên quy trình", "Cương vị", "Số quyết định", "Ngày ban hành", "Link tài liệu"];
+    const sheet = XLSX.utils.aoa_to_sheet([
+      columns,
+      [1, "Quy trình vận hành mẫu", "Chung", "QD-001/2026", "2026-06-29", "https://..."],
+    ]);
+    sheet["!cols"] = [
+      { wch: 8 },
+      { wch: 36 },
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 16 },
+      { wch: 42 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Mau nhap quy trinh");
+    XLSX.writeFile(workbook, "mau-nhap-quy-trinh-van-hanh.xlsx", { compression: true });
+    toast.success("Đã tạo file Excel mẫu");
+  }
+
+  async function handleProcedureImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!canImportProcedure || !hasProcedureValidity) {
+      toast.error("Chỉ quản trị viên hoặc kỹ thuật viên mới được nhập quy trình bằng Excel");
+      return;
+    }
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      toast.error("Chỉ chấp nhận file Excel .xlsx hoặc .xls");
+      return;
+    }
+
+    let imported = 0;
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+      if (!sheet) {
+        toast.error("File Excel không có dữ liệu");
+        return;
+      }
+
+      const rows = XLSX.utils.sheet_to_json<Array<string | number | Date | null>>(sheet, { header: 1, defval: "" });
+      const parsed = parseProcedureImportRows(rows);
+      if (parsed.errors.length) {
+        toast.error(parsed.errors[0]);
+        return;
+      }
+      if (!parsed.items.length) {
+        toast.error("File Excel chưa có dòng quy trình hợp lệ");
+        return;
+      }
+
+      setProcedureImporting(true);
+      for (const item of parsed.items) {
+        await upsert.mutateAsync({
+          category: "PROCEDURE",
+          title: item.title,
+          decisionNumber: item.decisionNumber || null,
+          issueDate: item.issueDate || null,
+          documentUrl: item.documentUrl,
+          managingPosition: item.managingPosition || COMMON_POSITION,
+          managementBlock: blockForDocumentPosition(item.managingPosition || COMMON_POSITION),
+          reason: null,
+          progress: null,
+          note: null,
+          attachmentUrls: [],
+        });
+        imported += 1;
+      }
+      toast.success(`Đã nhập ${imported} quy trình từ Excel`);
+    } catch (error) {
+      const message = (error as Error).message || "Không nhập được file Excel";
+      toast.error(imported ? `Đã nhập ${imported} dòng, sau đó lỗi: ${message}` : message);
+    } finally {
+      setProcedureImporting(false);
+    }
   }
 
   function openEdit(item: DigitalDocument) {
@@ -379,6 +507,7 @@ export function DocumentCatalogPage({
     setForm({
       title: item.title,
       decisionNumber: item.decisionNumber ?? "",
+      issueDate: normalizeIssueDateForInput(item.issueDate),
       documentUrl: item.documentUrl,
       reason: item.reason ?? "",
       progress: item.progress ?? "",
@@ -398,6 +527,7 @@ export function DocumentCatalogPage({
         category,
         title: form.title,
         decisionNumber: form.decisionNumber,
+        issueDate: hasIssueDateField ? form.issueDate || null : null,
         documentUrl: form.documentUrl,
         reason: hasReasonField ? form.reason || null : null,
         progress: hasProgressField ? form.progress || null : null,
@@ -450,11 +580,41 @@ export function DocumentCatalogPage({
             filenamePrefix={backupFilenamePrefix ?? "thu-muc-luu-tru"}
           />
         )}
-        {isAdmin && (
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            {addLabel}
-          </Button>
+        {(isAdmin || canImportProcedure) && (
+          <>
+            {canImportProcedure && (
+              <Button type="button" variant="outline" onClick={downloadProcedureImportTemplate}>
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                File Excel mẫu
+              </Button>
+            )}
+            {canImportProcedure && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => procedureImportInputRef.current?.click()}
+                  disabled={procedureImporting}
+                >
+                  {procedureImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 text-sky-600" />}
+                  Nhập Excel
+                </Button>
+                <input
+                  ref={procedureImportInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleProcedureImportFile}
+                />
+              </>
+            )}
+            {canCreate && (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                {addLabel}
+              </Button>
+            )}
+          </>
         )}
       </PageHeader>
       {afterHeader}
@@ -541,7 +701,7 @@ export function DocumentCatalogPage({
 
       <Card className="overflow-hidden">
         <div className={cn((historyTableLayout || wideNameNarrowLinkLayout) && "overflow-x-auto")}>
-        <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed")}>
+        <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed", hasIssueDateField && "min-w-[1260px] table-fixed", hasProcedureValidity && "min-w-[1400px] table-fixed")}>
           <TableHeader className={cn(historyTableLayout && "bg-muted/40")}>
             <TableRow className={cn("bg-muted/40 hover:bg-muted/40 [&_th]:whitespace-nowrap [&_th]:text-center", historyTableLayout && "hover:bg-transparent")}>
               <TableHead className={cn("w-16 whitespace-nowrap text-center", historyTableLayout && "w-[170px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>
@@ -562,6 +722,8 @@ export function DocumentCatalogPage({
               )}
               {!historyTableLayout && hasTagField && <TableHead className="w-[120px] text-center">{tagLabel}</TableHead>}
               {showCodeField && <TableHead className={cn("w-[180px] text-center", wideNameNarrowLinkLayout && "w-[150px]")}>{codeLabel}</TableHead>}
+              {hasIssueDateField && <TableHead className="w-[140px] text-center">Ngày ban hành</TableHead>}
+              {hasProcedureValidity && <TableHead className="w-[140px] text-center">Tình trạng</TableHead>}
               {!historyTableLayout && <TableHead className={cn(wideNameNarrowLinkLayout && "w-[210px]")}>{linkLabel}</TableHead>}
               {!historyTableLayout && hasAttachmentField && <TableHead className="w-[160px] text-center">{attachmentLabel}</TableHead>}
               {hasActions && <TableHead className={cn("w-[120px] text-center", historyTableLayout && "w-[96px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>Thao tác</TableHead>}
@@ -583,10 +745,14 @@ export function DocumentCatalogPage({
                   summaryField === "reason" ? item.reason : summaryField === "progress" || hasProgressField ? item.progress : item.documentUrl;
                 const detailSummaryLabel = hasProgressField ? progressLabel : summaryLabel ?? linkLabel;
                 const detailSummary = hasProgressField ? item.progress : historySummary;
+                const validity = hasProcedureValidity ? procedureValidity(item.issueDate) : null;
                 return (
                 <React.Fragment key={item.id}>
                 <TableRow
-                  className={cn(historyTableLayout && "cursor-pointer hover:bg-muted/30")}
+                  className={cn(
+                    historyTableLayout && "cursor-pointer hover:bg-muted/30",
+                    validity?.expired && "bg-red-50/80 hover:bg-red-50 [&_td]:border-red-100"
+                  )}
                   onClick={() => historyTableLayout && setExpandedId(expanded ? null : item.id)}
                 >
                   <TableCell className={cn("text-center font-semibold text-muted-foreground", historyTableLayout && "px-3 py-3 text-[13px]")}>
@@ -607,7 +773,7 @@ export function DocumentCatalogPage({
                           {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                         </button>
                         <div className="min-w-0 leading-tight">
-                          <div className="truncate text-[13px] font-semibold text-ink" title={item.title}>{item.title}</div>
+                          <div className={cn("truncate text-[13px] font-semibold text-ink", validity?.expired && "text-red-700")} title={item.title}>{item.title}</div>
                         </div>
                       </div>
                     ) : (
@@ -620,7 +786,7 @@ export function DocumentCatalogPage({
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-accent">
                           <FileText className="h-4 w-4" />
                         </div>
-                        <span className={cn("font-semibold text-ink", wideNameNarrowLinkLayout && "line-clamp-3 whitespace-normal leading-5")}>
+                        <span className={cn("font-semibold text-ink", wideNameNarrowLinkLayout && "line-clamp-3 whitespace-normal leading-5", validity?.expired && "text-red-700")}>
                           {item.title}
                         </span>
                       </div>
@@ -682,6 +848,27 @@ export function DocumentCatalogPage({
                     </TableCell>
                   )}
                   {showCodeField && <TableCell className="text-center text-muted-foreground">{item.decisionNumber || "—"}</TableCell>}
+                  {hasIssueDateField && (
+                    <TableCell className="text-center text-muted-foreground">
+                      {item.issueDate ? formatDate(item.issueDate) : "—"}
+                    </TableCell>
+                  )}
+                  {hasProcedureValidity && (
+                    <TableCell className="text-center">
+                      <span
+                        className={cn(
+                          "inline-flex h-7 items-center justify-center rounded-full px-3 text-xs font-bold ring-1",
+                          validity?.expired
+                            ? "bg-red-100 text-red-700 ring-red-200"
+                            : validity?.unknown
+                            ? "bg-slate-100 text-slate-600 ring-slate-200"
+                            : "bg-emerald-100 text-emerald-700 ring-emerald-200"
+                        )}
+                      >
+                        {validity?.label}
+                      </span>
+                    </TableCell>
+                  )}
                   {!historyTableLayout && (
                     <TableCell className={cn(wideNameNarrowLinkLayout && "align-top")}>
                       {contentMode === "text" ? (
@@ -1143,6 +1330,16 @@ export function DocumentCatalogPage({
                 placeholder={`Nhập ${codeLabel.toLowerCase()}...`}
               />
             </div>
+            {hasIssueDateField && (
+              <div className="grid gap-1.5">
+                <Label>Ngày ban hành</Label>
+                <Input
+                  type="date"
+                  value={form.issueDate}
+                  onChange={(event) => setForm((state) => ({ ...state, issueDate: event.target.value }))}
+                />
+              </div>
+            )}
             {hasReasonField && (
               <div className="grid gap-1.5">
                 <Label>{reasonLabel}</Label>
@@ -1271,6 +1468,95 @@ function readImageAsDataUrl(file: File) {
   });
 }
 
+function parseProcedureImportRows(rows: Array<Array<string | number | Date | null>>) {
+  const errors: string[] = [];
+  const headerIndex = rows.findIndex((row) => row.some((cell) => normalizeText(cellString(cell)) === "ten quy trinh"));
+  if (headerIndex < 0) return { items: [] as ProcedureImportRow[], errors: ["File Excel thiếu dòng tiêu đề mẫu"] };
+
+  const headers = rows[headerIndex].map((cell) => normalizeText(cellString(cell)));
+  const sttIndex = findColumnIndex(headers, ["stt"]);
+  const titleIndex = findColumnIndex(headers, ["ten quy trinh"]);
+  const positionIndex = findColumnIndex(headers, ["cuong vi"]);
+  const decisionIndex = findColumnIndex(headers, ["so quyet dinh"]);
+  const issueDateIndex = findColumnIndex(headers, ["ngay ban hanh"]);
+  const linkIndex = findColumnIndex(headers, ["link tai lieu", "duong dan tai lieu", "tai lieu"]);
+
+  if (sttIndex < 0 || titleIndex < 0 || positionIndex < 0 || decisionIndex < 0 || issueDateIndex < 0 || linkIndex < 0) {
+    return {
+      items: [] as ProcedureImportRow[],
+      errors: ["File Excel phải có đủ cột: STT, Tên quy trình, Cương vị, Số quyết định, Ngày ban hành, Link tài liệu"],
+    };
+  }
+
+  const items: ProcedureImportRow[] = [];
+  rows.slice(headerIndex + 1).forEach((row, index) => {
+    const line = headerIndex + index + 2;
+    const title = cellString(row[titleIndex]);
+    const documentUrl = cellString(row[linkIndex]);
+    const rawIssueDate = row[issueDateIndex];
+    const issueDate = cellDate(rawIssueDate);
+    const hasContent = row.some((cell) => cellString(cell));
+    if (!hasContent) return;
+
+    if (!title) {
+      errors.push(`Dòng ${line}: thiếu tên quy trình`);
+      return;
+    }
+    if (!documentUrl) {
+      errors.push(`Dòng ${line}: thiếu link tài liệu`);
+      return;
+    }
+    if (cellString(rawIssueDate) && !issueDate) {
+      errors.push(`Dòng ${line}: ngày ban hành không hợp lệ`);
+      return;
+    }
+
+    items.push({
+      title,
+      managingPosition: cellString(row[positionIndex]) || COMMON_POSITION,
+      decisionNumber: cellString(row[decisionIndex]),
+      issueDate,
+      documentUrl,
+    });
+  });
+
+  return { items, errors };
+}
+
+function findColumnIndex(headers: string[], aliases: string[]) {
+  return headers.findIndex((header) => aliases.includes(header));
+}
+
+function cellString(value: string | number | Date | null | undefined) {
+  if (value == null) return "";
+  if (value instanceof Date) return formatInputDate(value);
+  return String(value).trim();
+}
+
+function cellDate(value: string | number | Date | null | undefined) {
+  if (value == null || value === "") return "";
+  if (value instanceof Date) return formatInputDate(value);
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return "";
+    return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+  }
+
+  const raw = value.trim();
+  const isoMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
+
+  const viMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (viMatch) return `${viMatch[3]}-${viMatch[2].padStart(2, "0")}-${viMatch[1].padStart(2, "0")}`;
+
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : formatInputDate(date);
+}
+
+function formatInputDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function normalizeRecordDateForInput(value: string | null | undefined, inputType: "date" | "datetime-local") {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -1279,10 +1565,33 @@ function normalizeRecordDateForInput(value: string | null | undefined, inputType
   return raw.slice(0, 16);
 }
 
+function normalizeIssueDateForInput(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw.slice(0, 10);
+}
+
 function formatArchiveRecordDate(value: string | null | undefined, inputType: "date" | "datetime-local") {
   const raw = String(value ?? "").trim();
   if (!raw) return "—";
   return inputType === "datetime-local" && raw.includes("T") ? formatDateTime(raw) : formatDate(raw);
+}
+
+function procedureValidity(issueDate: string | null | undefined) {
+  const raw = String(issueDate ?? "").trim();
+  if (!raw) return { label: "Chưa có ngày", expired: false, unknown: true };
+
+  const issuedAt = new Date(raw);
+  if (Number.isNaN(issuedAt.getTime())) return { label: "Chưa có ngày", expired: false, unknown: true };
+
+  const expiresAt = new Date(issuedAt);
+  expiresAt.setFullYear(expiresAt.getFullYear() + 5);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  expiresAt.setHours(0, 0, 0, 0);
+  const expired = today.getTime() >= expiresAt.getTime();
+
+  return { label: expired ? "Hết hiệu lực" : "Còn hiệu lực", expired, unknown: false };
 }
 
 function DocumentUserAvatar({ user }: { user?: DigitalDocumentUser | null }) {

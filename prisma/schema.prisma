@@ -407,6 +407,7 @@ model DigitalDocument {
   category         String
   title            String
   decisionNumber   String?
+  issueDate        DateTime?
   documentUrl      String
   managingPosition String?
   managementBlock  String?
