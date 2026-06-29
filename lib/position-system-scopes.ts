@@ -1,8 +1,8 @@
 import { EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 
-export type ScopeAccess = "view" | "edit";
-export type NodeAccess = "none" | ScopeAccess;
+export type ScopeAccess = "none" | "view" | "edit";
+export type NodeAccess = ScopeAccess;
 
 export type PositionSystemScope = {
   id: string;
@@ -25,14 +25,10 @@ type DeviceLike = {
   managingPosition?: string | null;
 };
 
-const ACCESS_RANK: Record<NodeAccess, number> = { none: 0, view: 1, edit: 2 };
-
-export function strongerAccess(a: NodeAccess, b: NodeAccess): NodeAccess {
-  return ACCESS_RANK[a] >= ACCESS_RANK[b] ? a : b;
-}
-
-function normalizeAccess(value: unknown): ScopeAccess {
-  return value === "edit" ? "edit" : "view";
+export function normalizeScopeAccess(value: unknown): ScopeAccess {
+  if (value === "edit") return "edit";
+  if (value === "view") return "view";
+  return "none";
 }
 
 export function scopesForPosition(scopes: PositionSystemScope[], position?: string | null) {
@@ -97,21 +93,15 @@ export function nodeAccessForPosition(
   const explicit = scopesForPosition(scopes, position);
   if (!explicit.length) return "edit";
 
-  const { bySeq, parentOf } = nodeIndex(nodes);
-  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeAccess(scope.access)] as const));
+  const { parentOf } = nodeIndex(nodes);
+  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
 
-  let best: NodeAccess = "none";
   let current: string | null | undefined = seq;
   while (current) {
-    const access = accessBySeq.get(current);
-    if (access) best = strongerAccess(best, access);
+    if (accessBySeq.has(current)) return accessBySeq.get(current)!;
     current = parentOf.get(current) ?? null;
   }
-  if (best === "none") {
-    const rootName = rootNameOf(seq, bySeq, parentOf);
-    if (normalizeText(rootName).includes("common")) best = "view";
-  }
-  return best;
+  return "none";
 }
 
 /** Quyền của cương vị trên một thiết bị (suy ra hệ thống của thiết bị rồi xét node). */
@@ -131,32 +121,25 @@ export function deviceAccessForPosition(
   }
 
   const { bySeq, parentOf } = nodeIndex(nodes);
-  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeAccess(scope.access)] as const));
+  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
   const seqAccess = (seq: string | null | undefined): NodeAccess => {
-    let best: NodeAccess = "none";
     let current: string | null | undefined = seq;
     while (current) {
-      const access = accessBySeq.get(current);
-      if (access) best = strongerAccess(best, access);
+      if (accessBySeq.has(current)) return accessBySeq.get(current)!;
       current = parentOf.get(current) ?? null;
     }
-    return best;
+    return "none";
   };
 
-  let best: NodeAccess = "none";
-  best = strongerAccess(best, seqAccess(device.code));
-  best = strongerAccess(best, seqAccess(device.systemSeq));
+  if (device.code && bySeq.has(device.code)) return seqAccess(device.code);
+
+  let best: NodeAccess = seqAccess(device.systemSeq);
   if (device.system) {
     const node = Array.from(bySeq.values()).find((item) => normalizeText(item.name) === normalizeText(device.system!));
-    if (node) best = strongerAccess(best, seqAccess(node.seq));
+    if (node) best = seqAccess(node.seq);
   }
   // Nhánh COMMON luôn được xem.
-  if (best === "none" && seqAccess(device.code) === "none") {
-    const node = bySeq.get(device.code) ?? (device.systemSeq ? bySeq.get(device.systemSeq) : undefined);
-    if (node && normalizeText(rootNameOf(node.seq, bySeq, parentOf)).includes("common")) best = "view";
-  }
   // Thiết bị do chính cương vị quản lý → coi như được chỉnh sửa (giữ rule cũ).
-  if (best === "none" && normalizeText(device.managingPosition ?? "") === normalizedPosition) best = "edit";
   return best;
 }
 
@@ -186,15 +169,15 @@ export function rootAllowedForPosition(
   scopes: PositionSystemScope[]
 ) {
   const name = normalizeText(root.name);
-  if (name.includes("common")) return true;
   const normalizedPosition = normalizeText(position ?? "");
   if (!normalizedPosition) return true;
 
   const explicitScopes = scopesForPosition(scopes, position);
   if (explicitScopes.length) {
-    return explicitScopes.some((scope) => scope.systemSeq === root.seq);
+    return explicitScopes.some((scope) => scope.systemSeq === root.seq && normalizeScopeAccess(scope.access) !== "none");
   }
 
+  if (name.includes("common")) return true;
   const fallbackRule = EQUIPMENT_SYSTEM_BY_POSITION.find((rule) => name.includes(normalizeText(rule.match)));
   if (!fallbackRule) return true;
   return fallbackRule.positions.some((item) => normalizeText(item) === normalizedPosition);

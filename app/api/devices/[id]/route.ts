@@ -6,7 +6,7 @@ import {
   getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
-import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -73,8 +73,9 @@ async function findEquipmentRecord(seq: string) {
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const seq = decodeURIComponent(params.id);
+    await assertSeqViewable(user, seq);
     const device = await findEquipmentRecord(seq);
     if (!device) return fail("Không tìm thấy thiết bị", 404);
     return ok(device);

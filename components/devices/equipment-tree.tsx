@@ -22,7 +22,7 @@ import { normalizeText } from "@/lib/nav";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { useSession } from "next-auth/react";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
-import { scopesForPosition, strongerAccess, type NodeAccess } from "@/lib/position-system-scopes";
+import { nodeAccessForPosition, scopesForPosition } from "@/lib/position-system-scopes";
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
 function compareSeq(a: string, b: string) {
@@ -70,31 +70,9 @@ export function EquipmentTreeView() {
       }
       parentOf.set(n.seq, parent);
     }
-    const accessBySeq = new Map(explicit.map((s) => [s.systemSeq, s.access === "edit" ? "edit" : "view"] as const));
-    const rootNameOf = (seq: string): string => {
-      let cur: string | null | undefined = seq;
-      while (cur) {
-        const p: string | null = parentOf.get(cur) ?? null;
-        if (!p) return bySeq.get(cur)?.name ?? "";
-        cur = p;
-      }
-      return "";
-    };
-    const accessOf = (seq: string): NodeAccess => {
-      let best: NodeAccess = "none";
-      let cur: string | null | undefined = seq;
-      while (cur) {
-        const a = accessBySeq.get(cur);
-        if (a) best = strongerAccess(best, a);
-        cur = parentOf.get(cur) ?? null;
-      }
-      if (best === "none" && normalizeText(rootNameOf(seq)).includes("common")) best = "view";
-      return best;
-    };
-
     const visible = new Set<string>();
     for (const n of allNodes) {
-      if (accessOf(n.seq) !== "none") {
+      if (nodeAccessForPosition(n.seq, position, allNodes, scopes) !== "none") {
         let cur: string | null | undefined = n.seq;
         while (cur && !visible.has(cur)) { visible.add(cur); cur = parentOf.get(cur) ?? null; }
       }
