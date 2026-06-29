@@ -43,17 +43,49 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
   };
 }
 
+type DeviceUsageStats = {
+  repairCount?: number;
+  latestRepairAt?: Date | null;
+};
+
+function toDeviceRecordWithStats(
+  node: NormalizedEquipmentNode,
+  parent: NormalizedEquipmentNode | null,
+  stats?: DeviceUsageStats
+) {
+  return {
+    ...toDeviceRecord(node, parent),
+    repairLogs: stats?.latestRepairAt ? [{ startedAt: stats.latestRepairAt.toISOString() }] : [],
+    _count: { repairLogs: stats?.repairCount ?? 0 },
+  };
+}
+
 async function getDeviceLikeRecords() {
   const nodes = await getNormalizedEquipmentNodes(prisma);
   const index = buildEquipmentTreeIndex(nodes);
   const leafNodes = nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0);
+  const leafSeqs = leafNodes.map((node) => node.seq);
+  const repairStats = leafSeqs.length
+    ? await prisma.repairLog.groupBy({
+        by: ["deviceSeq"],
+        where: { deviceSeq: { in: leafSeqs } },
+        _count: { _all: true },
+        _max: { startedAt: true },
+      })
+    : [];
+  const statsBySeq = new Map(
+    repairStats.map((item) => [
+      item.deviceSeq,
+      { repairCount: item._count._all, latestRepairAt: item._max.startedAt },
+    ])
+  );
   return {
     nodes,
     index,
     records: leafNodes.map((node) => {
       const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
       const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-      return toDeviceRecord(node, parent);
+      return toDeviceRecordWithStats(node, parent, statsBySeq.get(node.seq));
     }),
   };
 }

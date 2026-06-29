@@ -274,6 +274,7 @@ export function DefectForm({
               <EquipmentTreePicker
                 value={form.deviceSystemSeq}
                 position={form.system || null}
+                accessFilter="edit"
                 onChange={setDeviceSystemNode}
                 placeholder="Chọn hệ thống thiết bị"
               />

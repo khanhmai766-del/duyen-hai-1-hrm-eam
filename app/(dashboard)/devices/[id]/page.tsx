@@ -15,6 +15,7 @@ import { DeviceForm } from "@/components/devices/device-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
+import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { can } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ export default function DeviceDetailPage() {
   const { data: session } = useSession();
   const { data, isLoading } = useDevice(id);
   const del = useDeleteDevice();
+  const access = useSystemAccess();
   const [editOpen, setEditOpen] = React.useState(false);
   const [delOpen, setDelOpen] = React.useState(false);
 
@@ -58,7 +60,7 @@ export default function DeviceDetailPage() {
           <p className="mt-1 font-mono text-sm text-navy">{device.code}</p>
         </div>
         <div className="flex gap-2">
-          {can(session?.user?.role, "createRepair") && (
+          {can(session?.user?.role, "createRepair") && access.canEditDevice(device) && (
             <Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Sửa</Button>
           )}
           {can(session?.user?.role, "deleteDevice") && (

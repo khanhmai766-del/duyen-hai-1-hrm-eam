@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -19,17 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices } from "@/hooks/useMaterials";
-import { useDevices } from "@/hooks/useDevices";
-import { useEquipmentTree } from "@/hooks/useEquipment";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
+import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
+import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { MATERIAL_SYSTEMS, can } from "@/lib/constants";
-import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
 
-const NO_DEVICE = "__none__";
+type MaterialEdit = Partial<Material> & { id?: string; replacements?: MaterialReplacementInput[] };
 
 export default function MaterialsPage() {
   const { data: session } = useSession();
@@ -37,18 +34,15 @@ export default function MaterialsPage() {
   // Chỉ Quản trị (ADMIN) được thêm / sửa / xoá vật tư.
   const canManage = role === "ADMIN";
   const { data, isLoading } = useMaterials();
-  const { data: devicesData } = useDevices({});
-  const { data: equipmentTreeData } = useEquipmentTree();
-  const scopesQuery = usePositionSystemScopes();
-  const devices = devicesData?.data ?? [];
-  const equipmentNodes = equipmentTreeData?.data ?? [];
-  const positionScopes = scopesQuery.data?.data ?? [];
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
   const [systemFilter, setSystemFilter] = React.useState("ALL");
-  const [edit, setEdit] = React.useState<(Partial<Material> & { deviceId?: string | null; managingPosition?: string | null }) | null>(null);
+  const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
   const [deleting, setDeleting] = React.useState<Material | null>(null);
   const [isNew, setIsNew] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -70,18 +64,12 @@ export default function MaterialsPage() {
   }, [trackId, data, router]);
 
   const total = data?.data?.length ?? 0;
-  const devicePositions = React.useMemo(
-    () => Array.from(new Set(devices.map((d) => d.managingPosition).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices]
-  );
-  const deviceSystems = React.useMemo(
-    () => Array.from(new Set(devices.map((d) => d.system).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
-    [devices]
-  );
+  // Nhãn "điểm dùng" = danh sách hệ thống/thiết bị mà vật tư này được gán (từ các điểm thay thế).
   const deviceLabel = React.useCallback((m: MaterialWithDevices) => {
-    const linked = m.deviceMaterials?.map((dm) => dm.device).filter(Boolean) ?? [];
-    if (!linked.length) return "";
-    return linked.map((d) => d.name || d.code).join(", ");
+    const names = Array.from(
+      new Set((m.replacements ?? []).map((r) => r.device?.name || r.system || "").filter(Boolean))
+    );
+    return names.join(", ");
   }, []);
   const materials = (data?.data ?? []).filter(
     (m) =>
@@ -101,6 +89,18 @@ export default function MaterialsPage() {
       return next.size === prev.size ? prev : next;
     });
   }, [visibleKey]);
+
+  // Phân trang danh mục vật tư (theo phong cách bảng khiếm khuyết).
+  const totalPages = Math.max(1, Math.ceil(materials.length / pageSize));
+  const firstShown = materials.length ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, materials.length);
+  const pagedMaterials = materials.slice((page - 1) * pageSize, page * pageSize);
+  React.useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+  React.useEffect(() => {
+    setPage(1);
+  }, [visibleKey, pageSize]);
 
   const allChecked = materials.length > 0 && materials.every((m) => selected.has(m.id));
   const someChecked = selected.size > 0 && !allChecked;
@@ -141,21 +141,17 @@ export default function MaterialsPage() {
     }
   }
 
-  function materialForEdit(m: MaterialWithDevices) {
-    const linkedDevice = m.deviceMaterials?.[0]?.device;
+  function materialForEdit(m: MaterialWithDevices): MaterialEdit {
     return {
       ...m,
-      deviceId: m.deviceMaterials?.[0]?.deviceId ?? null,
-      managingPosition: linkedDevice?.managingPosition ?? null,
-    };
-  }
-
-  function syncDeviceFields(deviceId: string | null) {
-    const device = devices.find((d) => d.id === deviceId);
-    return {
-      deviceId,
-      managingPosition: device?.managingPosition ?? null,
-      system: device?.system ?? null,
+      replacements: (m.replacements ?? []).map((r) => ({
+        deviceSeq: r.deviceSeq,
+        system: r.system,
+        quantity: r.quantity,
+        intervalMonths: r.intervalMonths,
+        intervalNote: r.intervalNote,
+        lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
+      })),
     };
   }
 
@@ -173,9 +169,9 @@ export default function MaterialsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
-        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, quantity: m.quantity, minStock: m.minStock, device: deviceLabel(m), system: m.system, supplier: m.supplier }))} filename="vat-tu" />
+        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, tonKho: m.quantity, dinhMucToiThieu: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
         {canManage && (
-          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, deviceId: null, managingPosition: null }); }}>
+          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
           </Button>
         )}
@@ -222,17 +218,8 @@ export default function MaterialsPage() {
         />
       ) : (
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-            <span className="text-sm text-muted-foreground">
-              {isFiltered ? <>Hiển thị <span className="font-semibold text-ink">{materials.length}</span> / {total} vật tư</> : <><span className="font-semibold text-ink">{total}</span> vật tư trong kho</>}
-            </span>
-            {systemFilter !== "ALL" && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
-                {systemFilter}
-              </span>
-            )}
-          </div>
-          <Table>
+          <div className="overflow-x-auto">
+          <Table className="min-w-[880px]">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 {canManage && (
@@ -247,19 +234,19 @@ export default function MaterialsPage() {
                 <TableHead className="text-center">Mã vật tư</TableHead>
                 <TableHead className="text-center">Tên vật tư</TableHead>
                 <TableHead className="text-center">ĐVT</TableHead>
-                <TableHead className="text-center">Số lượng</TableHead>
-                <TableHead className="text-center">Thiết bị</TableHead>
-                <TableHead className="text-center">Định kỳ thay thế</TableHead>
+                <TableHead className="text-center">Tồn kho</TableHead>
                 <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {materials.map((m) => {
+              {pagedMaterials.map((m) => {
                 const checked = selected.has(m.id);
+                const expanded = expandedId === m.id;
                 return (
-                  <TableRow key={m.id} data-state={checked ? "selected" : undefined} className={cn(checked && "bg-accent/5")}>
+                  <React.Fragment key={m.id}>
+                  <TableRow data-state={checked ? "selected" : undefined} className={cn("cursor-pointer hover:bg-muted/30", checked && "bg-accent/5")} onClick={() => setExpandedId(expanded ? null : m.id)}>
                     {canManage && (
-                      <TableCell className="w-10">
+                      <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           aria-label={`Chọn ${m.code}`}
                           checked={checked}
@@ -268,7 +255,17 @@ export default function MaterialsPage() {
                       </TableCell>
                     )}
                     <TableCell className="text-center">
-                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium text-navy">{m.code}</span>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setExpandedId(expanded ? null : m.id); }}
+                          className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors", expanded ? "bg-rose-500" : "bg-emerald-500")}
+                          title={expanded ? "Thu gọn" : "Mở chi tiết"}
+                        >
+                          {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                        </button>
+                        <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium text-navy">{m.code}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -293,11 +290,7 @@ export default function MaterialsPage() {
                         <span className="font-semibold tabular-nums text-ink">{m.quantity}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      {deviceLabel(m) || "—"}
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">{m.supplier ?? "—"}</TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
                           <Repeat className="h-4 w-4" />
@@ -315,81 +308,79 @@ export default function MaterialsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
+                  {expanded && (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
+                        <MaterialExpandedDetails m={m} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </TableBody>
           </Table>
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <div>
+              Hiển thị {firstShown}-{lastShown} trong tổng số {materials.length} vật tư
+              {isFiltered && <span> sau lọc</span>}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 md:ml-auto">
+              <div className="flex items-center gap-2">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink"
+                  aria-label="Số dòng mỗi trang"
+                >
+                  {[10, 25, 50, 100].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span>dòng</span>
+              </div>
+              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
+              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
+              <span className="mx-2 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-ink">{page}/{totalPages}</span>
+              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
+              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
+            </div>
+          </div>
         </Card>
       )}
 
       <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader><DialogTitle>{isNew ? "Thêm vật tư" : `Cập nhật: ${edit?.name}`}</DialogTitle></DialogHeader>
           {edit && (
             <div className="grid grid-cols-2 gap-3">
               {isNew && (
                 <>
                   <Field label="Mã *"><Input value={edit.code ?? ""} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>
-                  <Field label="ĐVT *"><Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} /></Field>
+                  <Field label="ĐVT *"><Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="Cái / Lít / Bộ…" /></Field>
                 </>
               )}
               <Field label="Ảnh vật tư" className="col-span-2">
                 <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
               </Field>
-              <Field label="Cương vị" className="col-span-2">
-                <Select
-                  value={edit.managingPosition || "NONE"}
-                  onValueChange={(v) => {
-                    const nextPosition = v === "NONE" ? null : v;
-                    const selectedDevice = devices.find((device) => device.id === edit.deviceId);
-                    setEdit({
-                      ...edit,
-                      managingPosition: nextPosition,
-                      ...(selectedDevice && nextPosition && !deviceAllowedForPosition(selectedDevice, nextPosition, equipmentNodes, positionScopes)
-                        ? { deviceId: null }
-                        : {}),
-                    });
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">— Không chọn —</SelectItem>
-                    {devicePositions.map((position) => (
-                      <SelectItem key={position} value={position}>{position}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
               <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-              <Field label="Thiết bị" className="col-span-2">
-                <Select value={edit.deviceId || NO_DEVICE} onValueChange={(v) => setEdit({ ...edit, ...syncDeviceFields(v === NO_DEVICE ? null : v) })}>
-                  <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_DEVICE}>— Không chọn —</SelectItem>
-                    {devices
-                      .filter((device) => !edit.managingPosition || deviceAllowedForPosition(device, edit.managingPosition, equipmentNodes, positionScopes))
-                      .map((device) => (
-                      <SelectItem key={device.id} value={device.id}>
-                        {device.name} ({device.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Hệ thống" className="col-span-2">
-                <Select value={edit.system ?? "NONE"} onValueChange={(v) => setEdit({ ...edit, system: v === "NONE" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Chọn hệ thống" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">— Không chọn —</SelectItem>
-                    {deviceSystems.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Số lượng"><Input type="number" value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
-              <Field label="Định kỳ thay thế"><Input value={edit.supplier ?? ""} onChange={(e) => setEdit({ ...edit, supplier: e.target.value })} placeholder="VD: 6 tháng / 8.000 giờ" /></Field>
+              <Field label="Tồn kho hiện có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
+              <Field label="Định mức tối thiểu"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
               <Field label="Ghi chú" className="col-span-2"><Input value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
+              <div className="col-span-2 mt-1">
+                <Label className="text-sm font-semibold text-ink">Điểm dùng / thay thế</Label>
+                <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+                  Một mã vật tư có thể dùng cho nhiều hệ thống/thiết bị với chu kỳ và số lượng cần thay khác nhau.
+                  Tổng số lượng các điểm = nhu cầu 1 chu kỳ để so với tồn kho.
+                </p>
+                <ReplacementPointsEditor
+                  value={edit.replacements ?? []}
+                  unit={edit.unit ?? undefined}
+                  onChange={(rows) => setEdit({ ...edit, replacements: rows })}
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -491,4 +482,58 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
     return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Sắp hết</span>;
   }
   return null;
+}
+
+/** Panel bung: chỉ liệt kê chi tiết các điểm thay thế dạng bảng (hệ thống · chu kỳ · số lượng). */
+function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
+  const points = m.replacements ?? [];
+  if (points.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-3 text-sm text-muted-foreground">
+        Chưa gán hệ thống/thiết bị cho vật tư này. Bấm <b>Sửa</b> để thêm điểm dùng / thay thế.
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+      <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Chi tiết điểm thay thế ({points.length})
+      </div>
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="border-b border-border text-muted-foreground">
+            <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
+            <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
+            <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {points.map((p) => (
+            <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
+              <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.system || "—"}</td>
+              <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
+              <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity} {m.unit}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PageButton({ icon: Icon, label, disabled, onClick }: { icon: LucideIcon; label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="h-8 w-8 rounded-lg disabled:cursor-not-allowed disabled:opacity-45"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
+  );
 }

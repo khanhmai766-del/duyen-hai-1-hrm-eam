@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
+import { assertSeqEditable } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const seq = String(body.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự");
+    await assertSeqEditable(user, seq);
     const data: Record<string, unknown> = {};
     if (body.attachedInfo !== undefined) data.attachedInfo = body.attachedInfo || null;
     if (body.documentUrl !== undefined) data.documentUrl = body.documentUrl || null;

@@ -1,11 +1,32 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { addMonths } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 
 export const dynamic = "force-dynamic";
 
-function mapMaterial<T extends { deviceMaterials?: Array<any> }>(material: T) {
+const MATERIAL_INCLUDE = {
+  deviceMaterials: {
+    include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
+    orderBy: { usedAt: "desc" as const },
+  },
+  // Điểm dùng/thay thế: mỗi (vật tư × hệ thống/thiết bị) có chu kỳ + số lượng cần thay riêng.
+  replacements: {
+    include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
+    orderBy: { nextDueAt: "asc" as const },
+  },
+};
+
+function mapMaterial<T extends { quantity: number; deviceMaterials?: Array<any>; replacements?: Array<any> }>(material: T) {
+  const replacements = (material.replacements ?? []).map((r) => ({
+    ...r,
+    deviceId: r.deviceSeq,
+    device: equipmentNodeToDevice(r.device),
+  }));
+  // Tổng nhu cầu 1 chu kỳ = Σ số lượng tất cả điểm thay thế; đề xuất thêm = thiếu hụt so với tồn kho.
+  const totalNeed = replacements.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+  const shortfall = Math.max(0, totalNeed - (Number(material.quantity) || 0));
   return {
     ...material,
     deviceMaterials: material.deviceMaterials?.map((dm) => ({
@@ -13,7 +34,44 @@ function mapMaterial<T extends { deviceMaterials?: Array<any> }>(material: T) {
       deviceId: dm.deviceSeq,
       device: equipmentNodeToDevice(dm.device),
     })),
+    replacements,
+    totalNeed,
+    shortfall,
   };
+}
+
+type ReplacementInput = {
+  deviceSeq?: string | null;
+  system?: string | null;
+  intervalMonths?: unknown;
+  intervalNote?: string | null;
+  quantity?: unknown;
+  lastReplacedAt?: string | null;
+};
+
+/** Dựng dữ liệu tạo một điểm thay thế từ payload form (kèm tính ngày đến hạn). */
+function buildReplacementCreate(entry: ReplacementInput, userId: string, defaultSystem: string | null) {
+  const intervalMonths = Math.max(1, Math.round(Number(entry.intervalMonths)) || 12);
+  const quantity = Math.max(0, Math.round(Number(entry.quantity)) || 0);
+  const lastReplacedAt = entry.lastReplacedAt ? new Date(entry.lastReplacedAt) : null;
+  return {
+    deviceSeq: entry.deviceSeq?.trim() || null,
+    system: entry.system?.trim() || defaultSystem || null,
+    quantity,
+    intervalMonths,
+    intervalNote: entry.intervalNote?.trim() || null,
+    lastReplacedAt,
+    nextDueAt: addMonths(lastReplacedAt ?? new Date(), intervalMonths),
+    createdById: userId,
+  };
+}
+
+/** Lọc các điểm hợp lệ (phải có thiết bị hoặc hệ thống) từ payload. */
+function parseReplacements(body: { replacements?: unknown }, userId: string, defaultSystem: string | null) {
+  if (!Array.isArray(body.replacements)) return [];
+  return body.replacements
+    .filter((r: ReplacementInput) => r && (String(r.deviceSeq ?? "").trim() || String(r.system ?? "").trim()))
+    .map((r: ReplacementInput) => buildReplacementCreate(r, userId, defaultSystem));
 }
 
 export async function GET() {
@@ -21,12 +79,7 @@ export async function GET() {
     await requireUser();
     const materials = await prisma.material.findMany({
       orderBy: { code: "asc" },
-      include: {
-        deviceMaterials: {
-          include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
-          orderBy: { usedAt: "desc" },
-        },
-      },
+      include: MATERIAL_INCLUDE,
     });
     return ok(materials.map(mapMaterial), { total: materials.length });
   });
@@ -40,6 +93,8 @@ export async function POST(req: NextRequest) {
     if (!body.code || !body.name || !body.unit) return fail("Thiếu thông tin bắt buộc");
     const exists = await prisma.material.findUnique({ where: { code: body.code } });
     if (exists) return fail("Mã vật tư đã tồn tại");
+    const defaultSystem = body.system?.trim() || null;
+    const replacements = parseReplacements(body, user.id, defaultSystem);
     const m = await prisma.material.create({
       data: {
         code: body.code,
@@ -48,25 +103,16 @@ export async function POST(req: NextRequest) {
         quantity: Number(body.quantity) || 0,
         minStock: Number(body.minStock) || 0,
         location: null,
-        system: body.system || null,
+        system: defaultSystem,
         imageUrl: body.imageUrl || null,
-        supplier: body.supplier || null,
         unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
         note: body.note || null,
-        ...(body.deviceId
-          ? {
-              deviceMaterials: {
-                create: {
-                  deviceSeq: body.deviceId,
-                  quantity: 1,
-                },
-              },
-            }
-          : {}),
+        ...(replacements.length ? { replacements: { create: replacements } } : {}),
       },
+      include: MATERIAL_INCLUDE,
     });
     await audit(user.id, "CREATE_MATERIAL", "Material", m.id, m.code);
-    return ok(m);
+    return ok(mapMaterial(m));
   });
 }
 
@@ -76,34 +122,32 @@ export async function PUT(req: NextRequest) {
     requireRole(user, ["ADMIN"]);
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
-    const m = await prisma.material.update({
+    const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
+    await prisma.material.update({
       where: { id: body.id },
       data: {
         ...(body.name != null ? { name: body.name } : {}),
+        ...(body.unit != null ? { unit: body.unit } : {}),
         ...(body.quantity != null ? { quantity: Number(body.quantity) } : {}),
         ...(body.minStock != null ? { minStock: Number(body.minStock) } : {}),
-        location: null,
-        ...(body.system !== undefined ? { system: body.system || null } : {}),
+        ...(defaultSystem !== undefined ? { system: defaultSystem } : {}),
         ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl || null } : {}),
-        ...(body.supplier !== undefined ? { supplier: body.supplier } : {}),
         ...(body.unitPrice != null ? { unitPrice: Number(body.unitPrice) } : {}),
         ...(body.note !== undefined ? { note: body.note || null } : {}),
       },
     });
-    if (body.deviceId !== undefined) {
-      await prisma.equipmentMaterial.deleteMany({ where: { materialId: m.id } });
-      if (body.deviceId) {
-        await prisma.equipmentMaterial.create({
-          data: {
-            materialId: m.id,
-            deviceSeq: body.deviceId,
-            quantity: 1,
-          },
-        });
+    // Đồng bộ điểm thay thế (chỉ khi payload có gửi mảng replacements): xoá hết rồi tạo lại theo form.
+    if (Array.isArray(body.replacements)) {
+      const current = await prisma.material.findUnique({ where: { id: body.id }, select: { system: true } });
+      const replacements = parseReplacements(body, user.id, defaultSystem ?? current?.system ?? null);
+      await prisma.materialReplacement.deleteMany({ where: { materialId: body.id } });
+      for (const data of replacements) {
+        await prisma.materialReplacement.create({ data: { ...data, materialId: body.id } });
       }
     }
-    await audit(user.id, "UPDATE_MATERIAL", "Material", m.id, m.code);
-    return ok(m);
+    const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });
+    await audit(user.id, "UPDATE_MATERIAL", "Material", body.id, m?.code ?? "");
+    return ok(m ? mapMaterial(m) : null);
   });
 }
 

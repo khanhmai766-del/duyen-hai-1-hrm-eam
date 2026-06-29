@@ -2,29 +2,23 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { FolderCog, Save } from "lucide-react";
+import { ChevronRight, Eye, FolderCog, Lock, Pencil, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
 import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
-import { rootAllowedForPosition, scopesForPosition, type PositionSystemScope } from "@/lib/position-system-scopes";
+import { scopesForPosition, type NodeAccess, type ScopeAccess } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 
-const EMPTY_EQUIPMENT_NODES: EquipmentNode[] = [];
-const EMPTY_SCOPES: PositionSystemScope[] = [];
-
-function sameSeqSet(a: Set<string>, b: Set<string>) {
-  if (a.size !== b.size) return false;
-  for (const item of a) {
-    if (!b.has(item)) return false;
-  }
-  return true;
-}
+const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; className: string }[] = [
+  { value: "none", label: "Không", icon: Lock, className: "data-[active=true]:bg-rose-100 data-[active=true]:text-rose-700" },
+  { value: "view", label: "Xem", icon: Eye, className: "data-[active=true]:bg-sky-100 data-[active=true]:text-sky-700" },
+  { value: "edit", label: "Sửa", icon: Pencil, className: "data-[active=true]:bg-emerald-100 data-[active=true]:text-emerald-700" },
+];
 
 export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const allPositions = usePositions();
@@ -35,14 +29,25 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const treeQuery = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
   const updateScopes = useUpdatePositionSystemScope();
-  const equipmentNodes = treeQuery.data?.data ?? EMPTY_EQUIPMENT_NODES;
-  const scopes = scopesQuery.data?.data ?? EMPTY_SCOPES;
+  const equipmentNodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
+  const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
   const [position, setPosition] = React.useState("");
-  const [selectedSeqs, setSelectedSeqs] = React.useState<Set<string>>(new Set());
+  // Map seq -> access đã gán tường minh ("view"|"edit"). Không có trong map = kế thừa cha.
+  const [grants, setGrants] = React.useState<Map<string, ScopeAccess>>(new Map());
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
-  const roots = React.useMemo(() => {
+  const { roots, childrenOf, parentOf } = React.useMemo(() => {
     const index = buildEquipmentTreeIndex(equipmentNodes);
-    return [...index.roots].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+    // Chỉ phân quyền ở node thư mục (hệ thống) — node có con.
+    const folderChildren = new Map<string, EquipmentNode[]>();
+    for (const [seq, children] of index.childrenOf) {
+      const folders = children.filter((child) => (index.childrenOf.get(child.seq) ?? []).length > 0);
+      if (folders.length) folderChildren.set(seq, folders.sort((a, b) => compareEquipmentSeq(a.seq, b.seq)));
+    }
+    const folderRoots = index.roots
+      .filter((root) => (index.childrenOf.get(root.seq) ?? []).length > 0)
+      .sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+    return { roots: folderRoots, childrenOf: folderChildren, parentOf: index.parentOf };
   }, [equipmentNodes]);
 
   React.useEffect(() => {
@@ -54,33 +59,121 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
 
   React.useEffect(() => {
     if (!position) return;
-    const saved = scopesForPosition(scopes, position).map((scope) => scope.systemSeq);
-    const fallback = roots
-      .filter((root) => rootAllowedForPosition(root, position, []))
-      .map((root) => root.seq);
-    const next = new Set(saved.length ? saved : fallback);
-    setSelectedSeqs((current) => (sameSeqSet(current, next) ? current : next));
-  }, [position, roots, scopes]);
+    const next = new Map<string, ScopeAccess>();
+    for (const scope of scopesForPosition(scopes, position)) {
+      next.set(scope.systemSeq, scope.access === "edit" ? "edit" : "view");
+    }
+    setGrants(next);
+  }, [position, scopes]);
 
-  const savedCount = React.useMemo(() => scopesForPosition(scopes, position).length, [scopes, position]);
+  // Quyền kế thừa từ tổ tiên gần nhất có gán tường minh.
+  const inheritedAccess = React.useCallback(
+    (seq: string): NodeAccess => {
+      let current: string | null | undefined = parentOf.get(seq) ?? null;
+      while (current) {
+        const own = grants.get(current);
+        if (own) return own;
+        current = parentOf.get(current) ?? null;
+      }
+      return "none";
+    },
+    [grants, parentOf]
+  );
 
-  function toggle(seq: string, checked: boolean) {
-    setSelectedSeqs((current) => {
+  function setAccess(seq: string, value: NodeAccess) {
+    setGrants((current) => {
+      const next = new Map(current);
+      if (value === "none") next.delete(seq);
+      else next.set(seq, value);
+      return next;
+    });
+  }
+
+  function toggleExpand(seq: string) {
+    setExpanded((current) => {
       const next = new Set(current);
-      if (checked) next.add(seq);
-      else next.delete(seq);
+      if (next.has(seq)) next.delete(seq);
+      else next.add(seq);
       return next;
     });
   }
 
   async function save() {
     if (!position) return toast.error("Vui lòng chọn cương vị");
+    const entries = Array.from(grants.entries()).map(([systemSeq, access]) => ({ systemSeq, access }));
     try {
-      await updateScopes.mutateAsync({ position, systemSeqs: Array.from(selectedSeqs) });
+      await updateScopes.mutateAsync({ position, entries });
       toast.success("Đã lưu phân quyền hệ thống thiết bị");
     } catch (error) {
       toast.error((error as Error).message);
     }
+  }
+
+  const savedCount = React.useMemo(() => scopesForPosition(scopes, position).length, [scopes, position]);
+
+  function renderNodes(list: EquipmentNode[], depth: number): React.ReactNode {
+    return list.map((node) => {
+      const kids = childrenOf.get(node.seq) ?? [];
+      const hasKids = kids.length > 0;
+      const open = expanded.has(node.seq);
+      const own = grants.get(node.seq);
+      const inherited = inheritedAccess(node.seq);
+      const effective: NodeAccess = own ?? inherited;
+      return (
+        <React.Fragment key={node.seq}>
+          <div
+            className="flex items-center gap-2 border-b border-border/60 py-1.5 pr-2"
+            style={{ paddingLeft: depth * 18 + 4 }}
+          >
+            {hasKids ? (
+              <button
+                type="button"
+                onClick={() => toggleExpand(node.seq)}
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+                title={open ? "Thu gọn" : "Mở rộng"}
+              >
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
+              </button>
+            ) : (
+              <span className="h-5 w-5 shrink-0" />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-ink" title={node.name}>{node.name}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">{node.seq}</span>
+            </span>
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
+              {ACCESS_OPTIONS.map((opt) => {
+                const active = (own ?? "none") === opt.value;
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    data-active={active}
+                    disabled={!isAdmin}
+                    onClick={() => setAccess(node.seq, opt.value)}
+                    title={opt.label}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed",
+                      opt.className
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {!own && effective !== "none" && (
+              <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground md:inline">
+                Kế thừa: {effective === "edit" ? "Sửa" : "Xem"}
+              </span>
+            )}
+          </div>
+          {hasKids && open && renderNodes(kids, depth + 1)}
+        </React.Fragment>
+      );
+    });
   }
 
   return (
@@ -93,7 +186,8 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
               Phân quyền hệ thống thiết bị theo cương vị
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Chọn cương vị rồi tick các hệ thống thiết bị được phép thao tác khi thêm lịch sử sửa chữa, khiếm khuyết và vật tư.
+              Chọn cương vị rồi đặt mức quyền cho từng hệ thống trong cây thiết bị: <b>Xem</b> (chỉ đọc) hoặc <b>Sửa</b> (xem &amp; thao tác).
+              Hệ thống con kế thừa quyền của hệ thống cha nếu không đặt riêng.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -124,31 +218,14 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
             Chưa có dữ liệu cây thiết bị để phân quyền.
           </div>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {roots.map((root) => {
-              const checked = selectedSeqs.has(root.seq);
-              return (
-                <label
-                  key={root.seq}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-3 transition-colors",
-                    checked ? "border-cyan-300 bg-cyan-50" : "border-border hover:border-cyan-200"
-                  )}
-                >
-                  <Checkbox checked={checked} onCheckedChange={(value) => toggle(root.seq, value === true)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-ink">{root.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{root.seq}</span>
-                  </span>
-                </label>
-              );
-            })}
+          <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-white">
+            {renderNodes(roots, 0)}
           </div>
         )}
         <div className="mt-3 text-xs text-muted-foreground">
           {savedCount > 0
-            ? `Cương vị này đang có ${savedCount} hệ thống được lưu cấu hình riêng.`
-            : "Chưa có cấu hình riêng: hệ thống đang dùng rule mặc định hiện có để không làm gián đoạn dữ liệu."}
+            ? `Cương vị này đang có ${savedCount} hệ thống được cấu hình riêng. Hệ thống không đặt quyền và ngoài nhánh được cấp sẽ bị ẩn (trừ nhánh COMMON luôn xem được).`
+            : "Chưa có cấu hình riêng: cương vị này đang được xem & thao tác toàn bộ (giữ nguyên hành vi cũ). Đặt quyền cho ít nhất một hệ thống để bắt đầu giới hạn."}
         </div>
       </CardContent>
     </Card>
