@@ -66,6 +66,10 @@ export function fileExtension(fileName: string) {
   return ext;
 }
 
+function metadataValue(value: string) {
+  return encodeURIComponent(value).slice(0, 1024);
+}
+
 export async function uploadS3Object(params: {
   key: string;
   body: Buffer;
@@ -79,7 +83,7 @@ export async function uploadS3Object(params: {
       Key: params.key,
       Body: params.body,
       ContentType: params.contentType || "application/octet-stream",
-      Metadata: params.originalName ? { originalName: params.originalName.slice(0, 255) } : undefined,
+      Metadata: params.originalName ? { originalName: metadataValue(params.originalName) } : undefined,
     })
   );
   return params.key;
