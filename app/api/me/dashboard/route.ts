@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
-import { signedS3Url } from "@/lib/s3-storage";
+import { s3ProxyUrl } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
       where: { id: user.id },
       select: { avatarUrl: true, avatarKey: true },
     });
-    const avatarUrl = dbUser?.avatarKey ? await signedS3Url(dbUser.avatarKey).catch(() => null) : dbUser?.avatarUrl ?? null;
+    const avatarUrl = dbUser?.avatarKey ? s3ProxyUrl(dbUser.avatarKey) : dbUser?.avatarUrl ?? null;
 
     return ok({
       avatarUrl,

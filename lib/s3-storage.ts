@@ -101,16 +101,24 @@ export async function signedS3Url(key: string, expiresIn = 300) {
   );
 }
 
+export async function getS3Object(key: string) {
+  const env = getS3Env();
+  return getClient().send(
+    new GetObjectCommand({
+      Bucket: env.bucket,
+      Key: key,
+    })
+  );
+}
+
+export function s3ProxyUrl(key: string) {
+  return `/api/files/s3?key=${encodeURIComponent(key)}`;
+}
+
 export async function userWithSignedMedia<T extends { avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(
   user: T
 ): Promise<T> {
-  try {
-    const [avatarUrl, signatureUrl] = await Promise.all([
-      user.avatarKey ? signedS3Url(user.avatarKey) : Promise.resolve(user.avatarUrl ?? null),
-      user.signatureKey ? signedS3Url(user.signatureKey) : Promise.resolve(user.signatureUrl ?? null),
-    ]);
-    return { ...user, avatarUrl, signatureUrl };
-  } catch {
-    return user;
-  }
+  const avatarUrl = user.avatarKey ? s3ProxyUrl(user.avatarKey) : user.avatarUrl ?? null;
+  const signatureUrl = user.signatureKey ? s3ProxyUrl(user.signatureKey) : user.signatureUrl ?? null;
+  return { ...user, avatarUrl, signatureUrl };
 }
