@@ -3,10 +3,15 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { handle, ok, requireUser } from "@/lib/api";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { normalizeText } from "@/lib/nav";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const access = await resolveEquipmentAccessForUser(user);
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
 
@@ -30,6 +35,7 @@ export async function GET(req: NextRequest) {
         doneBy: { select: { id: true, name: true, position: true, avatarUrl: true } },
         replacement: {
           select: {
+            deviceSeq: true,
             system: true,
             intervalMonths: true,
             intervalNote: true,
@@ -51,9 +57,18 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+    const visibleLogs = access.hasExplicitScopes
+      ? logs.filter((log) => {
+          const replacement = log.replacement;
+          if (!replacement) return false;
+          if (replacement.deviceSeq) return access.canViewSeq(replacement.deviceSeq);
+          if (replacement.system) return access.visibleSystemNames.has(normalizeText(replacement.system));
+          return false;
+        })
+      : logs;
 
     return ok(
-      logs.map((log: any) => ({
+      visibleLogs.map((log: any) => ({
         ...log,
         replacement: log.replacement
           ? {
@@ -69,7 +84,7 @@ export async function GET(req: NextRequest) {
             }
           : null,
       })),
-      { total: logs.length }
+      { total: visibleLogs.length }
     );
   });
 }

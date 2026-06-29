@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,8 @@ const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, a
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const access = await resolveEquipmentAccessForUser(user);
     const { searchParams } = new URL(req.url);
     const system = searchParams.get("system");
     const unit = searchParams.get("unit");
@@ -34,7 +36,10 @@ export async function GET(req: NextRequest) {
       orderBy: { performedAt: "desc" },
       include: INCLUDE,
     });
-    return ok(history, { total: history.length });
+    const data = history.filter(
+      (item) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: item.device, system: item.system })
+    );
+    return ok(data, { total: data.length });
   });
 }
 
@@ -46,6 +51,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
+    if (body.device) await assertSeqEditable(user, String(body.device));
 
     const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
     const history = await prisma.defectHistory.create({

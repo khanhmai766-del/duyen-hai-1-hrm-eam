@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 
 /**
  * Ghi nhận một lần thay thế vật tư tại điểm thay thế (chỉ ADMIN/Trưởng ca):
@@ -19,6 +20,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       include: { material: { select: { id: true, code: true, quantity: true } } },
     });
     if (!point) return fail("Không tìm thấy điểm thay thế", 404);
+    const access = await resolveEquipmentAccessForUser(user);
+    if (
+      access.hasExplicitScopes &&
+      !access.canEditDeviceLike({ device: point.deviceSeq, system: point.system })
+    ) {
+      return fail("Cương vị của bạn không có quyền thao tác trên điểm thay thế này", 403);
+    }
 
     const replacedAt = body.replacedAt ? new Date(body.replacedAt) : new Date();
     const qty = body.quantity != null && body.quantity !== "" ? Number(body.quantity) : null;

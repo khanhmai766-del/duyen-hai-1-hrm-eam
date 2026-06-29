@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { ChevronRight, Eye, FolderCog, Lock, Pencil, Save } from "lucide-react";
+import { BarChart3, ChevronRight, Eye, FolderCog, Lock, Pencil, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,8 +31,9 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   // Map seq -> access đã gán tường minh ("view"|"edit"). Không có trong map = kế thừa cha.
   const [grants, setGrants] = React.useState<Map<string, NodeAccess>>(new Map());
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  const [previewOpen, setPreviewOpen] = React.useState(false);
 
-  const { roots, childrenOf, parentOf } = React.useMemo(() => {
+  const { roots, childrenOf, parentOf, allChildrenOf } = React.useMemo(() => {
     const index = buildEquipmentTreeIndex(equipmentNodes);
     // Chỉ phân quyền ở node thư mục (hệ thống) — node có con.
     const folderChildren = new Map<string, EquipmentNode[]>();
@@ -43,7 +44,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
     const folderRoots = index.roots
       .filter((root) => (index.childrenOf.get(root.seq) ?? []).length > 0)
       .sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-    return { roots: folderRoots, childrenOf: folderChildren, parentOf: index.parentOf };
+    return { roots: folderRoots, childrenOf: folderChildren, parentOf: index.parentOf, allChildrenOf: index.childrenOf };
   }, [equipmentNodes]);
 
   React.useEffect(() => {
@@ -71,6 +72,11 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
       return "none";
     },
     [grants, parentOf]
+  );
+
+  const effectiveAccess = React.useCallback(
+    (seq: string): NodeAccess => grants.get(seq) ?? inheritedAccess(seq),
+    [grants, inheritedAccess]
   );
 
   function setAccess(seq: string, value: NodeAccess) {
@@ -102,6 +108,58 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const savedCount = React.useMemo(() => scopesForPosition(scopes, position).length, [scopes, position]);
+
+  const summary = React.useMemo(() => {
+    const result = {
+      systems: { none: 0, view: 0, edit: 0 },
+      devices: { none: 0, view: 0, edit: 0 },
+      explicit: { none: 0, view: 0, edit: 0 },
+    };
+    for (const access of grants.values()) result.explicit[access] += 1;
+    for (const node of equipmentNodes) {
+      const bucket = (allChildrenOf.get(node.seq) ?? []).length > 0 ? result.systems : result.devices;
+      bucket[effectiveAccess(node.seq)] += 1;
+    }
+    return result;
+  }, [allChildrenOf, effectiveAccess, equipmentNodes, grants]);
+
+  function hasPreviewVisible(node: EquipmentNode): boolean {
+    if (effectiveAccess(node.seq) !== "none") return true;
+    return (childrenOf.get(node.seq) ?? []).some(hasPreviewVisible);
+  }
+
+  function renderPreviewNodes(list: EquipmentNode[], depth: number): React.ReactNode {
+    return list.filter(hasPreviewVisible).map((node) => {
+      const kids = (childrenOf.get(node.seq) ?? []).filter(hasPreviewVisible);
+      const access = effectiveAccess(node.seq);
+      const isPathOnly = access === "none" && kids.length > 0;
+      return (
+        <React.Fragment key={`preview-${node.seq}`}>
+          <div
+            className="flex items-center gap-2 border-b border-border/60 py-1.5 pr-2 last:border-b-0"
+            style={{ paddingLeft: depth * 18 + 8 }}
+          >
+            <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-500/70" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-ink" title={node.name}>{node.name}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">{node.seq}</span>
+            </span>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                access === "edit" && "bg-emerald-100 text-emerald-700",
+                access === "view" && "bg-sky-100 text-sky-700",
+                isPathOnly && "bg-slate-100 text-slate-600"
+              )}
+            >
+              {access === "edit" ? "Sửa" : access === "view" ? "Xem" : "Đường dẫn"}
+            </span>
+          </div>
+          {kids.length > 0 && renderPreviewNodes(kids, depth + 1)}
+        </React.Fragment>
+      );
+    });
+  }
 
   function renderNodes(list: EquipmentNode[], depth: number): React.ReactNode {
     return list.map((node) => {
@@ -193,6 +251,10 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
                 ))}
               </SelectContent>
             </Select>
+            <Button type="button" variant="outline" onClick={() => setPreviewOpen((value) => !value)} disabled={!position}>
+              <Eye className="h-4 w-4" />
+              Xem trước
+            </Button>
             <Button type="button" onClick={save} disabled={!isAdmin || updateScopes.isPending || !position}>
               <Save className="h-4 w-4" />
               Lưu cấu hình
@@ -210,9 +272,62 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
             Chưa có dữ liệu cây thiết bị để phân quyền.
           </div>
         ) : (
-          <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-white">
-            {renderNodes(roots, 0)}
-          </div>
+          <>
+            <div className="mb-3 grid gap-2 md:grid-cols-3">
+              <div className="rounded-lg border border-rose-100 bg-white px-3 py-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-rose-700">
+                  <Lock className="h-3.5 w-3.5" />
+                  Không hiển thị
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {summary.systems.none} hệ thống · {summary.devices.none} thiết bị
+                </div>
+              </div>
+              <div className="rounded-lg border border-sky-100 bg-white px-3 py-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-sky-700">
+                  <Eye className="h-3.5 w-3.5" />
+                  Chỉ xem
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {summary.systems.view} hệ thống · {summary.devices.view} thiết bị
+                </div>
+              </div>
+              <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Được sửa
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  {summary.systems.edit} hệ thống · {summary.devices.edit} thiết bị
+                </div>
+              </div>
+            </div>
+            {previewOpen && (
+              <div className="mb-3 overflow-hidden rounded-xl border border-cyan-200 bg-white">
+                <div className="flex items-center justify-between border-b border-cyan-100 px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-cyan-800">
+                    <BarChart3 className="h-4 w-4" />
+                    Xem trước phạm vi của {position}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {summary.explicit.none + summary.explicit.view + summary.explicit.edit} dòng cấu hình tường minh
+                  </div>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {summary.systems.view + summary.systems.edit + summary.devices.view + summary.devices.edit > 0 ? (
+                    renderPreviewNodes(roots, 0)
+                  ) : (
+                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                      Cương vị này sẽ không thấy hệ thống/thiết bị nào.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-white">
+              {renderNodes(roots, 0)}
+            </div>
+          </>
         )}
         <div className="mt-3 text-xs text-muted-foreground">
           {savedCount > 0

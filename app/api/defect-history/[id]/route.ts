@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -10,6 +11,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
     const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : undefined;
+    const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
+    if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
+    if (existing.device) await assertSeqEditable(user, existing.device);
+    if (body.device) await assertSeqEditable(user, String(body.device));
 
     const history = await prisma.defectHistory.update({
       where: { id: params.id },
@@ -36,6 +41,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
+    if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
+    const access = await resolveEquipmentAccessForUser(user);
+    if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: existing.device, system: existing.system })) {
+      return fail("Cương vị của bạn không có quyền thao tác trên lịch sử khiếm khuyết này", 403);
+    }
     await prisma.defectHistory.delete({ where: { id: params.id } });
     await audit(user.id, "DELETE_DEFECT_HISTORY", "DefectHistory", params.id);
     return ok({ id: params.id });

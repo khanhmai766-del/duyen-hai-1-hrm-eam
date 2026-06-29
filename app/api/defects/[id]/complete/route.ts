@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 
 const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -18,6 +19,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const defect = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!defect) return fail("Không tìm thấy khiếm khuyết", 404);
+    const access = await resolveEquipmentAccessForUser(user);
+    if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: defect.device, system: defect.system })) {
+      return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
+    }
 
     const performedAt = body.performedAt ? new Date(body.performedAt) : new Date();
     const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { addMonths } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
+import { normalizeText } from "@/lib/nav";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -76,12 +78,30 @@ function parseReplacements(body: { replacements?: unknown }, userId: string, def
 
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const access = await resolveEquipmentAccessForUser(user);
     const materials = await prisma.material.findMany({
       orderBy: { code: "asc" },
       include: MATERIAL_INCLUDE,
     });
-    return ok(materials.map(mapMaterial), { total: materials.length });
+    const data = materials.map(mapMaterial);
+    const filtered = access.hasExplicitScopes
+      ? data
+          .map((material) => {
+            const deviceMaterials = (material.deviceMaterials ?? []).filter((item: any) => access.canViewSeq(item.deviceSeq));
+            const replacements = (material.replacements ?? []).filter((item: any) => {
+              if (item.deviceSeq) return access.canViewSeq(item.deviceSeq);
+              if (item.system) return access.visibleSystemNames.has(normalizeText(item.system));
+              return false;
+            });
+            return { ...material, deviceMaterials, replacements };
+          })
+          .filter((material) => {
+            if ((material.deviceMaterials ?? []).length || (material.replacements ?? []).length) return true;
+            return material.system ? access.visibleSystemNames.has(normalizeText(material.system)) : false;
+          })
+      : data;
+    return ok(filtered, { total: filtered.length });
   });
 }
 
