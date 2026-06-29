@@ -88,7 +88,8 @@ export default function AccountPage() {
 
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field icon="idcard" tint="from-sky-100 to-sky-200" label="Mã nhân viên" value={u?.employeeId} />
-              <Field icon="mail" tint="from-violet-100 to-violet-200" label="Email" value={u?.email ?? undefined} />
+              <Field icon="mail" tint="from-violet-100 to-violet-200" label="Email công ty" value={u?.email ?? undefined} />
+              <Field icon="mail" tint="from-cyan-100 to-cyan-200" label="Email làm việc" value={profile?.workEmail ?? undefined} />
               <Field icon="phone" tint="from-emerald-100 to-emerald-200" label="Số điện thoại" value={profile?.phone ?? undefined} />
               <Field icon="briefcase" tint="from-amber-100 to-amber-200" label="Chức vụ" value={profile?.position ?? undefined} />
               <Field icon="building" tint="from-rose-100 to-rose-200" label="Bộ phận" value={profile?.department ?? undefined} />
@@ -140,6 +141,7 @@ function EditProfileDialog({
     employeeId: profile.employeeId,
     phone: profile.phone ?? "",
     email: profile.email,
+    workEmail: profile.workEmail ?? "",
     name: profile.name,
     position: profile.position ?? "",
     department: profile.department ?? "",
@@ -156,11 +158,12 @@ function EditProfileDialog({
       signatureUrl: form.signatureUrl,
       employeeId: form.employeeId,
       phone: form.phone,
-      email: form.email,
+      workEmail: form.workEmail,
     };
     if (isAdmin) {
       // Chỉ quản trị viên mới được thay ảnh đại diện.
       payload.avatarUrl = form.avatarUrl;
+      payload.email = form.email;
       payload.name = form.name;
       payload.position = form.position;
       payload.department = form.department;
@@ -205,8 +208,16 @@ function EditProfileDialog({
           <EditField label="Số điện thoại">
             <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} />
           </EditField>
-          <EditField label="Email" className="sm:col-span-2">
-            <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+          <EditField label="Email công ty" className="sm:col-span-2">
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(e) => set("email", e.target.value)}
+              disabled={!isAdmin}
+            />
+          </EditField>
+          <EditField label="Email làm việc" className="sm:col-span-2">
+            <Input type="email" value={form.workEmail} onChange={(e) => set("workEmail", e.target.value)} />
           </EditField>
           <EditField label="Chữ ký số" className="sm:col-span-2">
             <SignaturePad value={form.signatureUrl} onChange={(v) => set("signatureUrl", v)} />
@@ -245,7 +256,7 @@ function EditProfileDialog({
         </div>
         {!isAdmin && (
           <p className="text-xs text-muted-foreground">
-            Bạn chỉ có thể chỉnh sửa ảnh, mã nhân viên, số điện thoại và email. Liên hệ Quản trị để đổi vai trò/chức vụ.
+            Bạn chỉ có thể chỉnh sửa chữ ký, mã nhân viên, số điện thoại và email làm việc. Liên hệ Quản trị để đổi email công ty, vai trò/chức vụ.
           </p>
         )}
         <DialogFooter>

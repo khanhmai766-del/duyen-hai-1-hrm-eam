@@ -4,7 +4,7 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileSpreadsheet, History, ImageUp, Pencil, PenLine, Plus, Search, ShieldAlert, Trash2, UploadCloud, X, type LucideIcon } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileSpreadsheet, History, ImageUp, KeyRound, Pencil, PenLine, Plus, Search, ShieldAlert, Trash2, UploadCloud, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -40,9 +40,10 @@ export default function AdminUsersPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [form, setForm] = React.useState({ name: "", email: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
+  const [resetTarget, setResetTarget] = React.useState<SafeUser | null>(null);
 
   if (session && session.user?.role !== "ADMIN") {
     return (
@@ -77,12 +78,12 @@ export default function AdminUsersPage() {
   }, [totalPages]);
 
   async function createUser() {
-    if (!form.name || !form.email || !form.employeeId) return toast.error("Nhập đủ thông tin bắt buộc");
+    if (!form.name || !form.email || !form.employeeId || !form.username.trim()) return toast.error("Nhập đủ thông tin bắt buộc");
     try {
       await create.mutateAsync(form);
       toast.success("Đã tạo người dùng");
       setOpen(false);
-      setForm({ name: "", email: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -125,6 +126,9 @@ export default function AdminUsersPage() {
             {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Button variant="outline" onClick={() => window.open("/admin/export-users", "_blank")}>
+          <Download className="h-4 w-4" /> Xuất danh sách
+        </Button>
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
       </PageHeader>
 
@@ -136,7 +140,7 @@ export default function AdminUsersPage() {
             <TableHeader>
               <TableRow className="[&_th]:whitespace-nowrap">
                 <TableHead className="text-center">Hình ảnh</TableHead>
-                <TableHead className="min-w-[200px]">Nhân viên</TableHead><TableHead>Mã NV</TableHead><TableHead>User</TableHead><TableHead>Email</TableHead>
+                <TableHead className="min-w-[200px]">Nhân viên</TableHead><TableHead>Mã NV</TableHead><TableHead>User</TableHead><TableHead>Email công ty</TableHead><TableHead>Email làm việc</TableHead>
                 <TableHead className="text-center">Chữ ký số</TableHead>
                 <TableHead>Phân quyền</TableHead><TableHead>Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
@@ -145,7 +149,7 @@ export default function AdminUsersPage() {
             <TableBody>
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                     Không tìm thấy người dùng phù hợp với điều kiện lọc.
                   </TableCell>
                 </TableRow>
@@ -169,6 +173,7 @@ export default function AdminUsersPage() {
                   <TableCell className="font-mono text-xs">{u.employeeId}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{u.username ?? "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{u.workEmail ?? "—"}</TableCell>
                   <TableCell className="text-center">
                     {u.signatureUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -212,6 +217,9 @@ export default function AdminUsersPage() {
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" title="Chỉnh sửa" onClick={() => setEditTarget(u)}>
                         <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" title="Reset mật khẩu về password123" onClick={() => setResetTarget(u)}>
+                        <KeyRound className="h-4 w-4 text-amber-600" />
                       </Button>
                       <Button variant="ghost" size="icon" title="Xoá" onClick={() => setDelTarget(u)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -294,8 +302,9 @@ export default function AdminUsersPage() {
               <SignaturePad value={form.signatureUrl} onChange={(v) => setForm({ ...form, signatureUrl: v })} />
             </Field>
             <Field label="Họ tên *" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Email *"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-            <Field label="User"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
+            <Field label="Email công ty *"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Email làm việc"><Input type="email" value={form.workEmail} onChange={(e) => setForm({ ...form, workEmail: e.target.value })} /></Field>
+            <Field label="User *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
@@ -316,6 +325,26 @@ export default function AdminUsersPage() {
 
       {/* Edit user */}
       <EditUserDialog target={editTarget} onClose={() => setEditTarget(null)} />
+
+      {/* Delete user */}
+      <ConfirmDialog
+        open={!!resetTarget}
+        onOpenChange={(o) => !o && setResetTarget(null)}
+        title="Reset mật khẩu?"
+        description={`Đặt lại mật khẩu tài khoản "${resetTarget?.name}" về password123. Người dùng sẽ phải đổi mật khẩu trong lần đăng nhập tiếp theo.`}
+        confirmLabel="Reset mật khẩu"
+        loading={update.isPending}
+        onConfirm={async () => {
+          if (!resetTarget) return;
+          try {
+            await update.mutateAsync({ id: resetTarget.id, resetPassword: true });
+            toast.success("Đã reset mật khẩu", { description: "Mật khẩu mặc định là password123." });
+            setResetTarget(null);
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        }}
+      />
 
       {/* Delete user */}
       <ConfirmDialog
@@ -381,6 +410,7 @@ type ImportReport = {
     row: number;
     employee_code: string | null;
     email: string | null;
+    work_email: string | null;
     action: string;
     status: string;
     errors: string[];
@@ -484,7 +514,7 @@ function AdminUserUploadPanel() {
       <CardHeader className="border-b bg-[linear-gradient(135deg,#f8fbff_0%,#eef8f5_100%)]">
         <CardTitle className="flex items-center gap-2 text-base">
           <UploadCloud className="h-4 w-4 text-navy" />
-          Nhập liệu & lưu trữ S3
+          Nhập liệu người dùng
         </CardTitle>
       </CardHeader>
       {!enabled ? (
@@ -499,7 +529,7 @@ function AdminUserUploadPanel() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-ink">Import người dùng từ Excel/CSV</p>
-              <p className="text-xs text-muted-foreground">Preview trước khi ghi database, file gốc lưu vào S3 khi import thật.</p>
+              <p className="text-xs text-muted-foreground">Xem trước dữ liệu trước khi ghi vào hệ thống.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => window.open("/admin/import-users?format=xlsx", "_blank")}>
               <Download className="h-4 w-4" /> Tải mẫu
@@ -530,7 +560,7 @@ function AdminUserUploadPanel() {
         <div className="space-y-3 rounded-lg border border-border bg-white p-3">
           <div>
             <p className="text-sm font-semibold text-ink">Upload ảnh/chữ ký theo mã nhân viên</p>
-            <p className="text-xs text-muted-foreground">File thật lên S3, database chỉ lưu key.</p>
+            <p className="text-xs text-muted-foreground">Gắn file theo mã nhân viên để cập nhật hồ sơ hàng loạt.</p>
           </div>
           <Input value={employeeCode} onChange={(e) => setEmployeeCode(e.target.value)} placeholder="Mã nhân viên, ví dụ NV001" />
           <MediaUploadRow icon={ImageUp} label="Ảnh đại diện" accept=".jpg,.jpeg,.png,.webp" onFile={setAvatarFile} onSubmit={() => submitSingle("avatar")} busy={busy === "avatar"} />
@@ -636,6 +666,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
       setForm({
         name: target.name,
         email: target.email,
+        workEmail: target.workEmail ?? "",
         username: target.username ?? "",
         employeeId: target.employeeId,
         phone: target.phone ?? "",
@@ -671,7 +702,8 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
               <SignaturePad value={form.signatureUrl} onChange={(v) => setForm({ ...form, signatureUrl: v })} />
             </Field>
             <Field label="Họ tên" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Email công ty"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+            <Field label="Email làm việc"><Input type="email" value={form.workEmail} onChange={(e) => setForm({ ...form, workEmail: e.target.value })} /></Field>
             <Field label="User"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="SĐT"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>

@@ -13,6 +13,7 @@ model User {
   name         String
   employeeId   String   @unique
   email        String   @unique
+  workEmail    String?  @map("work_email")
   username     String?  @unique
   phone        String?
   avatarUrl    String?
@@ -20,6 +21,8 @@ model User {
   avatarKey    String?  @map("avatar_key") // S3 object key, không lưu file thật trong DB
   signatureKey String?  @map("signature_key") // S3 object key, không lưu signed URL cố định
   passwordHash String
+  mustChangePassword Boolean @default(false) @map("must_change_password")
+  passwordChangedAt DateTime @default(now()) @map("password_changed_at")
   role         Role     @default(VIEWER)
   position     String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
   department   String?

@@ -57,6 +57,7 @@ async function main() {
         data: {
           ...u,
           passwordHash: pw,
+          passwordChangedAt: new Date(),
           avatarUrl: null,
           isActive: true,
         },

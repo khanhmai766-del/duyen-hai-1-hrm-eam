@@ -13,6 +13,7 @@ type ParsedUserRow = {
   employeeId: string;
   name: string;
   email: string;
+  workEmail: string | null;
   username: string | null;
   phone: string | null;
   position: string | null;
@@ -26,6 +27,7 @@ type RowReport = {
   row: number;
   employee_code: string | null;
   email: string | null;
+  work_email: string | null;
   action: "create" | "update" | "skip";
   status: "success" | "error" | "preview";
   errors: string[];
@@ -44,6 +46,13 @@ const USER_IMPORT_HEADERS: Record<string, keyof ParsedUserRow | "ignored"> = {
   "ho ten": "name",
   ten: "name",
   email: "email",
+  companyemail: "email",
+  emailcongty: "email",
+  "email cong ty": "email",
+  workemail: "workEmail",
+  workingemail: "workEmail",
+  emaillamviec: "workEmail",
+  "email lam viec": "workEmail",
   user: "username",
   username: "username",
   tendangnhap: "username",
@@ -114,6 +123,7 @@ function readRows(buffer: Buffer, fileName: string): ParsedUserRow[] {
       employeeId: String(mapped.employeeId ?? "").trim(),
       name: String(mapped.name ?? "").trim(),
       email: String(mapped.email ?? "").trim().toLowerCase(),
+      workEmail: String(mapped.workEmail ?? "").trim().toLowerCase() || null,
       username: String(mapped.username ?? "").trim() || null,
       phone: String(mapped.phone ?? "").trim() || null,
       position: String(mapped.position ?? "").trim() || null,
@@ -137,8 +147,10 @@ function validateRow(row: ParsedUserRow, mode: ImportMode) {
   const errors: string[] = [];
   if (!row.employeeId) errors.push("Thiếu mã nhân viên");
   if ((mode === "create" || mode === "upsert") && !row.name) errors.push("Thiếu họ tên");
-  if ((mode === "create" || mode === "upsert") && !row.email) errors.push("Thiếu email");
-  if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) errors.push("Email không hợp lệ");
+  if ((mode === "create" || mode === "upsert") && !row.email) errors.push("Thiếu email công ty");
+  if ((mode === "create" || mode === "upsert") && !row.username) errors.push("Thiếu user");
+  if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) errors.push("Email công ty không hợp lệ");
+  if (row.workEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.workEmail)) errors.push("Email làm việc không hợp lệ");
   return errors;
 }
 
@@ -147,7 +159,8 @@ export function createUserImportTemplate(format: "xlsx" | "csv") {
     {
       "Mã nhân viên": "NV001",
       "Họ tên": "Nguyễn Văn A",
-      "Email": "nva@duyenhai1.vn",
+      "Email công ty": "nguyenvana@evngenco1.vn",
+      "Email làm việc": "nva@duyenhai1.vn",
       "Số điện thoại": "0900000000",
       "Chức vụ": "Kỹ thuật viên",
       "Bộ phận": "Vận hành 1",
@@ -184,8 +197,13 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
   const duplicateEmails = new Set(emails.filter((v, i) => emails.indexOf(v) !== i));
   const duplicateUsernames = new Set(usernames.filter((v, i) => usernames.indexOf(v) !== i));
 
+  const existingWhere = [
+    ...(employeeIds.length ? [{ employeeId: { in: employeeIds } }] : []),
+    ...(emails.length ? [{ email: { in: emails } }] : []),
+    ...(usernames.length ? [{ username: { in: usernames } }] : []),
+  ];
   const existingUsers = await prisma.user.findMany({
-    where: { OR: [{ employeeId: { in: employeeIds } }, { email: { in: emails } }, { username: { in: usernames } }] },
+    where: existingWhere.length ? { OR: existingWhere } : undefined,
     select: { id: true, employeeId: true, email: true, username: true },
   });
   const byEmployeeId = new Map(existingUsers.map((u) => [u.employeeId, u]));
@@ -210,13 +228,13 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
   for (const row of rows) {
     const errors = validateRow(row, mode);
     if (duplicateCodes.has(row.employeeId)) errors.push("Mã nhân viên bị trùng trong tệp");
-    if (row.email && duplicateEmails.has(row.email)) errors.push("Email bị trùng trong tệp");
+    if (row.email && duplicateEmails.has(row.email)) errors.push("Email công ty bị trùng trong tệp");
     if (row.username && duplicateUsernames.has(row.username)) errors.push("User bị trùng trong tệp");
 
     const existing = row.employeeId ? byEmployeeId.get(row.employeeId) : null;
     const emailOwner = row.email ? byEmail.get(row.email) : null;
     const usernameOwner = row.username ? byUsername.get(row.username) : null;
-    if (emailOwner && emailOwner.employeeId !== row.employeeId) errors.push("Email đã thuộc mã nhân viên khác");
+    if (emailOwner && emailOwner.employeeId !== row.employeeId) errors.push("Email công ty đã thuộc mã nhân viên khác");
     if (usernameOwner && usernameOwner.employeeId !== row.employeeId) errors.push("User đã thuộc mã nhân viên khác");
     if (mode === "create" && existing) errors.push("Mã nhân viên đã tồn tại");
     if (mode === "update" && !existing) errors.push("Mã nhân viên chưa tồn tại");
@@ -227,6 +245,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
         row: row.rowNumber,
         employee_code: row.employeeId || null,
         email: row.email || null,
+        work_email: row.workEmail || null,
         action,
         status: errors.length ? "error" : "preview",
         errors,
@@ -240,6 +259,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
         data: {
           ...(row.name ? { name: row.name } : {}),
           ...(row.email ? { email: row.email } : {}),
+          workEmail: row.workEmail,
           username: row.username,
           phone: row.phone,
           position: row.position,
@@ -255,12 +275,15 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
           employeeId: row.employeeId,
           name: row.name,
           email: row.email,
+          workEmail: row.workEmail,
           username: row.username,
           phone: row.phone,
           position: row.position,
           department: row.department,
           role: row.role,
           passwordHash: await bcrypt.hash(row.password, 10),
+          mustChangePassword: row.password === "password123",
+          passwordChangedAt: new Date(),
           ...(row.isActive !== undefined ? { isActive: row.isActive } : {}),
         },
       });
@@ -274,6 +297,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
       row: row.rowNumber,
       employee_code: row.employeeId,
       email: row.email || null,
+      work_email: row.workEmail || null,
       action,
       status: "success",
       errors: [],

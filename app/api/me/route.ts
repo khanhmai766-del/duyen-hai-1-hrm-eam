@@ -5,8 +5,8 @@ import { userWithSignedMedia } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
-// Self-service profile update. Everyone may edit employeeId / phone / email /
-// signature on their own record; only ADMIN may change the avatar and the
+// Self-service profile update. Everyone may edit employeeId / phone / email làm việc /
+// signature on their own record; only ADMIN may change avatar, email công ty đăng nhập and
 // name / position / department / role.
 export async function PUT(req: NextRequest) {
   return handle(async () => {
@@ -17,11 +17,12 @@ export async function PUT(req: NextRequest) {
     const data: Record<string, unknown> = {};
     if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
     if (body.phone !== undefined) data.phone = body.phone || null;
-    if (body.email) data.email = body.email;
+    if (body.workEmail !== undefined) data.workEmail = String(body.workEmail || "").trim().toLowerCase() || null;
     if (body.employeeId) data.employeeId = body.employeeId;
     if (isAdmin) {
       // Chỉ quản trị viên mới được thay ảnh đại diện.
       if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
+      if (body.email) data.email = String(body.email).trim().toLowerCase();
       if (body.name) data.name = body.name;
       if (body.position !== undefined) data.position = body.position || null;
       if (body.department !== undefined) data.department = body.department || null;

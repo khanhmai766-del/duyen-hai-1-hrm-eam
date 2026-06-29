@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { passwordPolicyMessage } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,8 @@ export async function PUT(req: NextRequest) {
     if (!currentPassword || !newPassword || !confirmPassword) {
       return fail("Vui lòng nhập đầy đủ thông tin mật khẩu");
     }
-    if (newPassword.length < 8) {
-      return fail("Mật khẩu mới cần tối thiểu 8 ký tự");
-    }
+    const policyError = passwordPolicyMessage(newPassword);
+    if (policyError) return fail(policyError);
     if (newPassword !== confirmPassword) {
       return fail("Xác nhận mật khẩu mới không khớp");
     }
@@ -37,7 +37,11 @@ export async function PUT(req: NextRequest) {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
+      data: {
+        passwordHash: await bcrypt.hash(newPassword, 10),
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+      },
     });
     await audit(user.id, "CHANGE_PASSWORD", "User", user.id);
     return ok({ changed: true });
