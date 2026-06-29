@@ -5,8 +5,6 @@ import { safeEmployeeCode, uploadS3Object, userWithSignedMedia } from "@/lib/s3-
 
 export const dynamic = "force-dynamic";
 
-type MediaKind = "avatar" | "signature";
-
 const DATA_URL_RE = /^data:([^;,]+);base64,(.+)$/;
 
 function extensionForMime(mimeType: string) {
@@ -27,31 +25,29 @@ function isS3ProxyUrl(value: string) {
   return value.startsWith("/api/files/s3?") || value.includes("/api/files/s3?");
 }
 
-async function mediaUpdate(kind: MediaKind, value: unknown, employeeId: string) {
+async function signatureUpdate(value: unknown, employeeId: string) {
   if (value === undefined) return {};
   const raw = String(value ?? "").trim();
-  const keyField = kind === "avatar" ? "avatarKey" : "signatureKey";
-  const urlField = kind === "avatar" ? "avatarUrl" : "signatureUrl";
-  if (!raw) return { [urlField]: null, [keyField]: null };
+  if (!raw) return { signatureUrl: null, signatureKey: null };
   if (isS3ProxyUrl(raw)) return {};
   const match = raw.match(DATA_URL_RE);
-  if (!match) return { [urlField]: raw, [keyField]: null };
+  if (!match) return { signatureUrl: raw, signatureKey: null };
 
   const mimeType = match[1];
   const ext = extensionForMime(mimeType);
   const code = safeEmployeeCode(employeeId);
-  const key = `${kind === "avatar" ? "avatars" : "signatures"}/${code}.${ext}`;
+  const key = `signatures/${code}.${ext}`;
   await uploadS3Object({
     key,
     body: Buffer.from(match[2], "base64"),
     contentType: mimeType,
     originalName: `${code}.${ext}`,
   });
-  return { [urlField]: null, [keyField]: key };
+  return { signatureUrl: null, signatureKey: key };
 }
 
 // Self-service profile update. Everyone may edit employeeId / phone / email làm việc /
-// avatar / signature on their own record; only ADMIN may change email công ty đăng nhập and
+// signature on their own record; only ADMIN may change avatar, email công ty đăng nhập and
 // name / position / department / role.
 export async function PUT(req: NextRequest) {
   return handle(async () => {
@@ -64,6 +60,7 @@ export async function PUT(req: NextRequest) {
     if (body.workEmail !== undefined) data.workEmail = String(body.workEmail || "").trim().toLowerCase() || null;
     if (body.employeeId) data.employeeId = body.employeeId;
     if (isAdmin) {
+      if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
       if (body.email) data.email = String(body.email).trim().toLowerCase();
       if (body.name) data.name = body.name;
       if (body.position !== undefined) data.position = body.position || null;
@@ -81,8 +78,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const employeeId = String(data.employeeId ?? user.employeeId ?? "").trim();
-    Object.assign(data, await mediaUpdate("avatar", body.avatarUrl, employeeId));
-    Object.assign(data, await mediaUpdate("signature", body.signatureUrl, employeeId));
+    Object.assign(data, await signatureUpdate(body.signatureUrl, employeeId));
 
     const updated = await prisma.user.update({ where: { id: user.id }, data });
     await audit(user.id, "UPDATE_PROFILE", "User", user.id);
