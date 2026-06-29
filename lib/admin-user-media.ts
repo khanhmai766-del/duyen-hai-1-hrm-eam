@@ -58,9 +58,21 @@ function validateZipPath(fileName: string) {
   if (normalized.startsWith("/") || normalized.includes("../") || normalized.includes("..\\")) {
     throw new Error("Đường dẫn trong zip không hợp lệ");
   }
-  if (path.posix.basename(normalized) !== normalized) {
-    throw new Error("File trong zip phải nằm ở thư mục gốc");
-  }
+}
+
+function normalizedZipPath(fileName: string) {
+  return fileName.replace(/\\/g, "/");
+}
+
+function shouldIgnoreZipEntry(fileName: string) {
+  const normalized = normalizedZipPath(fileName);
+  const base = path.posix.basename(normalized);
+  return (
+    normalized === "__MACOSX" ||
+    normalized.startsWith("__MACOSX/") ||
+    base === ".DS_Store" ||
+    base.startsWith("._")
+  );
 }
 
 function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
@@ -71,6 +83,10 @@ function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
       zipfile.readEntry();
       zipfile.on("entry", (entry) => {
         if (/\/$/.test(entry.fileName)) {
+          zipfile.readEntry();
+          return;
+        }
+        if (shouldIgnoreZipEntry(entry.fileName)) {
           zipfile.readEntry();
           return;
         }
@@ -99,7 +115,7 @@ function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
           });
           stream.on("error", reject);
           stream.on("end", () => {
-            entries.push({ fileName: entry.fileName, buffer: Buffer.concat(chunks) });
+            entries.push({ fileName: path.posix.basename(normalizedZipPath(entry.fileName)), buffer: Buffer.concat(chunks) });
             zipfile.readEntry();
           });
         });
