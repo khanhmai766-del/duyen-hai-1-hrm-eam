@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { readLoginToken } from "@/lib/webauthn";
+import { isDefaultPassword, isPasswordExpired } from "@/lib/password-policy";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Phiên hết hạn sau 30 phút không hoạt động (cookie tự hết hạn khi tab đóng/mất mạng);
@@ -31,6 +32,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!token || token.email !== login) return null;
           const user = await prisma.user.findUnique({ where: { id: token.userId } });
           if (!user || !user.isActive || user.email !== login) return null;
+          const mustChangePassword = user.mustChangePassword || isPasswordExpired(user.passwordChangedAt);
+          if (mustChangePassword && !user.mustChangePassword) {
+            await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
+          }
           return {
             id: user.id,
             name: user.name,
@@ -38,6 +43,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             role: user.role,
             position: user.position ?? undefined,
             employeeId: user.employeeId,
+            mustChangePassword,
           };
         }
 
@@ -49,6 +55,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
+        const mustChangePassword = user.mustChangePassword || isDefaultPassword(password) || isPasswordExpired(user.passwordChangedAt);
+        if (mustChangePassword && !user.mustChangePassword) {
+          await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
+        }
 
         // NOTE: avatarUrl is intentionally NOT returned here. Avatars may be
         // large base64 data URLs; putting them in the JWT bloats the session
@@ -61,6 +71,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           position: user.position ?? undefined,
           employeeId: user.employeeId,
+          mustChangePassword,
         };
       },
     }),
@@ -72,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as any).role;
         token.position = (user as any).position;
         token.employeeId = (user as any).employeeId;
+        token.mustChangePassword = (user as any).mustChangePassword;
       }
       return token;
     },
@@ -81,6 +93,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role as string;
         session.user.position = token.position as string | undefined;
         session.user.employeeId = token.employeeId as string;
+        session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }
       return session;
     },

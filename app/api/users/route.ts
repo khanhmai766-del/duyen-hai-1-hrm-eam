@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { userWithSignedMedia } from "@/lib/s3-storage";
+import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,26 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
     const body = await req.json();
-    if (!body.name || !body.email || !body.employeeId) return fail("Thiếu thông tin bắt buộc");
     const username = String(body.username ?? "").trim() || null;
+    const email = String(body.email ?? "").trim().toLowerCase();
+    const workEmail = String(body.workEmail ?? "").trim().toLowerCase() || null;
+    if (!body.name || !email || !body.employeeId || !username) return fail("Thiếu thông tin bắt buộc");
     const exists = await prisma.user.findFirst({
-      where: { OR: [{ email: body.email }, { employeeId: body.employeeId }, ...(username ? [{ username }] : [])] },
+      where: {
+        OR: [
+          { email },
+          { employeeId: body.employeeId },
+          ...(username ? [{ username }] : []),
+        ],
+      },
     });
     if (exists) return fail("Email, user hoặc mã nhân viên đã tồn tại");
+    const password = String(body.password || DEFAULT_PASSWORD);
     const created = await prisma.user.create({
       data: {
         name: body.name,
-        email: body.email,
+        email,
+        workEmail,
         username,
         employeeId: body.employeeId,
         phone: body.phone || null,
@@ -44,7 +55,9 @@ export async function POST(req: NextRequest) {
         signatureUrl: body.signatureUrl || null,
         avatarKey: body.avatarKey || null,
         signatureKey: body.signatureKey || null,
-        passwordHash: await bcrypt.hash(body.password || "password123", 10),
+        passwordHash: await bcrypt.hash(password, 10),
+        mustChangePassword: password === DEFAULT_PASSWORD,
+        passwordChangedAt: new Date(),
       },
     });
     await audit(user.id, "CREATE_USER", "User", created.id, created.name);
@@ -58,6 +71,18 @@ export async function PUT(req: NextRequest) {
     requireRole(user, ["ADMIN"]);
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
+    if (body.resetPassword) {
+      const updated = await prisma.user.update({
+        where: { id: body.id },
+        data: {
+          passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 10),
+          mustChangePassword: true,
+          passwordChangedAt: new Date(),
+        },
+      });
+      await audit(user.id, "RESET_PASSWORD", "User", updated.id, updated.name);
+      return ok(await safe(updated));
+    }
     const data: any = {};
     if (body.role) data.role = body.role;
     if (body.isActive != null) data.isActive = body.isActive;
@@ -69,7 +94,8 @@ export async function PUT(req: NextRequest) {
     if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
     if (body.avatarKey !== undefined) data.avatarKey = body.avatarKey || null;
     if (body.signatureKey !== undefined) data.signatureKey = body.signatureKey || null;
-    if (body.email) data.email = body.email;
+    if (body.email) data.email = String(body.email).trim().toLowerCase();
+    if (body.workEmail !== undefined) data.workEmail = String(body.workEmail || "").trim().toLowerCase() || null;
     if (body.username !== undefined) data.username = String(body.username || "").trim() || null;
     if (body.employeeId) data.employeeId = body.employeeId;
 

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NAV_SECTIONS, normalizeText } from "@/lib/nav";
 import { apiMutate } from "@/lib/fetcher";
+import { passwordPolicyMessage } from "@/lib/password-policy";
 import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
 import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
@@ -53,6 +54,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const gridRef = React.useRef<HTMLDivElement>(null);
   const [profileOpen, setProfileOpen] = React.useState(false);
   const [passwordOpen, setPasswordOpen] = React.useState(false);
+  const forcePasswordChange = Boolean(session?.user?.mustChangePassword);
   const profileRef = React.useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   // Cảnh báo thay thế vật tư đã được "xem" (lưu client theo khóa id:nextDueAt).
@@ -75,6 +77,10 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const totalAlerts = notices.length + activeReplAlerts.length;
   const { data: dash } = useMyDashboard();
   const avatarUrl = dash?.data?.avatarUrl ?? null;
+
+  React.useEffect(() => {
+    if (forcePasswordChange) setPasswordOpen(true);
+  }, [forcePasswordChange]);
 
   // Quick-launch shortcuts (app grid) — top-level nav respecting admin-only.
   const quickLinks = React.useMemo(
@@ -525,12 +531,12 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           )}
         </div>
       </div>
-      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
+      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} forced={forcePasswordChange} />
     </header>
   );
 }
 
-function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function ChangePasswordDialog({ open, onOpenChange, forced }: { open: boolean; onOpenChange: (open: boolean) => void; forced?: boolean }) {
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -551,8 +557,9 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      toast.error("Mật khẩu mới cần tối thiểu 8 ký tự");
+    const policyError = passwordPolicyMessage(newPassword);
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -568,8 +575,12 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         confirmPassword,
       });
       toast.success("Đã đổi mật khẩu", {
-        description: "Bạn hãy dùng mật khẩu mới trong lần đăng nhập tiếp theo.",
+        description: forced ? "Vui lòng đăng nhập lại bằng mật khẩu mới." : "Bạn hãy dùng mật khẩu mới trong lần đăng nhập tiếp theo.",
       });
+      if (forced) {
+        signOut({ callbackUrl: "/login" });
+        return;
+      }
       onOpenChange(false);
     } catch (error) {
       toast.error("Không thể đổi mật khẩu", {
@@ -581,14 +592,17 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (forced && !nextOpen) return;
+      onOpenChange(nextOpen);
+    }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
               <KeyRound className="h-4 w-4" />
             </span>
-            Đổi mật khẩu
+            {forced ? "Đổi mật khẩu bắt buộc" : "Đổi mật khẩu"}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
@@ -596,7 +610,7 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             <Label htmlFor="currentPassword">Mật khẩu hiện tại</Label>
             <Input
               id="currentPassword"
-              type="text"
+              type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
@@ -654,12 +668,14 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             </div>
           </div>
           <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-            Mật khẩu mới cần tối thiểu 8 ký tự và không được trùng với mật khẩu hiện tại.
+            Mật khẩu mới cần tối thiểu 8 ký tự, có chữ hoa, chữ thường, số, ký tự đặc biệt và không được trùng với mật khẩu hiện tại.
           </p>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-              Hủy
-            </Button>
+            {!forced && (
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+                Hủy
+              </Button>
+            )}
             <Button type="submit" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
               Cập nhật
