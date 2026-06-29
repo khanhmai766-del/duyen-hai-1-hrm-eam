@@ -1,5 +1,5 @@
 import path from "path";
-import yauzl from "yauzl";
+import yauzl, { type Entry } from "yauzl";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
 import { fileExtension, safeEmployeeCode, uploadS3Object } from "@/lib/s3-storage";
@@ -70,6 +70,10 @@ function shouldIgnoreZipEntry(fileName: string) {
   return normalized.startsWith("__MACOSX/") || base === ".DS_Store" || base.startsWith("._");
 }
 
+function zipEntryFileName(entry: Entry) {
+  return (entry.fileNameRaw?.length ? entry.fileNameRaw.toString("utf8") : entry.fileName).normalize("NFC");
+}
+
 function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
   return new Promise((resolve, reject) => {
     const entries: ZipEntryBuffer[] = [];
@@ -77,17 +81,18 @@ function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
       if (err || !zipfile) return reject(err ?? new Error("Không đọc được file zip"));
       zipfile.readEntry();
       zipfile.on("entry", (entry) => {
-        if (/\/$/.test(entry.fileName)) {
+        const fileName = zipEntryFileName(entry);
+        if (/\/$/.test(fileName)) {
           zipfile.readEntry();
           return;
         }
-        if (shouldIgnoreZipEntry(entry.fileName)) {
+        if (shouldIgnoreZipEntry(fileName)) {
           zipfile.readEntry();
           return;
         }
         try {
-          validateZipPath(entry.fileName);
-          if (entry.uncompressedSize > maxSingleBytes()) throw new Error(`File ${entry.fileName} vượt quá dung lượng cho phép`);
+          validateZipPath(fileName);
+          if (entry.uncompressedSize > maxSingleBytes()) throw new Error(`File ${fileName} vượt quá dung lượng cho phép`);
         } catch (e) {
           zipfile.close();
           reject(e);
@@ -103,14 +108,14 @@ function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
           stream.on("data", (chunk) => {
             total += chunk.length;
             if (total > maxSingleBytes()) {
-              stream.destroy(new Error(`File ${entry.fileName} vượt quá dung lượng cho phép`));
+              stream.destroy(new Error(`File ${fileName} vượt quá dung lượng cho phép`));
               return;
             }
             chunks.push(Buffer.from(chunk));
           });
           stream.on("error", reject);
           stream.on("end", () => {
-            entries.push({ fileName: path.posix.basename(normalizedZipPath(entry.fileName)), buffer: Buffer.concat(chunks) });
+            entries.push({ fileName: path.posix.basename(normalizedZipPath(fileName)), buffer: Buffer.concat(chunks) });
             zipfile.readEntry();
           });
         });

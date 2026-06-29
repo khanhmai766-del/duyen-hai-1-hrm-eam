@@ -53,7 +53,7 @@ export function dateFolder(date = new Date()) {
 }
 
 export function safeEmployeeCode(value: string) {
-  const code = value.trim();
+  const code = value.trim().normalize("NFC");
   if (!/^[\p{L}\p{M}\p{N}._-]+$/u.test(code)) {
     throw new Error("Mã nhân viên chỉ được chứa chữ, số, dấu chấm, gạch ngang hoặc gạch dưới");
   }
