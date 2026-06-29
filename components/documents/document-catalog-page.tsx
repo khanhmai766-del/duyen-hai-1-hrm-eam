@@ -879,9 +879,11 @@ export function DocumentCatalogPage({
                   {!historyTableLayout && (
                     <TableCell className={cn(wideNameNarrowLinkLayout && "align-top")}>
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-accent">
-                          <FileText className="h-4 w-4" />
-                        </div>
+                        {!hasProcedureValidity && (
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-accent">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                        )}
                         <span className={cn("font-semibold text-ink", wideNameNarrowLinkLayout && "line-clamp-3 whitespace-normal leading-5", validity?.expired && "text-red-700")}>
                           {item.title}
                         </span>
