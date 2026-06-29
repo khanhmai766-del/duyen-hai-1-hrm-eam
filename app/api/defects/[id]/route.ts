@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import {
   ensureDefectImpactColumns,
   normalizeImpactValue,
@@ -16,6 +17,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
     await ensureDefectImpactColumns(prisma);
+    const existing = await prisma.defect.findUnique({ where: { id: params.id } });
+    if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+    if (existing.device) await assertSeqEditable(user, existing.device);
+    if (body.device) await assertSeqEditable(user, String(body.device));
     const defect = await prisma.defect.update({
       where: { id: params.id },
       data: {
@@ -49,6 +54,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    const existing = await prisma.defect.findUnique({ where: { id: params.id } });
+    if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+    const access = await resolveEquipmentAccessForUser(user);
+    if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: existing.device, system: existing.system })) {
+      return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
+    }
     await prisma.defect.delete({ where: { id: params.id } });
     await audit(user.id, "DELETE_DEFECT", "Defect", params.id);
     return ok({ id: params.id });

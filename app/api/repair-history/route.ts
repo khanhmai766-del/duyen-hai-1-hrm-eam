@@ -1,13 +1,13 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const sp = req.nextUrl.searchParams;
     const deviceId = sp.get("deviceId");
     const status = sp.get("status");
@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
     const to = sp.get("to");
 
     const where: Prisma.RepairLogWhereInput = {};
-    if (deviceId) where.deviceSeq = deviceId;
+    const access = await resolveEquipmentAccessForUser(user);
+    if (access.hasExplicitScopes) where.deviceSeq = { in: Array.from(access.visibleSeqs) };
+    if (deviceId) where.deviceSeq = access.canViewSeq(deviceId) ? deviceId : "__NO_ACCESS__";
     if (status && status !== "ALL") where.status = status as any;
     if (priority && priority !== "ALL") where.priority = priority as any;
     if (technicianId && technicianId !== "ALL") where.createdById = technicianId;

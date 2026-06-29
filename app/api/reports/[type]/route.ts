@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
 import { buildEquipmentTreeIndex, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
+import { normalizeText } from "@/lib/nav";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 
 async function getLeafEquipmentCount() {
   const nodes = await getNormalizedEquipmentNodes(prisma);
@@ -12,7 +14,8 @@ async function getLeafEquipmentCount() {
 
 export async function GET(req: NextRequest, { params }: { params: { type: string } }) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const access = await resolveEquipmentAccessForUser(user);
     const sp = req.nextUrl.searchParams;
     const from = sp.get("from") ? new Date(sp.get("from")!) : undefined;
     const to = sp.get("to") ? new Date(sp.get("to")! + "T23:59:59") : undefined;
@@ -21,9 +24,19 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
     switch (params.type) {
       case "summary": {
         const [deviceCount, repairs, materials, todayShift] = await Promise.all([
-          getLeafEquipmentCount(),
-          prisma.repairLog.groupBy({ by: ["status"], _count: true }),
-          prisma.material.findMany(),
+          access.hasExplicitScopes
+            ? Promise.resolve(
+                access.nodes.filter((node) => (access.index.childrenOf.get(node.seq) ?? []).length === 0).length
+              )
+            : getLeafEquipmentCount(),
+          prisma.repairLog.groupBy({
+            by: ["status"],
+            where: access.hasExplicitScopes ? { deviceSeq: { in: Array.from(access.visibleSeqs) } } : undefined,
+            _count: true,
+          }),
+          prisma.material.findMany({
+            include: { deviceMaterials: { select: { deviceSeq: true } } },
+          }),
           (async () => {
             const start = new Date();
             start.setHours(0, 0, 0, 0);
@@ -38,9 +51,16 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
             });
           })(),
         ]);
-        const lowStock = materials.filter((m) => m.quantity <= m.minStock).length;
+        const visibleMaterials = access.hasExplicitScopes
+          ? materials.filter((m) => {
+              if (m.system && access.visibleSystemNames.has(normalizeText(m.system))) return true;
+              return m.deviceMaterials.some((dm) => access.canViewSeq(dm.deviceSeq));
+            })
+          : materials;
+        const lowStock = visibleMaterials.filter((m) => m.quantity <= m.minStock).length;
         const onShift = todayShift?.checkIns.filter((c) => c.status !== "ABSENT").length ?? 0;
         const recentRepairs = await prisma.repairLog.findMany({
+          where: access.hasExplicitScopes ? { deviceSeq: { in: Array.from(access.visibleSeqs) } } : undefined,
           orderBy: { startedAt: "desc" },
           take: 5,
           include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
@@ -61,7 +81,10 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
       case "repair-frequency": {
         const grouped = await prisma.repairLog.groupBy({
           by: ["deviceSeq"],
-          where: dateFilter ? { startedAt: dateFilter } : undefined,
+          where: {
+            ...(dateFilter ? { startedAt: dateFilter } : {}),
+            ...(access.hasExplicitScopes ? { deviceSeq: { in: Array.from(access.visibleSeqs) } } : {}),
+          },
           _count: true,
         });
         const devices = await prisma.equipmentNode.findMany({
@@ -77,6 +100,7 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
 
       case "mtbf": {
         const devices = await prisma.equipmentNode.findMany({
+          where: access.hasExplicitScopes ? { seq: { in: Array.from(access.visibleSeqs) } } : undefined,
           include: { repairLogs: { orderBy: { startedAt: "asc" }, select: { startedAt: true, downtime: true } } },
         });
         const data = devices
@@ -123,7 +147,10 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
 
       case "downtime-by-category": {
         const logs = await prisma.repairLog.findMany({
-          where: dateFilter ? { startedAt: dateFilter } : undefined,
+          where: {
+            ...(dateFilter ? { startedAt: dateFilter } : {}),
+            ...(access.hasExplicitScopes ? { deviceSeq: { in: Array.from(access.visibleSeqs) } } : {}),
+          },
           include: { device: { select: { parentSeq: true } } },
         });
         const map = new Map<string, number>();
@@ -135,7 +162,10 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
       }
 
       case "material-consumption": {
-        const used = await prisma.equipmentMaterial.findMany({ include: { material: true } });
+        const used = await prisma.equipmentMaterial.findMany({
+          where: access.hasExplicitScopes ? { deviceSeq: { in: Array.from(access.visibleSeqs) } } : undefined,
+          include: { material: true },
+        });
         const map = new Map<string, { name: string; quantity: number; value: number }>();
         for (const u of used) {
           const e = map.get(u.materialId) ?? { name: u.material.name, quantity: 0, value: 0 };

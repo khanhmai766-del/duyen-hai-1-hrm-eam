@@ -2,9 +2,10 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
-import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { addMonths, replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
+import { normalizeText } from "@/lib/nav";
 
 const INCLUDE = {
   material: {
@@ -45,7 +46,8 @@ function mapPoint(point: any) {
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const access = await resolveEquipmentAccessForUser(user);
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const materialId = sp.get("materialId");
@@ -69,14 +71,21 @@ export async function GET(req: NextRequest) {
       orderBy: { nextDueAt: "asc" },
       include: INCLUDE,
     });
+    const visiblePoints = access.hasExplicitScopes
+      ? points.filter((point) => {
+          if (point.deviceSeq) return access.canViewSeq(point.deviceSeq);
+          if (point.system) return access.visibleSystemNames.has(normalizeText(point.system));
+          return false;
+        })
+      : points;
 
     const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
-    for (const p of points) counts[replacementDueStatus(p.nextDueAt)]++;
+    for (const p of visiblePoints) counts[replacementDueStatus(p.nextDueAt)]++;
 
-    let filtered = points;
+    let filtered = visiblePoints;
     if (due && due !== "ALL") {
-      if (due === "WARN") filtered = points.filter((p) => replacementDueStatus(p.nextDueAt) !== "OK");
-      else filtered = points.filter((p) => replacementDueStatus(p.nextDueAt) === due);
+      if (due === "WARN") filtered = visiblePoints.filter((p) => replacementDueStatus(p.nextDueAt) !== "OK");
+      else filtered = visiblePoints.filter((p) => replacementDueStatus(p.nextDueAt) === due);
     }
 
     return ok(filtered.map(mapPoint), { total: filtered.length, counts, warn: counts.OVERDUE + counts.DUE_SOON });

@@ -122,6 +122,7 @@ export async function GET(req: NextRequest) {
     const systems = Array.from(
       new Set(
         records
+          .filter((device) => visibleSeqs.has(device.code))
           .map((device) => device.system)
           .filter((name): name is string => !!name)
       )

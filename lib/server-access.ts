@@ -1,13 +1,12 @@
-import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
   getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
+import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import {
-  deviceAccessForPosition,
   nodeAccessForPosition,
   normalizeScopeAccess,
   type PositionSystemScope,
@@ -22,7 +21,20 @@ type DeviceLike = {
   managingPosition?: string | null;
 };
 
-/** Đọc bảng phân quyền hệ thống (quản lý bằng raw SQL). Lỗi/chưa có bảng → rỗng. */
+export type EquipmentAccessContext = {
+  nodes: NormalizedEquipmentNode[];
+  index: ReturnType<typeof buildEquipmentTreeIndex>;
+  hasExplicitScopes: boolean;
+  visibleSeqs: Set<string>;
+  editableSeqs: Set<string>;
+  visibleSystemNames: Set<string>;
+  editableSystemNames: Set<string>;
+  canViewSeq: (seq?: string | null) => boolean;
+  canEditSeq: (seq?: string | null) => boolean;
+  canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => boolean;
+  canEditDeviceLike: (device: { device?: string | null; system?: string | null }) => boolean;
+};
+
 export async function loadPositionSystemScopeRows(): Promise<PositionSystemScope[]> {
   try {
     const rows = await prisma.$queryRaw<
@@ -40,66 +52,121 @@ export async function loadPositionSystemScopeRows(): Promise<PositionSystemScope
   }
 }
 
-/** Cương vị có cấu hình riêng không (nếu chưa thì không giới hạn — giữ hành vi cũ). */
 function hasExplicitScopes(scopes: PositionSystemScope[], position: string) {
   const normalized = normalizeText(position);
   return scopes.some((scope) => normalizeText(scope.position) === normalized);
 }
 
-export async function filterEquipmentNodesForUser(user: SessionUser, nodes: NormalizedEquipmentNode[]) {
-  if (user.role === "ADMIN") return nodes;
-  const position = user.position ?? "";
-  if (!position) return nodes;
-  const scopes = await loadPositionSystemScopeRows();
-  if (!hasExplicitScopes(scopes, position)) return nodes;
+export async function resolveEquipmentAccessForUser(
+  user: SessionUser,
+  inputNodes?: NormalizedEquipmentNode[]
+): Promise<EquipmentAccessContext> {
+  const allNodes = inputNodes ?? await getNormalizedEquipmentNodes(prisma);
+  const allIndex = buildEquipmentTreeIndex(allNodes);
+  const allSeqs = new Set(allNodes.map((node) => node.seq));
+  const allNames = new Set(allNodes.map((node) => normalizeText(node.name)).filter(Boolean));
 
-  const index = buildEquipmentTreeIndex(nodes);
-  const visible = new Set<string>();
-  for (const node of nodes) {
-    if (nodeAccessForPosition(node.seq, position, nodes, scopes) === "none") continue;
+  const unrestricted = {
+    nodes: allNodes,
+    index: allIndex,
+    hasExplicitScopes: false,
+    visibleSeqs: allSeqs,
+    editableSeqs: allSeqs,
+    visibleSystemNames: allNames,
+    editableSystemNames: allNames,
+    canViewSeq: () => true,
+    canEditSeq: () => true,
+    canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => {
+      return true;
+    },
+    canEditDeviceLike: (device: { device?: string | null; system?: string | null }) => {
+      return true;
+    },
+  } satisfies EquipmentAccessContext;
+
+  if (user.role === "ADMIN") return unrestricted;
+  const position = user.position ?? "";
+  if (!position) return unrestricted;
+
+  const scopes = await loadPositionSystemScopeRows();
+  if (!hasExplicitScopes(scopes, position)) return unrestricted;
+
+  const visibleSeqs = new Set<string>();
+  const editableSeqs = new Set<string>();
+  for (const node of allNodes) {
+    const access = nodeAccessForPosition(node.seq, position, allNodes, scopes);
+    if (access === "none") continue;
+    if (access === "edit") editableSeqs.add(node.seq);
+
     let current: string | null | undefined = node.seq;
-    while (current && !visible.has(current)) {
-      visible.add(current);
-      current = index.parentOf.get(current) ?? null;
+    while (current && !visibleSeqs.has(current)) {
+      visibleSeqs.add(current);
+      current = allIndex.parentOf.get(current) ?? null;
     }
   }
-  return nodes.filter((node) => visible.has(node.seq));
+
+  const visibleNodes = allNodes.filter((node) => visibleSeqs.has(node.seq));
+  const visibleSystemNames = new Set(visibleNodes.map((node) => normalizeText(node.name)).filter(Boolean));
+  const editableSystemNames = new Set(
+    allNodes
+      .filter((node) => editableSeqs.has(node.seq))
+      .map((node) => normalizeText(node.name))
+      .filter(Boolean)
+  );
+
+  return {
+    nodes: visibleNodes,
+    index: buildEquipmentTreeIndex(visibleNodes),
+    hasExplicitScopes: true,
+    visibleSeqs,
+    editableSeqs,
+    visibleSystemNames,
+    editableSystemNames,
+    canViewSeq: (seq?: string | null) => !!seq && visibleSeqs.has(seq),
+    canEditSeq: (seq?: string | null) => !!seq && editableSeqs.has(seq),
+    canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => {
+      if (device.device) return visibleSeqs.has(device.device);
+      if (device.system) return visibleSystemNames.has(normalizeText(device.system));
+      return false;
+    },
+    canEditDeviceLike: (device: { device?: string | null; system?: string | null }) => {
+      if (device.device) return editableSeqs.has(device.device);
+      if (device.system) return editableSystemNames.has(normalizeText(device.system));
+      return false;
+    },
+  };
 }
 
-/** Chặn nếu cương vị người dùng không có quyền CHỈNH SỬA trên hệ thống của node seq. */
+export async function filterEquipmentNodesForUser(user: SessionUser, nodes: NormalizedEquipmentNode[]) {
+  const access = await resolveEquipmentAccessForUser(user, nodes);
+  return access.nodes;
+}
+
 export async function assertSeqViewable(user: SessionUser, seq: string) {
-  if (user.role === "ADMIN") return;
-  const position = user.position ?? "";
-  if (!position) return;
-  const scopes = await loadPositionSystemScopeRows();
-  if (!hasExplicitScopes(scopes, position)) return;
-  const nodes = await getNormalizedEquipmentNodes(prisma);
-  if (nodeAccessForPosition(seq, position, nodes, scopes) === "none") {
+  const access = await resolveEquipmentAccessForUser(user);
+  if (!access.canViewSeq(seq)) {
     throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
   }
 }
 
 export async function assertSeqEditable(user: SessionUser, seq: string) {
-  if (user.role === "ADMIN") return;
-  const position = user.position ?? "";
-  if (!position) return;
-  const scopes = await loadPositionSystemScopeRows();
-  if (!hasExplicitScopes(scopes, position)) return;
-  const nodes = await getNormalizedEquipmentNodes(prisma);
-  if (nodeAccessForPosition(seq, position, nodes, scopes) !== "edit") {
+  const access = await resolveEquipmentAccessForUser(user);
+  if (!access.canEditSeq(seq)) {
     throw fail("Cương vị của bạn không có quyền chỉnh sửa hệ thống thiết bị này", 403);
   }
 }
 
-/** Chặn nếu cương vị người dùng không có quyền CHỈNH SỬA trên hệ thống của thiết bị. */
 export async function assertDeviceEditable(user: SessionUser, device: DeviceLike) {
-  if (user.role === "ADMIN") return;
-  const position = user.position ?? "";
-  if (!position) return;
-  const scopes = await loadPositionSystemScopeRows();
-  if (!hasExplicitScopes(scopes, position)) return;
-  const nodes = await getNormalizedEquipmentNodes(prisma);
-  if (deviceAccessForPosition(device, position, nodes, scopes) !== "edit") {
+  const access = await resolveEquipmentAccessForUser(user);
+  const canEdit = device.code
+    ? access.canEditSeq(device.code)
+    : device.systemSeq
+      ? access.canEditSeq(device.systemSeq)
+      : device.system
+        ? access.editableSystemNames.has(normalizeText(device.system))
+        : true;
+
+  if (!canEdit) {
     throw fail("Cương vị của bạn không có quyền thao tác trên hệ thống thiết bị này", 403);
   }
 }

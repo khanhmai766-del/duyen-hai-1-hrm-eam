@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const log = await prisma.repairLog.findUnique({
       where: { id: params.id },
       include: {
@@ -15,6 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       },
     });
     if (!log) return fail("Không tìm thấy phiếu sửa chữa", 404);
+    await assertSeqViewable(user, log.deviceSeq);
     return ok(withDeviceAlias(log));
   });
 }
@@ -25,6 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const existing = await prisma.repairLog.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu sửa chữa", 404);
 
+    await assertSeqEditable(user, existing.deviceSeq);
     const body = await req.json();
 
     // Approval is restricted to ADMIN/SUPERVISOR.
@@ -69,6 +72,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const user = await requireUser();
     const existing = await prisma.repairLog.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu sửa chữa", 404);
+    await assertSeqEditable(user, existing.deviceSeq);
     // Only ADMIN or the creator may delete.
     if (user.role !== "ADMIN" && existing.createdById !== user.id) {
       return fail("Chỉ Quản trị hoặc người tạo mới được xoá", 403);

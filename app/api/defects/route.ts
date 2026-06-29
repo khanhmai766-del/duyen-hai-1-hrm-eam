@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import {
   ensureDefectImpactColumns,
   normalizeImpactValue,
@@ -15,7 +15,8 @@ const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, a
 
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const access = await resolveEquipmentAccessForUser(user);
     await ensureDefectImpactColumns(prisma);
     // Ẩn các phiếu đã xử lý quá 2 tuần khỏi danh sách (lịch sử vẫn giữ riêng).
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -25,8 +26,10 @@ export async function GET() {
       include: INCLUDE,
     });
     const impactById = await readDefectImpactFields(prisma, defects.map((defect) => defect.id));
-    const data = defects.map((defect) => ({ ...defect, ...impactById.get(defect.id) }));
-    return ok(data, { total: defects.length });
+    const data = defects
+      .filter((defect) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: defect.device, system: defect.system }))
+      .map((defect) => ({ ...defect, ...impactById.get(defect.id) }));
+    return ok(data, { total: data.length });
   });
 }
 
