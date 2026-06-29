@@ -67,12 +67,7 @@ function normalizedZipPath(fileName: string) {
 function shouldIgnoreZipEntry(fileName: string) {
   const normalized = normalizedZipPath(fileName);
   const base = path.posix.basename(normalized);
-  return (
-    normalized === "__MACOSX" ||
-    normalized.startsWith("__MACOSX/") ||
-    base === ".DS_Store" ||
-    base.startsWith("._")
-  );
+  return normalized.startsWith("__MACOSX/") || base === ".DS_Store" || base.startsWith("._");
 }
 
 function zipFromBuffer(buffer: Buffer): Promise<ZipEntryBuffer[]> {
