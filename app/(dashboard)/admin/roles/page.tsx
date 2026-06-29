@@ -255,7 +255,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
     id: "document-procedure",
     group: "Tài liệu số",
-    feature: "Quy trình vận hành",
+    feature: "Danh mục quy trình",
     note: "Quản trị viên được thêm, sửa, xoá quy trình; các vai trò khác được tra cứu tài liệu.",
     matrix: { ADMIN: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },

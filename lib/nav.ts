@@ -68,7 +68,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "QUẢN LÝ TÀI LIỆU SỐ",
     items: [
-      { label: "Quy trình vận hành", href: "/documents/procedures", icon: FileText, keywords: "danh muc quy trinh van hanh procedure sop tai lieu so" },
+      { label: "Danh mục quy trình", href: "/documents/procedures", icon: FileText, keywords: "danh muc quy trinh van hanh procedure sop tai lieu so" },
       { label: "Sơ đồ P&ID", href: "/documents/pid", icon: Workflow, keywords: "danh muc so do pid p&id ban ve tai lieu ky thuat" },
       { label: "Forum kỹ thuật", href: "/forum", icon: MessagesSquare, keywords: "forum dien dan trao doi ky thuat tai lieu quy trinh so do ban ve" },
       { label: "Thư mục lưu trữ", href: "/documents/archive", icon: Archive, keywords: "thu muc luu tru archive folder tai lieu so kho du lieu" },

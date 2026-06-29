@@ -21,6 +21,7 @@ export interface DigitalDocument {
   documentUrl: string;
   managingPosition: string | null;
   managementBlock: string | null;
+  procedureType: string | null;
   reason: string | null;
   progress: string | null;
   note: string | null;
@@ -40,6 +41,7 @@ export interface DigitalDocumentInput {
   documentUrl: string;
   managingPosition?: string | null;
   managementBlock?: string | null;
+  procedureType?: string | null;
   reason?: string | null;
   progress?: string | null;
   note?: string | null;

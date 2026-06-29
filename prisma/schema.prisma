@@ -411,6 +411,7 @@ model DigitalDocument {
   documentUrl      String
   managingPosition String?
   managementBlock  String?
+  procedureType    String?
   reason           String?
   progress         String?
   note             String?

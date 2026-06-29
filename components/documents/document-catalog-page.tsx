@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import * as XLSX from "xlsx";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, Loader2, Minus, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, Loader2, Minus, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -11,6 +11,7 @@ import { AnnualBackupExport, type BackupColumn } from "@/components/shared/annua
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +35,7 @@ import {
   useDocuments,
   useUpsertDocument,
 } from "@/hooks/useDocuments";
-import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import { EQUIPMENT_BLOCKS, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
@@ -47,6 +49,9 @@ type DocumentForm = {
   progress: string;
   note: string;
   managingPosition: string;
+  managingPositions: string[];
+  managementBlock: string;
+  procedureType: string;
   recordDate: string;
   archiveYear: string;
   attachmentUrls: string[];
@@ -61,41 +66,106 @@ const EMPTY_FORM: DocumentForm = {
   progress: "",
   note: "",
   managingPosition: "",
+  managingPositions: [],
+  managementBlock: "Chung",
+  procedureType: "QTVH-XLSC",
   recordDate: "",
   archiveYear: "",
   attachmentUrls: [],
 };
 
-const COMMON_POSITION = "Chung";
+const LEGACY_COMMON_POSITION = "Chung";
+const LEGACY_COMMON_BLOCK = "QT Chung";
+const COMMON_BLOCK = "Chung";
+const MANAGEMENT_BLOCK_OPTIONS = [COMMON_BLOCK, ...EQUIPMENT_BLOCKS] as const;
 const ALL_FILTER = "__ALL__";
 const PAGE_SIZE_OPTIONS = ["10", "20", "50"];
+const PROCEDURE_TYPES = ["QTVH-XLSC", "QT thử nghiệm - nghiệm thu", "QTNV", "QTAT-MT", "QT sữa chữa, bảo dưỡng", "QT khác", "Thông tư - nghị định"] as const;
+const EXPIRING_PROCEDURE_TYPES = new Set(["QTVH-XLSC", "QT thử nghiệm - nghiệm thu", "QTNV", "QT sữa chữa, bảo dưỡng"]);
 
 type ProcedureImportRow = {
   title: string;
   managingPosition: string;
+  managementBlock: string;
+  procedureType: string;
   decisionNumber: string;
   issueDate: string;
   documentUrl: string;
 };
 
 function blockForDocumentPosition(position?: string | null): string {
-  return position?.trim() === COMMON_POSITION ? COMMON_POSITION : blockForPosition(position);
+  const value = position?.trim();
+  return !value || value === LEGACY_COMMON_POSITION || value === COMMON_BLOCK ? COMMON_BLOCK : blockForPosition(value);
 }
 
 function documentPositionLabel(position?: string | null): string {
   const value = position?.trim();
   if (!value) return "";
-  return value === COMMON_POSITION ? COMMON_POSITION : announcementPositionLabel(value);
+  if (value === LEGACY_COMMON_POSITION || value === COMMON_BLOCK) return "Tất cả cương vị";
+  return announcementPositionLabel(value);
+}
+
+function documentPositions(value?: string | null): string[] {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw === LEGACY_COMMON_POSITION || raw === COMMON_BLOCK) return [];
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item ?? "").trim()).filter((item) => item && item !== LEGACY_COMMON_POSITION && item !== COMMON_BLOCK);
+      }
+    } catch {
+      return [raw];
+    }
+  }
+  return raw
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function documentPositionSummary(value?: string | null) {
+  const positions = documentPositions(value);
+  if (!positions.length) return "Tất cả cương vị";
+  if (positions.length <= 2) return positions.map((position) => documentPositionLabel(position)).join(", ");
+  return `${positions.length} cương vị`;
 }
 
 function documentPositionMatches(position: string | null | undefined, filter: string) {
-  return normalizeText(documentPositionLabel(position)) === normalizeText(filter);
+  const positions = documentPositions(position);
+  if (!positions.length) return true;
+  return positions.some((item) => normalizeText(documentPositionLabel(item)) === normalizeText(filter));
+}
+
+function documentManagementBlocks(item: { managingPosition?: string | null; managementBlock?: string | null }): string[] {
+  const stored = String(item.managementBlock ?? "").trim();
+  if (stored) {
+    const blocks = stored
+      .split(",")
+      .map((block) => [LEGACY_COMMON_POSITION, LEGACY_COMMON_BLOCK].includes(block.trim()) ? COMMON_BLOCK : block.trim())
+      .filter(Boolean);
+    return blocks.length > 1 ? [COMMON_BLOCK] : blocks;
+  }
+  const positions = documentPositions(item.managingPosition);
+  if (!positions.length) return [COMMON_BLOCK];
+  const blocks = Array.from(new Set(positions.map((position) => blockForDocumentPosition(position)).filter(Boolean)));
+  return blocks.length > 1 ? [COMMON_BLOCK] : blocks;
 }
 
 function documentManagementBlock(item: { managingPosition?: string | null; managementBlock?: string | null }): string {
-  return item.managingPosition?.trim() === COMMON_POSITION
-    ? COMMON_POSITION
-    : item.managementBlock || blockForDocumentPosition(item.managingPosition);
+  return documentManagementBlocks(item).join(", ") || COMMON_BLOCK;
+}
+
+function normalizeProcedureType(value?: string | null) {
+  const raw = String(value ?? "").trim();
+  return PROCEDURE_TYPES.includes(raw as (typeof PROCEDURE_TYPES)[number]) ? raw : "QT khác";
+}
+
+function normalizeManagementBlock(value?: string | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw === LEGACY_COMMON_POSITION || raw === LEGACY_COMMON_BLOCK) return COMMON_BLOCK;
+  const matched = MANAGEMENT_BLOCK_OPTIONS.find((block) => normalizeText(block) === normalizeText(raw));
+  return matched ?? COMMON_BLOCK;
 }
 
 interface DocumentCatalogPageProps {
@@ -217,7 +287,7 @@ export function DocumentCatalogPage({
   const [pageIndex, setPageIndex] = React.useState(1);
   const [procedureImporting, setProcedureImporting] = React.useState(false);
   const procedureImportInputRef = React.useRef<HTMLInputElement>(null);
-  const managementBlock = showEquipmentScope ? blockForDocumentPosition(form.managingPosition) : "";
+  const managementBlock = showEquipmentScope ? form.managementBlock || COMMON_BLOCK : "";
   const hasTagField = Boolean(tagLabel && tagOptions.length);
   const hasNameOptions = nameOptions.length > 0;
   const hasReasonField = Boolean(reasonLabel);
@@ -228,6 +298,7 @@ export function DocumentCatalogPage({
   const hasYearField = Boolean(yearLabel && yearOptions.length);
   const hasIssueDateField = category === "PROCEDURE" || category === "PID";
   const hasProcedureValidity = category === "PROCEDURE";
+  const showPositionColumn = showEquipmentScope && !hasProcedureValidity;
   const isCompactArchiveForm = hasNameOptions && hasYearField && hasTagField && hasDateField;
   const useHistoryFormLayout = historyTableLayout && !isCompactArchiveForm;
   const baseColumnCount = historyTableLayout ? 1 : 3;
@@ -236,7 +307,9 @@ export function DocumentCatalogPage({
   const tableColumnCount =
     baseColumnCount +
     (hasActions ? 1 : 0) +
-    (showEquipmentScope ? 2 : 0) +
+    (showPositionColumn ? 1 : 0) +
+    (showEquipmentScope ? 1 : 0) +
+    (hasProcedureValidity ? 1 : 0) +
     (showCodeField ? 1 : 0) +
     (hasIssueDateField ? 1 : 0) +
     (hasProcedureValidity ? 1 : 0) +
@@ -251,13 +324,10 @@ export function DocumentCatalogPage({
       announcementPositionOptions([
         ...(devices.data?.data ?? []).map((device) => device.managingPosition),
         ...userPositions,
-      ]).filter((value) => value !== COMMON_POSITION && isSelectableManagingPosition(value)),
+      ]).filter((value) => value !== LEGACY_COMMON_POSITION && isSelectableManagingPosition(value)),
     [devices.data?.data, userPositions]
   );
-  const blockOptions = React.useMemo(
-    () => Array.from(new Set(positionOptions.map((position) => blockForDocumentPosition(position)).filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi")),
-    [positionOptions]
-  );
+  const blockOptions = React.useMemo(() => [...MANAGEMENT_BLOCK_OPTIONS], []);
   const activeYearFilter = hasYearField ? yearFilter || yearOptions[0] || "" : "";
   const formYearOptions = React.useMemo(
     () => Array.from(new Set([...yearOptions, activeYearFilter].filter(Boolean))).sort((a, b) => Number(b) - Number(a)),
@@ -284,17 +354,19 @@ export function DocumentCatalogPage({
       if (hasYearField && activeYearFilter && item.managingPosition !== activeYearFilter) return false;
       if (hasTagField && tagFilter !== ALL_FILTER && item.decisionNumber !== tagFilter) return false;
       if (showEquipmentScope && positionFilter !== ALL_FILTER && !documentPositionMatches(item.managingPosition, positionFilter)) return false;
-      const itemBlock = documentManagementBlock(item);
-      if (showEquipmentScope && blockFilter !== ALL_FILTER && itemBlock !== blockFilter) return false;
+      const itemBlocks = documentManagementBlocks(item);
+      const itemBlock = itemBlocks.join(", ");
+      if (showEquipmentScope && blockFilter !== ALL_FILTER && !itemBlocks.includes(blockFilter)) return false;
       if (!needle) return true;
-      const validity = hasProcedureValidity ? procedureValidity(item.issueDate).label : "";
-      return [item.title, item.decisionNumber, item.issueDate, validity, item.documentUrl, item.reason, item.progress, item.note, documentPositionLabel(item.managingPosition), itemBlock]
+      const procedureType = hasProcedureValidity ? normalizeProcedureType(item.procedureType) : "";
+      const validity = hasProcedureValidity ? procedureValidity(item.issueDate, item.procedureType).label : "";
+      return [item.title, procedureType, item.decisionNumber, item.issueDate, validity, item.documentUrl, item.reason, item.progress, item.note, documentPositionSummary(item.managingPosition), itemBlock]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle));
     }).sort((a, b) => {
       if (!hasProcedureValidity) return 0;
-      const aValidity = procedureValidity(a.issueDate);
-      const bValidity = procedureValidity(b.issueDate);
+      const aValidity = procedureValidity(a.issueDate, a.procedureType);
+      const bValidity = procedureValidity(b.issueDate, b.procedureType);
       if (aValidity.expired !== bValidity.expired) return aValidity.expired ? -1 : 1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
@@ -329,6 +401,15 @@ export function DocumentCatalogPage({
       });
     }
     if (hasIssueDateField) {
+      if (hasProcedureValidity) {
+        columns.push({
+          key: "procedureType",
+          header: "Loại QT",
+          width: 24,
+          align: "center",
+          value: (item) => normalizeProcedureType(item.procedureType),
+        });
+      }
       columns.push({
         key: "issueDate",
         header: "Ngày ban hành",
@@ -343,7 +424,7 @@ export function DocumentCatalogPage({
         header: "Tình trạng",
         width: 16,
         align: "center",
-        value: (item) => procedureValidity(item.issueDate).label,
+        value: (item) => procedureValidity(item.issueDate, item.procedureType).label,
       });
     }
     if (hasReasonField) {
@@ -417,21 +498,26 @@ export function DocumentCatalogPage({
       title: defaultName || nameOptions[0]?.value || "",
       decisionNumber: hasTagField ? tagOptions[0]?.value ?? "" : "",
       issueDate: "",
+      managingPositions: hasProcedureValidity ? positionOptions : [],
+      managementBlock: COMMON_BLOCK,
+      procedureType: "QTVH-XLSC",
       archiveYear: hasYearField ? yearOptions[0] ?? "" : "",
     });
     setFormOpen(true);
   }
 
   function downloadProcedureImportTemplate() {
-    const columns = ["STT", "Tên quy trình", "Cương vị", "Số quyết định", "Ngày ban hành", "Link tài liệu"];
+    const columns = ["STT", "Tên quy trình", "Loại QT", "Cương vị", "Khối quản lý", "Số quyết định", "Ngày ban hành", "Link tài liệu"];
     const sheet = XLSX.utils.aoa_to_sheet([
       columns,
-      [1, "Quy trình vận hành mẫu", "Chung", "QD-001/2026", "2026-06-29", "https://..."],
+      [1, "Quy trình vận hành mẫu", "QTVH-XLSC", "Lò trưởng S1, Máy trưởng S1", "Chung", "QD-001/2026", "2026-06-29", "https://..."],
     ]);
     sheet["!cols"] = [
       { wch: 8 },
       { wch: 36 },
       { wch: 24 },
+      { wch: 34 },
+      { wch: 18 },
       { wch: 22 },
       { wch: 16 },
       { wch: 42 },
@@ -484,8 +570,9 @@ export function DocumentCatalogPage({
           decisionNumber: item.decisionNumber || null,
           issueDate: item.issueDate || null,
           documentUrl: item.documentUrl,
-          managingPosition: item.managingPosition || COMMON_POSITION,
-          managementBlock: blockForDocumentPosition(item.managingPosition || COMMON_POSITION),
+          managingPosition: JSON.stringify(importProcedurePositions(item.managingPosition, positionOptions)),
+          managementBlock: normalizeManagementBlock(item.managementBlock),
+          procedureType: normalizeProcedureType(item.procedureType),
           reason: null,
           progress: null,
           note: null,
@@ -512,7 +599,10 @@ export function DocumentCatalogPage({
       reason: item.reason ?? "",
       progress: item.progress ?? "",
       note: item.note ?? "",
-      managingPosition: showEquipmentScope ? documentPositionLabel(item.managingPosition) || COMMON_POSITION : item.managingPosition ?? "",
+      managingPosition: showEquipmentScope ? documentPositionLabel(item.managingPosition) || LEGACY_COMMON_POSITION : item.managingPosition ?? "",
+      managingPositions: showEquipmentScope && hasProcedureValidity ? documentPositions(item.managingPosition) : [],
+      managementBlock: showEquipmentScope ? normalizeManagementBlock(item.managementBlock || documentManagementBlock(item)) : COMMON_BLOCK,
+      procedureType: hasProcedureValidity ? normalizeProcedureType(item.procedureType) : "QTVH-XLSC",
       recordDate: showEquipmentScope ? "" : normalizeRecordDateForInput(item.managementBlock, dateInputType),
       archiveYear: showEquipmentScope ? "" : item.managingPosition ?? "",
       attachmentUrls: item.attachmentUrls ?? [],
@@ -532,8 +622,13 @@ export function DocumentCatalogPage({
         reason: hasReasonField ? form.reason || null : null,
         progress: hasProgressField ? form.progress || null : null,
         note: hasNoteField ? form.note || null : null,
-        managingPosition: showEquipmentScope ? form.managingPosition || COMMON_POSITION : hasYearField ? form.archiveYear || null : null,
-        managementBlock: showEquipmentScope ? managementBlock : hasDateField ? form.recordDate || null : null,
+        managingPosition: showEquipmentScope
+          ? hasProcedureValidity
+            ? JSON.stringify(form.managingPositions)
+            : form.managingPosition || LEGACY_COMMON_POSITION
+          : hasYearField ? form.archiveYear || null : null,
+        managementBlock: showEquipmentScope ? normalizeManagementBlock(form.managementBlock) : hasDateField ? form.recordDate || null : null,
+        procedureType: hasProcedureValidity ? normalizeProcedureType(form.procedureType) : null,
         attachmentUrls: hasAttachmentField ? form.attachmentUrls : [],
       });
       setFormOpen(false);
@@ -701,16 +796,17 @@ export function DocumentCatalogPage({
 
       <Card className="overflow-hidden">
         <div className={cn((historyTableLayout || wideNameNarrowLinkLayout) && "overflow-x-auto")}>
-        <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed", hasIssueDateField && "min-w-[1260px] table-fixed", hasProcedureValidity && "min-w-[1400px] table-fixed")}>
+        <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed", hasIssueDateField && "min-w-[1260px] table-fixed", hasProcedureValidity && "min-w-[1280px] table-fixed")}>
           <TableHeader className={cn(historyTableLayout && "bg-muted/40")}>
             <TableRow className={cn("bg-muted/40 hover:bg-muted/40 [&_th]:whitespace-nowrap [&_th]:text-center", historyTableLayout && "hover:bg-transparent")}>
               <TableHead className={cn("w-16 whitespace-nowrap text-center", historyTableLayout && "w-[170px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>
                 {historyTableLayout ? nameLabel : "STT"}
               </TableHead>
               {!historyTableLayout && <TableHead className={cn("whitespace-nowrap text-center", wideNameNarrowLinkLayout && "w-[390px]")}>{nameLabel}</TableHead>}
+              {!historyTableLayout && hasProcedureValidity && <TableHead className="w-[190px] text-center">Loại QT</TableHead>}
               {historyTableLayout && hasTagField && <TableHead className="w-[92px] text-center text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">{tagLabel}</TableHead>}
               {hasYearField && <TableHead className={cn("w-[110px] text-center", historyTableLayout && "w-[82px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>{yearLabel}</TableHead>}
-              {showEquipmentScope && <TableHead className="w-[170px] text-center">Cương vị</TableHead>}
+              {showPositionColumn && <TableHead className="w-[170px] text-center">Cương vị</TableHead>}
               {showEquipmentScope && <TableHead className="w-[160px] text-center">Khối quản lý</TableHead>}
               {hasDateField && (
                 <TableHead className={cn("w-[150px] text-center", historyTableLayout && "w-[320px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>
@@ -745,7 +841,7 @@ export function DocumentCatalogPage({
                   summaryField === "reason" ? item.reason : summaryField === "progress" || hasProgressField ? item.progress : item.documentUrl;
                 const detailSummaryLabel = hasProgressField ? progressLabel : summaryLabel ?? linkLabel;
                 const detailSummary = hasProgressField ? item.progress : historySummary;
-                const validity = hasProcedureValidity ? procedureValidity(item.issueDate) : null;
+                const validity = hasProcedureValidity ? procedureValidity(item.issueDate, item.procedureType) : null;
                 return (
                 <React.Fragment key={item.id}>
                 <TableRow
@@ -792,6 +888,7 @@ export function DocumentCatalogPage({
                       </div>
                     </TableCell>
                   )}
+                  {!historyTableLayout && hasProcedureValidity && <TableCell className="text-center text-muted-foreground">{normalizeProcedureType(item.procedureType)}</TableCell>}
                   {historyTableLayout && hasTagField && (
                     <TableCell className="px-3 py-3 text-center">
                       <span
@@ -805,8 +902,8 @@ export function DocumentCatalogPage({
                     </TableCell>
                   )}
                   {hasYearField && <TableCell className={cn("text-center font-semibold text-muted-foreground", historyTableLayout && "px-3 py-3 text-[13px]")}>{item.managingPosition || "—"}</TableCell>}
-                  {showEquipmentScope && (
-                    <TableCell className="text-center text-muted-foreground">{documentPositionLabel(item.managingPosition) || "—"}</TableCell>
+                  {showPositionColumn && (
+                    <TableCell className="text-center text-muted-foreground">{documentPositionSummary(item.managingPosition)}</TableCell>
                   )}
                   {showEquipmentScope && (
                     <TableCell className="text-center text-muted-foreground">{documentManagementBlock(item)}</TableCell>
@@ -1229,27 +1326,66 @@ export function DocumentCatalogPage({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label>Cương vị</Label>
+                  {hasProcedureValidity ? (
+                    <ProcedurePositionPicker
+                      positions={positionOptions}
+                      selected={form.managingPositions}
+                      onChange={(next) => setForm((state) => ({ ...state, managingPositions: next }))}
+                    />
+                  ) : (
+                    <Select
+                      value={form.managingPosition || LEGACY_COMMON_POSITION}
+                      onValueChange={(value) => setForm((state) => ({ ...state, managingPosition: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn cương vị" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={LEGACY_COMMON_POSITION}>Chung</SelectItem>
+                        {positionOptions.map((position) => (
+                          <SelectItem key={position} value={position}>
+                            {position}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Khối quản lý</Label>
                   <Select
-                    value={form.managingPosition || COMMON_POSITION}
-                    onValueChange={(value) => setForm((state) => ({ ...state, managingPosition: value }))}
+                    value={managementBlock}
+                    onValueChange={(value) => setForm((state) => ({ ...state, managementBlock: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Chọn cương vị" />
+                      <SelectValue placeholder="Chọn khối quản lý" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={COMMON_POSITION}>Chung</SelectItem>
-                      {positionOptions.map((position) => (
-                        <SelectItem key={position} value={position}>
-                          {position}
+                      {blockOptions.map((block) => (
+                        <SelectItem key={block} value={block}>
+                          {block}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Khối quản lý</Label>
-                  <Input value={managementBlock} readOnly className="bg-muted/60" />
-                </div>
+              </div>
+            )}
+            {hasProcedureValidity && (
+              <div className="grid gap-1.5">
+                <Label>Loại QT</Label>
+                <Select value={form.procedureType} onValueChange={(value) => setForm((state) => ({ ...state, procedureType: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn loại quy trình" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROCEDURE_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
             {((hasTagField && (!historyTableLayout || isCompactArchiveForm)) || hasDateField || (hasYearField && useHistoryFormLayout)) && (
@@ -1468,6 +1604,66 @@ function readImageAsDataUrl(file: File) {
   });
 }
 
+function ProcedurePositionPicker({
+  positions,
+  selected,
+  onChange,
+}: {
+  positions: string[];
+  selected: string[];
+  onChange: (positions: string[]) => void;
+}) {
+  const selectedSet = React.useMemo(() => new Set(selected), [selected]);
+  const allChecked = positions.length > 0 && selected.length === positions.length;
+  const someChecked = selected.length > 0 && selected.length < positions.length;
+  const label = !selected.length
+    ? COMMON_BLOCK
+    : allChecked
+    ? "Tất cả cương vị"
+    : selected.length <= 2
+    ? selected.join(", ")
+    : `${selected.length} cương vị`;
+
+  function toggle(position: string, checked: boolean) {
+    const next = checked ? Array.from(new Set([...selected, position])) : selected.filter((item) => item !== position);
+    onChange(next.filter((item) => positions.includes(item)));
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="h-10 justify-between px-3 font-normal">
+          <span className="truncate">{label}</span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(380px,90vw)] p-0">
+        <div className="border-b p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <Checkbox
+              checked={allChecked ? true : someChecked ? "indeterminate" : false}
+              onCheckedChange={(checked) => onChange(checked ? positions : [])}
+            />
+            Tất cả cương vị
+          </label>
+        </div>
+        <div className="max-h-72 overflow-y-auto p-2">
+          {positions.length ? (
+            positions.map((position) => (
+              <label key={position} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted">
+                <Checkbox checked={selectedSet.has(position)} onCheckedChange={(checked) => toggle(position, !!checked)} />
+                <span className="min-w-0 flex-1 truncate">{position}</span>
+              </label>
+            ))
+          ) : (
+            <div className="px-2 py-6 text-center text-sm text-muted-foreground">Chưa có danh sách cương vị</div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function parseProcedureImportRows(rows: Array<Array<string | number | Date | null>>) {
   const errors: string[] = [];
   const headerIndex = rows.findIndex((row) => row.some((cell) => normalizeText(cellString(cell)) === "ten quy trinh"));
@@ -1476,15 +1672,17 @@ function parseProcedureImportRows(rows: Array<Array<string | number | Date | nul
   const headers = rows[headerIndex].map((cell) => normalizeText(cellString(cell)));
   const sttIndex = findColumnIndex(headers, ["stt"]);
   const titleIndex = findColumnIndex(headers, ["ten quy trinh"]);
+  const procedureTypeIndex = findColumnIndex(headers, ["loai qt", "loai quy trinh"]);
   const positionIndex = findColumnIndex(headers, ["cuong vi"]);
+  const managementBlockIndex = findColumnIndex(headers, ["khoi quan ly"]);
   const decisionIndex = findColumnIndex(headers, ["so quyet dinh"]);
   const issueDateIndex = findColumnIndex(headers, ["ngay ban hanh"]);
   const linkIndex = findColumnIndex(headers, ["link tai lieu", "duong dan tai lieu", "tai lieu"]);
 
-  if (sttIndex < 0 || titleIndex < 0 || positionIndex < 0 || decisionIndex < 0 || issueDateIndex < 0 || linkIndex < 0) {
+  if (sttIndex < 0 || titleIndex < 0 || procedureTypeIndex < 0 || positionIndex < 0 || decisionIndex < 0 || issueDateIndex < 0 || linkIndex < 0) {
     return {
       items: [] as ProcedureImportRow[],
-      errors: ["File Excel phải có đủ cột: STT, Tên quy trình, Cương vị, Số quyết định, Ngày ban hành, Link tài liệu"],
+      errors: ["File Excel phải có đủ cột: STT, Tên quy trình, Loại QT, Cương vị, Số quyết định, Ngày ban hành, Link tài liệu"],
     };
   }
 
@@ -1513,7 +1711,9 @@ function parseProcedureImportRows(rows: Array<Array<string | number | Date | nul
 
     items.push({
       title,
-      managingPosition: cellString(row[positionIndex]) || COMMON_POSITION,
+      managingPosition: cellString(row[positionIndex]),
+      managementBlock: normalizeManagementBlock(managementBlockIndex >= 0 ? cellString(row[managementBlockIndex]) : ""),
+      procedureType: normalizeProcedureType(cellString(row[procedureTypeIndex])),
       decisionNumber: cellString(row[decisionIndex]),
       issueDate,
       documentUrl,
@@ -1553,6 +1753,19 @@ function cellDate(value: string | number | Date | null | undefined) {
   return Number.isNaN(date.getTime()) ? "" : formatInputDate(date);
 }
 
+function importProcedurePositions(value: string, positionOptions: string[]) {
+  const raw = value.trim();
+  if (!raw) return positionOptions;
+  if (normalizeText(raw) === normalizeText(COMMON_BLOCK) || normalizeText(raw) === normalizeText(LEGACY_COMMON_POSITION) || normalizeText(raw) === "tat ca cuong vi") {
+    return positionOptions;
+  }
+  const requested = raw
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return requested.length ? requested : positionOptions;
+}
+
 function formatInputDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -1577,7 +1790,10 @@ function formatArchiveRecordDate(value: string | null | undefined, inputType: "d
   return inputType === "datetime-local" && raw.includes("T") ? formatDateTime(raw) : formatDate(raw);
 }
 
-function procedureValidity(issueDate: string | null | undefined) {
+function procedureValidity(issueDate: string | null | undefined, procedureType?: string | null) {
+  const normalizedType = normalizeProcedureType(procedureType);
+  if (!EXPIRING_PROCEDURE_TYPES.has(normalizedType)) return { label: "Còn hiệu lực", expired: false, unknown: false };
+
   const raw = String(issueDate ?? "").trim();
   if (!raw) return { label: "Chưa có ngày", expired: false, unknown: true };
 
