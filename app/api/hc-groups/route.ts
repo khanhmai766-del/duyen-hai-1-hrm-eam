@@ -12,11 +12,11 @@ function clampHours(h: unknown): number {
   return Math.min(8, Math.max(1, n));
 }
 
-// Retention: HC attendance is kept for the trailing 5 months. Anything older is
+// Retention: HC attendance is kept for the trailing 1 month. Anything older is
 // purged from the database (members are removed via the HcCheckIn cascade).
 function retentionCutoff(): Date {
   const d = new Date();
-  d.setMonth(d.getMonth() - 5);
+  d.setMonth(d.getMonth() - 1);
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -28,7 +28,7 @@ async function purgeExpiredHc(): Promise<void> {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
-    // Enforce the 5-month retention window on every load.
+    // Enforce the 1-month retention window on every load.
     await purgeExpiredHc();
     const dateParam = req.nextUrl.searchParams.get("date");
     const base = dateParam ? new Date(dateParam) : new Date();
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         createdById: user.id,
       },
     });
-    // 5-month retention: drop anything older whenever new data is added.
+    // 1-month retention: drop anything older whenever new data is added.
     await purgeExpiredHc();
     await audit(user.id, "CREATE_HC_GROUP", "HcGroup", group.id, `Tạo nhóm hành chính: ${content}`);
     return ok(group);

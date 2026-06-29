@@ -623,6 +623,13 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({ type: "DRILL_INCIDENT", title: "", date: "", note: "" });
   const events = data?.data ?? [];
+  const upcomingEvents = React.useMemo(
+    () =>
+      events
+        .filter((event) => eventDateTone(event.date) !== "past")
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [events]
+  );
 
   function openCreate() {
     setEditingId(null);
@@ -678,15 +685,15 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
         </p>
         {isLoading ? (
           <div className="h-24" />
-        ) : events.length === 0 ? (
+        ) : upcomingEvents.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
             <ShieldCheck className="h-8 w-8 text-muted-foreground/50" />
-            Chưa có lịch diễn tập.
+            Chưa có lịch diễn tập từ hôm nay trở đi.
           </div>
         ) : (
           // Scroll area: ~4 entries visible by default.
           <div className="max-h-[296px] space-y-2 overflow-y-auto pr-1">
-            {events.map((e) => {
+            {upcomingEvents.map((e) => {
               const meta = OPERATION_TYPE[e.type as keyof typeof OPERATION_TYPE] ?? OPERATION_TYPE.OTHER;
               const tone = EVENT_TONES[eventDateTone(e.date)];
               return (

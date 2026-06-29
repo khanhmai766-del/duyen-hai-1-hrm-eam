@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat } from "lucide-react";
@@ -100,6 +101,14 @@ export default function OrgChartPage() {
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("fullscreenchange", onFsChange);
+    };
+  }, [viewer]);
+  React.useEffect(() => {
+    if (!viewer) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
     };
   }, [viewer]);
 
@@ -206,8 +215,8 @@ export default function OrgChartPage() {
       </Dialog>
 
       {/* Fullscreen presentation (Viewer) — for TV / projector. ESC to exit. */}
-      {viewer && (
-        <div className="fixed inset-0 z-[100] flex flex-col overflow-auto bg-white p-6">
+      {viewer && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[1000] flex h-dvh w-dvw flex-col overflow-auto bg-white p-6">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-ink">Nhân sự trực ca vận hành</h2>
@@ -232,7 +241,8 @@ export default function OrgChartPage() {
           <div className="flex-1 text-[1.05rem]">
             <OrgTemplateChart assignments={assignments} checkIns={checkIns} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Controls */}
