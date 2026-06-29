@@ -552,7 +552,7 @@ export function DocumentCatalogPage({
       }
 
       const rows = XLSX.utils.sheet_to_json<Array<string | number | Date | null>>(sheet, { header: 1, defval: "" });
-      const parsed = parseProcedureImportRows(rows);
+      const parsed = parseProcedureImportRows(rows, sheet);
       if (parsed.errors.length) {
         toast.error(parsed.errors[0]);
         return;
@@ -1664,7 +1664,7 @@ function ProcedurePositionPicker({
   );
 }
 
-function parseProcedureImportRows(rows: Array<Array<string | number | Date | null>>) {
+function parseProcedureImportRows(rows: Array<Array<string | number | Date | null>>, sheet: XLSX.WorkSheet) {
   const errors: string[] = [];
   const headerIndex = rows.findIndex((row) => row.some((cell) => normalizeText(cellString(cell)) === "ten quy trinh"));
   if (headerIndex < 0) return { items: [] as ProcedureImportRow[], errors: ["File Excel thiếu dòng tiêu đề mẫu"] };
@@ -1689,8 +1689,9 @@ function parseProcedureImportRows(rows: Array<Array<string | number | Date | nul
   const items: ProcedureImportRow[] = [];
   rows.slice(headerIndex + 1).forEach((row, index) => {
     const line = headerIndex + index + 2;
+    const sheetRowIndex = headerIndex + index + 1;
     const title = cellString(row[titleIndex]);
-    const documentUrl = cellString(row[linkIndex]);
+    const documentUrl = cellLink(sheet, sheetRowIndex, linkIndex) || cellString(row[linkIndex]) || cellLink(sheet, sheetRowIndex, titleIndex);
     const rawIssueDate = row[issueDateIndex];
     const issueDate = cellDate(rawIssueDate);
     const hasContent = row.some((cell) => cellString(cell));
@@ -1731,6 +1732,22 @@ function cellString(value: string | number | Date | null | undefined) {
   if (value == null) return "";
   if (value instanceof Date) return formatInputDate(value);
   return String(value).trim();
+}
+
+function cellLink(sheet: XLSX.WorkSheet, rowIndex: number, columnIndex: number) {
+  if (columnIndex < 0) return "";
+  const cell = sheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })] as (XLSX.CellObject & { l?: { Target?: string } }) | undefined;
+  const target = cell?.l?.Target?.trim();
+  if (target) return target;
+  const formulaLink = formulaHyperlink(cell?.f);
+  return formulaLink;
+}
+
+function formulaHyperlink(formula?: string) {
+  const raw = String(formula ?? "").trim();
+  if (!raw) return "";
+  const match = raw.match(/^HYPERLINK\(\s*"([^"]+)"/i) ?? raw.match(/^HYPERLINK\(\s*'([^']+)'/i);
+  return match?.[1]?.trim() ?? "";
 }
 
 function cellDate(value: string | number | Date | null | undefined) {
