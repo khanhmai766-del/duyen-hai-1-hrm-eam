@@ -6,7 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { rootAllowedForPosition, scopesForPosition, strongerAccess, type NodeAccess } from "@/lib/position-system-scopes";
+import { nodeAccessForPosition, rootAllowedForPosition, scopesForPosition } from "@/lib/position-system-scopes";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 
@@ -95,23 +95,14 @@ export function EquipmentTreePicker({
   // accessFilter="edit": chỉ hiện các hệ thống cương vị có quyền Sửa (kế thừa theo nhánh) + tổ tiên để duyệt.
   // null = không lọc theo quyền (chưa cấu hình riêng, hoặc không bật accessFilter) → dùng rule gốc.
   const editVisibleSeqs = React.useMemo(() => {
-    if (accessFilter !== "edit" || !position) return null;
+    if (!position) return null;
     const explicit = scopesForPosition(scopes, position);
     if (!explicit.length) return null;
-    const accessBySeq = new Map(explicit.map((s) => [s.systemSeq, s.access === "edit" ? "edit" : "view"] as const));
-    const accessOf = (seq: string): NodeAccess => {
-      let best: NodeAccess = "none";
-      let cur: string | null | undefined = seq;
-      while (cur) {
-        const a = accessBySeq.get(cur);
-        if (a) best = strongerAccess(best, a);
-        cur = effParentOf.get(cur) ?? null;
-      }
-      return best;
-    };
     const set = new Set<string>();
     for (const n of nodes) {
-      if (accessOf(n.seq) === "edit") {
+      const access = nodeAccessForPosition(n.seq, position, nodes, scopes);
+      const allowed = accessFilter === "edit" ? access === "edit" : access !== "none";
+      if (allowed) {
         let cur: string | null | undefined = n.seq;
         while (cur && !set.has(cur)) { set.add(cur); cur = effParentOf.get(cur) ?? null; }
       }
@@ -150,6 +141,7 @@ export function EquipmentTreePicker({
     let matchCount = 0;
     for (const n of nodes) {
       if (!folderSeqs.has(n.seq)) continue;
+      if (editVisibleSeqs && !editVisibleSeqs.has(n.seq)) continue;
       if (normalizeText([n.seq, n.name].filter(Boolean).join(" ")).includes(q)) {
         matchCount++;
         visible.add(n.seq);
@@ -162,7 +154,7 @@ export function EquipmentTreePicker({
       }
     }
     return { visible, searchExpanded, matchCount };
-  }, [q, nodes, bySeq, effParentOf, folderSeqs]);
+  }, [q, nodes, bySeq, effParentOf, folderSeqs, editVisibleSeqs]);
 
   const isOpenNode = (seq: string) => (q ? searchExpanded!.has(seq) : expanded.has(seq));
   function toggle(seq: string) {

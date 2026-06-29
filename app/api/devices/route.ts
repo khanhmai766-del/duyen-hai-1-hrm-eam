@@ -9,6 +9,7 @@ import {
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
+import { filterEquipmentNodesForUser } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -92,17 +93,25 @@ async function getDeviceLikeRecords() {
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const sp = req.nextUrl.searchParams;
     const q = normalizeText(sp.get("q")?.trim() ?? "");
     const systemSeq = sp.get("systemSeq")?.trim();
     const systemName = sp.get("system")?.trim();
 
-    const { nodes, index, records } = await getDeviceLikeRecords();
-    const allowedSeqs = systemSeq ? getEquipmentDescendantSeqs(nodes, systemSeq) : null;
+    const { nodes, records } = await getDeviceLikeRecords();
+    const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
+    const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
+    const visibleIndex = buildEquipmentTreeIndex(visibleNodes);
+    const allowedSeqs = systemSeq
+      ? visibleSeqs.has(systemSeq)
+        ? getEquipmentDescendantSeqs(visibleNodes, systemSeq)
+        : new Set<string>()
+      : null;
 
     const devices = records
       .filter((device) => {
+        if (!visibleSeqs.has(device.code)) return false;
         if (allowedSeqs && !allowedSeqs.has(device.code)) return false;
         if (!allowedSeqs && systemName && systemName !== "ALL" && device.system !== systemName) return false;
         if (!q) return true;
@@ -121,7 +130,7 @@ export async function GET(req: NextRequest) {
     return ok(devices, {
       total: devices.length,
       systems,
-      rootSystems: index.roots.map((node) => ({ seq: node.seq, name: node.name })),
+      rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
       source: "equipment-node",
     });
   });

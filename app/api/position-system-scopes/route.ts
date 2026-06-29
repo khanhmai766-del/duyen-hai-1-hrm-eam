@@ -5,7 +5,7 @@ import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-type ScopeAccess = "view" | "edit";
+type ScopeAccess = "none" | "view" | "edit";
 
 type ScopeRow = {
   id: string;
@@ -81,7 +81,7 @@ export async function PUT(req: NextRequest) {
       ? body.entries
           .map((entry: { systemSeq?: unknown; access?: unknown }) => ({
             systemSeq: String(entry?.systemSeq ?? "").trim(),
-            access: (entry?.access === "edit" ? "edit" : "view") as ScopeAccess,
+            access: (entry?.access === "edit" ? "edit" : entry?.access === "view" ? "view" : "none") as ScopeAccess,
           }))
           .filter((entry: { systemSeq: string }) => entry.systemSeq)
       : Array.isArray(body.systemSeqs)
@@ -94,7 +94,14 @@ export async function PUT(req: NextRequest) {
     const bySeq = new Map<string, ScopeAccess>();
     for (const entry of rawEntries) {
       const prev = bySeq.get(entry.systemSeq);
-      bySeq.set(entry.systemSeq, prev === "edit" || entry.access === "edit" ? "edit" : "view");
+      bySeq.set(
+        entry.systemSeq,
+        prev === "edit" || entry.access === "edit"
+          ? "edit"
+          : prev === "view" || entry.access === "view"
+            ? "view"
+            : "none"
+      );
     }
 
     if (!position) return fail("Vui lòng chọn cương vị cần phân quyền hệ thống thiết bị");

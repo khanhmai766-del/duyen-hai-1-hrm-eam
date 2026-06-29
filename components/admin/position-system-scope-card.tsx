@@ -11,7 +11,7 @@ import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/u
 import { usePositions } from "@/hooks/useUsers";
 import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
-import { scopesForPosition, type NodeAccess, type ScopeAccess } from "@/lib/position-system-scopes";
+import { normalizeScopeAccess, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 
 const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; className: string }[] = [
@@ -33,7 +33,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
   const [position, setPosition] = React.useState("");
   // Map seq -> access đã gán tường minh ("view"|"edit"). Không có trong map = kế thừa cha.
-  const [grants, setGrants] = React.useState<Map<string, ScopeAccess>>(new Map());
+  const [grants, setGrants] = React.useState<Map<string, NodeAccess>>(new Map());
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
   const { roots, childrenOf, parentOf } = React.useMemo(() => {
@@ -59,9 +59,9 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
 
   React.useEffect(() => {
     if (!position) return;
-    const next = new Map<string, ScopeAccess>();
+    const next = new Map<string, NodeAccess>();
     for (const scope of scopesForPosition(scopes, position)) {
-      next.set(scope.systemSeq, scope.access === "edit" ? "edit" : "view");
+      next.set(scope.systemSeq, normalizeScopeAccess(scope.access));
     }
     setGrants(next);
   }, [position, scopes]);
@@ -83,8 +83,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   function setAccess(seq: string, value: NodeAccess) {
     setGrants((current) => {
       const next = new Map(current);
-      if (value === "none") next.delete(seq);
-      else next.set(seq, value);
+      next.set(seq, value);
       return next;
     });
   }

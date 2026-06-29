@@ -2,16 +2,17 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
-import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
 // Toàn bộ cây danh mục thiết bị (phẳng) — client tự dựng cây từ seq/parentSeq.
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     const normalizedNodes = await getNormalizedEquipmentNodes(prisma);
-    return ok(normalizedNodes.map((node) => ({ ...node, deviceId: node.deviceId ?? null })));
+    const visibleNodes = await filterEquipmentNodesForUser(user, normalizedNodes);
+    return ok(visibleNodes.map((node) => ({ ...node, deviceId: node.deviceId ?? null })));
   });
 }
 
