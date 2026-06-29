@@ -25,6 +25,7 @@ async function ensureDigitalDocumentTable() {
       "documentUrl" TEXT NOT NULL,
       "managingPosition" TEXT,
       "managementBlock" TEXT,
+      "procedureType" TEXT,
       "reason" TEXT,
       "progress" TEXT,
       "note" TEXT,
@@ -42,6 +43,7 @@ async function ensureDigitalDocumentTable() {
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "managingPosition" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "issueDate" TIMESTAMP(3)`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "managementBlock" TEXT`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "procedureType" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "reason" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "progress" TEXT`);
   await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "note" TEXT`);
@@ -68,6 +70,7 @@ function normalizeBody(body: Record<string, unknown>) {
     documentUrl: String(body.documentUrl ?? "").trim(),
     managingPosition: String(body.managingPosition ?? "").trim() || null,
     managementBlock: String(body.managementBlock ?? "").trim() || null,
+    procedureType: String(body.procedureType ?? "").trim() || null,
     reason: String(body.reason ?? "").trim() || null,
     progress: String(body.progress ?? "").trim() || null,
     note: String(body.note ?? "").trim() || null,
@@ -94,6 +97,7 @@ export async function GET(req: NextRequest) {
           d."documentUrl",
           d."managingPosition",
           d."managementBlock",
+          d."procedureType",
           d."reason",
           d."progress",
           d."note",
@@ -146,9 +150,9 @@ export async function POST(req: NextRequest) {
     const id = randomUUID();
     const rows = await prisma.$queryRawUnsafe(
       `
-        INSERT INTO "DigitalDocument" (id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "reason", "progress", "note", "attachmentUrls", "createdById", "updatedById")
-        VALUES ($1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, $10, $11, $12, $13, $13)
-        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
+        INSERT INTO "DigitalDocument" (id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "note", "attachmentUrls", "createdById", "updatedById")
+        VALUES ($1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
+        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
       `,
       id,
       category,
@@ -158,6 +162,7 @@ export async function POST(req: NextRequest) {
       payload.documentUrl,
       payload.managingPosition,
       payload.managementBlock,
+      payload.procedureType,
       payload.reason,
       payload.progress,
       payload.note,
@@ -200,14 +205,15 @@ export async function PUT(req: NextRequest) {
           "documentUrl" = $6,
           "managingPosition" = $7,
           "managementBlock" = $8,
-          "reason" = $9,
-          "progress" = $10,
-          "note" = $11,
-          "attachmentUrls" = $12,
-          "updatedById" = $13,
+          "procedureType" = $9,
+          "reason" = $10,
+          "progress" = $11,
+          "note" = $12,
+          "attachmentUrls" = $13,
+          "updatedById" = $14,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE id = $1 AND category = $2
-        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
+        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
       `,
       id,
       category,
@@ -217,6 +223,7 @@ export async function PUT(req: NextRequest) {
       payload.documentUrl,
       payload.managingPosition,
       payload.managementBlock,
+      payload.procedureType,
       payload.reason,
       payload.progress,
       payload.note,
