@@ -17,6 +17,7 @@ export interface DigitalDocument {
   category: DocumentCategory;
   title: string;
   decisionNumber: string | null;
+  issueDate: string | null;
   documentUrl: string;
   managingPosition: string | null;
   managementBlock: string | null;
@@ -35,6 +36,7 @@ export interface DigitalDocumentInput {
   category: DocumentCategory;
   title: string;
   decisionNumber?: string | null;
+  issueDate?: string | null;
   documentUrl: string;
   managingPosition?: string | null;
   managementBlock?: string | null;

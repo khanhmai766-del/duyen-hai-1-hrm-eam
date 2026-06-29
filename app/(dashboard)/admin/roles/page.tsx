@@ -145,7 +145,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Nhân sự / Ca trực",
     feature: "Duyệt điểm danh và chấm công hành chính",
     note: "Áp dụng cho ca trực, check-in hành chính và danh sách cần xác nhận.",
-    matrix: { ADMIN: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "approve", SUPERVISOR: "none", TECHNICIAN: "approve", VIEWER: "none" },
   },
   {
     id: "user-admin",

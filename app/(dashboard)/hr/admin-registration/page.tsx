@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -22,6 +23,7 @@ import {
   useHcUpdateRegistrationNote,
   type HcRegistration,
 } from "@/hooks/useHcAttendance";
+import { apiGet } from "@/lib/fetcher";
 import { cn, initials } from "@/lib/utils";
 
 const HC_SELF_PERIODS = [
@@ -31,6 +33,13 @@ const HC_SELF_PERIODS = [
   { value: "AFTERNOON", label: "Buổi chiều" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((period) => `Hành chính - ${period.label}`);
+const APPROVE_PERMISSION_ID = "shift-approve";
+const APPROVE_PERMISSION_VALUES = new Set(["approve", "manage", "full"]);
+
+interface RbacConfig {
+  permissions?: Array<{ id: string; matrix?: Record<string, string> }>;
+  userOverrides?: Array<{ userId: string; permissionId: string; roleId?: string; value?: string }>;
+}
 
 function formatDateInput(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -43,6 +52,12 @@ function addCalendarDays(from: Date, days: number) {
   return date;
 }
 
+function isBeforeRegistrationCutoff(now = new Date()) {
+  const cutoff = new Date(now);
+  cutoff.setHours(16, 30, 0, 0);
+  return now.getTime() < cutoff.getTime();
+}
+
 function formatDateLabel(date: string) {
   return new Date(date).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
@@ -51,10 +66,31 @@ function periodLabel(content: string) {
   return HC_SELF_PERIODS.find((period) => content === `Hành chính - ${period.label}`)?.label ?? "Hành chính";
 }
 
+function hasAssignedApprovePermission(config: RbacConfig | undefined, userId: string | undefined, role: string | undefined) {
+  if (!config || !userId) return false;
+  const permission = config.permissions?.find((item) => item.id === APPROVE_PERMISSION_ID);
+  if (APPROVE_PERMISSION_VALUES.has(permission?.matrix?.[role ?? ""] ?? "none")) return true;
+  return (config.userOverrides ?? []).some((override) => {
+    if (override.userId !== userId) return false;
+    if (override.permissionId === APPROVE_PERMISSION_ID) return APPROVE_PERMISSION_VALUES.has(override.value ?? "none");
+    if (override.permissionId !== "__ROLE_PROFILE__" || !override.roleId) return false;
+    return APPROVE_PERMISSION_VALUES.has(override.value ?? "none") || APPROVE_PERMISSION_VALUES.has(permission?.matrix?.[override.roleId] ?? "none");
+  });
+}
+
 export default function AdministrativeRegistrationPage() {
   const { data: session } = useSession();
-  const canManage = ["ADMIN", "SUPERVISOR"].includes(session?.user?.role ?? "");
   const myId = session?.user?.id;
+  const rbacQuery = useQuery({
+    queryKey: ["rbac-config"],
+    queryFn: () => apiGet<RbacConfig>("/api/rbac"),
+    enabled: !!session?.user,
+  });
+  const canManage =
+    ["ADMIN", "TECHNICIAN"].includes(session?.user?.role ?? "") ||
+    hasAssignedApprovePermission(rbacQuery.data?.data, myId, session?.user?.role);
+  const [now, setNow] = React.useState(() => new Date());
+  const registrationOpen = isBeforeRegistrationCutoff(now);
   const minRegisterDate = React.useMemo(() => formatDateInput(addCalendarDays(new Date(), 2)), []);
   const checkIn = useHcCheckIn();
   const [registerDate, setRegisterDate] = React.useState(minRegisterDate);
@@ -79,8 +115,14 @@ export default function AdministrativeRegistrationPage() {
     setPeriod(currentPeriod?.value ?? "FULL_DAY");
   }, [myRegistration]);
 
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!registrationOpen) return toast.error("Chỉ được đăng ký đi hành chính trước 16h30");
     if (myRegistration) return toast.error("Cập nhật nội dung tại danh sách đăng ký phía dưới");
     try {
       await checkIn.mutateAsync({ date: registerDate, period, note });
@@ -97,7 +139,7 @@ export default function AdministrativeRegistrationPage() {
         <ArrowLeft className="h-4 w-4" /> Lịch làm việc
       </Link>
 
-      <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày và chờ người có quyền duyệt" />
+      <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày, trước 16h30 và chờ người có quyền duyệt" />
 
       <Card className="overflow-hidden">
         <CardHeader className="border-b border-border">
@@ -159,13 +201,18 @@ export default function AdministrativeRegistrationPage() {
               </div>
             )}
             <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Đăng ký sau khi gửi không thể tự hủy. Người có quyền duyệt có thể duyệt hoặc hủy đăng ký.
+              Đăng ký phải gửi trước 16h30. Sau khi gửi không thể tự hủy. Người có quyền duyệt có thể duyệt hoặc hủy đăng ký.
             </div>
+            {!registrationOpen && (
+              <div className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                Đã quá 16h30, không thể gửi đăng ký đi hành chính mới trong hôm nay.
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button asChild variant="outline">
                 <Link href="/hr">Huỷ</Link>
               </Button>
-              <Button type="submit" disabled={checkIn.isPending || !!myRegistration}>
+              <Button type="submit" disabled={checkIn.isPending || !!myRegistration || !registrationOpen}>
                 {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {myRegistration ? "Đã đăng ký" : "Gửi đăng ký"}
               </Button>
             </div>

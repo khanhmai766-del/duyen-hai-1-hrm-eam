@@ -1,10 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
-const MANAGER = ["ADMIN", "SUPERVISOR"];
+const APPROVE_PERMISSION_ID = "shift-approve";
+const MANAGER = ["ADMIN", "TECHNICIAN"];
 const HC_SELF_PERIODS = {
   FULL_DAY: { label: "Cả ngày", hours: 8 },
   MORNING: { label: "Buổi sáng", hours: 4 },
@@ -37,6 +39,16 @@ function addCalendarDays(from: Date, days: number) {
 
 function canRegisterForDate(target: Date, now = new Date()) {
   return startOfDay(target).getTime() >= addCalendarDays(now, 2).getTime();
+}
+
+function isBeforeRegistrationCutoff(now = new Date()) {
+  const cutoff = new Date(now);
+  cutoff.setHours(16, 30, 0, 0);
+  return now.getTime() < cutoff.getTime();
+}
+
+async function canManageHc(user: { id?: string; role?: string }) {
+  return MANAGER.includes(user.role ?? "") || hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
 
 /** POST — current user checks themselves into a group, or registers HC directly. */
@@ -76,6 +88,9 @@ export async function POST(req: NextRequest) {
       });
       if (!hasNote && existingRegistration) return fail("Ngày này đã có đăng ký đi hành chính, chỉ được cập nhật nội dung công việc");
       if (hasNote) {
+        if (!isBeforeRegistrationCutoff()) {
+          return fail("Chỉ được đăng ký đi hành chính trước 16h30");
+        }
         if (!existingRegistration && !canRegisterForDate(start)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
         }
@@ -160,7 +175,7 @@ export async function DELETE(req: NextRequest) {
     const groupId = req.nextUrl.searchParams.get("groupId");
     const checkInId = req.nextUrl.searchParams.get("checkInId");
     if (checkInId) {
-      requireRole(user, MANAGER);
+      if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
       const checkIn = await prisma.hcCheckIn.findUnique({
         where: { id: checkInId },
         include: { user: { select: { name: true } } },
@@ -195,7 +210,7 @@ export async function PUT(req: NextRequest) {
       if (!Array.isArray(ids) || ids.length !== 1) return fail("Thiếu đăng ký cần cập nhật");
       const target = await prisma.hcCheckIn.findFirst({ where: { id: ids[0], groupId, isRegistered: true } });
       if (!target) return fail("Không tìm thấy đăng ký", 404);
-      if (target.userId !== user.id && !MANAGER.includes(user.role)) return fail("Không đủ quyền truy cập", 403);
+      if (target.userId !== user.id && !(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
       const res = await prisma.hcCheckIn.updateMany({
         where: { ...where, isRegistered: true },
         data: { note: cleanNote || null },
@@ -203,7 +218,7 @@ export async function PUT(req: NextRequest) {
       await audit(user.id, "HC_REGISTER_NOTE_UPDATE", "HcGroup", groupId, `Cập nhật nội dung đăng ký HC (${res.count})`);
       return ok({ updated: res.count });
     }
-    requireRole(user, MANAGER);
+    if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
     const res = await prisma.hcCheckIn.updateMany({
       where,
       data: { isApproved: true, ...(note !== undefined ? { note: cleanNote || null } : {}) },
