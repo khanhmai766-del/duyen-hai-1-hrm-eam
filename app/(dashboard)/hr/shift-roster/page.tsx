@@ -2,24 +2,30 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye } from "lucide-react";
+import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useUsers } from "@/hooks/useUsers";
 import {
   useTimesheet,
+  useUpdateTimesheetOverride,
   useRosterSchedule,
   useUploadRoster,
   useDeleteRoster,
   type RosterSchedule,
+  type TimesheetEntry,
+  type TimesheetOverride,
 } from "@/hooks/useShifts";
 import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -35,6 +41,29 @@ function cellMeta(code: Code) {
   return { short: m.short, color: m.color, text: m.text, label: m.label };
 }
 
+function shiftEntryLabel(entry: TimesheetEntry) {
+  const code = entry.shiftType as Code;
+  const short = cellMeta(code).short;
+  return entry.hours === 8 ? short : `${formatHours(entry.hours)}${short}`;
+}
+
+function formatHours(hours: number) {
+  return Number.isInteger(hours) ? String(hours) : String(hours).replace(".", ",");
+}
+
+function sortShiftEntries(entries: TimesheetEntry[]) {
+  const order = new Map(SHIFT_TYPE_ORDER.map((shiftType, index) => [shiftType, index]));
+  return [...entries].sort((a, b) => {
+    const byShift = (order.get(a.shiftType as keyof typeof SHIFT_TYPE) ?? 99) - (order.get(b.shiftType as keyof typeof SHIFT_TYPE) ?? 99);
+    if (byShift !== 0) return byShift;
+    return a.hours - b.hours;
+  });
+}
+
+function monthCellDate(year: number, monthIndex: number, day: number) {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 // HC (chấm công hành chính) cell colour by content type:
 // diễn tập sự cố → đỏ, diễn tập PCCC → xanh, còn lại → xám.
 function hcMeta(content: string) {
@@ -42,6 +71,10 @@ function hcMeta(content: string) {
   if (c.includes("pccc")) return { bg: "#2563EB", text: "#ffffff", label: "Diễn tập PCCC" };
   if (c.includes("sự cố") || c.includes("su co")) return { bg: "#DC2626", text: "#ffffff", label: "Diễn tập sự cố" };
   return { bg: "#6B7280", text: "#ffffff", label: "Khác" };
+}
+
+function hcWorkNote(hc: { note?: string | null }) {
+  return hc.note?.trim() || "";
 }
 
 export default function ShiftRosterPage() {
@@ -59,21 +92,47 @@ export default function ShiftRosterPage() {
 
   const monthStr = `${month.year}-${String(month.month + 1).padStart(2, "0")}`;
   const timesheet = useTimesheet(monthStr);
-  // Map "userId:day" → approved shiftType, for the bảng-công view.
+  const updateOverride = useUpdateTimesheetOverride(monthStr);
+  const canEditTimesheet = Boolean(timesheet.data?.data?.canEdit || isAdmin);
+  const [editCell, setEditCell] = React.useState<{
+    userId: string;
+    userName: string;
+    date: string;
+    day: number;
+    value: string;
+    calculated: string;
+    override?: TimesheetOverride;
+  } | null>(null);
+  const [editValue, setEditValue] = React.useState("");
+  // Map "userId:day" → shift attendance entries. A day can contain multiple
+  // shift records, e.g. V2 plus 4V3 for a 12-hour work stretch.
   const tsMap = React.useMemo(() => {
-    const m = new Map<string, string>();
-    (timesheet.data?.data?.entries ?? []).forEach((e) => m.set(`${e.userId}:${e.day}`, e.shiftType));
+    const m = new Map<string, TimesheetEntry[]>();
+    (timesheet.data?.data?.entries ?? []).forEach((e) => {
+      const key = `${e.userId}:${e.day}`;
+      const entries = m.get(key) ?? [];
+      entries.push(e);
+      m.set(key, sortShiftEntries(entries));
+    });
+    return m;
+  }, [timesheet.data]);
+  // Map "userId:day" → manual timesheet override set by an authorized user.
+  const overrideMap = React.useMemo(() => {
+    const m = new Map<string, TimesheetOverride>();
+    (timesheet.data?.data?.overrides ?? []).forEach((override) => {
+      m.set(`${override.userId}:${override.day}`, override);
+    });
     return m;
   }, [timesheet.data]);
   // Map "userId:day" → approved administrative (HC) attendance for that day
   // (hours + the group's content, which drives the cell colour). When a person
   // has several HC entries the same day, keep the one with the most hours.
   const hcMap = React.useMemo(() => {
-    const m = new Map<string, { hours: number; content: string }>();
+    const m = new Map<string, { hours: number; content: string; note: string | null }>();
     (timesheet.data?.data?.hcEntries ?? []).forEach((e) => {
       const k = `${e.userId}:${e.day}`;
       const cur = m.get(k);
-      if (!cur || e.hours > cur.hours) m.set(k, { hours: e.hours, content: e.content });
+      if (!cur || e.hours > cur.hours) m.set(k, { hours: e.hours, content: e.content, note: e.note });
     });
     return m;
   }, [timesheet.data]);
@@ -85,10 +144,54 @@ export default function ShiftRosterPage() {
   const positions = (Array.from(new Set(users.map((u) => u.position).filter(Boolean))) as string[]).sort(
     (a, b) => a.localeCompare(b, "vi")
   );
-  // Bảng công scope: ADMIN sees everyone; everyone else sees only their own row.
+  // Bảng công scope: người được quyền chỉnh xem toàn bộ, người khác xem dòng của mình.
   const rows = users
-    .filter((u) => isAdmin || u.id === session?.user?.id)
+    .filter((u) => canEditTimesheet || u.id === session?.user?.id)
     .filter((u) => posFilter === "ALL" || u.position === posFilter);
+
+  function calculatedCellValue(entries: TimesheetEntry[], hc?: { hours: number; content: string; note?: string | null }) {
+    return [
+      ...entries.map(shiftEntryLabel),
+      ...(hc ? [formatHours(hc.hours)] : []),
+    ].join(", ");
+  }
+
+  function openEditCell(params: {
+    user: { id: string; name: string };
+    day: number;
+    entries: TimesheetEntry[];
+    hc?: { hours: number; content: string; note: string | null };
+    override?: TimesheetOverride;
+  }) {
+    if (!canEditTimesheet) return;
+    const calculated = calculatedCellValue(params.entries, params.hc);
+    const next = {
+      userId: params.user.id,
+      userName: params.user.name,
+      date: monthCellDate(month.year, month.month, params.day),
+      day: params.day,
+      value: params.override?.value ?? "",
+      calculated,
+      override: params.override,
+    };
+    setEditCell(next);
+    setEditValue(next.value || calculated);
+  }
+
+  async function saveOverride(value = editValue) {
+    if (!editCell) return;
+    try {
+      await updateOverride.mutateAsync({
+        userId: editCell.userId,
+        date: editCell.date,
+        value: value.trim(),
+      });
+      toast.success(value.trim() ? "Đã cập nhật ô bảng công" : "Đã xoá giá trị chỉnh tay");
+      setEditCell(null);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
 
   function shift(delta: number) {
     setMonth((m) => {
@@ -97,18 +200,33 @@ export default function ShiftRosterPage() {
     });
   }
 
-  // ---- Bảng công exports (admin → all staff, others → self) ----
+  function timesheetCellText(userId: string, day: number, includePending = true) {
+    const override = overrideMap.get(`${userId}:${day}`);
+    if (override) return override.value;
+    const entries = tsMap.get(`${userId}:${day}`) ?? [];
+    const hc = hcMap.get(`${userId}:${day}`);
+    return [
+      ...entries.map((entry) => `${shiftEntryLabel(entry)}${includePending && !entry.isApproved ? " (chưa duyệt)" : ""}`),
+      ...(hc ? [formatHours(hc.hours)] : []),
+    ].join(", ");
+  }
+
+  function hcCommentText(user: { id: string; name: string; employeeId: string }, day: number) {
+    const hc = hcMap.get(`${user.id}:${day}`);
+    const note = hcWorkNote(hc ?? {});
+    if (!note) return "";
+    return `${user.employeeId} - ${user.name.toLocaleUpperCase("vi-VN")}:\n${note}`;
+  }
+
+  // ---- Bảng công exports (người có quyền → all staff, others → self) ----
   function exportCsv() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
-    const headers = ["Nhân viên", "Mã NV", "Chức vụ", "Bộ phận", ...days.map(String)];
+    const headers = ["Nhân viên", "Mã NV", "Chức vụ", ...days.map(String)];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = [headers.map(esc).join(",")];
     rows.forEach((u) => {
-      const cells = days.map((d) => {
-        const c = tsMap.get(`${u.id}:${d}`) as Code | undefined;
-        return c ? cellMeta(c).short : "";
-      });
-      lines.push([u.name, u.employeeId, u.position ?? "", u.department ?? "", ...cells].map(esc).join(","));
+      const cells = days.map((d) => timesheetCellText(u.id, d));
+      lines.push([u.name, u.employeeId, u.position ?? "", ...cells].map(esc).join(","));
     });
     const csv = "﻿" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -118,21 +236,76 @@ export default function ShiftRosterPage() {
     a.download = `bang-cong-${month.month + 1}-${month.year}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`Đã xuất ${rows.length} dòng (Excel/CSV)`);
+    toast.success(`Đã xuất ${rows.length} dòng CSV`);
+  }
+
+  async function exportExcel() {
+    if (!rows.length) return toast.error("Không có dữ liệu để xuất");
+    const XLSX = await import("xlsx");
+    const headers = ["Nhân viên", "Mã NV", "Chức vụ", ...days.map(String)];
+    const table = [
+      [`Bảng công trực ca - Phân xưởng Vận hành 1`],
+      [`Tháng ${month.month + 1}/${month.year}`],
+      [],
+      headers,
+      ...rows.map((u) => [
+        u.name,
+        u.employeeId,
+        u.position ?? "",
+        ...days.map((d) => timesheetCellText(u.id, d)),
+      ]),
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(table);
+    sheet["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
+    ];
+    sheet["!cols"] = [
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 24 },
+      ...days.map(() => ({ wch: 9 })),
+    ];
+    const firstDataRow = 4; // zero-based row index: title, month, blank, header, data...
+    const firstDayCol = 3;
+    rows.forEach((u, rowIndex) => {
+      days.forEach((day, dayIndex) => {
+        const comment = hcCommentText(u, day);
+        if (!comment) return;
+        const ref = XLSX.utils.encode_cell({ r: firstDataRow + rowIndex, c: firstDayCol + dayIndex });
+        const cell = sheet[ref] ?? { t: "s", v: "" };
+        cell.c = [{ a: "PowerPlant EAM", t: comment }];
+        sheet[ref] = cell;
+      });
+    });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Bảng công");
+    XLSX.writeFile(workbook, `bang-cong-${month.month + 1}-${month.year}.xlsx`, { compression: true });
+    toast.success(`Đã xuất ${rows.length} dòng Excel`);
   }
 
   function exportPdf() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
-    const scope = isAdmin ? "Toàn bộ nhân sự" : "Cá nhân";
+    const scope = canEditTimesheet ? "Toàn bộ nhân sự" : "Cá nhân";
     const dayTh = days.map((d) => `<th>${d}</th>`).join("");
     const bodyRows = rows
       .map((u, i) => {
         const tds = days
           .map((d) => {
-            const c = tsMap.get(`${u.id}:${d}`) as Code | undefined;
-            if (!c) return "<td></td>";
-            const m = cellMeta(c);
-            return `<td style="background:${m.color};color:${m.text};font-weight:700">${m.short}</td>`;
+            const override = overrideMap.get(`${u.id}:${d}`);
+            if (override) return `<td><span class="shift-chip manual">${override.value.replace(/</g, "&lt;")}</span></td>`;
+            const entries = tsMap.get(`${u.id}:${d}`) ?? [];
+            const hc = hcMap.get(`${u.id}:${d}`);
+            if (!entries.length && !hc) return "<td></td>";
+            const inner = entries
+              .map((entry) => {
+                const m = entry.isApproved
+                  ? cellMeta(entry.shiftType as Code)
+                  : { color: "#DC2626", text: "#ffffff" };
+                return `<span class="shift-chip" style="background:${m.color};color:${m.text}">${shiftEntryLabel(entry)}</span>`;
+              })
+              .join("") + (hc ? `<span class="shift-chip" style="background:${hcMeta(hc.content).bg};color:${hcMeta(hc.content).text}">${formatHours(hc.hours)}</span>` : "");
+            return `<td>${inner}</td>`;
           })
           .join("");
         const name = (u.name ?? "").replace(/</g, "&lt;");
@@ -155,13 +328,15 @@ export default function ShiftRosterPage() {
   th,td { border:1px solid #cbd5e1; padding:2px 3px; text-align:center; }
   th { background:#f1f5f9; }
   td.l, th.l { text-align:left; white-space:nowrap; }
+  .shift-chip { display:inline-block; min-width:18px; margin:1px; border-radius:3px; padding:1px 3px; font-weight:700; }
+  .shift-chip.manual { background:#0f172a; color:#ffffff; border:1px solid #38bdf8; }
   .legend { margin-top:8px; font-size:10px; }
   .legend span { display:inline-block; margin-right:14px; }
   .chip { display:inline-block; width:18px; height:14px; border-radius:3px; line-height:14px; font-weight:700; margin-right:4px; text-align:center; }
 </style></head><body>
   <div id="sheet">
     <h1>Bảng công trực ca — Phân xưởng Vận hành 1</h1>
-    <p class="sub">Tháng ${month.month + 1}/${month.year} · ${scope} · Chỉ gồm các ca đã được duyệt chấm công</p>
+    <p class="sub">Tháng ${month.month + 1}/${month.year} · ${scope} · Ca chưa duyệt được tô đỏ</p>
     <table>
       <thead><tr><th>STT</th><th class="l">Họ tên</th><th>Mã NV</th><th class="l">Chức vụ</th>${dayTh}</tr></thead>
       <tbody>${bodyRows}</tbody>
@@ -170,7 +345,8 @@ export default function ShiftRosterPage() {
       <span><i class="chip" style="background:#FDE68A;color:#92400E">V1</i>Sáng</span>
       <span><i class="chip" style="background:#BFDBFE;color:#1E40AF">V2</i>Chiều</span>
       <span><i class="chip" style="background:#C7D2FE;color:#3730A3">V3</i>Đêm</span>
-      <span>Ô trống: chưa có công duyệt</span>
+      <span><i class="chip" style="background:#DC2626;color:#ffffff">V</i>Chưa duyệt</span>
+      <span>4V3: 4 giờ ca đêm · Ô trống: chưa có công</span>
     </p>
   </div>
   <script>
@@ -220,7 +396,7 @@ export default function ShiftRosterPage() {
             Bảng công
           </button>
         </div>
-        {view === "timesheet" && isAdmin && (
+        {view === "timesheet" && canEditTimesheet && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -231,8 +407,11 @@ export default function ShiftRosterPage() {
               <DropdownMenuItem onClick={exportPdf}>
                 <FileText className="h-4 w-4 text-red-600" /> PDF
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportExcel}>
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel (.xlsx)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={exportCsv}>
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel (.csv)
+                <FileSpreadsheet className="h-4 w-4 text-slate-600" /> CSV (.csv)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -251,7 +430,7 @@ export default function ShiftRosterPage() {
                 <Button variant="outline" size="icon" onClick={() => shift(1)}><ChevronRight className="h-4 w-4" /></Button>
               </div>
               <div className="flex items-center gap-3">
-                {isAdmin && (
+                {canEditTimesheet && (
                   <select
                     value={posFilter}
                     onChange={(e) => setPosFilter(e.target.value)}
@@ -274,6 +453,12 @@ export default function ShiftRosterPage() {
                   <span className="inline-flex items-center gap-1">
                     <span className="flex h-5 w-5 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-500">N</span>Nghỉ
                   </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="flex h-5 w-8 items-center justify-center rounded bg-red-600 text-[10px] font-bold text-white">V</span>Chưa duyệt
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    <span className="font-semibold text-ink">4V3</span> = 4 giờ ca đêm
+                  </span>
                   <span className="mx-1 hidden h-4 w-px bg-border md:inline-block" />
                   <span className="font-medium text-muted-foreground">HC (giờ):</span>
                   <span className="inline-flex items-center gap-1">
@@ -289,12 +474,13 @@ export default function ShiftRosterPage() {
               </div>
             </div>
             <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
-              {isAdmin
+              {canEditTimesheet
                 ? "Bảng công của toàn bộ nhân sự — "
                 : "Bảng công của bạn — "}
-              chỉ hiển thị các ca <span className="font-medium text-ink">đã được Quản trị / Trưởng ca duyệt chấm công</span>,
-              kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>;
-              ô trống (·) là ngày chưa có công được duyệt. Dữ liệu chỉ xem, không chỉnh tay.
+              hiển thị ca đã điểm danh trên sơ đồ tổ chức ca; ca <span className="font-medium text-red-600">chưa duyệt được tô đỏ</span>.
+              Nếu số giờ khác 8 thì mã ca có tiền tố giờ, ví dụ <span className="font-medium text-ink">4V3</span>;
+              kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>; nếu HC có nội dung công việc thì rê chuột lên ô để xem.
+              {canEditTimesheet ? " Người được phân quyền có thể bấm vào từng ô để chỉnh giá trị hiển thị." : " Dữ liệu chỉ xem, không chỉnh tay."}
             </p>
           </Card>
 
@@ -327,41 +513,68 @@ export default function ShiftRosterPage() {
                         <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
                       </td>
                       {days.map((d) => {
-                        const code = tsMap.get(`${u.id}:${d}`) as Code | undefined;
+                        const entries = tsMap.get(`${u.id}:${d}`) ?? [];
                         const hc = hcMap.get(`${u.id}:${d}`);
-                        if (!code && hc == null) {
-                          return (
-                            <td key={d} className="border-l border-slate-200 p-0.5 text-center">
-                              <span className="mx-auto flex h-8 w-8 items-center justify-center text-[11px] text-slate-300">·</span>
-                            </td>
-                          );
-                        }
-                        const meta = code ? cellMeta(code) : null;
+                        const override = overrideMap.get(`${u.id}:${d}`);
+                        const open = () => openEditCell({ user: u, day: d, entries, hc, override });
                         return (
-                          <td key={d} className="border-l border-slate-200 p-0.5 text-center">
-                            <div className="mx-auto flex w-8 flex-col items-center justify-center gap-0.5">
-                              {meta && (
+                          <td
+                            key={d}
+                            className={cn(
+                              "group relative border-l border-slate-200 p-0.5 text-center",
+                              canEditTimesheet && "cursor-pointer hover:bg-sky-50/60"
+                            )}
+                            onClick={open}
+                            title={canEditTimesheet ? "Bấm để chỉnh ô bảng công" : undefined}
+                          >
+                            <div className="mx-auto flex min-h-8 min-w-10 flex-col items-center justify-center gap-0.5">
+                              {override ? (
                                 <span
-                                  className="flex h-7 w-8 items-center justify-center rounded text-[11px] font-bold"
-                                  style={{ background: meta.color, color: meta.text }}
-                                  title={`${u.name} · Ngày ${d}: ${meta.label}`}
+                                  className="flex min-h-7 min-w-8 items-center justify-center rounded border border-sky-300 bg-slate-800 px-1 text-[11px] font-bold text-white shadow-sm"
+                                  title={`${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`}
                                 >
-                                  {meta.short}
+                                  {override.value}
                                 </span>
+                              ) : entries.length || hc != null ? (
+                                <>
+                                  {entries.map((entry) => {
+                                    const meta = entry.isApproved
+                                      ? cellMeta(entry.shiftType as Code)
+                                      : { color: "#DC2626", text: "#ffffff", label: "Chưa duyệt" };
+                                    return (
+                                      <span
+                                        key={`${entry.shiftType}-${entry.hours}-${entry.isApproved ? "ok" : "pending"}`}
+                                        className="flex min-h-7 min-w-8 items-center justify-center rounded px-1 text-[11px] font-bold"
+                                        style={{ background: meta.color, color: meta.text }}
+                                        title={`${u.name} · Ngày ${d}: ${SHIFT_TYPE[entry.shiftType as keyof typeof SHIFT_TYPE]?.label ?? entry.shiftType} — ${entry.hours} giờ${entry.isApproved ? " (đã duyệt)" : " (chưa duyệt)"}`}
+                                      >
+                                        {shiftEntryLabel(entry)}
+                                      </span>
+                                    );
+                                  })}
+                                  {hc != null && (() => {
+                                    const hm = hcMeta(hc.content);
+                                    const workNote = hcWorkNote(hc);
+                                    return (
+                                      <span
+                                        className="flex h-7 w-8 items-center justify-center rounded text-[10px] font-bold"
+                                        style={{ background: hm.bg, color: hm.text }}
+                                        title={workNote ? `${u.name} · Ngày ${d}: ${workNote}` : undefined}
+                                      >
+                                        {formatHours(hc.hours)}
+                                      </span>
+                                    );
+                                  })()}
+                                </>
+                              ) : (
+                                <span className="mx-auto flex h-8 w-8 items-center justify-center text-[11px] text-slate-300">·</span>
                               )}
-                              {hc != null && (() => {
-                                const hm = hcMeta(hc.content);
-                                return (
-                                  <span
-                                    className="flex h-7 w-8 items-center justify-center rounded text-[10px] font-bold"
-                                    style={{ background: hm.bg, color: hm.text }}
-                                    title={`${u.name} · Ngày ${d}: ${hc.content} — ${hc.hours} giờ (HC, đã duyệt)`}
-                                  >
-                                    {hc.hours}h
-                                  </span>
-                                );
-                              })()}
                             </div>
+                            {canEditTimesheet && (
+                              <span className="pointer-events-none absolute right-0.5 top-0.5 hidden rounded bg-white/90 p-0.5 text-sky-700 shadow-sm ring-1 ring-sky-100 group-hover:block">
+                                <PencilLine className="h-3 w-3" />
+                              </span>
+                            )}
                           </td>
                         );
                       })}
@@ -373,10 +586,56 @@ export default function ShiftRosterPage() {
           )}
         </>
       )}
+      <Dialog open={!!editCell} onOpenChange={(open) => !open && setEditCell(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Chỉnh ô bảng công</DialogTitle>
+          </DialogHeader>
+          {editCell && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm">
+                <div className="font-semibold text-ink">{editCell.userName}</div>
+                <div className="text-xs text-muted-foreground">Ngày {String(editCell.day).padStart(2, "0")}/{String(month.month + 1).padStart(2, "0")}/{month.year}</div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Giá trị hiển thị</Label>
+                <Input
+                  value={editValue}
+                  onChange={(event) => setEditValue(event.target.value)}
+                  placeholder={editCell.calculated || "Ví dụ: ĐC, V2, 4V3, 8"}
+                  maxLength={40}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  Mặc định hiện tại: <span className="font-medium text-ink">{editCell.calculated || "trống"}</span>
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveOverride("")}
+              disabled={updateOverride.isPending || !editCell?.override}
+            >
+              <RotateCcw className="h-4 w-4" /> Khôi phục mặc định
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditCell(null)}>
+                Hủy
+              </Button>
+              <Button type="button" onClick={() => saveOverride()} disabled={updateOverride.isPending}>
+                {updateOverride.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Lưu
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
 /* ---- Lịch trực ca: an admin-uploaded PDF (Vận hành 1) ---- */
 function RosterPdfView({ isAdmin }: { isAdmin: boolean }) {
   const { data, isLoading } = useRosterSchedule();

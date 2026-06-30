@@ -1,19 +1,43 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, requireUser, handle } from "@/lib/api";
+import { audit, fail, ok, requireUser, handle } from "@/lib/api";
+import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
+const APPROVE_PERMISSION_ID = "shift-approve";
+const MANAGER = new Set(["ADMIN", "SUPERVISOR"]);
+
+async function canEditTimesheet(user: { id?: string; role?: string }) {
+  return MANAGER.has(user.role ?? "") || hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
+}
+
+async function ensureTimesheetOverrideTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "TimesheetOverride" (
+      "userId" TEXT NOT NULL,
+      date TEXT NOT NULL,
+      value TEXT NOT NULL,
+      note TEXT,
+      "updatedById" TEXT,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY ("userId", date)
+    )
+  `);
+}
+
 /**
- * Bảng công trực ca: approved attendance for a month. Returns one entry per
- * approved shift assignment — { userId, day, shiftType } — so the roster page can
- * render each staff member's actually-worked (and duyệt-chấm-công-approved) shifts.
+ * Bảng công trực ca: attendance for a month. Returns one entry per checked-in
+ * shift assignment, including logged hours and approval state, so the roster
+ * page can render partial shifts (4V3) and highlight forgotten approvals.
  */
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    // Only ADMIN sees everyone's timesheet; everyone else sees only their own.
-    const scopeToSelf = user.role !== "ADMIN";
+    const canEdit = await canEditTimesheet(user);
+    // Người có quyền duyệt/chỉnh công xem toàn bộ bảng; người khác chỉ xem dòng của mình.
+    const scopeToSelf = !canEdit;
+    await ensureTimesheetOverrideTable();
 
     const monthParam = req.nextUrl.searchParams.get("month"); // YYYY-MM
     const now = new Date();
@@ -29,20 +53,43 @@ export async function GET(req: NextRequest) {
 
     const assignments = await prisma.shiftAssignment.findMany({
       where: {
-        isApproved: true,
         ...(scopeToSelf ? { userId: user.id } : {}),
         shift: { date: { gte: monthStart, lte: monthEnd } },
       },
       select: {
+        shiftId: true,
         userId: true,
+        isApproved: true,
         shift: { select: { date: true, shiftType: true } },
       },
     });
+    const checkIns = await prisma.checkIn.findMany({
+      where: {
+        ...(scopeToSelf ? { userId: user.id } : {}),
+        shift: { date: { gte: monthStart, lte: monthEnd } },
+      },
+      select: {
+        shiftId: true,
+        userId: true,
+        note: true,
+        shift: { select: { date: true, shiftType: true } },
+      },
+    });
+    const hoursByUserShift = new Map<string, number>();
+    for (const checkIn of checkIns) {
+      const parsed = parseShiftHours(checkIn.note);
+      const key = `${checkIn.userId}:${checkIn.shiftId}`;
+      if (parsed.explicit || !hoursByUserShift.has(key)) {
+        hoursByUserShift.set(key, parsed.hours);
+      }
+    }
 
     const entries = assignments.map((a) => ({
       userId: a.userId,
       day: a.shift.date.getDate(),
       shiftType: a.shift.shiftType as string,
+      hours: hoursByUserShift.get(`${a.userId}:${a.shiftId}`) ?? 8,
+      isApproved: a.isApproved,
     }));
 
     // Approved administrative (hành chính) check-ins → hours per user per day.
@@ -52,15 +99,102 @@ export async function GET(req: NextRequest) {
         ...(scopeToSelf ? { userId: user.id } : {}),
         group: { date: { gte: monthStart, lte: monthEnd } },
       },
-      select: { userId: true, hours: true, group: { select: { date: true, content: true } } },
+      select: { userId: true, hours: true, note: true, group: { select: { date: true, content: true } } },
     });
     const hcEntries = hcCheckIns.map((c) => ({
       userId: c.userId,
       day: c.group.date.getDate(),
       hours: c.hours,
       content: c.group.content,
+      note: c.note,
     }));
 
-    return ok({ month: mo + 1, year: y, entries, hcEntries });
+    const overrideRows = await prisma.$queryRawUnsafe<
+      {
+        userId: string;
+        date: string;
+        value: string;
+        note: string | null;
+        updatedAt: Date;
+        updatedById: string | null;
+        updatedByName: string | null;
+      }[]
+    >(
+      `
+        SELECT o."userId", o.date, o.value, o.note, o."updatedAt", o."updatedById", u.name AS "updatedByName"
+        FROM "TimesheetOverride" o
+        LEFT JOIN "User" u ON u.id = o."updatedById"
+        WHERE o.date >= $1 AND o.date <= $2
+        ${scopeToSelf ? `AND o."userId" = $3` : ""}
+        ORDER BY o.date ASC
+      `,
+      `${y}-${String(mo + 1).padStart(2, "0")}-01`,
+      `${y}-${String(mo + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`,
+      ...(scopeToSelf ? [user.id] : [])
+    );
+    const overrides = overrideRows.map((row) => ({
+      userId: row.userId,
+      date: row.date,
+      day: Number(row.date.slice(8, 10)),
+      value: row.value,
+      note: row.note,
+      updatedAt: row.updatedAt.toISOString(),
+      updatedBy: row.updatedById ? { id: row.updatedById, name: row.updatedByName ?? "—" } : null,
+    }));
+
+    return ok({ month: mo + 1, year: y, entries, hcEntries, overrides, canEdit });
   });
+}
+
+export async function PUT(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    if (!(await canEditTimesheet(user))) return fail("Bạn không có quyền chỉnh bảng công", 403);
+    await ensureTimesheetOverrideTable();
+
+    const body = (await req.json()) as Record<string, unknown>;
+    const userId = String(body.userId ?? "").trim();
+    const date = String(body.date ?? "").trim();
+    const value = String(body.value ?? "").trim();
+    const note = String(body.note ?? "").trim() || null;
+
+    if (!userId) return fail("Thiếu nhân viên cần chỉnh công");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Ngày bảng công không hợp lệ");
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
+    if (!target) return fail("Không tìm thấy nhân viên", 404);
+
+    if (!value) {
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM "TimesheetOverride" WHERE "userId" = $1 AND date = $2`,
+        userId,
+        date
+      );
+      await audit(user.id, "DELETE_TIMESHEET_OVERRIDE", "TimesheetOverride", `${userId}:${date}`, target.name);
+      return ok({ userId, date, value: "" });
+    }
+
+    if (value.length > 40) return fail("Giá trị ô bảng công tối đa 40 ký tự");
+    await prisma.$executeRawUnsafe(
+      `
+        INSERT INTO "TimesheetOverride" ("userId", date, value, note, "updatedById", "updatedAt")
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+        ON CONFLICT ("userId", date)
+        DO UPDATE SET value = EXCLUDED.value, note = EXCLUDED.note, "updatedById" = EXCLUDED."updatedById", "updatedAt" = CURRENT_TIMESTAMP
+      `,
+      userId,
+      date,
+      value,
+      note,
+      user.id
+    );
+    await audit(user.id, "UPDATE_TIMESHEET_OVERRIDE", "TimesheetOverride", `${userId}:${date}`, `${target.name}: ${value}`);
+    return ok({ userId, date, value, note });
+  });
+}
+
+function parseShiftHours(note: string | null) {
+  const match = note?.match(/^\s*(\d+(?:[,.]\d+)?)\s*h/i);
+  if (!match) return { hours: 8, explicit: false };
+  const hours = Number(match[1].replace(",", "."));
+  return { hours: Number.isFinite(hours) && hours > 0 ? hours : 8, explicit: true };
 }

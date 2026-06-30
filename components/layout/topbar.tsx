@@ -278,11 +278,11 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           </button>
 
           {notifOpen && (
-            <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-xl border border-border bg-white shadow-lg">
+            <div className="fixed inset-x-2 top-[4.25rem] z-50 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-xl border border-border bg-white shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-80">
               <div className="border-b border-border px-4 pt-2.5">
                 <span className="text-sm font-semibold text-ink">Thông báo</span>
                 {/* Tabs: tách biệt cảnh báo vận hành và cảnh báo thay thế vật tư */}
-                <div className="mt-2 flex gap-1">
+                <div className="mt-2 grid grid-cols-3 gap-1 sm:flex">
                   <NotifTab active={notifTab === "ops"} onClick={() => setNotifTab("ops")} label="Vận hành" count={notices.length} />
                   <NotifTab active={notifTab === "repl"} onClick={() => setNotifTab("repl")} label="Thay thế vật tư" count={activeReplAlerts.length} />
                   <NotifTab active={notifTab === "internal"} onClick={() => setNotifTab("internal")} label="Nội bộ" count={internalEvents.length} />
@@ -692,13 +692,13 @@ function NotifTab({ active, onClick, label, count }: { active: boolean; onClick:
     <button
       onClick={onClick}
       className={cn(
-        "relative -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-xs font-medium transition-colors",
+        "relative -mb-px flex min-h-10 w-full items-center justify-center gap-1.5 border-b-2 px-1 py-2 text-center text-xs font-medium leading-tight transition-colors sm:min-h-0 sm:w-auto sm:px-2.5",
         active ? "border-accent text-accent" : "border-transparent text-muted-foreground hover:text-ink"
       )}
     >
-      {label}
+      <span className="min-w-0 break-words">{label}</span>
       {count > 0 && (
-        <span className={cn("rounded-full px-1.5 text-[10px] font-bold", active ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground")}>
+        <span className={cn("shrink-0 rounded-full px-1.5 text-[10px] font-bold", active ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground")}>
           {count}
         </span>
       )}
