@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { maybeUploadDataUrlList } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ function normalizeBody(body: Record<string, unknown>) {
   const attachmentUrls = Array.isArray(body.attachmentUrls)
     ? body.attachmentUrls
         .map((value) => String(value ?? "").trim())
-        .filter((value) => value.startsWith("data:image/"))
+        .filter((value) => value.startsWith("data:image/") || /^https?:\/\//i.test(value))
         .slice(0, 2)
     : [];
 
@@ -130,6 +131,7 @@ export async function POST(req: NextRequest) {
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
 
     const payload = normalizeBody(body);
+    payload.attachmentUrls = await maybeUploadDataUrlList(payload.attachmentUrls, "digital-documents/attachments", "document-image");
     if (!payload.title) return fail("Vui lòng nhập tên tài liệu");
     if (!OPTIONAL_DOCUMENT_URL_CATEGORIES.has(category) && !payload.documentUrl) return fail("Vui lòng nhập nội dung hoặc link tài liệu");
 
@@ -174,6 +176,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const payload = normalizeBody(body);
+    payload.attachmentUrls = await maybeUploadDataUrlList(payload.attachmentUrls, "digital-documents/attachments", "document-image");
     if (!payload.title) return fail("Vui lòng nhập tên tài liệu");
     if (!OPTIONAL_DOCUMENT_URL_CATEGORIES.has(category) && !payload.documentUrl) return fail("Vui lòng nhập nội dung hoặc link tài liệu");
 

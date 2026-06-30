@@ -1,13 +1,9 @@
 import type { NextRequest } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
-import crypto from "crypto";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { uploadBufferToS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "announcements");
 
 /** POST /api/announcements/upload — ADMIN uploads a PDF attachment (multipart
  *  field "file"). Returns { url, name } to store on the announcement. */
@@ -24,13 +20,15 @@ export async function POST(req: NextRequest) {
     if (!isPdf) return fail("Chỉ chấp nhận tệp PDF");
     if (file.size > 25 * 1024 * 1024) return fail("Tệp vượt quá 25MB");
 
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    const stored = `${crypto.randomUUID()}.pdf`;
     const bytes = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(path.join(UPLOAD_DIR, stored), bytes);
+    const uploaded = await uploadBufferToS3({
+      buffer: bytes,
+      contentType: "application/pdf",
+      folder: "announcements/pdf",
+      filename: file.name,
+    });
 
-    const url = `/uploads/announcements/${stored}`;
-    await audit(user.id, "UPLOAD_ANNOUNCEMENT_FILE", "Announcement", stored, file.name);
-    return ok({ url, name: file.name });
+    await audit(user.id, "UPLOAD_ANNOUNCEMENT_FILE", "Announcement", uploaded.key, file.name);
+    return ok({ url: uploaded.url, key: uploaded.key, name: file.name });
   });
 }

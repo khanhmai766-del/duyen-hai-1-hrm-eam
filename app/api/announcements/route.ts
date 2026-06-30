@@ -4,17 +4,22 @@ import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
+import { deleteFromS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ADMIN_ONLY = ["ADMIN"];
 
-/** Best-effort removal of a locally-stored announcement attachment. */
-async function removeLocalFile(fileUrl: string | null | undefined) {
-  if (!fileUrl?.startsWith("/uploads/announcements/")) return;
+/** Best-effort removal of an announcement attachment. */
+async function removeAttachment(fileUrl: string | null | undefined) {
+  if (!fileUrl) return;
   try {
-    await fs.rm(path.join(process.cwd(), "public", fileUrl), { force: true });
+    if (fileUrl.startsWith("/uploads/announcements/")) {
+      await fs.rm(path.join(process.cwd(), "public", fileUrl), { force: true });
+      return;
+    }
+    await deleteFromS3(fileUrl);
   } catch {
     // non-fatal
   }
@@ -86,7 +91,7 @@ export async function PUT(req: NextRequest) {
     // If the attachment changed, drop the old file to avoid orphans.
     if (fileUrl !== undefined) {
       const prev = await prisma.announcement.findUnique({ where: { id }, select: { fileUrl: true } });
-      if (prev?.fileUrl && prev.fileUrl !== fileUrl) await removeLocalFile(prev.fileUrl);
+      if (prev?.fileUrl && prev.fileUrl !== fileUrl) await removeAttachment(prev.fileUrl);
     }
 
     const item = await prisma.announcement.update({
@@ -118,7 +123,7 @@ export async function DELETE(req: NextRequest) {
     if (!id) return fail("Thiếu id bài đăng");
     const prev = await prisma.announcement.findUnique({ where: { id }, select: { fileUrl: true } });
     await prisma.announcement.delete({ where: { id } });
-    await removeLocalFile(prev?.fileUrl);
+    await removeAttachment(prev?.fileUrl);
     await audit(user.id, "DELETE_ANNOUNCEMENT", "Announcement", id, "Xoá bài đăng");
     return ok({ id });
   });

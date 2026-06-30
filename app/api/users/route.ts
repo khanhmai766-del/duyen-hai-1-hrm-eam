@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ export async function POST(req: NextRequest) {
       where: { OR: [{ email: body.email }, { employeeId: body.employeeId }] },
     });
     if (exists) return fail("Email hoặc mã nhân viên đã tồn tại");
+    const avatarUrl = await maybeUploadDataUrl({ value: body.avatarUrl || null, folder: "avatars", preset: "avatar" });
+    const signatureUrl = await maybeUploadDataUrl({ value: body.signatureUrl || null, folder: "signatures", preset: "signature" });
     const created = await prisma.user.create({
       data: {
         name: body.name,
@@ -37,8 +40,8 @@ export async function POST(req: NextRequest) {
         role: body.role || "VIEWER",
         position: body.position || null,
         department: body.department || null,
-        avatarUrl: body.avatarUrl || null,
-        signatureUrl: body.signatureUrl || null,
+        avatarUrl,
+        signatureUrl,
         passwordHash: await bcrypt.hash(body.password || "password123", 10),
       },
     });
@@ -60,8 +63,12 @@ export async function PUT(req: NextRequest) {
     if (body.position !== undefined) data.position = body.position;
     if (body.department !== undefined) data.department = body.department;
     if (body.phone !== undefined) data.phone = body.phone;
-    if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
-    if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
+    if (body.avatarUrl !== undefined) {
+      data.avatarUrl = await maybeUploadDataUrl({ value: body.avatarUrl || null, folder: "avatars", preset: "avatar" });
+    }
+    if (body.signatureUrl !== undefined) {
+      data.signatureUrl = await maybeUploadDataUrl({ value: body.signatureUrl || null, folder: "signatures", preset: "signature" });
+    }
     if (body.email) data.email = body.email;
     if (body.employeeId) data.employeeId = body.employeeId;
 

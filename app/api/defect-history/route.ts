@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { maybeUploadDataUrlList } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,11 @@ export async function POST(req: NextRequest) {
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
     if (body.device) await assertSeqEditable(user, String(body.device));
 
-    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
+    const images = await maybeUploadDataUrlList(
+      Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [],
+      "defect-history/images",
+      "image"
+    );
     const history = await prisma.defectHistory.create({
       data: {
         unit: body.unit,

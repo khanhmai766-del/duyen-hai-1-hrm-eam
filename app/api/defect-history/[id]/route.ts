@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { maybeUploadDataUrlList } from "@/lib/s3";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -10,7 +11,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
-    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : undefined;
+    const images = Array.isArray(body.images)
+      ? await maybeUploadDataUrlList(body.images.filter(Boolean).slice(0, 3), "defect-history/images", "image")
+      : undefined;
     const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
     if (existing.device) await assertSeqEditable(user, existing.device);

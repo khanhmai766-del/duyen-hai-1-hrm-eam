@@ -36,7 +36,7 @@ function LoginInner() {
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
   const [biometricSupported, setBiometricSupported] = React.useState(false);
-  const [stats, setStats] = React.useState<{ devices: number } | null>(null);
+  const [stats, setStats] = React.useState<{ devices: number; users: number } | null>(null);
 
   React.useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -208,7 +208,7 @@ function LoginInner() {
             An Toàn - Hiệu Quả - Kinh Tế - Bảo Vệ Môi Trường
           </p>
         </div>
-        <div className="relative z-10 flex gap-8 text-sm text-white/70">
+        <div className="relative z-10 grid grid-cols-4 gap-5 text-sm text-white/70">
           <div>
             <div className="text-2xl font-bold text-white">{stats ? stats.devices.toLocaleString("vi-VN") : "—"}</div>
             Thiết bị quản lý
@@ -220,6 +220,10 @@ function LoginInner() {
           <div>
             <div className="text-2xl font-bold text-white">5</div>
             Ca/ Kíp vận hành
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-white">{stats ? stats.users.toLocaleString("vi-VN") : "—"}</div>
+            Nhân sự
           </div>
         </div>
       </div>

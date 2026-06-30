@@ -5,6 +5,7 @@ import { addMonths } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
     if (exists) return fail("Mã vật tư đã tồn tại");
     const defaultSystem = body.system?.trim() || null;
     const replacements = parseReplacements(body, user.id, defaultSystem);
+    const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" });
     const m = await prisma.material.create({
       data: {
         code: body.code,
@@ -124,7 +126,7 @@ export async function POST(req: NextRequest) {
         minStock: Number(body.minStock) || 0,
         location: null,
         system: defaultSystem,
-        imageUrl: body.imageUrl || null,
+        imageUrl,
         unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
         note: body.note || null,
         ...(replacements.length ? { replacements: { create: replacements } } : {}),
@@ -143,6 +145,10 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
+    const imageUrl =
+      body.imageUrl !== undefined
+        ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" })
+        : undefined;
     await prisma.material.update({
       where: { id: body.id },
       data: {
@@ -151,7 +157,7 @@ export async function PUT(req: NextRequest) {
         ...(body.quantity != null ? { quantity: Number(body.quantity) } : {}),
         ...(body.minStock != null ? { minStock: Number(body.minStock) } : {}),
         ...(defaultSystem !== undefined ? { system: defaultSystem } : {}),
-        ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl || null } : {}),
+        ...(body.imageUrl !== undefined ? { imageUrl } : {}),
         ...(body.unitPrice != null ? { unitPrice: Number(body.unitPrice) } : {}),
         ...(body.note !== undefined ? { note: body.note || null } : {}),
       },

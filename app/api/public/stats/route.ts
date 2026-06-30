@@ -9,11 +9,12 @@ const SYNTHETIC_EQUIPMENT_NODE_SEQS = ["1.0", "1.1"];
 // và tổng người dùng. Chỉ trả về số đếm, không lộ dữ liệu chi tiết.
 export async function GET() {
   return handle(async () => {
-    const [equipmentNodes, existingSyntheticNodes] = await Promise.all([
+    const [equipmentNodes, existingSyntheticNodes, users] = await Promise.all([
       prisma.equipmentNode.count(),
       prisma.equipmentNode.count({ where: { seq: { in: SYNTHETIC_EQUIPMENT_NODE_SEQS } } }),
+      prisma.user.count({ where: { isActive: true } }),
     ]);
     const devices = equipmentNodes + SYNTHETIC_EQUIPMENT_NODE_SEQS.length - existingSyntheticNodes;
-    return ok({ devices });
+    return ok({ devices, users });
   });
 }

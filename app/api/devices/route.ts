@@ -10,6 +10,7 @@ import {
 } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import { filterEquipmentNodesForUser } from "@/lib/server-access";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -151,7 +152,8 @@ export async function POST(req: NextRequest) {
 
     const parentSeq = String(body.systemSeq ?? "").trim() || parentSeqOf(seq);
     const maxSort = await prisma.equipmentNode.aggregate({ _max: { sort: true } });
-    const imageUrl = Array.isArray(body.images) ? body.images.filter(Boolean)[0] ?? null : null;
+    const rawImageUrl = Array.isArray(body.images) ? body.images.filter(Boolean)[0] ?? null : null;
+    const imageUrl = await maybeUploadDataUrl({ value: rawImageUrl, folder: "equipment/images", preset: "image" });
     const node = await prisma.equipmentNode.create({
       data: {
         seq,

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +15,17 @@ export async function PUT(req: NextRequest) {
     const isAdmin = user.role === "ADMIN";
 
     const data: Record<string, unknown> = {};
-    if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
+    if (body.signatureUrl !== undefined) {
+      data.signatureUrl = await maybeUploadDataUrl({ value: body.signatureUrl || null, folder: "signatures", preset: "signature" });
+    }
     if (body.phone !== undefined) data.phone = body.phone || null;
     if (body.email) data.email = body.email;
     if (body.employeeId) data.employeeId = body.employeeId;
     if (isAdmin) {
       // Chỉ quản trị viên mới được thay ảnh đại diện.
-      if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
+      if (body.avatarUrl !== undefined) {
+        data.avatarUrl = await maybeUploadDataUrl({ value: body.avatarUrl || null, folder: "avatars", preset: "avatar" });
+      }
       if (body.name) data.name = body.name;
       if (body.position !== undefined) data.position = body.position || null;
       if (body.department !== undefined) data.department = body.department || null;
