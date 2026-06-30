@@ -50,22 +50,24 @@ export async function audit(
     saveToAuditLog?: boolean;
   }
 ) {
-  try {
-    await writeActivityLog({
-      actorUserId: userId,
-      actorName: options?.actorName,
-      action,
-      targetType: entity,
-      targetId: entityId,
-      detail,
-      beforeData: options?.beforeData,
-      afterData: options?.afterData,
-      changedFields: options?.changedFields,
-      ipAddress: options?.ipAddress,
-      userAgent: options?.userAgent,
-      saveToAuditLog: options?.saveToAuditLog,
-    });
-  } catch {
+  // Ghi log KHÔNG chặn response: kích hoạt ở chế độ nền (không await) để mutation
+  // trả kết quả ngay, không phải đợi 1-2 insert DB + (tuỳ chọn) upload S3. App chạy
+  // trên Node server (VPS) nên promise nền vẫn hoàn tất sau khi response đã gửi.
+  // Lỗi ghi log là không nghiêm trọng → nuốt qua .catch.
+  void writeActivityLog({
+    actorUserId: userId,
+    actorName: options?.actorName,
+    action,
+    targetType: entity,
+    targetId: entityId,
+    detail,
+    beforeData: options?.beforeData,
+    afterData: options?.afterData,
+    changedFields: options?.changedFields,
+    ipAddress: options?.ipAddress,
+    userAgent: options?.userAgent,
+    saveToAuditLog: options?.saveToAuditLog,
+  }).catch(() => {
     // non-fatal
-  }
+  });
 }
