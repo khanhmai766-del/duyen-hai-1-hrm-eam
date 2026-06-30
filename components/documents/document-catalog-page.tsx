@@ -212,6 +212,7 @@ interface DocumentCatalogPageProps {
   backupSubtitle?: string;
   backupFilenamePrefix?: string;
   wideNameNarrowLinkLayout?: boolean;
+  hideDocumentIcon?: boolean;
 }
 
 export function DocumentCatalogPage({
@@ -258,6 +259,7 @@ export function DocumentCatalogPage({
   backupSubtitle,
   backupFilenamePrefix,
   wideNameNarrowLinkLayout = false,
+  hideDocumentIcon = false,
 }: DocumentCatalogPageProps) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
@@ -280,6 +282,7 @@ export function DocumentCatalogPage({
   const [form, setForm] = React.useState<DocumentForm>(EMPTY_FORM);
   const [positionFilter, setPositionFilter] = React.useState(ALL_FILTER);
   const [blockFilter, setBlockFilter] = React.useState(ALL_FILTER);
+  const [procedureTypeFilter, setProcedureTypeFilter] = React.useState(ALL_FILTER);
   const [yearFilter, setYearFilter] = React.useState("");
   const [tagFilter, setTagFilter] = React.useState(ALL_FILTER);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -337,7 +340,7 @@ export function DocumentCatalogPage({
   React.useEffect(() => {
     setExpandedId(null);
     setPageIndex(1);
-  }, [category, q, historyTableLayout, yearFilter, tagFilter]);
+  }, [category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter]);
 
   React.useEffect(() => {
     if (!hasYearField) {
@@ -354,6 +357,7 @@ export function DocumentCatalogPage({
       if (hasYearField && activeYearFilter && item.managingPosition !== activeYearFilter) return false;
       if (hasTagField && tagFilter !== ALL_FILTER && item.decisionNumber !== tagFilter) return false;
       if (showEquipmentScope && positionFilter !== ALL_FILTER && !documentPositionMatches(item.managingPosition, positionFilter)) return false;
+      if (hasProcedureValidity && procedureTypeFilter !== ALL_FILTER && normalizeProcedureType(item.procedureType) !== procedureTypeFilter) return false;
       const itemBlocks = documentManagementBlocks(item);
       const itemBlock = itemBlocks.join(", ");
       if (showEquipmentScope && blockFilter !== ALL_FILTER && !itemBlocks.includes(blockFilter)) return false;
@@ -370,7 +374,7 @@ export function DocumentCatalogPage({
       if (aValidity.expired !== bValidity.expired) return aValidity.expired ? -1 : 1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [docs.data?.data, q, hasYearField, activeYearFilter, hasTagField, tagFilter, showEquipmentScope, positionFilter, blockFilter, hasProcedureValidity]);
+  }, [docs.data?.data, q, hasYearField, activeYearFilter, hasTagField, tagFilter, showEquipmentScope, positionFilter, procedureTypeFilter, blockFilter, hasProcedureValidity]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(pageIndex, pageCount);
@@ -715,7 +719,16 @@ export function DocumentCatalogPage({
       {afterHeader}
 
       <Card className="p-4">
-        <div className={cn("grid gap-3", hasYearField || hasTagField ? "xl:grid-cols-[1fr_auto]" : "xl:grid-cols-[1fr_220px_190px]")}>
+        <div
+          className={cn(
+            "grid gap-3",
+            hasYearField || hasTagField
+              ? "xl:grid-cols-[1fr_auto]"
+              : hasProcedureValidity
+              ? "xl:grid-cols-[1fr_220px_180px_190px]"
+              : "xl:grid-cols-[1fr_220px_190px]"
+          )}
+        >
           <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -765,10 +778,10 @@ export function DocumentCatalogPage({
             <>
               <Select value={positionFilter} onValueChange={setPositionFilter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Lọc cương vị" />
+                  <SelectValue placeholder={hasProcedureValidity ? "Lọc quy trình theo cương vị" : "Lọc cương vị"} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_FILTER}>Tất cả cương vị</SelectItem>
+                  <SelectItem value={ALL_FILTER}>{hasProcedureValidity ? "Tất cả quy trình" : "Tất cả cương vị"}</SelectItem>
                   {positionOptions.map((position) => (
                     <SelectItem key={position} value={position}>
                       {position}
@@ -776,6 +789,21 @@ export function DocumentCatalogPage({
                   ))}
                 </SelectContent>
               </Select>
+              {hasProcedureValidity && (
+                <Select value={procedureTypeFilter} onValueChange={setProcedureTypeFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Loại QT" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_FILTER}>Tất cả loại QT</SelectItem>
+                    {PROCEDURE_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={blockFilter} onValueChange={setBlockFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Lọc khối quản lý" />
@@ -879,7 +907,7 @@ export function DocumentCatalogPage({
                   {!historyTableLayout && (
                     <TableCell className={cn(wideNameNarrowLinkLayout && "align-top")}>
                       <div className="flex min-w-0 items-start gap-3">
-                        {!hasProcedureValidity && (
+                        {!hideDocumentIcon && !hasProcedureValidity && (
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-accent">
                             <FileText className="h-4 w-4" />
                           </div>
@@ -1140,7 +1168,7 @@ export function DocumentCatalogPage({
             ) : (
               <TableRow>
                 <TableCell colSpan={tableColumnCount} className="p-0">
-                  <EmptyState title={emptyTitle} description={emptyDescription} icon={FileText} />
+                  <EmptyState title={emptyTitle} description={emptyDescription} icon={hideDocumentIcon ? null : FileText} />
                 </TableCell>
               </TableRow>
             )}

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useHcGroups, useCreateHcGroup, useUpdateHcGroup, useDeleteHcGroup,
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
@@ -25,10 +26,10 @@ import { cn, initials } from "@/lib/utils";
 
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const HC_SELF_PERIODS = [
-  { value: "FULL_DAY", label: "Cả ngày", hours: 8 },
-  { value: "MORNING", label: "Buổi sáng", hours: 4 },
-  { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3 },
-  { value: "AFTERNOON", label: "Buổi chiều", hours: 4 },
+  { value: "FULL_DAY", label: "Cả ngày", hours: 8, cutoff: "Trước 08h00" },
+  { value: "MORNING", label: "Buổi sáng", hours: 4, cutoff: "Trước 08h00" },
+  { value: "AFTERNOON", label: "Buổi chiều", hours: 4, cutoff: "Trước 13h30" },
+  { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3, cutoff: "Trước 14h30" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
 
@@ -292,48 +293,32 @@ function GroupCard({ group, canManage, myId }: { group: HcGroup; canManage: bool
 }
 
 /* ---- Create / edit group dialog ---- */
-const HC_PRESETS = ["Diễn tập xử lý sự cố", "Diễn tập PCCC"];
-const HC_OTHER = "Khác";
-
 function GroupDialog({
   open, onOpenChange, date, group,
 }: { open: boolean; onOpenChange: (o: boolean) => void; date: string; group?: HcGroup }) {
   const create = useCreateHcGroup();
   const update = useUpdateHcGroup();
   const isEdit = !!group;
-  // `preset` is the dropdown choice; `custom` holds the free text when "Khác".
-  const [preset, setPreset] = React.useState("");
-  const [custom, setCustom] = React.useState("");
+  const [content, setContent] = React.useState("");
   const [hours, setHours] = React.useState(8);
 
   React.useEffect(() => {
     if (!open) return;
-    const c = group?.content ?? "";
-    if (HC_PRESETS.includes(c)) {
-      setPreset(c);
-      setCustom("");
-    } else if (c) {
-      setPreset(HC_OTHER);
-      setCustom(c);
-    } else {
-      setPreset("");
-      setCustom("");
-    }
+    setContent(group?.content ?? "");
     setHours(group?.hours ?? 8);
   }, [open, group]);
 
   const dateLabel = date.split("-").reverse().join("-");
-  const content = (preset === HC_OTHER ? custom : preset).trim();
+  const cleanContent = content.trim();
 
   async function save() {
-    if (!preset) return toast.error("Chọn nội dung");
-    if (!content) return toast.error("Nhập nội dung");
+    if (!cleanContent) return toast.error("Nhập nội dung");
     try {
       if (isEdit) {
-        await update.mutateAsync({ id: group!.id, content, hours });
+        await update.mutateAsync({ id: group!.id, content: cleanContent, hours });
         toast.success("Đã cập nhật nhóm");
       } else {
-        await create.mutateAsync({ date, content, hours });
+        await create.mutateAsync({ date, content: cleanContent, hours });
         toast.success("Đã tạo nhóm hành chính");
       }
       onOpenChange(false);
@@ -363,19 +348,8 @@ function GroupDialog({
             </Select>
           </Row>
           <Row label="Nội dung">
-            <Select value={preset} onValueChange={setPreset}>
-              <SelectTrigger><SelectValue placeholder="Chọn nội dung" /></SelectTrigger>
-              <SelectContent>
-                {HC_PRESETS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                <SelectItem value={HC_OTHER}>{HC_OTHER}</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input value={content} onChange={(e) => setContent(e.target.value)} placeholder="Nhập nội dung..." autoFocus />
           </Row>
-          {preset === HC_OTHER && (
-            <Row label="Nội dung khác">
-              <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Nhập nội dung..." autoFocus />
-            </Row>
-          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Huỷ</Button>
@@ -394,6 +368,7 @@ function SelfAdministrativeCheckInDialog({
 }: { open: boolean; onOpenChange: (o: boolean) => void; date: string; groups: HcGroup[]; myId?: string }) {
   const checkIn = useHcCheckIn();
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
+  const [workNote, setWorkNote] = React.useState("");
 
   const myCheckIn = React.useMemo(
     () => groups.flatMap((g) => g.members.map((m) => ({ member: m, group: g }))).find((entry) => entry.member.userId === myId),
@@ -406,11 +381,12 @@ function SelfAdministrativeCheckInDialog({
       ? HC_SELF_PERIODS.find((p) => myCheckIn.group.content === `Hành chính - ${p.label}`)
       : undefined;
     setPeriod(current?.value ?? "FULL_DAY");
+    setWorkNote(myCheckIn?.member.note ?? "");
   }, [open, myCheckIn]);
 
   async function save() {
     try {
-      await checkIn.mutateAsync({ date, period });
+      await checkIn.mutateAsync({ date, period, workNote });
       toast.success(myCheckIn ? "Đã cập nhật chấm công hành chính" : "Đã chấm công hành chính");
       onOpenChange(false);
     } catch (e) {
@@ -431,17 +407,28 @@ function SelfAdministrativeCheckInDialog({
               <SelectContent>
                 {HC_SELF_PERIODS.map((p) => (
                   <SelectItem key={p.value} value={p.value}>
-                    {p.label}
+                    {p.label} ({p.cutoff})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </Row>
+          <Row label="Nội dung công việc">
+            <Textarea
+              value={workNote}
+              onChange={(e) => setWorkNote(e.target.value)}
+              rows={3}
+              placeholder="Nhập nội dung công việc nếu có..."
+            />
           </Row>
           {myCheckIn && (
             <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
               Bạn đã chấm công {periodLabel(myCheckIn.group.content).toLowerCase()}, có thể cập nhật lại.
             </div>
           )}
+          <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Thời gian chấm công: cả ngày và buổi sáng trước 08h00; buổi chiều trước 13h30; ra ca sáng trước 14h30.
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Huỷ</Button>

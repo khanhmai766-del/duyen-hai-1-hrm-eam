@@ -67,7 +67,7 @@ export function useDeleteHcGroup() {
 export function useHcCheckIn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { groupId: string; hours: number } | { date: string; period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON"; note?: string }) =>
+    mutationFn: (body: { groupId: string; hours: number } | { date: string; period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON"; note?: string; workNote?: string }) =>
       apiMutate("/api/hc-groups/checkin", "POST", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });

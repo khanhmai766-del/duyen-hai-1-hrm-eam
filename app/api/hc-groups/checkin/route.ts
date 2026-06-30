@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 const APPROVE_PERMISSION_ID = "shift-approve";
 const MANAGER = ["ADMIN", "TECHNICIAN"];
 const HC_SELF_PERIODS = {
-  FULL_DAY: { label: "Cả ngày", hours: 8 },
-  MORNING: { label: "Buổi sáng", hours: 4 },
-  MORNING_OFF: { label: "Ra ca sáng", hours: 3 },
-  AFTERNOON: { label: "Buổi chiều", hours: 4 },
+  FULL_DAY: { label: "Cả ngày", hours: 8, cutoffHour: 8, cutoffMinute: 0, cutoffLabel: "08h00" },
+  MORNING: { label: "Buổi sáng", hours: 4, cutoffHour: 8, cutoffMinute: 0, cutoffLabel: "08h00" },
+  AFTERNOON: { label: "Buổi chiều", hours: 4, cutoffHour: 13, cutoffMinute: 30, cutoffLabel: "13h30" },
+  MORNING_OFF: { label: "Ra ca sáng", hours: 3, cutoffHour: 14, cutoffMinute: 30, cutoffLabel: "14h30" },
 } as const;
 const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính - ${p.label}`);
 const DEFAULT_REGISTER_NOTE = "Chờ phân công";
@@ -47,6 +47,18 @@ function isBeforeRegistrationCutoff(now = new Date()) {
   return now.getTime() < cutoff.getTime();
 }
 
+function isSameLocalDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function isBeforeCheckInCutoff(period: keyof typeof HC_SELF_PERIODS, target: Date, now = new Date()) {
+  if (!isSameLocalDay(target, now)) return false;
+  const option = HC_SELF_PERIODS[period];
+  const cutoff = new Date(now);
+  cutoff.setHours(option.cutoffHour, option.cutoffMinute, 0, 0);
+  return now.getTime() < cutoff.getTime();
+}
+
 async function canManageHc(user: { id?: string; role?: string }) {
   return MANAGER.includes(user.role ?? "") || hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
@@ -56,12 +68,13 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const body = await req.json();
-    const { groupId, hours, date, period, note } = body as {
+    const { groupId, hours, date, period, note, workNote } = body as {
       groupId?: string;
       hours?: number;
       date?: string;
       period?: keyof typeof HC_SELF_PERIODS;
       note?: string;
+      workNote?: string;
     };
 
     if (!groupId) {
@@ -74,6 +87,7 @@ export async function POST(req: NextRequest) {
       if (Number.isNaN(start.getTime())) return fail("Ngày không hợp lệ");
       const hasNote = Object.prototype.hasOwnProperty.call(body, "note");
       const cleanNote = note?.trim() || null;
+      const cleanWorkNote = workNote?.trim() || null;
       const registerNote = cleanNote ?? DEFAULT_REGISTER_NOTE;
       const existingRegistration = await prisma.hcCheckIn.findFirst({
         where: {
@@ -94,6 +108,8 @@ export async function POST(req: NextRequest) {
         if (!existingRegistration && !canRegisterForDate(start)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
         }
+      } else if (!isBeforeCheckInCutoff(period, start)) {
+        return fail(`Chỉ được chấm công ${option.label.toLowerCase()} trước ${option.cutoffLabel}`);
       }
 
       if (existingRegistration) {
@@ -134,14 +150,18 @@ export async function POST(req: NextRequest) {
 
       const checkIn = await prisma.hcCheckIn.upsert({
         where: { groupId_userId: { groupId: group.id, userId: user.id } },
-        update: { hours: option.hours, isApproved: !hasNote, ...(hasNote ? { note: registerNote, isRegistered: true } : {}) },
+        update: {
+          hours: option.hours,
+          isApproved: !hasNote,
+          ...(hasNote ? { note: registerNote, isRegistered: true } : { note: cleanWorkNote, isRegistered: false }),
+        },
         create: {
           groupId: group.id,
           userId: user.id,
           hours: option.hours,
           isApproved: !hasNote,
           isRegistered: hasNote,
-          ...(hasNote ? { note: registerNote } : {}),
+          note: hasNote ? registerNote : cleanWorkNote,
         },
       });
       await audit(

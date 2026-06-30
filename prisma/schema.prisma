@@ -71,6 +71,8 @@ model Announcement {
   body        String
   pinned      Boolean  @default(false)
   orderedBy   String? // "Theo lệnh" — tên quản đốc / phó quản đốc ra lệnh
+  issuedAt    DateTime? // ngày ra mệnh lệnh
+  invalidatedAt DateTime? // ngày đánh dấu mệnh lệnh không còn hiệu lực; tự xoá sau 15 ngày
   linkUrl     String? // optional website link
   fileUrl     String? // optional attached PDF (public URL)
   fileName    String? // original PDF file name
