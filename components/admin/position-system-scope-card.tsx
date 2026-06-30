@@ -11,7 +11,7 @@ import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/u
 import { usePositions } from "@/hooks/useUsers";
 import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
-import { normalizeScopeAccess, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
+import { normalizeScopeAccess, positionScopeOptions, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 
 const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; className: string }[] = [
@@ -23,7 +23,7 @@ const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; clas
 export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const allPositions = usePositions();
   const positions = React.useMemo(
-    () => selectableManagingPositionOptions(allPositions),
+    () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
     [allPositions]
   );
   const treeQuery = useEquipmentTree();

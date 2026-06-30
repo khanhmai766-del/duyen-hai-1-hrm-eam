@@ -9,6 +9,7 @@ import { normalizeText } from "@/lib/nav";
 import {
   nodeAccessForPosition,
   normalizeScopeAccess,
+  scopesForPosition,
   type PositionSystemScope,
 } from "@/lib/position-system-scopes";
 
@@ -53,8 +54,7 @@ export async function loadPositionSystemScopeRows(): Promise<PositionSystemScope
 }
 
 function hasExplicitScopes(scopes: PositionSystemScope[], position: string) {
-  const normalized = normalizeText(position);
-  return scopes.some((scope) => normalizeText(scope.position) === normalized);
+  return scopesForPosition(scopes, position).length > 0;
 }
 
 export async function resolveEquipmentAccessForUser(
