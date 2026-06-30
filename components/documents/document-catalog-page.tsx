@@ -340,7 +340,7 @@ export function DocumentCatalogPage({
   React.useEffect(() => {
     setExpandedId(null);
     setPageIndex(1);
-  }, [category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter]);
+  }, [category, q, historyTableLayout, yearFilter, tagFilter, procedureTypeFilter, positionFilter, blockFilter]);
 
   React.useEffect(() => {
     if (!hasYearField) {

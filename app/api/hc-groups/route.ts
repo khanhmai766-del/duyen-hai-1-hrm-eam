@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { userWithSignedMedia } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +44,23 @@ export async function GET(req: NextRequest) {
       include: {
         createdBy: { select: { id: true, name: true } },
         members: {
-          include: { user: { select: { id: true, name: true, position: true, avatarUrl: true, phone: true } } },
+          include: { user: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true, phone: true } } },
           orderBy: { createdAt: "asc" },
         },
       },
     });
-    return ok(groups);
+    const hydratedGroups = await Promise.all(
+      groups.map(async (group) => ({
+        ...group,
+        members: await Promise.all(
+          group.members.map(async (member) => ({
+            ...member,
+            user: await userWithSignedMedia(member.user),
+          }))
+        ),
+      }))
+    );
+    return ok(hydratedGroups);
   });
 }
 

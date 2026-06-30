@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { requestAuditMeta } from "@/lib/activity-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,6 +9,15 @@ export const dynamic = "force-dynamic";
 const RBAC_CONFIG_KEY = "rbac-permissions";
 const PERMISSION_VALUES = new Set(["full", "manage", "approve", "create", "own", "read", "none"]);
 const ROLES = ["ADMIN", "SUPERVISOR", "TECHNICIAN", "VIEWER"] as const;
+
+function parseJsonSafe(value?: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 async function ensureRbacConfigTable() {
   await prisma.$executeRawUnsafe(`
@@ -121,6 +131,11 @@ export async function PUT(req: NextRequest) {
       userOverrides: normalizeUserOverrides(body.userOverrides),
     };
     if (!payload.permissions.length) return fail("Vui lòng cấu hình ít nhất một quyền quản lý");
+    const beforeRows = await prisma.$queryRawUnsafe<{ value: string }[]>(
+      `SELECT value FROM "RbacConfig" WHERE key = $1 LIMIT 1`,
+      RBAC_CONFIG_KEY
+    );
+    const beforeData = parseJsonSafe(Array.isArray(beforeRows) ? beforeRows[0]?.value : null);
 
     await prisma.$executeRawUnsafe(
       `
@@ -134,7 +149,13 @@ export async function PUT(req: NextRequest) {
       user.id
     );
 
-    await audit(user.id, "UPDATE_RBAC_CONFIG", "RbacConfig", RBAC_CONFIG_KEY);
+    await audit(user.id, "UPDATE_RBAC_CONFIG", "RbacConfig", RBAC_CONFIG_KEY, "Cập nhật cấu hình phân quyền", {
+      actorName: user.name,
+      beforeData,
+      afterData: payload,
+      changedFields: ["permissions", "roles", "userOverrides"],
+      ...requestAuditMeta(req),
+    });
     return ok(payload);
   });
 }

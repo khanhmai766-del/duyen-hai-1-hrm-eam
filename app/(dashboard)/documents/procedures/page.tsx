@@ -13,6 +13,7 @@ export default function ProcedureDocumentsPage() {
       emptyTitle="Chưa có danh mục quy trình"
       emptyDescription="Admin có thể thêm quy trình, số quyết định và link tài liệu liên kết tại đây."
       showEquipmentScope
+      showPaginationFooter
       wideNameNarrowLinkLayout
     />
   );

@@ -14,6 +14,7 @@ export default function PidDocumentsPage() {
       emptyDescription="Admin có thể thêm tên sơ đồ, số bản vẽ và link tài liệu liên kết tại đây."
       showEquipmentScope
       showCodeField={false}
+      showPaginationFooter
       wideNameNarrowLinkLayout
       hideDocumentIcon
     />

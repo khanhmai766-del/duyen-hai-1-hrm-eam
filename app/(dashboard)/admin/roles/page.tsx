@@ -155,6 +155,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "system_audit_log:view",
+    group: "Quản trị hệ thống",
+    feature: "Xem Audit hệ thống",
+    note: "Tra cứu các thay đổi quan trọng về phân quyền, người dùng và cấu hình hệ thống.",
+    matrix: { ADMIN: "read", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
     id: "device-manage",
     group: "Thiết bị",
     feature: "Thêm, sửa và nhập danh mục thiết bị",

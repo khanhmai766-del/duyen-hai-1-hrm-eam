@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { userWithSignedMedia } from "@/lib/s3-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
         },
       },
       include: {
-        user: { select: { id: true, name: true, position: true, avatarUrl: true, phone: true } },
+        user: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true, phone: true } },
         group: {
           select: {
             id: true,
@@ -51,6 +52,13 @@ export async function GET(req: NextRequest) {
       ],
     });
 
-    return ok(registrations);
+    const hydratedRegistrations = await Promise.all(
+      registrations.map(async (registration) => ({
+        ...registration,
+        user: await userWithSignedMedia(registration.user),
+      }))
+    );
+
+    return ok(hydratedRegistrations);
   });
 }

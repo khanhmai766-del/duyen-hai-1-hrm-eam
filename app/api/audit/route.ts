@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, requireRole, handle } from "@/lib/api";
+import { actionConfig } from "@/lib/activity-log";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,6 @@ export async function GET() {
       take: 50,
       include: { user: { select: { name: true } } },
     });
-    return ok(logs);
+    return ok(logs.map((log) => ({ ...log, category: log.category ?? actionConfig(log.action).category })));
   });
 }

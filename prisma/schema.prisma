@@ -144,6 +144,13 @@ enum Role {
   VIEWER
 }
 
+enum ActivityLogCategory {
+  SYSTEM
+  SECURITY
+  ATTENDANCE
+  USER
+}
+
 model Shift {
   id        String    @id @default(cuid())
   date      DateTime
@@ -367,12 +374,33 @@ model AuditLog {
   id        String   @id @default(cuid())
   userId    String
   action    String // e.g. "CREATE_DEVICE", "DELETE_REPAIR"
+  category  ActivityLogCategory @default(USER)
   entity    String // e.g. "Device", "RepairLog"
   entityId  String?
   detail    String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+}
+
+model SystemAuditLog {
+  id            String   @id @default(cuid())
+  actorUserId   String
+  actorName     String
+  action        String
+  targetType    String
+  targetId      String?
+  beforeData    Json?
+  afterData     Json?
+  changedFields String[]
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorUserId])
+  @@index([action])
+  @@map("system_audit_logs")
 }
 
 // Chấm công hành chính: nhóm đi công tác hành chính (HC) theo ngày.

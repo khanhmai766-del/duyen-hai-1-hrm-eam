@@ -384,7 +384,21 @@ export default function NotificationsPage() {
               <div className={cn("mt-1 text-sm font-semibold", isInvalid ? "text-red-700" : "text-ink")}>
                 Ngày ra mệnh lệnh: {formatDate(announcementDate(a))}
               </div>
-              <p className={cn("mt-1 whitespace-pre-wrap text-sm", isInvalid ? "text-red-800" : "text-muted-foreground")}>{a.body}</p>
+              <div
+                className={cn(
+                  "mt-3 rounded-lg border px-4 py-3",
+                  isInvalid
+                    ? "border-red-200 bg-white/75 text-red-900"
+                    : "border-slate-200 bg-slate-50/80 text-ink"
+                )}
+              >
+                <div className={cn("mb-1 text-[11px] font-bold uppercase tracking-normal", isInvalid ? "text-red-600" : "text-muted-foreground")}>
+                  Nội dung mệnh lệnh
+                </div>
+                <div className="whitespace-pre-wrap text-[15px] font-bold leading-7">
+                  {a.body}
+                </div>
+              </div>
               {(a.linkUrl || a.fileUrl) && (
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {a.linkUrl && (

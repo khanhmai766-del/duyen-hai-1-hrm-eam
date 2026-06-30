@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { writeActivityLog } from "@/lib/activity-log";
 
 export function ok<T>(data: T, meta?: Record<string, unknown>) {
   return NextResponse.json({ data, meta: meta ?? null, error: null });
@@ -34,9 +34,37 @@ export function handle(fn: () => Promise<Response>): Promise<Response> {
   });
 }
 
-export async function audit(userId: string, action: string, entity: string, entityId?: string, detail?: string) {
+export async function audit(
+  userId: string,
+  action: string,
+  entity: string,
+  entityId?: string,
+  detail?: string,
+  options?: {
+    actorName?: string | null;
+    beforeData?: unknown;
+    afterData?: unknown;
+    changedFields?: string[];
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    saveToAuditLog?: boolean;
+  }
+) {
   try {
-    await prisma.auditLog.create({ data: { userId, action, entity, entityId, detail } });
+    await writeActivityLog({
+      actorUserId: userId,
+      actorName: options?.actorName,
+      action,
+      targetType: entity,
+      targetId: entityId,
+      detail,
+      beforeData: options?.beforeData,
+      afterData: options?.afterData,
+      changedFields: options?.changedFields,
+      ipAddress: options?.ipAddress,
+      userAgent: options?.userAgent,
+      saveToAuditLog: options?.saveToAuditLog,
+    });
   } catch {
     // non-fatal
   }

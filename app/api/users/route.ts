@@ -2,10 +2,12 @@ import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { requestAuditMeta } from "@/lib/activity-log";
 import { userWithSignedMedia } from "@/lib/s3-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
+const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
 
 async function safe<T extends { passwordHash?: string; avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(u: T) {
   const { passwordHash, ...rest } = u;
@@ -60,7 +62,12 @@ export async function POST(req: NextRequest) {
         passwordChangedAt: new Date(),
       },
     });
-    await audit(user.id, "CREATE_USER", "User", created.id, created.name);
+    await audit(user.id, "CREATE_USER", "User", created.id, created.name, {
+      actorName: user.name,
+      afterData: await safe(created),
+      changedFields: ["created"],
+      ...requestAuditMeta(req),
+    });
     return ok(await safe(created));
   });
 }
@@ -72,6 +79,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     if (body.resetPassword) {
+      const before = await prisma.user.findUnique({ where: { id: body.id } });
       const updated = await prisma.user.update({
         where: { id: body.id },
         data: {
@@ -80,9 +88,16 @@ export async function PUT(req: NextRequest) {
           passwordChangedAt: new Date(),
         },
       });
-      await audit(user.id, "RESET_PASSWORD", "User", updated.id, updated.name);
+      await audit(user.id, "RESET_PASSWORD", "User", updated.id, updated.name, {
+        actorName: user.name,
+        beforeData: before ? await safe(before) : null,
+        afterData: await safe(updated),
+        changedFields: ["passwordHash", "mustChangePassword", "passwordChangedAt"],
+        ...requestAuditMeta(req),
+      });
       return ok(await safe(updated));
     }
+    const before = await prisma.user.findUnique({ where: { id: body.id } });
     const data: any = {};
     if (body.role) data.role = body.role;
     if (body.isActive != null) data.isActive = body.isActive;
@@ -113,7 +128,19 @@ export async function PUT(req: NextRequest) {
     }
 
     const updated = await prisma.user.update({ where: { id: body.id }, data });
-    await audit(user.id, "UPDATE_USER", "User", updated.id, updated.name);
+    const beforeSafe = before ? await safe(before) : null;
+    const afterSafe = await safe(updated);
+    const changedFields = Object.keys(data);
+    const action = changedFields.length === 1 && changedFields[0] === "isActive"
+      ? updated.isActive ? "ACTIVATE_USER" : "DEACTIVATE_USER"
+      : "UPDATE_USER";
+    await audit(user.id, action, "User", updated.id, updated.name, {
+      actorName: user.name,
+      beforeData: beforeSafe,
+      afterData: afterSafe,
+      changedFields,
+      ...requestAuditMeta(req),
+    });
     return ok(await safe(updated));
   });
 }
@@ -123,22 +150,78 @@ export async function DELETE(req: NextRequest) {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
     const id = req.nextUrl.searchParams.get("id");
+    const permanent = req.nextUrl.searchParams.get("permanent") === "true";
     if (!id) return fail("Thiếu id");
     if (id === user.id) return fail("Không thể xoá chính tài khoản đang đăng nhập");
     const target = await prisma.user.findUnique({ where: { id } });
     if (!target) return fail("Không tìm thấy người dùng", 404);
+    if (permanent) {
+      const body = await req.json().catch(() => ({}));
+      const confirmation = String(body.confirmation ?? "").trim().toLocaleLowerCase("vi");
+      if (confirmation !== PERMANENT_DELETE_CONFIRMATION) return fail('Nhập đúng "xác nhận xóa" để xoá vĩnh viễn người dùng');
+
+      await prisma.$transaction(async (tx) => {
+        await tx.digitalDocument.updateMany({ where: { createdById: id }, data: { createdById: null } });
+        await tx.digitalDocument.updateMany({ where: { updatedById: id }, data: { updatedById: null } });
+        await tx.rbacConfig.updateMany({ where: { updatedById: id }, data: { updatedById: null } });
+        await tx.systemBroadcast.updateMany({ where: { createdById: id }, data: { createdById: null, createdByName: null } });
+
+        await tx.announcementRead.deleteMany({ where: { userId: id } });
+        await tx.announcement.deleteMany({ where: { createdById: id } });
+        await tx.operationEvent.deleteMany({ where: { createdById: id } });
+        await tx.shiftAssignment.deleteMany({ where: { userId: id } });
+        await tx.checkIn.updateMany({ where: { approvedBy: id }, data: { approvedBy: null } });
+        await tx.checkIn.deleteMany({ where: { userId: id } });
+        await tx.shiftHandover.deleteMany({ where: { OR: [{ fromUserId: id }, { toUserId: id }] } });
+        await tx.repairLog.updateMany({ where: { approvedById: id }, data: { approvedById: null } });
+        await tx.repairLog.deleteMany({ where: { createdById: id } });
+        await tx.materialReplacementLog.deleteMany({ where: { doneById: id } });
+        await tx.materialReplacement.deleteMany({ where: { createdById: id } });
+        await tx.defect.deleteMany({ where: { createdById: id } });
+        await tx.defectHistory.deleteMany({ where: { createdById: id } });
+        await tx.auditLog.deleteMany({ where: { userId: id } });
+        await tx.hcCheckIn.deleteMany({ where: { userId: id } });
+        await tx.hcGroup.deleteMany({ where: { createdById: id } });
+        await tx.forumReply.deleteMany({ where: { authorId: id } });
+        await tx.forumPost.deleteMany({ where: { authorId: id } });
+        await tx.webAuthnCredential.deleteMany({ where: { userId: id } });
+        await tx.user.delete({ where: { id } });
+      });
+
+      await audit(user.id, "PERMANENT_DELETE_USER", "User", id, target.name, {
+        actorName: user.name,
+        beforeData: await safe(target),
+        afterData: null,
+        changedFields: ["deleted"],
+        ...requestAuditMeta(req),
+      });
+      return ok({ id, permanent: true });
+    }
+
     try {
       await prisma.user.delete({ where: { id } });
     } catch (e: any) {
       // Foreign-key constraint (has check-ins / repairs / etc.) → deactivate instead.
       if (e?.code === "P2003") {
-        await prisma.user.update({ where: { id }, data: { isActive: false } });
-        await audit(user.id, "DEACTIVATE_USER", "User", id, target.name);
-        return fail("Người dùng có dữ liệu liên quan nên không thể xoá — đã chuyển sang trạng thái ngừng hoạt động.");
+        const updated = await prisma.user.update({ where: { id }, data: { isActive: false } });
+        await audit(user.id, "DEACTIVATE_USER", "User", id, target.name, {
+          actorName: user.name,
+          beforeData: await safe(target),
+          afterData: await safe(updated),
+          changedFields: ["isActive"],
+          ...requestAuditMeta(req),
+        });
+        return ok({ id, deactivated: true, message: "Người dùng có dữ liệu liên quan nên đã chuyển sang trạng thái ngừng hoạt động." });
       }
       throw e;
     }
-    await audit(user.id, "DELETE_USER", "User", id, target.name);
+    await audit(user.id, "DELETE_USER", "User", id, target.name, {
+      actorName: user.name,
+      beforeData: await safe(target),
+      afterData: null,
+      changedFields: ["deleted"],
+      ...requestAuditMeta(req),
+    });
     return ok({ id });
   });
 }

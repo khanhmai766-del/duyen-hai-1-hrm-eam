@@ -13,19 +13,67 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, usePositions } from "@/hooks/useUsers";
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
 import { apiGet } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
-import { formatDateTime, initials } from "@/lib/utils";
+import { cn, formatDateTime, initials } from "@/lib/utils";
 import type { SafeUser } from "@/types";
 
 const ROLE_KEYS = Object.keys(ROLES) as RoleKey[];
+const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
+type ActivityCategory = "SYSTEM" | "SECURITY" | "ATTENDANCE" | "USER";
+type ActivityLogRow = {
+  id: string;
+  action: string;
+  category: ActivityCategory;
+  entity: string;
+  entityId: string | null;
+  detail: string | null;
+  createdAt: string;
+  user?: { name: string | null } | null;
+};
+type SystemAuditLogRow = {
+  id: string;
+  actorUserId: string;
+  actorName: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  beforeData: unknown;
+  afterData: unknown;
+  changedFields: string[];
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+};
+
+const CATEGORY_BADGE: Record<ActivityCategory, string> = {
+  SYSTEM: "border-orange-200 bg-orange-100 text-orange-800",
+  ATTENDANCE: "border-blue-200 bg-blue-100 text-blue-800",
+  SECURITY: "border-violet-200 bg-violet-100 text-violet-800",
+  USER: "border-slate-200 bg-slate-100 text-slate-700",
+};
+
+function compactDetail(value: unknown, max = 90) {
+  const text = typeof value === "string" ? value : value == null ? "" : JSON.stringify(value);
+  if (!text) return "—";
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function formatJson(value: unknown) {
+  if (value == null) return "—";
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
 
 export default function AdminUsersPage() {
   const { data: session } = useSession();
@@ -33,7 +81,13 @@ export default function AdminUsersPage() {
   const create = useCreateUser();
   const update = useUpdateUser();
   const del = useDeleteUser();
-  const audit = useQuery({ queryKey: ["audit"], queryFn: () => apiGet<any[]>("/api/audit"), enabled: session?.user?.role === "ADMIN" });
+  const permanentDelete = usePermanentDeleteUser();
+  const audit = useQuery({ queryKey: ["audit"], queryFn: () => apiGet<ActivityLogRow[]>("/api/audit"), enabled: session?.user?.role === "ADMIN" });
+  const systemAudit = useQuery({
+    queryKey: ["system-audit"],
+    queryFn: () => apiGet<SystemAuditLogRow[]>("/api/system-audit"),
+    enabled: session?.user?.role === "ADMIN",
+  });
 
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -43,7 +97,12 @@ export default function AdminUsersPage() {
   const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
+  const [permanentDelTarget, setPermanentDelTarget] = React.useState<SafeUser | null>(null);
+  const [permanentConfirm, setPermanentConfirm] = React.useState("");
   const [resetTarget, setResetTarget] = React.useState<SafeUser | null>(null);
+  const [auditTab, setAuditTab] = React.useState<"activity" | "system">("activity");
+  const [activityDetail, setActivityDetail] = React.useState<ActivityLogRow | null>(null);
+  const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
 
   if (session && session.user?.role !== "ADMIN") {
     return (
@@ -67,7 +126,8 @@ export default function AdminUsersPage() {
   const firstShown = filteredUsers.length ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, filteredUsers.length);
   const pagedUsers = filteredUsers.slice((page - 1) * pageSize, page * pageSize);
-  const auditRows = (audit.data?.data ?? []).slice(0, 20);
+  const auditRows = (audit.data?.data ?? []).slice(0, 50);
+  const systemAuditRows = (systemAudit.data?.data ?? []).slice(0, 100);
 
   React.useEffect(() => {
     setPage(1);
@@ -221,8 +281,19 @@ export default function AdminUsersPage() {
                       <Button variant="ghost" size="icon" title="Reset mật khẩu về password123" onClick={() => setResetTarget(u)}>
                         <KeyRound className="h-4 w-4 text-amber-600" />
                       </Button>
-                      <Button variant="ghost" size="icon" title="Xoá" onClick={() => setDelTarget(u)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                      <Button variant="ghost" size="icon" title="Xoá an toàn / ngừng hoạt động" onClick={() => setDelTarget(u)}>
+                        <Archive className="h-4 w-4 text-amber-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Xoá vĩnh viễn"
+                        onClick={() => {
+                          setPermanentDelTarget(u);
+                          setPermanentConfirm("");
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-700" />
                       </Button>
                     </div>
                   </TableCell>
@@ -261,33 +332,87 @@ export default function AdminUsersPage() {
         </Card>
       )}
 
-      {/* Audit log — show the 20 most recent entries; ~10 visible, scroll for the rest */}
+      {/* Audit log */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><History className="h-4 w-4" /> Nhật ký hoạt động</CardTitle></CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2"><History className="h-4 w-4" /> Nhật ký hoạt động</CardTitle>
+          <div className="inline-flex rounded-lg border border-border bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => setAuditTab("activity")}
+              className={cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", auditTab === "activity" ? "bg-white text-ink shadow-sm" : "text-muted-foreground hover:text-ink")}
+            >
+              Activity Log
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuditTab("system")}
+              className={cn("rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", auditTab === "system" ? "bg-white text-ink shadow-sm" : "text-muted-foreground hover:text-ink")}
+            >
+              Audit hệ thống
+            </button>
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
-          <Table wrapperClassName="max-h-[460px]">
-            <TableHeader>
-              <TableRow>
-                {["Thời gian", "Người dùng", "Hành động", "Đối tượng", "Chi tiết"].map((h) => (
-                  <TableHead key={h} className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">{h}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {auditRows.map((a: any) => (
-                <TableRow key={a.id}>
-                  <TableCell className="text-xs text-muted-foreground">{formatDateTime(a.createdAt)}</TableCell>
-                  <TableCell className="text-sm">{a.user?.name}</TableCell>
-                  <TableCell><span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{a.action}</span></TableCell>
-                  <TableCell className="text-sm">{a.entity}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{a.detail}</TableCell>
+          {auditTab === "activity" ? (
+            <Table wrapperClassName="max-h-[460px]">
+              <TableHeader>
+                <TableRow>
+                  {["Thời gian", "Người dùng", "Hành động", "Phân loại", "Đối tượng", "Chi tiết"].map((h) => (
+                    <TableHead key={h} className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">{h}</TableHead>
+                  ))}
                 </TableRow>
-              ))}
-              {auditRows.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="py-6 text-center text-muted-foreground">Chưa có nhật ký</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {auditRows.map((a) => (
+                  <TableRow key={a.id} className={cn(a.category === "SYSTEM" && "bg-orange-50/45 hover:bg-orange-50")}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(a.createdAt)}</TableCell>
+                    <TableCell className="text-sm">{a.user?.name ?? "—"}</TableCell>
+                    <TableCell><span className={cn("rounded border px-2 py-0.5 font-mono text-xs font-semibold", CATEGORY_BADGE[a.category])}>{a.action}</span></TableCell>
+                    <TableCell><span className={cn("rounded-full border px-2 py-0.5 text-xs font-bold", CATEGORY_BADGE[a.category])}>{a.category}</span></TableCell>
+                    <TableCell className="text-sm">{a.entity}</TableCell>
+                    <TableCell className="max-w-[360px] text-sm text-muted-foreground">
+                      <button type="button" onClick={() => setActivityDetail(a)} className="text-left hover:text-ink hover:underline">
+                        {compactDetail(a.detail)}
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {auditRows.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">Chưa có nhật ký</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          ) : (
+            <Table wrapperClassName="max-h-[460px]">
+              <TableHeader>
+                <TableRow>
+                  {["Thời gian", "Người thao tác", "Hành động", "Đối tượng", "Trường thay đổi", "Chi tiết"].map((h) => (
+                    <TableHead key={h} className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_hsl(var(--border))]">{h}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {systemAuditRows.map((a) => (
+                  <TableRow key={a.id} className="bg-orange-50/45 hover:bg-orange-50">
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(a.createdAt)}</TableCell>
+                    <TableCell className="text-sm font-medium text-ink">{a.actorName}</TableCell>
+                    <TableCell><span className="rounded border border-orange-200 bg-orange-100 px-2 py-0.5 font-mono text-xs font-semibold text-orange-800">{a.action}</span></TableCell>
+                    <TableCell className="text-sm">{a.targetType}{a.targetId ? ` · ${a.targetId}` : ""}</TableCell>
+                    <TableCell className="max-w-[260px] truncate text-sm text-muted-foreground">{a.changedFields?.join(", ") || "—"}</TableCell>
+                    <TableCell>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setSystemAuditDetail(a)}>
+                        Xem before/after
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {systemAuditRows.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">Chưa có audit hệ thống</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -357,8 +482,10 @@ export default function AdminUsersPage() {
         onConfirm={async () => {
           if (!delTarget) return;
           try {
-            await del.mutateAsync(delTarget.id);
-            toast.success("Đã xoá người dùng");
+            const result = await del.mutateAsync(delTarget.id);
+            toast.success(result.deactivated ? "Đã chuyển người dùng sang trạng thái ngừng hoạt động" : "Đã xoá người dùng", {
+              description: result.message,
+            });
             setDelTarget(null);
           } catch (e) {
             toast.error((e as Error).message);
@@ -366,6 +493,112 @@ export default function AdminUsersPage() {
           }
         }}
       />
+
+      <Dialog
+        open={!!permanentDelTarget}
+        onOpenChange={(open) => {
+          if (open) return;
+          setPermanentDelTarget(null);
+          setPermanentConfirm("");
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xoá vĩnh viễn người dùng?</DialogTitle>
+            <DialogDescription>
+              Thao tác này xoá hoàn toàn tài khoản "{permanentDelTarget?.name}" ({permanentDelTarget?.employeeId}) và các dữ liệu liên quan khỏi hệ thống. Không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="permanent-delete-confirm">Nhập "xác nhận xóa" để tiếp tục</Label>
+            <Input
+              id="permanent-delete-confirm"
+              value={permanentConfirm}
+              onChange={(event) => setPermanentConfirm(event.target.value)}
+              placeholder="xác nhận xóa"
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPermanentDelTarget(null);
+                setPermanentConfirm("");
+              }}
+              disabled={permanentDelete.isPending}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={permanentDelete.isPending || permanentConfirm.trim().toLocaleLowerCase("vi") !== PERMANENT_DELETE_CONFIRMATION}
+              onClick={async () => {
+                if (!permanentDelTarget) return;
+                try {
+                  await permanentDelete.mutateAsync({ id: permanentDelTarget.id, confirmation: permanentConfirm });
+                  toast.success("Đã xoá vĩnh viễn người dùng");
+                  setPermanentDelTarget(null);
+                  setPermanentConfirm("");
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+            >
+              Xoá vĩnh viễn
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!activityDetail} onOpenChange={(open) => !open && setActivityDetail(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Chi tiết Activity Log</DialogTitle>
+            <DialogDescription>
+              {activityDetail?.action} · {activityDetail?.entity}
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="max-h-[55vh] overflow-auto rounded-lg border border-border bg-muted p-4 text-xs leading-5 text-ink">
+            {activityDetail?.detail || "Không có chi tiết"}
+          </pre>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActivityDetail(null)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!systemAuditDetail} onOpenChange={(open) => !open && setSystemAuditDetail(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Audit hệ thống</DialogTitle>
+            <DialogDescription>
+              {systemAuditDetail?.action} · {systemAuditDetail?.targetType}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div>
+              <div className="mb-1 text-xs font-bold uppercase text-muted-foreground">Before</div>
+              <pre className="max-h-[56vh] overflow-auto rounded-lg border border-border bg-slate-50 p-4 text-xs leading-5 text-ink">
+                {formatJson(systemAuditDetail?.beforeData)}
+              </pre>
+            </div>
+            <div>
+              <div className="mb-1 text-xs font-bold uppercase text-muted-foreground">After</div>
+              <pre className="max-h-[56vh] overflow-auto rounded-lg border border-orange-200 bg-orange-50 p-4 text-xs leading-5 text-ink">
+                {formatJson(systemAuditDetail?.afterData)}
+              </pre>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border bg-white px-3 py-2 text-xs text-muted-foreground">
+            IP: <span className="font-medium text-ink">{systemAuditDetail?.ipAddress ?? "—"}</span> · User-Agent:{" "}
+            <span className="font-medium text-ink">{compactDetail(systemAuditDetail?.userAgent, 140)}</span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSystemAuditDetail(null)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

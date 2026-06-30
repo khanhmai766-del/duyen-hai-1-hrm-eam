@@ -41,7 +41,16 @@ export function useUpdateUser() {
 export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiMutate(`/api/users?id=${id}`, "DELETE"),
+    mutationFn: (id: string) => apiMutate<{ id: string; deactivated?: boolean; message?: string; permanent?: boolean }>(`/api/users?id=${id}`, "DELETE"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function usePermanentDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { id: string; confirmation: string }) =>
+      apiMutate<{ id: string; permanent: boolean }>(`/api/users?id=${body.id}&permanent=true`, "DELETE", { confirmation: body.confirmation }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 }
