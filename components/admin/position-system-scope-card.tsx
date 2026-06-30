@@ -11,7 +11,7 @@ import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/u
 import { usePositions } from "@/hooks/useUsers";
 import { isSelectableManagingPosition } from "@/lib/constants";
 import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
-import { normalizeScopeAccess, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
+import { normalizeScopeAccess, positionScopeOptions, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 
 const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; className: string }[] = [
@@ -21,7 +21,8 @@ const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; clas
 ];
 
 export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
-  const positions = usePositions().filter(isSelectableManagingPosition);
+  const rawPositions = usePositions().filter(isSelectableManagingPosition);
+  const positions = React.useMemo(() => positionScopeOptions(rawPositions), [rawPositions]);
   const treeQuery = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
   const updateScopes = useUpdatePositionSystemScope();
@@ -48,7 +49,8 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   }, [equipmentNodes]);
 
   React.useEffect(() => {
-    if (!position && positions.length) setPosition(positions[0]);
+    if (!positions.length) return;
+    if (!position || !positions.includes(position)) setPosition(positions[0]);
   }, [position, positions]);
 
   React.useEffect(() => {

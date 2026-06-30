@@ -1,4 +1,3 @@
-import { EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 
 export type ScopeAccess = "none" | "view" | "edit";
@@ -31,10 +30,33 @@ export function normalizeScopeAccess(value: unknown): ScopeAccess {
   return "none";
 }
 
+export function normalizePositionScopeLabel(position?: string | null) {
+  return String(position ?? "")
+    .trim()
+    .replace(/[-\s]+s[12]$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizePositionScopeKey(position?: string | null) {
+  return normalizeText(normalizePositionScopeLabel(position));
+}
+
+export function positionScopeOptions(positions: string[]) {
+  const byKey = new Map<string, string>();
+  for (const position of positions) {
+    const label = normalizePositionScopeLabel(position);
+    const key = normalizePositionScopeKey(label);
+    if (!key || byKey.has(key)) continue;
+    byKey.set(key, label);
+  }
+  return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "vi"));
+}
+
 export function scopesForPosition(scopes: PositionSystemScope[], position?: string | null) {
-  const normalized = normalizeText(position ?? "");
+  const normalized = normalizePositionScopeKey(position);
   if (!normalized) return [];
-  return scopes.filter((scope) => normalizeText(scope.position) === normalized);
+  return scopes.filter((scope) => normalizePositionScopeKey(scope.position) === normalized);
 }
 
 function nodeIndex(nodes: EquipmentNodeLike[]) {
@@ -116,7 +138,7 @@ export function deviceAccessForPosition(
   const explicit = scopesForPosition(scopes, position);
   if (!explicit.length) {
     // Chưa cấu hình riêng: giữ rule cũ theo cương vị quản lý của thiết bị.
-    const ok = !device.managingPosition || normalizeText(device.managingPosition) === normalizedPosition;
+    const ok = !device.managingPosition || normalizePositionScopeKey(device.managingPosition) === normalizePositionScopeKey(position);
     return ok ? "edit" : "none";
   }
 
@@ -168,8 +190,7 @@ export function rootAllowedForPosition(
   position: string | null | undefined,
   scopes: PositionSystemScope[]
 ) {
-  const name = normalizeText(root.name);
-  const normalizedPosition = normalizeText(position ?? "");
+  const normalizedPosition = normalizePositionScopeKey(position);
   if (!normalizedPosition) return true;
 
   const explicitScopes = scopesForPosition(scopes, position);
@@ -177,8 +198,5 @@ export function rootAllowedForPosition(
     return explicitScopes.some((scope) => scope.systemSeq === root.seq && normalizeScopeAccess(scope.access) !== "none");
   }
 
-  if (name.includes("common")) return true;
-  const fallbackRule = EQUIPMENT_SYSTEM_BY_POSITION.find((rule) => name.includes(normalizeText(rule.match)));
-  if (!fallbackRule) return true;
-  return fallbackRule.positions.some((item) => normalizeText(item) === normalizedPosition);
+  return true;
 }

@@ -70,7 +70,7 @@ import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDev
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
-import { can, EQUIPMENT_SYSTEM_BY_POSITION } from "@/lib/constants";
+import { can } from "@/lib/constants";
 import { buildEquipmentTreeIndex, compareEquipmentSeq, dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
@@ -1022,31 +1022,18 @@ function DashboardView({ devices }: { devices: DeviceListItem[] }) {
 
   const bySystem = groupCount((d) => d.system).slice(0, 10);
 
-  // Số thiết bị mỗi cương vị "phải quản lý": ưu tiên phân quyền hệ thống (scope quyền Sửa),
-  // cương vị chưa cấu hình riêng thì theo rule mặc định EQUIPMENT_SYSTEM_BY_POSITION (theo hệ thống gốc).
+  // Số thiết bị mỗi cương vị "phải quản lý": lấy theo phân quyền hệ thống trực tiếp (scope quyền Sửa).
   const byPosition = React.useMemo(() => {
     const index = buildEquipmentTreeIndex(equipmentNodes);
-    const { parentOf, bySeq } = index;
-    const norm = (s: string | null | undefined) => normalizeText(s ?? "");
+    const { parentOf } = index;
     const editPosBySeq = new Map<string, string[]>();
-    const configured = new Set<string>(); // cương vị (chuẩn hóa) đã có cấu hình riêng
     for (const scope of scopes) {
-      configured.add(norm(scope.position));
       if (scope.access === "edit") {
         const arr = editPosBySeq.get(scope.systemSeq) ?? [];
         arr.push(scope.position);
         editPosBySeq.set(scope.systemSeq, arr);
       }
     }
-    const rootNameOf = (seq: string): string => {
-      let cur: string | null | undefined = seq;
-      while (cur) {
-        const p: string | null = parentOf.get(cur) ?? null;
-        if (!p) return bySeq.get(cur)?.name ?? "";
-        cur = p;
-      }
-      return "";
-    };
     const counts = new Map<string, number>();
     for (const d of devices) {
       const managing = new Set<string>();
@@ -1056,10 +1043,6 @@ function DashboardView({ devices }: { devices: DeviceListItem[] }) {
         for (const pos of editPosBySeq.get(cur) ?? []) managing.add(pos);
         cur = parentOf.get(cur) ?? null;
       }
-      // Rule mặc định cho cương vị chưa cấu hình riêng.
-      const rn = norm(rootNameOf(d.code));
-      const rule = rn ? EQUIPMENT_SYSTEM_BY_POSITION.find((r) => rn.includes(norm(r.match))) : undefined;
-      if (rule) for (const pos of rule.positions) if (!configured.has(norm(pos))) managing.add(pos);
       for (const pos of managing) counts.set(pos, (counts.get(pos) ?? 0) + 1);
     }
     return Array.from(counts.entries())

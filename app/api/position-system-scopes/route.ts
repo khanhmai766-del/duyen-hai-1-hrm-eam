@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { normalizePositionScopeKey, normalizePositionScopeLabel } from "@/lib/position-system-scopes";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,7 @@ export async function PUT(req: NextRequest) {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
     const body = await req.json();
-    const position = typeof body.position === "string" ? body.position.trim() : "";
+    const position = normalizePositionScopeLabel(typeof body.position === "string" ? body.position : "");
 
     // Payload mới: entries [{ systemSeq, access }]. Vẫn nhận systemSeqs cũ (mặc định "edit").
     const rawEntries: Array<{ systemSeq: string; access: ScopeAccess }> = Array.isArray(body.entries)
@@ -107,7 +108,18 @@ export async function PUT(req: NextRequest) {
     if (!position) return fail("Vui lòng chọn cương vị cần phân quyền hệ thống thiết bị");
 
     await ensureScopeTable();
-    await prisma.$executeRaw`DELETE FROM "PositionSystemScope" WHERE "position" = ${position}`;
+    const existingRows = await listScopes();
+    const positionKey = normalizePositionScopeKey(position);
+    const positionsToClear = Array.from(
+      new Set(
+        existingRows
+          .filter((row) => normalizePositionScopeKey(row.position) === positionKey)
+          .map((row) => row.position)
+      )
+    );
+    for (const item of positionsToClear) {
+      await prisma.$executeRaw`DELETE FROM "PositionSystemScope" WHERE "position" = ${item}`;
+    }
     for (const [systemSeq, access] of bySeq) {
       await prisma.$executeRaw`
         INSERT INTO "PositionSystemScope" ("id", "position", "systemSeq", "access")
