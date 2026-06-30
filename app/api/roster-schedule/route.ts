@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { deleteFromS3, keyFromPublicUrl, uploadBufferToS3 } from "@/lib/s3";
-import { s3ProxyUrl } from "@/lib/s3-storage";
+import { deleteFromS3, keyFromPublicUrl, s3ProxyUrl, uploadBufferToS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
