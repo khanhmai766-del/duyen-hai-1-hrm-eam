@@ -143,8 +143,8 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
     id: "shift-approve",
     group: "Nhân sự / Ca trực",
-    feature: "Duyệt điểm danh và chấm công hành chính",
-    note: "Áp dụng cho ca trực, check-in hành chính và danh sách cần xác nhận.",
+    feature: "Duyệt điểm danh, chấm công hành chính và chỉnh bảng công",
+    note: "Áp dụng cho ca trực, check-in hành chính, danh sách cần xác nhận và các ô bảng công cần điều chỉnh thủ công.",
     matrix: { ADMIN: "approve", SUPERVISOR: "none", TECHNICIAN: "approve", VIEWER: "none" },
   },
   {

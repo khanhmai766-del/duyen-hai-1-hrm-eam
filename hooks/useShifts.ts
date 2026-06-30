@@ -33,18 +33,32 @@ export interface TimesheetEntry {
   userId: string;
   day: number;
   shiftType: string;
+  hours: number;
+  isApproved: boolean;
 }
 export interface HcEntry {
   userId: string;
   day: number;
   hours: number;
   content: string;
+  note: string | null;
+}
+export interface TimesheetOverride {
+  userId: string;
+  date: string;
+  day: number;
+  value: string;
+  note: string | null;
+  updatedAt: string;
+  updatedBy: { id: string; name: string } | null;
 }
 export interface Timesheet {
   month: number;
   year: number;
   entries: TimesheetEntry[];
   hcEntries: HcEntry[];
+  overrides: TimesheetOverride[];
+  canEdit: boolean;
 }
 
 /** Approved attendance (bảng công) for a month — `month` is "YYYY-MM". */
@@ -52,6 +66,15 @@ export function useTimesheet(month: string) {
   return useQuery({
     queryKey: ["timesheet", month],
     queryFn: () => apiGet<Timesheet>(`/api/shifts/timesheet?month=${month}`),
+  });
+}
+
+export function useUpdateTimesheetOverride(month: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { userId: string; date: string; value: string; note?: string }) =>
+      apiMutate("/api/shifts/timesheet", "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timesheet", month] }),
   });
 }
 

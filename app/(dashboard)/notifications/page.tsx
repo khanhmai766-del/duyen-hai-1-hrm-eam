@@ -61,7 +61,7 @@ const EMPTY_FORM = {
   pinned: false,
   orderedBy: "",
   orderAuthority: "LĐPX",
-  issuedAt: new Date().toISOString().slice(0, 10),
+  issuedAt: formatDateInput(new Date()),
   linkUrl: "",
   fileUrl: "",
   fileName: "",
@@ -89,11 +89,26 @@ function joinOrderedBy(orderAuthority: string, orderedBy: string) {
   return name ? `${authority} - ${name}` : authority;
 }
 
+function formatDateInput(value: Date) {
+  return `${String(value.getDate()).padStart(2, "0")}/${String(value.getMonth() + 1).padStart(2, "0")}/${value.getFullYear()}`;
+}
+
 function dateInputValue(value?: string | null) {
-  if (!value) return new Date().toISOString().slice(0, 10);
+  if (!value) return formatDateInput(new Date());
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
-  return date.toISOString().slice(0, 10);
+  if (Number.isNaN(date.getTime())) return formatDateInput(new Date());
+  return formatDateInput(date);
+}
+
+function parseDateInput(value: string) {
+  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function announcementDate(a: Announcement) {
@@ -212,7 +227,7 @@ export default function NotificationsPage() {
 
   function openCreate(category: AnnouncementCategory) {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, category, issuedAt: new Date().toISOString().slice(0, 10) });
+    setForm({ ...EMPTY_FORM, category, issuedAt: formatDateInput(new Date()) });
     setDialogOpen(true);
   }
   function openEdit(a: Announcement) {
@@ -269,9 +284,12 @@ export default function NotificationsPage() {
   async function submit() {
     if (!form.title.trim() || !form.body.trim()) return toast.error("Nhập tiêu đề và nội dung");
     if (parseAnnouncementTargets(form.classification).length === 0) return toast.error("Chọn cương vị nhận mệnh lệnh");
+    const issuedAt = parseDateInput(form.issuedAt);
+    if (!issuedAt) return toast.error("Ngày ra mệnh lệnh phải đúng định dạng DD/MM/YYYY");
     const { orderAuthority, ...restForm } = form;
     const payload = {
       ...restForm,
+      issuedAt,
       classification: encodeAnnouncementTargets(parseAnnouncementTargets(form.classification)),
       orderedBy: joinOrderedBy(orderAuthority, form.orderedBy),
     };
@@ -575,9 +593,12 @@ export default function NotificationsPage() {
             <div>
               <Label className="mb-1.5 block">Ngày ra mệnh lệnh</Label>
               <Input
-                type="date"
+                type="text"
+                inputMode="numeric"
                 value={form.issuedAt}
                 onChange={(e) => setForm({ ...form, issuedAt: e.target.value })}
+                placeholder="DD/MM/YYYY"
+                maxLength={10}
               />
             </div>
             <div>

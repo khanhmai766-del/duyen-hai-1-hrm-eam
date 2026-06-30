@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, requireRole, handle } from "@/lib/api";
+import { userWithSignedMedia } from "@/lib/s3-storage";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -26,15 +27,51 @@ export async function GET(req: NextRequest) {
         },
         include: {
           assignments: {
-            include: { user: { select: { id: true, name: true, phone: true, avatarUrl: true, signatureUrl: true, position: true } } },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  avatarUrl: true,
+                  signatureUrl: true,
+                  avatarKey: true,
+                  signatureKey: true,
+                  position: true,
+                },
+              },
+            },
           },
           checkIns: {
-            include: { user: { select: { id: true, name: true, position: true, avatarUrl: true } } },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  position: true,
+                  avatarUrl: true,
+                  avatarKey: true,
+                },
+              },
+            },
           },
           handovers: true,
         },
       });
-      return ok(shift);
+      if (!shift) return ok(null);
+      const assignments = await Promise.all(
+        shift.assignments.map(async (assignment) => ({
+          ...assignment,
+          user: await userWithSignedMedia(assignment.user),
+        }))
+      );
+      const checkIns = await Promise.all(
+        shift.checkIns.map(async (checkIn) => ({
+          ...checkIn,
+          user: await userWithSignedMedia(checkIn.user),
+        }))
+      );
+      return ok({ ...shift, assignments, checkIns });
     }
 
     const shifts = await prisma.shift.findMany({
