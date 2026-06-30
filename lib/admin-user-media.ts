@@ -2,7 +2,7 @@ import path from "path";
 import yauzl, { type Entry } from "yauzl";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
-import { fileExtension, safeEmployeeCode, uploadS3Object } from "@/lib/s3-storage";
+import { fileExtension, safeEmployeeCode, uploadS3Object } from "@/lib/s3";
 
 type MediaKind = "avatar" | "signature";
 

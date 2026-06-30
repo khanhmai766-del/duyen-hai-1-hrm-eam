@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { fail, handle, requireUser } from "@/lib/api";
-import { getS3Object } from "@/lib/s3-storage";
+import { getS3Object } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

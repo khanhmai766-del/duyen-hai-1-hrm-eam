@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, requireRole, handle } from "@/lib/api";
-import { userWithSignedMedia } from "@/lib/s3-storage";
+import { userWithSignedMedia } from "@/lib/s3";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import path from "path";
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from "sharp";
 
 type ImagePreset = "avatar" | "signature" | "image" | "document-image";
@@ -27,8 +28,11 @@ function requiredEnv(name: string) {
   return value;
 }
 
+let _client: S3Client | null = null;
+
 function s3Client() {
-  return new S3Client({
+  if (_client) return _client;
+  _client = new S3Client({
     region: process.env.S3_REGION || "us-east-1",
     endpoint: requiredEnv("S3_ENDPOINT"),
     credentials: {
@@ -37,6 +41,7 @@ function s3Client() {
     },
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
   });
+  return _client;
 }
 
 function bucket() {
@@ -196,4 +201,72 @@ export async function deleteFromS3(url: string | null | undefined) {
   const key = keyFromPublicUrl(url);
   if (!key) return;
   await s3Client().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Lưu trữ theo KHÓA do caller chỉ định, phục vụ qua app proxy (/api/files/s3)
+// hoặc signed URL. (Gộp từ lib/s3-storage.ts cũ — dùng chung client/bucket ở trên.)
+// ───────────────────────────────────────────────────────────────────────────
+
+export function dateFolder(date = new Date()) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+export function safeEmployeeCode(value: string) {
+  const code = value.trim().normalize("NFC");
+  if (!/^[\p{L}\p{M}\p{N}._-]+$/u.test(code)) {
+    throw new Error("Mã nhân viên chỉ được chứa chữ, số, dấu chấm, gạch ngang hoặc gạch dưới");
+  }
+  return code;
+}
+
+export function fileExtension(fileName: string) {
+  const ext = path.extname(fileName).toLowerCase().replace(".", "");
+  if (!ext) throw new Error("Không xác định được phần mở rộng tệp");
+  return ext;
+}
+
+function metadataValue(value: string) {
+  return encodeURIComponent(value).slice(0, 1024);
+}
+
+export async function uploadS3Object(params: {
+  key: string;
+  body: Buffer;
+  contentType?: string;
+  originalName?: string;
+}) {
+  await s3Client().send(
+    new PutObjectCommand({
+      Bucket: bucket(),
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType || "application/octet-stream",
+      Metadata: params.originalName ? { originalName: metadataValue(params.originalName) } : undefined,
+    })
+  );
+  return params.key;
+}
+
+export async function signedS3Url(key: string, expiresIn = 300) {
+  return getSignedUrl(s3Client(), new GetObjectCommand({ Bucket: bucket(), Key: key }), { expiresIn });
+}
+
+export async function getS3Object(key: string) {
+  return s3Client().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
+}
+
+export function s3ProxyUrl(key: string) {
+  return `/api/files/s3?key=${encodeURIComponent(key)}`;
+}
+
+export async function userWithSignedMedia<
+  T extends { avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }
+>(user: T): Promise<T> {
+  const avatarUrl = user.avatarKey ? s3ProxyUrl(user.avatarKey) : user.avatarUrl ?? null;
+  const signatureUrl = user.signatureKey ? s3ProxyUrl(user.signatureKey) : user.signatureUrl ?? null;
+  return { ...user, avatarUrl, signatureUrl };
 }

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/api";
-import { dateFolder, fileExtension, uploadS3Object } from "@/lib/s3-storage";
+import { dateFolder, fileExtension, uploadS3Object } from "@/lib/s3";
 import type { Role } from "@prisma/client";
 
 type ImportMode = "create" | "update" | "upsert";

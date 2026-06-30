@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
-import { s3ProxyUrl } from "@/lib/s3-storage";
+import { s3ProxyUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 

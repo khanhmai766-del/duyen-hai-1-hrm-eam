@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { safeEmployeeCode, uploadS3Object, userWithSignedMedia } from "@/lib/s3-storage";
+import { safeEmployeeCode, uploadS3Object, userWithSignedMedia } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 

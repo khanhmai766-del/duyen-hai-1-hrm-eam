@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
-import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3-storage";
+import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";

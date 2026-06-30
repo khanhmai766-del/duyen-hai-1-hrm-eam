@@ -1,6 +1,6 @@
 import { Prisma, type ActivityLogCategory } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { uploadS3Object } from "@/lib/s3-storage";
+import { uploadS3Object } from "@/lib/s3";
 
 type ActionConfig = {
   category: ActivityLogCategory;

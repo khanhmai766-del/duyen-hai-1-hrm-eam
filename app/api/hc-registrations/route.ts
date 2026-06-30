@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
-import { userWithSignedMedia } from "@/lib/s3-storage";
+import { userWithSignedMedia } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
