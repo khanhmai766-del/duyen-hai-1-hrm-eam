@@ -91,8 +91,10 @@ export async function POST(req: NextRequest) {
     if (!content) return fail("Vui lòng nhập nội dung trao đổi");
 
     const id = randomUUID();
+    // updatedAt là @updatedAt trong Prisma (NOT NULL, KHÔNG có default ở DB). Vì đây là
+    // raw INSERT (bỏ qua Prisma) nên phải tự điền, không sẽ lỗi 23502 NOT NULL.
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "ForumPost" (id, title, content, category, tags, attachments, "authorId") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO "ForumPost" (id, title, content, category, tags, attachments, "authorId", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
       id,
       title,
       content,
