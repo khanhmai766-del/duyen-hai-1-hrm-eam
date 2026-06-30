@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
+import { useUsersFull, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
 import { apiGet } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -77,7 +77,7 @@ function formatJson(value: unknown) {
 
 export default function AdminUsersPage() {
   const { data: session } = useSession();
-  const { data, isLoading } = useUsers();
+  const { data, isLoading } = useUsersFull();
   const create = useCreateUser();
   const update = useUpdateUser();
   const del = useDeleteUser();

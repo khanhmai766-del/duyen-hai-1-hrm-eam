@@ -3,20 +3,55 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
-import { userWithSignedMedia } from "@/lib/s3-storage";
+import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
+
+// Bản "summary": đủ trường cho danh sách/dropdown/sidebar nhưng KHÔNG kèm chữ ký
+// (signatureUrl là base64 lớn, không danh sách nào hiển thị). Giữ nguyên hình dạng
+// SafeUser để mọi nơi tiêu thụ không phải đổi kiểu.
+const SUMMARY_SELECT = {
+  id: true,
+  name: true,
+  employeeId: true,
+  email: true,
+  workEmail: true,
+  username: true,
+  phone: true,
+  avatarUrl: true,
+  avatarKey: true,
+  role: true,
+  position: true,
+  department: true,
+  isActive: true,
+  mustChangePassword: true,
+  passwordChangedAt: true,
+  createdAt: true,
+} as const;
 
 async function safe<T extends { passwordHash?: string; avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(u: T) {
   const { passwordHash, ...rest } = u;
   return userWithSignedMedia(rest);
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
+    // ?summary=1 → trả bản nhẹ (bỏ chữ ký base64; avatar qua proxy S3 nếu đã migrate).
+    // Dùng cho sidebar (mọi trang), dropdown chọn người, danh sách chức vụ... Trang
+    // Quản trị người dùng vẫn lấy bản đầy đủ qua useUsersFull().
+    if (req.nextUrl.searchParams.get("summary") === "1") {
+      const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" }, select: SUMMARY_SELECT });
+      const data = users.map((u) => ({
+        ...u,
+        avatarUrl: u.avatarKey ? s3ProxyUrl(u.avatarKey) : u.avatarUrl ?? null,
+        signatureUrl: null as string | null,
+        signatureKey: null as string | null,
+      }));
+      return ok(data);
+    }
     const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" } });
     return ok(await Promise.all(users.map(safe)));
   });

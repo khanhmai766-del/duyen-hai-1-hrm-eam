@@ -5,7 +5,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { SafeUser } from "@/types";
 
+/**
+ * Danh sách người dùng bản "nhẹ" (không kèm chữ ký base64; avatar qua proxy S3).
+ * Đây là bản dùng mặc định cho hầu hết UI (sidebar, dropdown, chọn người, chức vụ).
+ */
 export function useUsers() {
+  return useQuery({ queryKey: ["users", "summary"], queryFn: () => apiGet<SafeUser[]>("/api/users?summary=1") });
+}
+
+/**
+ * Bản đầy đủ (kèm avatarUrl/signatureUrl base64) — CHỈ dùng ở trang cần chữ ký,
+ * ví dụ Quản trị người dùng. Query key ["users"] vẫn được làm mới bởi các mutation
+ * invalidate ["users"] (khớp tiền tố, gồm cả ["users","summary"]).
+ */
+export function useUsersFull() {
   return useQuery({ queryKey: ["users"], queryFn: () => apiGet<SafeUser[]>("/api/users") });
 }
 
