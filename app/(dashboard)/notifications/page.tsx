@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -22,6 +22,8 @@ import {
   useAnnouncements,
   useCreateAnnouncement,
   useUpdateAnnouncement,
+  useInvalidateAnnouncement,
+  useRestoreAnnouncement,
   useDeleteAnnouncement,
   useUploadAnnouncementFile,
   useMarkAnnouncementRead,
@@ -59,6 +61,7 @@ const EMPTY_FORM = {
   pinned: false,
   orderedBy: "",
   orderAuthority: "LĐPX",
+  issuedAt: new Date().toISOString().slice(0, 10),
   linkUrl: "",
   fileUrl: "",
   fileName: "",
@@ -84,6 +87,25 @@ function joinOrderedBy(orderAuthority: string, orderedBy: string) {
     : "LĐPX";
   const name = orderedBy.trim();
   return name ? `${authority} - ${name}` : authority;
+}
+
+function dateInputValue(value?: string | null) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
+  return date.toISOString().slice(0, 10);
+}
+
+function announcementDate(a: Announcement) {
+  return a.issuedAt ?? a.createdAt;
+}
+
+function invalidRetentionDaysLeft(value?: string | null) {
+  if (!value) return null;
+  const invalidated = new Date(value);
+  if (Number.isNaN(invalidated.getTime())) return null;
+  const expiresAt = invalidated.getTime() + 15 * 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
 }
 
 export default function NotificationsPage() {
@@ -112,6 +134,8 @@ export default function NotificationsPage() {
 
   const create = useCreateAnnouncement();
   const update = useUpdateAnnouncement();
+  const invalidate = useInvalidateAnnouncement();
+  const restore = useRestoreAnnouncement();
   const del = useDeleteAnnouncement();
   const upload = useUploadAnnouncementFile();
   const markRead = useMarkAnnouncementRead();
@@ -158,12 +182,12 @@ export default function NotificationsPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [search, setSearch] = React.useState("");
   const years = Array.from(
-    new Set([currentYear, ...bulletins.map((a) => new Date(a.createdAt).getFullYear())])
-  ).sort((x, y) => y - x);
+    new Set([currentYear, ...bulletins.map((a) => new Date(announcementDate(a)).getFullYear())])
+  ).filter((year) => !Number.isNaN(year)).sort((x, y) => y - x);
   const nq = normalizeText(search.trim());
   const filtered = bulletins.filter(
     (a) =>
-      (yearFilter === "ALL" || new Date(a.createdAt).getFullYear() === Number(yearFilter)) &&
+      (yearFilter === "ALL" || new Date(announcementDate(a)).getFullYear() === Number(yearFilter)) &&
       (positionFilter === "ALL" || isAnnouncementTargetForPosition(a.classification, positionFilter)) &&
       (!nq || normalizeText([a.title, a.body, announcementTargetLabel(a.classification), a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
   );
@@ -178,6 +202,7 @@ export default function NotificationsPage() {
     return {
       stt: a.stt || String(i + 1),
       title: a.title,
+      issuedAt: formatDate(announcementDate(a)),
       targetPositions: announcementTargetLabel(a.classification),
       orderAuthority,
       orderedBy,
@@ -187,7 +212,7 @@ export default function NotificationsPage() {
 
   function openCreate(category: AnnouncementCategory) {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, category });
+    setForm({ ...EMPTY_FORM, category, issuedAt: new Date().toISOString().slice(0, 10) });
     setDialogOpen(true);
   }
   function openEdit(a: Announcement) {
@@ -202,6 +227,7 @@ export default function NotificationsPage() {
       pinned: a.pinned,
       orderedBy: order.orderedBy,
       orderAuthority: order.orderAuthority,
+      issuedAt: dateInputValue(a.issuedAt ?? a.createdAt),
       linkUrl: a.linkUrl ?? "",
       fileUrl: a.fileUrl ?? "",
       fileName: a.fileName ?? "",
@@ -273,6 +299,24 @@ export default function NotificationsPage() {
     }
   }
 
+  async function markIneffective(a: Announcement) {
+    try {
+      await invalidate.mutateAsync(a.id);
+      toast.success("Đã đánh dấu mệnh lệnh không còn hiệu lực");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function restoreOrder(a: Announcement) {
+    try {
+      await restore.mutateAsync(a.id);
+      toast.success("Đã khôi phục mệnh lệnh");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   /** A single admin post card (bảng tin or mệnh lệnh). */
   function PostCard({ a }: { a: Announcement }) {
     const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, u.position));
@@ -284,12 +328,16 @@ export default function NotificationsPage() {
     const readCount = trackedReads.length;
     const total = targetUsers.length;
     const allRead = total > 0 && readCount >= total;
+    const isInvalid = Boolean(a.invalidatedAt);
+    const daysLeft = invalidRetentionDaysLeft(a.invalidatedAt);
     return (
       <Card
         className={cn(
           "group transition-colors",
-          a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",
-          allRead &&
+          isInvalid
+            ? "border-red-300 bg-red-50/90 ring-1 ring-red-200"
+            : a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",
+          !isInvalid && allRead &&
             "border-amber-300 bg-gradient-to-br from-amber-100 via-yellow-100 to-amber-200 dark:border-amber-500/40 dark:from-amber-500/20 dark:via-yellow-500/10 dark:to-amber-600/20"
         )}
       >
@@ -304,13 +352,21 @@ export default function NotificationsPage() {
                   </span>
                 )}
                 <h3 className="font-semibold text-ink">{a.title}</h3>
+                {isInvalid && (
+                  <span className="shrink-0 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                    Không còn hiệu lực
+                  </span>
+                )}
                 {a.classification && (
                   <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                     {announcementTargetLabel(a.classification)}
                   </span>
                 )}
               </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{a.body}</p>
+              <div className={cn("mt-1 text-sm font-semibold", isInvalid ? "text-red-700" : "text-ink")}>
+                Ngày ra mệnh lệnh: {formatDate(announcementDate(a))}
+              </div>
+              <p className={cn("mt-1 whitespace-pre-wrap text-sm", isInvalid ? "text-red-800" : "text-muted-foreground")}>{a.body}</p>
               {(a.linkUrl || a.fileUrl) && (
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {a.linkUrl && (
@@ -346,12 +402,28 @@ export default function NotificationsPage() {
               <div className="mt-2 text-xs text-muted-foreground">
                 Cập nhật bởi: <span className="font-medium text-ink">Quản trị viên</span> - {formatDate(a.updatedAt)}
               </div>
+              {isInvalid && (
+                <div className="mt-2 rounded-md border border-red-200 bg-white/70 px-3 py-2 text-xs font-medium text-red-700">
+                  Mệnh lệnh không còn hiệu lực từ {formatDate(a.invalidatedAt)}. Có thể khôi phục trong {daysLeft ?? 15} ngày trước khi hệ thống tự xoá.
+                </div>
+              )}
             </div>
             {isAdmin && (
               <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <button onClick={() => openEdit(a)} title="Sửa" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-ink">
-                  <Pencil className="h-4 w-4" />
-                </button>
+                {isInvalid ? (
+                  <button onClick={() => restoreOrder(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
+                    <RotateCcw className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <>
+                    <button onClick={() => openEdit(a)} title="Sửa" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-ink">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => markIneffective(a)} title="Mệnh lệnh không còn hiệu lực" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700">
+                      <Ban className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
                 <button onClick={() => setDeleting(a)} title="Xoá" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive">
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -499,6 +571,14 @@ export default function NotificationsPage() {
                   className="text-center"
                 />
               </div>
+            </div>
+            <div>
+              <Label className="mb-1.5 block">Ngày ra mệnh lệnh</Label>
+              <Input
+                type="date"
+                value={form.issuedAt}
+                onChange={(e) => setForm({ ...form, issuedAt: e.target.value })}
+              />
             </div>
             <div>
               <Label className="mb-1.5 block">Cương vị nhận mệnh lệnh</Label>

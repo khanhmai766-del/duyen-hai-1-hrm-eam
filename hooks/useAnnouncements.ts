@@ -20,6 +20,8 @@ export interface Announcement {
   body: string;
   pinned: boolean;
   orderedBy: string | null;
+  issuedAt: string | null;
+  invalidatedAt: string | null;
   linkUrl: string | null;
   fileUrl: string | null;
   fileName: string | null;
@@ -37,6 +39,8 @@ interface AnnouncementInput {
   stt?: string | null;
   pinned?: boolean;
   orderedBy?: string | null;
+  issuedAt?: string | null;
+  invalidatedAt?: string | null;
   linkUrl?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
@@ -62,6 +66,22 @@ export function useUpdateAnnouncement() {
   return useMutation({
     mutationFn: (body: { id: string } & Partial<AnnouncementInput>) =>
       apiMutate("/api/announcements", "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
+  });
+}
+
+export function useInvalidateAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate("/api/announcements", "PUT", { id, action: "INVALIDATE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
+  });
+}
+
+export function useRestoreAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate("/api/announcements", "PUT", { id, action: "RESTORE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
   });
 }

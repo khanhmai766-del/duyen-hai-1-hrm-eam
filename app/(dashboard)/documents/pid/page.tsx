@@ -15,6 +15,7 @@ export default function PidDocumentsPage() {
       showEquipmentScope
       showCodeField={false}
       wideNameNarrowLinkLayout
+      hideDocumentIcon
     />
   );
 }
