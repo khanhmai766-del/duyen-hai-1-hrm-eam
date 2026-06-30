@@ -330,17 +330,19 @@ export function DefectForm({
           </div>
         ) : (
           <div className="mx-auto max-w-xl space-y-5">
-            <Row label="Yêu Cầu">
-              <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </Row>
-            <Row label="Số Yêu Cầu">
-              <Input value={form.requestNumber} onChange={(e) => set("requestNumber", e.target.value)} />
-            </Row>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Row label="Yêu Cầu" compact>
+                <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Row>
+              <Row label="Số Yêu Cầu" compact>
+                <Input value={form.requestNumber} onChange={(e) => set("requestNumber", e.target.value)} />
+              </Row>
+            </div>
             <Row label="Nội Dung">
               <Textarea value={form.content} onChange={(e) => set("content", e.target.value)} rows={2} />
             </Row>
@@ -396,11 +398,11 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children, compact = false }: { label: string; children: React.ReactNode; compact?: boolean }) {
   return (
-    <div className="grid grid-cols-[180px_1fr] items-center gap-4">
+    <div className={cn("grid items-center gap-4", compact ? "grid-cols-[88px_1fr]" : "grid-cols-[180px_1fr]")}>
       <Label className="whitespace-nowrap text-right text-muted-foreground">{label}</Label>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

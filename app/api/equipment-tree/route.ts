@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
 import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,9 @@ export async function PUT(req: NextRequest) {
     const data: Record<string, unknown> = {};
     if (body.attachedInfo !== undefined) data.attachedInfo = body.attachedInfo || null;
     if (body.documentUrl !== undefined) data.documentUrl = body.documentUrl || null;
-    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null;
+    if (body.imageUrl !== undefined) {
+      data.imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "equipment/images", preset: "image" });
+    }
     const node = await prisma.equipmentNode.update({ where: { seq }, data });
     await audit(user.id, "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.name);
     return ok({ seq: node.seq });

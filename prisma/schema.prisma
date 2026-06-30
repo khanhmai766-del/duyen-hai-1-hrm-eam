@@ -46,6 +46,10 @@ model User {
   webAuthnCredentials     WebAuthnCredential[]
   forumPosts              ForumPost[]              @relation("ForumPostAuthor")
   forumReplies            ForumReply[]             @relation("ForumReplyAuthor")
+
+  @@index([position])
+  @@index([role])
+  @@index([isActive])
 }
 
 model WebAuthnCredential {
@@ -59,6 +63,8 @@ model WebAuthnCredential {
   lastUsedAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Bảng tin nội bộ: bài đăng do Quản trị (ADMIN) tạo, mọi người chỉ xem.
@@ -82,6 +88,9 @@ model Announcement {
 
   createdBy User               @relation("AnnouncementCreator", fields: [createdById], references: [id])
   reads     AnnouncementRead[]
+
+  @@index([category, pinned, createdAt])
+  @@index([createdById])
 }
 
 // Xác nhận đã đọc thông báo / mệnh lệnh của từng user.
@@ -135,6 +144,9 @@ model OperationEvent {
   createdAt   DateTime @default(now())
 
   createdBy User @relation("OpCreatedBy", fields: [createdById], references: [id])
+
+  @@index([date])
+  @@index([createdById])
 }
 
 enum Role {
@@ -160,6 +172,9 @@ model Shift {
   assignments ShiftAssignment[]
   checkIns    CheckIn[]
   handovers   ShiftHandover[]
+
+  @@index([date, shiftType])
+  @@index([unit, date])
 }
 
 enum ShiftType {
@@ -178,6 +193,10 @@ model ShiftAssignment {
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
+
+  @@index([shiftId])
+  @@index([userId])
+  @@index([parentId])
 }
 
 model CheckIn {
@@ -192,6 +211,10 @@ model CheckIn {
 
   user  User  @relation(fields: [userId], references: [id])
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([shiftId])
+  @@index([status])
 }
 
 model ShiftHandover {
@@ -232,6 +255,10 @@ model RepairLog {
   approvedBy User?  @relation("ApprovedBy", fields: [approvedById], references: [id])
 
   @@index([deviceSeq])
+  @@index([deviceSeq, startedAt])
+  @@index([status])
+  @@index([createdById])
+  @@index([startedAt])
 }
 
 enum RepairStatus {
@@ -266,6 +293,9 @@ model Material {
 
   deviceMaterials EquipmentMaterial[]
   replacements    MaterialReplacement[]
+
+  @@index([system])
+  @@index([quantity])
 }
 
 // Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí
@@ -293,6 +323,10 @@ model MaterialReplacement {
   logs      MaterialReplacementLog[]
 
   @@index([deviceSeq])
+  @@index([materialId])
+  @@index([system])
+  @@index([isActive, nextDueAt])
+  @@index([createdById])
 }
 
 // Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.
@@ -306,6 +340,10 @@ model MaterialReplacementLog {
 
   replacement MaterialReplacement @relation(fields: [replacementId], references: [id], onDelete: Cascade)
   doneBy      User                @relation("MrDoneBy", fields: [doneById], references: [id])
+
+  @@index([replacementId])
+  @@index([doneById])
+  @@index([replacedAt])
 }
 
 model EquipmentMaterial {
@@ -346,6 +384,14 @@ model Defect {
   updatedAt     DateTime  @updatedAt
 
   createdBy User @relation("DefectCreatedBy", fields: [createdById], references: [id])
+
+  @@index([device])
+  @@index([system])
+  @@index([status])
+  @@index([unit, status])
+  @@index([createdAt])
+  @@index([completedAt])
+  @@index([createdById])
 }
 
 // Lịch sử xử lý khiếm khuyết theo cương vị — sinh khi một khiếm khuyết được "Hoàn thành".
@@ -368,6 +414,12 @@ model DefectHistory {
   createdAt       DateTime @default(now())
 
   createdBy User @relation("DefectHistoryCreatedBy", fields: [createdById], references: [id])
+
+  @@index([device])
+  @@index([system])
+  @@index([performedAt])
+  @@index([unit, performedAt])
+  @@index([createdById])
 }
 
 model AuditLog {
@@ -381,6 +433,10 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@index([createdAt])
 }
 
 model SystemAuditLog {
@@ -415,6 +471,9 @@ model HcGroup {
 
   createdBy User        @relation("HcGroupCreator", fields: [createdById], references: [id])
   members   HcCheckIn[]
+
+  @@index([date])
+  @@index([createdById])
 }
 
 model HcCheckIn {
@@ -431,6 +490,8 @@ model HcCheckIn {
   user  User    @relation("HcCheckInUser", fields: [userId], references: [id])
 
   @@unique([groupId, userId])
+  @@index([userId])
+  @@index([isApproved])
 }
 
 // Tài liệu số (quy trình, sơ đồ P&ID, lưu trữ…). Bảng được tạo/đồng bộ bằng raw
@@ -508,7 +569,9 @@ model EquipmentNode {
   materialReplacements MaterialReplacement[]
 
   @@index([parentSeq])
+  @@index([parentSeq, sort])
   @@index([code])
+  @@index([depth])
 }
 
 // Phạm vi hệ thống thiết bị được gán cho từng cương vị quản lý.

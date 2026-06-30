@@ -1,33 +1,25 @@
 import type { NextRequest } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { deleteFromS3, uploadBufferToS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Single official roster (Vận hành 1), uploaded as a PDF by an admin.
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
-const PDF_NAME = "lich-truc-ca-vh1.pdf";
-const META_NAME = "lich-truc-ca-vh1.meta.json";
-const PDF_PATH = path.join(UPLOAD_DIR, PDF_NAME);
-const META_PATH = path.join(UPLOAD_DIR, META_NAME);
-const PUBLIC_URL = `/uploads/${PDF_NAME}`;
+const ROSTER_META_KEY = "roster-schedule";
 
 interface RosterMeta {
   url: string;
+  key?: string;
   name: string; // original file name
   uploadedAt: string;
   uploadedBy: string;
 }
 
 async function readMeta(): Promise<RosterMeta | null> {
-  try {
-    const raw = await fs.readFile(META_PATH, "utf8");
-    return JSON.parse(raw) as RosterMeta;
-  } catch {
-    return null;
-  }
+  const row = await prisma.rbacConfig.findUnique({ where: { key: ROSTER_META_KEY } });
+  if (!row?.value) return null;
+  return JSON.parse(row.value) as RosterMeta;
 }
 
 /** GET — current roster PDF metadata (or { url: null } if none uploaded). */
@@ -53,19 +45,30 @@ export async function POST(req: NextRequest) {
     if (!isPdf) return fail("Chỉ chấp nhận tệp PDF");
     if (file.size > 25 * 1024 * 1024) return fail("Tệp vượt quá 25MB");
 
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
     const bytes = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(PDF_PATH, bytes);
+    const previous = await readMeta();
+    const uploaded = await uploadBufferToS3({
+      buffer: bytes,
+      contentType: "application/pdf",
+      folder: "roster/pdf",
+      filename: file.name,
+    });
 
     const meta: RosterMeta = {
-      url: PUBLIC_URL,
+      url: uploaded.url,
+      key: uploaded.key,
       name: file.name,
       uploadedAt: new Date().toISOString(),
       uploadedBy: user.name ?? "—",
     };
-    await fs.writeFile(META_PATH, JSON.stringify(meta), "utf8");
+    await prisma.rbacConfig.upsert({
+      where: { key: ROSTER_META_KEY },
+      create: { key: ROSTER_META_KEY, value: JSON.stringify(meta), updatedById: user.id },
+      update: { value: JSON.stringify(meta), updatedById: user.id, updatedAt: new Date() },
+    });
+    if (previous?.url) await deleteFromS3(previous.url);
 
-    await audit(user.id, "UPLOAD_ROSTER", "RosterSchedule", PDF_NAME, `Tải lên lịch trực ca: ${file.name}`);
+    await audit(user.id, "UPLOAD_ROSTER", "RosterSchedule", uploaded.key, `Tải lên lịch trực ca: ${file.name}`);
     return ok(meta);
   });
 }
@@ -75,9 +78,10 @@ export async function DELETE() {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
-    await fs.rm(PDF_PATH, { force: true });
-    await fs.rm(META_PATH, { force: true });
-    await audit(user.id, "DELETE_ROSTER", "RosterSchedule", PDF_NAME, "Xoá lịch trực ca");
+    const previous = await readMeta();
+    if (previous?.url) await deleteFromS3(previous.url);
+    await prisma.rbacConfig.deleteMany({ where: { key: ROSTER_META_KEY } });
+    await audit(user.id, "DELETE_ROSTER", "RosterSchedule", ROSTER_META_KEY, "Xoá lịch trực ca");
     return ok({ url: null });
   });
 }

@@ -42,11 +42,24 @@ export function normalizePositionScopeKey(position?: string | null) {
   return normalizeText(normalizePositionScopeLabel(position));
 }
 
+const HIDDEN_POSITION_SCOPE_OPTION_KEYS = new Set([
+  "i&c",
+  "khi nen - nha dau 300m3",
+  "xlnt- nha dau 5000m3",
+  "tram nuoc tho",
+  "truong kip lo - may dh1",
+].map(compactPositionScopeKey));
+
+function compactPositionScopeKey(position?: string | null) {
+  return normalizePositionScopeKey(position).replace(/[^a-z0-9]+/g, "");
+}
+
 export function positionScopeOptions(positions: string[]) {
   const byKey = new Map<string, string>();
   for (const position of positions) {
     const label = normalizePositionScopeLabel(position);
     const key = normalizePositionScopeKey(label);
+    if (HIDDEN_POSITION_SCOPE_OPTION_KEYS.has(compactPositionScopeKey(label))) continue;
     if (!key || byKey.has(key)) continue;
     byKey.set(key, label);
   }

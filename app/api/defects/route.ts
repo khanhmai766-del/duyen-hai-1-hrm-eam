@@ -8,6 +8,7 @@ import {
   readDefectImpactFields,
   updateDefectImpactFields,
 } from "@/lib/defect-impact-fields";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
       fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
       environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
     };
+    const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" });
 
     const defect = await prisma.defect.create({
       data: {
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
         status: body.status || "CHUA_XU_LY",
         detectedAt: body.detectedAt ? new Date(body.detectedAt) : null,
         note: body.note?.trim() || null,
+        imageUrl,
         createdById: user.id,
       },
       include: INCLUDE,

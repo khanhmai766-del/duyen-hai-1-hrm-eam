@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { maybeUploadDataUrlList } from "@/lib/s3";
 
 const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -25,7 +26,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const performedAt = body.performedAt ? new Date(body.performedAt) : new Date();
-    const images = Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [];
+    const images = await maybeUploadDataUrlList(
+      Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [],
+      "defect-history/images",
+      "image"
+    );
 
     const [history] = await prisma.$transaction([
       prisma.defectHistory.create({

@@ -8,6 +8,7 @@ import {
   readDefectImpactFields,
   updateDefectImpactFields,
 } from "@/lib/defect-impact-fields";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -21,6 +22,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
     if (existing.device) await assertSeqEditable(user, existing.device);
     if (body.device) await assertSeqEditable(user, String(body.device));
+    const imageUrl =
+      body.imageUrl !== undefined
+        ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" })
+        : undefined;
     const defect = await prisma.defect.update({
       where: { id: params.id },
       data: {
@@ -35,6 +40,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         status: body.status,
         detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? new Date(body.detectedAt) : null) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
+        imageUrl,
       },
       include: INCLUDE,
     });

@@ -7,6 +7,7 @@ import {
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
+import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const images = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
+    const imageUrl =
+      body.images !== undefined
+        ? await maybeUploadDataUrl({ value: images[0] ?? null, folder: "equipment/images", preset: "image" })
+        : undefined;
     const parentSeq = typeof body.systemSeq === "string" && body.systemSeq.trim()
       ? body.systemSeq.trim()
       : parentSeqOf(nextSeq);
@@ -117,7 +122,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         depth: nextSeq.split(".").length,
         attachedInfo: body.attachedInfo !== undefined ? String(body.attachedInfo || "").trim() || null : undefined,
         documentUrl: body.documentUrl !== undefined ? String(body.documentUrl || "").trim() || null : undefined,
-        imageUrl: body.images !== undefined ? images[0] ?? null : undefined,
+        imageUrl,
       },
     });
 
