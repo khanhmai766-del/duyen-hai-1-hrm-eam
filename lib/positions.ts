@@ -20,8 +20,30 @@ export function standardPositionOptions(userPositions: Array<string | null | und
   return uniqueVietnamesePositions([...ORG_SEAT_TITLES, ...userPositions]).sort((a, b) => a.localeCompare(b, "vi"));
 }
 
+const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[] }> = [
+  {
+    canonical: "I&C",
+    aliases: [
+      "I&C",
+      "I & C",
+      "Thiết bị đo lường điều khiển",
+      "Thiết bị đo lường và điều khiển",
+      "Thiết bị đo lường & điều khiển",
+    ],
+  },
+];
+
+function announcementPositionKey(position: string) {
+  return normalizeText(position).replace(/\s+/g, " ");
+}
+
 export function announcementPositionLabel(position?: string | null) {
-  return (position ?? "").trim().replace(/\s+S[12]$/i, "");
+  const clean = (position ?? "").trim().replace(/\s+S[12]$/i, "");
+  const key = announcementPositionKey(clean);
+  const group = ANNOUNCEMENT_POSITION_ALIASES.find((item) =>
+    item.aliases.some((alias) => announcementPositionKey(alias) === key)
+  );
+  return group?.canonical ?? clean;
 }
 
 export function announcementPositionOptions(userPositions: Array<string | null | undefined> = []) {

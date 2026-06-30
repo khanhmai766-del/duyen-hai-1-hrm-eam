@@ -55,14 +55,15 @@ export function DefectForm({
 
   // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
-  const positions = usePositions().filter(isSelectableManagingPosition);
+  const allPositions = usePositions();
+  const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
   // Thiết bị lấy từ module Thiết bị.
   const { data: devicesData } = useDevices({});
   const { data: equipmentTreeData } = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
-  const devices = devicesData?.data ?? [];
-  const equipmentNodes = equipmentTreeData?.data ?? [];
-  const positionScopes = scopesQuery.data?.data ?? [];
+  const devices = React.useMemo(() => devicesData?.data ?? [], [devicesData]);
+  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
+  const positionScopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
 
   const [form, setForm] = React.useState({
     unit: defect?.unit ?? "",
@@ -242,7 +243,7 @@ export function DefectForm({
       </div>
 
       <div className="flex-1 overflow-y-auto p-5">
-        {step === 1 ? (
+        <div className={cn(step === 1 ? "block" : "hidden")}>
           <div className="mx-auto max-w-xl space-y-5">
             <Row label="Tổ Máy *">
               <div className="grid grid-cols-3 gap-2">
@@ -328,37 +329,40 @@ export function DefectForm({
               <Input type="date" value={form.detectedAt} onChange={(e) => set("detectedAt", e.target.value)} />
             </Row>
           </div>
-        ) : (
-          <div className="mx-auto max-w-xl space-y-5">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Row label="Yêu Cầu" compact>
-                <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+        </div>
+        <div className={cn(step === 2 ? "block" : "hidden")}>
+          <div className="mx-auto w-full max-w-2xl rounded-xl border border-border/80 bg-white p-5 shadow-sm">
+            <div className="grid gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <StackField label="Yêu Cầu">
+                  <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
+                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </StackField>
+                <StackField label="Số Yêu Cầu">
+                  <Input className="h-11" value={form.requestNumber} onChange={(e) => set("requestNumber", e.target.value)} />
+                </StackField>
+              </div>
+              <StackField label="Nội Dung">
+                <Textarea className="min-h-[88px] resize-y" value={form.content} onChange={(e) => set("content", e.target.value)} />
+              </StackField>
+              <StackField label="Tình Trạng Khiếm Khuyết">
+                <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    {DEFECT_STATUS_ORDER.map((s) => <SelectItem key={s} value={s}>{DEFECT_STATUS[s].label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </Row>
-              <Row label="Số Yêu Cầu" compact>
-                <Input value={form.requestNumber} onChange={(e) => set("requestNumber", e.target.value)} />
-              </Row>
+              </StackField>
+              <StackField label="Ghi Chú">
+                <Textarea className="min-h-[88px] resize-y" value={form.note} onChange={(e) => set("note", e.target.value)} />
+              </StackField>
             </div>
-            <Row label="Nội Dung">
-              <Textarea value={form.content} onChange={(e) => set("content", e.target.value)} rows={2} />
-            </Row>
-            <Row label="Tình Trạng Khiếm Khuyết">
-              <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DEFECT_STATUS_ORDER.map((s) => <SelectItem key={s} value={s}>{DEFECT_STATUS[s].label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </Row>
-            <Row label="Ghi Chú">
-              <Textarea value={form.note} onChange={(e) => set("note", e.target.value)} rows={2} />
-            </Row>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Footer */}
@@ -402,6 +406,15 @@ function Row({ label, children, compact = false }: { label: string; children: Re
   return (
     <div className={cn("grid items-center gap-4", compact ? "grid-cols-[88px_1fr]" : "grid-cols-[180px_1fr]")}>
       <Label className="whitespace-nowrap text-right text-muted-foreground">{label}</Label>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function StackField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2">
+      <Label className="text-sm font-semibold text-slate-600">{label}</Label>
       <div className="min-w-0">{children}</div>
     </div>
   );

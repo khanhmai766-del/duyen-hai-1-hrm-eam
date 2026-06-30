@@ -260,9 +260,11 @@ export default function NotificationsPage() {
 
   function toggleTargetPosition(position: string, checked: boolean) {
     const current = selectedTargetPositions().filter((p) => p !== ALL_ANNOUNCEMENT_POSITIONS);
+    const positionKey = normalizeText(announcementPositionLabel(position));
+    const otherPositions = current.filter((p) => normalizeText(announcementPositionLabel(p)) !== positionKey);
     const next = checked
-      ? Array.from(new Set([...current, position]))
-      : current.filter((p) => p !== position);
+      ? Array.from(new Set([...otherPositions, announcementPositionLabel(position)]))
+      : otherPositions;
     setTargetPositions(next);
   }
 
