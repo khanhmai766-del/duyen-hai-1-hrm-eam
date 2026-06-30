@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { deleteFromS3, uploadBufferToS3 } from "@/lib/s3";
+import { deleteFromS3, keyFromPublicUrl, uploadBufferToS3 } from "@/lib/s3";
+import { s3ProxyUrl } from "@/lib/s3-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,9 @@ interface RosterMeta {
 async function readMeta(): Promise<RosterMeta | null> {
   const row = await prisma.rbacConfig.findUnique({ where: { key: ROSTER_META_KEY } });
   if (!row?.value) return null;
-  return JSON.parse(row.value) as RosterMeta;
+  const meta = JSON.parse(row.value) as RosterMeta;
+  const key = meta.key ?? keyFromPublicUrl(meta.url);
+  return key ? { ...meta, key, url: s3ProxyUrl(key) } : meta;
 }
 
 /** GET — current roster PDF metadata (or { url: null } if none uploaded). */
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest) {
     });
 
     const meta: RosterMeta = {
-      url: uploaded.url,
+      url: s3ProxyUrl(uploaded.key),
       key: uploaded.key,
       name: file.name,
       uploadedAt: new Date().toISOString(),

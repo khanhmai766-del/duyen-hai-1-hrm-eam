@@ -670,6 +670,11 @@ function RosterPdfView({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString("vi-VN") : "");
+  const pdfUrl = React.useMemo(() => {
+    if (!roster?.url) return "";
+    const separator = roster.url.includes("?") ? "&" : "?";
+    return `${roster.url}${separator}v=${encodeURIComponent(roster.uploadedAt ?? "")}`;
+  }, [roster?.uploadedAt, roster?.url]);
 
   return (
     <Card className="overflow-hidden">
@@ -722,7 +727,7 @@ function RosterPdfView({ isAdmin }: { isAdmin: boolean }) {
         </div>
       ) : hasPdf ? (
         <iframe
-          src={`${roster!.url}?v=${encodeURIComponent(roster?.uploadedAt ?? "")}`}
+          src={pdfUrl}
           title="Lịch trực ca Vận hành 1"
           className="h-[78vh] w-full border-0"
         />

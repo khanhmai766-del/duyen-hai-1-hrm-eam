@@ -188,6 +188,13 @@ export async function maybeUploadDataUrlList(values: string[] | null | undefined
 
 export function keyFromPublicUrl(url: string | null | undefined) {
   if (!url) return null;
+  if (url.startsWith("/api/files/s3?")) {
+    try {
+      return new URL(url, "http://local").searchParams.get("key");
+    } catch {
+      return null;
+    }
+  }
   const base = publicBaseUrl();
   if (base && url.startsWith(`${base}/`)) return url.slice(base.length + 1);
   const endpoint = process.env.S3_ENDPOINT?.replace(/\/+$/, "");
