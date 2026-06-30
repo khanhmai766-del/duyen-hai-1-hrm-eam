@@ -19,17 +19,6 @@ function parseJsonSafe(value?: string | null) {
   }
 }
 
-async function ensureRbacConfigTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "RbacConfig" (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      "updatedById" TEXT,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
-
 function normalizeRoles(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value
@@ -92,7 +81,6 @@ function normalizeUserOverrides(value: unknown) {
 export async function GET() {
   return handle(async () => {
     await requireUser();
-    await ensureRbacConfigTable();
 
     const rows = await prisma.$queryRawUnsafe<{ value: string }[]>(
       `SELECT value FROM "RbacConfig" WHERE key = $1 LIMIT 1`,
@@ -120,7 +108,6 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
-    await ensureRbacConfigTable();
 
     const body = (await req.json()) as Record<string, unknown>;
     const roles = normalizeRoles(body.roles);

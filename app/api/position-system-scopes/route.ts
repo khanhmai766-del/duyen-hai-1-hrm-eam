@@ -16,45 +16,9 @@ type ScopeRow = {
   createdAt: Date;
 };
 
-async function ensureScopeTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "PositionSystemScope" (
-      "id" TEXT NOT NULL,
-      "position" TEXT NOT NULL,
-      "systemSeq" TEXT NOT NULL,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "PositionSystemScope_pkey" PRIMARY KEY ("id")
-    );
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "PositionSystemScope_position_systemSeq_key"
-    ON "PositionSystemScope" ("position", "systemSeq");
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "PositionSystemScope_position_idx"
-    ON "PositionSystemScope" ("position");
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "PositionSystemScope_systemSeq_idx"
-    ON "PositionSystemScope" ("systemSeq");
-  `);
-  // Thêm cột mức quyền (view/edit). Dữ liệu cũ vốn là quyền "thao tác" → backfill thành "edit".
-  await prisma.$executeRawUnsafe(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'PositionSystemScope' AND column_name = 'access'
-      ) THEN
-        ALTER TABLE "PositionSystemScope" ADD COLUMN "access" TEXT NOT NULL DEFAULT 'view';
-        UPDATE "PositionSystemScope" SET "access" = 'edit';
-      END IF;
-    END $$;
-  `);
-}
-
+// Bảng PositionSystemScope (gồm cột "access") được khai báo trong prisma/schema.prisma
+// và tạo bằng db push.
 async function listScopes() {
-  await ensureScopeTable();
   return prisma.$queryRaw<ScopeRow[]>`
     SELECT "id", "position", "systemSeq", "access", "createdAt"
     FROM "PositionSystemScope"
@@ -107,7 +71,6 @@ export async function PUT(req: NextRequest) {
 
     if (!position) return fail("Vui lòng chọn cương vị cần phân quyền hệ thống thiết bị");
 
-    await ensureScopeTable();
     const existingRows = await listScopes();
     const positionKey = normalizePositionScopeKey(position);
     const positionsToClear = Array.from(

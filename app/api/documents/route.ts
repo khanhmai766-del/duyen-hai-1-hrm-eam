@@ -15,42 +15,8 @@ const DOCUMENT_EDITOR_ROLES = new Set(["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
 const OPERATION_DOCUMENT_CATEGORIES = new Set(["PROCEDURE", "PID"]);
 const OPERATION_DOCUMENT_ROLES = new Set(["ADMIN", "TECHNICIAN"]);
 
-async function ensureDigitalDocumentTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "DigitalDocument" (
-      id TEXT PRIMARY KEY,
-      category TEXT NOT NULL,
-      title TEXT NOT NULL,
-      "decisionNumber" TEXT,
-      "issueDate" TIMESTAMP(3),
-      "documentUrl" TEXT NOT NULL,
-      "managingPosition" TEXT,
-      "managementBlock" TEXT,
-      "procedureType" TEXT,
-      "reason" TEXT,
-      "progress" TEXT,
-      "note" TEXT,
-      "attachmentUrls" TEXT,
-      "createdById" TEXT,
-      "updatedById" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "DigitalDocument_category_updatedAt_idx"
-    ON "DigitalDocument" (category, "updatedAt" DESC)
-  `);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "managingPosition" TEXT`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "issueDate" TIMESTAMP(3)`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "managementBlock" TEXT`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "procedureType" TEXT`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "reason" TEXT`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "progress" TEXT`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "note" TEXT`);
-  await prisma.$executeRawUnsafe(`ALTER TABLE "DigitalDocument" ADD COLUMN IF NOT EXISTS "attachmentUrls" TEXT`);
-}
-
+// Bảng DigitalDocument (gồm index theo category + updatedAt) được khai báo trong
+// prisma/schema.prisma và tạo bằng db push.
 function normalizeCategory(value: string | null | undefined) {
   const category = String(value ?? "").trim().toUpperCase();
   return CATEGORIES.has(category) ? category : null;
@@ -82,7 +48,6 @@ function normalizeBody(body: Record<string, unknown>) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
-    await ensureDigitalDocumentTable();
 
     const category = normalizeCategory(req.nextUrl.searchParams.get("category"));
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
@@ -133,7 +98,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await ensureDigitalDocumentTable();
 
     const body = (await req.json()) as Record<string, unknown>;
     const category = normalizeCategory(String(body.category ?? ""));
@@ -180,7 +144,6 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await ensureDigitalDocumentTable();
 
     const body = (await req.json()) as Record<string, unknown>;
     const id = String(body.id ?? "").trim();
@@ -244,7 +207,6 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await ensureDigitalDocumentTable();
 
     const id = req.nextUrl.searchParams.get("id")?.trim();
     const category = normalizeCategory(req.nextUrl.searchParams.get("category"));

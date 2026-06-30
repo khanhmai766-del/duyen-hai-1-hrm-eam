@@ -22,19 +22,8 @@ type RbacConfig = {
   userOverrides?: RbacUserOverride[];
 };
 
-async function ensureRbacConfigTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "RbacConfig" (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      "updatedById" TEXT,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
-
+// Bảng RbacConfig được khai báo trong prisma/schema.prisma và tạo bằng db push.
 async function readRbacConfig(): Promise<RbacConfig | null> {
-  await ensureRbacConfigTable();
   const rows = await prisma.$queryRawUnsafe<{ value: string }[]>(
     `SELECT value FROM "RbacConfig" WHERE key = $1 LIMIT 1`,
     RBAC_CONFIG_KEY

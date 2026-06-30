@@ -2,12 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import {
-  ensureDefectImpactColumns,
-  normalizeImpactValue,
-  readDefectImpactFields,
-  updateDefectImpactFields,
-} from "@/lib/defect-impact-fields";
+import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl } from "@/lib/s3";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
@@ -17,7 +12,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
-    await ensureDefectImpactColumns(prisma);
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
     if (existing.device) await assertSeqEditable(user, existing.device);
@@ -41,18 +35,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? new Date(body.detectedAt) : null) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
         imageUrl,
+        // Khi gửi 1 trong 2 trường ảnh hưởng thì cập nhật cả hai (giữ nguyên hành vi cũ);
+        // không gửi gì thì để undefined → Prisma bỏ qua, không đổi giá trị.
+        fireSafetyImpact:
+          body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined
+            ? normalizeImpactValue(body.fireSafetyImpact)
+            : undefined,
+        environmentSafetyImpact:
+          body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined
+            ? normalizeImpactValue(body.environmentSafetyImpact)
+            : undefined,
       },
       include: INCLUDE,
     });
-    if (body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined) {
-      await updateDefectImpactFields(prisma, defect.id, {
-        fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
-        environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
-      });
-    }
-    const impactFields = await readDefectImpactFields(prisma, [defect.id]);
     await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id);
-    return ok({ ...defect, ...impactFields.get(defect.id) });
+    return ok(defect);
   });
 }
 

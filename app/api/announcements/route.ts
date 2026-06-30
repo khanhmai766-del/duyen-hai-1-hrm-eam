@@ -27,14 +27,6 @@ async function removeAttachment(fileUrl: string | null | undefined) {
   }
 }
 
-async function ensureAnnouncementLifecycleColumns() {
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE "Announcement"
-    ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3),
-    ADD COLUMN IF NOT EXISTS "invalidatedAt" TIMESTAMP(3)
-  `);
-}
-
 async function purgeExpiredInvalidAnnouncements() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - INVALID_RETENTION_DAYS);
@@ -58,7 +50,6 @@ function parseNullableDate(value: string | null | undefined) {
 /** GET /api/announcements — bảng tin nội bộ. Mọi người đăng nhập đều xem được. */
 export async function GET() {
   return handle(async () => {
-    await ensureAnnouncementLifecycleColumns();
     await purgeExpiredInvalidAnnouncements();
     await requireUser();
     const items = await prisma.announcement.findMany({
@@ -79,7 +70,6 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
-    await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, linkUrl, fileUrl, fileName } = body as {
       title?: string; body?: string; pinned?: boolean; category?: string; classification?: string | null; stt?: string | null; orderedBy?: string | null; issuedAt?: string | null; linkUrl?: string | null; fileUrl?: string | null; fileName?: string | null;
@@ -116,7 +106,6 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
-    await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { id, title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, invalidatedAt, action, linkUrl, fileUrl, fileName } = body as {
       id?: string; title?: string; body?: string; pinned?: boolean; category?: string; classification?: string | null; stt?: string | null; orderedBy?: string | null; issuedAt?: string | null; invalidatedAt?: string | null; action?: "INVALIDATE" | "RESTORE"; linkUrl?: string | null; fileUrl?: string | null; fileName?: string | null;
@@ -171,7 +160,6 @@ export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
-    await ensureAnnouncementLifecycleColumns();
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id bài đăng");
     const prev = await prisma.announcement.findUnique({ where: { id }, select: { fileUrl: true } });

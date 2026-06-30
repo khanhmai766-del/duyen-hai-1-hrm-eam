@@ -8,30 +8,13 @@ export const dynamic = "force-dynamic";
 
 const ADMIN_ONLY = ["ADMIN"];
 
-// Thông báo hệ thống (message box giữa màn hình). Bảng tạo/đồng bộ bằng raw SQL
-// để không phụ thuộc migration; khai báo thêm trong prisma/schema.prisma cho an toàn.
-async function ensureTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "SystemBroadcast" (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
-      "isActive" BOOLEAN NOT NULL DEFAULT true,
-      "createdById" TEXT,
-      "createdByName" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
-
+// Bảng SystemBroadcast được khai báo trong prisma/schema.prisma và tạo bằng db push.
 const SELECT = `SELECT id, title, body, "isActive", "createdById", "createdByName", "createdAt", "updatedAt" FROM "SystemBroadcast"`;
 
 // GET: ADMIN nhận toàn bộ (để quản lý); user khác chỉ nhận các thông báo đang bật.
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    await ensureTable();
     const where = user.role === "ADMIN" ? "" : `WHERE "isActive" = true`;
     const rows = await prisma.$queryRawUnsafe(
       `${SELECT} ${where} ORDER BY "isActive" DESC, "updatedAt" DESC`
@@ -44,7 +27,6 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
-    await ensureTable();
     const body = (await req.json()) as Record<string, unknown>;
     const title = String(body.title ?? "").trim();
     const content = String(body.body ?? "").trim();
@@ -70,7 +52,6 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
-    await ensureTable();
     const body = (await req.json()) as Record<string, unknown>;
     const id = String(body.id ?? "");
     if (!id) return fail("Thiếu id thông báo");
@@ -111,7 +92,6 @@ export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
-    await ensureTable();
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id");
     await prisma.$executeRawUnsafe(`DELETE FROM "SystemBroadcast" WHERE id = $1`, id);

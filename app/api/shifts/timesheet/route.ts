@@ -12,19 +12,7 @@ async function canEditTimesheet(user: { id?: string; role?: string }) {
   return MANAGER.has(user.role ?? "") || hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
 
-async function ensureTimesheetOverrideTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "TimesheetOverride" (
-      "userId" TEXT NOT NULL,
-      date TEXT NOT NULL,
-      value TEXT NOT NULL,
-      note TEXT,
-      "updatedById" TEXT,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY ("userId", date)
-    )
-  `);
-}
+// Bảng TimesheetOverride được khai báo trong prisma/schema.prisma và tạo bằng db push.
 
 /**
  * Bảng công trực ca: attendance for a month. Returns one entry per checked-in
@@ -37,7 +25,6 @@ export async function GET(req: NextRequest) {
     const canEdit = await canEditTimesheet(user);
     // Người có quyền duyệt/chỉnh công xem toàn bộ bảng; người khác chỉ xem dòng của mình.
     const scopeToSelf = !canEdit;
-    await ensureTimesheetOverrideTable();
 
     const monthParam = req.nextUrl.searchParams.get("month"); // YYYY-MM
     const now = new Date();
@@ -150,7 +137,6 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     if (!(await canEditTimesheet(user))) return fail("Bạn không có quyền chỉnh bảng công", 403);
-    await ensureTimesheetOverrideTable();
 
     const body = (await req.json()) as Record<string, unknown>;
     const userId = String(body.userId ?? "").trim();

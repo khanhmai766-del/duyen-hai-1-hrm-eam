@@ -587,3 +587,17 @@ model PositionSystemScope {
   @@index([position])
   @@index([systemSeq])
 }
+
+// Ghi đè công trực ca theo ngày (do người có quyền duyệt/chỉnh công đặt). Khóa chính
+// kép (userId, date). CRUD chạy bằng raw SQL trong app/api/shifts/timesheet/route.ts;
+// khai báo ở đây để db push tạo bảng và không đề nghị xoá.
+model TimesheetOverride {
+  userId      String
+  date        String // YYYY-MM-DD
+  value       String
+  note        String?
+  updatedById String?
+  updatedAt   DateTime @default(now())
+
+  @@id([userId, date])
+}
