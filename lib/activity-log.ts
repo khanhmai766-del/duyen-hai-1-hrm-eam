@@ -1,5 +1,6 @@
 import { Prisma, type ActivityLogCategory } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { uploadS3Object } from "@/lib/s3-storage";
 
 type ActionConfig = {
   category: ActivityLogCategory;
@@ -71,6 +72,36 @@ function diffFields(beforeData: unknown, afterData: unknown) {
   return Array.from(keys).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
 }
 
+function auditS3Enabled() {
+  return process.env.AUDIT_LOG_S3_ENABLED === "true";
+}
+
+function auditS3Prefix() {
+  return (process.env.AUDIT_LOG_S3_PREFIX || "audit-logs").replace(/^\/+|\/+$/g, "");
+}
+
+function datePath(date: Date) {
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}/${month}/${day}`;
+}
+
+async function writeAuditObjectToS3(kind: "activity" | "system", id: string, createdAt: Date, payload: unknown) {
+  if (!auditS3Enabled()) return;
+  try {
+    const key = `${auditS3Prefix()}/${kind}/${datePath(createdAt)}/${id}.json`;
+    await uploadS3Object({
+      key,
+      body: Buffer.from(JSON.stringify(payload, null, 2), "utf8"),
+      contentType: "application/json",
+      originalName: `${id}.json`,
+    });
+  } catch (error) {
+    console.warn("Không thể lưu audit log lên S3", error);
+  }
+}
+
 export async function writeActivityLog(params: {
   actorUserId: string;
   actorName?: string | null;
@@ -88,7 +119,7 @@ export async function writeActivityLog(params: {
   const config = actionConfig(params.action);
   const category = config.category;
 
-  await prisma.auditLog.create({
+  const activityLog = await prisma.auditLog.create({
     data: {
       userId: params.actorUserId,
       action: params.action,
@@ -97,6 +128,17 @@ export async function writeActivityLog(params: {
       entityId: params.targetId ?? undefined,
       detail: params.detail ?? undefined,
     },
+  });
+  await writeAuditObjectToS3("activity", activityLog.id, activityLog.createdAt, {
+    id: activityLog.id,
+    kind: "activity",
+    actorUserId: params.actorUserId,
+    action: params.action,
+    category,
+    targetType: params.targetType,
+    targetId: params.targetId ?? null,
+    detail: params.detail ?? null,
+    createdAt: activityLog.createdAt.toISOString(),
   });
 
   const shouldSaveSystemAudit = params.saveToAuditLog ?? config.saveToAuditLog;
@@ -107,7 +149,7 @@ export async function writeActivityLog(params: {
     (await prisma.user.findUnique({ where: { id: params.actorUserId }, select: { name: true } }).then((user) => user?.name).catch(() => null)) ??
     "Không xác định";
 
-  await prisma.systemAuditLog.create({
+  const systemAuditLog = await prisma.systemAuditLog.create({
     data: {
       actorUserId: params.actorUserId,
       actorName,
@@ -120,6 +162,21 @@ export async function writeActivityLog(params: {
       ipAddress: params.ipAddress ?? null,
       userAgent: params.userAgent ?? null,
     },
+  });
+  await writeAuditObjectToS3("system", systemAuditLog.id, systemAuditLog.createdAt, {
+    id: systemAuditLog.id,
+    kind: "system",
+    actorUserId: params.actorUserId,
+    actorName,
+    action: params.action,
+    targetType: params.targetType,
+    targetId: params.targetId ?? null,
+    beforeData: params.beforeData ?? null,
+    afterData: params.afterData ?? null,
+    changedFields: systemAuditLog.changedFields,
+    ipAddress: params.ipAddress ?? null,
+    userAgent: params.userAgent ?? null,
+    createdAt: systemAuditLog.createdAt.toISOString(),
   });
 }
 
