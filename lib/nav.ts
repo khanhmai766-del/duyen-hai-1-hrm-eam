@@ -59,10 +59,10 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics dashboard thiet bi" },
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, keywords: "device thiet bi may moc esp fgd boiler turbine" },
+      { label: "Khiếm khuyết thiết bị", href: "/defects", icon: ShieldAlert, keywords: "defect su co fault khiem khuyet" },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
       { label: "Danh mục vật tư", href: "/materials", icon: Package, keywords: "material vat tu phu tung ton kho" },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
-      { label: "Khiếm khuyết thiết bị", href: "/defects", icon: ShieldAlert, keywords: "defect su co fault khiem khuyet" },
     ],
   },
   {

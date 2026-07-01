@@ -131,6 +131,7 @@ export async function GET(req: NextRequest) {
 
     return ok(devices, {
       total: devices.length,
+      totalSystemDevices: records.length,
       systems,
       rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
       source: "equipment-node",

@@ -40,9 +40,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { useDefects } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
+import { useEquipmentTree } from "@/hooks/useEquipment";
 import { useMaterials } from "@/hooks/useMaterials";
+import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { useReplacements } from "@/hooks/useReplacements";
+import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
+import { selectableManagingPositionOptions } from "@/lib/positions";
+import { deviceAllowedForPosition, positionScopeOptions } from "@/lib/position-system-scopes";
 import { cn, formatDate } from "@/lib/utils";
 
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
@@ -75,27 +80,47 @@ export default function ReportsPage() {
   const historyQuery = useDefectHistory({ from: from || undefined, to: to || undefined });
   const replacementsQuery = useReplacements({});
   const materialsQuery = useMaterials();
+  const equipmentTreeQuery = useEquipmentTree();
+  const scopesQuery = usePositionSystemScopes();
+  const allPositions = usePositions();
 
   const devices = devicesQuery.data?.data ?? [];
   const defects = defectsQuery.data?.data ?? [];
   const defectHistory = historyQuery.data?.data ?? [];
   const replacements = replacementsQuery.data?.data ?? [];
   const materials = materialsQuery.data?.data ?? [];
+  const equipmentNodes = equipmentTreeQuery.data?.data ?? [];
+  const positionScopes = scopesQuery.data?.data ?? [];
+  const dashboardPositionOptions = React.useMemo(
+    () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
+    [allPositions]
+  );
+  const totalSystemDevices = Number(devicesQuery.data?.meta?.totalSystemDevices ?? devices.length);
   const isLoading =
     devicesQuery.isLoading ||
     defectsQuery.isLoading ||
     historyQuery.isLoading ||
     replacementsQuery.isLoading ||
-    materialsQuery.isLoading;
+    materialsQuery.isLoading ||
+    equipmentTreeQuery.isLoading ||
+    scopesQuery.isLoading;
+
+  React.useEffect(() => {
+    if (systemPositionFilter === "ALL") return;
+    if (!dashboardPositionOptions.includes(systemPositionFilter)) setSystemPositionFilter("ALL");
+  }, [dashboardPositionOptions, systemPositionFilter]);
 
   const dashboard = React.useMemo(() => {
     const deviceByCode = new Map(devices.map((device) => [device.code, device]));
     const systems = unique(devices.map((device) => device.system).filter(Boolean) as string[]);
-    const positions = unique(devices.map((device) => device.managingPosition).filter(Boolean) as string[]);
+    const positions = dashboardPositionOptions;
+    const matchesPosition = (device: { code: string; system?: string | null; systemSeq?: string | null; managingPosition?: string | null }) =>
+      systemPositionFilter === "ALL" ||
+      deviceAllowedForPosition(device, systemPositionFilter, equipmentNodes, positionScopes);
     const systemChartDevices =
       systemPositionFilter === "ALL"
         ? devices
-        : devices.filter((device) => device.managingPosition === systemPositionFilter);
+        : devices.filter(matchesPosition);
     const systemChartDeviceCodes = new Set(systemChartDevices.map((device) => device.code));
     const systemChartSystems = unique(systemChartDevices.map((device) => device.system).filter(Boolean) as string[]);
     const visibleDefects = defects.filter((defect) => inDateRange(defect.detectedAt ?? defect.createdAt, dateRange));
@@ -128,8 +153,7 @@ export default function ReportsPage() {
         const replacementWarn = replacements.filter((item) => {
           const linkedDevice = item.device ?? item.material.deviceMaterials?.[0]?.device ?? null;
           const itemSystem = linkedDevice?.system ?? item.system ?? item.material.system;
-          const itemPosition = linkedDevice?.managingPosition;
-          const matchPosition = systemPositionFilter === "ALL" || itemPosition === systemPositionFilter;
+          const matchPosition = matchesPosition(linkedDevice ?? { code: "", system: itemSystem ?? null });
           return itemSystem === system && matchPosition && replacementDueStatus(item.nextDueAt) !== "OK";
         }).length;
         return { name: system, devices: deviceCount, defects: openDefectCount, warning: replacementWarn };
@@ -140,8 +164,9 @@ export default function ReportsPage() {
     const positionRows = positions
       .map((position) => ({
         name: position,
-        value: devices.filter((device) => device.managingPosition === position).length,
+        value: devices.filter((device) => deviceAllowedForPosition(device, position, equipmentNodes, positionScopes)).length,
       }))
+      .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
 
@@ -267,7 +292,7 @@ export default function ReportsPage() {
       repairYearOptions,
       yearlyTrend,
     };
-  }, [dateRange, defectHistory, defects, devices, materials, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
+  }, [dashboardPositionOptions, dateRange, defectHistory, defects, devices, equipmentNodes, materials, positionScopes, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
 
   return (
     <div className="space-y-5 print:space-y-4">
@@ -313,7 +338,7 @@ export default function ReportsPage() {
         <MetricCard
           icon={Factory}
           label="Tổng thiết bị"
-          value={devices.length}
+          value={totalSystemDevices}
           detail={`${dashboard.systems.length} hệ thống · ${dashboard.positions.length} cương vị`}
           tone="blue"
           loading={isLoading}
