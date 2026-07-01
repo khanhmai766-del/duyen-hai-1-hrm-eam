@@ -24,6 +24,7 @@ import { cn, initials } from "@/lib/utils";
 import type { ShiftAssignmentWithUser, CheckInWithUser } from "@/types";
 
 const HOURS_OPTIONS = [4, 6, 8];
+const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
 
 const UNITS = ["Vận hành 1", "Vận hành 2"];
 
@@ -106,9 +107,19 @@ export default function OrgChartPage() {
   }, [viewer]);
   React.useEffect(() => {
     if (!viewer) return;
+    try {
+      sessionStorage.setItem(ORG_CHART_VIEWER_KEY, "1");
+    } catch {
+      /* sessionStorage không khả dụng */
+    }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      try {
+        sessionStorage.removeItem(ORG_CHART_VIEWER_KEY);
+      } catch {
+        /* sessionStorage không khả dụng */
+      }
       document.body.style.overflow = previousOverflow;
     };
   }, [viewer]);

@@ -21,7 +21,8 @@ export default function LoginPage() {
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const callbackUrl = params.get("callbackUrl") || "/";
+  const rawCallbackUrl = params.get("callbackUrl") || "/";
+  const callbackUrl = rawCallbackUrl.startsWith("/login") ? "/" : rawCallbackUrl;
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -36,8 +37,10 @@ function LoginInner() {
     // Reset cờ "đã đóng" thông báo hệ thống để mỗi lần đăng nhập đều hiển thị lại.
     try {
       sessionStorage.removeItem("broadcast-dismissed");
+      localStorage.removeItem("pp:last-activity");
+      sessionStorage.removeItem("pp:org-chart-viewer-active");
     } catch {
-      /* sessionStorage không khả dụng */
+      /* Web storage không khả dụng */
     }
   }, []);
 
@@ -57,7 +60,7 @@ function LoginInner() {
   React.useEffect(() => {
     if (params.get("reason") === "timeout") {
       toast.warning("Phiên đăng nhập đã hết hạn", {
-        description: "Bạn đã không hoạt động hoặc mất kết nối quá 30 phút. Vui lòng đăng nhập lại.",
+        description: "Bạn đã không hoạt động hoặc mất kết nối quá 15 phút. Vui lòng đăng nhập lại.",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,6 +76,11 @@ function LoginInner() {
       return;
     }
     toast.success("Đăng nhập thành công");
+    try {
+      localStorage.setItem("pp:last-activity", String(Date.now()));
+    } catch {
+      /* Web storage không khả dụng */
+    }
     router.push(callbackUrl);
     router.refresh();
   }
@@ -163,6 +171,11 @@ function LoginInner() {
       });
       if (res?.error) throw new Error("Không tạo được phiên đăng nhập");
       toast.success("Đăng nhập vân tay thành công");
+      try {
+        localStorage.setItem("pp:last-activity", String(Date.now()));
+      } catch {
+        /* Web storage không khả dụng */
+      }
       router.push(callbackUrl);
       router.refresh();
     } catch (error) {

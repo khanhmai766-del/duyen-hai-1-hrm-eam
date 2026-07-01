@@ -21,7 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     // refetchInterval: làm mới phiên mỗi 5 phút khi tab đang mở & online (giữ phiên "trượt"
-    // cho người dùng đang hoạt động); không refetch khi offline để cookie kịp hết hạn sau 30 phút.
+    // cho người dùng đang hoạt động); không refetch khi offline để cookie kịp hết hạn sau 15 phút.
     <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus refetchWhenOffline={false}>
       <QueryClientProvider client={queryClient}>
         {children}

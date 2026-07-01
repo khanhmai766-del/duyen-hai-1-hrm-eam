@@ -65,13 +65,18 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const markRead = useMarkAnnouncementRead();
   const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
   const { data: opsData, isLoading: opsLoading } = useOperations();
-  // Thông báo nội bộ chỉ hiện trên chuông trong vòng 1 tháng kể từ ngày diễn ra;
-  // quá 1 tháng tự ẩn khỏi icon chuông (dữ liệu vẫn lưu, xem ở Dashboard).
+  // Tab Nội bộ trên chuông chỉ phản chiếu đúng các mục đang hiển thị trong
+  // "Thông tin nội bộ" ở Overview: hôm nay hoặc sắp tới, không lấy lịch đã qua.
   const internalEvents = React.useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - 1);
-    cutoff.setHours(0, 0, 0, 0);
-    return (opsData?.data ?? []).filter((e) => new Date(e.date) >= cutoff);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return (opsData?.data ?? [])
+      .filter((e) => {
+        const d = new Date(e.date);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime() >= today.getTime();
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [opsData]);
   const replAlerts = alertsData?.data ?? [];
   const replAlertKey = (a: (typeof replAlerts)[number]) => `${a.id}:${new Date(a.nextDueAt).getTime()}`;

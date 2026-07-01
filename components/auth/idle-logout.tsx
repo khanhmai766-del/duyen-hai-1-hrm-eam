@@ -3,18 +3,20 @@
 import * as React from "react";
 import { signOut, useSession } from "next-auth/react";
 
-// 30 phút không thao tác HOẶC mất kết nối mạng → tự động đăng xuất.
-const TIMEOUT_MS = 30 * 60 * 1000;
+// 15 phút không thao tác HOẶC mất kết nối mạng → tự động đăng xuất.
+const TIMEOUT_MS = 15 * 60 * 1000;
 const CHECK_INTERVAL_MS = 20 * 1000; // tần suất kiểm tra
 const ACTIVITY_THROTTLE_MS = 5 * 1000; // hạn chế ghi localStorage liên tục
 const STORAGE_KEY = "pp:last-activity";
+const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
 
 /**
- * Tự động đăng xuất khi người dùng không thao tác hoặc mất sóng wifi/internet quá 30 phút,
+ * Tự động đăng xuất khi người dùng không thao tác hoặc mất sóng wifi/internet quá 15 phút,
  * buộc đăng nhập lại để vào tiếp hệ thống.
  *
+ * - Chế độ Viewer của sơ đồ tổ chức ca vận hành được xem là đang trình chiếu, không tính idle.
  * - Thao tác (chuột/bàn phím/chạm/cuộn) khi ĐANG online sẽ làm mới mốc thời gian.
- * - Mất mạng được xem là "không hoạt động" nên vẫn tính vào 30 phút; nếu tới hạn lúc đang
+ * - Mất mạng được xem là "không hoạt động" nên vẫn tính vào 15 phút; nếu tới hạn lúc đang
  *   mất mạng thì hoãn đăng xuất tới khi có mạng lại (lúc đó cookie phía server cũng đã hết hạn).
  * - Mốc thời gian lưu ở localStorage để đồng bộ giữa các tab và khi tải lại / mở lại trang.
  */
@@ -34,6 +36,13 @@ export function IdleLogout() {
         localStorage.setItem(STORAGE_KEY, String(t));
       } catch {
         /* localStorage không khả dụng */
+      }
+    };
+    const isOrgChartViewerActive = () => {
+      try {
+        return window.location.pathname.startsWith("/hr/org-chart") && sessionStorage.getItem(ORG_CHART_VIEWER_KEY) === "1";
+      } catch {
+        return false;
       }
     };
 
@@ -62,14 +71,18 @@ export function IdleLogout() {
     }
 
     function check() {
+      if (isOrgChartViewerActive()) {
+        writeLast(now());
+        return;
+      }
       const last = readLast();
       if (last && now() - last >= TIMEOUT_MS) doLogout();
     }
 
-    // Khi vào trang: nếu mốc cũ đã quá hạn (vd mở lại sau >30 phút) thì đăng xuất ngay;
+    // Khi vào trang: nếu mốc cũ đã quá hạn (vd mở lại sau >15 phút) thì đăng xuất ngay;
     // ngược lại đặt lại mốc về thời điểm hiện tại.
     const initial = readLast();
-    if (initial && now() - initial >= TIMEOUT_MS) {
+    if (!isOrgChartViewerActive() && initial && now() - initial >= TIMEOUT_MS) {
       doLogout();
     } else {
       writeLast(now());

@@ -16,6 +16,7 @@ const STORAGE_KEY = "broadcast-dismissed";
 export function BroadcastModal() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const mustChangePassword = Boolean(session?.user?.mustChangePassword);
   const { data } = useBroadcasts();
   const active = (data?.data ?? []).find((b) => b.isActive) ?? null;
   const key = active ? `${active.id}:${active.updatedAt}` : "";
@@ -34,7 +35,9 @@ export function BroadcastModal() {
 
   // Admin chỉ quản lý ở trang Quản trị — không nhận popup. Các user khác nhận
   // mỗi lần đăng nhập cho tới khi admin ngừng/xoá thông báo.
-  const open = ready && !isAdmin && !!active && key !== dismissedKey;
+  // Nếu người dùng bắt buộc đổi mật khẩu lần đầu/hết hạn, ưu tiên popup đổi mật khẩu
+  // để họ hoàn tất trước; thông báo hệ thống sẽ hiện ở lần đăng nhập/phiên sau.
+  const open = ready && !isAdmin && !mustChangePassword && !!active && key !== dismissedKey;
 
   function dismiss() {
     try {
