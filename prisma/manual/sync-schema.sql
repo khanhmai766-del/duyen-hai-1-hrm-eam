@@ -111,3 +111,20 @@ CREATE TABLE IF NOT EXISTS "TimesheetOverride" (
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY ("userId", date)
 );
+
+-- OilGun (dữ liệu vòi dầu buồng đốt — 36 vòi/tổ máy). Sau khi tạo bảng phải chạy
+-- seed: `node prisma/seed-oil-guns.mjs` để nạp 36 vòi cho S1 và S2.
+CREATE TABLE IF NOT EXISTS "OilGun" (
+  id TEXT PRIMARY KEY,
+  machine TEXT NOT NULL,
+  code TEXT NOT NULL,
+  wall TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'available',
+  defect TEXT,
+  "updatedBy" TEXT,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "OilGun_machine_code_key" ON "OilGun" (machine, code);
+CREATE INDEX IF NOT EXISTS "OilGun_machine_idx" ON "OilGun" (machine);

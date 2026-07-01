@@ -603,3 +603,19 @@ model TimesheetOverride {
 
   @@id([userId, date])
 }
+// Dữ liệu vòi dầu buồng đốt: 36 vòi/tổ máy (S1, S2), trạng thái khả dụng + khiếm khuyết.
+model OilGun {
+  id        String   @id @default(cuid())
+  machine   String   // "S1" | "S2"
+  code      String   // "D1", "E1", "A3"...
+  wall      String   // "REAR" (tường sau) | "FRONT" (tường trước)
+  position  Int      @default(0) // thứ tự hiển thị trên sơ đồ
+  status    String   @default("available") // available | unavailable
+  defect    String?  // khiếm khuyết vòi dầu
+  updatedBy String?  // tên người cập nhật gần nhất
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([machine, code])
+  @@index([machine])
+}
