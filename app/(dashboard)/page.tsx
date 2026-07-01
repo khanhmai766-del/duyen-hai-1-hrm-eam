@@ -137,18 +137,15 @@ export default function DashboardPage() {
         <WeatherCard />
       </div>
 
-      {/* Body: left column (Operation info), right column (Links + Contact).
-          Both columns stretch to the same height; the lower card in each grows to fill. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-stretch">
-        <div className="flex flex-col gap-6 lg:col-span-3">
-          <div className="flex flex-1 [&>*]:h-full [&>*]:w-full">
-            <OperationInfoCard canManage={can(session?.user?.role, "manageOperations")} />
-          </div>
+      {/* Body cards mirror the compact 3-panel dashboard layout: nội bộ · link · liên lạc. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,0.92fr)] lg:items-stretch">
+        <div className="min-w-0 [&>*]:h-full">
+          <OperationInfoCard canManage={can(session?.user?.role, "manageOperations")} />
         </div>
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <div className="flex flex-1 [&>*]:h-full [&>*]:w-full">
-            <SupportLinksCard />
-          </div>
+        <div className="min-w-0 [&>*]:h-full">
+          <SupportLinksCard />
+        </div>
+        <div className="min-w-0 [&>*]:h-full">
           <ContactCard />
         </div>
       </div>
@@ -188,7 +185,7 @@ function SupportLinksCard() {
   const [tab, setTab] = React.useState<SupportLinkGroup>("ops");
   const links = SUPPORT_LINKS.filter((l) => l.group === tab);
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="flex items-center gap-2">
           <Link2 className="h-4 w-4 text-accent" /> Danh mục LINK hỗ trợ
@@ -199,7 +196,7 @@ function SupportLinksCard() {
         </div>
       </CardHeader>
       {/* Scroll area sized to ~8 entries; the rest scroll. */}
-      <CardContent className="max-h-[404px] space-y-1.5 overflow-y-auto pr-1">
+      <CardContent className="max-h-[296px] space-y-1.5 overflow-y-auto pr-1">
         {links.length === 0 ? (
           <p className="px-1 py-8 text-center text-sm text-muted-foreground">Chưa có đường link nào trong nhóm này.</p>
         ) : (
@@ -242,7 +239,7 @@ function SupportLinkTab({ active, onClick, label }: { active: boolean; onClick: 
 /* ---- Control-room contacts ---- */
 function ContactCard() {
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Phone className="h-4 w-4 text-accent" /> Thông tin liên lạc
