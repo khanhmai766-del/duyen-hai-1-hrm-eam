@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Droplet, Flame, TrendingUp, Unplug, Wind } from "lucide-react";
 import { DocumentCatalogPage } from "@/components/documents/document-catalog-page";
+import { OilGunBoard } from "@/components/documents/oil-gun-board";
 import type { DocumentCategory } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 
@@ -189,6 +190,7 @@ export default function ArchiveDocumentsPage() {
       showPaginationFooter={activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA"}
       allowStaffEdit
       showAnnualBackupExport
+      customContent={activeTab === "OIL_GUN_DATA" ? <OilGunBoard /> : undefined}
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
       backupFilenamePrefix={BACKUP_FILENAME_PREFIX[activeTab]}
       afterHeader={

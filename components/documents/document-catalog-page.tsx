@@ -213,6 +213,7 @@ interface DocumentCatalogPageProps {
   backupFilenamePrefix?: string;
   wideNameNarrowLinkLayout?: boolean;
   hideDocumentIcon?: boolean;
+  customContent?: React.ReactNode;
 }
 
 export function DocumentCatalogPage({
@@ -260,6 +261,7 @@ export function DocumentCatalogPage({
   backupFilenamePrefix,
   wideNameNarrowLinkLayout = false,
   hideDocumentIcon = false,
+  customContent,
 }: DocumentCatalogPageProps) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
@@ -822,6 +824,9 @@ export function DocumentCatalogPage({
         </div>
       </Card>
 
+      {customContent ? (
+        customContent
+      ) : (
       <Card className="overflow-hidden">
         <div className={cn((historyTableLayout || wideNameNarrowLinkLayout) && "overflow-x-auto")}>
         <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed", hasIssueDateField && "min-w-[1260px] table-fixed", hasProcedureValidity && "min-w-[1280px] table-fixed")}>
@@ -1265,6 +1270,7 @@ export function DocumentCatalogPage({
           </div>
         )}
       </Card>
+      )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className={cn("max-w-xl", isCompactArchiveForm && "max-w-lg")}>
