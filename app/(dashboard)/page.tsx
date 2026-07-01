@@ -614,9 +614,40 @@ function SafeOperationUnitRow({
   const paused = Boolean(setting?.pausedAt);
   const hasStarted = Boolean(setting?.startedAt);
   return (
-    <div className="grid gap-4 rounded-lg border border-emerald-200 bg-white/85 p-3 shadow-sm md:grid-cols-[172px_minmax(0,1fr)] md:items-center">
+    <div className="relative grid gap-4 rounded-lg border border-emerald-200 bg-white/85 p-3 pr-12 shadow-sm md:grid-cols-[172px_minmax(0,1fr)] md:items-center">
+      {canManage && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="outline"
+              className="absolute right-3 top-3 h-8 w-8 rounded-md bg-white/95 shadow-sm"
+              disabled={saving}
+              title="Tác vụ vận hành an toàn"
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="bottom" className="w-56">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Tác vụ {unit}</DropdownMenuLabel>
+            <DropdownMenuItem onClick={onOpenStart} disabled={saving}>
+              <Play className="h-4 w-4 fill-current" />
+              Nhập mốc bắt đầu
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onTogglePause} disabled={saving || !hasStarted}>
+              <Equal className="h-4 w-4" />
+              {paused ? "Tiếp tục bộ đếm" : "Tạm dừng bộ đếm"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onReset} disabled={saving} className="text-red-600 focus:text-red-700">
+              <X className="h-4 w-4" />
+              Reset về 0
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <div className="relative min-h-[104px] border-emerald-100 md:border-r md:pr-4">
-        <div className="flex h-full items-center gap-3 pr-8">
+        <div className="flex h-full items-center gap-3">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -633,37 +664,6 @@ function SafeOperationUnitRow({
             <div className="text-4xl font-extrabold leading-none text-emerald-700">{unit}</div>
           </div>
         </div>
-        {canManage && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                variant="outline"
-                className="absolute bottom-0 right-0 h-7 w-7 rounded-md bg-white/90 shadow-sm"
-                disabled={saving}
-                title="Tác vụ vận hành an toàn"
-              >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="right" className="w-56">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Tác vụ {unit}</DropdownMenuLabel>
-              <DropdownMenuItem onClick={onOpenStart} disabled={saving}>
-                <Play className="h-4 w-4 fill-current" />
-                Nhập mốc bắt đầu
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onTogglePause} disabled={saving || !hasStarted}>
-                <Equal className="h-4 w-4" />
-                {paused ? "Tiếp tục bộ đếm" : "Tạm dừng bộ đếm"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onReset} disabled={saving} className="text-red-600 focus:text-red-700">
-                <X className="h-4 w-4" />
-                Reset về 0
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
 
       <div className="min-w-0">
