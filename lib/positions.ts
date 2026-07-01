@@ -31,6 +31,21 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
       "Thiết bị đo lường & điều khiển",
     ],
   },
+  {
+    // "TK Lò máy" (chức vụ user) ≡ "Trưởng kíp Lò - Máy DH1" (cương vị trong mệnh lệnh)
+    canonical: "Trưởng kíp Lò - Máy DH1",
+    aliases: ["Trưởng kíp Lò - Máy DH1", "TK Lò máy"],
+  },
+  {
+    // "XLNT" ≡ "XLNT - Nhà dầu 5000m3"
+    canonical: "XLNT - Nhà dầu 5000m3",
+    aliases: ["XLNT - Nhà dầu 5000m3", "XLNT"],
+  },
+  {
+    // "Khí nén - Nhà dầu" ≡ "Khí nén - nhà dầu 300m3" (normalizeText đã bỏ qua hoa/thường + dấu)
+    canonical: "Khí nén - nhà dầu 300m3",
+    aliases: ["Khí nén - nhà dầu 300m3", "Khí nén - Nhà dầu"],
+  },
 ];
 
 function announcementPositionKey(position: string) {
