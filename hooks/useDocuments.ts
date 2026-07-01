@@ -3,7 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
-export type DocumentCategory = "PROCEDURE" | "PID" | "ARCHIVE" | "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "MAJOR_REPAIR";
+export type DocumentCategory =
+  | "PROCEDURE"
+  | "PID"
+  | "ARCHIVE"
+  | "GRID_SEPARATION"
+  | "STARTUP_DATA"
+  | "BOILER_CALIBRATION"
+  | "MAJOR_REPAIR"
+  | "OIL_GUN_DATA"
+  | "SOOT_BLOWER_DATA";
 
 export interface DigitalDocumentUser {
   id: string | null;

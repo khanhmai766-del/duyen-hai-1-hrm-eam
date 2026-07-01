@@ -1,13 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Flame, TrendingUp, Unplug } from "lucide-react";
+import { Droplet, Flame, TrendingUp, Unplug, Wind } from "lucide-react";
 import { DocumentCatalogPage } from "@/components/documents/document-catalog-page";
 import type { DocumentCategory } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
 
 type ArchiveTab = {
-  key: Extract<DocumentCategory, "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "MAJOR_REPAIR">;
+  key: Extract<
+    DocumentCategory,
+    "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "MAJOR_REPAIR" | "OIL_GUN_DATA" | "SOOT_BLOWER_DATA"
+  >;
   label: string;
   icon: React.ElementType;
   description: string;
@@ -48,6 +51,22 @@ const ARCHIVE_TABS: ArchiveTab[] = [
     emptyTitle: "Chưa có dữ liệu sửa chữa lớn",
     emptyDescription: "Admin có thể thêm tên thư mục và link tài liệu sửa chữa lớn tại đây.",
   },
+  {
+    key: "OIL_GUN_DATA",
+    label: "Dữ liệu vòi dầu",
+    icon: Droplet,
+    description: "Lưu trữ đường dẫn dữ liệu vòi dầu phục vụ tra cứu và tổng hợp vận hành",
+    emptyTitle: "Chưa có dữ liệu vòi dầu",
+    emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu vòi dầu tại đây.",
+  },
+  {
+    key: "SOOT_BLOWER_DATA",
+    label: "Dữ liệu vòi thổi bụi",
+    icon: Wind,
+    description: "Lưu trữ đường dẫn dữ liệu vòi thổi bụi phục vụ tra cứu và tổng hợp vận hành",
+    emptyTitle: "Chưa có dữ liệu vòi thổi bụi",
+    emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu vòi thổi bụi tại đây.",
+  },
 ];
 const UNIT_TAGS = [
   { label: "S1", value: "S1" },
@@ -64,12 +83,20 @@ const BACKUP_FILENAME_PREFIX: Record<ArchiveTab["key"], string> = {
   STARTUP_DATA: "backup-du-lieu-khoi-dong",
   BOILER_CALIBRATION: "backup-du-lieu-hieu-chinh-lo",
   MAJOR_REPAIR: "backup-sua-chua-lon",
+  OIL_GUN_DATA: "backup-du-lieu-voi-dau",
+  SOOT_BLOWER_DATA: "backup-du-lieu-voi-thoi-bui",
 };
 
 export default function ArchiveDocumentsPage() {
   const [activeTab, setActiveTab] = React.useState<ArchiveTab["key"]>("GRID_SEPARATION");
   const activeConfig = ARCHIVE_TABS.find((item) => item.key === activeTab) ?? ARCHIVE_TABS[0];
-  const usesArchiveTimelineLayout = activeTab === "BOILER_CALIBRATION" || activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA" || activeTab === "MAJOR_REPAIR";
+  const usesArchiveTimelineLayout =
+    activeTab === "BOILER_CALIBRATION" ||
+    activeTab === "GRID_SEPARATION" ||
+    activeTab === "STARTUP_DATA" ||
+    activeTab === "MAJOR_REPAIR" ||
+    activeTab === "OIL_GUN_DATA" ||
+    activeTab === "SOOT_BLOWER_DATA";
 
   return (
     <DocumentCatalogPage
@@ -89,6 +116,10 @@ export default function ArchiveDocumentsPage() {
               ? "Ghi chú"
               : activeTab === "MAJOR_REPAIR"
                 ? "Link tài liệu sửa chữa"
+                : activeTab === "OIL_GUN_DATA"
+                  ? "Link dữ liệu vòi dầu"
+                  : activeTab === "SOOT_BLOWER_DATA"
+                    ? "Link dữ liệu vòi thổi bụi"
                 : "Link thư mục"
       }
       requireLink={activeTab !== "GRID_SEPARATION" && activeTab !== "STARTUP_DATA"}
@@ -110,6 +141,10 @@ export default function ArchiveDocumentsPage() {
             ? "https://... hoặc link xử lý / biên bản"
             : activeTab === "STARTUP_DATA"
               ? "Nhập ghi chú..."
+              : activeTab === "OIL_GUN_DATA"
+                ? "https://... hoặc link dữ liệu vòi dầu"
+                : activeTab === "SOOT_BLOWER_DATA"
+                  ? "https://... hoặc link dữ liệu vòi thổi bụi"
               : "https://... hoặc link Google Drive / PDF"
       }
       reasonLabel={activeTab === "GRID_SEPARATION" ? "Nguyên nhân" : undefined}
@@ -134,7 +169,19 @@ export default function ArchiveDocumentsPage() {
       summaryField={activeTab === "GRID_SEPARATION" ? "reason" : undefined}
       attachmentLabel={activeTab === "BOILER_CALIBRATION" ? "Hình ảnh biên bản" : undefined}
       maxAttachments={activeTab === "BOILER_CALIBRATION" ? 2 : undefined}
-      defaultName={activeTab === "BOILER_CALIBRATION" ? "Hiệu chỉnh Lò" : activeTab === "STARTUP_DATA" ? "Khởi động tổ máy" : activeTab === "MAJOR_REPAIR" ? "Sửa chữa lớn" : undefined}
+      defaultName={
+        activeTab === "BOILER_CALIBRATION"
+          ? "Hiệu chỉnh Lò"
+          : activeTab === "STARTUP_DATA"
+            ? "Khởi động tổ máy"
+            : activeTab === "MAJOR_REPAIR"
+              ? "Sửa chữa lớn"
+              : activeTab === "OIL_GUN_DATA"
+                ? "Dữ liệu vòi dầu"
+                : activeTab === "SOOT_BLOWER_DATA"
+                  ? "Dữ liệu vòi thổi bụi"
+                  : undefined
+      }
       yearLabel={usesArchiveTimelineLayout ? "Năm" : undefined}
       yearOptions={usesArchiveTimelineLayout ? ARCHIVE_YEAR_OPTIONS : undefined}
       requireYear={usesArchiveTimelineLayout}
@@ -145,7 +192,7 @@ export default function ArchiveDocumentsPage() {
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
       backupFilenamePrefix={BACKUP_FILENAME_PREFIX[activeTab]}
       afterHeader={
-        <div className="flex gap-1 border-b border-border">
+        <div className="flex flex-wrap gap-1 border-b border-border">
           {ARCHIVE_TABS.map((item) => (
             <ArchiveTabButton
               key={item.key}
@@ -196,7 +243,7 @@ function ArchiveTabButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+        "-mb-px inline-flex whitespace-nowrap items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
         active ? "border-navy text-navy" : "border-transparent text-muted-foreground hover:text-ink"
       )}
     >
