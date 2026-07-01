@@ -130,14 +130,14 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
         })}
       </nav>
 
-      <div className={cn("space-y-2 border-t border-blue-100/80 bg-white/70 dark:border-slate-800/80 dark:bg-slate-950/60", collapsed ? "p-2" : "p-4")}>
+      <div className={cn("space-y-1.5 border-t border-blue-100/80 bg-white/70 dark:border-slate-800/80 dark:bg-slate-950/60", collapsed ? "p-2" : "p-3")}>
         <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
           <div className="group relative shrink-0">
             <button
-              className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-700 text-white shadow-lg shadow-blue-500/30 ring-1 ring-white/50 transition-transform duration-200 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/30 hover:scale-105"
+              className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-700 text-white shadow-lg shadow-blue-500/30 ring-1 ring-white/50 transition-transform duration-200 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/30 hover:scale-105"
               aria-label="Trợ giúp"
             >
-              <LifeBuoy className="relative h-[18px] w-[18px] drop-shadow-sm" />
+              <LifeBuoy className="relative h-4 w-4 drop-shadow-sm" />
             </button>
             <div className="pointer-events-none absolute bottom-0 left-full z-50 ml-3 w-64 origin-bottom-left scale-95 rounded-xl border border-border bg-white p-3 opacity-0 shadow-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100 dark:bg-slate-900">
               <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent">
@@ -174,7 +174,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
             </div>
           </div>
           {!collapsed && (
-            <span className="flex-1 text-center text-[11px] leading-tight text-muted-foreground">
+            <span className="flex-1 text-center text-[10.5px] leading-tight text-muted-foreground">
               © 2026 — Phân xưởng Vận hành 1
             </span>
           )}
@@ -184,7 +184,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
           title={timeStr}
           className={cn(
             "flex items-center justify-center gap-2 rounded-xl border border-blue-100 bg-white/80 text-sm font-semibold text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-300",
-            collapsed ? "h-10" : "py-2.5"
+            collapsed ? "h-10" : "py-2"
           )}
         >
           <Clock className="h-4 w-4 text-accent" />
