@@ -79,6 +79,8 @@ export default function DashboardPage() {
         <SafetyTicker />
       </div>
 
+      <SafeOperationCard canManage={can(session?.user?.role, "manageOperations")} />
+
       {/* Stat row — all four cards stretch to the user-photo card's height */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
         {/* 1 — Current user: full-bleed photo with overlaid name/title */}
@@ -135,11 +137,10 @@ export default function DashboardPage() {
         <WeatherCard />
       </div>
 
-      {/* Body: left column (Safe operation + Operation info), right column (Links + Contact).
+      {/* Body: left column (Operation info), right column (Links + Contact).
           Both columns stretch to the same height; the lower card in each grows to fill. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-stretch">
         <div className="flex flex-col gap-6 lg:col-span-3">
-          <SafeOperationCard canManage={can(session?.user?.role, "manageOperations")} />
           <div className="flex flex-1 [&>*]:h-full [&>*]:w-full">
             <OperationInfoCard canManage={can(session?.user?.role, "manageOperations")} />
           </div>
@@ -541,12 +542,12 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
           Thời gian vận hành an toàn (Safe Operation)
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="grid gap-3 lg:grid-cols-2">
         {isLoading ? (
-          <div className="space-y-3">
+          <>
             <div className="h-[118px] rounded-lg border border-emerald-100 bg-white/70" />
             <div className="h-[118px] rounded-lg border border-emerald-100 bg-white/70" />
-          </div>
+          </>
         ) : (
           SAFE_OPERATION_UNITS.map((unit) => (
             <SafeOperationUnitRow
@@ -615,8 +616,8 @@ function SafeOperationUnitRow({
   const paused = Boolean(setting?.pausedAt);
   const hasStarted = Boolean(setting?.startedAt);
   return (
-    <div className="grid gap-4 rounded-lg border border-emerald-200 bg-white/85 p-3 shadow-sm sm:grid-cols-[172px_minmax(0,1fr)] sm:items-center">
-      <div className="relative min-h-[104px] border-emerald-100 sm:border-r sm:pr-4">
+    <div className="grid gap-4 rounded-lg border border-emerald-200 bg-white/85 p-3 shadow-sm md:grid-cols-[172px_minmax(0,1fr)] md:items-center">
+      <div className="relative min-h-[104px] border-emerald-100 md:border-r md:pr-4">
         <div className="flex h-full items-center gap-3 pr-8">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
             {/* eslint-disable-next-line @next/next/no-img-element */}
