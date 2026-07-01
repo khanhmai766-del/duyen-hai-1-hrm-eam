@@ -286,6 +286,8 @@ model Material {
   location  String?
   system    String? // hệ thống thiết bị: Lò Hơi, Máy Nghiền, ESP, FGD...
   imageUrl  String? // ảnh minh hoạ vật tư (public URL)
+  documentUrl  String? // tài liệu đính kèm (PDF hoặc link)
+  documentName String? // tên file tài liệu đính kèm
   supplier  String? // tái dùng làm "Định kỳ thay thế"
   unitPrice Float?
   note      String? // "Ghi chú"

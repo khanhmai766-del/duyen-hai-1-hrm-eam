@@ -21,7 +21,40 @@ const MATERIAL_INCLUDE = {
   },
 };
 
-function mapMaterial<T extends { quantity: number; deviceMaterials?: Array<any>; replacements?: Array<any> }>(material: T) {
+type MaterialDocumentFields = {
+  documentUrl: string | null;
+  documentName: string | null;
+};
+
+function normalizeMaterialDocument(body: { documentUrl?: unknown; documentName?: unknown }): MaterialDocumentFields {
+  const documentUrl = String(body.documentUrl ?? "").trim() || null;
+  const documentName = String(body.documentName ?? "").trim() || null;
+  return { documentUrl, documentName: documentUrl ? documentName : null };
+}
+
+async function materialDocumentMap() {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null }>>`
+      SELECT "id", "documentUrl", "documentName" FROM "Material"
+    `;
+    return new Map(rows.map((row) => [row.id, { documentUrl: row.documentUrl, documentName: row.documentName }]));
+  } catch {
+    return new Map<string, MaterialDocumentFields>();
+  }
+}
+
+async function updateMaterialDocument(materialId: string, fields: MaterialDocumentFields) {
+  await prisma.$executeRaw`
+    UPDATE "Material"
+    SET "documentUrl" = ${fields.documentUrl}, "documentName" = ${fields.documentName}
+    WHERE "id" = ${materialId}
+  `;
+}
+
+function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?: Array<any>; replacements?: Array<any> }>(
+  material: T,
+  document?: MaterialDocumentFields
+) {
   const replacements = (material.replacements ?? []).map((r) => ({
     ...r,
     deviceId: r.deviceSeq,
@@ -32,6 +65,8 @@ function mapMaterial<T extends { quantity: number; deviceMaterials?: Array<any>;
   const shortfall = Math.max(0, totalNeed - (Number(material.quantity) || 0));
   return {
     ...material,
+    documentUrl: document?.documentUrl ?? null,
+    documentName: document?.documentName ?? null,
     deviceMaterials: material.deviceMaterials?.map((dm) => ({
       ...dm,
       deviceId: dm.deviceSeq,
@@ -85,7 +120,8 @@ export async function GET() {
       orderBy: { code: "asc" },
       include: MATERIAL_INCLUDE,
     });
-    const data = materials.map(mapMaterial);
+    const documents = await materialDocumentMap();
+    const data = materials.map((material) => mapMaterial(material, documents.get(material.id)));
     const filtered = access.hasExplicitScopes
       ? data
           .map((material) => {
@@ -117,6 +153,7 @@ export async function POST(req: NextRequest) {
     const defaultSystem = body.system?.trim() || null;
     const replacements = parseReplacements(body, user.id, defaultSystem);
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" });
+    const document = normalizeMaterialDocument(body);
     const m = await prisma.material.create({
       data: {
         code: body.code,
@@ -133,8 +170,9 @@ export async function POST(req: NextRequest) {
       },
       include: MATERIAL_INCLUDE,
     });
+    await updateMaterialDocument(m.id, document);
     await audit(user.id, "CREATE_MATERIAL", "Material", m.id, m.code);
-    return ok(mapMaterial(m));
+    return ok(mapMaterial(m, document));
   });
 }
 
@@ -149,6 +187,9 @@ export async function PUT(req: NextRequest) {
       body.imageUrl !== undefined
         ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" })
         : undefined;
+    const document = body.documentUrl !== undefined || body.documentName !== undefined
+      ? normalizeMaterialDocument(body)
+      : undefined;
     await prisma.material.update({
       where: { id: body.id },
       data: {
@@ -162,6 +203,9 @@ export async function PUT(req: NextRequest) {
         ...(body.note !== undefined ? { note: body.note || null } : {}),
       },
     });
+    if (document !== undefined) {
+      await updateMaterialDocument(body.id, document);
+    }
     // Đồng bộ điểm thay thế (chỉ khi payload có gửi mảng replacements): xoá hết rồi tạo lại theo form.
     if (Array.isArray(body.replacements)) {
       const current = await prisma.material.findUnique({ where: { id: body.id }, select: { system: true } });
@@ -173,7 +217,7 @@ export async function PUT(req: NextRequest) {
     }
     const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });
     await audit(user.id, "UPDATE_MATERIAL", "Material", body.id, m?.code ?? "");
-    return ok(m ? mapMaterial(m) : null);
+    return ok(m ? mapMaterial(m, document ?? (await materialDocumentMap()).get(body.id)) : null);
   });
 }
 

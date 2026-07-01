@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -26,7 +26,12 @@ import { MATERIAL_SYSTEMS, can } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
 
-type MaterialEdit = Partial<Material> & { id?: string; replacements?: MaterialReplacementInput[] };
+type MaterialEdit = Partial<Material> & {
+  id?: string;
+  documentUrl?: string | null;
+  documentName?: string | null;
+  replacements?: MaterialReplacementInput[];
+};
 
 export default function MaterialsPage() {
   const { data: session } = useSession();
@@ -369,6 +374,13 @@ export default function MaterialsPage() {
               <Field label="Tồn kho hiện có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
               <Field label="Định mức tối thiểu"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
               <Field label="Ghi chú" className="col-span-2"><Input value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
+              <Field label="Tài liệu đính kèm" className="col-span-2">
+                <MaterialDocumentField
+                  url={edit.documentUrl ?? ""}
+                  name={edit.documentName ?? ""}
+                  onChange={(documentUrl, documentName) => setEdit({ ...edit, documentUrl, documentName })}
+                />
+              </Field>
               <div className="col-span-2 mt-1">
                 <Label className="text-sm font-semibold text-ink">Điểm dùng / thay thế</Label>
                 <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
@@ -473,6 +485,82 @@ function MaterialImageField({ value, onChange }: { value: string | null; onChang
   );
 }
 
+function MaterialDocumentField({
+  url,
+  name,
+  onChange,
+}: {
+  url: string;
+  name: string;
+  onChange: (url: string | null, name: string | null) => void;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      return toast.error("Chỉ chấp nhận tệp PDF");
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("kind", "document");
+      const res = await fetch("/api/materials/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || "Tải tệp PDF thất bại");
+      onChange(json.data.url as string, json.data.name as string);
+      toast.success("Đã tải lên tệp PDF");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  function setUrl(nextUrl: string) {
+    const clean = nextUrl.trim();
+    onChange(clean || null, clean ? name || null : null);
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-slate-50/60 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Dán link PDF / Google Drive hoặc tải tệp PDF"
+            className="bg-white pl-9"
+          />
+        </div>
+        <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+        <Button type="button" variant="outline" className="shrink-0 bg-white" disabled={uploading} onClick={() => inputRef.current?.click()}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          Tải PDF
+        </Button>
+      </div>
+      {url ? (
+        <div className="mt-2 flex items-center gap-2 rounded-md border border-blue-100 bg-white px-3 py-2 text-sm">
+          <FileText className="h-4 w-4 shrink-0 text-blue-700" />
+          <span className="min-w-0 flex-1 truncate text-ink">{name || url}</span>
+          <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-accent" title="Mở tài liệu">
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          <button type="button" onClick={() => onChange(null, null)} title="Gỡ tài liệu" className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-muted-foreground">Chỉ nhận PDF khi tải file lên, tối đa 25MB.</div>
+      )}
+    </div>
+  );
+}
+
 /** Cảnh báo tồn kho: "Hết hàng" khi =0, "Sắp hết" khi ≤ định mức tối thiểu. */
 function StockBadge({ quantity, minStock }: { quantity: number; minStock: number }) {
   if (quantity <= 0) {
@@ -489,35 +577,56 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
   const points = m.replacements ?? [];
   if (points.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-3 text-sm text-muted-foreground">
-        Chưa gán hệ thống/thiết bị cho vật tư này. Bấm <b>Sửa</b> để thêm điểm dùng / thay thế.
+      <div className="space-y-3">
+        {m.documentUrl && <MaterialDocumentLink url={m.documentUrl} name={m.documentName} />}
+        <div className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-3 text-sm text-muted-foreground">
+          Chưa gán hệ thống/thiết bị cho vật tư này. Bấm <b>Sửa</b> để thêm điểm dùng / thay thế.
+        </div>
       </div>
     );
   }
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
-      <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Chi tiết điểm thay thế ({points.length})
-      </div>
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
-            <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
-            <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
-              <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.system || "—"}</td>
-              <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
-              <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity} {m.unit}</td>
+    <div className="space-y-3">
+      {m.documentUrl && <MaterialDocumentLink url={m.documentUrl} name={m.documentName} />}
+      <div className="overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+        <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Chi tiết điểm thay thế ({points.length})
+        </div>
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground">
+              <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
+              <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
+              <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
+                <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.system || "—"}</td>
+                <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
+                <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity} {m.unit}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
+  );
+}
+
+function MaterialDocumentLink({ url, name }: { url: string; name?: string | null }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-2.5 text-sm font-medium text-blue-800 transition-colors hover:border-blue-200 hover:bg-blue-50"
+    >
+      <FileText className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{name || "Tài liệu đính kèm"}</span>
+      <ExternalLink className="h-4 w-4 shrink-0" />
+    </a>
   );
 }
 

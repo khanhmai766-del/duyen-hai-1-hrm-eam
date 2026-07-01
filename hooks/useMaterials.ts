@@ -20,6 +20,8 @@ export interface MaterialReplacementPoint {
 }
 
 export interface MaterialWithDevices extends Material {
+  documentUrl?: string | null;
+  documentName?: string | null;
   deviceMaterials?: Array<{
     id: string;
     deviceId: string;
@@ -49,6 +51,8 @@ export type MaterialReplacementInput = {
 
 export type MaterialInput = Partial<Material> & {
   id?: string;
+  documentUrl?: string | null;
+  documentName?: string | null;
   replacements?: MaterialReplacementInput[];
 };
 
