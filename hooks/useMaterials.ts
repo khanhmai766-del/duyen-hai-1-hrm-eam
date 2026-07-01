@@ -20,8 +20,8 @@ export interface MaterialReplacementPoint {
 }
 
 export interface MaterialWithDevices extends Material {
-  documentUrl?: string | null;
-  documentName?: string | null;
+  documentUrl: string | null;
+  documentName: string | null;
   deviceMaterials?: Array<{
     id: string;
     deviceId: string;
