@@ -8,7 +8,7 @@ import {
 import { toast } from "sonner";
 import { useOilGuns, useUpdateOilGun, type OilGun } from "@/hooks/useOilGuns";
 
-/* Bố trí vòi theo bảng vận hành: mỗi cụm 3 vòi (1 cột trên sơ đồ) */
+/* Bố trí vòi theo bảng vận hành: mỗi mảng con là 1 cụm vị trí liền nhau trên sơ đồ. */
 const REAR_GROUPS = [
   ["D1", "E1", "F1"], ["D2", "E2", "F2"], ["D3", "E3", "F3"],
   ["A3", "B3", "C3"], ["A2", "B2", "C2"], ["A1", "B1", "C1"],
@@ -223,32 +223,30 @@ function Stat({ label, value, c, icon }: { label: string; value: number; c: stri
 function Wall({ groups, byCode, onOpen, highlight, selected }: {
   groups: string[][]; byCode: Map<string, OilGun>; onOpen: (c: string) => void; highlight: string; selected: string | null;
 }) {
+  const codes = groups.flat();
+
   return (
     <div className="ogb-wall">
-      {groups.map((group, i) => (
-        <div className="ogb-col" key={i}>
-          {group.map((code) => {
-            const g = byCode.get(code);
-            const t = tone(g);
-            const hasDefect = g?.defect?.trim();
-            const dim = highlight && !code.includes(highlight);
-            return (
-              <button key={code}
-                className={`ogb-gun ${selected === code ? "active" : ""} ${dim ? "dim" : ""}`}
-                style={{ background: t.bg, borderColor: selected === code ? C.accent : t.line }}
-                onClick={() => onOpen(code)}
-                title={`${code} — ${t.label}${hasDefect ? " · " + g!.defect : ""}`}>
-                <span className="ogb-gun-dot" style={{ background: t.c }} />
-                <span className="ogb-gun-code" style={{ color: C.navy }}>{code}</span>
-                <span className="ogb-gun-line" style={{ color: t.c }}>
-                  {g?.status === "unavailable" ? "Không khả dụng" : "Khả dụng"}
-                </span>
-                {hasDefect && <Wrench className="ogb-gun-wrench" size={12} style={{ color: t.c }} />}
-              </button>
-            );
-          })}
-        </div>
-      ))}
+      {codes.map((code) => {
+        const g = byCode.get(code);
+        const t = tone(g);
+        const hasDefect = g?.defect?.trim();
+        const dim = highlight && !code.includes(highlight);
+        return (
+          <button key={code}
+            className={`ogb-gun ${selected === code ? "active" : ""} ${dim ? "dim" : ""}`}
+            style={{ background: t.bg, borderColor: selected === code ? C.accent : t.line }}
+            onClick={() => onOpen(code)}
+            title={`${code} — ${t.label}${hasDefect ? " · " + g!.defect : ""}`}>
+            <span className="ogb-gun-dot" style={{ background: t.c }} />
+            <span className="ogb-gun-code" style={{ color: C.navy }}>{code}</span>
+            <span className="ogb-gun-line" style={{ color: t.c }}>
+              {g?.status === "unavailable" ? "Không khả dụng" : "Khả dụng"}
+            </span>
+            {hasDefect && <Wrench className="ogb-gun-wrench" size={12} style={{ color: t.c }} />}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -284,21 +282,20 @@ const CSS = `
 .ogb-loading{flex-direction:row;color:#64748b;}
 .ogb-empty code{background:#f1f5f9;padding:2px 7px;border-radius:6px;font-size:12px;}
 .spin{animation:spin 1s linear infinite;}@keyframes spin{to{transform:rotate(360deg);}}
-.ogb-board{min-width:720px;display:flex;flex-direction:column;gap:10px;}
+.ogb-board{min-width:1080px;display:flex;flex-direction:column;gap:10px;}
 .ogb-wall-label{font-weight:600;font-size:11px;letter-spacing:0;text-transform:uppercase;color:#94a3b8;text-align:center;}
-.ogb-wall{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
-.ogb-col{display:flex;flex-direction:column;gap:8px;}
+.ogb-wall{display:grid;grid-template-columns:repeat(18,minmax(52px,1fr));gap:6px;}
 .ogb-chamber{display:flex;align-items:center;justify-content:center;gap:14px;height:64px;border-radius:12px;margin:4px 0;font-weight:700;font-size:22px;letter-spacing:0;color:#fff;background:linear-gradient(100deg,${C.chamber2},${C.chamber1});box-shadow:inset 0 0 40px rgba(0,0,0,.18);position:relative;overflow:hidden;}
 .ogb-chamber::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 120%,rgba(255,255,255,.35),transparent 60%);}
 .ogb-chamber svg{opacity:.9;}
-.ogb-gun{position:relative;border:1.5px solid;border-radius:11px;padding:10px 8px 9px;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;gap:2px;font-family:inherit;}
+.ogb-gun{position:relative;border:1.5px solid;border-radius:9px;padding:8px 7px;min-height:54px;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;justify-content:center;gap:2px;font-family:inherit;}
 .ogb-gun:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,40,70,.12);}
 .ogb-gun:focus-visible{outline:2px solid ${C.accent};outline-offset:2px;}
 .ogb-gun.active{box-shadow:0 0 0 3px rgba(37,99,235,.25);}
 .ogb-gun.dim{opacity:.32;filter:grayscale(.4);}
 .ogb-gun-dot{position:absolute;top:10px;right:9px;width:9px;height:9px;border-radius:50%;}
-.ogb-gun-code{font-weight:700;font-size:17px;line-height:1.1;}
-.ogb-gun-line{font-size:10.5px;font-weight:600;}
+.ogb-gun-code{font-weight:700;font-size:15px;line-height:1.1;}
+.ogb-gun-line{font-size:9.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ogb-gun-wrench{position:absolute;bottom:8px;right:8px;}
 .ogb-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px dashed ${C.line};font-size:12.5px;color:#475569;}
 .ogb-legend span{display:inline-flex;align-items:center;gap:7px;}
@@ -326,6 +323,6 @@ const CSS = `
 .ogb-note.warn{background:${C.warnBg};color:${C.warn};}
 .ogb-meta{margin-top:20px;font-size:12px;color:#94a3b8;border-top:1px dashed ${C.line};padding-top:14px;}
 .ogb-panel-foot{padding:16px 22px;border-top:1px solid ${C.line};display:flex;gap:10px;justify-content:flex-end;background:#fbfbfa;}
-@media (max-width:640px){.ogb-root{padding:14px;}.ogb-chamber{font-size:16px;height:52px;}.ogb-panel{width:100%;}}
+@media (max-width:640px){.ogb-root{padding:14px;}.ogb-board-wrap{padding:14px;}.ogb-board{min-width:960px;}.ogb-chamber{font-size:16px;height:52px;}.ogb-panel{width:100%;}}
 @media (prefers-reduced-motion:reduce){.ogb-gun,.ogb-panel,.ogb-overlay{transition:none;animation:none;}}
 `;
