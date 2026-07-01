@@ -4,7 +4,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat } from "lucide-react";
+import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useShift, useCheckInOrg, useRecallCheckIn, useApproveAttendance, useRemoveAssignment } from "@/hooks/useShifts";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useUsers } from "@/hooks/useUsers";
 import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { ORG_CHIEF, ORG_LEADS, ORG_SEAT_TITLES, type OrgTone } from "@/lib/org-template";
@@ -22,7 +23,7 @@ import { normalizeText } from "@/lib/nav";
 import { cn, initials } from "@/lib/utils";
 import type { ShiftAssignmentWithUser, CheckInWithUser } from "@/types";
 
-const HOURS_OPTIONS = [4, 6, 8, 10, 12];
+const HOURS_OPTIONS = [4, 6, 8];
 
 const UNITS = ["Vận hành 1", "Vận hành 2"];
 
@@ -125,10 +126,7 @@ export default function OrgChartPage() {
   // thu hồi điểm danh nữa (chỉ ADMIN / Trưởng ca mới thu hồi được).
   const myApproved = assignments.some((a) => a.user?.id === session?.user?.id && a.isApproved);
   const recallLocked = isCheckedIn && myApproved && !canApprove;
-  // Khi ca đã được duyệt (có người đã duyệt) → khoá điểm danh với user thường;
-  // chỉ Quản trị / Trưởng ca được thêm/xoá nhân sự.
-  const shiftLocked = approved > 0;
-  const checkInLocked = shiftLocked && !canApprove;
+  // Duyệt hết chỉ đánh dấu ca để giữ dữ liệu bảng công; không khoá điểm danh thêm.
 
   async function handleRecall() {
     try {
@@ -173,16 +171,6 @@ export default function OrgChartPage() {
               Thu hồi điểm danh
             </Button>
           )
-        ) : checkInLocked ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled
-            className="cursor-not-allowed text-muted-foreground"
-            title="Ca trực đã được Quản trị / Trưởng ca duyệt — đã khoá điểm danh"
-          >
-            <Lock className="h-4 w-4" /> Đã duyệt — khoá điểm danh
-          </Button>
         ) : (
           <Button size="sm" variant="accent" onClick={() => setCheckInOpen(true)}><UserCheck className="h-4 w-4" /> Điểm danh</Button>
         )}
@@ -325,6 +313,7 @@ function CheckInDialog({
   unit: string;
 }) {
   const { data: session } = useSession();
+  const currentPosition = useCurrentPosition();
   const { data: usersData } = useUsers();
   const checkIn = useCheckInOrg();
 
@@ -342,13 +331,14 @@ function CheckInDialog({
   // Default to the seat matching the user's chức danh, else the first seat.
   React.useEffect(() => {
     if (open) {
-      const own = me?.position ?? session?.user?.position ?? "";
-      setPosition(positions.includes(own) ? own : positions[0]);
+      const own = currentPosition.position || me?.position || "";
+      const secondary = me?.secondaryPosition ?? "";
+      setPosition(positions.includes(own) ? own : positions.includes(secondary) ? secondary : positions[0]);
       setHours(8);
       setSwap(false);
       setSwapNote("");
     }
-  }, [open, me?.position, session?.user?.position, positions]);
+  }, [open, currentPosition.position, me?.position, me?.secondaryPosition, positions]);
 
   const dateLabel = date.split("-").reverse().join("-"); // YYYY-MM-DD → DD-MM-YYYY
   const caLabel = `${SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? ""} ${dateLabel}`.trim();
@@ -488,6 +478,7 @@ function formatPrintDate(date: string) {
 function approvedAttendanceRows(assignments: ShiftAssignmentWithUser[]) {
   const order = new Map(ORG_SEAT_TITLES.map((title, index) => [title, index]));
   return [...assignments]
+    .filter((a) => normalizeText(a.positionLabel) !== normalizeText(ORG_CHIEF))
     .sort((a, b) => {
       const bySeat = (order.get(a.positionLabel) ?? 999) - (order.get(b.positionLabel) ?? 999);
       if (bySeat !== 0) return bySeat;
@@ -510,6 +501,11 @@ function printAttendancePdf({
   targetWindow?: Window | null;
 }) {
   const rows = approvedAttendanceRows(assignments);
+  const chief = assignments.find((a) => normalizeText(a.positionLabel) === normalizeText(ORG_CHIEF));
+  const chiefSignature = chief?.user.signatureUrl
+    ? `<img src="${escapeHtml(chief.user.signatureUrl)}" alt="Chữ ký ${escapeHtml(chief.user.name)}" />`
+    : "";
+  const chiefName = chief?.user.name ? escapeHtml(chief.user.name) : "&nbsp;";
   const emptyRows = Math.max(0, ATTENDANCE_FORM_ROWS - rows.length);
   const shiftLabel = SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? shiftType;
   const titleShift = shiftLabel.toUpperCase();
@@ -639,9 +635,30 @@ function printAttendancePdf({
           }
           .sign-off {
             margin-top: 10px;
-            padding-right: 14%;
+            margin-left: auto;
+            width: 230px;
             text-align: right;
             font-weight: 700;
+          }
+          .sign-title,
+          .sign-name {
+            text-align: center;
+          }
+          .sign-signature {
+            display: flex;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 4px;
+          }
+          .sign-signature img {
+            max-width: 170px;
+            max-height: 42px;
+            object-fit: contain;
+          }
+          .sign-name {
+            margin-top: 2px;
+            font-size: 12pt;
           }
           @media print {
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -695,7 +712,11 @@ function printAttendancePdf({
             </thead>
             <tbody>${bodyRows}</tbody>
           </table>
-          <div class="sign-off">KÝ TÊN</div>
+          <div class="sign-off">
+            <div class="sign-title">KÝ TÊN</div>
+            <div class="sign-signature">${chiefSignature}</div>
+            <div class="sign-name">${chiefName}</div>
+          </div>
         </main>
         <script>
           window.addEventListener("load", () => {
@@ -754,21 +775,16 @@ function ApproveAttendanceDialog({
   const pending = assignments.filter((a) => !a.isApproved).length;
 
   async function approveAll() {
-    const printWindow = window.open("", "_blank", "width=900,height=1100");
-    if (!printWindow) {
-      toast.error("Trình duyệt đã chặn cửa sổ xuất PDF. Vui lòng cho phép popup rồi thử lại.");
-      return;
-    }
-    printWindow.document.write("<p style=\"font-family:Arial,sans-serif;padding:24px\">Đang duyệt chấm công và chuẩn bị file PDF...</p>");
     try {
       const res: any = await approve.mutateAsync({ date, shiftType, unit });
       toast.success(`Đã duyệt ${res?.data?.approved ?? ""} chấm công`.trim());
       setConfirmApproveOpen(false);
-      printAttendancePdf({ assignments, date, shiftType, unit, targetWindow: printWindow });
     } catch (e) {
-      printWindow.close();
       toast.error((e as Error).message);
     }
+  }
+  function exportAttendancePdf() {
+    printAttendancePdf({ assignments, date, shiftType, unit });
   }
   async function approveOne(id: string) {
     try {
@@ -852,16 +868,20 @@ function ApproveAttendanceDialog({
           <DialogHeader>
             <DialogTitle>Xác nhận duyệt chấm công</DialogTitle>
             <DialogDescription>
-              Bạn có chắc chắn muốn duyệt toàn bộ {total} điểm danh của ca này và xuất file PDF danh sách phổ biến và sinh hoạt không?
+              Chọn tác vụ cần thực hiện cho toàn bộ {total} điểm danh của ca này.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button variant="outline" onClick={() => setConfirmApproveOpen(false)} disabled={approve.isPending}>
               Hủy
             </Button>
             <Button onClick={approveAll} disabled={approve.isPending || total === 0}>
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Xác nhận và xuất PDF
+              Xác nhận
+            </Button>
+            <Button type="button" variant="secondary" onClick={exportAttendancePdf} disabled={total === 0}>
+              <Printer className="h-4 w-4" />
+              Xuất PDF
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -942,7 +962,7 @@ function PersonnelPicker({
   const [q, setQ] = React.useState("");
   const nq = normalizeText(q.trim());
   const filtered = nq
-    ? users.filter((u) => normalizeText(`${u.name} ${u.employeeId}`).includes(nq))
+    ? users.filter((u) => normalizeText(`${u.name} ${u.employeeId} ${u.position ?? ""} ${u.secondaryPosition ?? ""}`).includes(nq))
     : users;
 
   return (
@@ -979,7 +999,11 @@ function PersonnelPicker({
               <div className="truncate text-sm font-medium text-ink">
                 {u.name} <span className="text-xs font-normal text-muted-foreground">({u.employeeId})</span>
               </div>
-              <div className="truncate text-xs text-muted-foreground">{u.position ?? "—"}{u.phone ? ` · ${u.phone}` : ""}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {u.position ?? "—"}
+                {u.secondaryPosition ? ` · Phụ: ${u.secondaryPosition}` : ""}
+                {u.phone ? ` · ${u.phone}` : ""}
+              </div>
             </div>
           </button>
         ))}

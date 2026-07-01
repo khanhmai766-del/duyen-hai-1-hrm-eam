@@ -17,6 +17,7 @@ export interface HcGroup {
   date: string;
   content: string;
   hours: number;
+  period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON" | null;
   unit: string | null;
   createdById: string;
   createdBy: { id: string; name: string };
@@ -43,7 +44,7 @@ export function useHcRegistrations(from: string) {
 export function useCreateHcGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { date: string; content: string; hours: number }) => apiMutate("/api/hc-groups", "POST", body),
+    mutationFn: (body: { date: string; content: string; hours: number; period?: "FULL_DAY" | "MORNING" | "AFTERNOON" }) => apiMutate("/api/hc-groups", "POST", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
   });
 }
@@ -51,7 +52,7 @@ export function useCreateHcGroup() {
 export function useUpdateHcGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { id: string; content?: string; hours?: number }) => apiMutate("/api/hc-groups", "PUT", body),
+    mutationFn: (body: { id: string; content?: string; hours?: number; period?: "FULL_DAY" | "MORNING" | "AFTERNOON" }) => apiMutate("/api/hc-groups", "PUT", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
   });
 }

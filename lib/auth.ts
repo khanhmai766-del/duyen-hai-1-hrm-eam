@@ -4,6 +4,21 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { readLoginToken } from "@/lib/webauthn";
 import { isDefaultPassword, isPasswordExpired } from "@/lib/password-policy";
+import { effectiveUserPosition } from "@/lib/current-position";
+
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+
+let loginLockColumnsReady = false;
+
+async function ensureLoginLockColumns() {
+  if (loginLockColumnsReady) return;
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User"
+    ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
+  `);
+  loginLockColumnsReady = true;
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Phiên hết hạn sau 30 phút không hoạt động (cookie tự hết hạn khi tab đóng/mất mạng);
@@ -26,12 +41,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = credentials?.password as string | undefined;
         const biometricToken = credentials?.biometricToken as string | undefined;
         if (!login || (!password && !biometricToken)) return null;
+        await ensureLoginLockColumns();
 
         if (biometricToken) {
           const token = readLoginToken(biometricToken);
           if (!token || token.email !== login) return null;
           const user = await prisma.user.findUnique({ where: { id: token.userId } });
-          if (!user || !user.isActive || user.email !== login) return null;
+          if (!user || !user.isActive || user.lockedAt || user.email !== login) return null;
           const mustChangePassword = user.mustChangePassword || isPasswordExpired(user.passwordChangedAt);
           if (mustChangePassword && !user.mustChangePassword) {
             await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
@@ -42,6 +58,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             email: user.email,
             role: user.role,
             position: user.position ?? undefined,
+            secondaryPosition: user.secondaryPosition ?? undefined,
+            currentPosition: effectiveUserPosition(user) ?? undefined,
             employeeId: user.employeeId,
             mustChangePassword,
           };
@@ -50,11 +68,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await prisma.user.findFirst({
           where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
         });
-        if (!user || !user.isActive) return null;
+        if (!user || !user.isActive || user.lockedAt) return null;
         if (!password) return null;
 
         const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          const failedLoginAttempts = user.failedLoginAttempts + 1;
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              failedLoginAttempts,
+              lockedAt: failedLoginAttempts >= MAX_FAILED_LOGIN_ATTEMPTS ? new Date() : null,
+            },
+          });
+          return null;
+        }
+        if (user.failedLoginAttempts > 0) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { failedLoginAttempts: 0, lockedAt: null },
+          });
+        }
         const mustChangePassword = user.mustChangePassword || isDefaultPassword(password) || isPasswordExpired(user.passwordChangedAt);
         if (mustChangePassword && !user.mustChangePassword) {
           await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
@@ -70,6 +104,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           role: user.role,
           position: user.position ?? undefined,
+          secondaryPosition: user.secondaryPosition ?? undefined,
+          currentPosition: effectiveUserPosition(user) ?? undefined,
           employeeId: user.employeeId,
           mustChangePassword,
         };
@@ -82,6 +118,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = (user as any).id;
         token.role = (user as any).role;
         token.position = (user as any).position;
+        token.secondaryPosition = (user as any).secondaryPosition;
+        token.currentPosition = (user as any).currentPosition;
         token.employeeId = (user as any).employeeId;
         token.mustChangePassword = (user as any).mustChangePassword;
       }
@@ -92,6 +130,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.position = token.position as string | undefined;
+        session.user.secondaryPosition = token.secondaryPosition as string | undefined;
+        session.user.currentPosition = token.currentPosition as string | undefined;
         session.user.employeeId = token.employeeId as string;
         session.user.mustChangePassword = Boolean(token.mustChangePassword);
       }

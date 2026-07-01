@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
 import { s3ProxyUrl } from "@/lib/s3";
+import { aggregateHcHoursByPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,17 @@ export async function GET(req: NextRequest) {
         isApproved: true,
         shift: { date: { gte: monthStart, lte: monthEnd } },
       },
-      include: { shift: { select: { date: true } } },
+      include: { shift: { select: { date: true, shiftType: true } } },
     });
     const attendanceDays = Array.from(
       new Set(monthApproved.map((a) => a.shift.date.getDate()))
     ).sort((a, b) => a - b);
     const shiftHours = monthApproved.length * 8;
+    const morningShiftDays = new Set(
+      monthApproved
+        .filter((a) => a.shift.shiftType === "MORNING")
+        .map((a) => a.shift.date.getDate())
+    );
 
     // Administrative (hành chính) attendance for the month → the second chart
     // series. Approved HC check-ins, keyed by day with their logged hours.
@@ -47,14 +53,19 @@ export async function GET(req: NextRequest) {
         isApproved: true,
         group: { date: { gte: monthStart, lte: monthEnd } },
       },
-      include: { group: { select: { date: true } } },
+      include: { group: { select: { date: true, period: true } } },
     });
-    const adminMap = new Map<number, number>();
+    const adminMap = new Map<number, Array<{ hours: number; period: string | null }>>();
     for (const c of monthHc) {
       const d = c.group.date.getDate();
-      adminMap.set(d, Math.max(adminMap.get(d) ?? 0, c.hours));
+      const entries = adminMap.get(d) ?? [];
+      entries.push({ hours: c.hours, period: c.group.period });
+      adminMap.set(d, entries);
     }
-    const adminDays = Array.from(adminMap, ([day, hours]) => ({ day, hours })).sort(
+    const adminDays = Array.from(adminMap, ([day, entries]) => ({
+      day,
+      hours: aggregateHcHoursByPeriod(entries, { hasMorningShift: morningShiftDays.has(day) }),
+    })).sort(
       (a, b) => a.day - b.day
     );
     const adminHours = adminDays.reduce((sum, entry) => sum + entry.hours, 0);

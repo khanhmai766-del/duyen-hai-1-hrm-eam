@@ -51,15 +51,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Khi danh sách ca trực đã được DUYỆT (có ít nhất một phân công đã duyệt →
-    // ca bị "khoá"), user thường không được điểm danh/thêm vào nữa. Chỉ ADMIN /
-    // Trưởng ca mới được thay đổi nhân sự (thêm/xoá).
-    const isManager = ["ADMIN", "SUPERVISOR"].includes(user.role);
-    const shiftLocked = shift.assignments.some((a) => a.isApproved);
-    if (shiftLocked && !isManager) {
-      return fail("Ca trực đã được duyệt — không thể điểm danh thêm. Vui lòng liên hệ Quản trị / Trưởng ca.", 403);
-    }
-
     // Điểm danh sớm: nếu ca chưa bắt đầu (tương lai) → tính là "điểm danh sớm".
     // Mỗi user chỉ được đặt trước tối đa MAX_EARLY_CHECKINS ca trực.
     const now = new Date();
@@ -141,9 +132,12 @@ export async function DELETE(req: NextRequest) {
       requireRole(user, ["ADMIN", "SUPERVISOR"]);
       const target = await prisma.shiftAssignment.findUnique({ where: { id } });
       if (!target) return fail("Không tìm thấy phân công", 404);
+      const targetShift = await prisma.shift.findUnique({ where: { id: target.shiftId }, select: { isAttendanceLocked: true } });
       await prisma.shiftAssignment.updateMany({ where: { parentId: id }, data: { parentId: target.parentId } });
       await prisma.shiftAssignment.delete({ where: { id } });
-      await prisma.checkIn.deleteMany({ where: { shiftId: target.shiftId, userId: target.userId } });
+      if (!targetShift?.isAttendanceLocked || !target.isApproved) {
+        await prisma.checkIn.deleteMany({ where: { shiftId: target.shiftId, userId: target.userId } });
+      }
       await audit(user.id, "REMOVE_CHECKIN", "ShiftAssignment", id, "Xoá điểm danh");
       return ok({ removed: 1 });
     }
@@ -218,8 +212,12 @@ export async function PUT(req: NextRequest) {
       ? { id: { in: ids }, shiftId: shift.id }
       : { shiftId: shift.id };
     const res = await prisma.shiftAssignment.updateMany({ where, data: { isApproved: true } });
+    const approveAll = !(Array.isArray(ids) && ids.length);
+    if (approveAll) {
+      await prisma.shift.update({ where: { id: shift.id }, data: { isAttendanceLocked: true } });
+    }
 
-    await audit(user.id, "APPROVE_CHECKIN", "Shift", shift.id, `Duyệt chấm công (${res.count})`);
-    return ok({ approved: res.count });
+    await audit(user.id, "APPROVE_CHECKIN", "Shift", shift.id, approveAll ? `Duyệt hết chấm công (${res.count})` : `Duyệt chấm công (${res.count})`);
+    return ok({ approved: res.count, locked: approveAll });
   });
 }

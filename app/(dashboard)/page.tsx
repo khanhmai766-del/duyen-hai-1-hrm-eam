@@ -4,16 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  ReferenceLine,
-} from "recharts";
-import {
   CalendarCheck,
   Briefcase,
   ShieldCheck,
@@ -25,6 +15,10 @@ import {
   CalendarDays,
   Trash2,
   Pencil,
+  Play,
+  Equal,
+  X,
+  MoreHorizontal,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
@@ -35,14 +29,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { OPERATION_TYPE, OPERATION_TYPE_ORDER, can, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
-import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
 import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/lib/links";
 import { initials, cn } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
-import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, type MyDashboard, type OperationEvent } from "@/hooks/useDashboard";
+import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent, type SafeOperationSetting } from "@/hooks/useDashboard";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { toast } from "sonner";
 
 /** Tracks browser connectivity via `navigator.onLine` + online/offline events.
@@ -64,6 +58,7 @@ function useOnline() {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const currentPosition = useCurrentPosition();
   const me = useMyDashboard();
 
   // Live connectivity status — online while signed in & connected, offline when
@@ -114,7 +109,7 @@ export default function DashboardPage() {
               {session?.user?.name ?? "—"}
             </div>
             <div className="truncate text-sm text-white/85 [text-shadow:0_1px_6px_rgba(0,0,0,0.5)]">
-              {session?.user?.position ?? session?.user?.employeeId}
+              {currentPosition.position || session?.user?.employeeId}
             </div>
           </div>
         </Card>
@@ -140,11 +135,11 @@ export default function DashboardPage() {
         <WeatherCard />
       </div>
 
-      {/* Body: left column (Activity + Operation info), right column (Links + Contact).
+      {/* Body: left column (Safe operation + Operation info), right column (Links + Contact).
           Both columns stretch to the same height; the lower card in each grows to fill. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:items-stretch">
         <div className="flex flex-col gap-6 lg:col-span-3">
-          <ActivityCard />
+          <SafeOperationCard canManage={can(session?.user?.role, "manageOperations")} />
           <div className="flex flex-1 [&>*]:h-full [&>*]:w-full">
             <OperationInfoCard canManage={can(session?.user?.role, "manageOperations")} />
           </div>
@@ -416,176 +411,294 @@ function WeatherCard() {
   );
 }
 
-/* ---- Activity (attendance) bar chart with month picker ---- */
-const VN_MONTHS = ["Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12"];
+/* ---- Safe operation realtime counter ---- */
+type SafeOperationUnit = "S1" | "S2";
+const SAFE_OPERATION_UNITS: SafeOperationUnit[] = ["S1", "S2"];
+const SAFE_OPERATION_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
-/** A clear "Hôm nay" pill drawn at the top of the today reference line. */
-function renderTodayLabel({ viewBox }: { viewBox?: { x: number; y: number } }) {
-  if (!viewBox) return <g />;
-  const w = 52;
-  const h = 18;
-  const cx = Math.max(viewBox.x, 34 + w / 2); // keep the pill clear of the Y axis
+function vietnamDateParts(value: string | Date) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SAFE_OPERATION_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    day: get("day"),
+    month: get("month"),
+    year: get("year"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
+
+function dateTimeInputValue(value?: string | Date | null) {
+  if (!value) return "";
+  const parts = vietnamDateParts(value);
+  if (!parts) return "";
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+}
+
+function parseSafeStartInput(value: string) {
+  const raw = value.trim();
+  const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const hour = match[4] ? Number(match[4]) : 0;
+  const minute = match[5] ? Number(match[5]) : 0;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  const check = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+07:00`;
+}
+
+function formatSafeStart(value?: string | Date | null) {
+  if (!value) return "Chưa thiết lập";
+  const parts = vietnamDateParts(value);
+  if (!parts) return "Chưa thiết lập";
+  return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`;
+}
+
+function safeElapsedParts(startedAt?: string | Date | null, now = new Date(), pausedAt?: string | Date | null) {
+  const start = startedAt ? new Date(startedAt) : null;
+  if (!start || Number.isNaN(start.getTime())) return { days: 0, hours: 0, minutes: 0 };
+  const pause = pausedAt ? new Date(pausedAt) : null;
+  const effectiveNow = pause && !Number.isNaN(pause.getTime()) ? pause : now;
+  const ms = Math.max(0, effectiveNow.getTime() - start.getTime());
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const minuteMs = 60 * 1000;
+  const days = Math.floor(ms / dayMs);
+  const hours = Math.floor((ms % dayMs) / hourMs);
+  const minutes = Math.floor((ms % hourMs) / minuteMs);
+  return { days, hours, minutes };
+}
+
+function SafeOperationCard({ canManage }: { canManage: boolean }) {
+  const { data, isLoading } = useSafeOperations();
+  const update = useUpdateSafeOperation();
+  const settings = data?.data ?? [];
+  const byUnit = React.useMemo(() => new Map(settings.map((item) => [item.unit, item])), [settings]);
+  const [now, setNow] = React.useState(() => new Date());
+  const [editingUnit, setEditingUnit] = React.useState<SafeOperationUnit | null>(null);
+  const [draftStart, setDraftStart] = React.useState("");
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  function openStartDialog(unit: SafeOperationUnit) {
+    setEditingUnit(unit);
+    setDraftStart(dateTimeInputValue(byUnit.get(unit)?.startedAt) || dateTimeInputValue(new Date()));
+  }
+
+  async function saveStart() {
+    if (!editingUnit) return;
+    if (!draftStart) return toast.error("Chọn ngày bắt đầu vận hành an toàn");
+    const startedAt = parseSafeStartInput(draftStart);
+    if (!startedAt) return toast.error("Nhập thời gian theo định dạng DD/MM/YYYY HH:mm");
+    try {
+      await update.mutateAsync({ unit: editingUnit, action: "SET_START", startedAt });
+      toast.success(`Đã cập nhật mốc vận hành an toàn ${editingUnit}`);
+      setEditingUnit(null);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function togglePause(unit: SafeOperationUnit) {
+    try {
+      await update.mutateAsync({ unit, action: "TOGGLE_PAUSE" });
+      toast.success("Đã cập nhật trạng thái bộ đếm");
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function reset(unit: SafeOperationUnit) {
+    try {
+      await update.mutateAsync({ unit, action: "RESET" });
+      toast.success(`Đã reset thời gian vận hành an toàn ${unit}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   return (
-    <g>
-      <rect x={cx - w / 2} y={0} width={w} height={h} rx={9} fill="#2563EB" />
-      <text
-        x={cx}
-        y={h / 2 + 0.5}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize={10}
-        fontWeight={600}
-        fill="#ffffff"
-      >
-        Hôm nay
-      </text>
-    </g>
+    <Card className="overflow-hidden border-emerald-200/80 bg-gradient-to-br from-white via-white to-emerald-50/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-normal text-emerald-700">
+          <ShieldCheck className="h-4 w-4" />
+          Thời gian vận hành an toàn (Safe Operation)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isLoading ? (
+          <div className="space-y-3">
+            <div className="h-[118px] rounded-lg border border-emerald-100 bg-white/70" />
+            <div className="h-[118px] rounded-lg border border-emerald-100 bg-white/70" />
+          </div>
+        ) : (
+          SAFE_OPERATION_UNITS.map((unit) => (
+            <SafeOperationUnitRow
+              key={unit}
+              unit={unit}
+              setting={byUnit.get(unit)}
+              now={now}
+              canManage={canManage}
+              saving={update.isPending}
+              onOpenStart={() => openStartDialog(unit)}
+              onTogglePause={() => togglePause(unit)}
+              onReset={() => reset(unit)}
+            />
+          ))
+        )}
+      </CardContent>
+      <Dialog open={!!editingUnit} onOpenChange={(open) => !open && setEditingUnit(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nhập thời gian bắt đầu vận hành {editingUnit}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Ngày giờ bắt đầu</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={draftStart}
+              onChange={(event) => setDraftStart(event.target.value)}
+              placeholder="DD/MM/YYYY HH:mm"
+            />
+            <div className="text-xs text-muted-foreground">Ví dụ: 25/12/2025 14:00</div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUnit(null)}>Hủy</Button>
+            <Button onClick={saveStart} disabled={update.isPending}>
+              {update.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Lưu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 
-function ActivityCard() {
-  const today = new Date();
-  const [year, setYear] = React.useState(today.getFullYear());
-  const [month, setMonth] = React.useState(today.getMonth() + 1); // 1-12
-  const [open, setOpen] = React.useState(false);
-
-  const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-  const { data, isLoading } = useMyDashboard(monthStr);
-  const m = data?.data;
-  const daysInMonth = m?.daysInMonth ?? new Date(year, month, 0).getDate();
-  // Mark "today" only when the chart is showing the current month/year.
-  const todayDay =
-    year === today.getFullYear() && month === today.getMonth() + 1 ? today.getDate() : null;
-  const shiftSet = new Set(m?.attendanceDays ?? []);
-  const adminMap = new Map((m?.adminDays ?? []).map((a) => [a.day, a.hours]));
-  // Two attendance series per day: shift duty (8h per approved shift, red) and
-  // administrative check-ins (logged hours, yellow). Days with neither stay empty.
-  const chart = Array.from({ length: daysInMonth }, (_, i) => {
-    const day = i + 1;
-    return {
-      day,
-      shift: shiftSet.has(day) ? 8 : 0,
-      admin: adminMap.get(day) ?? 0,
-    };
-  });
-
+function SafeOperationUnitRow({
+  unit,
+  setting,
+  now,
+  canManage,
+  saving,
+  onOpenStart,
+  onTogglePause,
+  onReset,
+}: {
+  unit: SafeOperationUnit;
+  setting?: SafeOperationSetting;
+  now: Date;
+  canManage: boolean;
+  saving: boolean;
+  onOpenStart: () => void;
+  onTogglePause: () => void;
+  onReset: () => void;
+}) {
+  const elapsed = safeElapsedParts(setting?.startedAt, now, setting?.pausedAt);
+  const paused = Boolean(setting?.pausedAt);
+  const hasStarted = Boolean(setting?.startedAt);
   return (
-    <Card className="h-full">
-      <CardHeader className="flex-row items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CardTitle>Activity</CardTitle>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <button
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-ink"
-                title="Chọn tháng"
+    <div className="grid gap-4 rounded-lg border border-emerald-200 bg-white/85 p-3 shadow-sm sm:grid-cols-[172px_minmax(0,1fr)] sm:items-center">
+      <div className="relative min-h-[104px] border-emerald-100 sm:border-r sm:pr-4">
+        <div className="flex h-full items-center gap-3 pr-8">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/duyenhai-card.jpg" alt="" className="h-full w-full object-cover" />
+          </div>
+          <div>
+            <div className="whitespace-nowrap text-xs font-bold uppercase text-slate-700">Tổ máy</div>
+            <div className="text-4xl font-extrabold leading-none text-emerald-700">{unit}</div>
+          </div>
+        </div>
+        {canManage && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="outline"
+                className="absolute bottom-0 right-0 h-7 w-7 rounded-md bg-white/90 shadow-sm"
+                disabled={saving}
+                title="Tác vụ vận hành an toàn"
               >
-                <CalendarDays className="h-3.5 w-3.5" />
-                {VN_MONTHS[month - 1]}/{year}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-56" align="start">
-              <div className="mb-2 flex items-center justify-between">
-                <button className="rounded p-1 hover:bg-muted" onClick={() => setYear((y) => y - 1)}>‹</button>
-                <span className="text-sm font-semibold text-ink">{year}</span>
-                <button
-                  className="rounded p-1 hover:bg-muted disabled:opacity-30"
-                  onClick={() => setYear((y) => Math.min(today.getFullYear(), y + 1))}
-                  disabled={year >= today.getFullYear()}
-                >
-                  ›
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {VN_MONTHS.map((label, i) => {
-                  const mNum = i + 1;
-                  const future = year === today.getFullYear() && mNum > today.getMonth() + 1;
-                  const active = mNum === month;
-                  return (
-                    <button
-                      key={label}
-                      disabled={future}
-                      onClick={() => {
-                        setMonth(mNum);
-                        setOpen(false);
-                      }}
-                      className={cn(
-                        "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                        active ? "bg-navy text-white" : "hover:bg-muted",
-                        future && "cursor-not-allowed opacity-30"
-                      )}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="hidden items-center gap-3 text-xs text-muted-foreground sm:flex">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#DC2626]" /> Trực ca
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-[#F59E0B]" /> Hành chính
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="h-[240px]" />
-        ) : (
-          // Horizontal scroll on narrow screens keeps every day legible (each
-          // day gets a fixed min slot); on wide screens it fills the card.
-          <div className="overflow-x-auto pb-1">
-            <div className="chart-3d h-[240px] min-w-[620px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chart} barCategoryGap="22%" barGap={1.5} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
-                  {Bar3DDefs({ colors: ["#DC2626", "#F59E0B"] })}
-                  <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="4 4" />
-                  <XAxis
-                    dataKey="day"
-                    interval={0}
-                    tick={{ fontSize: 10 }}
-                    tickMargin={6}
-                    tickLine={{ stroke: "#cbd5e1" }}
-                    axisLine={{ stroke: "#cbd5e1" }}
-                    height={22}
-                  />
-                  <YAxis
-                    domain={[0, 8]}
-                    ticks={[0, 2, 4, 6, 8]}
-                    tick={{ fontSize: 10 }}
-                    width={30}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                    tickFormatter={(v) => `${v}h`}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-                    labelFormatter={(label) => `Ngày ${label}`}
-                    formatter={(v: number, name) => [v > 0 ? `${v}h` : "—", name]}
-                  />
-                  {todayDay != null && (
-                    <ReferenceLine
-                      x={todayDay}
-                      stroke="#2563EB"
-                      strokeWidth={1.5}
-                      strokeDasharray="3 3"
-                      label={renderTodayLabel}
-                    />
-                  )}
-                  <Bar dataKey="shift" name="Trực ca" radius={[3, 3, 0, 0]} maxBarSize={9} fill={barFill("#DC2626")} />
-                  <Bar dataKey="admin" name="Hành chính" radius={[3, 3, 0, 0]} maxBarSize={9} fill={barFill("#F59E0B")} />
-                </BarChart>
-              </ResponsiveContainer>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="right" className="w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Tác vụ {unit}</DropdownMenuLabel>
+              <DropdownMenuItem onClick={onOpenStart} disabled={saving}>
+                <Play className="h-4 w-4 fill-current" />
+                Nhập mốc bắt đầu
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onTogglePause} disabled={saving || !hasStarted}>
+                <Equal className="h-4 w-4" />
+                {paused ? "Tiếp tục bộ đếm" : "Tạm dừng bộ đếm"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onReset} disabled={saving} className="text-red-600 focus:text-red-700">
+                <X className="h-4 w-4" />
+                Reset về 0
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <div className="min-w-0">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-700">
+              {hasStarted ? paused ? "Đang tạm dừng bộ đếm" : "Đang vận hành an toàn" : "Chưa bắt đầu bộ đếm"}
+            </div>
+            <div className="mt-1 grid grid-cols-3 gap-2 text-emerald-700 sm:max-w-md">
+              <ElapsedNumber value={elapsed.days} label="ngày" />
+              <ElapsedNumber value={elapsed.hours} label="giờ" pad />
+              <ElapsedNumber value={elapsed.minutes} label="phút" pad />
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-100 pt-2">
+          <span className="text-xs font-medium text-slate-600">Kể từ: {formatSafeStart(setting?.startedAt)}</span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold",
+              hasStarted ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+            )}
+          >
+            {hasStarted ? <ShieldCheck className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+            {hasStarted ? "Không có sự cố" : "Tổ máy ngừng"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ElapsedNumber({ value, label, pad = false }: { value: number; label: string; pad?: boolean }) {
+  return (
+    <div className="min-w-0 border-r border-emerald-100 last:border-r-0">
+      <span className="text-4xl font-extrabold leading-none tabular-nums sm:text-5xl">
+        {pad ? String(value).padStart(2, "0") : value}
+      </span>
+      <span className="ml-1 text-xs font-semibold text-slate-600">{label}</span>
+    </div>
   );
 }
 

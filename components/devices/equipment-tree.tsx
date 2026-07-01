@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { useSession } from "next-auth/react";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { nodeAccessForPosition, scopesForPosition } from "@/lib/position-system-scopes";
 
@@ -42,9 +43,10 @@ export function EquipmentTreeView() {
   const focusSeq = params.get("focusSeq");
   const { data, isLoading } = useEquipmentTree();
   const { data: session } = useSession();
+  const currentPosition = useCurrentPosition();
   const scopesQuery = usePositionSystemScopes();
   const role = session?.user?.role;
-  const position = session?.user?.position ?? "";
+  const position = currentPosition.position;
   const allNodes = React.useMemo(() => data?.data ?? [], [data]);
 
   // Lọc theo quyền Xem của cương vị người dùng: chỉ hiện hệ thống được cấp (Xem trở lên)

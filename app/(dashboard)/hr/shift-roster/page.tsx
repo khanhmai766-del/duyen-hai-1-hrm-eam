@@ -29,6 +29,8 @@ import {
 } from "@/hooks/useShifts";
 import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/nav";
+import { aggregateHcHoursByPeriod } from "@/lib/hc-period";
 import { toast } from "sonner";
 
 type View = "roster" | "timesheet";
@@ -64,6 +66,36 @@ function monthCellDate(year: number, monthIndex: number, day: number) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function monthKey(year: number, monthIndex: number) {
+  return year * 12 + monthIndex;
+}
+
+function retentionMonthRange(now = new Date()) {
+  const current = { year: now.getFullYear(), month: now.getMonth() };
+  const start = new Date(current.year, current.month - 1, 1);
+  return {
+    min: { year: start.getFullYear(), month: start.getMonth() },
+    max: current,
+  };
+}
+
+function positionRank(position?: string | null) {
+  const normalized = normalizeText(position ?? "");
+  if (!normalized) return 999;
+  if (normalized.includes("pho quan doc")) return 1;
+  if (normalized.includes("quan doc")) return 0;
+  if (normalized.includes("ky thuat vien")) return 2;
+  if (normalized.includes("nhan vien van phong")) return 3;
+  if (normalized.includes("truong ca")) return 4;
+  return 100;
+}
+
+function comparePositionPriority(a?: string | null, b?: string | null) {
+  const byRank = positionRank(a) - positionRank(b);
+  if (byRank !== 0) return byRank;
+  return normalizeText(a ?? "").localeCompare(normalizeText(b ?? ""), "vi");
+}
+
 // HC (chấm công hành chính) cell colour by content type:
 // diễn tập sự cố → đỏ, diễn tập PCCC → xanh, còn lại → xám.
 function hcMeta(content: string) {
@@ -89,6 +121,10 @@ export default function ShiftRosterPage() {
   });
   const [posFilter, setPosFilter] = React.useState("ALL");
   const [view, setView] = React.useState<View>("roster");
+  const retentionRange = React.useMemo(() => retentionMonthRange(), []);
+  const currentMonthKey = monthKey(month.year, month.month);
+  const minMonthKey = monthKey(retentionRange.min.year, retentionRange.min.month);
+  const maxMonthKey = monthKey(retentionRange.max.year, retentionRange.max.month);
 
   const monthStr = `${month.year}-${String(month.month + 1).padStart(2, "0")}`;
   const timesheet = useTimesheet(monthStr);
@@ -124,30 +160,48 @@ export default function ShiftRosterPage() {
     });
     return m;
   }, [timesheet.data]);
-  // Map "userId:day" → approved administrative (HC) attendance for that day
-  // (hours + the group's content, which drives the cell colour). When a person
-  // has several HC entries the same day, keep the one with the most hours.
+  // Map "userId:day" → approved administrative (HC) attendance for that day.
+  // Same-period entries keep the highest hours; different periods are summed.
   const hcMap = React.useMemo(() => {
-    const m = new Map<string, { hours: number; content: string; note: string | null }>();
+    const grouped = new Map<string, Array<{ hours: number; content: string; note: string | null; period: string | null }>>();
     (timesheet.data?.data?.hcEntries ?? []).forEach((e) => {
       const k = `${e.userId}:${e.day}`;
-      const cur = m.get(k);
-      if (!cur || e.hours > cur.hours) m.set(k, { hours: e.hours, content: e.content, note: e.note });
+      const entries = grouped.get(k) ?? [];
+      entries.push({ hours: e.hours, content: e.content, note: e.note, period: e.period });
+      grouped.set(k, entries);
+    });
+    const m = new Map<string, { hours: number; content: string; note: string | null }>();
+    grouped.forEach((entries, key) => {
+      const shiftEntries = tsMap.get(key) ?? [];
+      const hasMorningShift = shiftEntries.some((entry) => entry.shiftType === "MORNING");
+      const note = entries.map((entry) => hcWorkNote(entry)).filter(Boolean).join("\n");
+      m.set(key, {
+        hours: aggregateHcHoursByPeriod(entries, { hasMorningShift }),
+        content: entries.map((entry) => entry.content).join(" / "),
+        note: note || null,
+      });
     });
     return m;
-  }, [timesheet.data]);
+  }, [timesheet.data, tsMap]);
 
   const daysInMonth = new Date(month.year, month.month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const monthName = new Date(month.year, month.month).toLocaleDateString("vi-VN", { month: "long", year: "numeric" });
   // Distinct chức vụ / cương vị (positions) for the filter dropdown.
   const positions = (Array.from(new Set(users.map((u) => u.position).filter(Boolean))) as string[]).sort(
-    (a, b) => a.localeCompare(b, "vi")
+    comparePositionPriority
   );
   // Bảng công scope: người được quyền chỉnh xem toàn bộ, người khác xem dòng của mình.
   const rows = users
     .filter((u) => canEditTimesheet || u.id === session?.user?.id)
-    .filter((u) => posFilter === "ALL" || u.position === posFilter);
+    .filter((u) => posFilter === "ALL" || u.position === posFilter)
+    .sort((a, b) => {
+      const byPosition = comparePositionPriority(a.position, b.position);
+      if (byPosition !== 0) return byPosition;
+      const byEmployeeId = String(a.employeeId ?? "").localeCompare(String(b.employeeId ?? ""), "vi", { numeric: true });
+      if (byEmployeeId !== 0) return byEmployeeId;
+      return a.name.localeCompare(b.name, "vi");
+    });
 
   function calculatedCellValue(entries: TimesheetEntry[], hc?: { hours: number; content: string; note?: string | null }) {
     return [
@@ -196,7 +250,10 @@ export default function ShiftRosterPage() {
   function shift(delta: number) {
     setMonth((m) => {
       const d = new Date(m.year, m.month + delta);
-      return { year: d.getFullYear(), month: d.getMonth() };
+      const next = { year: d.getFullYear(), month: d.getMonth() };
+      const nextKey = monthKey(next.year, next.month);
+      if (nextKey < minMonthKey || nextKey > maxMonthKey) return m;
+      return next;
     });
   }
 
@@ -221,12 +278,12 @@ export default function ShiftRosterPage() {
   // ---- Bảng công exports (người có quyền → all staff, others → self) ----
   function exportCsv() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
-    const headers = ["Nhân viên", "Mã NV", "Chức vụ", ...days.map(String)];
+    const headers = ["Mã NV", "Nhân viên", "Chức vụ", ...days.map(String)];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = [headers.map(esc).join(",")];
     rows.forEach((u) => {
       const cells = days.map((d) => timesheetCellText(u.id, d));
-      lines.push([u.name, u.employeeId, u.position ?? "", ...cells].map(esc).join(","));
+      lines.push([u.employeeId, u.name, u.position ?? "", ...cells].map(esc).join(","));
     });
     const csv = "﻿" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -242,15 +299,15 @@ export default function ShiftRosterPage() {
   async function exportExcel() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
     const XLSX = await import("xlsx");
-    const headers = ["Nhân viên", "Mã NV", "Chức vụ", ...days.map(String)];
+    const headers = ["Mã NV", "Nhân viên", "Chức vụ", ...days.map(String)];
     const table = [
       [`Bảng công trực ca - Phân xưởng Vận hành 1`],
       [`Tháng ${month.month + 1}/${month.year}`],
       [],
       headers,
       ...rows.map((u) => [
-        u.name,
         u.employeeId,
+        u.name,
         u.position ?? "",
         ...days.map((d) => timesheetCellText(u.id, d)),
       ]),
@@ -261,8 +318,8 @@ export default function ShiftRosterPage() {
       { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
     ];
     sheet["!cols"] = [
-      { wch: 28 },
       { wch: 12 },
+      { wch: 28 },
       { wch: 24 },
       ...days.map(() => ({ wch: 9 })),
     ];
@@ -310,7 +367,7 @@ export default function ShiftRosterPage() {
           .join("");
         const name = (u.name ?? "").replace(/</g, "&lt;");
         const pos = (u.position ?? "").replace(/</g, "&lt;");
-        return `<tr><td>${i + 1}</td><td class="l">${name}</td><td>${u.employeeId}</td><td class="l">${pos}</td>${tds}</tr>`;
+        return `<tr><td>${i + 1}</td><td>${u.employeeId}</td><td class="l">${name}</td><td class="l">${pos}</td>${tds}</tr>`;
       })
       .join("");
     // Page margins (mm) — kept small so more room for content on a single sheet.
@@ -338,7 +395,7 @@ export default function ShiftRosterPage() {
     <h1>Bảng công trực ca — Phân xưởng Vận hành 1</h1>
     <p class="sub">Tháng ${month.month + 1}/${month.year} · ${scope} · Ca chưa duyệt được tô đỏ</p>
     <table>
-      <thead><tr><th>STT</th><th class="l">Họ tên</th><th>Mã NV</th><th class="l">Chức vụ</th>${dayTh}</tr></thead>
+      <thead><tr><th>STT</th><th>Mã NV</th><th class="l">Họ tên</th><th class="l">Chức vụ</th>${dayTh}</tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
     <p class="legend">
@@ -425,9 +482,9 @@ export default function ShiftRosterPage() {
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => shift(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" onClick={() => shift(-1)} disabled={currentMonthKey <= minMonthKey}><ChevronLeft className="h-4 w-4" /></Button>
                 <span className="min-w-[160px] text-center font-semibold capitalize text-ink">{monthName}</span>
-                <Button variant="outline" size="icon" onClick={() => shift(1)}><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" onClick={() => shift(1)} disabled={currentMonthKey >= maxMonthKey}><ChevronRight className="h-4 w-4" /></Button>
               </div>
               <div className="flex items-center gap-3">
                 {canEditTimesheet && (
@@ -477,6 +534,7 @@ export default function ShiftRosterPage() {
               {canEditTimesheet
                 ? "Bảng công của toàn bộ nhân sự — "
                 : "Bảng công của bạn — "}
+              chỉ lưu trữ 2 tháng gần nhất;{" "}
               hiển thị ca đã điểm danh trên sơ đồ tổ chức ca; ca <span className="font-medium text-red-600">chưa duyệt được tô đỏ</span>.
               Nếu số giờ khác 8 thì mã ca có tiền tố giờ, ví dụ <span className="font-medium text-ink">4V3</span>;
               kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>; nếu HC có nội dung công việc thì rê chuột lên ô để xem.
@@ -491,8 +549,8 @@ export default function ShiftRosterPage() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="sticky left-0 z-20 w-[190px] min-w-[190px] border-r border-slate-200 bg-white px-4 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">Nhân viên</th>
-                    <th className="sticky left-[190px] z-20 w-[110px] min-w-[110px] border-r border-border bg-white px-3 py-2 text-center text-xs font-semibold uppercase text-muted-foreground">Mã NV</th>
+                    <th className="sticky left-0 z-20 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center text-xs font-semibold uppercase text-muted-foreground">Mã NV</th>
+                    <th className="sticky left-[110px] z-20 w-[220px] min-w-[220px] border-r border-border bg-white px-4 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">Nhân viên</th>
                     {days.map((d) => {
                       const dow = new Date(month.year, month.month, d).getDay();
                       const weekend = dow === 0 || dow === 6;
@@ -505,12 +563,12 @@ export default function ShiftRosterPage() {
                 <tbody>
                   {rows.map((u) => (
                     <tr key={u.id} className="border-b border-border hover:bg-muted/30">
-                      <td className="sticky left-0 z-10 w-[190px] min-w-[190px] border-r border-slate-200 bg-white px-4 py-2">
+                      <td className="sticky left-0 z-10 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center">
+                        <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
+                      </td>
+                      <td className="sticky left-[110px] z-10 w-[220px] min-w-[220px] border-r border-border bg-white px-4 py-2">
                         <div className="font-medium text-ink">{u.name}</div>
                         <div className="text-xs text-muted-foreground">{u.position}</div>
-                      </td>
-                      <td className="sticky left-[190px] z-10 w-[110px] min-w-[110px] border-r border-border bg-white px-3 py-2 text-center">
-                        <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
                       </td>
                       {days.map((d) => {
                         const entries = tsMap.get(`${u.id}:${d}`) ?? [];

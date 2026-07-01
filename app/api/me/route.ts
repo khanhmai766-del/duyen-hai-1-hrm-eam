@@ -2,10 +2,20 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { safeEmployeeCode, uploadS3Object, userWithSignedMedia } from "@/lib/s3";
+import { avatarUpdate } from "@/lib/user-avatar-storage";
+import { isValidCurrentPosition } from "@/lib/current-position";
 
 export const dynamic = "force-dynamic";
 
 const DATA_URL_RE = /^data:([^;,]+);base64,(.+)$/;
+
+async function ensureUserCurrentPositionColumn() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User"
+    ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "currentPosition" TEXT
+  `);
+}
 
 function extensionForMime(mimeType: string) {
   switch (mimeType.toLowerCase()) {
@@ -52,18 +62,29 @@ async function signatureUpdate(value: unknown, employeeId: string) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureUserCurrentPositionColumn();
     const body = await req.json();
     const isAdmin = user.role === "ADMIN";
+    const existing = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { position: true, secondaryPosition: true, currentPosition: true },
+    });
+    if (!existing) return fail("Tài khoản không hợp lệ", 401);
 
     const data: Record<string, unknown> = {};
     if (body.phone !== undefined) data.phone = body.phone || null;
     if (body.workEmail !== undefined) data.workEmail = String(body.workEmail || "").trim().toLowerCase() || null;
     if (body.employeeId) data.employeeId = body.employeeId;
+    if (body.currentPosition !== undefined) {
+      const currentPosition = String(body.currentPosition || "").trim() || null;
+      if (!isValidCurrentPosition(existing, currentPosition)) return fail("Chức vụ hiện tại không hợp lệ", 400);
+      data.currentPosition = currentPosition;
+    }
     if (isAdmin) {
-      if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
       if (body.email) data.email = String(body.email).trim().toLowerCase();
       if (body.name) data.name = body.name;
       if (body.position !== undefined) data.position = body.position || null;
+      if (body.secondaryPosition !== undefined) data.secondaryPosition = body.secondaryPosition || null;
       if (body.department !== undefined) data.department = body.department || null;
       if (body.role) data.role = body.role;
     }
@@ -78,6 +99,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const employeeId = String(data.employeeId ?? user.employeeId ?? "").trim();
+    if (isAdmin) Object.assign(data, await avatarUpdate(body.avatarUrl, employeeId));
     Object.assign(data, await signatureUpdate(body.signatureUrl, employeeId));
 
     const updated = await prisma.user.update({ where: { id: user.id }, data });

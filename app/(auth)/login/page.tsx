@@ -69,7 +69,7 @@ function LoginInner() {
     const res = await signIn("credentials", { email, password, redirect: false });
     setLoading(false);
     if (res?.error) {
-      toast.error("Đăng nhập thất bại", { description: "Email hoặc mật khẩu không đúng." });
+      toast.error("Đăng nhập thất bại", { description: "Email/mật khẩu không đúng hoặc tài khoản đã bị khóa." });
       return;
     }
     toast.success("Đăng nhập thành công");

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCreateRepair, useUpdateRepair } from "@/hooks/useRepair";
 import { useDevices } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
 import { isSelectableManagingPosition, PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
@@ -29,7 +29,7 @@ export function RepairForm({
 }) {
   const create = useCreateRepair();
   const update = useUpdateRepair();
-  const { data: session } = useSession();
+  const currentPosition = useCurrentPosition();
   const { data: devicesData } = useDevices({});
   const { data: equipmentTreeData } = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
@@ -40,7 +40,7 @@ export function RepairForm({
   const isEdit = !!repair;
   const [deviceSearch, setDeviceSearch] = React.useState("");
   const [selectedPosition, setSelectedPosition] = React.useState(() => {
-    const current = session?.user?.position ?? "";
+    const current = currentPosition.position;
     return isSelectableManagingPosition(current) ? current : "";
   });
 
@@ -65,9 +65,9 @@ export function RepairForm({
   }
 
   React.useEffect(() => {
-    const current = session?.user?.position ?? "";
+    const current = currentPosition.position;
     if (!selectedPosition && isSelectableManagingPosition(current)) setSelectedPosition(current);
-  }, [session?.user?.position, selectedPosition]);
+  }, [currentPosition.position, selectedPosition]);
 
   const filteredDevices = devices.filter((d) => {
     const matchesSearch = !deviceSearch || `${d.code} ${d.name}`.toLowerCase().includes(deviceSearch.toLowerCase());

@@ -28,8 +28,10 @@ export function usePositions(): string[] {
   return React.useMemo(() => {
     const set = new Set<string>();
     for (const u of data?.data ?? []) {
-      const p = (u.position ?? "").trim();
-      if (p) set.add(p);
+      for (const value of [u.position, u.secondaryPosition]) {
+        const p = (value ?? "").trim();
+        if (p) set.add(p);
+      }
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
   }, [data]);
@@ -75,6 +77,7 @@ export function useUpdateProfile() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["announcements"] });
     },
   });
 }

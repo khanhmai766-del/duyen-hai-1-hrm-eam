@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
 import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3";
+import { avatarUpdate } from "@/lib/user-avatar-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
+import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-position";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
@@ -24,12 +26,26 @@ const SUMMARY_SELECT = {
   avatarKey: true,
   role: true,
   position: true,
+  secondaryPosition: true,
+  currentPosition: true,
   department: true,
   isActive: true,
+  lockedAt: true,
+  failedLoginAttempts: true,
   mustChangePassword: true,
   passwordChangedAt: true,
   createdAt: true,
 } as const;
+
+async function ensureUserSecondaryPositionColumn() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User"
+    ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
+  `);
+}
 
 async function safe<T extends { passwordHash?: string; avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(u: T) {
   const { passwordHash, ...rest } = u;
@@ -39,6 +55,7 @@ async function safe<T extends { passwordHash?: string; avatarUrl?: string | null
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
+    await ensureUserSecondaryPositionColumn();
     // ?summary=1 → trả bản nhẹ (bỏ chữ ký base64; avatar qua proxy S3 nếu đã migrate).
     // Dùng cho sidebar (mọi trang), dropdown chọn người, danh sách chức vụ... Trang
     // Quản trị người dùng vẫn lấy bản đầy đủ qua useUsersFull().
@@ -61,6 +78,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
+    await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     const username = String(body.username ?? "").trim() || null;
     const email = String(body.email ?? "").trim().toLowerCase();
@@ -77,6 +95,15 @@ export async function POST(req: NextRequest) {
     });
     if (exists) return fail("Email, user hoặc mã nhân viên đã tồn tại");
     const password = String(body.password || DEFAULT_PASSWORD);
+    const avatarData = await avatarUpdate(body.avatarUrl, body.employeeId);
+    const initialPositions = {
+      position: body.position || null,
+      secondaryPosition: body.secondaryPosition || null,
+      currentPosition: body.currentPosition || body.position || null,
+    };
+    const initialCurrentPosition = isValidCurrentPosition(initialPositions, initialPositions.currentPosition)
+      ? initialPositions.currentPosition
+      : effectiveUserPosition({ ...initialPositions, currentPosition: null });
     const created = await prisma.user.create({
       data: {
         name: body.name,
@@ -87,11 +114,14 @@ export async function POST(req: NextRequest) {
         phone: body.phone || null,
         role: body.role || "VIEWER",
         position: body.position || null,
+        secondaryPosition: body.secondaryPosition || null,
+        currentPosition: initialCurrentPosition,
         department: body.department || null,
-        avatarUrl: body.avatarUrl || null,
+        avatarUrl: null,
         signatureUrl: body.signatureUrl || null,
         avatarKey: body.avatarKey || null,
         signatureKey: body.signatureKey || null,
+        ...avatarData,
         passwordHash: await bcrypt.hash(password, 10),
         mustChangePassword: password === DEFAULT_PASSWORD,
         passwordChangedAt: new Date(),
@@ -111,6 +141,7 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ["ADMIN"]);
+    await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     if (body.resetPassword) {
@@ -121,13 +152,15 @@ export async function PUT(req: NextRequest) {
           passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 10),
           mustChangePassword: true,
           passwordChangedAt: new Date(),
+          failedLoginAttempts: 0,
+          lockedAt: null,
         },
       });
       await audit(user.id, "RESET_PASSWORD", "User", updated.id, updated.name, {
         actorName: user.name,
         beforeData: before ? await safe(before) : null,
         afterData: await safe(updated),
-        changedFields: ["passwordHash", "mustChangePassword", "passwordChangedAt"],
+        changedFields: ["passwordHash", "mustChangePassword", "passwordChangedAt", "failedLoginAttempts", "lockedAt"],
         ...requestAuditMeta(req),
       });
       return ok(await safe(updated));
@@ -138,11 +171,11 @@ export async function PUT(req: NextRequest) {
     if (body.isActive != null) data.isActive = body.isActive;
     if (body.name) data.name = body.name;
     if (body.position !== undefined) data.position = body.position;
+    if (body.secondaryPosition !== undefined) data.secondaryPosition = body.secondaryPosition || null;
+    if (body.currentPosition !== undefined) data.currentPosition = body.currentPosition || null;
     if (body.department !== undefined) data.department = body.department;
     if (body.phone !== undefined) data.phone = body.phone;
-    if (body.avatarUrl !== undefined) data.avatarUrl = body.avatarUrl || null;
     if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
-    if (body.avatarKey !== undefined) data.avatarKey = body.avatarKey || null;
     if (body.signatureKey !== undefined) data.signatureKey = body.signatureKey || null;
     if (body.email) data.email = String(body.email).trim().toLowerCase();
     if (body.workEmail !== undefined) data.workEmail = String(body.workEmail || "").trim().toLowerCase() || null;
@@ -161,6 +194,18 @@ export async function PUT(req: NextRequest) {
       const ex = await prisma.user.findFirst({ where: { username: data.username as string, NOT: { id: body.id } } });
       if (ex) return fail("User đã tồn tại");
     }
+    const nextPositions = {
+      position: (data.position as string | null | undefined) ?? before?.position ?? null,
+      secondaryPosition: (data.secondaryPosition as string | null | undefined) ?? before?.secondaryPosition ?? null,
+      currentPosition: (data.currentPosition as string | null | undefined) ?? before?.currentPosition ?? null,
+    };
+    if (!isValidCurrentPosition(nextPositions, nextPositions.currentPosition)) {
+      data.currentPosition = effectiveUserPosition({ ...nextPositions, currentPosition: null });
+    }
+
+    const employeeId = String(data.employeeId ?? before?.employeeId ?? "").trim();
+    Object.assign(data, await avatarUpdate(body.avatarUrl, employeeId));
+    if (body.avatarKey !== undefined && body.avatarUrl === undefined) data.avatarKey = body.avatarKey || null;
 
     const updated = await prisma.user.update({ where: { id: body.id }, data });
     const beforeSafe = before ? await safe(before) : null;

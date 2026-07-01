@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,7 @@ export async function POST(req: NextRequest) {
             date: start,
             content,
             hours: option.hours,
+            period: normalizeHcPeriod(period),
             createdById: user.id,
           },
         }));

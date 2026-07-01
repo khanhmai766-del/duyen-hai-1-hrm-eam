@@ -94,7 +94,7 @@ export default function AdminUsersPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
   const [permanentDelTarget, setPermanentDelTarget] = React.useState<SafeUser | null>(null);
@@ -120,7 +120,7 @@ export default function AdminUsersPage() {
   const filteredUsers = users.filter(
     (u) =>
       (!nq || normalizeText(`${u.name} ${u.employeeId} ${u.username ?? ""}`).includes(nq)) &&
-      (positionFilter === "ALL" || u.position === positionFilter)
+      (positionFilter === "ALL" || u.position === positionFilter || u.secondaryPosition === positionFilter)
   );
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
   const firstShown = filteredUsers.length ? (page - 1) * pageSize + 1 : 0;
@@ -143,7 +143,7 @@ export default function AdminUsersPage() {
       await create.mutateAsync(form);
       toast.success("Đã tạo người dùng");
       setOpen(false);
-      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -228,7 +228,12 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell>
                     <div className="whitespace-nowrap font-medium text-ink">{u.name}</div>
-                    <div className="text-xs text-muted-foreground">{u.position}</div>
+                    <div className="text-xs text-muted-foreground">{u.position || "—"}</div>
+                    {u.secondaryPosition && (
+                      <div className="mt-0.5 inline-flex max-w-[220px] items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                        Phụ: <span className="ml-1 truncate">{u.secondaryPosition}</span>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{u.employeeId}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{u.username ?? "—"}</TableCell>
@@ -255,23 +260,30 @@ export default function AdminUsersPage() {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <button
-                      onClick={() => toggleActive(u.id, !u.isActive)}
-                      title={u.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
-                      className={`relative h-7 w-12 rounded-full shadow-inner ring-1 transition-all duration-300 ${
-                        u.isActive
-                          ? "bg-gradient-to-b from-emerald-400 to-green-600 ring-green-700/30"
-                          : "bg-gradient-to-b from-slate-200 to-slate-400 ring-slate-400/40"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-all duration-300 ${
-                          u.isActive ? "translate-x-[22px]" : "translate-x-0.5"
+                    <div className="flex flex-col items-start gap-1.5">
+                      <button
+                        onClick={() => toggleActive(u.id, !u.isActive)}
+                        title={u.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
+                        className={`relative h-7 w-12 rounded-full shadow-inner ring-1 transition-all duration-300 ${
+                          u.isActive
+                            ? "bg-gradient-to-b from-emerald-400 to-green-600 ring-green-700/30"
+                            : "bg-gradient-to-b from-slate-200 to-slate-400 ring-slate-400/40"
                         }`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full ${u.isActive ? "bg-green-500" : "bg-slate-400"}`} />
-                      </span>
-                    </button>
+                        <span
+                          className={`absolute top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-all duration-300 ${
+                            u.isActive ? "translate-x-[22px]" : "translate-x-0.5"
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${u.isActive ? "bg-green-500" : "bg-slate-400"}`} />
+                        </span>
+                      </button>
+                      {u.lockedAt && (
+                        <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                          Bị khóa
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
@@ -432,6 +444,7 @@ export default function AdminUsersPage() {
             <Field label="User *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
+            <Field label="Chức vụ phụ"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="Vai trò">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
@@ -904,6 +917,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         employeeId: target.employeeId,
         phone: target.phone ?? "",
         position: target.position ?? "",
+        secondaryPosition: target.secondaryPosition ?? "",
         department: target.department ?? "",
         avatarUrl: target.avatarUrl ?? "",
         signatureUrl: target.signatureUrl ?? "",
@@ -941,6 +955,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
             <Field label="Mã NV"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="SĐT"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
             <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
+            <Field label="Chức vụ phụ"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="Vai trò">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>

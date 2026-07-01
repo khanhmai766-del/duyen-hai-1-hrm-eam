@@ -23,8 +23,12 @@ model User {
   passwordHash String
   mustChangePassword Boolean @default(false) @map("must_change_password")
   passwordChangedAt DateTime @default(now()) @map("password_changed_at")
+  failedLoginAttempts Int @default(0) @map("failed_login_attempts")
+  lockedAt DateTime? @map("locked_at")
   role         Role     @default(VIEWER)
   position     String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
+  secondaryPosition String? // chức vụ phụ khi nhân sự trực luân phiên 2 vị trí
+  currentPosition String? // chức vụ hiện tại người dùng đang chọn để nhận thông báo/quyền theo cương vị
   department   String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -168,6 +172,7 @@ model Shift {
   date      DateTime
   shiftType ShiftType
   unit      String // "Vận hành 1", "Vận hành 2"
+  isAttendanceLocked Boolean @default(false) @map("is_attendance_locked")
 
   assignments ShiftAssignment[]
   checkIns    CheckIn[]
@@ -467,6 +472,7 @@ model HcGroup {
   date        DateTime // ngày chấm công
   content     String   // nội dung đi hành chính
   hours       Int      @default(8) // số giờ chấm công mặc định của nhóm
+  period      String?  @default("FULL_DAY") // FULL_DAY | MORNING | AFTERNOON | MORNING_OFF
   unit        String?
   createdById String   // chủ trì
   createdAt   DateTime @default(now())

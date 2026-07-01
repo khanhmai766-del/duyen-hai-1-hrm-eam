@@ -10,6 +10,8 @@ export async function exportUsersWorkbook() {
       phone: true,
       email: true,
       workEmail: true,
+      position: true,
+      secondaryPosition: true,
     },
   });
 
@@ -17,6 +19,8 @@ export async function exportUsersWorkbook() {
     "Nhân viên": user.name,
     "Mã NV": user.employeeId,
     "Số điện thoại": user.phone ?? "",
+    "Chức vụ": user.position ?? "",
+    "Chức vụ phụ": user.secondaryPosition ?? "",
     "Email công ty": user.email,
     "Email làm việc": user.workEmail ?? "",
   }));
@@ -26,6 +30,8 @@ export async function exportUsersWorkbook() {
     { wch: 28 },
     { wch: 14 },
     { wch: 16 },
+    { wch: 24 },
+    { wch: 24 },
     { wch: 30 },
     { wch: 30 },
   ];

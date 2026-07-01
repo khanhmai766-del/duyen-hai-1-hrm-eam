@@ -6,6 +6,8 @@ declare module "next-auth" {
       id: string;
       role: string;
       position?: string;
+      secondaryPosition?: string;
+      currentPosition?: string;
       employeeId: string;
       avatarUrl?: string;
       mustChangePassword?: boolean;
@@ -15,6 +17,8 @@ declare module "next-auth" {
   interface User {
     role: string;
     position?: string;
+    secondaryPosition?: string;
+    currentPosition?: string;
     employeeId: string;
     avatarUrl?: string;
     mustChangePassword?: boolean;
@@ -26,6 +30,8 @@ declare module "next-auth/jwt" {
     id: string;
     role: string;
     position?: string;
+    secondaryPosition?: string;
+    currentPosition?: string;
     employeeId: string;
     avatarUrl?: string;
     mustChangePassword?: boolean;

@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { effectiveUserPosition } from "@/lib/current-position";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 import { isAnnouncementTargetForPosition } from "@/lib/announcement-targets";
 import { deleteFromS3 } from "@/lib/s3";
@@ -11,7 +12,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ADMIN_ONLY = ["ADMIN"];
-const INVALID_RETENTION_DAYS = 15;
 
 /** Best-effort removal of an announcement attachment. */
 async function removeAttachment(fileUrl: string | null | undefined) {
@@ -27,17 +27,12 @@ async function removeAttachment(fileUrl: string | null | undefined) {
   }
 }
 
-async function purgeExpiredInvalidAnnouncements() {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - INVALID_RETENTION_DAYS);
-  const expired = await prisma.announcement.findMany({
-    where: { invalidatedAt: { lt: cutoff } },
-    select: { id: true, fileUrl: true },
-  });
-  for (const item of expired) {
-    await prisma.announcement.delete({ where: { id: item.id } });
-    await removeAttachment(item.fileUrl);
-  }
+async function ensureAnnouncementLifecycleColumns() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Announcement"
+    ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3),
+    ADD COLUMN IF NOT EXISTS "invalidatedAt" TIMESTAMP(3)
+  `);
 }
 
 function parseNullableDate(value: string | null | undefined) {
@@ -50,14 +45,14 @@ function parseNullableDate(value: string | null | undefined) {
 /** GET /api/announcements — bảng tin nội bộ. Mọi người đăng nhập đều xem được. */
 export async function GET() {
   return handle(async () => {
-    await purgeExpiredInvalidAnnouncements();
+    await ensureAnnouncementLifecycleColumns();
     await requireUser();
     const items = await prisma.announcement.findMany({
       orderBy: [{ pinned: "desc" }, { issuedAt: "desc" }, { createdAt: "desc" }],
       include: {
         createdBy: { select: { name: true } },
         reads: {
-          select: { userId: true, readAt: true, user: { select: { name: true, position: true, avatarUrl: true } } },
+          select: { userId: true, readAt: true, user: { select: { name: true, position: true, secondaryPosition: true, currentPosition: true, avatarUrl: true } } },
         },
       },
     });
@@ -70,6 +65,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
+    await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, linkUrl, fileUrl, fileName } = body as {
       title?: string; body?: string; pinned?: boolean; category?: string; classification?: string | null; stt?: string | null; orderedBy?: string | null; issuedAt?: string | null; linkUrl?: string | null; fileUrl?: string | null; fileName?: string | null;
@@ -106,6 +102,7 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     requireRole(user, ADMIN_ONLY);
+    await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { id, title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, invalidatedAt, action, linkUrl, fileUrl, fileName } = body as {
       id?: string; title?: string; body?: string; pinned?: boolean; category?: string; classification?: string | null; stt?: string | null; orderedBy?: string | null; issuedAt?: string | null; invalidatedAt?: string | null; action?: "INVALIDATE" | "RESTORE"; linkUrl?: string | null; fileUrl?: string | null; fileName?: string | null;
@@ -117,6 +114,23 @@ export async function PUT(req: NextRequest) {
         where: { id },
         data: { invalidatedAt: action === "INVALIDATE" ? new Date() : null },
       });
+      if (action === "INVALIDATE") {
+        const targetUsers = await prisma.user.findMany({
+          where: { isActive: true },
+          select: { id: true, position: true, secondaryPosition: true, currentPosition: true },
+        });
+        const targetUserIds = targetUsers
+          .filter((target) => {
+            const position = effectiveUserPosition(target);
+            return !isAnnouncementReadExemptPosition(position) && isAnnouncementTargetForPosition(item.classification, position);
+          })
+          .map((target) => target.id);
+        if (targetUserIds.length > 0) {
+          await prisma.announcementRead.deleteMany({
+            where: { announcementId: item.id, userId: { in: targetUserIds } },
+          });
+        }
+      }
       await audit(
         user.id,
         action === "INVALIDATE" ? "INVALIDATE_ANNOUNCEMENT" : "RESTORE_ANNOUNCEMENT",

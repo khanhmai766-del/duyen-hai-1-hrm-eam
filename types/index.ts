@@ -58,11 +58,11 @@ export interface RepairLogWithRelations extends RepairLog {
 }
 
 export interface ShiftAssignmentWithUser extends ShiftAssignment {
-  user: Pick<User, "id" | "name" | "phone" | "avatarUrl" | "signatureUrl" | "position">;
+  user: Pick<User, "id" | "name" | "phone" | "avatarUrl" | "signatureUrl" | "position" | "secondaryPosition">;
 }
 
 export interface CheckInWithUser extends CheckIn {
-  user: Pick<User, "id" | "name" | "position" | "avatarUrl">;
+  user: Pick<User, "id" | "name" | "position" | "secondaryPosition" | "avatarUrl">;
 }
 
 export interface OrgChartNodeData {

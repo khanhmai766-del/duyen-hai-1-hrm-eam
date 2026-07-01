@@ -17,6 +17,7 @@ type ParsedUserRow = {
   username: string | null;
   phone: string | null;
   position: string | null;
+  secondaryPosition: string | null;
   department: string | null;
   role: Role;
   password: string;
@@ -64,6 +65,9 @@ const USER_IMPORT_HEADERS: Record<string, keyof ParsedUserRow | "ignored"> = {
   position: "position",
   chucvu: "position",
   "chuc vu": "position",
+  secondaryposition: "secondaryPosition",
+  chucvuphu: "secondaryPosition",
+  "chuc vu phu": "secondaryPosition",
   department: "department",
   phongban: "department",
   "phong ban": "department",
@@ -127,6 +131,7 @@ function readRows(buffer: Buffer, fileName: string): ParsedUserRow[] {
       username: String(mapped.username ?? "").trim() || null,
       phone: String(mapped.phone ?? "").trim() || null,
       position: String(mapped.position ?? "").trim() || null,
+      secondaryPosition: String(mapped.secondaryPosition ?? "").trim() || null,
       department: String(mapped.department ?? "").trim() || null,
       role: roleValue(mapped.role),
       password: String(mapped.password ?? "").trim() || "password123",
@@ -163,6 +168,7 @@ export function createUserImportTemplate(format: "xlsx" | "csv") {
       "Email làm việc": "nva@duyenhai1.vn",
       "Số điện thoại": "0900000000",
       "Chức vụ": "Kỹ thuật viên",
+      "Chức vụ phụ": "Trưởng ca",
       "Bộ phận": "Vận hành 1",
       "Vai trò": "TECHNICIAN",
       "User": "nva",
@@ -263,6 +269,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
           username: row.username,
           phone: row.phone,
           position: row.position,
+          secondaryPosition: row.secondaryPosition,
           department: row.department,
           role: row.role,
           ...(row.isActive !== undefined ? { isActive: row.isActive } : {}),
@@ -279,6 +286,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
           username: row.username,
           phone: row.phone,
           position: row.position,
+          secondaryPosition: row.secondaryPosition,
           department: row.department,
           role: row.role,
           passwordHash: await bcrypt.hash(row.password, 10),

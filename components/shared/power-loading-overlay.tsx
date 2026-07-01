@@ -13,7 +13,7 @@ type PowerLoadingOverlayProps = {
 
 export function PowerLoadingOverlay({
   active,
-  delayMs = 5000,
+  delayMs = 10000,
   message = "Đang tải dữ liệu vận hành",
   className,
 }: PowerLoadingOverlayProps) {

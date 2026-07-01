@@ -9,6 +9,7 @@ export interface ShiftDetail {
   date: string;
   shiftType: string;
   unit: string;
+  isAttendanceLocked: boolean;
   assignments: ShiftAssignmentWithUser[];
   checkIns: CheckInWithUser[];
   handovers: any[];
@@ -42,6 +43,7 @@ export interface HcEntry {
   hours: number;
   content: string;
   note: string | null;
+  period: string | null;
 }
 export interface TimesheetOverride {
   userId: string;

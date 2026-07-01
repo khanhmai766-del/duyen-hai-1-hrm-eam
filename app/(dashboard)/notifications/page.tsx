@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -18,6 +18,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ExportButton } from "@/components/shared/export-button";
 import { toast } from "sonner";
 import { useUsers } from "@/hooks/useUsers";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import {
   useAnnouncements,
   useCreateAnnouncement,
@@ -32,6 +33,7 @@ import {
 } from "@/hooks/useAnnouncements";
 import { formatDate, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { effectiveUserPosition } from "@/lib/current-position";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 import {
   announcementPositionLabel,
@@ -70,6 +72,7 @@ const EMPTY_FORM = {
 const NO_ORDERER = "__none__";
 const ORDER_AUTHORITIES = ["BGĐ", "LĐPX"] as const;
 type OrderAuthority = (typeof ORDER_AUTHORITIES)[number];
+const INVALID_ARCHIVE_DAYS = 15;
 
 // Cấp BGĐ ra lệnh: danh sách cố định. LĐPX lấy động từ DS Quản đốc / Phó quản đốc.
 const BGD_ORDERERS = ["Phó Giám Đốc Quản Lý Vận Hành", "Giám Đốc"];
@@ -115,12 +118,16 @@ function announcementDate(a: Announcement) {
   return a.issuedAt ?? a.createdAt;
 }
 
-function invalidRetentionDaysLeft(value?: string | null) {
+function invalidArchiveDaysLeft(value?: string | null) {
   if (!value) return null;
   const invalidated = new Date(value);
   if (Number.isNaN(invalidated.getTime())) return null;
-  const expiresAt = invalidated.getTime() + 15 * 24 * 60 * 60 * 1000;
-  return Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+  const archiveAt = invalidated.getTime() + INVALID_ARCHIVE_DAYS * 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((archiveAt - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+function isArchivedInvalidAnnouncement(a: Announcement) {
+  return Boolean(a.invalidatedAt) && invalidArchiveDaysLeft(a.invalidatedAt) === 0;
 }
 
 export default function NotificationsPage() {
@@ -128,7 +135,8 @@ export default function NotificationsPage() {
   const myId = session?.user?.id;
   const role = session?.user?.role;
   const isAdmin = role === "ADMIN";
-  const exemptFromReadConfirm = isAnnouncementReadExemptPosition(session?.user?.position);
+  const { position: currentPosition } = useCurrentPosition();
+  const exemptFromReadConfirm = isAnnouncementReadExemptPosition(currentPosition);
   // ADMIN & Trưởng ca (SUPERVISOR) xem được ai đã/chưa đọc mệnh lệnh.
   const isManager = role === "ADMIN" || role === "SUPERVISOR";
 
@@ -140,7 +148,10 @@ export default function NotificationsPage() {
   const managers = allUsers.filter((u) => (u.position ?? "").toLowerCase().includes("quản đốc"));
   // "Tất cả user" để tính đã đọc/chưa đọc = toàn bộ nhân sự đang hoạt động.
   const activeUsers = allUsers.filter(
-    (u) => u.isActive && !isAnnouncementReadExemptPosition(u.position) && isAnnouncementShiftRosterPosition(u.position)
+    (u) => {
+      const position = effectiveUserPosition(u);
+      return u.isActive && !isAnnouncementReadExemptPosition(position) && isAnnouncementShiftRosterPosition(position);
+    }
   );
   const positionOptions = React.useMemo(() => {
     return announcementShiftRosterPositionOptions();
@@ -196,11 +207,15 @@ export default function NotificationsPage() {
   const [yearFilter, setYearFilter] = React.useState(String(currentYear));
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [search, setSearch] = React.useState("");
+  const [showInvalidArchive, setShowInvalidArchive] = React.useState(false);
+  const archivedBulletins = bulletins.filter(isArchivedInvalidAnnouncement);
+  const activeBulletins = bulletins.filter((a) => !isArchivedInvalidAnnouncement(a));
+  const currentBulletins = showInvalidArchive ? archivedBulletins : activeBulletins;
   const years = Array.from(
-    new Set([currentYear, ...bulletins.map((a) => new Date(announcementDate(a)).getFullYear())])
+    new Set([currentYear, ...currentBulletins.map((a) => new Date(announcementDate(a)).getFullYear())])
   ).filter((year) => !Number.isNaN(year)).sort((x, y) => y - x);
   const nq = normalizeText(search.trim());
-  const filtered = bulletins.filter(
+  const filtered = currentBulletins.filter(
     (a) =>
       (yearFilter === "ALL" || new Date(announcementDate(a)).getFullYear() === Number(yearFilter)) &&
       (positionFilter === "ALL" || isAnnouncementTargetForPosition(a.classification, positionFilter)) &&
@@ -339,21 +354,22 @@ export default function NotificationsPage() {
 
   /** A single admin post card (bảng tin or mệnh lệnh). */
   function PostCard({ a }: { a: Announcement }) {
-    const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, u.position));
+    const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, effectiveUserPosition(u)));
     const targetUserIds = new Set(targetUsers.map((u) => u.id));
     const trackedReads = a.reads.filter((r) => targetUserIds.has(r.userId));
     const readUserIds = new Set(trackedReads.map((r) => r.userId));
     const readByMe = myId ? readUserIds.has(myId) : false;
-    const mustReadByMe = !exemptFromReadConfirm && isAnnouncementTargetForPosition(a.classification, session?.user?.position);
+    const mustReadByMe = !exemptFromReadConfirm && isAnnouncementTargetForPosition(a.classification, currentPosition);
     const readCount = trackedReads.length;
     const total = targetUsers.length;
     const allRead = total > 0 && readCount >= total;
     const isInvalid = Boolean(a.invalidatedAt);
-    const daysLeft = invalidRetentionDaysLeft(a.invalidatedAt);
+    const daysLeft = invalidArchiveDaysLeft(a.invalidatedAt);
+    const archivedInvalid = isArchivedInvalidAnnouncement(a);
     return (
       <Card
         className={cn(
-          "group transition-colors",
+          "group overflow-hidden transition-colors",
           isInvalid
             ? "border-red-300 bg-red-50/90 ring-1 ring-red-200"
             : a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",
@@ -361,24 +377,24 @@ export default function NotificationsPage() {
             "border-amber-300 bg-gradient-to-br from-amber-100 via-yellow-100 to-amber-200 dark:border-amber-500/40 dark:from-amber-500/20 dark:via-yellow-500/10 dark:to-amber-600/20"
         )}
       >
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-3">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-start gap-1.5 sm:items-center">
                 {a.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" />}
                 {a.stt && (
                   <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-xs font-bold text-accent">
                     {a.stt}
                   </span>
                 )}
-                <h3 className="font-semibold text-ink">{a.title}</h3>
+                <h3 className="min-w-0 max-w-full break-words font-semibold leading-snug text-ink">{a.title}</h3>
                 {isInvalid && (
                   <span className="shrink-0 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
                     Không còn hiệu lực
                   </span>
                 )}
                 {a.classification && (
-                  <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  <span className="min-w-0 max-w-full basis-full whitespace-normal break-words rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium leading-snug text-muted-foreground sm:basis-auto">
                     {announcementTargetLabel(a.classification)}
                   </span>
                 )}
@@ -438,12 +454,15 @@ export default function NotificationsPage() {
               </div>
               {isInvalid && (
                 <div className="mt-2 rounded-md border border-red-200 bg-white/70 px-3 py-2 text-xs font-medium text-red-700">
-                  Mệnh lệnh không còn hiệu lực từ {formatDate(a.invalidatedAt)}. Có thể khôi phục trong {daysLeft ?? 15} ngày trước khi hệ thống tự xoá.
+                  Mệnh lệnh không còn hiệu lực từ {formatDate(a.invalidatedAt)}.
+                  {archivedInvalid
+                    ? " Đang nằm trong mục Mệnh lệnh hết hiệu lực."
+                    : ` Sẽ chuyển vào mục Mệnh lệnh hết hiệu lực sau ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày.`}
                 </div>
               )}
             </div>
             {isAdmin && (
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="flex shrink-0 items-center gap-1 self-end opacity-100 transition-opacity sm:self-start sm:opacity-0 sm:group-hover:opacity-100">
                 {isInvalid ? (
                   <button onClick={() => restoreOrder(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
                     <RotateCcw className="h-4 w-4" />
@@ -533,27 +552,44 @@ export default function NotificationsPage() {
               ))}
             </SelectContent>
           </Select>
-          {isManager && (
-            <div className="ml-auto">
-              <ExportButton rows={exportRows} filename="menh-lenh-san-xuat" title="Mệnh lệnh sản xuất" />
-            </div>
-          )}
-          {isAdmin && (
-            <Button size="sm" className={cn("shrink-0", !isManager && "ml-auto")} onClick={() => openCreate("BULLETIN")}>
-              <Plus className="h-4 w-4" /> Đăng mệnh lệnh
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {isManager && (
+              <ExportButton
+                rows={exportRows}
+                filename={showInvalidArchive ? "menh-lenh-het-hieu-luc" : "menh-lenh-san-xuat"}
+                title={showInvalidArchive ? "Mệnh lệnh hết hiệu lực" : "Mệnh lệnh sản xuất"}
+              />
+            )}
+            <Button
+              size="sm"
+              variant={showInvalidArchive ? "default" : "outline"}
+              className="shrink-0"
+              onClick={() => setShowInvalidArchive((value) => !value)}
+            >
+              <Archive className="h-4 w-4" />
+              {showInvalidArchive ? "Mệnh lệnh hiện hành" : "Mệnh lệnh hết hiệu lực"}
             </Button>
-          )}
+            {isAdmin && (
+              <Button size="sm" className="shrink-0" onClick={() => openCreate("BULLETIN")}>
+                <Plus className="h-4 w-4" /> Đăng mệnh lệnh
+              </Button>
+            )}
+          </div>
         </div>
 
         {annLoading ? (
           <TableSkeleton rows={2} />
-        ) : bulletins.length === 0 ? (
+        ) : currentBulletins.length === 0 ? (
           <Card>
             <CardContent className="py-8">
               <EmptyState
                 icon={Megaphone}
-                title="Chưa có mệnh lệnh"
-                description={isAdmin ? "Nhấn “Đăng mệnh lệnh” để tạo bài viết đầu tiên." : "Hiện chưa có mệnh lệnh từ Ban quản trị."}
+                title={showInvalidArchive ? "Chưa có mệnh lệnh hết hiệu lực" : "Chưa có mệnh lệnh"}
+                description={
+                  showInvalidArchive
+                    ? "Các mệnh lệnh sẽ tự chuyển vào đây sau 15 ngày kể từ khi đánh dấu không còn hiệu lực."
+                    : isAdmin ? "Nhấn “Đăng mệnh lệnh” để tạo bài viết đầu tiên." : "Hiện chưa có mệnh lệnh từ Ban quản trị."
+                }
               />
             </CardContent>
           </Card>
@@ -562,10 +598,12 @@ export default function NotificationsPage() {
             <CardContent className="py-8">
               <EmptyState
                 icon={Megaphone}
-                title="Không có mệnh lệnh"
+                title={showInvalidArchive ? "Không có mệnh lệnh hết hiệu lực" : "Không có mệnh lệnh"}
                 description={
                   yearFilter === String(currentYear)
-                    ? "Chưa có mệnh lệnh nào trong năm nay. Chọn năm khác ở bộ lọc để xem mệnh lệnh các năm trước."
+                    ? showInvalidArchive
+                      ? "Chưa có mệnh lệnh hết hiệu lực nào trong năm nay. Chọn năm khác ở bộ lọc để xem dữ liệu cũ hơn."
+                      : "Chưa có mệnh lệnh nào trong năm nay. Chọn năm khác ở bộ lọc để xem mệnh lệnh các năm trước."
                     : "Không có mệnh lệnh nào khớp với bộ lọc đã chọn."
                 }
               />
@@ -745,7 +783,7 @@ export default function NotificationsPage() {
             <DialogTitle>Tình trạng xác nhận đọc</DialogTitle>
           </DialogHeader>
           {readersOf && (() => {
-            const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(readersOf.classification, u.position));
+            const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(readersOf.classification, effectiveUserPosition(u)));
             const targetUserIds = new Set(targetUsers.map((u) => u.id));
             const trackedReads = readersOf.reads.filter((r) => targetUserIds.has(r.userId));
             const readSet = new Set(trackedReads.map((r) => r.userId));
@@ -768,7 +806,7 @@ export default function NotificationsPage() {
                         <li key={r.userId} className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-sm dark:bg-emerald-500/10">
                           <span className="min-w-0 truncate">
                             <span className="font-medium text-ink">{r.user.name}</span>
-                            {r.user.position && <span className="ml-1.5 text-xs text-muted-foreground">{r.user.position}</span>}
+                            {effectiveUserPosition(r.user) && <span className="ml-1.5 text-xs text-muted-foreground">{effectiveUserPosition(r.user)}</span>}
                           </span>
                           <span className="shrink-0 text-xs text-muted-foreground">{formatDate(r.readAt)}</span>
                         </li>
@@ -787,7 +825,7 @@ export default function NotificationsPage() {
                       {unread.map((u) => (
                         <li key={u.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm">
                           <span className="font-medium text-ink">{u.name}</span>
-                          {u.position && <span className="text-xs text-muted-foreground">· {u.position}</span>}
+                          {effectiveUserPosition(u) && <span className="text-xs text-muted-foreground">· {effectiveUserPosition(u)}</span>}
                         </li>
                       ))}
                     </ul>

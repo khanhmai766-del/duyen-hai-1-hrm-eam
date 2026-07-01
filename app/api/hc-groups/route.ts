@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { userWithSignedMedia } from "@/lib/s3";
+import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
@@ -70,14 +71,16 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     requireRole(user, MANAGER);
     const body = await req.json();
-    const { date, content, hours, unit } = body as { date: string; content: string; hours?: number; unit?: string };
+    const { date, content, hours, unit, period } = body as { date: string; content: string; hours?: number; unit?: string; period?: string };
     if (!date || !content?.trim()) return fail("Thiếu ngày hoặc nội dung");
+    const groupPeriod = normalizeHcPeriod(period);
 
     const group = await prisma.hcGroup.create({
       data: {
         date: new Date(date),
         content: content.trim(),
         hours: clampHours(hours),
+        period: groupPeriod,
         unit: unit ?? null,
         createdById: user.id,
       },
@@ -95,13 +98,15 @@ export async function PUT(req: NextRequest) {
     const user = await requireUser();
     requireRole(user, MANAGER);
     const body = await req.json();
-    const { id, content, hours } = body as { id: string; content?: string; hours?: number };
+    const { id, content, hours, period } = body as { id: string; content?: string; hours?: number; period?: string };
     if (!id) return fail("Thiếu id nhóm");
+    const groupPeriod = period === undefined ? undefined : normalizeHcPeriod(period);
     const group = await prisma.hcGroup.update({
       where: { id },
       data: {
         ...(content !== undefined ? { content: content.trim() } : {}),
         ...(hours !== undefined ? { hours: clampHours(hours) } : {}),
+        ...(groupPeriod !== undefined ? { period: groupPeriod } : {}),
       },
     });
     await audit(user.id, "UPDATE_HC_GROUP", "HcGroup", id, "Sửa nhóm hành chính");

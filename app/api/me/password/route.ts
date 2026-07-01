@@ -41,6 +41,8 @@ export async function PUT(req: NextRequest) {
         passwordHash: await bcrypt.hash(newPassword, 10),
         mustChangePassword: false,
         passwordChangedAt: new Date(),
+        failedLoginAttempts: 0,
+        lockedAt: null,
       },
     });
     await audit(user.id, "CHANGE_PASSWORD", "User", user.id);

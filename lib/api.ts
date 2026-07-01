@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { writeActivityLog } from "@/lib/activity-log";
+import { effectiveUserPosition } from "@/lib/current-position";
+import { prisma } from "@/lib/prisma";
+
+let userPositionColumnsReady = false;
+
+async function ensureUserPositionColumns() {
+  if (userPositionColumnsReady) return;
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "User"
+    ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
+  `);
+  userPositionColumnsReady = true;
+}
 
 export function ok<T>(data: T, meta?: Record<string, unknown>) {
   return NextResponse.json({ data, meta: meta ?? null, error: null });
@@ -16,7 +32,32 @@ export async function requireUser() {
   if (!session?.user) {
     throw fail("Chưa đăng nhập", 401);
   }
-  return session.user;
+  await ensureUserPositionColumns();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      role: true,
+      position: true,
+      secondaryPosition: true,
+      currentPosition: true,
+      employeeId: true,
+      name: true,
+      email: true,
+      isActive: true,
+      lockedAt: true,
+      mustChangePassword: true,
+    },
+  }).catch(() => null);
+  if (!dbUser?.isActive || dbUser.lockedAt) throw fail("Tài khoản không hợp lệ", 401);
+  const currentPosition = effectiveUserPosition(dbUser) ?? undefined;
+  return {
+    ...session.user,
+    ...dbUser,
+    position: currentPosition,
+    primaryPosition: dbUser.position ?? undefined,
+    secondaryPosition: dbUser.secondaryPosition ?? undefined,
+    currentPosition,
+  };
 }
 
 export function requireRole(user: { role: string }, roles: string[]) {

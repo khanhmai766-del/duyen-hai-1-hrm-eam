@@ -14,6 +14,7 @@ import { NAV_SECTIONS, normalizeText } from "@/lib/nav";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
@@ -42,6 +43,7 @@ const GRID_TINTS = [
 
 export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
+  const currentPosition = useCurrentPosition();
   const router = useRouter();
   const role = session?.user?.role;
   const [q, setQ] = React.useState("");
@@ -465,9 +467,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           >
             <div className="hidden text-right leading-tight sm:block">
               <div className="max-w-[160px] truncate text-sm font-bold text-navy">{session?.user?.name ?? "—"}</div>
-              {(session?.user?.position || session?.user?.role) && (
+              {(currentPosition.position || session?.user?.role) && (
                 <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {session?.user?.position ?? session?.user?.role}
+                  {currentPosition.position || session?.user?.role}
                 </div>
               )}
             </div>
@@ -496,7 +498,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-ink">{session?.user?.name ?? "—"}</div>
-                  <div className="truncate text-xs text-muted-foreground">{session?.user?.position ?? session?.user?.role}</div>
+                  <div className="truncate text-xs text-muted-foreground">{currentPosition.position || session?.user?.role}</div>
                 </div>
               </div>
               {/* Menu */}

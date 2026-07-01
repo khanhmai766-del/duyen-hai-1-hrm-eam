@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
 export type AnnouncementCategory = "BULLETIN" | "ORDER";
@@ -8,7 +9,7 @@ export type AnnouncementCategory = "BULLETIN" | "ORDER";
 export interface AnnouncementReader {
   userId: string;
   readAt: string;
-  user: { name: string; position: string | null; avatarUrl: string | null };
+  user: { name: string; position: string | null; secondaryPosition?: string | null; currentPosition?: string | null; avatarUrl: string | null };
 }
 
 export interface Announcement {
@@ -103,9 +104,44 @@ export function useUploadAnnouncementFile() {
 /** Xác nhận đã đọc một thông báo/mệnh lệnh (mọi user). */
 export function useMarkAnnouncementRead() {
   const qc = useQueryClient();
+  const { data: session } = useSession();
   return useMutation({
     mutationFn: (announcementId: string) => apiMutate("/api/announcements/read", "POST", { announcementId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
+    onMutate: async (announcementId: string) => {
+      await qc.cancelQueries({ queryKey: ["announcements"] });
+      const previous = qc.getQueryData<{ data: Announcement[]; meta: any }>(["announcements"]);
+      const userId = session?.user?.id;
+      if (previous?.data && userId) {
+        qc.setQueryData<{ data: Announcement[]; meta: any }>(["announcements"], {
+          ...previous,
+          data: previous.data.map((item) => {
+            if (item.id !== announcementId || item.reads.some((read) => read.userId === userId)) return item;
+            return {
+              ...item,
+              reads: [
+                ...item.reads,
+                {
+                  userId,
+                  readAt: new Date().toISOString(),
+                  user: {
+                    name: session.user?.name ?? "Bạn",
+                    position: session.user?.position ?? null,
+                    secondaryPosition: session.user?.secondaryPosition ?? null,
+                    currentPosition: session.user?.currentPosition ?? null,
+                    avatarUrl: null,
+                  },
+                },
+              ],
+            };
+          }),
+        });
+      }
+      return { previous };
+    },
+    onError: (_error, _announcementId, context) => {
+      if (context?.previous) qc.setQueryData(["announcements"], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
   });
 }
 

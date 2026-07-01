@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/utils";
 
 /**
- * Avatar input that accepts either a local file (stored inline as a base64
- * data URL) or a pasted image URL.
+ * Avatar input that accepts either a local file or a pasted image URL.
+ * Local files are downscaled for preview; profile APIs persist them to S3.
  */
 export function AvatarPicker({
   value,

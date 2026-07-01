@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useEquipmentTree } from "@/hooks/useEquipment";
+import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import {
   deviceAccessForPosition,
@@ -23,11 +24,12 @@ type DeviceLike = {
  */
 export function useSystemAccess() {
   const { data: session } = useSession();
+  const currentPosition = useCurrentPosition();
   const treeQuery = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
 
   const isAdmin = session?.user?.role === "ADMIN";
-  const position = session?.user?.position ?? "";
+  const position = currentPosition.position;
   const nodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
   const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
 

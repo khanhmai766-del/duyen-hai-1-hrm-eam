@@ -45,6 +45,30 @@ export interface OperationEvent {
   createdBy: { name: string };
 }
 
+export interface SafeOperationSetting {
+  id: string;
+  unit: "S1" | "S2";
+  startedAt: string | null;
+  pausedAt: string | null;
+  updatedAt: string;
+}
+
+export function useSafeOperations() {
+  return useQuery({
+    queryKey: ["safe-operation"],
+    queryFn: () => apiGet<SafeOperationSetting[]>("/api/safe-operation"),
+  });
+}
+
+export function useUpdateSafeOperation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { unit: "S1" | "S2"; action: "SET_START"; startedAt: string } | { unit: "S1" | "S2"; action: "TOGGLE_PAUSE" | "RESET" }) =>
+      apiMutate<SafeOperationSetting>("/api/safe-operation", "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["safe-operation"] }),
+  });
+}
+
 export function useOperations(month?: string) {
   return useQuery({
     queryKey: ["operations", month ?? "recent"],

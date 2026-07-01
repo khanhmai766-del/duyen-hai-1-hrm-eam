@@ -23,6 +23,7 @@ import {
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
 } from "@/hooks/useHcAttendance";
 import { cn, initials } from "@/lib/utils";
+import { HC_PERIOD_LABEL, normalizeHcPeriod } from "@/lib/hc-period";
 
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const HC_SELF_PERIODS = [
@@ -32,6 +33,11 @@ const HC_SELF_PERIODS = [
   { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3, cutoff: "Trước 14h30" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
+const MANAGED_GROUP_PERIODS: Array<{ value: "FULL_DAY" | "MORNING" | "AFTERNOON"; label: string }> = [
+  { value: "FULL_DAY", label: "Cả ngày" },
+  { value: "MORNING", label: "Buổi sáng" },
+  { value: "AFTERNOON", label: "Buổi chiều" },
+];
 
 function isSelfHcGroup(group: HcGroup) {
   return HC_SELF_CONTENTS.includes(group.content);
@@ -215,7 +221,9 @@ function GroupCard({ group, canManage, myId }: { group: HcGroup; canManage: bool
           <div className="font-semibold text-ink">
             Chủ trì {group.createdBy.name} · {group.content}
           </div>
-          <div className="text-xs text-muted-foreground">{group.hours} giờ</div>
+          <div className="text-xs text-muted-foreground">
+            {HC_PERIOD_LABEL[normalizeHcPeriod(group.period)]} · {group.hours} giờ
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={approved === group.members.length && group.members.length > 0 ? "accent" : "secondary"} className="gap-1.5">
@@ -301,11 +309,14 @@ function GroupDialog({
   const isEdit = !!group;
   const [content, setContent] = React.useState("");
   const [hours, setHours] = React.useState(8);
+  const [period, setPeriod] = React.useState<"FULL_DAY" | "MORNING" | "AFTERNOON">("FULL_DAY");
 
   React.useEffect(() => {
     if (!open) return;
     setContent(group?.content ?? "");
     setHours(group?.hours ?? 8);
+    const current = normalizeHcPeriod(group?.period);
+    setPeriod(current === "AFTERNOON" || current === "MORNING" ? current : "FULL_DAY");
   }, [open, group]);
 
   const dateLabel = date.split("-").reverse().join("-");
@@ -315,10 +326,10 @@ function GroupDialog({
     if (!cleanContent) return toast.error("Nhập nội dung");
     try {
       if (isEdit) {
-        await update.mutateAsync({ id: group!.id, content: cleanContent, hours });
+        await update.mutateAsync({ id: group!.id, content: cleanContent, hours, period });
         toast.success("Đã cập nhật nhóm");
       } else {
-        await create.mutateAsync({ date, content: cleanContent, hours });
+        await create.mutateAsync({ date, content: cleanContent, hours, period });
         toast.success("Đã tạo nhóm hành chính");
       }
       onOpenChange(false);
@@ -338,6 +349,14 @@ function GroupDialog({
         <div className="space-y-3">
           <Row label="Thời gian">
             <span className="text-sm font-medium text-ink">{dateLabel}</span>
+          </Row>
+          <Row label="Buổi">
+            <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MANAGED_GROUP_PERIODS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </Row>
           <Row label="Số giờ chấm công">
             <Select value={String(hours)} onValueChange={(v) => setHours(Number(v))}>

@@ -8,11 +8,51 @@ export const dynamic = "force-dynamic";
 const APPROVE_PERMISSION_ID = "shift-approve";
 const MANAGER = new Set(["ADMIN", "SUPERVISOR"]);
 
+function retentionMonthRange(now = new Date()) {
+  const current = { year: now.getFullYear(), month: now.getMonth() };
+  const start = new Date(current.year, current.month - 1, 1);
+  return {
+    min: { year: start.getFullYear(), month: start.getMonth() },
+    max: current,
+  };
+}
+
+function monthKey(year: number, monthIndex: number) {
+  return year * 12 + monthIndex;
+}
+
+function isMonthInRetention(year: number, monthIndex: number) {
+  const range = retentionMonthRange();
+  const key = monthKey(year, monthIndex);
+  return key >= monthKey(range.min.year, range.min.month) && key <= monthKey(range.max.year, range.max.month);
+}
+
+function isDateInRetention(date: string) {
+  const match = date.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!match) return false;
+  return isMonthInRetention(Number(match[1]), Number(match[2]) - 1);
+}
+
 async function canEditTimesheet(user: { id?: string; role?: string }) {
   return MANAGER.has(user.role ?? "") || hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
 
-// Bảng TimesheetOverride được khai báo trong prisma/schema.prisma và tạo bằng db push.
+async function ensureTimesheetOverrideTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "TimesheetOverride" (
+      "userId" TEXT NOT NULL,
+      date TEXT NOT NULL,
+      value TEXT NOT NULL,
+      note TEXT,
+      "updatedById" TEXT,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY ("userId", date)
+    )
+  `);
+  const range = retentionMonthRange();
+  const minDate = `${range.min.year}-${String(range.min.month + 1).padStart(2, "0")}-01`;
+  await prisma.$executeRawUnsafe(`DELETE FROM "TimesheetOverride" WHERE date < $1`, minDate);
+}
 
 /**
  * Bảng công trực ca: attendance for a month. Returns one entry per checked-in
@@ -22,6 +62,7 @@ async function canEditTimesheet(user: { id?: string; role?: string }) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureTimesheetOverrideTable();
     const canEdit = await canEditTimesheet(user);
     // Người có quyền duyệt/chỉnh công xem toàn bộ bảng; người khác chỉ xem dòng của mình.
     const scopeToSelf = !canEdit;
@@ -37,6 +78,10 @@ export async function GET(req: NextRequest) {
     }
     const monthStart = new Date(y, mo, 1);
     const monthEnd = new Date(y, mo + 1, 0, 23, 59, 59, 999);
+
+    if (!isMonthInRetention(y, mo)) {
+      return ok({ month: mo + 1, year: y, entries: [], hcEntries: [], overrides: [], canEdit });
+    }
 
     const assignments = await prisma.shiftAssignment.findMany({
       where: {
@@ -59,7 +104,7 @@ export async function GET(req: NextRequest) {
         shiftId: true,
         userId: true,
         note: true,
-        shift: { select: { date: true, shiftType: true } },
+        shift: { select: { date: true, shiftType: true, isAttendanceLocked: true } },
       },
     });
     const hoursByUserShift = new Map<string, number>();
@@ -71,6 +116,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const assignmentKeys = new Set(assignments.map((a) => `${a.userId}:${a.shiftId}`));
     const entries = assignments.map((a) => ({
       userId: a.userId,
       day: a.shift.date.getDate(),
@@ -78,6 +124,17 @@ export async function GET(req: NextRequest) {
       hours: hoursByUserShift.get(`${a.userId}:${a.shiftId}`) ?? 8,
       isApproved: a.isApproved,
     }));
+    for (const checkIn of checkIns) {
+      const key = `${checkIn.userId}:${checkIn.shiftId}`;
+      if (assignmentKeys.has(key) || !checkIn.shift.isAttendanceLocked) continue;
+      entries.push({
+        userId: checkIn.userId,
+        day: checkIn.shift.date.getDate(),
+        shiftType: checkIn.shift.shiftType as string,
+        hours: hoursByUserShift.get(key) ?? 8,
+        isApproved: true,
+      });
+    }
 
     // Approved administrative (hành chính) check-ins → hours per user per day.
     const hcCheckIns = await prisma.hcCheckIn.findMany({
@@ -86,13 +143,14 @@ export async function GET(req: NextRequest) {
         ...(scopeToSelf ? { userId: user.id } : {}),
         group: { date: { gte: monthStart, lte: monthEnd } },
       },
-      select: { userId: true, hours: true, note: true, group: { select: { date: true, content: true } } },
+      select: { userId: true, hours: true, note: true, group: { select: { date: true, content: true, period: true } } },
     });
     const hcEntries = hcCheckIns.map((c) => ({
       userId: c.userId,
       day: c.group.date.getDate(),
       hours: c.hours,
       content: c.group.content,
+      period: c.group.period,
       note: c.note,
     }));
 
@@ -136,6 +194,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureTimesheetOverrideTable();
     if (!(await canEditTimesheet(user))) return fail("Bạn không có quyền chỉnh bảng công", 403);
 
     const body = (await req.json()) as Record<string, unknown>;
@@ -146,6 +205,7 @@ export async function PUT(req: NextRequest) {
 
     if (!userId) return fail("Thiếu nhân viên cần chỉnh công");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Ngày bảng công không hợp lệ");
+    if (!isDateInRetention(date)) return fail("Bảng công chỉ lưu trữ và chỉnh sửa trong 2 tháng gần nhất", 400);
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
     if (!target) return fail("Không tìm thấy nhân viên", 404);
 

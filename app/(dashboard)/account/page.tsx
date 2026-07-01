@@ -19,6 +19,7 @@ import { useUpdateProfile, useUsers } from "@/hooks/useUsers";
 import { apiGet } from "@/lib/fetcher";
 import { cn, initials } from "@/lib/utils";
 import { ROLES, type RoleKey } from "@/lib/constants";
+import { availableUserPositions, effectiveUserPosition } from "@/lib/current-position";
 import { normalizeText } from "@/lib/nav";
 import type { SafeUser } from "@/types";
 
@@ -31,6 +32,7 @@ export default function AccountPage() {
   const { data: session } = useSession();
   const u = session?.user;
   const isAdmin = u?.role === "ADMIN";
+  const updateProfile = useUpdateProfile();
 
   const { data } = useQuery({
     queryKey: ["users"],
@@ -38,8 +40,20 @@ export default function AccountPage() {
     enabled: !!u,
   });
   const profile = data?.data?.find((x) => x.id === u?.id);
+  const currentPosition = effectiveUserPosition(profile);
+  const positionChoices = availableUserPositions(profile);
 
   const [open, setOpen] = React.useState(false);
+
+  async function changeCurrentPosition(value: string) {
+    if (!value || value === currentPosition) return;
+    try {
+      await updateProfile.mutateAsync({ currentPosition: value });
+      toast.success("Đã đổi chức vụ hiện tại");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -70,6 +84,30 @@ export default function AccountPage() {
               <div>
                 <h2 className="text-2xl font-bold text-ink">{u?.name ?? "—"}</h2>
                 <p className="mt-0.5 text-muted-foreground">{profile?.position ?? "—"}</p>
+                {profile?.secondaryPosition && (
+                  <p className="mt-1 text-sm font-medium text-muted-foreground">
+                    Chức vụ phụ: {profile.secondaryPosition}
+                  </p>
+                )}
+                {profile && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase text-muted-foreground">Chức vụ hiện tại</span>
+                    <Select
+                      value={currentPosition ?? ""}
+                      onValueChange={changeCurrentPosition}
+                      disabled={positionChoices.length <= 1 || updateProfile.isPending}
+                    >
+                      <SelectTrigger className="h-8 w-[240px] max-w-full rounded-full bg-white px-3 text-sm font-semibold">
+                        <SelectValue placeholder="Chọn chức vụ hiện tại" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {positionChoices.map((position) => (
+                          <SelectItem key={position} value={position}>{position}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {u?.role && <RoleBadge role={u.role} />}
                   <span
@@ -91,7 +129,9 @@ export default function AccountPage() {
               <Field icon="mail" tint="from-violet-100 to-violet-200" label="Email công ty" value={u?.email ?? undefined} />
               <Field icon="mail" tint="from-cyan-100 to-cyan-200" label="Email làm việc" value={profile?.workEmail ?? undefined} />
               <Field icon="phone" tint="from-emerald-100 to-emerald-200" label="Số điện thoại" value={profile?.phone ?? undefined} />
+              <Field icon="briefcase" tint="from-lime-100 to-lime-200" label="Chức vụ hiện tại" value={currentPosition ?? undefined} />
               <Field icon="briefcase" tint="from-amber-100 to-amber-200" label="Chức vụ" value={profile?.position ?? undefined} />
+              <Field icon="briefcase" tint="from-orange-100 to-orange-200" label="Chức vụ phụ" value={profile?.secondaryPosition ?? undefined} />
               <Field icon="building" tint="from-rose-100 to-rose-200" label="Bộ phận" value={profile?.department ?? undefined} />
               <Field icon="shield" tint="from-indigo-100 to-indigo-200" label="Phân quyền" value={u?.role} />
             </div>
@@ -130,10 +170,14 @@ function EditProfileDialog({
       if (EXCLUDED_POSITIONS.has(key) || byKey.has(key)) return;
       byKey.set(key, p);
     };
-    (usersData?.data ?? []).forEach((u) => add(u.position));
+    (usersData?.data ?? []).forEach((u) => {
+      add(u.position);
+      add(u.secondaryPosition);
+    });
     add(profile.position);
+    add(profile.secondaryPosition);
     return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [usersData, profile.position]);
+  }, [usersData, profile.position, profile.secondaryPosition]);
 
   const [form, setForm] = React.useState({
     avatarUrl: profile.avatarUrl ?? "",
@@ -144,6 +188,7 @@ function EditProfileDialog({
     workEmail: profile.workEmail ?? "",
     name: profile.name,
     position: profile.position ?? "",
+    secondaryPosition: profile.secondaryPosition ?? "",
     department: profile.department ?? "",
     role: profile.role,
   });
@@ -165,6 +210,7 @@ function EditProfileDialog({
       payload.email = form.email;
       payload.name = form.name;
       payload.position = form.position;
+      payload.secondaryPosition = form.secondaryPosition;
       payload.department = form.department;
       payload.role = form.role;
     }
@@ -231,6 +277,17 @@ function EditProfileDialog({
                 <Select value={form.position} onValueChange={(v) => set("position", v)}>
                   <SelectTrigger><SelectValue placeholder="Chọn chức vụ" /></SelectTrigger>
                   <SelectContent className="max-h-72">
+                    {positionOptions.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </EditField>
+              <EditField label="Chức vụ phụ">
+                <Select value={form.secondaryPosition || "__none__"} onValueChange={(v) => set("secondaryPosition", v === "__none__" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Chọn chức vụ phụ" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="__none__">Không chọn</SelectItem>
                     {positionOptions.map((p) => (
                       <SelectItem key={p} value={p}>{p}</SelectItem>
                     ))}
