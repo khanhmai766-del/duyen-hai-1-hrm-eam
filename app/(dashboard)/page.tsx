@@ -413,6 +413,7 @@ function WeatherCard() {
 type SafeOperationUnit = "S1" | "S2";
 const SAFE_OPERATION_UNITS: SafeOperationUnit[] = ["S1", "S2"];
 const SAFE_OPERATION_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const SAFE_OPERATION_IMAGE_SRC = process.env.NEXT_PUBLIC_SAFE_OPERATION_IMAGE_URL || "/brand/duyen-hai-plant.jpg";
 
 function vietnamDateParts(value: string | Date) {
   const date = new Date(value);
@@ -618,7 +619,14 @@ function SafeOperationUnitRow({
         <div className="flex h-full items-center gap-3 pr-8">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/duyenhai-card.jpg" alt="" className="h-full w-full object-cover" />
+            <img
+              src={SAFE_OPERATION_IMAGE_SRC}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(event) => {
+                event.currentTarget.src = "/brand/duyen-hai-plant.jpg";
+              }}
+            />
           </div>
           <div>
             <div className="whitespace-nowrap text-xs font-bold uppercase text-slate-700">Tổ máy</div>
