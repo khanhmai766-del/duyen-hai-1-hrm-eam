@@ -50,6 +50,10 @@ export async function POST(req: NextRequest) {
         include: { assignments: true },
       });
     }
+    const managerAddingUser = !!body.userId && ["ADMIN", "SUPERVISOR"].includes(user.role);
+    if (shift.isAttendanceLocked && !managerAddingUser) {
+      return fail("Ca trực đã được duyệt hết và khóa điểm danh.", 403);
+    }
 
     // Điểm danh sớm: nếu ca chưa bắt đầu (tương lai) → tính là "điểm danh sớm".
     // Mỗi user chỉ được đặt trước tối đa MAX_EARLY_CHECKINS ca trực.

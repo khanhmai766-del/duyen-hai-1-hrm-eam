@@ -10,6 +10,8 @@ export interface HcMember {
   isApproved: boolean;
   note: string | null;
   isRegistered: boolean;
+  createdAt: string;
+  updatedAt: string;
   user: { id: string; name: string; position: string | null; avatarUrl: string | null; phone: string | null };
 }
 export interface HcGroup {

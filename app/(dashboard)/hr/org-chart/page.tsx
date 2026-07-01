@@ -129,6 +129,7 @@ export default function OrgChartPage() {
   const assignments = (shift?.assignments ?? []) as ShiftAssignmentWithUser[];
   const checkIns = shift?.checkIns ?? [];
   const approved = assignments.filter((a) => a.isApproved).length;
+  const attendanceLocked = Boolean(shift?.isAttendanceLocked);
 
   // Whether the logged-in user already has a seat in this shift → toggles the
   // "Điểm danh" (check in) ↔ "Thu hồi điểm danh" (recall) button.
@@ -137,7 +138,7 @@ export default function OrgChartPage() {
   // thu hồi điểm danh nữa (chỉ ADMIN / Trưởng ca mới thu hồi được).
   const myApproved = assignments.some((a) => a.user?.id === session?.user?.id && a.isApproved);
   const recallLocked = isCheckedIn && myApproved && !canApprove;
-  // Duyệt hết chỉ đánh dấu ca để giữ dữ liệu bảng công; không khoá điểm danh thêm.
+  // Duyệt hết khóa điểm danh thêm để chốt dữ liệu bảng công của ca.
 
   async function handleRecall() {
     try {
@@ -183,7 +184,17 @@ export default function OrgChartPage() {
             </Button>
           )
         ) : (
-          <Button size="sm" variant="accent" onClick={() => setCheckInOpen(true)}><UserCheck className="h-4 w-4" /> Điểm danh</Button>
+          <Button
+            size="sm"
+            variant={attendanceLocked ? "outline" : "accent"}
+            onClick={() => setCheckInOpen(true)}
+            disabled={attendanceLocked}
+            className={attendanceLocked ? "cursor-not-allowed text-muted-foreground" : undefined}
+            title={attendanceLocked ? "Ca trực đã duyệt hết — điểm danh đã khóa" : undefined}
+          >
+            {attendanceLocked ? <Lock className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+            {attendanceLocked ? "Đã khóa điểm danh" : "Điểm danh"}
+          </Button>
         )}
         <Button size="sm" variant="outline" onClick={openViewer}>
           <Tv className="h-4 w-4" /> Viewer
@@ -788,7 +799,7 @@ function ApproveAttendanceDialog({
   async function approveAll() {
     try {
       const res: any = await approve.mutateAsync({ date, shiftType, unit });
-      toast.success(`Đã duyệt ${res?.data?.approved ?? ""} chấm công`.trim());
+      toast.success(`Đã duyệt ${res?.data?.approved ?? ""} chấm công và khóa điểm danh`.trim());
       setConfirmApproveOpen(false);
     } catch (e) {
       toast.error((e as Error).message);
@@ -879,7 +890,8 @@ function ApproveAttendanceDialog({
           <DialogHeader>
             <DialogTitle>Xác nhận duyệt chấm công</DialogTitle>
             <DialogDescription>
-              Chọn tác vụ cần thực hiện cho toàn bộ {total} điểm danh của ca này.
+              Duyệt toàn bộ {total} điểm danh của ca này và khóa người dùng tự điểm danh thêm.
+              Người có quyền duyệt vẫn có thể bổ sung nhân sự khi có thay đổi đột xuất.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:justify-end">

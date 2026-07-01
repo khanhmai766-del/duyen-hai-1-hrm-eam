@@ -672,7 +672,7 @@ function SafeOperationUnitRow({
             <div className="text-sm font-semibold text-slate-700">
               {hasStarted ? paused ? "Đang tạm dừng bộ đếm" : "Đang vận hành an toàn" : "Chưa bắt đầu bộ đếm"}
             </div>
-            <div className="mt-1 grid grid-cols-3 gap-2 text-emerald-700 sm:max-w-md">
+            <div className="mt-1 grid min-w-0 grid-cols-3 gap-1 text-emerald-700 sm:gap-2">
               <ElapsedNumber value={elapsed.days} label="ngày" />
               <ElapsedNumber value={elapsed.hours} label="giờ" pad />
               <ElapsedNumber value={elapsed.minutes} label="phút" pad />
@@ -698,12 +698,19 @@ function SafeOperationUnitRow({
 }
 
 function ElapsedNumber({ value, label, pad = false }: { value: number; label: string; pad?: boolean }) {
+  const display = pad ? String(value).padStart(2, "0") : String(value);
+  const lengthClass =
+    display.length >= 5
+      ? "text-[clamp(1.65rem,2.3vw,2.35rem)]"
+      : display.length >= 4
+        ? "text-[clamp(1.8rem,2.65vw,2.65rem)]"
+        : "text-[clamp(1.95rem,2.95vw,2.9rem)]";
   return (
-    <div className="min-w-0 border-r border-emerald-100 last:border-r-0">
-      <span className="text-4xl font-extrabold leading-none tabular-nums sm:text-5xl">
-        {pad ? String(value).padStart(2, "0") : value}
+    <div className="flex min-w-0 flex-col items-center justify-end border-r border-emerald-100 px-1.5 last:border-r-0">
+      <span className={cn("block max-w-full whitespace-nowrap text-center font-extrabold leading-none tabular-nums tracking-normal", lengthClass)}>
+        {display}
       </span>
-      <span className="ml-1 text-xs font-semibold text-slate-600">{label}</span>
+      <span className="mt-1.5 block text-center text-[11px] font-bold leading-none text-slate-600 sm:text-xs">{label}</span>
     </div>
   );
 }

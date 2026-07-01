@@ -85,7 +85,7 @@ function positionRank(position?: string | null) {
   if (normalized.includes("pho quan doc")) return 1;
   if (normalized.includes("quan doc")) return 0;
   if (normalized.includes("ky thuat vien")) return 2;
-  if (normalized.includes("nhan vien van phong")) return 3;
+  if (normalized.includes("thong ke") || normalized.includes("nhan vien van phong")) return 3;
   if (normalized.includes("truong ca")) return 4;
   return 100;
 }
