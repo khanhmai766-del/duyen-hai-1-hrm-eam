@@ -44,7 +44,7 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
   {
     // "Khí nén - Nhà dầu" ≡ "Khí nén - nhà dầu 300m3" (normalizeText đã bỏ qua hoa/thường + dấu)
     canonical: "Khí nén - nhà dầu 300m3",
-    aliases: ["Khí nén - nhà dầu 300m3", "Khí nén - Nhà dầu"],
+    aliases: ["Khí nén - nhà dầu 300m3", "Khí nén - Nhà Dầu"],
   },
 ];
 
