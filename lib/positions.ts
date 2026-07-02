@@ -23,7 +23,7 @@ export function standardPositionOptions(userPositions: Array<string | null | und
 export const OPERATION_POSITION_TITLES = [
   "ESP",
   "FGD",
-  "Khí nén - Nhà dầu",
+  "Khí Nén - Nhà Dầu",
   "Lò phó",
   "Lò Trưởng",
   "Máy nghiền",
@@ -73,9 +73,19 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
     aliases: ["XLNT - Nhà dầu 5000m3", "XLNT"],
   },
   {
-    // "Khí nén - Nhà dầu" ≡ "Khí nén - nhà dầu 300m3" (normalizeText đã bỏ qua hoa/thường + dấu)
-    canonical: "Khí nén - Nhà dầu",
-    aliases: ["Khí nén - nhà dầu 300m3", "Khí nén - Nhà Dầu", "Nhà dầu - khí nén", "Nhà dầu - Khí nén"],
+    // Các biến thể Nhà dầu/Khí nén đều quy về tên chức vụ trên server chính.
+    canonical: "Khí Nén - Nhà Dầu",
+    aliases: [
+      "Khí Nén - Nhà Dầu",
+      "Khí nén - nhà dầu 300m3",
+      "Khí nén - Nhà Dầu",
+      "Khí Nén-Nhà Dầu",
+      "Khí Nén – Nhà Dầu",
+      "Nhà dầu - khí nén",
+      "Nhà dầu - Khí nén",
+      "Nhà Dầu - Khí Nén",
+      "Nhà Dầu – Khí Nén",
+    ],
   },
   {
     // Một số danh mục cũ gọi "Trạm nước thô" là "Trạm bơm nước thô".
@@ -101,7 +111,11 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
 ];
 
 function announcementPositionKey(position: string) {
-  return normalizeText(position).replace(/\s+/g, " ");
+  return normalizeText(position)
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function announcementPositionLabel(position?: string | null) {
