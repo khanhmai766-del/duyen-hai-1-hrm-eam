@@ -9,8 +9,13 @@ import type { SafeUser } from "@/types";
  * Danh sách người dùng bản "nhẹ" (không kèm chữ ký base64; avatar qua proxy S3).
  * Đây là bản dùng mặc định cho hầu hết UI (sidebar, dropdown, chọn người, chức vụ).
  */
-export function useUsers() {
-  return useQuery({ queryKey: ["users", "summary"], queryFn: () => apiGet<SafeUser[]>("/api/users?summary=1") });
+export function useUsers(options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
+  return useQuery({
+    queryKey: ["users", "summary"],
+    queryFn: () => apiGet<SafeUser[]>("/api/users?summary=1"),
+    enabled,
+  });
 }
 
 /**
@@ -23,8 +28,8 @@ export function useUsersFull() {
 }
 
 /** Danh sách "Chức vụ" phân biệt (bỏ trùng, đã sắp xếp) lấy từ người dùng. */
-export function usePositions(): string[] {
-  const { data } = useUsers();
+export function usePositions(options: { enabled?: boolean } = {}): string[] {
+  const { data } = useUsers(options);
   return React.useMemo(() => {
     const set = new Set<string>();
     for (const u of data?.data ?? []) {

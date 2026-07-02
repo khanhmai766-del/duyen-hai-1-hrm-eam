@@ -272,9 +272,10 @@ export function DocumentCatalogPage({
   const canEdit = canManageOperationDocument || (allowStaffEdit && (userRole === "SUPERVISOR" || userRole === "TECHNICIAN"));
   const canDelete = isAdmin || (canManageOperationDocument && userRole === "TECHNICIAN");
   const hasActions = canEdit || canDelete;
+  const needsPositionOptions = showEquipmentScope || canImportProcedure;
   const docs = useDocuments(category);
-  const devices = useDevices({});
-  const userPositions = usePositions();
+  const devices = useDevices({ enabled: needsPositionOptions });
+  const userPositions = usePositions({ enabled: needsPositionOptions });
   const upsert = useUpsertDocument();
   const remove = useDeleteDocument();
   const [q, setQ] = React.useState("");
@@ -325,12 +326,14 @@ export function DocumentCatalogPage({
     (hasYearField ? 1 : 0);
 
   const positionOptions = React.useMemo(
-    () =>
-      announcementPositionOptions([
+    () => {
+      if (!needsPositionOptions) return [];
+      return announcementPositionOptions([
         ...(devices.data?.data ?? []).map((device) => device.managingPosition),
         ...userPositions,
-      ]).filter((value) => value !== LEGACY_COMMON_POSITION && isSelectableManagingPosition(value)),
-    [devices.data?.data, userPositions]
+      ]).filter((value) => value !== LEGACY_COMMON_POSITION && isSelectableManagingPosition(value));
+    },
+    [devices.data?.data, needsPositionOptions, userPositions]
   );
   const blockOptions = React.useMemo(() => [...MANAGEMENT_BLOCK_OPTIONS], []);
   const activeYearFilter = hasYearField ? yearFilter || yearOptions[0] || "" : "";

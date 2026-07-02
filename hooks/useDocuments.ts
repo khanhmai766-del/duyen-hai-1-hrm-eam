@@ -61,6 +61,7 @@ export function useDocuments(category: DocumentCategory) {
   return useQuery({
     queryKey: ["documents", category],
     queryFn: () => apiGet<DigitalDocument[]>(`/api/documents?category=${category}`),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
