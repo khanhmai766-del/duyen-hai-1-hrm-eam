@@ -23,6 +23,15 @@ export interface DeviceListItem extends DeviceRecord {
   _count: { repairLogs: number };
 }
 
+export interface DeviceListMeta {
+  total: number;
+  totalSystemDevices: number;
+  systems: string[];
+  rootSystems: Array<{ seq: string; name: string }>;
+  byPosition: Array<{ name: string; count: number }>;
+  source: string;
+}
+
 export interface DeviceWithRelations extends DeviceRecord {
   repairLogs: Array<{
     id?: string;
@@ -38,14 +47,16 @@ export interface DeviceWithRelations extends DeviceRecord {
   }>;
 }
 
-export function useDevices(params: { q?: string; system?: string; systemSeq?: string }) {
+export function useDevices(params: { q?: string; system?: string; systemSeq?: string; enabled?: boolean }) {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
   if (params.system) qs.set("system", params.system);
   if (params.systemSeq) qs.set("systemSeq", params.systemSeq);
+  const { enabled = true, ...queryParams } = params;
   return useQuery({
-    queryKey: ["devices", params],
-    queryFn: () => apiGet<DeviceListItem[]>(`/api/devices?${qs.toString()}`),
+    queryKey: ["devices", queryParams],
+    queryFn: () => apiGet<DeviceListItem[]>(`/api/devices?${qs.toString()}`) as Promise<{ data: DeviceListItem[]; meta: DeviceListMeta }>,
+    enabled,
   });
 }
 

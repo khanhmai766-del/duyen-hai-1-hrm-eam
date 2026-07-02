@@ -67,11 +67,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
-import { useSystemAccess } from "@/hooks/useSystemAccess";
-import { useEquipmentTree } from "@/hooks/useEquipment";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { can } from "@/lib/constants";
-import { buildEquipmentTreeIndex, compareEquipmentSeq, dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
@@ -102,7 +98,6 @@ export default function DevicesPage() {
   const params = useSearchParams();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
-  const access = useSystemAccess();
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
@@ -132,73 +127,23 @@ export default function DevicesPage() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const { data, isLoading } = useDevices({ q: debouncedQ, systemSeq: systemSeq === "ALL" ? undefined : systemSeq });
-  const { data: equipmentTreeData, isLoading: equipmentTreeLoading } = useEquipmentTree();
+  const shouldLoadDevices = view === "dashboard" || view === "detail" || view === "table";
+  const { data, isLoading } = useDevices({
+    q: debouncedQ,
+    systemSeq: systemSeq === "ALL" ? undefined : systemSeq,
+    enabled: shouldLoadDevices,
+  });
   const del = useDeleteDevice();
-  const rawDevices = data?.data ?? [];
-  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
-  const equipmentIndex = React.useMemo(() => buildEquipmentTreeIndex(equipmentNodes), [equipmentNodes]);
+  const devices = data?.data ?? [];
+  const deviceMeta = data?.meta;
+  const systemOptions = deviceMeta?.rootSystems ?? [];
+  const selectedSystemNode = null as { seq: string; name: string } | null;
+  const byPosition = deviceMeta?.byPosition ?? [];
+  const equipmentTreeLoading = false;
+  const systemDisplayRows: SystemTreeRow[] = [];
+  const systemLeafRows: SystemTreeRow[] = [];
   // Tập seq người dùng được Xem (gồm tổ tiên để vẫn thấy đường dẫn). null = không giới hạn (admin/cương vị chưa cấu hình).
-  const visibleSeqs = React.useMemo(() => {
-    if (access.isAdmin) return null;
-    const set = new Set<string>();
-    let restricted = false;
-    for (const node of equipmentNodes) {
-      if (access.accessForSeq(node.seq) !== "none") {
-        let cur: string | null | undefined = node.seq;
-        while (cur && !set.has(cur)) { set.add(cur); cur = equipmentIndex.parentOf.get(cur) ?? null; }
-      } else {
-        restricted = true;
-      }
-    }
-    return restricted ? set : null;
-  }, [access.isAdmin, access.accessForSeq, equipmentNodes, equipmentIndex]);
   // Lọc danh sách thẻ/lý lịch theo quyền Xem của cương vị (giống cây thiết bị).
-  const devices = React.useMemo(
-    () => (visibleSeqs ? rawDevices.filter((d) => visibleSeqs.has(d.code)) : rawDevices),
-    [rawDevices, visibleSeqs]
-  );
-  const systemOptions = React.useMemo(() => {
-    const roots = [...equipmentIndex.roots].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-    return visibleSeqs ? roots.filter((root) => visibleSeqs.has(root.seq)) : roots;
-  }, [equipmentIndex, visibleSeqs]);
-  const selectedSystemNode = systemSeq === "ALL" ? null : equipmentIndex.bySeq.get(systemSeq) ?? null;
-  const systemTreeRows = React.useMemo(() => {
-    const qText = normalizeText(debouncedQ.trim());
-    const rows: SystemTreeRow[] = [];
-    const queue = selectedSystemNode
-      ? [...(equipmentIndex.childrenOf.get(selectedSystemNode.seq) ?? [])]
-      : [...systemOptions];
-    while (queue.length) {
-      const node = queue.shift()!;
-      const childCount = (equipmentIndex.childrenOf.get(node.seq) ?? []).length;
-      const parentSeq = equipmentIndex.parentOf.get(node.seq);
-      const parent = parentSeq ? equipmentIndex.bySeq.get(parentSeq) ?? null : null;
-      const row = {
-        seq: node.seq,
-        parentSeq: parentSeq ?? null,
-        name: node.name,
-        parentName: parent?.name ?? "",
-        drawing: node.drawing,
-        isGroup: childCount > 0,
-        childCount,
-        deviceId: node.deviceId ?? null,
-      };
-      const haystack = normalizeText([row.seq, row.name, row.parentName, row.drawing].filter(Boolean).join(" "));
-      const visible = !visibleSeqs || visibleSeqs.has(row.seq);
-      if ((!qText || haystack.includes(qText)) && visible) rows.push(row);
-      queue.push(...(equipmentIndex.childrenOf.get(node.seq) ?? []));
-    }
-    return rows.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-  }, [debouncedQ, equipmentIndex, selectedSystemNode, systemOptions, visibleSeqs]);
-  const systemLeafRows = React.useMemo(
-    () => dedupeEquipmentLeafNodes(systemTreeRows.filter((row) => !row.isGroup)),
-    [systemTreeRows]
-  );
-  const systemDisplayRows = React.useMemo(() => {
-    const groupRows = systemTreeRows.filter((row) => row.isGroup);
-    return [...groupRows, ...systemLeafRows].sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-  }, [systemLeafRows, systemTreeRows]);
 
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
@@ -234,7 +179,9 @@ export default function DevicesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
-        <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
+        {shouldLoadDevices && (
+          <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
+        )}
         {isAdmin && (
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet className="h-4 w-4" /> Nhập CSV/Excel
@@ -262,7 +209,7 @@ export default function DevicesPage() {
             );
           })}
         </div>
-        {view !== "form" && view !== "table" && (
+        {shouldLoadDevices && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
             <select
@@ -322,7 +269,7 @@ export default function DevicesPage() {
               action={isAdmin ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
           ) : (view as ViewMode) === "dashboard" ? (
-            <DashboardView devices={devices} />
+            <DashboardView devices={devices} byPosition={byPosition} />
           ) : (
             <DetailView
               devices={devices}
@@ -1003,11 +950,7 @@ function CardGridPagination({
   );
 }
 
-function DashboardView({ devices }: { devices: DeviceListItem[] }) {
-  const scopesQuery = usePositionSystemScopes();
-  const treeQuery = useEquipmentTree();
-  const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
-  const equipmentNodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
+function DashboardView({ devices, byPosition }: { devices: DeviceListItem[]; byPosition: Array<{ name: string; count: number }> }) {
 
   const groupCount = (key: (d: DeviceListItem) => string | null | undefined) =>
     Object.entries(
@@ -1023,7 +966,8 @@ function DashboardView({ devices }: { devices: DeviceListItem[] }) {
   const bySystem = groupCount((d) => d.system).slice(0, 10);
 
   // Số thiết bị mỗi cương vị "phải quản lý": lấy theo phân quyền hệ thống trực tiếp (scope quyền Sửa).
-  const byPosition = React.useMemo(() => {
+  /*
+  const legacyByPosition = React.useMemo(() => {
     const index = buildEquipmentTreeIndex(equipmentNodes);
     const { parentOf } = index;
     const editPosBySeq = new Map<string, string[]>();
@@ -1050,6 +994,7 @@ function DashboardView({ devices }: { devices: DeviceListItem[] }) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
   }, [devices, scopes, equipmentNodes]);
+  */
   const repairHotlist = [...devices]
     .filter((d) => d._count.repairLogs > 0)
     .sort((a, b) => b._count.repairLogs - a._count.repairLogs)

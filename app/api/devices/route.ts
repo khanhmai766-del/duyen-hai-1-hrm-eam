@@ -9,7 +9,7 @@ import {
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
-import { filterEquipmentNodesForUser } from "@/lib/server-access";
+import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,8 @@ type DeviceUsageStats = {
   repairCount?: number;
   latestRepairAt?: Date | null;
 };
+
+type DeviceListRecord = ReturnType<typeof toDeviceRecordWithStats>;
 
 function toDeviceRecordWithStats(
   node: NormalizedEquipmentNode,
@@ -90,6 +92,36 @@ async function getDeviceLikeRecords() {
       return toDeviceRecordWithStats(node, parent, statsBySeq.get(node.seq));
     }),
   };
+}
+
+async function getDeviceCountsByPosition(
+  devices: DeviceListRecord[],
+  index: ReturnType<typeof buildEquipmentTreeIndex>
+) {
+  const scopes = await loadPositionSystemScopeRows();
+  const editPosBySeq = new Map<string, string[]>();
+  for (const scope of scopes) {
+    if (scope.access !== "edit") continue;
+    const positions = editPosBySeq.get(scope.systemSeq) ?? [];
+    positions.push(scope.position);
+    editPosBySeq.set(scope.systemSeq, positions);
+  }
+
+  const counts = new Map<string, number>();
+  for (const device of devices) {
+    const managing = new Set<string>();
+    let current: string | null | undefined = device.code;
+    while (current) {
+      for (const position of editPosBySeq.get(current) ?? []) managing.add(position);
+      current = index.parentOf.get(current) ?? null;
+    }
+    for (const position of managing) counts.set(position, (counts.get(position) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 }
 
 export async function GET(req: NextRequest) {
@@ -134,6 +166,7 @@ export async function GET(req: NextRequest) {
       totalSystemDevices: records.length,
       systems,
       rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
+      byPosition: await getDeviceCountsByPosition(devices, visibleIndex),
       source: "equipment-node",
     });
   });
