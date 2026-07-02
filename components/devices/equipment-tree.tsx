@@ -20,10 +20,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentNode, useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
-import { useSession } from "next-auth/react";
-import { useCurrentPosition } from "@/hooks/useCurrentPosition";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
-import { nodeAccessForPosition, scopesForPosition } from "@/lib/position-system-scopes";
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
 function compareSeq(a: string, b: string) {
@@ -42,45 +38,11 @@ export function EquipmentTreeView() {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
   const { data, isLoading } = useEquipmentTree();
-  const { data: session } = useSession();
-  const currentPosition = useCurrentPosition();
-  const scopesQuery = usePositionSystemScopes();
-  const role = session?.user?.role;
-  const position = currentPosition.position;
   const allNodes = React.useMemo(() => data?.data ?? [], [data]);
 
   // Lọc theo quyền Xem của cương vị người dùng: chỉ hiện hệ thống được cấp (Xem trở lên)
   // cùng tổ tiên của chúng. Quản trị viên / chưa cấu hình riêng → thấy toàn bộ.
-  const nodes = React.useMemo(() => {
-    const scopes = scopesQuery.data?.data ?? [];
-    if (role === "ADMIN" || !position) return allNodes;
-    const explicit = scopesForPosition(scopes, position);
-    if (!explicit.length) return allNodes;
-
-    const bySeq = new Map(allNodes.map((n) => [n.seq, n] as const));
-    const parentOf = new Map<string, string | null>();
-    for (const n of allNodes) {
-      let parent: string | null = n.parentSeq && bySeq.has(n.parentSeq) ? n.parentSeq : null;
-      if (!parent) {
-        const parts = n.seq.split(".");
-        parts.pop();
-        while (parts.length) {
-          const p = parts.join(".");
-          if (bySeq.has(p)) { parent = p; break; }
-          parts.pop();
-        }
-      }
-      parentOf.set(n.seq, parent);
-    }
-    const visible = new Set<string>();
-    for (const n of allNodes) {
-      if (nodeAccessForPosition(n.seq, position, allNodes, scopes) !== "none") {
-        let cur: string | null | undefined = n.seq;
-        while (cur && !visible.has(cur)) { visible.add(cur); cur = parentOf.get(cur) ?? null; }
-      }
-    }
-    return allNodes.filter((n) => visible.has(n.seq));
-  }, [allNodes, role, position, scopesQuery.data]);
+  const nodes = allNodes;
 
   // Chỉ mục: seq -> node, parentSeq -> các con (đã sắp xếp), danh sách gốc.
   const { bySeq, childrenOf, roots, effParentOf } = React.useMemo(() => {
