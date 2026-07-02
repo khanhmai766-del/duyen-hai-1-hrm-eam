@@ -28,10 +28,10 @@ import { HC_PERIOD_LABEL, normalizeHcPeriod } from "@/lib/hc-period";
 
 const HOURS = [1, 2, 3, 4, 5, 6, 7, 8];
 const HC_SELF_PERIODS = [
-  { value: "FULL_DAY", label: "Cả ngày", hours: 8, cutoff: "Trước 08h00" },
-  { value: "MORNING", label: "Buổi sáng", hours: 4, cutoff: "Trước 08h00" },
-  { value: "AFTERNOON", label: "Buổi chiều", hours: 4, cutoff: "Trước 13h30" },
-  { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3, cutoff: "Trước 14h30" },
+  { value: "FULL_DAY", label: "Cả ngày", hours: 8 },
+  { value: "MORNING", label: "Buổi sáng", hours: 4 },
+  { value: "AFTERNOON", label: "Buổi chiều", hours: 4 },
+  { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3 },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
 const HC_RECALL_WINDOW_MS = 30 * 60 * 1000;
@@ -465,7 +465,7 @@ function SelfAdministrativeCheckInDialog({
               <SelectContent>
                 {HC_SELF_PERIODS.map((p) => (
                   <SelectItem key={p.value} value={p.value}>
-                    {p.label} ({p.cutoff})
+                    {p.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -484,9 +484,6 @@ function SelfAdministrativeCheckInDialog({
               Bạn đã chấm công {periodLabel(myCheckIn.group.content).toLowerCase()}, có thể cập nhật lại.
             </div>
           )}
-          <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Thời gian chấm công: cả ngày và buổi sáng trước 08h00; buổi chiều trước 13h30; ra ca sáng trước 14h30.
-          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Huỷ</Button>

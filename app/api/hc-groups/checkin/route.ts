@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 
 const APPROVE_PERMISSION_ID = "hc-attendance-approve";
 const HC_SELF_PERIODS = {
-  FULL_DAY: { label: "Cả ngày", hours: 8, cutoffHour: 8, cutoffMinute: 0, cutoffLabel: "08h00" },
-  MORNING: { label: "Buổi sáng", hours: 4, cutoffHour: 8, cutoffMinute: 0, cutoffLabel: "08h00" },
-  AFTERNOON: { label: "Buổi chiều", hours: 4, cutoffHour: 13, cutoffMinute: 30, cutoffLabel: "13h30" },
-  MORNING_OFF: { label: "Ra ca sáng", hours: 3, cutoffHour: 14, cutoffMinute: 30, cutoffLabel: "14h30" },
+  FULL_DAY: { label: "Cả ngày", hours: 8 },
+  MORNING: { label: "Buổi sáng", hours: 4 },
+  AFTERNOON: { label: "Buổi chiều", hours: 4 },
+  MORNING_OFF: { label: "Ra ca sáng", hours: 3 },
 } as const;
 const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính - ${p.label}`);
 const DEFAULT_REGISTER_NOTE = "Chờ phân công";
@@ -67,14 +67,6 @@ function canRecallCheckIn(checkIn: { updatedAt?: Date | null; createdAt: Date },
   return now.getTime() - markedAt.getTime() <= RECALL_WINDOW_MS;
 }
 
-function isBeforeCheckInCutoff(period: keyof typeof HC_SELF_PERIODS, target: Date, now = new Date()) {
-  if (!isSameLocalDay(target, now)) return false;
-  const option = HC_SELF_PERIODS[period];
-  const cutoff = new Date(now);
-  cutoff.setHours(option.cutoffHour, option.cutoffMinute, 0, 0);
-  return now.getTime() < cutoff.getTime();
-}
-
 async function canManageHc(user: { id?: string; role?: string }) {
   return hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
@@ -125,8 +117,8 @@ export async function POST(req: NextRequest) {
         if (!existingRegistration && !canRegisterForDate(start)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
         }
-      } else if (!isBeforeCheckInCutoff(period, start)) {
-        return fail(`Chỉ được chấm công ${option.label.toLowerCase()} trước ${option.cutoffLabel}`);
+      } else if (!isSameLocalDay(start, new Date())) {
+        return fail("Chỉ được chấm công hành chính trong ngày hiện tại");
       }
 
       if (existingRegistration) {
