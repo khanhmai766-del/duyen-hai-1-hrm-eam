@@ -1200,7 +1200,7 @@ function Seat({
         "group relative rounded-xl border text-center transition-all duration-300",
         presentation ? "flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 py-1" : "px-2 py-2.5",
         filled
-          ? cn("bg-white hover:-translate-y-0.5", s.filled)
+          ? cn(s.cell, "hover:-translate-y-0.5", s.filled)
           : cn("border-dashed bg-muted/20 opacity-90", s.cell)
       )}
     >
@@ -1313,7 +1313,7 @@ function Occupants({
             {o.user.name}
           </span>
           {!presentation && o.user.phone && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-950">
               <Phone className="h-2.5 w-2.5" /> {o.user.phone}
             </span>
           )}
@@ -1350,7 +1350,7 @@ function CompactOccupant({
             "relative flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy to-accent font-bold text-white shadow-[0_6px_12px_-8px_rgba(15,23,42,0.55)] ring-1 ring-white",
             largeAvatar
               ? "h-10 w-10 text-[11px] xl:h-11 xl:w-11 xl:text-xs"
-              : dense ? "h-6 w-6 text-[8px]" : "h-7 w-7 text-[8px] xl:h-8 xl:w-8 xl:text-[9px]"
+              : "h-7 w-7 text-[8px] xl:h-8 xl:w-8 xl:text-[9px]"
           )}
         >
           {occupant.user.avatarUrl ? (
@@ -1384,7 +1384,7 @@ function CompactOccupant({
           {occupant.user.name}
         </div>
         {occupant.user.phone && (
-          <div className="mt-0.5 flex min-w-0 items-center gap-0.5 text-[8px] leading-none text-muted-foreground xl:text-[9px]">
+          <div className="mt-0.5 flex min-w-0 items-center gap-0.5 text-[8px] font-bold leading-none text-slate-950 xl:text-[9px]">
             <Phone className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{occupant.user.phone}</span>
           </div>
