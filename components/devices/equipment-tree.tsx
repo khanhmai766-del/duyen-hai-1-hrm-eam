@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronRight,
   Folder,
@@ -175,7 +176,6 @@ export function EquipmentTreeView() {
     return { visible, searchExpanded, matchCount };
   }, [q, nodes, bySeq, effParentOf]);
 
-  const isOpen = (seq: string) => (q ? searchExpanded!.has(seq) : expanded.has(seq));
   // Callback ổn định để TreeNodeRow (React.memo) không re-render khi cây vẽ lại.
   const onToggle = React.useCallback((seq: string) => {
     setExpanded((s) => {
@@ -213,30 +213,39 @@ export function EquipmentTreeView() {
     return path;
   }, [selectedNode, bySeq, effParentOf]);
 
-  function renderNodes(list: EquipmentNode[], depth: number): React.ReactNode {
-    return list
-      .filter((n) => !visible || visible.has(n.seq))
-      .map((n) => {
+  // Làm phẳng cây đang mở thành mảng tuyến tính để virtualize (chỉ render các dòng
+  // trong khung nhìn). Duyệt DFS, chỉ đi xuống node đang mở & tôn trọng bộ lọc tìm kiếm.
+  const flatRows = React.useMemo(() => {
+    const rows: { node: EquipmentNode; depth: number; hasKids: boolean; kidsCount: number; open: boolean }[] = [];
+    const walk = (list: EquipmentNode[], depth: number) => {
+      for (const n of list) {
+        if (visible && !visible.has(n.seq)) continue;
         const kids = childrenOf.get(n.seq) ?? [];
         const hasKids = kids.length > 0;
-        const open = isOpen(n.seq);
-        return (
-          <React.Fragment key={n.seq}>
-            <TreeNodeRow
-              node={n}
-              depth={depth}
-              hasKids={hasKids}
-              kidsCount={kids.length}
-              isOpen={open}
-              isSelected={selected === n.seq}
-              onSelect={onSelect}
-              onToggle={onToggle}
-            />
-            {hasKids && open && renderNodes(kids, depth + 1)}
-          </React.Fragment>
-        );
-      });
-  }
+        const open = q ? !!searchExpanded?.has(n.seq) : expanded.has(n.seq);
+        rows.push({ node: n, depth, hasKids, kidsCount: kids.length, open });
+        if (hasKids && open) walk(kids, depth + 1);
+      }
+    };
+    walk(roots, 0);
+    return rows;
+  }, [roots, childrenOf, visible, searchExpanded, expanded, q]);
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 32,
+    overscan: 12,
+    getItemKey: (index) => flatRows[index]?.node.seq ?? index,
+  });
+
+  // Cuộn tới node được focus (vd đến từ QR/liên kết "Trong cây") sau khi tổ tiên đã bung.
+  React.useEffect(() => {
+    if (!focusSeq) return;
+    const idx = flatRows.findIndex((r) => r.node.seq === focusSeq);
+    if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: "center" });
+  }, [focusSeq, flatRows, rowVirtualizer]);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
@@ -283,7 +292,7 @@ export function EquipmentTreeView() {
           )}
         </div>
 
-        <div className="max-h-[68vh] min-h-[340px] overflow-y-auto p-2">
+        <div ref={scrollRef} className="max-h-[68vh] min-h-[340px] overflow-y-auto p-2">
           {isLoading ? (
             <div className="flex items-center justify-center py-20 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -293,7 +302,31 @@ export function EquipmentTreeView() {
           ) : q && matchCount === 0 ? (
             <div className="py-20 text-center text-sm text-muted-foreground">Không tìm thấy thiết bị phù hợp.</div>
           ) : (
-            renderNodes(roots, 0)
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+              {rowVirtualizer.getVirtualItems().map((vi) => {
+                const row = flatRows[vi.index];
+                if (!row) return null;
+                return (
+                  <div
+                    key={vi.key}
+                    data-index={vi.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
+                  >
+                    <TreeNodeRow
+                      node={row.node}
+                      depth={row.depth}
+                      hasKids={row.hasKids}
+                      kidsCount={row.kidsCount}
+                      isOpen={row.open}
+                      isSelected={selected === row.node.seq}
+                      onSelect={onSelect}
+                      onToggle={onToggle}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 

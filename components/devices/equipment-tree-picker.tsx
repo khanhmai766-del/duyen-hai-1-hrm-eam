@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Cpu, Search, X, Loader2 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -159,7 +160,6 @@ export function EquipmentTreePicker({
     return { visible, searchExpanded, matchCount };
   }, [q, nodes, bySeq, effParentOf, folderSeqs, editVisibleSeqs]);
 
-  const isOpenNode = (seq: string) => (q ? searchExpanded!.has(seq) : expanded.has(seq));
   function toggle(seq: string) {
     setExpanded((s) => {
       const next = new Set(s);
@@ -175,52 +175,37 @@ export function EquipmentTreePicker({
     setOpen(false);
   }
 
-  function renderNodes(list: EquipmentNode[], depth: number): React.ReactNode {
-    return list
-      .filter((n) => !visible || visible.has(n.seq))
-      .filter((n) => folderSeqs.has(n.seq))
-      .filter((n) => !editVisibleSeqs || editVisibleSeqs.has(n.seq))
-      .map((n) => {
+  // Làm phẳng cây thư mục đang mở (đã lọc theo tìm kiếm + quyền) để virtualize.
+  const flatRows = React.useMemo(() => {
+    const rows: { node: EquipmentNode; depth: number; kidsCount: number; open: boolean }[] = [];
+    const walk = (list: EquipmentNode[], depth: number) => {
+      for (const n of list) {
+        if (visible && !visible.has(n.seq)) continue;
+        if (!folderSeqs.has(n.seq)) continue;
+        if (editVisibleSeqs && !editVisibleSeqs.has(n.seq)) continue;
         const kids = childrenOf.get(n.seq) ?? [];
-        const hasKids = kids.length > 0;
-        const isOpen = isOpenNode(n.seq);
-        return (
-          <React.Fragment key={n.seq}>
-            <button
-              type="button"
-              onClick={() => {
-                onChange(n);
-                toggle(n.seq);
-              }}
-              className={cn(
-                "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
-                value === n.seq ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted"
-              )}
-              style={{ paddingLeft: depth * 16 + 4 }}
-            >
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
-                {hasKids && <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />}
-              </span>
-              {hasKids ? (
-                isOpen ? (
-                  <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
-                ) : (
-                  <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-                )
-              ) : (
-                <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
-              )}
-              <span className="min-w-0 flex-1 truncate" title={n.name}>
-                {n.name}
-              </span>
-              {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kids.length}</span>}
-              <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{n.seq}</span>
-            </button>
-            {hasKids && isOpen && renderNodes(kids, depth + 1)}
-          </React.Fragment>
-        );
-      });
-  }
+        const open = q ? !!searchExpanded?.has(n.seq) : expanded.has(n.seq);
+        rows.push({ node: n, depth, kidsCount: kids.length, open });
+        if (kids.length > 0 && open) walk(kids, depth + 1);
+      }
+    };
+    walk(filteredRoots, 0);
+    return rows;
+  }, [filteredRoots, visible, folderSeqs, editVisibleSeqs, childrenOf, expanded, searchExpanded, q]);
+
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 32,
+    overscan: 10,
+    getItemKey: (index) => flatRows[index]?.node.seq ?? index,
+  });
+
+  // Popover mount trễ: đo lại khi mở để virtualizer bắt được khung cuộn.
+  React.useEffect(() => {
+    if (open) rowVirtualizer.measure();
+  }, [open, rowVirtualizer]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -258,17 +243,19 @@ export function EquipmentTreePicker({
             )}
           </div>
         </div>
-        <div className="max-h-[320px] overflow-y-auto p-1.5">
+        <div className="px-1.5 pt-1.5">
           <button
             type="button"
             onClick={() => pick(null)}
             className={cn(
-              "mb-1 flex w-full items-center rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-muted",
+              "flex w-full items-center rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-muted",
               !selectedNode ? "font-semibold text-accent" : "text-muted-foreground"
             )}
           >
             — Không chọn —
           </button>
+        </div>
+        <div ref={scrollRef} className="max-h-[300px] overflow-y-auto px-1.5 pb-1.5">
           {isLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -278,7 +265,54 @@ export function EquipmentTreePicker({
           ) : q && matchCount === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">Không tìm thấy thiết bị phù hợp.</div>
           ) : (
-            renderNodes(filteredRoots, 0)
+            <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+              {rowVirtualizer.getVirtualItems().map((vi) => {
+                const row = flatRows[vi.index];
+                if (!row) return null;
+                const n = row.node;
+                const hasKids = row.kidsCount > 0;
+                const isOpen = row.open;
+                return (
+                  <div
+                    key={vi.key}
+                    data-index={vi.index}
+                    ref={rowVirtualizer.measureElement}
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(n);
+                        toggle(n.seq);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
+                        value === n.seq ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted"
+                      )}
+                      style={{ paddingLeft: row.depth * 16 + 4 }}
+                    >
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
+                        {hasKids && <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />}
+                      </span>
+                      {hasKids ? (
+                        isOpen ? (
+                          <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
+                        ) : (
+                          <Folder className="h-4 w-4 shrink-0 text-amber-500" />
+                        )
+                      ) : (
+                        <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate" title={n.name}>
+                        {n.name}
+                      </span>
+                      {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{row.kidsCount}</span>}
+                      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{n.seq}</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </PopoverContent>
