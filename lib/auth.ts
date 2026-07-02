@@ -5,8 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { readLoginToken } from "@/lib/webauthn";
 import { isDefaultPassword, isPasswordExpired } from "@/lib/password-policy";
 import { effectiveUserPosition } from "@/lib/current-position";
-
-const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+import { MAX_FAILED_LOGIN_ATTEMPTS } from "@/lib/login-security";
 
 let loginLockColumnsReady = false;
 

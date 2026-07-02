@@ -226,11 +226,11 @@ export default function OrgChartPage() {
 
       {/* Fullscreen presentation (Viewer) — for TV / projector. ESC to exit. */}
       {viewer && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[1000] flex h-dvh w-dvw flex-col overflow-auto bg-white p-6">
-          <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="fixed inset-0 z-[1000] flex h-dvh w-dvw flex-col overflow-hidden bg-white p-4">
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-ink">Nhân sự trực ca vận hành</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <h2 className="text-xl font-bold text-ink xl:text-2xl">Nhân sự trực ca vận hành</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm">
                 {caLabel} · {unit}
               </p>
             </div>
@@ -244,12 +244,12 @@ export default function OrgChartPage() {
                 onClick={closeViewer}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-ink"
               >
-                <X className="h-4 w-4" /> Thoát (ESC)
+                <X className="h-4 w-4" /> Thoát
               </button>
             </div>
           </div>
-          <div className="flex-1 text-[1.05rem]">
-            <OrgTemplateChart assignments={assignments} checkIns={checkIns} />
+          <div className="min-h-0 flex-1">
+            <OrgTemplateChart assignments={assignments} checkIns={checkIns} presentation />
           </div>
         </div>,
         document.body
@@ -1046,7 +1046,15 @@ const TONE_STYLES: Record<OrgTone | "chief", { bar: string; cell: string; title:
   green: { bar: "bg-green-50 border-green-200", cell: "bg-green-50/50 border-green-200", title: "text-green-700", block: "bg-green-50/30", filled: "border-emerald-300 shadow-[0_10px_24px_-10px_rgba(16,185,129,0.5)]" },
 };
 
-function OrgTemplateChart({ assignments, checkIns }: { assignments: ShiftAssignmentWithUser[]; checkIns?: CheckInWithUser[] }) {
+function OrgTemplateChart({
+  assignments,
+  checkIns,
+  presentation = false,
+}: {
+  assignments: ShiftAssignmentWithUser[];
+  checkIns?: CheckInWithUser[];
+  presentation?: boolean;
+}) {
   // Group occupants by the exact seat title they checked into.
   const byTitle = React.useMemo(() => {
     const m = new Map<string, ShiftAssignmentWithUser[]>();
@@ -1075,24 +1083,36 @@ function OrgTemplateChart({ assignments, checkIns }: { assignments: ShiftAssignm
   }, [assignments, checkIns]);
 
   return (
-    <div className="space-y-4 overflow-x-auto rounded-xl border border-border bg-white p-4">
+    <div
+      className={cn(
+        presentation
+          ? "flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-xl border border-border bg-white p-2"
+          : "space-y-4 overflow-x-auto rounded-xl border border-border bg-white p-4"
+      )}
+    >
       {/* Chief */}
-      <SeatBar title={ORG_CHIEF} occupants={byTitle.get(ORG_CHIEF)} tone="chief" />
+      <SeatBar title={ORG_CHIEF} occupants={byTitle.get(ORG_CHIEF)} tone="chief" presentation={presentation} />
 
       {/* Leads + their seat columns */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+      <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex flex-col gap-4 lg:flex-row lg:items-stretch")}>
         {ORG_LEADS.map((lead) => (
           <div
             key={lead.title}
-            className={cn("min-w-[260px] space-y-2 rounded-lg p-2", TONE_STYLES[lead.tone].block)}
+            className={cn(
+              presentation ? "flex min-w-0 flex-col gap-1.5 rounded-lg p-1.5" : "min-w-[260px] space-y-2 rounded-lg p-2",
+              TONE_STYLES[lead.tone].block
+            )}
             style={{ flex: lead.columns.length }}
           >
-            <SeatBar title={lead.title} occupants={byTitle.get(lead.title)} tone={lead.tone} />
-            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}>
+            <SeatBar title={lead.title} occupants={byTitle.get(lead.title)} tone={lead.tone} presentation={presentation} />
+            <div
+              className={cn(presentation ? "grid min-h-0 flex-1 gap-1.5" : "grid gap-2")}
+              style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}
+            >
               {lead.columns.map((col, i) => (
-                <div key={i} className="flex flex-col gap-2">
+                <div key={i} className={cn(presentation ? "flex min-h-0 flex-col gap-1.5" : "flex flex-col gap-2")}>
                   {col.map((seat) => (
-                    <Seat key={seat} title={seat} occupants={byTitle.get(seat)} tone={lead.tone} />
+                    <Seat key={seat} title={seat} occupants={byTitle.get(seat)} tone={lead.tone} presentation={presentation} />
                   ))}
                 </div>
               ))}
@@ -1102,15 +1122,17 @@ function OrgTemplateChart({ assignments, checkIns }: { assignments: ShiftAssignm
       </div>
 
       {/* Legend */}
-      <div className="border-t border-border pt-3 text-xs text-muted-foreground">
-        <span className="font-semibold text-ink">Quy tắc hiển thị: </span>
-        <span className="font-semibold text-ink">Màu đen</span> = đã được duyệt;{" "}
-        <span className="font-semibold text-warning">Họ &amp; tên màu cam</span> = chưa được duyệt.
-      </div>
+      {!presentation && (
+        <div className="border-t border-border pt-3 text-xs text-muted-foreground">
+          <span className="font-semibold text-ink">Quy tắc hiển thị: </span>
+          <span className="font-semibold text-ink">Màu đen</span> = đã được duyệt;{" "}
+          <span className="font-semibold text-warning">Họ &amp; tên màu cam</span> = chưa được duyệt.
+        </div>
+      )}
 
       {/* VHV trực đổi ca */}
       {swapRows.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+        <div className={cn("shrink-0 rounded-lg border border-amber-200 bg-amber-50/60", presentation ? "p-2" : "p-3")}>
           <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700">
             <Repeat className="h-3.5 w-3.5" /> VHV trực đổi ca
           </div>
@@ -1130,50 +1152,86 @@ function OrgTemplateChart({ assignments, checkIns }: { assignments: ShiftAssignm
 }
 
 /** Full-width header bar for the chief / lead rows. */
-function SeatBar({ title, occupants, tone }: { title: string; occupants?: ShiftAssignmentWithUser[]; tone: OrgTone | "chief" }) {
-  const s = TONE_STYLES[tone];
-  const filled = !!occupants?.length;
-  return (
-    <div className={cn("group rounded-lg border px-3 py-2 text-center transition-all duration-300", s.bar, filled && s.filled)}>
-      <div className={cn("text-xs font-semibold", s.title)}>{title}</div>
-      <Occupants occupants={occupants} center />
-    </div>
-  );
-}
-
-/** A single member seat cell. */
-function Seat({ title, occupants, tone }: { title: string; occupants?: ShiftAssignmentWithUser[]; tone: OrgTone }) {
+function SeatBar({
+  title,
+  occupants,
+  tone,
+  presentation = false,
+}: {
+  title: string;
+  occupants?: ShiftAssignmentWithUser[];
+  tone: OrgTone | "chief";
+  presentation?: boolean;
+}) {
   const s = TONE_STYLES[tone];
   const filled = !!occupants?.length;
   return (
     <div
       className={cn(
-        "group relative rounded-xl border px-2 py-2.5 text-center transition-all duration-300",
+        "group shrink-0 rounded-lg border text-center transition-all duration-300",
+        presentation ? "px-2 py-1.5" : "px-3 py-2",
+        s.bar,
+        filled && s.filled
+      )}
+    >
+      <div className={cn(presentation ? "text-[10px] font-semibold leading-tight xl:text-xs" : "text-xs font-semibold", s.title)}>{title}</div>
+      <Occupants occupants={occupants} center presentation={presentation} />
+    </div>
+  );
+}
+
+/** A single member seat cell. */
+function Seat({
+  title,
+  occupants,
+  tone,
+  presentation = false,
+}: {
+  title: string;
+  occupants?: ShiftAssignmentWithUser[];
+  tone: OrgTone;
+  presentation?: boolean;
+}) {
+  const s = TONE_STYLES[tone];
+  const filled = !!occupants?.length;
+  return (
+    <div
+      className={cn(
+        "group relative rounded-xl border text-center transition-all duration-300",
+        presentation ? "min-h-0 flex-1 overflow-hidden px-1.5 py-1.5" : "px-2 py-2.5",
         filled
           ? cn("bg-white hover:-translate-y-0.5", s.filled)
           : cn("border-dashed bg-muted/20 opacity-90", s.cell)
       )}
     >
-      <div className={cn("text-[11px] font-semibold leading-tight", s.title)}>{title}</div>
+      <div className={cn(presentation ? "text-[10px] font-semibold leading-tight xl:text-[11px]" : "text-[11px] font-semibold leading-tight", s.title)}>{title}</div>
       {filled ? (
-        <Occupants occupants={occupants} />
+        <Occupants occupants={occupants} presentation={presentation} />
       ) : (
-        <div className="mt-1 text-[11px] text-muted-foreground/40">— trống —</div>
+        <div className={cn("mt-1 text-muted-foreground/40", presentation ? "text-[10px]" : "text-[11px]")}>— trống —</div>
       )}
     </div>
   );
 }
 
-function Occupants({ occupants, center }: { occupants?: ShiftAssignmentWithUser[]; center?: boolean }) {
+function Occupants({
+  occupants,
+  center,
+  presentation = false,
+}: {
+  occupants?: ShiftAssignmentWithUser[];
+  center?: boolean;
+  presentation?: boolean;
+}) {
   if (!occupants?.length) {
-    return center ? <div className="mt-0.5 text-[11px] text-muted-foreground/40">— trống —</div> : null;
+    return center ? <div className={cn("mt-0.5 text-muted-foreground/40", presentation ? "text-[10px]" : "text-[11px]")}>— trống —</div> : null;
   }
   return (
-    <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-2">
+    <div className={cn("flex flex-wrap justify-center", presentation ? "mt-1 gap-x-1.5 gap-y-1" : "mt-1.5 gap-x-3 gap-y-2")}>
       {occupants.map((o) => (
         <div
           key={o.id}
-          className="flex flex-col items-center [perspective:600px] animate-in fade-in zoom-in-95 duration-500"
+          className={cn("flex min-w-0 flex-col items-center [perspective:600px] animate-in fade-in zoom-in-95 duration-500", presentation && "w-full max-w-full")}
         >
           <div className="relative">
             {/* Vầng sáng công nghệ phía sau (hiện rõ khi hover) */}
@@ -1187,7 +1245,8 @@ function Occupants({ occupants, center }: { occupants?: ShiftAssignmentWithUser[
             {/* Ảnh user 3D: viền gradient + bóng nổi, nghiêng/phóng khi hover */}
             <div
               className={cn(
-                "relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy to-accent text-[11px] font-bold text-white shadow-[0_8px_18px_-6px_rgba(15,23,42,0.55)] ring-2 ring-white transition-transform duration-300 will-change-transform group-hover:scale-110 group-hover:[transform:rotateY(12deg)_rotateX(6deg)]"
+                "relative flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy to-accent font-bold text-white shadow-[0_8px_18px_-6px_rgba(15,23,42,0.55)] ring-2 ring-white transition-transform duration-300 will-change-transform group-hover:scale-110 group-hover:[transform:rotateY(12deg)_rotateX(6deg)]",
+                presentation ? "h-8 w-8 text-[9px] xl:h-10 xl:w-10 xl:text-[10px]" : "h-12 w-12 text-[11px]"
               )}
             >
               {o.user.avatarUrl ? (
@@ -1202,16 +1261,26 @@ function Occupants({ occupants, center }: { occupants?: ShiftAssignmentWithUser[
             {/* Chấm trạng thái điểm danh */}
             <span
               className={cn(
-                "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white shadow ring-2 ring-white",
+                "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full text-white shadow ring-2 ring-white",
+                presentation ? "h-3.5 w-3.5" : "h-4 w-4",
                 o.isApproved ? "bg-emerald-500" : "bg-amber-500"
               )}
               title={o.isApproved ? "Đã được duyệt" : "Chưa được duyệt"}
             >
-              {o.isApproved ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+              {o.isApproved ? <Check className={cn(presentation ? "h-2 w-2" : "h-2.5 w-2.5")} /> : <Clock className={cn(presentation ? "h-2 w-2" : "h-2.5 w-2.5")} />}
             </span>
           </div>
-          <span className={cn("mt-1.5 text-xs font-bold leading-tight", o.isApproved ? "text-ink" : "text-warning")}>{o.user.name}</span>
-          {o.user.phone && (
+          <span
+            className={cn(
+              "font-bold leading-tight",
+              presentation ? "mt-1 block w-full max-w-full truncate px-1 text-[10px] xl:text-[11px]" : "mt-1.5 text-xs",
+              o.isApproved ? "text-ink" : "text-warning"
+            )}
+            title={o.user.name}
+          >
+            {o.user.name}
+          </span>
+          {!presentation && o.user.phone && (
             <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
               <Phone className="h-2.5 w-2.5" /> {o.user.phone}
             </span>

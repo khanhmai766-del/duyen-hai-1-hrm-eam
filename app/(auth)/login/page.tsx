@@ -31,6 +31,8 @@ function LoginInner() {
   const [biometricLoading, setBiometricLoading] = React.useState(false);
   const [biometricSupported, setBiometricSupported] = React.useState(false);
   const [stats, setStats] = React.useState<{ devices: number; users: number } | null>(null);
+  const [loginError, setLoginError] = React.useState("");
+  const passwordRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -69,20 +71,29 @@ function LoginInner() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const res = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
-    if (res?.error) {
-      toast.error("Đăng nhập thất bại", { description: "Email/mật khẩu không đúng hoặc tài khoản đã bị khóa." });
-      return;
-    }
-    toast.success("Đăng nhập thành công");
+    setLoginError("");
     try {
-      localStorage.setItem("pp:last-activity", String(Date.now()));
-    } catch {
-      /* Web storage không khả dụng */
+      const res = await signIn("credentials", { email, password, redirect: false });
+      if (res?.error) {
+        setPassword("");
+        setPasswordVisible(false);
+        const message = await readLoginFailureMessage(email);
+        setLoginError(message);
+        toast.error("Đăng nhập thất bại", { description: message });
+        window.setTimeout(() => passwordRef.current?.focus(), 0);
+        return;
+      }
+      toast.success("Đăng nhập thành công");
+      try {
+        localStorage.setItem("pp:last-activity", String(Date.now()));
+      } catch {
+        /* Web storage không khả dụng */
+      }
+      router.push(callbackUrl);
+      router.refresh();
+    } finally {
+      setLoading(false);
     }
-    router.push(callbackUrl);
-    router.refresh();
   }
 
   async function syncBiometric() {
@@ -294,7 +305,10 @@ function LoginInner() {
                     id="email"
                     type="text"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setLoginError("");
+                    }}
                     className="login-access-input"
                     required
                   />
@@ -306,11 +320,17 @@ function LoginInner() {
                   <div className="relative">
                     <Input
                       id="password"
+                      ref={passwordRef}
                       type={passwordVisible ? "text" : "password"}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setLoginError("");
+                      }}
                       className="login-access-input pr-20"
                       autoComplete="current-password"
+                      aria-invalid={Boolean(loginError)}
+                      aria-describedby={loginError ? "login-error" : undefined}
                       required
                     />
                     <button
@@ -323,6 +343,11 @@ function LoginInner() {
                       {passwordVisible ? "Ẩn" : "Hiển thị"}
                     </button>
                   </div>
+                  {loginError && (
+                    <p id="login-error" className="text-sm font-medium text-red-600">
+                      {loginError}
+                    </p>
+                  )}
                 </div>
                 <Button type="submit" className="login-access-button w-full" disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
@@ -364,6 +389,20 @@ function LoginInner() {
       </div>
     </div>
   );
+}
+
+async function readLoginFailureMessage(email: string) {
+  try {
+    const res = await fetch("/api/auth/login-attempt-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const json = await res.json();
+    return json?.data?.message || "Email/User hoặc mật khẩu không đúng.";
+  } catch {
+    return "Email/User hoặc mật khẩu không đúng.";
+  }
 }
 
 function base64urlToBuffer(value: string) {
