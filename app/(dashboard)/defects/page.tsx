@@ -20,7 +20,8 @@ import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialo
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_STATUS, DEFECT_STATUS_ORDER, DEFECT_SEVERITY, DEFECT_SEVERITY_ORDER, DEFECT_REQUEST_TYPES, can, isSelectableManagingPosition } from "@/lib/constants";
+import { DEFECT_STATUS, DEFECT_STATUS_ORDER, DEFECT_SEVERITY, DEFECT_SEVERITY_ORDER, DEFECT_REQUEST_TYPES, isSelectableManagingPosition } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
@@ -28,9 +29,9 @@ const PAGE_SIZES = [10, 25, 50, 100];
 
 export default function DefectsPage() {
   const { data: session } = useSession();
-  const role = session?.user?.role;
-  const canManage = can(role, "manageDefect");
-  const canDelete = can(role, "approveRepair"); // ADMIN + SUPERVISOR
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
+  const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
 
   const { data, isLoading } = useDefects();
   const del = useDeleteDefect();

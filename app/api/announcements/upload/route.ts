@@ -1,16 +1,21 @@
 import type { NextRequest } from "next/server";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { uploadBufferToS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** POST /api/announcements/upload — ADMIN uploads a PDF attachment (multipart
+async function requireAnnouncementManager(user: { id?: string; role: string }) {
+  await requirePermissionLevel(user, "announcement-manage", ["manage", "full"], "Không đủ quyền tải tệp mệnh lệnh");
+}
+
+/** POST /api/announcements/upload — người có quyền quản lý upload PDF (multipart
  *  field "file"). Returns { url, name } to store on the announcement. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requireAnnouncementManager(user);
 
     const form = await req.formData();
     const file = form.get("file");

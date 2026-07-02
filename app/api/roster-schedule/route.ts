@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { deleteFromS3, keyFromPublicUrl, s3ProxyUrl, uploadBufferToS3 } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,11 +34,11 @@ export async function GET() {
   });
 }
 
-/** POST — ADMIN uploads/replaces the roster PDF (multipart: field "file"). */
+/** POST — người có quyền duyệt ca vận hành uploads/replaces the roster PDF. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền tải lịch trực ca");
 
     const form = await req.formData();
     const file = form.get("file");
@@ -75,11 +76,11 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** DELETE — ADMIN removes the current roster PDF. */
+/** DELETE — người có quyền duyệt ca vận hành removes the current roster PDF. */
 export async function DELETE() {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền xoá lịch trực ca");
     const previous = await readMeta();
     if (previous?.url) await deleteFromS3(previous.url);
     await prisma.rbacConfig.deleteMany({ where: { key: ROSTER_META_KEY } });

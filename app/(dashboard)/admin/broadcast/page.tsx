@@ -21,11 +21,13 @@ import {
   useDeleteBroadcast,
   type SystemBroadcast,
 } from "@/hooks/useBroadcast";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDateTime, cn } from "@/lib/utils";
 
 export default function BroadcastAdminPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const rbac = useRbacAccess();
+  const isAdmin = rbac.can("broadcast-manage", ["manage", "full"]);
 
   const { data, isLoading } = useBroadcasts();
   const items = data?.data ?? [];
@@ -39,13 +41,13 @@ export default function BroadcastAdminPage() {
   const [deleting, setDeleting] = React.useState<SystemBroadcast | null>(null);
   const pending = create.isPending || update.isPending;
 
-  if (session && !isAdmin) {
+  if (session && !isAdmin && !rbac.isLoading) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
           <ShieldAlert className="h-10 w-10 text-destructive" />
           <p className="font-medium text-ink">Bạn không có quyền truy cập trang này</p>
-          <p className="text-sm text-muted-foreground">Chỉ Quản trị viên mới gửi thông báo hệ thống.</p>
+          <p className="text-sm text-muted-foreground">Bạn chưa được cấp quyền quản lý thông báo hệ thống.</p>
         </CardContent>
       </Card>
     );

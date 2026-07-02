@@ -2,13 +2,16 @@ import type { NextRequest } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { deleteFromS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ADMIN_ONLY = ["ADMIN"];
+async function requireAnnouncementManager(user: { id?: string; role: string }) {
+  await requirePermissionLevel(user, "announcement-manage", ["manage", "full"], "Không đủ quyền quản lý mệnh lệnh");
+}
 
 /** Best-effort removal of an announcement attachment. */
 async function removeAttachment(fileUrl: string | null | undefined) {
@@ -76,11 +79,11 @@ export async function GET() {
   });
 }
 
-/** POST /api/announcements — đăng bài (chỉ ADMIN). */
+/** POST /api/announcements — đăng bài (Quản trị / Quản lý có quyền). */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
+    await requireAnnouncementManager(user);
     await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, linkUrl, fileUrl, fileName } = body as {
@@ -109,11 +112,11 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** PUT /api/announcements — sửa bài (chỉ ADMIN). */
+/** PUT /api/announcements — sửa bài (Quản trị / Quản lý có quyền). */
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
+    await requireAnnouncementManager(user);
     await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { id, title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, invalidatedAt, action, linkUrl, fileUrl, fileName } = body as {
@@ -164,11 +167,11 @@ export async function PUT(req: NextRequest) {
   });
 }
 
-/** DELETE /api/announcements?id= — xoá bài (chỉ ADMIN). */
+/** DELETE /api/announcements?id= — xoá bài (Quản trị / Quản lý có quyền). */
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
+    await requireAnnouncementManager(user);
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id bài đăng");
     const prev = await prisma.announcement.findUnique({ where: { id }, select: { fileUrl: true } });

@@ -1,16 +1,17 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
+    await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền cập nhật khiếm khuyết");
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
@@ -56,7 +57,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "defect-close", ["approve", "manage", "full"], "Không đủ quyền xoá khiếm khuyết");
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
     const access = await resolveEquipmentAccessForUser(user);

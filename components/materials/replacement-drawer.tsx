@@ -15,7 +15,8 @@ import {
   useDeleteReplacement,
   type ReplacementItem,
 } from "@/hooks/useReplacements";
-import { replacementIntervalLabel, can } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { replacementIntervalLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 
 export function ReplacementDrawer({
@@ -27,8 +28,9 @@ export function ReplacementDrawer({
   role?: string;
   onClose: () => void;
 }) {
-  const canManage = can(role, "manageReplacement");
-  const canDelete = can(role, "approveRepair"); // ADMIN + SUPERVISOR
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("replacement-manage", ["create", "manage", "full"]);
+  const canDelete = rbac.can("replacement-manage", ["full"]);
   const { data, isLoading } = useReplacements(material ? { materialId: material.id } : {});
   const del = useDeleteReplacement();
   const points = data?.data ?? [];

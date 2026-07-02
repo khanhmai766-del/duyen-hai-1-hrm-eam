@@ -33,6 +33,7 @@ import {
 } from "@/hooks/useAnnouncements";
 import { formatDate, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { effectiveUserPosition } from "@/lib/current-position";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 import {
@@ -135,11 +136,12 @@ export default function NotificationsPage() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const role = session?.user?.role;
-  const isAdmin = role === "ADMIN";
+  const rbac = useRbacAccess();
+  const canManageAnnouncements = rbac.can("announcement-manage", ["manage", "full"]);
   const { position: currentPosition } = useCurrentPosition();
   const exemptFromReadConfirm = isAnnouncementReadExemptPosition(currentPosition);
-  // ADMIN & Trưởng ca (SUPERVISOR) xem được ai đã/chưa đọc mệnh lệnh.
-  const isManager = role === "ADMIN" || role === "MANAGER" || role === "SUPERVISOR";
+  // Cấp quản lý xem được ai đã/chưa đọc mệnh lệnh.
+  const isManager = rbac.can("announcement-manage", ["manage", "full"]);
 
   const { data: annData, isLoading: annLoading } = useAnnouncements();
   const announcements = annData?.data ?? [];
@@ -482,7 +484,7 @@ export default function NotificationsPage() {
                 </div>
               )}
             </div>
-            {isAdmin && (
+            {canManageAnnouncements && (
               <div className="flex shrink-0 items-center gap-1 self-end opacity-100 transition-opacity sm:self-start sm:opacity-0 sm:group-hover:opacity-100">
                 {isInvalid ? (
                   <button onClick={() => restoreOrder(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
@@ -544,7 +546,7 @@ export default function NotificationsPage() {
     <div className="space-y-6">
       <PageHeader title="MỆNH LỆNH SẢN XUẤT" description="Mệnh lệnh & thông tin vận hành cần chú ý" />
 
-      {/* Bảng tin từ Ban quản trị (chỉ ADMIN đăng/sửa/xoá; mọi người đều xem) */}
+      {/* Mệnh lệnh sản xuất: người có quyền quản lý được đăng/sửa/xoá; mọi người đều xem. */}
       <section className="space-y-3">
         {/* Thanh tìm kiếm + bộ lọc (năm / phân loại) + đăng mệnh lệnh */}
         <div className="flex flex-wrap items-center gap-2">
@@ -590,7 +592,7 @@ export default function NotificationsPage() {
               <Archive className="h-4 w-4" />
               {showInvalidArchive ? "Mệnh lệnh hiện hành" : "Mệnh lệnh hết hiệu lực"}
             </Button>
-            {isAdmin && (
+            {canManageAnnouncements && (
               <Button size="sm" className="shrink-0" onClick={() => openCreate("BULLETIN")}>
                 <Plus className="h-4 w-4" /> Đăng mệnh lệnh
               </Button>
@@ -609,7 +611,7 @@ export default function NotificationsPage() {
                 description={
                   showInvalidArchive
                     ? "Các mệnh lệnh sẽ tự chuyển vào đây sau 15 ngày kể từ khi đánh dấu không còn hiệu lực."
-                    : isAdmin ? "Nhấn “Đăng mệnh lệnh” để tạo bài viết đầu tiên." : "Hiện chưa có mệnh lệnh từ Ban quản trị."
+                    : canManageAnnouncements ? "Nhấn “Đăng mệnh lệnh” để tạo bài viết đầu tiên." : "Hiện chưa có mệnh lệnh từ Ban quản trị."
                 }
               />
             </CardContent>
@@ -655,7 +657,7 @@ export default function NotificationsPage() {
         )}
       </section>
 
-      {/* Create / edit dialog — ADMIN only */}
+      {/* Create / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -815,7 +817,7 @@ export default function NotificationsPage() {
         onConfirm={confirmDelete}
       />
 
-      {/* Tình trạng đọc — chỉ ADMIN / Trưởng ca */}
+      {/* Tình trạng đọc — chỉ cấp quản lý */}
       <Dialog open={!!readersOf} onOpenChange={(o) => !o && setReadersOf(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>

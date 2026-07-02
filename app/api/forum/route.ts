@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const AUTHOR_SELECT = `
   json_build_object(
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requirePermissionLevel(user, "forum-write", ["create", "manage", "full"], "Không đủ quyền tạo chủ đề forum");
     const body = await req.json();
     const title = String(body.title ?? "").trim();
     const content = String(body.content ?? "").trim();

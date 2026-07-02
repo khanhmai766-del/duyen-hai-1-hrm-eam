@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
@@ -15,7 +16,7 @@ const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position:
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
+    await requirePermissionLevel(user, "defect-manage", ["create", "manage", "full"], "Không đủ quyền xử lý khiếm khuyết");
     const body = await req.json().catch(() => ({}));
 
     const defect = await prisma.defect.findUnique({ where: { id: params.id } });

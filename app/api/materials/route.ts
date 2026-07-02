@@ -6,6 +6,7 @@ import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -145,7 +146,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền thêm vật tư");
     const body = await req.json();
     if (!body.code || !body.name || !body.unit) return fail("Thiếu thông tin bắt buộc");
     const exists = await prisma.material.findUnique({ where: { code: body.code } });
@@ -179,7 +180,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
@@ -222,14 +223,14 @@ export async function PUT(req: NextRequest) {
 }
 
 /**
- * DELETE /api/materials — xoá vật tư (chỉ ADMIN).
+ * DELETE /api/materials — xoá vật tư (Quản trị / Quản lý).
  *  - Một vật tư:  ?id=<id>
  *  - Nhiều vật tư: body JSON { ids: string[] }
  */
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "material-manage", ["full"], "Không đủ quyền xoá vật tư");
 
     // Gom danh sách id cần xoá từ query (đơn) hoặc body (hàng loạt).
     const single = req.nextUrl.searchParams.get("id");

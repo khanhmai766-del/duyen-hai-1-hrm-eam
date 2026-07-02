@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { shiftWindow, MAX_EARLY_CHECKINS } from "@/lib/constants";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 /**
  * Org-chart check-in ("Điểm danh"): places the current user into a seat
@@ -24,12 +25,14 @@ export async function POST(req: NextRequest) {
     if (!date || !shiftType || !unit || !positionLabel?.trim()) {
       return fail("Thiếu thông tin ca trực hoặc cương vị");
     }
+    await requirePermissionLevel(user, "shift-operation-check-in", ["create", "manage", "full"], "Không đủ quyền điểm danh ca vận hành");
     const label = positionLabel.trim();
+    const canApproveShift = await hasPermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"]);
 
     // Admin / Trưởng ca may place another user into a seat (the "Thêm" picker in
     // Duyệt chấm công). Everyone else can only check themselves in.
     const targetUserId =
-      body.userId && body.userId !== user.id && ["ADMIN", "MANAGER", "SUPERVISOR"].includes(user.role)
+      body.userId && body.userId !== user.id && canApproveShift
         ? (body.userId as string)
         : user.id;
 
@@ -50,7 +53,7 @@ export async function POST(req: NextRequest) {
         include: { assignments: true },
       });
     }
-    const managerAddingUser = !!body.userId && ["ADMIN", "MANAGER", "SUPERVISOR"].includes(user.role);
+    const managerAddingUser = !!body.userId && canApproveShift;
     if (shift.isAttendanceLocked && !managerAddingUser) {
       return fail("Ca trực đã được duyệt hết và khóa điểm danh.", 403);
     }
@@ -133,7 +136,7 @@ export async function DELETE(req: NextRequest) {
     // Admin/Trưởng ca removing a specific seat (rejecting a check-in).
     const id = sp.get("id");
     if (id) {
-      requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+      await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền thu hồi điểm danh");
       const target = await prisma.shiftAssignment.findUnique({ where: { id } });
       if (!target) return fail("Không tìm thấy phân công", 404);
       const targetShift = await prisma.shift.findUnique({ where: { id: target.shiftId }, select: { isAttendanceLocked: true } });
@@ -167,8 +170,8 @@ export async function DELETE(req: NextRequest) {
 
     // Khi chấm công đã được duyệt, user dưới quyền Quản trị / Trưởng ca không
     // được tự thu hồi điểm danh (chỉ ADMIN / SUPERVISOR mới thu hồi được).
-    const isManager = ["ADMIN", "MANAGER", "SUPERVISOR"].includes(user.role);
-    if (!isManager && mine.some((a) => a.isApproved)) {
+    const canApproveShift = await hasPermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"]);
+    if (!canApproveShift && mine.some((a) => a.isApproved)) {
       return fail("Chấm công đã được duyệt — bạn không thể thu hồi điểm danh. Vui lòng liên hệ Quản trị / Quản lý / Trưởng ca.", 403);
     }
 
@@ -191,7 +194,7 @@ export async function DELETE(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền duyệt điểm danh ca vận hành");
     const body = await req.json();
     const { date, shiftType, unit, ids } = body as {
       date: string;

@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
+    await requirePermissionLevel(user, "repair-create", ["create", "manage", "full"], "Không đủ quyền tạo phiếu sửa chữa");
     const body = await req.json();
     if (!body.deviceId || !body.title || !body.action) {
       return fail("Thiếu thông tin bắt buộc (thiết bị, tiêu đề, hành động)");

@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 function parentSeqOf(seq: string) {
   const parts = seq.split(".");
@@ -12,7 +13,7 @@ function parentSeqOf(seq: string) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền nhập danh mục thiết bị");
     const body = await req.json();
     const rows: Array<{ code?: string; name?: string; systemSeq?: string }> = Array.isArray(body.rows) ? body.rows : [];
     if (!rows.length) return fail("Không có dòng dữ liệu hợp lệ");

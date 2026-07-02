@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { uploadBufferToS3, uploadImageBufferToS3 } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,13 +14,13 @@ const ALLOWED: Record<string, string> = {
 };
 
 /**
- * POST /api/materials/upload — ADMIN tải ảnh minh hoạ hoặc PDF đính kèm vật tư
+ * POST /api/materials/upload — Quản trị / Quản lý tải ảnh minh hoạ hoặc PDF đính kèm vật tư
  * (multipart, field "file", kind="image" | "document"). Trả về { url, name } để lưu vào vật tư.
  */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền tải tệp vật tư");
 
     const form = await req.formData();
     const file = form.get("file");

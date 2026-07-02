@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +67,12 @@ function normalizePermissionRows(value: unknown, roleIds: string[]) {
       const matrix = item.matrix as Record<string, unknown> | undefined;
       const normalizedMatrix = Object.fromEntries(
         roleIds.map((roleId) => {
-          const fallback = roleId === "MANAGER" ? strongestPermission([matrix?.SUPERVISOR, matrix?.TECHNICIAN]) : "none";
+          const fallback =
+            roleId === "MANAGER" && ["announcement-manage", "material-manage"].includes(String(item.id ?? ""))
+              ? "full"
+              : roleId === "MANAGER"
+                ? strongestPermission([matrix?.SUPERVISOR, matrix?.TECHNICIAN])
+                : "none";
           return [roleId, validPermissionValue(matrix?.[roleId], fallback)];
         })
       );
@@ -129,7 +135,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "rbac-manage", ["full"], "Không đủ quyền cập nhật ma trận phân quyền");
 
     const body = (await req.json()) as Record<string, unknown>;
     const roles = normalizeRoles(body.roles);

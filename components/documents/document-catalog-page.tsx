@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
   type DigitalDocument,
   type DigitalDocumentUser,
@@ -265,12 +266,22 @@ export function DocumentCatalogPage({
 }: DocumentCatalogPageProps) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
-  const isAdmin = userRole === "ADMIN";
-  const canManageOperationDocument = (category === "PROCEDURE" || category === "PID") && (isAdmin || userRole === "TECHNICIAN");
-  const canImportProcedure = category === "PROCEDURE" && (isAdmin || userRole === "TECHNICIAN");
-  const canCreate = isAdmin || (canManageOperationDocument && userRole === "TECHNICIAN");
-  const canEdit = canManageOperationDocument || (allowStaffEdit && (userRole === "SUPERVISOR" || userRole === "TECHNICIAN"));
-  const canDelete = isAdmin || (canManageOperationDocument && userRole === "TECHNICIAN");
+  const rbac = useRbacAccess();
+  const documentPermission =
+    category === "PROCEDURE" ? "document-procedure" :
+    category === "PID" ? "document-pid" :
+    null;
+  const canImportProcedure = category === "PROCEDURE" && rbac.can("document-procedure", ["create", "manage", "full"]);
+  const canCreate = documentPermission
+    ? rbac.can(documentPermission, ["create", "manage", "full"])
+    : rbac.can("archive-create-delete", ["create", "manage", "full"]);
+  const canEdit = documentPermission
+    ? rbac.can(documentPermission, ["manage", "full"])
+    : allowStaffEdit && rbac.can("archive-edit", ["manage", "full"]);
+  const canDelete = documentPermission
+    ? rbac.can(documentPermission, ["full"])
+    : rbac.can("archive-create-delete", ["full"]);
+  const canBackup = rbac.can("archive-backup", ["full"]);
   const hasActions = canEdit || canDelete;
   const needsPositionOptions = showEquipmentScope || canImportProcedure;
   const docs = useDocuments(category);
@@ -672,7 +683,7 @@ export function DocumentCatalogPage({
   return (
     <div className="space-y-6">
       <PageHeader title={title} description={description}>
-        {showAnnualBackupExport && isAdmin && (
+        {showAnnualBackupExport && canBackup && (
           <AnnualBackupExport
             rows={backupRows}
             columns={backupColumns}
@@ -684,7 +695,7 @@ export function DocumentCatalogPage({
             filenamePrefix={backupFilenamePrefix ?? "thu-muc-luu-tru"}
           />
         )}
-        {(isAdmin || canImportProcedure) && (
+        {(canCreate || canImportProcedure) && (
           <>
             {canImportProcedure && (
               <Button type="button" variant="outline" onClick={downloadProcedureImportTemplate}>

@@ -22,6 +22,7 @@ import {
   useHcGroups, useCreateHcGroup, useUpdateHcGroup, useDeleteHcGroup,
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
 } from "@/hooks/useHcAttendance";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn, initials } from "@/lib/utils";
 import { HC_PERIOD_LABEL, normalizeHcPeriod } from "@/lib/hc-period";
 
@@ -57,7 +58,8 @@ function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: strin
 
 export default function AdminAttendancePage() {
   const { data: session } = useSession();
-  const canManage = ["ADMIN", "MANAGER", "SUPERVISOR"].includes(session?.user?.role ?? "");
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("hc-attendance-check-in", ["create", "manage", "full"]) || rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
   const myId = session?.user?.id;
 
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));

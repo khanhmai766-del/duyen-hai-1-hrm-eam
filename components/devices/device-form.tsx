@@ -16,6 +16,7 @@ import { useCreateDevice, useUpdateDevice, type DeviceRecord } from "@/hooks/use
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { usePositions } from "@/hooks/useUsers";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 
 const NONE = "__none__";
@@ -25,7 +26,8 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
   const create = useCreateDevice();
   const update = useUpdateDevice();
   const isEdit = !!device;
-  const canEditCode = !isEdit || session?.user?.role === "ADMIN";
+  const rbac = useRbacAccess();
+  const canEditCode = !isEdit || rbac.can("device-code", ["full"]);
   const positions = usePositions().filter(isSelectableManagingPosition);
   const { data: equipmentTreeData } = useEquipmentTree();
   const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);

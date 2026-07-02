@@ -19,6 +19,7 @@ import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
 import { useUsersFull, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -109,22 +110,27 @@ function formatJson(value: unknown) {
 
 export default function AdminUsersPage() {
   const { data: session } = useSession();
+  const rbac = useRbacAccess();
+  const canManageUsers = rbac.can("user-manage", ["manage", "full"]);
+  const canViewActivityLog = rbac.can("system_audit_log:view", ["read", "manage", "full"]);
+  const canManageRbac = rbac.can("rbac-manage", ["full"]);
+  const canOpenPage = canManageUsers || canViewActivityLog || canManageRbac;
   const queryClient = useQueryClient();
   const { data, isLoading } = useUsersFull();
   const create = useCreateUser();
   const update = useUpdateUser();
   const del = useDeleteUser();
   const permanentDelete = usePermanentDeleteUser();
-  const audit = useQuery({ queryKey: ["audit"], queryFn: () => apiGet<ActivityLogRow[]>("/api/audit"), enabled: session?.user?.role === "ADMIN" });
+  const audit = useQuery({ queryKey: ["audit"], queryFn: () => apiGet<ActivityLogRow[]>("/api/audit"), enabled: canViewActivityLog });
   const systemAudit = useQuery({
     queryKey: ["system-audit"],
     queryFn: () => apiGet<SystemAuditLogRow[]>("/api/system-audit"),
-    enabled: session?.user?.role === "ADMIN",
+    enabled: canViewActivityLog,
   });
   const rbacQuery = useQuery({
     queryKey: ["rbac-config"],
     queryFn: () => apiGet<RbacConfig>("/api/rbac"),
-    enabled: session?.user?.role === "ADMIN",
+    enabled: canManageUsers || canManageRbac,
   });
   const saveRbac = useMutation({
     mutationFn: (body: RbacConfig) => apiMutate<RbacConfig>("/api/rbac", "PUT", body),
@@ -149,12 +155,12 @@ export default function AdminUsersPage() {
   const [activityDetail, setActivityDetail] = React.useState<ActivityLogRow | null>(null);
   const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
 
-  if (session && session.user?.role !== "ADMIN") {
+  if (session && !canOpenPage && !rbac.isLoading) {
     return (
       <Card><CardContent className="flex flex-col items-center gap-2 py-16 text-center">
         <ShieldAlert className="h-10 w-10 text-destructive" />
         <p className="font-medium text-ink">Bạn không có quyền truy cập trang này</p>
-        <p className="text-sm text-muted-foreground">Chỉ Quản trị viên mới quản lý người dùng.</p>
+        <p className="text-sm text-muted-foreground">Bạn chưa được cấp quyền quản trị người dùng hoặc xem nhật ký hệ thống.</p>
       </CardContent></Card>
     );
   }

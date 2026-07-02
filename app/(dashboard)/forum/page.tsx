@@ -39,6 +39,7 @@ import {
   type ForumPost,
   type ForumReply,
 } from "@/hooks/useForum";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn, formatDateTime, initials } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -59,7 +60,9 @@ const DEFAULT_FORM = {
 
 export default function ForumPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const rbac = useRbacAccess();
+  const canWriteForum = rbac.can("forum-write", ["create", "manage", "full"]);
+  const canModerateForum = rbac.can("forum-moderate", ["full"]);
   const currentUserId = session?.user?.id;
   const [category, setCategory] = React.useState("ALL");
   const [q, setQ] = React.useState("");
@@ -151,15 +154,17 @@ export default function ForumPage() {
   }
 
   function canManage(authorId: string) {
-    return isAdmin || (!!currentUserId && authorId === currentUserId);
+    return canModerateForum || (!!currentUserId && authorId === currentUserId);
   }
 
   return (
     <div className="space-y-6">
       <PageHeader title="FORUM KỸ THUẬT" description="Trao đổi kinh nghiệm, chia sẻ tài liệu, quy trình, sơ đồ và bản vẽ vận hành">
-        <Button onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
-          <Plus className="h-4 w-4" /> Chủ đề mới
-        </Button>
+        {canWriteForum && (
+          <Button onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
+            <Plus className="h-4 w-4" /> Chủ đề mới
+          </Button>
+        )}
       </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -246,7 +251,7 @@ export default function ForumPage() {
           icon={MessageSquareText}
           title="Chưa có chủ đề Forum"
           description="Tạo chủ đề đầu tiên để chia sẻ tài liệu, quy trình hoặc câu hỏi kỹ thuật với ca/kíp."
-          action={{ label: "Tạo chủ đề", onClick: openCreate }}
+          action={canWriteForum ? { label: "Tạo chủ đề", onClick: openCreate } : undefined}
         />
       ) : (
         <div className="space-y-4">
@@ -260,7 +265,8 @@ export default function ForumPage() {
               setReplyLinks={(v) => setReplyLinks((s) => ({ ...s, [post.id]: v }))}
               onReply={() => submitReply(post.id)}
               replying={createReply.isPending}
-              isAdmin={isAdmin}
+              canWrite={canWriteForum}
+              isAdmin={canModerateForum}
               canManagePost={canManage(post.author.id)}
               canManageReply={(authorId) => canManage(authorId)}
               onEditPost={() => openEditPost(post)}
@@ -322,6 +328,7 @@ function ForumPostCard({
   setReplyLinks,
   onReply,
   replying,
+  canWrite,
   isAdmin,
   canManagePost,
   canManageReply,
@@ -338,6 +345,7 @@ function ForumPostCard({
   setReplyLinks: (v: string) => void;
   onReply: () => void;
   replying: boolean;
+  canWrite: boolean;
   isAdmin: boolean;
   canManagePost: boolean;
   canManageReply: (authorId: string) => boolean;
@@ -447,15 +455,17 @@ function ForumPostCard({
             )}
           </div>
         ))}
-        <div className="grid gap-2 rounded-xl border border-dashed border-border bg-white p-3">
-          <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
-          <Input value={replyLinks} onChange={(e) => setReplyLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
-          <div className="flex justify-end">
-            <Button size="sm" onClick={onReply} disabled={replying || !reply.trim()}>
-              <Send className="h-4 w-4" /> Gửi phản hồi
-            </Button>
+        {canWrite && (
+          <div className="grid gap-2 rounded-xl border border-dashed border-border bg-white p-3">
+            <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
+            <Input value={replyLinks} onChange={(e) => setReplyLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
+            <div className="flex justify-end">
+              <Button size="sm" onClick={onReply} disabled={replying || !reply.trim()}>
+                <Send className="h-4 w-4" /> Gửi phản hồi
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Card>
   );

@@ -30,13 +30,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { OPERATION_TYPE, OPERATION_TYPE_ORDER, can, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
+import { OPERATION_TYPE, OPERATION_TYPE_ORDER, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
 import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/lib/links";
 import { initials, cn } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
 import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent, type SafeOperationSetting } from "@/hooks/useDashboard";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { toast } from "sonner";
 
 /** Tracks browser connectivity via `navigator.onLine` + online/offline events.
@@ -59,6 +60,7 @@ function useOnline() {
 export default function DashboardPage() {
   const { data: session } = useSession();
   const currentPosition = useCurrentPosition();
+  const rbac = useRbacAccess();
   const me = useMyDashboard();
 
   // Live connectivity status — online while signed in & connected, offline when
@@ -79,7 +81,7 @@ export default function DashboardPage() {
         <SafetyTicker />
       </div>
 
-      <SafeOperationCard canManage={can(session?.user?.role, "manageOperations")} />
+      <SafeOperationCard canManage={rbac.can("operation-events", ["manage", "full"])} />
 
       {/* Stat row — all four cards stretch to the user-photo card's height */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
@@ -140,7 +142,7 @@ export default function DashboardPage() {
       {/* Body cards mirror the compact 3-panel dashboard layout: nội bộ · link · liên lạc. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,0.92fr)] lg:items-stretch">
         <div className="min-w-0 [&>*]:h-full">
-          <OperationInfoCard canManage={can(session?.user?.role, "manageOperations")} />
+          <OperationInfoCard canManage={rbac.can("operation-events", ["create", "manage", "full"])} />
         </div>
         <div className="min-w-0 [&>*]:h-full">
           <SupportLinksCard />

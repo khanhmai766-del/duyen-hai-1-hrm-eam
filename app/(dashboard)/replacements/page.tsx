@@ -32,9 +32,9 @@ import {
   REPL_DUE_ORDER,
   replacementDueStatus,
   replacementIntervalLabel,
-  can,
 } from "@/lib/constants";
 import { formatDate, cn, initials } from "@/lib/utils";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 type TabKey = "schedule" | "history";
 
@@ -51,8 +51,9 @@ function ymLabel(m: string): string {
 export default function ReplacementsPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const canManage = can(role, "manageReplacement");
-  const canDelete = can(role, "approveRepair"); // ADMIN + SUPERVISOR
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("replacement-manage", ["create", "manage", "full"]);
+  const canDelete = rbac.can("replacement-manage", ["full"]);
   const [tab, setTab] = React.useState<TabKey>("schedule");
   // Bộ lọc tháng/năm dùng chung cho cả 2 tab (mặc định tháng hiện tại).
   const [month, setMonth] = React.useState(() => ym(new Date()));

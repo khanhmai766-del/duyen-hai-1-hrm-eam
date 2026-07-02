@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]); // entered by Trưởng ca
+    await requirePermissionLevel(user, "operation-events", ["create", "manage", "full"], "Không đủ quyền cập nhật thông tin vận hành");
     const body = await req.json();
     if (!body.title || !body.date || !body.type) return fail("Thiếu loại, tiêu đề hoặc ngày");
     const event = await prisma.operationEvent.create({
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "operation-events", ["manage", "full"], "Không đủ quyền cập nhật thông tin vận hành");
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     if (!body.title || !body.date || !body.type) return fail("Thiếu loại, tiêu đề hoặc ngày");
@@ -77,7 +78,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "operation-events", ["full"], "Không đủ quyền xoá thông tin vận hành");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id");
     await prisma.operationEvent.delete({ where: { id } });

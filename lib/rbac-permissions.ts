@@ -1,9 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_RBAC_MATRIX } from "@/lib/rbac-defaults";
 
 const RBAC_CONFIG_KEY = "rbac-permissions";
 const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
 const APPROVE_LEVELS = new Set(["approve", "manage", "full"]);
+const MANAGE_LEVELS = new Set(["manage", "full"]);
 const VIEW_LEVELS = new Set(["read", "own", "create", "approve", "manage", "full"]);
+export type PermissionLevel = "none" | "read" | "own" | "create" | "approve" | "manage" | "full";
+
+const PERMISSION_RANK: Record<PermissionLevel, number> = {
+  none: 0,
+  read: 1,
+  own: 2,
+  create: 3,
+  approve: 4,
+  manage: 5,
+  full: 6,
+};
 
 type RbacPermission = {
   id: string;
@@ -21,6 +34,17 @@ type RbacConfig = {
   permissions?: RbacPermission[];
   userOverrides?: RbacUserOverride[];
 };
+
+function permissionLevel(value: string | null | undefined): PermissionLevel {
+  const raw = String(value ?? "none");
+  return raw in PERMISSION_RANK ? (raw as PermissionLevel) : "none";
+}
+
+function strongestPermission(values: Array<string | null | undefined>): PermissionLevel {
+  return values
+    .map(permissionLevel)
+    .reduce<PermissionLevel>((best, value) => (PERMISSION_RANK[value] > PERMISSION_RANK[best] ? value : best), "none");
+}
 
 // Bảng RbacConfig được khai báo trong prisma/schema.prisma và tạo bằng db push.
 async function readRbacConfig(): Promise<RbacConfig | null> {
@@ -45,39 +69,48 @@ function allowsView(value: string | null | undefined) {
   return VIEW_LEVELS.has(String(value ?? "none"));
 }
 
-export async function hasAssignedApprovePermission(user: { id?: string; role?: string }, permissionId: string) {
-  if (!user.id) return false;
+function allowsManage(value: string | null | undefined) {
+  return MANAGE_LEVELS.has(String(value ?? "none"));
+}
+
+export async function assignedPermissionLevel(user: { id?: string; role?: string }, permissionId: string): Promise<PermissionLevel> {
+  if (user.role === "ADMIN") return "full";
+  if (!user.id) return "none";
   const config = await readRbacConfig();
-  if (!config) return false;
+  if (!config) return permissionLevel(DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""]);
 
   const permissions = Array.isArray(config.permissions) ? config.permissions : [];
   const overrides = Array.isArray(config.userOverrides) ? config.userOverrides : [];
   const targetPermission = permissions.find((item) => item.id === permissionId);
-  if (allowsApprove(targetPermission?.matrix?.[user.role ?? ""])) return true;
+  const roleValue = targetPermission?.matrix?.[user.role ?? ""] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""];
+  const overrideValues = overrides
+    .filter((override) => override.userId === user.id)
+    .flatMap((override) => {
+      if (override.permissionId === permissionId) return [override.value];
+      if (override.permissionId !== ROLE_PROFILE_PERMISSION || !override.roleId) return [];
+      return [override.value, targetPermission?.matrix?.[override.roleId] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[override.roleId]];
+    });
 
-  return overrides.some((override) => {
-    if (override.userId !== user.id) return false;
-    if (override.permissionId === permissionId) return allowsApprove(override.value);
-    if (override.permissionId !== ROLE_PROFILE_PERMISSION || !override.roleId) return false;
-    return allowsApprove(override.value) || allowsApprove(targetPermission?.matrix?.[override.roleId]);
-  });
+  return strongestPermission([roleValue, ...overrideValues]);
+}
+
+export async function hasAssignedPermissionLevel(
+  user: { id?: string; role?: string },
+  permissionId: string,
+  allowed: PermissionLevel[]
+) {
+  const level = await assignedPermissionLevel(user, permissionId);
+  return allowed.includes(level);
+}
+
+export async function hasAssignedApprovePermission(user: { id?: string; role?: string }, permissionId: string) {
+  return allowsApprove(await assignedPermissionLevel(user, permissionId));
+}
+
+export async function hasAssignedManagePermission(user: { id?: string; role?: string }, permissionId: string) {
+  return allowsManage(await assignedPermissionLevel(user, permissionId));
 }
 
 export async function hasAssignedPermission(user: { id?: string; role?: string }, permissionId: string) {
-  if (user.role === "ADMIN") return true;
-  if (!user.id) return false;
-  const config = await readRbacConfig();
-  if (!config) return false;
-
-  const permissions = Array.isArray(config.permissions) ? config.permissions : [];
-  const overrides = Array.isArray(config.userOverrides) ? config.userOverrides : [];
-  const targetPermission = permissions.find((item) => item.id === permissionId);
-  if (allowsView(targetPermission?.matrix?.[user.role ?? ""])) return true;
-
-  return overrides.some((override) => {
-    if (override.userId !== user.id) return false;
-    if (override.permissionId === permissionId) return allowsView(override.value);
-    if (override.permissionId !== ROLE_PROFILE_PERMISSION || !override.roleId) return false;
-    return allowsView(override.value) || allowsView(targetPermission?.matrix?.[override.roleId]);
-  });
+  return allowsView(await assignedPermissionLevel(user, permissionId));
 }

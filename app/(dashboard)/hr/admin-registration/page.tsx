@@ -33,7 +33,7 @@ const HC_SELF_PERIODS = [
   { value: "AFTERNOON", label: "Buổi chiều" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((period) => `Hành chính - ${period.label}`);
-const APPROVE_PERMISSION_ID = "shift-approve";
+const APPROVE_PERMISSION_ID = "shift-operation-approve";
 const APPROVE_PERMISSION_VALUES = new Set(["approve", "manage", "full"]);
 
 interface RbacConfig {

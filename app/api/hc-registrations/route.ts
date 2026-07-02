@@ -6,8 +6,7 @@ import { userWithSignedMedia } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
 
-const APPROVE_PERMISSION_ID = "shift-approve";
-const MANAGER = ["ADMIN", "TECHNICIAN"];
+const APPROVE_PERMISSION_ID = "hc-attendance-approve";
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Ra ca sáng", "Hành chính - Buổi chiều"];
 
 function dayStart(date: string | null) {
@@ -20,7 +19,7 @@ function dayStart(date: string | null) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const canManage = MANAGER.includes(user.role) || (await hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID));
+    const canManage = await hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
     const from = dayStart(req.nextUrl.searchParams.get("from"));
 
     const registrations = await prisma.hcCheckIn.findMany({

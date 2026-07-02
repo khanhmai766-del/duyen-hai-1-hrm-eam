@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 /**
  * Ghi nhận một lần thay thế vật tư tại điểm thay thế (chỉ ADMIN/Trưởng ca):
@@ -12,7 +13,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền ghi nhận thay thế vật tư");
     const body = await req.json().catch(() => ({}));
 
     const point = await prisma.materialReplacement.findUnique({

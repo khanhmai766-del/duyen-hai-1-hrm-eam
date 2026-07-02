@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
@@ -50,7 +51,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền cập nhật điểm thay thế");
     const body = await req.json();
     const existing = await prisma.materialReplacement.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
@@ -103,7 +104,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "replacement-manage", ["full"], "Không đủ quyền xoá điểm thay thế");
     const existing = await prisma.materialReplacement.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
     const access = await resolveEquipmentAccessForUser(user);

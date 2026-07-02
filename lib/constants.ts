@@ -340,9 +340,9 @@ export const CAN = {
   manageUsers: ["ADMIN"],
   manageDevices: ["ADMIN"],
   deleteDevice: ["ADMIN"],
-  manageMaterials: ["ADMIN"],
+  manageMaterials: ["ADMIN", "MANAGER"],
   manageOperations: ["ADMIN", "MANAGER", "SUPERVISOR"],
-  manageAnnouncements: ["ADMIN"],
+  manageAnnouncements: ["ADMIN", "MANAGER"],
   manageReplacement: ["ADMIN", "MANAGER", "SUPERVISOR"],
   manageDefect: ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"],
 } as const;

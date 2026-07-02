@@ -19,9 +19,11 @@ import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import type { NavItem } from "@/lib/nav";
 
 // Tông màu gradient nhẹ cho từng ô trong bảng truy cập nhanh (gán theo chỉ số).
 const GRID_TINTS = [
@@ -40,6 +42,13 @@ const GRID_TINTS = [
   "bg-gradient-to-br from-pink-100 to-pink-200 text-pink-700",
   "bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700",
 ];
+const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
+
+function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
+  if (!item.adminOnly) return true;
+  if (role === "ADMIN") return true;
+  return (item.permissionIds ?? []).some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
+}
 
 async function logout(callbackUrl = "/login") {
   try {
@@ -58,6 +67,7 @@ async function logout(callbackUrl = "/login") {
 
 export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
+  const rbac = useRbacAccess();
   const currentPosition = useCurrentPosition();
   const router = useRouter();
   const role = session?.user?.role;
@@ -109,9 +119,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const quickLinks = React.useMemo(
     () =>
       NAV_SECTIONS.flatMap((s) => s.items)
-        .filter((i) => !i.adminOnly || role === "ADMIN")
+        .filter((i) => navItemAllowed(i, role, rbac.can) || i.children?.some((child) => navItemAllowed(child, role, rbac.can)))
         .map((i) => ({ label: i.label, href: i.href, icon: i.icon })),
-    [role]
+    [rbac.can, role]
   );
 
   function toggleFullscreen() {
@@ -137,7 +147,8 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     () =>
       NAV_SECTIONS.flatMap((s) =>
         s.items
-          .filter((i) => !i.adminOnly || role === "ADMIN")
+          .map((i) => ({ ...i, children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can)) }))
+          .filter((i) => navItemAllowed(i, role, rbac.can) || !!i.children?.length)
           .flatMap((i) => {
             const own = {
               label: i.label,
@@ -156,7 +167,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             return [own, ...kids];
           })
       ),
-    [role]
+    [rbac.can, role]
   );
 
   const nq = normalizeText(q);

@@ -1,19 +1,23 @@
 import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { maybeUploadDataUrlList } from "@/lib/s3";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ADMIN_ONLY = ["ADMIN"];
 const CATEGORIES = new Set(["PROCEDURE", "PID", "ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION", "MAJOR_REPAIR", "OIL_GUN_DATA", "SOOT_BLOWER_DATA"]);
 const OPTIONAL_DOCUMENT_URL_CATEGORIES = new Set(["GRID_SEPARATION", "STARTUP_DATA"]);
 const ARCHIVE_EDIT_CATEGORIES = new Set(["ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION", "MAJOR_REPAIR", "OIL_GUN_DATA", "SOOT_BLOWER_DATA"]);
-const DOCUMENT_EDITOR_ROLES = new Set(["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
 const OPERATION_DOCUMENT_CATEGORIES = new Set(["PROCEDURE", "PID"]);
-const OPERATION_DOCUMENT_ROLES = new Set(["ADMIN", "TECHNICIAN"]);
+
+function documentPermissionId(category: string) {
+  if (category === "PROCEDURE") return "document-procedure";
+  if (category === "PID") return "document-pid";
+  return null;
+}
 
 // Bảng DigitalDocument (gồm index theo category + updatedAt) được khai báo trong
 // prisma/schema.prisma và tạo bằng db push.
@@ -102,10 +106,11 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as Record<string, unknown>;
     const category = normalizeCategory(String(body.category ?? ""));
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
-    if (OPERATION_DOCUMENT_CATEGORIES.has(category)) {
-      if (!OPERATION_DOCUMENT_ROLES.has(user.role)) return fail("Bạn không có quyền thêm tài liệu vận hành", 403);
+    const documentPermission = documentPermissionId(category);
+    if (documentPermission) {
+      await requirePermissionLevel(user, documentPermission, ["create", "manage", "full"], "Bạn không có quyền thêm tài liệu vận hành");
     } else {
-      requireRole(user, ADMIN_ONLY);
+      await requirePermissionLevel(user, "archive-create-delete", ["create", "manage", "full"], "Bạn không có quyền thêm hồ sơ lưu trữ");
     }
 
     const payload = normalizeBody(body);
@@ -150,9 +155,12 @@ export async function PUT(req: NextRequest) {
     const category = normalizeCategory(String(body.category ?? ""));
     if (!id) return fail("Thiếu id tài liệu");
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
-    const canEditOperationDocument = OPERATION_DOCUMENT_CATEGORIES.has(category) && OPERATION_DOCUMENT_ROLES.has(user.role);
-    const canEditArchiveDocument = DOCUMENT_EDITOR_ROLES.has(user.role) && (user.role === "ADMIN" || ARCHIVE_EDIT_CATEGORIES.has(category));
-    if (!canEditOperationDocument && !canEditArchiveDocument) {
+    const documentPermission = documentPermissionId(category);
+    if (documentPermission) {
+      await requirePermissionLevel(user, documentPermission, ["manage", "full"], "Bạn không có quyền chỉnh sửa tài liệu");
+    } else if (ARCHIVE_EDIT_CATEGORIES.has(category)) {
+      await requirePermissionLevel(user, "archive-edit", ["manage", "full"], "Bạn không có quyền chỉnh sửa hồ sơ lưu trữ");
+    } else {
       return fail("Bạn không có quyền chỉnh sửa tài liệu", 403);
     }
 
@@ -212,8 +220,11 @@ export async function DELETE(req: NextRequest) {
     const category = normalizeCategory(req.nextUrl.searchParams.get("category"));
     if (!id) return fail("Thiếu id tài liệu");
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
-    if (!OPERATION_DOCUMENT_CATEGORIES.has(category) || !OPERATION_DOCUMENT_ROLES.has(user.role)) {
-      requireRole(user, ADMIN_ONLY);
+    const documentPermission = documentPermissionId(category);
+    if (documentPermission) {
+      await requirePermissionLevel(user, documentPermission, ["full"], "Bạn không có quyền xoá tài liệu");
+    } else if (!(await hasPermissionLevel(user, "archive-create-delete", ["full"]))) {
+      throw fail("Bạn không có quyền xoá hồ sơ lưu trữ", 403);
     }
 
     const deleted = await prisma.$executeRawUnsafe(

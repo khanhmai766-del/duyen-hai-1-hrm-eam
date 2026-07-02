@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 function normalizeList(value: unknown, max: number) {
   if (Array.isArray(value)) {
@@ -30,17 +31,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json();
     const authorId = await getPostAuthor(params.id);
     if (!authorId) return fail("Không tìm thấy chủ đề Forum", 404);
-    const isAdmin = user.role === "ADMIN";
     const isOwner = user.id === authorId;
 
     if (typeof body.isPinned === "boolean") {
-      if (!isAdmin) return fail("Chỉ quản trị viên được ghim chủ đề", 403);
+      await requirePermissionLevel(user, "forum-moderate", ["full"], "Không đủ quyền ghim chủ đề");
       await prisma.$executeRawUnsafe(`UPDATE "ForumPost" SET "isPinned" = $2 WHERE id = $1`, params.id, body.isPinned);
       await audit(user.id, "PIN_FORUM_POST", "ForumPost", params.id, String(body.isPinned));
       return ok({ id: params.id, isPinned: body.isPinned });
     }
 
-    if (!isOwner && !isAdmin) return fail("Bạn không có quyền sửa chủ đề này", 403);
+    if (!isOwner && !(await hasPermissionLevel(user, "forum-moderate", ["full"]))) return fail("Bạn không có quyền sửa chủ đề này", 403);
     const title = String(body.title ?? "").trim();
     const content = String(body.content ?? "").trim();
     const category = String(body.category ?? "DISCUSSION").trim() || "DISCUSSION";
@@ -68,7 +68,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const user = await requireUser();
     const authorId = await getPostAuthor(params.id);
     if (!authorId) return fail("Không tìm thấy chủ đề Forum", 404);
-    if (user.role !== "ADMIN" && user.id !== authorId) return fail("Bạn không có quyền gỡ chủ đề này", 403);
+    if (user.id !== authorId && !(await hasPermissionLevel(user, "forum-moderate", ["full"]))) return fail("Bạn không có quyền gỡ chủ đề này", 403);
 
     await prisma.$executeRawUnsafe(`DELETE FROM "ForumPost" WHERE id = $1`, params.id);
     await audit(user.id, "DELETE_FORUM_POST", "ForumPost", params.id);

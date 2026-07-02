@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useShift, useCheckInOrg, useRecallCheckIn, useApproveAttendance, useRemoveAssignment } from "@/hooks/useShifts";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useUsers } from "@/hooks/useUsers";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { ORG_CHIEF, ORG_LEADS, ORG_SEAT_TITLES, type OrgTone } from "@/lib/org-template";
 import { normalizeText } from "@/lib/nav";
@@ -79,9 +80,9 @@ export default function OrgChartPage() {
   const [viewer, setViewer] = React.useState(false);
   const [approveOpen, setApproveOpen] = React.useState(false);
   const recall = useRecallCheckIn();
+  const rbac = useRbacAccess();
 
-  // Only Quản trị (ADMIN) and Trưởng ca (SUPERVISOR) may approve attendance.
-  const canApprove = ["ADMIN", "MANAGER", "SUPERVISOR"].includes(session?.user?.role ?? "");
+  const canApprove = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
 
   const dateLabel = date.split("-").reverse().join("-");
   const caLabel = `${SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? ""} ${dateLabel}`.trim();

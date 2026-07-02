@@ -67,7 +67,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
-import { can } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
@@ -97,7 +97,10 @@ export default function DevicesPage() {
   const router = useRouter();
   const params = useSearchParams();
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const rbac = useRbacAccess();
+  const canManageDevices = rbac.can("device-manage", ["create", "manage", "full"]);
+  const canImportDevices = rbac.can("device-manage", ["manage", "full"]);
+  const canDeleteDevices = rbac.can("device-delete", ["full"]);
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
@@ -154,14 +157,14 @@ export default function DevicesPage() {
   // `n` keyboard shortcut -> open form view (admin only)
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "n" && isAdmin && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      if (e.key === "n" && canManageDevices && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
         setView("form");
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, isAdmin]);
+  }, [params, canManageDevices]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -174,7 +177,7 @@ export default function DevicesPage() {
     }
   }
 
-  const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || isAdmin));
+  const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
 
   return (
     <div className="space-y-6">
@@ -182,7 +185,7 @@ export default function DevicesPage() {
         {shouldLoadDevices && (
           <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
         )}
-        {isAdmin && (
+        {canImportDevices && (
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <FileSpreadsheet className="h-4 w-4" /> Nhập CSV/Excel
           </Button>
@@ -229,7 +232,7 @@ export default function DevicesPage() {
       {view === "tree" ? (
         <EquipmentTreeView />
       ) : view === "form" ? (
-        isAdmin ? (
+        canManageDevices ? (
           <DeviceForm
             onDone={(device) => {
               const sp = new URLSearchParams(params.toString());
@@ -242,7 +245,7 @@ export default function DevicesPage() {
           <Card><CardContent className="flex flex-col items-center gap-2 py-16 text-center">
             <ShieldAlert className="h-10 w-10 text-destructive" />
             <p className="font-medium text-ink">Bạn không có quyền thêm thiết bị</p>
-            <p className="text-sm text-muted-foreground">Chỉ Quản trị viên mới được thêm thiết bị mới.</p>
+            <p className="text-sm text-muted-foreground">Bạn chưa có quyền thêm thiết bị mới.</p>
           </CardContent></Card>
         )
       ) : (
@@ -266,14 +269,14 @@ export default function DevicesPage() {
               icon={Cpu}
               title="Không có thiết bị"
               description="Không tìm thấy thiết bị phù hợp."
-              action={isAdmin ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
+              action={canManageDevices ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
           ) : (view as ViewMode) === "dashboard" ? (
             <DashboardView devices={devices} byPosition={byPosition} />
           ) : (
             <DetailView
               devices={devices}
-              canDelete={can(session?.user?.role, "deleteDevice")}
+              canDelete={canDeleteDevices}
               onQr={setQrDevice}
               onDelete={setDeleteTarget}
             />

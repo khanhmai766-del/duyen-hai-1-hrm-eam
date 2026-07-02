@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, requireUser, requireRole, handle } from "@/lib/api";
+import { ok, requireUser, handle } from "@/lib/api";
 import { userWithSignedMedia } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "shift-operation-check-in", ["create", "manage", "full"], "Không đủ quyền tạo ca vận hành");
     const body = await req.json();
     const shift = await prisma.shift.create({
       data: {

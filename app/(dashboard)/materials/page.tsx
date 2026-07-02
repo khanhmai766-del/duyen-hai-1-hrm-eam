@@ -22,7 +22,8 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
-import { MATERIAL_SYSTEMS, can } from "@/lib/constants";
+import { MATERIAL_SYSTEMS } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
 
@@ -36,8 +37,8 @@ type MaterialEdit = Partial<Material> & {
 export default function MaterialsPage() {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  // Chỉ Quản trị (ADMIN) được thêm / sửa / xoá vật tư.
-  const canManage = role === "ADMIN";
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("material-manage", ["create", "manage", "full"]);
   const { data, isLoading } = useMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();

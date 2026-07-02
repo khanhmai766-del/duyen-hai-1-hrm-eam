@@ -1,10 +1,11 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { getNormalizedEquipmentNodeList } from "@/lib/equipment-tree";
 import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
+    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền cập nhật cây thiết bị");
     const body = await req.json();
     const seq = String(body.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự");

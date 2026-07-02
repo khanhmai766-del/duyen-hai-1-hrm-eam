@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { ok, requireUser, requireRole, handle } from "@/lib/api";
+import { ok, requireUser, handle } from "@/lib/api";
 import { actionConfig } from "@/lib/activity-log";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "system_audit_log:view", ["read", "manage", "full"], "Không đủ quyền xem nhật ký hoạt động");
 
     // Retention: purge audit entries older than 3 months. Runs lazily on read
     // (no cron in this deployment) and is non-fatal if it fails.

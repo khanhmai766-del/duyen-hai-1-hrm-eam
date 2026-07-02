@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizePositionScopeKey, normalizePositionScopeLabel } from "@/lib/position-system-scopes";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "rbac-manage", ["full"], "Không đủ quyền cấu hình phạm vi thiết bị theo cương vị");
     const body = await req.json();
     const position = normalizePositionScopeLabel(typeof body.position === "string" ? body.position : "");
 

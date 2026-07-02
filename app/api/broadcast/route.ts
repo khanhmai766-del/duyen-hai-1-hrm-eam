@@ -1,12 +1,13 @@
 import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ADMIN_ONLY = ["ADMIN"];
+const BROADCAST_PERMISSION = "broadcast-manage";
 
 // Bảng SystemBroadcast được khai báo trong prisma/schema.prisma và tạo bằng db push.
 const SELECT = `SELECT id, title, body, "isActive", "createdById", "createdByName", "createdAt", "updatedAt" FROM "SystemBroadcast"`;
@@ -15,7 +16,8 @@ const SELECT = `SELECT id, title, body, "isActive", "createdById", "createdByNam
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    const where = user.role === "ADMIN" ? "" : `WHERE "isActive" = true`;
+    const canManage = await hasPermissionLevel(user, BROADCAST_PERMISSION, ["manage", "full"]);
+    const where = canManage ? "" : `WHERE "isActive" = true`;
     const rows = await prisma.$queryRawUnsafe(
       `${SELECT} ${where} ORDER BY "isActive" DESC, "updatedAt" DESC`
     );
@@ -26,7 +28,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
+    await requirePermissionLevel(user, BROADCAST_PERMISSION, ["manage", "full"], "Không đủ quyền tạo thông báo hệ thống");
     const body = (await req.json()) as Record<string, unknown>;
     const title = String(body.title ?? "").trim();
     const content = String(body.body ?? "").trim();
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
+    await requirePermissionLevel(user, BROADCAST_PERMISSION, ["manage", "full"], "Không đủ quyền cập nhật thông báo hệ thống");
     const body = (await req.json()) as Record<string, unknown>;
     const id = String(body.id ?? "");
     if (!id) return fail("Thiếu id thông báo");
@@ -91,7 +93,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ADMIN_ONLY);
+    await requirePermissionLevel(user, BROADCAST_PERMISSION, ["full"], "Không đủ quyền xoá thông báo hệ thống");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id");
     await prisma.$executeRawUnsafe(`DELETE FROM "SystemBroadcast" WHERE id = $1`, id);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { handle, requireRole, requireUser } from "@/lib/api";
+import { handle, requireUser } from "@/lib/api";
 import { exportUsersWorkbook } from "@/lib/admin-user-export";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "user-manage", ["read", "manage", "full"], "Không đủ quyền export người dùng");
 
     const body = await exportUsersWorkbook();
     return new NextResponse(body, {

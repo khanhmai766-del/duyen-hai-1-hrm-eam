@@ -13,13 +13,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useShift, useCheckIn, useApproveCheckIn, useCreateHandover } from "@/hooks/useShifts";
-import { CHECKIN_STATUS, SHIFT_TYPE, can } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { CHECKIN_STATUS, SHIFT_TYPE } from "@/lib/constants";
 import { formatTime, initials, cn } from "@/lib/utils";
 import type { CheckInWithUser, ShiftAssignmentWithUser } from "@/types";
 
 export default function CheckInPage() {
   const { data: session } = useSession();
-  const role = session?.user?.role;
+  const rbac = useRbacAccess();
+  const canApproveCheckIn = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
   const date = new Date().toISOString().slice(0, 10);
   const { data, isLoading } = useShift({ date });
   const shift = data?.data;
@@ -100,7 +102,7 @@ export default function CheckInPage() {
                           Ra
                         </Button>
                       )}
-                      {can(role, "approveCheckIn") && !c.approvedBy && (
+                      {canApproveCheckIn && !c.approvedBy && (
                         <Button size="sm" variant="ghost" title="Duyệt" onClick={async () => {
                           try { await approve.mutateAsync(c.id); toast.success("Đã duyệt điểm danh"); }
                           catch (e) { toast.error((e as Error).message); }

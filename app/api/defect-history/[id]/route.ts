@@ -1,15 +1,16 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList } from "@/lib/s3";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
+    await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền cập nhật lịch sử khiếm khuyết");
     const body = await req.json();
     const images = Array.isArray(body.images)
       ? await maybeUploadDataUrlList(body.images.filter(Boolean).slice(0, 3), "defect-history/images", "image")
@@ -43,7 +44,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "defect-close", ["approve", "manage", "full"], "Không đủ quyền xoá lịch sử khiếm khuyết");
     const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
     const access = await resolveEquipmentAccessForUser(user);

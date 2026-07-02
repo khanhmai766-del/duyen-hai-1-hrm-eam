@@ -1,13 +1,14 @@
 import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
 import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3";
 import { avatarUpdate } from "@/lib/user-avatar-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-position";
 import { getOrSetUserSummaryCache, invalidateUserSummaryCache } from "@/lib/user-summary-cache";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
@@ -80,7 +81,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền tạo người dùng");
     await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     const username = String(body.username ?? "").trim() || null;
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền cập nhật người dùng");
     await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
@@ -233,7 +234,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "user-manage", ["full"], "Không đủ quyền xoá người dùng");
     const id = req.nextUrl.searchParams.get("id");
     const permanent = req.nextUrl.searchParams.get("permanent") === "true";
     if (!id) return fail("Thiếu id");

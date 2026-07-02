@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   Check,
@@ -43,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { PositionSystemScopeCard } from "@/components/admin/position-system-scope-card";
 import { useUpdateUser, useUsers } from "@/hooks/useUsers";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import { normalizeText } from "@/lib/nav";
@@ -178,6 +178,7 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
       "user-manage",
       "rbac-manage",
       "system_audit_log:view",
+      "broadcast-manage",
       "device-delete",
       "device-code",
       "archive-create-delete",
@@ -187,7 +188,13 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
   ) {
     return "none";
   }
-  if (["device-manage", "material-manage", "announcement-manage", "document-procedure", "document-pid"].includes(row.id)) {
+  if (row.id === "announcement-manage") {
+    return "full";
+  }
+  if (row.id === "material-manage") {
+    return "full";
+  }
+  if (["device-manage", "document-procedure", "document-pid"].includes(row.id)) {
     return "read";
   }
   return strongestPermission([row.matrix.SUPERVISOR, row.matrix.TECHNICIAN]);
@@ -291,7 +298,14 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Quản trị hệ thống",
     feature: "Xem Audit hệ thống",
     note: "Tra cứu các thay đổi quan trọng về phân quyền, người dùng và cấu hình hệ thống.",
-    matrix: { ADMIN: "read", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "read", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "broadcast-manage",
+    group: "Quản trị hệ thống",
+    feature: "Quản lý thông báo hệ thống",
+    note: "Tạo, bật/tắt, cập nhật hoặc xoá thông báo dạng hộp thoại gửi tới toàn bộ người dùng.",
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "device-manage",
@@ -354,7 +368,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Vật tư",
     feature: "Quản lý danh mục vật tư",
     note: "Thêm, sửa, xoá, nhập dữ liệu và cập nhật tồn kho vật tư.",
-    matrix: { ADMIN: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+    matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
     id: "replacement-manage",
@@ -368,7 +382,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Thông tin vận hành",
     feature: "Mệnh lệnh sản xuất / thông báo",
     note: "Đăng, sửa, xoá thông báo và tài liệu đính kèm.",
-    matrix: { ADMIN: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+    matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
     id: "operation-events",
@@ -540,8 +554,8 @@ const EMPTY_NEW_ROLE = {
 
 export default function RolesPage() {
   const queryClient = useQueryClient();
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const rbac = useRbacAccess();
+  const isAdmin = rbac.can("rbac-manage", ["full"]);
   const users = useUsers();
   const updateUser = useUpdateUser();
   const rbacQuery = useQuery({

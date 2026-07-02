@@ -1,11 +1,11 @@
 import type { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
-const MANAGE_ROLES = ["ADMIN", "MANAGER", "SUPERVISOR"];
 const SAFE_OPERATION_UNITS = ["S1", "S2"] as const;
 type SafeOperationUnit = (typeof SAFE_OPERATION_UNITS)[number];
 
@@ -86,7 +86,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, MANAGE_ROLES);
+    await requirePermissionLevel(user, "operation-events", ["manage", "full"], "Không đủ quyền cập nhật vận hành an toàn");
     await ensureSafeOperationTable();
     const body = await req.json();
     const unit = parseUnit(body.unit);

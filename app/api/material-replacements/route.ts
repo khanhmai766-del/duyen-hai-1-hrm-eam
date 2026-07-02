@@ -6,6 +6,7 @@ import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-a
 import { addMonths, replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const INCLUDE = {
   material: {
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
+    await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền tạo điểm thay thế vật tư");
     const body = await req.json();
 
     if (!body.materialId || !body.intervalMonths) return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");

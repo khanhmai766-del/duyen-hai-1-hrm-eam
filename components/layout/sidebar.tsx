@@ -8,6 +8,9 @@ import { ChevronDown, Clock, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
 import { NAV_SECTIONS as SECTIONS, type NavItem } from "@/lib/nav";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+
+const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
 
 function pathActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -25,6 +28,7 @@ function sectionHasActiveItem(pathname: string, items: NavItem[]) {
 export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
+  const rbac = useRbacAccess();
   const pathname = usePathname();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
 
@@ -91,7 +95,12 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
 
       <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
         {SECTIONS.map((section) => {
-          const items = section.items.filter((i) => !i.adminOnly || role === "ADMIN");
+          const items = section.items
+            .map((item) => {
+              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can));
+              return children ? { ...item, children } : item;
+            })
+            .filter((item) => navItemAllowed(item, role, rbac.can) || !!item.children?.length);
           if (!items.length) return null;
           const sectionClosed = !!closedSections[section.title];
           return (
@@ -193,6 +202,12 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       </div>
     </div>
   );
+}
+
+function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
+  if (!item.adminOnly) return true;
+  if (role === "ADMIN") return true;
+  return (item.permissionIds ?? []).some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
 }
 
 function PowerGridMark() {

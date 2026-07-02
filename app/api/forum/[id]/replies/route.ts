@@ -2,10 +2,12 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
+    await requirePermissionLevel(user, "forum-write", ["create", "manage", "full"], "Không đủ quyền phản hồi forum");
     const body = await req.json();
     const content = String(body.content ?? "").trim();
     const attachments = normalizeList(body.attachments, 5);

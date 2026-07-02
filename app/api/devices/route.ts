@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
   compareEquipmentSeq,
@@ -12,6 +12,7 @@ import { normalizeText } from "@/lib/nav";
 import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -210,7 +211,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền thêm thiết bị");
     const body = await req.json();
     const seq = String(body.code ?? body.seq ?? "").trim();
     const name = String(body.name ?? "").trim();

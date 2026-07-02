@@ -6,8 +6,7 @@ import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
-const APPROVE_PERMISSION_ID = "shift-approve";
-const MANAGER = ["ADMIN", "TECHNICIAN"];
+const APPROVE_PERMISSION_ID = "hc-attendance-approve";
 const HC_SELF_PERIODS = {
   FULL_DAY: { label: "Cả ngày", hours: 8, cutoffHour: 8, cutoffMinute: 0, cutoffLabel: "08h00" },
   MORNING: { label: "Buổi sáng", hours: 4, cutoffHour: 8, cutoffMinute: 0, cutoffLabel: "08h00" },
@@ -77,7 +76,7 @@ function isBeforeCheckInCutoff(period: keyof typeof HC_SELF_PERIODS, target: Dat
 }
 
 async function canManageHc(user: { id?: string; role?: string }) {
-  return MANAGER.includes(user.role ?? "") || hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
+  return hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
 
 /** POST — current user checks themselves into a group, or registers HC directly. */

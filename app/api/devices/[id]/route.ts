@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
   getNormalizedEquipmentNodes,
@@ -9,6 +9,7 @@ import {
 import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
+    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền cập nhật thiết bị");
     const currentSeq = decodeURIComponent(params.id);
     await assertSeqEditable(user, currentSeq);
     const body = await req.json();
@@ -97,7 +98,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const nextSeq = typeof body.code === "string" ? body.code.trim() : currentSeq;
     const name = typeof body.name === "string" ? body.name.trim() : current.name;
     if (!nextSeq || !name) return fail("Số thứ tự và tên thiết bị không được để trống");
-    if (nextSeq !== currentSeq && user.role !== "ADMIN") {
+    if (nextSeq !== currentSeq && !(await hasPermissionLevel(user, "device-code", ["full"]))) {
       return fail("Chỉ Quản trị viên được chỉnh sửa số thứ tự thiết bị", 403);
     }
     if (nextSeq !== currentSeq) {
@@ -137,7 +138,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN"]);
+    await requirePermissionLevel(user, "device-delete", ["full"], "Không đủ quyền xoá thiết bị");
     const seq = decodeURIComponent(params.id);
     const node = await prisma.equipmentNode.findUnique({ where: { seq } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);

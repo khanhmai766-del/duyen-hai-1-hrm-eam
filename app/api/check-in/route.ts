@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 // POST = create or update a check-in record (check in / check out / set status)
 export async function POST(req: NextRequest) {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!["ADMIN", "MANAGER", "SUPERVISOR"].includes(user.role)) return fail("Không đủ quyền duyệt", 403);
+    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền duyệt");
     const body = await req.json();
     if (!body.checkInId) return fail("Thiếu checkInId");
     const record = await prisma.checkIn.update({

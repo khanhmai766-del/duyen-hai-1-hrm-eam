@@ -1,12 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { userWithSignedMedia } from "@/lib/s3";
 import { normalizeHcPeriod } from "@/lib/hc-period";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
-const MANAGER = ["ADMIN", "MANAGER", "SUPERVISOR"];
 let hcCheckInUpdatedAtReady = false;
 
 async function ensureHcCheckInUpdatedAtColumn() {
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, MANAGER);
+    await requirePermissionLevel(user, "hc-attendance-check-in", ["create", "manage", "full"], "Không đủ quyền tạo nhóm hành chính");
     const body = await req.json();
     const { date, content, hours, unit, period } = body as { date: string; content: string; hours?: number; unit?: string; period?: string };
     if (!date || !content?.trim()) return fail("Thiếu ngày hoặc nội dung");
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, MANAGER);
+    await requirePermissionLevel(user, "hc-attendance-check-in", ["manage", "full"], "Không đủ quyền sửa nhóm hành chính");
     const body = await req.json();
     const { id, content, hours, period } = body as { id: string; content?: string; hours?: number; period?: string };
     if (!id) return fail("Thiếu id nhóm");
@@ -129,7 +129,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, MANAGER);
+    await requirePermissionLevel(user, "hc-attendance-check-in", ["manage", "full"], "Không đủ quyền xoá nhóm hành chính");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id nhóm");
     await prisma.hcGroup.delete({ where: { id } });

@@ -35,7 +35,8 @@ import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_UNITS, can, isSelectableManagingPosition } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { DEFECT_UNITS, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
@@ -45,8 +46,9 @@ type SortDir = "asc" | "desc";
 const PAGE_SIZES = [10, 25, 50, 100];
 
 export function DefectHistoryTab({ role }: { role?: string }) {
-  const canManage = can(role, "manageDefect"); // ADMIN + SUPERVISOR + TECHNICIAN
-  const canDelete = can(role, "approveRepair"); // ADMIN + SUPERVISOR
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
+  const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
   // Loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên khỏi bộ lọc cương vị.
   const positions = usePositions().filter(isSelectableManagingPosition);
   const { data: devicesData } = useDevices({});

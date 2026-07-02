@@ -31,6 +31,7 @@ import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { aggregateHcHoursByPeriod } from "@/lib/hc-period";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { toast } from "sonner";
 
 type View = "roster" | "timesheet";
@@ -111,7 +112,8 @@ function hcWorkNote(hc: { note?: string | null }) {
 
 export default function ShiftRosterPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const rbac = useRbacAccess();
+  const canManageRosterPdf = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
 
   const { data, isLoading } = useUsers();
   const users = (data?.data ?? []).filter((u) => u.isActive);
@@ -130,7 +132,7 @@ export default function ShiftRosterPage() {
   const monthStr = `${month.year}-${String(month.month + 1).padStart(2, "0")}`;
   const timesheet = useTimesheet(monthStr);
   const updateOverride = useUpdateTimesheetOverride(monthStr);
-  const canEditTimesheet = Boolean(timesheet.data?.data?.canEdit || isAdmin);
+  const canEditTimesheet = Boolean(timesheet.data?.data?.canEdit || canManageRosterPdf);
   const [editCell, setEditCell] = React.useState<{
     userId: string;
     userName: string;
@@ -490,7 +492,7 @@ export default function ShiftRosterPage() {
       </PageHeader>
 
       {view === "roster" ? (
-        <RosterPdfView isAdmin={isAdmin} />
+        <RosterPdfView canManage={canManageRosterPdf} />
       ) : (
         <>
           <Card className="p-4">
@@ -737,7 +739,7 @@ export default function ShiftRosterPage() {
   );
 }
 /* ---- Lịch trực ca: an admin-uploaded PDF (Vận hành 1) ---- */
-function RosterPdfView({ isAdmin }: { isAdmin: boolean }) {
+function RosterPdfView({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useRosterSchedule();
   const upload = useUploadRoster();
   const remove = useDeleteRoster();
@@ -795,7 +797,7 @@ function RosterPdfView({ isAdmin }: { isAdmin: boolean }) {
         </div>
 
         {/* Actions are ADMIN-only — everyone else has view-only access. */}
-        {isAdmin ? (
+        {canManage ? (
           <div className="flex items-center gap-2">
             {hasPdf && (
               <a href={roster!.url!} download target="_blank" rel="noopener noreferrer">
@@ -839,12 +841,12 @@ function RosterPdfView({ isAdmin }: { isAdmin: boolean }) {
           <div>
             <div className="font-semibold text-ink">Chưa có lịch trực ca</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {isAdmin
+              {canManage
                 ? "Tải lên tệp PDF lịch trực ca của phân xưởng Vận hành 1."
                 : "Lịch trực ca sẽ được Quản trị cập nhật. Vui lòng quay lại sau."}
             </div>
           </div>
-          {isAdmin && (
+          {canManage && (
             <Button onClick={() => inputRef.current?.click()} disabled={upload.isPending}>
               {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               Tải lên lịch (PDF)

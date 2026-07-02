@@ -20,12 +20,38 @@ export function standardPositionOptions(userPositions: Array<string | null | und
   return uniqueVietnamesePositions([...ORG_SEAT_TITLES, ...userPositions]).sort((a, b) => a.localeCompare(b, "vi"));
 }
 
+export const OPERATION_POSITION_TITLES = [
+  "ESP",
+  "FGD",
+  "Khí nén - Nhà dầu",
+  "Lò phó",
+  "Lò Trưởng",
+  "Máy nghiền",
+  "Máy phó",
+  "Máy trưởng",
+  "NH3 - Lò hơi phụ",
+  "Thải xỉ",
+  "Thiết bị đo lường điều khiển",
+  "TK Lò máy",
+  "Trạm bơm nước thô",
+  "Trạm bơm tuần hoàn",
+  "Trợ thủ",
+  "Trực chính Điện",
+  "Trực phụ điện",
+  "Trưởng ca",
+  "Trưởng kíp điện",
+  "XLN hỗn hợp",
+  "XLNT",
+] as const;
+
 const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[] }> = [
   {
-    canonical: "I&C",
+    canonical: "Thiết bị đo lường điều khiển",
     aliases: [
       "I&C",
       "I & C",
+      "Kỹ thuật viên I&C",
+      "KTV I&C",
       "Thiết bị đo lường điều khiển",
       "Thiết bị đo lường và điều khiển",
       "Thiết bị đo lường & điều khiển",
@@ -33,7 +59,7 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
   },
   {
     // Các biến thể chức vụ user đều quy về cương vị trong mệnh lệnh.
-    canonical: "Trưởng kíp Lò - Máy DH1",
+    canonical: "TK Lò máy",
     aliases: [
       "Trưởng kíp Lò - Máy DH1",
       "Trưởng kíp Lò - Máy",
@@ -43,13 +69,34 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
   },
   {
     // "XLNT" ≡ "XLNT - Nhà dầu 5000m3"
-    canonical: "XLNT - Nhà dầu 5000m3",
+    canonical: "XLNT",
     aliases: ["XLNT - Nhà dầu 5000m3", "XLNT"],
   },
   {
     // "Khí nén - Nhà dầu" ≡ "Khí nén - nhà dầu 300m3" (normalizeText đã bỏ qua hoa/thường + dấu)
-    canonical: "Khí nén - nhà dầu 300m3",
-    aliases: ["Khí nén - nhà dầu 300m3", "Khí nén - Nhà Dầu"],
+    canonical: "Khí nén - Nhà dầu",
+    aliases: ["Khí nén - nhà dầu 300m3", "Khí nén - Nhà Dầu", "Nhà dầu - khí nén", "Nhà dầu - Khí nén"],
+  },
+  {
+    // Một số danh mục cũ gọi "Trạm nước thô" là "Trạm bơm nước thô".
+    canonical: "Trạm bơm nước thô",
+    aliases: ["Trạm nước thô", "Trạm bơm nước thô"],
+  },
+  {
+    canonical: "NH3 - Lò hơi phụ",
+    aliases: ["NH3 - Lò hơi phụ", "NH3- Lò hơi phụ", "NH3 - Lò phụ", "NH3- Lò phụ"],
+  },
+  {
+    canonical: "Lò Trưởng",
+    aliases: ["Lò Trưởng", "Lò trưởng"],
+  },
+  {
+    canonical: "Lò phó",
+    aliases: ["Lò phó", "Lò Phó"],
+  },
+  {
+    canonical: "Trực chính Điện",
+    aliases: ["Trực chính Điện", "Trực chính điện"],
   },
 ];
 
@@ -72,8 +119,7 @@ export function announcementPositionOptions(userPositions: Array<string | null |
 }
 
 export function announcementShiftRosterPositionOptions() {
-  return uniqueVietnamesePositions(ORG_SEAT_TITLES.map(announcementPositionLabel))
-    .sort((a, b) => a.localeCompare(b, "vi"));
+  return [...OPERATION_POSITION_TITLES];
 }
 
 export function isAnnouncementShiftRosterPosition(position?: string | null) {
