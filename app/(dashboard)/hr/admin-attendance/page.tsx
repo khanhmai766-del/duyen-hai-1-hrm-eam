@@ -35,11 +35,23 @@ const HC_SELF_PERIODS = [
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
 const HC_RECALL_WINDOW_MS = 30 * 60 * 1000;
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const MANAGED_GROUP_PERIODS: Array<{ value: "FULL_DAY" | "MORNING" | "AFTERNOON"; label: string }> = [
   { value: "FULL_DAY", label: "Cả ngày" },
   { value: "MORNING", label: "Buổi sáng" },
   { value: "AFTERNOON", label: "Buổi chiều" },
 ];
+
+function vietnamDateInput(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
 
 function isSelfHcGroup(group: HcGroup) {
   return HC_SELF_CONTENTS.includes(group.content);
@@ -62,7 +74,8 @@ export default function AdminAttendancePage() {
   const canManage = rbac.can("hc-attendance-check-in", ["create", "manage", "full"]) || rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
   const myId = session?.user?.id;
 
-  const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = React.useState(() => vietnamDateInput());
+  const [followToday, setFollowToday] = React.useState(true);
   const [addOpen, setAddOpen] = React.useState(false);
   const [selfCheckInOpen, setSelfCheckInOpen] = React.useState(false);
 
@@ -70,6 +83,20 @@ export default function AdminAttendancePage() {
   const groups = data?.data ?? [];
   const selfHcGroups = groups.filter(isSelfHcGroup);
   const managedGroups = groups.filter((g) => !isSelfHcGroup(g));
+  const openSelfCheckIn = React.useCallback(() => {
+    setDate(vietnamDateInput());
+    setFollowToday(true);
+    setSelfCheckInOpen(true);
+  }, []);
+
+  React.useEffect(() => {
+    const syncToday = () => {
+      if (followToday) setDate(vietnamDateInput());
+    };
+    syncToday();
+    const timer = window.setInterval(syncToday, 30_000);
+    return () => window.clearInterval(timer);
+  }, [followToday]);
 
   return (
     <div className="space-y-6">
@@ -80,9 +107,18 @@ export default function AdminAttendancePage() {
       <PageHeader title="QUẢN LÝ HÀNH CHÍNH" description="Theo dõi nhân viên đi hành chính — dữ liệu lưu 1 tháng gần nhất">
         <div className="flex items-center gap-2">
           <Label className="text-sm text-muted-foreground">Thời gian</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44" />
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDate(value);
+              setFollowToday(value === vietnamDateInput());
+            }}
+            className="w-44"
+          />
         </div>
-        <Button variant="accent" onClick={() => setSelfCheckInOpen(true)} disabled={isLoading}>
+        <Button variant="accent" onClick={openSelfCheckIn} disabled={isLoading}>
           <UserCheck className="h-4 w-4" /> Chấm công hành chính
         </Button>
         {canManage && (

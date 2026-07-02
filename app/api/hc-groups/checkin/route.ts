@@ -16,6 +16,7 @@ const HC_SELF_PERIODS = {
 const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính - ${p.label}`);
 const DEFAULT_REGISTER_NOTE = "Chờ phân công";
 const RECALL_WINDOW_MS = 30 * 60 * 1000;
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 let hcCheckInUpdatedAtReady = false;
 
 async function ensureHcCheckInUpdatedAtColumn() {
@@ -58,8 +59,15 @@ function isBeforeRegistrationCutoff(now = new Date()) {
   return now.getTime() < cutoff.getTime();
 }
 
-function isSameLocalDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+function vietnamDateInput(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function canRecallCheckIn(checkIn: { updatedAt?: Date | null; createdAt: Date }, now = new Date()) {
@@ -117,7 +125,7 @@ export async function POST(req: NextRequest) {
         if (!existingRegistration && !canRegisterForDate(start)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
         }
-      } else if (!isSameLocalDay(start, new Date())) {
+      } else if (date !== vietnamDateInput()) {
         return fail("Chỉ được chấm công hành chính trong ngày hiện tại");
       }
 
