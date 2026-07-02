@@ -112,6 +112,61 @@ function rootNameOf(seq: string, bySeq: Map<string, EquipmentNodeLike>, parentOf
   return name;
 }
 
+export function createPositionAccessResolver(
+  position: string | null | undefined,
+  nodes: EquipmentNodeLike[],
+  scopes: PositionSystemScope[]
+) {
+  const normalizedPosition = normalizeText(position ?? "");
+  const explicit = scopesForPosition(scopes, position);
+  const { bySeq, parentOf } = nodeIndex(nodes);
+  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
+  const byName = new Map<string, EquipmentNodeLike>();
+  for (const node of bySeq.values()) {
+    const key = normalizeText(node.name);
+    if (key && !byName.has(key)) byName.set(key, node);
+  }
+
+  const scopedSeqAccess = (seq: string | null | undefined): NodeAccess => {
+    let current: string | null | undefined = seq;
+    while (current) {
+      if (accessBySeq.has(current)) return accessBySeq.get(current)!;
+      current = parentOf.get(current) ?? null;
+    }
+    return "none";
+  };
+
+  const accessForSeq = (seq: string | null | undefined): NodeAccess => {
+    if (!normalizedPosition) return "edit";
+    if (!explicit.length) return "edit";
+    return scopedSeqAccess(seq);
+  };
+
+  const accessForDevice = (device: DeviceLike | null | undefined): NodeAccess => {
+    if (!normalizedPosition) return "edit";
+    if (!device) return "edit";
+    if (!explicit.length) {
+      const ok = !device.managingPosition || normalizePositionScopeKey(device.managingPosition) === normalizePositionScopeKey(position);
+      return ok ? "edit" : "none";
+    }
+
+    if (device.code && bySeq.has(device.code)) return scopedSeqAccess(device.code);
+
+    let best: NodeAccess = scopedSeqAccess(device.systemSeq);
+    if (device.system) {
+      const node = byName.get(normalizeText(device.system));
+      if (node) best = scopedSeqAccess(node.seq);
+    }
+    return best;
+  };
+
+  return {
+    hasExplicitScopes: explicit.length > 0,
+    accessForSeq,
+    accessForDevice,
+  };
+}
+
 /**
  * Quyền của một cương vị trên một node của cây thiết bị (kế thừa theo nhánh cha).
  * - Cương vị CHƯA có cấu hình riêng → "edit" (không giới hạn, giữ nguyên hành vi cũ).
@@ -123,20 +178,7 @@ export function nodeAccessForPosition(
   nodes: EquipmentNodeLike[],
   scopes: PositionSystemScope[]
 ): NodeAccess {
-  const normalizedPosition = normalizeText(position ?? "");
-  if (!normalizedPosition) return "edit";
-  const explicit = scopesForPosition(scopes, position);
-  if (!explicit.length) return "edit";
-
-  const { parentOf } = nodeIndex(nodes);
-  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
-
-  let current: string | null | undefined = seq;
-  while (current) {
-    if (accessBySeq.has(current)) return accessBySeq.get(current)!;
-    current = parentOf.get(current) ?? null;
-  }
-  return "none";
+  return createPositionAccessResolver(position, nodes, scopes).accessForSeq(seq);
 }
 
 /** Quyền của cương vị trên một thiết bị (suy ra hệ thống của thiết bị rồi xét node). */

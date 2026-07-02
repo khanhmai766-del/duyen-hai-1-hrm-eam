@@ -6,8 +6,7 @@ import { useEquipmentTree } from "@/hooks/useEquipment";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import {
-  deviceAccessForPosition,
-  nodeAccessForPosition,
+  createPositionAccessResolver,
   type NodeAccess,
 } from "@/lib/position-system-scopes";
 
@@ -32,23 +31,27 @@ export function useSystemAccess() {
   const position = currentPosition.position;
   const nodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
   const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
+  const accessResolver = React.useMemo(
+    () => createPositionAccessResolver(position, nodes, scopes),
+    [position, nodes, scopes]
+  );
 
   const accessForSeq = React.useCallback(
     (seq: string | null | undefined): NodeAccess => {
       if (isAdmin) return "edit";
       if (!seq) return "edit";
-      return nodeAccessForPosition(seq, position, nodes, scopes);
+      return accessResolver.accessForSeq(seq);
     },
-    [isAdmin, position, nodes, scopes]
+    [accessResolver, isAdmin]
   );
 
   const accessForDevice = React.useCallback(
     (device: DeviceLike | null | undefined): NodeAccess => {
       if (isAdmin) return "edit";
       if (!device) return "edit";
-      return deviceAccessForPosition(device, position, nodes, scopes);
+      return accessResolver.accessForDevice(device);
     },
-    [isAdmin, position, nodes, scopes]
+    [accessResolver, isAdmin]
   );
 
   return {

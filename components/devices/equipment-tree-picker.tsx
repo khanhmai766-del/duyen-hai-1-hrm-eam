@@ -6,7 +6,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { nodeAccessForPosition, rootAllowedForPosition, scopesForPosition } from "@/lib/position-system-scopes";
+import { createPositionAccessResolver, rootAllowedForPosition } from "@/lib/position-system-scopes";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 
@@ -91,16 +91,19 @@ export function EquipmentTreePicker({
 
   const selectedNode = value ? bySeq.get(value) ?? null : null;
   const folderSeqs = React.useMemo(() => new Set(Array.from(childrenOf.entries()).filter(([, kids]) => kids.length > 0).map(([seq]) => seq)), [childrenOf]);
+  const accessResolver = React.useMemo(
+    () => createPositionAccessResolver(position, nodes, scopes),
+    [position, nodes, scopes]
+  );
 
   // accessFilter="edit": chỉ hiện các hệ thống cương vị có quyền Sửa (kế thừa theo nhánh) + tổ tiên để duyệt.
   // null = không lọc theo quyền (chưa cấu hình riêng, hoặc không bật accessFilter) → dùng rule gốc.
   const editVisibleSeqs = React.useMemo(() => {
     if (!position) return null;
-    const explicit = scopesForPosition(scopes, position);
-    if (!explicit.length) return null;
+    if (!accessResolver.hasExplicitScopes) return null;
     const set = new Set<string>();
     for (const n of nodes) {
-      const access = nodeAccessForPosition(n.seq, position, nodes, scopes);
+      const access = accessResolver.accessForSeq(n.seq);
       const allowed = accessFilter === "edit" ? access === "edit" : access !== "none";
       if (allowed) {
         let cur: string | null | undefined = n.seq;
@@ -108,7 +111,7 @@ export function EquipmentTreePicker({
       }
     }
     return set;
-  }, [accessFilter, position, scopes, nodes, effParentOf]);
+  }, [accessFilter, accessResolver, nodes, position, effParentOf]);
 
   // Lọc nhóm gốc: nếu lọc theo quyền Sửa thì dùng editVisibleSeqs; ngược lại theo rule cương vị.
   const filteredRoots = React.useMemo(() => {

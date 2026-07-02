@@ -7,7 +7,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import {
-  nodeAccessForPosition,
+  createPositionAccessResolver,
   normalizeScopeAccess,
   scopesForPosition,
   type PositionSystemScope,
@@ -93,8 +93,9 @@ export async function resolveEquipmentAccessForUser(
 
   const visibleSeqs = new Set<string>();
   const editableSeqs = new Set<string>();
+  const accessResolver = createPositionAccessResolver(position, allNodes, scopes);
   for (const node of allNodes) {
-    const access = nodeAccessForPosition(node.seq, position, allNodes, scopes);
+    const access = accessResolver.accessForSeq(node.seq);
     if (access === "none") continue;
     if (access === "edit") editableSeqs.add(node.seq);
 
