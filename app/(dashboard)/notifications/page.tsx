@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -73,6 +73,7 @@ const NO_ORDERER = "__none__";
 const ORDER_AUTHORITIES = ["BGĐ", "LĐPX"] as const;
 type OrderAuthority = (typeof ORDER_AUTHORITIES)[number];
 const INVALID_ARCHIVE_DAYS = 15;
+const ORDERS_PER_PAGE = 10;
 
 // Cấp BGĐ ra lệnh: danh sách cố định. LĐPX lấy động từ DS Quản đốc / Phó quản đốc.
 const BGD_ORDERERS = ["Phó Giám Đốc Quản Lý Vận Hành", "Giám Đốc"];
@@ -201,12 +202,11 @@ export default function NotificationsPage() {
     }
   }
 
-  // Mặc định chỉ hiện mệnh lệnh của NĂM HIỆN TẠI (thời gian thực); mệnh lệnh
-  // năm cũ vẫn lưu trữ, tra cứu lại bằng bộ lọc năm.
   const currentYear = new Date().getFullYear();
-  const [yearFilter, setYearFilter] = React.useState(String(currentYear));
+  const [yearFilter, setYearFilter] = React.useState("ALL");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [search, setSearch] = React.useState("");
+  const [page, setPage] = React.useState(1);
   const [showInvalidArchive, setShowInvalidArchive] = React.useState(false);
   const archivedBulletins = bulletins.filter(isArchivedInvalidAnnouncement);
   const activeBulletins = bulletins.filter((a) => !isArchivedInvalidAnnouncement(a));
@@ -221,11 +221,32 @@ export default function NotificationsPage() {
       (positionFilter === "ALL" || isAnnouncementTargetForPosition(a.classification, positionFilter)) &&
       (!nq || normalizeText([a.title, a.body, announcementTargetLabel(a.classification), a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
   );
+  function mustReadByCurrentUser(a: Announcement) {
+    return !exemptFromReadConfirm && isAnnouncementTargetForPosition(a.classification, currentPosition);
+  }
+  function isUnreadByCurrentUser(a: Announcement) {
+    return Boolean(myId) && mustReadByCurrentUser(a) && !a.reads.some((r) => r.userId === myId);
+  }
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const unreadDiff = Number(isUnreadByCurrentUser(b)) - Number(isUnreadByCurrentUser(a));
+    if (unreadDiff !== 0) return unreadDiff;
+    return new Date(announcementDate(b)).getTime() - new Date(announcementDate(a)).getTime();
+  });
+  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / ORDERS_PER_PAGE));
+  const firstShown = sortedFiltered.length ? (page - 1) * ORDERS_PER_PAGE + 1 : 0;
+  const lastShown = Math.min(page * ORDERS_PER_PAGE, sortedFiltered.length);
+  const pagedAnnouncements = sortedFiltered.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE);
+  React.useEffect(() => {
+    setPage(1);
+  }, [yearFilter, positionFilter, search, showInvalidArchive]);
+  React.useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
   const isOrder = form.category === "ORDER";
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
 
   // Dữ liệu xuất PDF/Excel — theo đúng danh sách mệnh lệnh đang hiển thị.
-  const exportRows = filtered.map((a, i) => {
+  const exportRows = sortedFiltered.map((a, i) => {
     const { orderAuthority, orderedBy } = a.orderedBy
       ? splitOrderedBy(a.orderedBy)
       : { orderAuthority: "", orderedBy: "" };
@@ -600,18 +621,36 @@ export default function NotificationsPage() {
                 icon={Megaphone}
                 title={showInvalidArchive ? "Không có mệnh lệnh hết hiệu lực" : "Không có mệnh lệnh"}
                 description={
-                  yearFilter === String(currentYear)
-                    ? showInvalidArchive
-                      ? "Chưa có mệnh lệnh hết hiệu lực nào trong năm nay. Chọn năm khác ở bộ lọc để xem dữ liệu cũ hơn."
-                      : "Chưa có mệnh lệnh nào trong năm nay. Chọn năm khác ở bộ lọc để xem mệnh lệnh các năm trước."
-                    : "Không có mệnh lệnh nào khớp với bộ lọc đã chọn."
+                  "Không có mệnh lệnh nào khớp với bộ lọc đã chọn."
                 }
               />
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-3">
-            {filtered.map((a) => <PostCard key={a.id} a={a} />)}
+            {pagedAnnouncements.map((a) => <PostCard key={a.id} a={a} />)}
+            {sortedFiltered.length > ORDERS_PER_PAGE && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-medium text-muted-foreground">
+                  Hiển thị {firstShown}-{lastShown} / {sortedFiltered.length} mệnh lệnh
+                </div>
+                <div className="flex items-center gap-1 self-end sm:self-auto">
+                  <Button variant="outline" size="icon" className="h-8 w-8" title="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)}>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" title="Trang trước" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">{page}/{totalPages}</span>
+                  <Button variant="outline" size="icon" className="h-8 w-8" title="Trang sau" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" title="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </section>

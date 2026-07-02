@@ -32,9 +32,14 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
     ],
   },
   {
-    // "TK Lò máy" (chức vụ user) ≡ "Trưởng kíp Lò - Máy DH1" (cương vị trong mệnh lệnh)
+    // Các biến thể chức vụ user đều quy về cương vị trong mệnh lệnh.
     canonical: "Trưởng kíp Lò - Máy DH1",
-    aliases: ["Trưởng kíp Lò - Máy DH1", "TK Lò máy"],
+    aliases: [
+      "Trưởng kíp Lò - Máy DH1",
+      "Trưởng kíp Lò - Máy",
+      "Trưởng kíp Lò máy",
+      "TK Lò máy",
+    ],
   },
   {
     // "XLNT" ≡ "XLNT - Nhà dầu 5000m3"

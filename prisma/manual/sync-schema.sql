@@ -17,9 +17,25 @@
 -- ngoài-schema → mất dữ liệu).
 -- =====================================================================
 
--- Announcement: cột vòng đời mệnh lệnh
+-- Announcement: cột mệnh lệnh / tệp đính kèm / vòng đời
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'BULLETIN';
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "classification" TEXT;
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "stt" TEXT;
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "orderedBy" TEXT;
 ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3);
 ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "invalidatedAt" TIMESTAMP(3);
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "linkUrl" TEXT;
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "fileUrl" TEXT;
+ALTER TABLE "Announcement" ADD COLUMN IF NOT EXISTS "fileName" TEXT;
+
+CREATE TABLE IF NOT EXISTS "AnnouncementRead" (
+  id TEXT PRIMARY KEY,
+  "announcementId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "AnnouncementRead_announcementId_userId_key"
+  ON "AnnouncementRead" ("announcementId", "userId");
 
 -- Defect: cột ảnh hưởng PCCC / môi trường
 ALTER TABLE "Defect" ADD COLUMN IF NOT EXISTS "fireSafetyImpact" TEXT;
