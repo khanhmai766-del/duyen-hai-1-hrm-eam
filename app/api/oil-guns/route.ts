@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     // Vận hành viên trở lên được cập nhật; Viewer chỉ xem.
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
 
     const body = await req.json();
     const machine = String(body.machine || "").trim();

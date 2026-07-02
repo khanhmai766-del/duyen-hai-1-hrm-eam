@@ -19,7 +19,7 @@ import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
-import { OPERATION_TYPE } from "@/lib/constants";
+import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -40,6 +40,21 @@ const GRID_TINTS = [
   "bg-gradient-to-br from-pink-100 to-pink-200 text-pink-700",
   "bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700",
 ];
+
+async function logout(callbackUrl = "/login") {
+  try {
+    localStorage.removeItem("pp:last-activity");
+    sessionStorage.removeItem("pp:org-chart-viewer-active");
+  } catch {
+    // bỏ qua nếu storage không khả dụng
+  }
+  try {
+    const result = await signOut({ callbackUrl, redirect: false });
+    window.location.assign(result?.url ?? callbackUrl);
+  } catch {
+    window.location.assign(callbackUrl);
+  }
+}
 
 export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
@@ -84,6 +99,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const totalAlerts = notices.length + activeReplAlerts.length;
   const { data: dash } = useMyDashboard();
   const avatarUrl = dash?.data?.avatarUrl ?? null;
+  const accountSubtitle = currentPosition.position || ROLES[role as RoleKey]?.label || role || "";
 
   React.useEffect(() => {
     if (forcePasswordChange) setPasswordOpen(true);
@@ -472,9 +488,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           >
             <div className="hidden text-right leading-tight sm:block">
               <div className="max-w-[160px] truncate text-sm font-bold text-navy">{session?.user?.name ?? "—"}</div>
-              {(currentPosition.position || session?.user?.role) && (
+              {accountSubtitle && (
                 <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {currentPosition.position || session?.user?.role}
+                  {accountSubtitle}
                 </div>
               )}
             </div>
@@ -503,7 +519,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-ink">{session?.user?.name ?? "—"}</div>
-                  <div className="truncate text-xs text-muted-foreground">{currentPosition.position || session?.user?.role}</div>
+                  <div className="truncate text-xs text-muted-foreground">{accountSubtitle}</div>
                 </div>
               </div>
               {/* Menu */}
@@ -527,7 +543,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 <button
                   onClick={() => {
                     setProfileOpen(false);
-                    signOut({ callbackUrl: "/login" });
+                    void logout("/login");
                   }}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-red-50"
                 >
@@ -585,7 +601,7 @@ function ChangePasswordDialog({ open, onOpenChange, forced }: { open: boolean; o
         description: forced ? "Vui lòng đăng nhập lại bằng mật khẩu mới." : "Bạn hãy dùng mật khẩu mới trong lần đăng nhập tiếp theo.",
       });
       if (forced) {
-        signOut({ callbackUrl: "/login" });
+        void logout("/login");
         return;
       }
       onOpenChange(false);

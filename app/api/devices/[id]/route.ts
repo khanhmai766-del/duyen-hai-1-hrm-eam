@@ -86,7 +86,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
     const currentSeq = decodeURIComponent(params.id);
     await assertSeqEditable(user, currentSeq);
     const body = await req.json();

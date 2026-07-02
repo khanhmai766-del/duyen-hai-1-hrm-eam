@@ -82,7 +82,7 @@ const USER_IMPORT_HEADERS: Record<string, keyof ParsedUserRow | "ignored"> = {
   "trang thai": "isActive",
 };
 
-const ROLES: Role[] = ["ADMIN", "SUPERVISOR", "TECHNICIAN", "VIEWER"];
+const ROLES: Role[] = ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN", "VIEWER"];
 
 function normalizeHeader(value: unknown) {
   return String(value ?? "")

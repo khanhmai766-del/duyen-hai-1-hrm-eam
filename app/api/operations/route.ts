@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]); // entered by Trưởng ca
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]); // entered by Trưởng ca
     const body = await req.json();
     if (!body.title || !body.date || !body.type) return fail("Thiếu loại, tiêu đề hoặc ngày");
     const event = await prisma.operationEvent.create({
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     if (!body.title || !body.date || !body.type) return fail("Thiếu loại, tiêu đề hoặc ngày");
@@ -77,7 +77,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id");
     await prisma.operationEvent.delete({ where: { id } });

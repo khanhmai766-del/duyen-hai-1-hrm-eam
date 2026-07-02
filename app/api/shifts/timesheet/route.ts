@@ -6,7 +6,7 @@ import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 export const dynamic = "force-dynamic";
 
 const APPROVE_PERMISSION_ID = "shift-approve";
-const MANAGER = new Set(["ADMIN", "SUPERVISOR"]);
+const MANAGER = new Set(["ADMIN", "MANAGER", "SUPERVISOR"]);
 
 function retentionMonthRange(now = new Date()) {
   const current = { year: now.getFullYear(), month: now.getMonth() };

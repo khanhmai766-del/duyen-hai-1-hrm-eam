@@ -81,7 +81,7 @@ export default function OrgChartPage() {
   const recall = useRecallCheckIn();
 
   // Only Quản trị (ADMIN) and Trưởng ca (SUPERVISOR) may approve attendance.
-  const canApprove = ["ADMIN", "SUPERVISOR"].includes(session?.user?.role ?? "");
+  const canApprove = ["ADMIN", "MANAGER", "SUPERVISOR"].includes(session?.user?.role ?? "");
 
   const dateLabel = date.split("-").reverse().join("-");
   const caLabel = `${SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? ""} ${dateLabel}`.trim();
@@ -173,7 +173,7 @@ export default function OrgChartPage() {
               variant="outline"
               disabled
               className="cursor-not-allowed text-muted-foreground"
-              title="Chấm công đã được Quản trị / Trưởng ca duyệt — bạn không thể thu hồi điểm danh"
+              title="Chấm công đã được Quản trị / Quản lý / Trưởng ca duyệt — bạn không thể thu hồi điểm danh"
             >
               <Lock className="h-4 w-4" /> Đã duyệt — khoá thu hồi
             </Button>

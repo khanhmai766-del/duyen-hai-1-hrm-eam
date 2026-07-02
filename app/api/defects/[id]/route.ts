@@ -10,7 +10,7 @@ const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, a
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
     const access = await resolveEquipmentAccessForUser(user);

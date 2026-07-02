@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const body = await req.json();
 
     if (!body.materialId || !body.intervalMonths) return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");

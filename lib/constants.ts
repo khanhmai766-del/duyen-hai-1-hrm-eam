@@ -24,6 +24,7 @@ export const PRIORITY_ORDER: PriorityKey[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL
 
 export const ROLES = {
   ADMIN: { label: "Quản trị", badge: "bg-navy text-white" },
+  MANAGER: { label: "Quản lý", badge: "bg-indigo-600 text-white" },
   SUPERVISOR: { label: "Trưởng ca", badge: "bg-accent text-white" },
   TECHNICIAN: { label: "Kỹ thuật viên", badge: "bg-secondary text-white" },
   VIEWER: { label: "Người xem", badge: "bg-gray-200 text-gray-700" },
@@ -333,17 +334,17 @@ export function replacementIntervalLabel(months: number, note?: string | null): 
 
 // RBAC capability matrix
 export const CAN = {
-  createRepair: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
-  approveRepair: ["ADMIN", "SUPERVISOR"],
-  approveCheckIn: ["ADMIN", "SUPERVISOR"],
+  createRepair: ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"],
+  approveRepair: ["ADMIN", "MANAGER", "SUPERVISOR"],
+  approveCheckIn: ["ADMIN", "MANAGER", "SUPERVISOR"],
   manageUsers: ["ADMIN"],
   manageDevices: ["ADMIN"],
   deleteDevice: ["ADMIN"],
   manageMaterials: ["ADMIN"],
-  manageOperations: ["ADMIN", "SUPERVISOR"],
+  manageOperations: ["ADMIN", "MANAGER", "SUPERVISOR"],
   manageAnnouncements: ["ADMIN"],
-  manageReplacement: ["ADMIN", "SUPERVISOR"],
-  manageDefect: ["ADMIN", "SUPERVISOR", "TECHNICIAN"],
+  manageReplacement: ["ADMIN", "MANAGER", "SUPERVISOR"],
+  manageDefect: ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"],
 } as const;
 
 export function can(role: string | undefined, capability: keyof typeof CAN): boolean {

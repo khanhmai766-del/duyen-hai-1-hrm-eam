@@ -28,7 +28,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
     const seq = String(body.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự");

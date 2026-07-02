@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!["ADMIN", "SUPERVISOR"].includes(user.role)) return fail("Không đủ quyền duyệt", 403);
+    if (!["ADMIN", "MANAGER", "SUPERVISOR"].includes(user.role)) return fail("Không đủ quyền duyệt", 403);
     const body = await req.json();
     if (!body.checkInId) return fail("Thiếu checkInId");
     const record = await prisma.checkIn.update({

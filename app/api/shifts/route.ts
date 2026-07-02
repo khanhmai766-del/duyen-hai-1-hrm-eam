@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const body = await req.json();
     const shift = await prisma.shift.create({
       data: {

@@ -8,7 +8,17 @@ export const dynamic = "force-dynamic";
 
 const RBAC_CONFIG_KEY = "rbac-permissions";
 const PERMISSION_VALUES = new Set(["full", "manage", "approve", "create", "own", "read", "none"]);
-const ROLES = ["ADMIN", "SUPERVISOR", "TECHNICIAN", "VIEWER"] as const;
+const ROLES = ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN", "VIEWER"] as const;
+type PermissionValue = "full" | "manage" | "approve" | "create" | "own" | "read" | "none";
+const PERMISSION_RANK: Record<string, number> = {
+  none: 0,
+  read: 1,
+  own: 2,
+  create: 3,
+  approve: 4,
+  manage: 5,
+  full: 6,
+};
 
 function parseJsonSafe(value?: string | null) {
   if (!value) return null;
@@ -36,6 +46,18 @@ function normalizeRoles(value: unknown) {
     .filter((row) => row.id && row.label);
 }
 
+function validPermissionValue(value: unknown, fallback: PermissionValue = "none"): PermissionValue {
+  const raw = String(value ?? fallback);
+  return PERMISSION_VALUES.has(raw) ? (raw as PermissionValue) : fallback;
+}
+
+function strongestPermission(values: unknown[]): PermissionValue {
+  return values.reduce<PermissionValue>((best, value) => {
+    const current = validPermissionValue(value);
+    return PERMISSION_RANK[current] > PERMISSION_RANK[best] ? current : best;
+  }, "none");
+}
+
 function normalizePermissionRows(value: unknown, roleIds: string[]) {
   if (!Array.isArray(value)) return [];
   return value
@@ -44,8 +66,8 @@ function normalizePermissionRows(value: unknown, roleIds: string[]) {
       const matrix = item.matrix as Record<string, unknown> | undefined;
       const normalizedMatrix = Object.fromEntries(
         roleIds.map((roleId) => {
-          const raw = String(matrix?.[roleId] ?? "none");
-          return [roleId, PERMISSION_VALUES.has(raw) ? raw : "none"];
+          const fallback = roleId === "MANAGER" ? strongestPermission([matrix?.SUPERVISOR, matrix?.TECHNICIAN]) : "none";
+          return [roleId, validPermissionValue(matrix?.[roleId], fallback)];
         })
       );
       return {

@@ -126,13 +126,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.position = token.position as string | undefined;
-        session.user.secondaryPosition = token.secondaryPosition as string | undefined;
-        session.user.currentPosition = token.currentPosition as string | undefined;
-        session.user.employeeId = token.employeeId as string;
-        session.user.mustChangePassword = Boolean(token.mustChangePassword);
+        const tokenId = token.id as string | undefined;
+        const dbUser = tokenId
+          ? await prisma.user
+              .findUnique({
+                where: { id: tokenId },
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  role: true,
+                  position: true,
+                  secondaryPosition: true,
+                  currentPosition: true,
+                  employeeId: true,
+                  isActive: true,
+                  lockedAt: true,
+                  mustChangePassword: true,
+                },
+              })
+              .catch(() => null)
+          : null;
+
+        if (dbUser?.isActive && !dbUser.lockedAt) {
+          session.user.id = dbUser.id;
+          session.user.name = dbUser.name;
+          session.user.email = dbUser.email;
+          session.user.role = dbUser.role;
+          session.user.position = dbUser.position ?? undefined;
+          session.user.secondaryPosition = dbUser.secondaryPosition ?? undefined;
+          session.user.currentPosition = effectiveUserPosition(dbUser) ?? undefined;
+          session.user.employeeId = dbUser.employeeId;
+          session.user.mustChangePassword = Boolean(dbUser.mustChangePassword);
+        } else {
+          session.user.id = token.id as string;
+          session.user.role = token.role as string;
+          session.user.position = token.position as string | undefined;
+          session.user.secondaryPosition = token.secondaryPosition as string | undefined;
+          session.user.currentPosition = token.currentPosition as string | undefined;
+          session.user.employeeId = token.employeeId as string;
+          session.user.mustChangePassword = Boolean(token.mustChangePassword);
+        }
       }
       return session;
     },

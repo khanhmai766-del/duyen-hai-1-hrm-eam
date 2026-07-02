@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
     if (!body.deviceId || !body.title || !body.action) {
       return fail("Thiếu thông tin bắt buộc (thiết bị, tiêu đề, hành động)");

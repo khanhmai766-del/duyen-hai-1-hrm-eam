@@ -9,7 +9,7 @@ const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, a
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json();
     const images = Array.isArray(body.images)
       ? await maybeUploadDataUrlList(body.images.filter(Boolean).slice(0, 3), "defect-history/images", "image")
@@ -43,7 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
     const access = await resolveEquipmentAccessForUser(user);

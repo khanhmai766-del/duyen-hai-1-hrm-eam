@@ -57,7 +57,7 @@ function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: strin
 
 export default function AdminAttendancePage() {
   const { data: session } = useSession();
-  const canManage = ["ADMIN", "SUPERVISOR"].includes(session?.user?.role ?? "");
+  const canManage = ["ADMIN", "MANAGER", "SUPERVISOR"].includes(session?.user?.role ?? "");
   const myId = session?.user?.id;
 
   const [date, setDate] = React.useState(() => new Date().toISOString().slice(0, 10));

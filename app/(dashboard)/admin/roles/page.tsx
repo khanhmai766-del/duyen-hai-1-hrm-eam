@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
+  Check,
   CheckCircle2,
+  ChevronsUpDown,
   CircleDot,
   Eye,
   KeyRound,
@@ -14,6 +16,7 @@ import {
   Plus,
   RotateCcw,
   Save,
+  Search,
   Settings2,
   ShieldCheck,
   Trash2,
@@ -34,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { RoleBadge } from "@/components/devices/status-badge";
@@ -41,6 +45,7 @@ import { PositionSystemScopeCard } from "@/components/admin/position-system-scop
 import { useUpdateUser, useUsers } from "@/hooks/useUsers";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 type PermissionValue = "full" | "manage" | "approve" | "create" | "own" | "read" | "none";
@@ -70,6 +75,7 @@ interface RoleColumn {
   scope: string;
   accent: string;
   systemRole?: RoleKey;
+  sourceRoleIds?: RoleKey[];
   custom?: boolean;
 }
 
@@ -89,6 +95,14 @@ const SYSTEM_ROLE_COLUMNS: RoleColumn[] = [
     scope: "Quản trị hệ thống",
     accent: "from-[#1E3A5F] to-[#2563EB]",
     systemRole: "ADMIN",
+  },
+  {
+    id: "MANAGER",
+    label: ROLES.MANAGER.label,
+    desc: "Quản lý nghiệp vụ, duyệt và điều phối dữ liệu vận hành.",
+    scope: "Quản lý vận hành",
+    accent: "from-indigo-500 to-blue-600",
+    systemRole: "MANAGER",
   },
   {
     id: "SUPERVISOR",
@@ -118,41 +132,159 @@ const SYSTEM_ROLE_COLUMNS: RoleColumn[] = [
 
 const ROLE_ORDER: RoleKey[] = SYSTEM_ROLE_COLUMNS.map((role) => role.id as RoleKey);
 
-const DEFAULT_MATRIX: Record<string, PermissionValue> = {
-  ADMIN: "manage",
-  SUPERVISOR: "read",
-  TECHNICIAN: "read",
-  VIEWER: "read",
+const MATRIX_SYSTEM_ROLE_COLUMNS: RoleColumn[] = [
+  SYSTEM_ROLE_COLUMNS[0],
+  SYSTEM_ROLE_COLUMNS[1],
+  {
+    id: "SUPERVISOR_TECHNICIAN",
+    label: "Trưởng ca / Kỹ thuật viên",
+    desc: "Nhóm quyền dùng chung cho Trưởng ca và Kỹ thuật viên.",
+    scope: "Điều hành / kỹ thuật",
+    accent: "from-blue-500 to-orange-500",
+    sourceRoleIds: ["SUPERVISOR", "TECHNICIAN"],
+  },
+  SYSTEM_ROLE_COLUMNS[4],
+];
+
+const PERMISSION_RANK: Record<PermissionValue, number> = {
+  none: 0,
+  read: 1,
+  own: 2,
+  create: 3,
+  approve: 4,
+  manage: 5,
+  full: 6,
 };
+
+function strongestPermission(values: Array<PermissionValue | undefined>): PermissionValue {
+  return values.reduce<PermissionValue>(
+    (best, value) => (value && PERMISSION_RANK[value] > PERMISSION_RANK[best] ? value : best),
+    "none"
+  );
+}
+
+function roleMatrixIds(role: RoleColumn) {
+  return role.sourceRoleIds ?? [role.id];
+}
+
+function roleMatrixValue(matrix: Record<string, PermissionValue>, role: RoleColumn): PermissionValue {
+  return strongestPermission(roleMatrixIds(role).map((roleId) => matrix[roleId] ?? "none"));
+}
+
+function managerDefaultValue(row: PermissionRow): PermissionValue {
+  if (
+    [
+      "user-admin",
+      "user-manage",
+      "rbac-manage",
+      "system_audit_log:view",
+      "device-delete",
+      "device-code",
+      "archive-create-delete",
+      "archive-backup",
+      "forum-moderate",
+    ].includes(row.id)
+  ) {
+    return "none";
+  }
+  if (["device-manage", "material-manage", "announcement-manage", "document-procedure", "document-pid"].includes(row.id)) {
+    return "read";
+  }
+  return strongestPermission([row.matrix.SUPERVISOR, row.matrix.TECHNICIAN]);
+}
+
+function normalizeMergedRoleMatrix(rows: PermissionRow[]) {
+  return rows.map((row) => {
+    const mergedValue = strongestPermission([row.matrix.SUPERVISOR, row.matrix.TECHNICIAN]);
+    return {
+      ...row,
+      matrix: {
+        ...row.matrix,
+        MANAGER: row.matrix.MANAGER ?? managerDefaultValue(row),
+        SUPERVISOR: mergedValue,
+        TECHNICIAN: mergedValue,
+      },
+    };
+  });
+}
 
 const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
-    id: "dashboard-read",
+    id: "overview-dashboard-read",
     group: "Tổng quan",
-    feature: "Xem dashboard, báo cáo và tra cứu dữ liệu",
-    note: "Bao gồm overview, báo cáo, danh sách thiết bị, lịch sử, vật tư.",
-    matrix: { ADMIN: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+    feature: "Xem dashboard tổng quan",
+    note: "Xem các chỉ số nhanh, cảnh báo, lịch trực và thông tin tổng hợp trên trang chủ.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
-    id: "shift-check-in",
-    group: "Nhân sự / Ca trực",
-    feature: "Điểm danh theo sơ đồ tổ chức ca",
-    note: "Tự chọn cương vị trực hoặc xem phân công theo ca.",
-    matrix: { ADMIN: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
+    id: "overview-reports-read",
+    group: "Tổng quan",
+    feature: "Xem báo cáo và thống kê",
+    note: "Tra cứu các báo cáo tổng hợp, biểu đồ và số liệu thống kê trong hệ thống.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
-    id: "shift-approve",
-    group: "Nhân sự / Ca trực",
-    feature: "Duyệt điểm danh, chấm công hành chính và chỉnh bảng công",
-    note: "Áp dụng cho ca trực, check-in hành chính, danh sách cần xác nhận và các ô bảng công cần điều chỉnh thủ công.",
-    matrix: { ADMIN: "approve", SUPERVISOR: "none", TECHNICIAN: "approve", VIEWER: "none" },
+    id: "overview-devices-read",
+    group: "Tổng quan",
+    feature: "Xem thông tin thiết bị",
+    note: "Xem danh sách thiết bị, cây thiết bị, lý lịch thiết bị và thông tin QR công khai.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
-    id: "user-admin",
-    group: "Nhân sự / Ca trực",
-    feature: "Quản lý người dùng và phân quyền",
-    note: "Tạo tài khoản, đổi vai trò, khóa/mở nhân sự.",
-    matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+    id: "overview-repair-defect-read",
+    group: "Tổng quan",
+    feature: "Xem sửa chữa và khiếm khuyết",
+    note: "Tra cứu phiếu sửa chữa, lịch sử sửa chữa và hồ sơ khiếm khuyết thiết bị.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "overview-materials-read",
+    group: "Tổng quan",
+    feature: "Xem vật tư và lịch thay thế",
+    note: "Tra cứu danh mục vật tư, điểm dùng, lịch thay thế và cảnh báo đến hạn.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "shift-operation-check-in",
+    group: "Nhân sự / Ca vận hành",
+    feature: "Điểm danh ca vận hành theo sơ đồ tổ chức",
+    note: "Tự chọn cương vị trực, xem phân công theo ca và ghi nhận có mặt trên sơ đồ ca.",
+    matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
+  },
+  {
+    id: "shift-operation-approve",
+    group: "Nhân sự / Ca vận hành",
+    feature: "Duyệt điểm danh ca vận hành",
+    note: "Xác nhận người trực theo từng cương vị, duyệt hoặc thu hồi điểm danh trong ca vận hành.",
+    matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "hc-attendance-check-in",
+    group: "Nhân sự / Hành chính",
+    feature: "Đăng ký và chấm công hành chính",
+    note: "Tạo nhóm hành chính, đăng ký nhân sự và ghi nhận chấm công hành chính trong ngày.",
+    matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
+  },
+  {
+    id: "hc-attendance-approve",
+    group: "Nhân sự / Hành chính",
+    feature: "Duyệt chấm công hành chính và chỉnh bảng công",
+    note: "Duyệt danh sách hành chính, xác nhận giờ công và điều chỉnh thủ công các ô bảng công khi cần.",
+    matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "user-manage",
+    group: "Quản trị người dùng",
+    feature: "Quản lý tài khoản người dùng",
+    note: "Tạo tài khoản, cập nhật hồ sơ, đổi vai trò hệ thống, khóa/mở hoặc vô hiệu hóa nhân sự.",
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "rbac-manage",
+    group: "Quản trị người dùng",
+    feature: "Quản lý ma trận phân quyền",
+    note: "Chỉnh cấp quyền theo vai trò, tạo phân quyền mở rộng và gán quyền riêng cho từng user.",
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "system_audit_log:view",
@@ -186,7 +318,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "repair-edit",
     group: "Sửa chữa",
     feature: "Sửa phiếu sửa chữa",
-    note: "Trưởng ca sửa được mọi phiếu; kỹ thuật viên chỉ sửa phiếu do mình tạo.",
+    note: "Quản lý và Trưởng ca sửa được mọi phiếu; kỹ thuật viên chỉ sửa phiếu do mình tạo.",
     matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "own", VIEWER: "none" },
   },
   {
@@ -291,7 +423,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "archive-edit",
     group: "Tài liệu số",
     feature: "Thư mục lưu trữ - chỉnh sửa hồ sơ",
-    note: "Quản trị, Trưởng ca và Kỹ thuật viên được chỉnh sửa dữ liệu đã ghi nhận; Người xem chỉ tra cứu.",
+    note: "Quản trị, Quản lý, Trưởng ca và Kỹ thuật viên được chỉnh sửa dữ liệu đã ghi nhận; Người xem chỉ tra cứu.",
     matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   },
   {
@@ -317,50 +449,87 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
   },
 ];
 
+function mergeDefaultPermissions(rows: PermissionRow[]) {
+  if (!rows.length) return DEFAULT_PERMISSIONS;
+
+  const existingById = new Map(rows.map((row) => [row.id, row]));
+  const legacyOverviewMatrix = existingById.get("dashboard-read")?.matrix;
+  const legacyMatrixByNewId: Record<string, Record<string, PermissionValue> | undefined> = {
+    "shift-operation-check-in": existingById.get("shift-check-in")?.matrix,
+    "shift-operation-approve": existingById.get("shift-approve")?.matrix,
+    "hc-attendance-check-in": existingById.get("shift-check-in")?.matrix,
+    "hc-attendance-approve": existingById.get("shift-approve")?.matrix,
+    "user-manage": existingById.get("user-admin")?.matrix,
+    "rbac-manage": existingById.get("user-admin")?.matrix,
+  };
+  const defaultIds = new Set(DEFAULT_PERMISSIONS.map((row) => row.id));
+  const legacyIds = new Set(["dashboard-read", "shift-check-in", "shift-approve", "user-admin"]);
+  const mergedDefaults = DEFAULT_PERMISSIONS.map((row) => {
+    const existing = existingById.get(row.id);
+    if (existing) return existing;
+    if (row.group === "Tổng quan" && legacyOverviewMatrix) return { ...row, matrix: { ...row.matrix, ...legacyOverviewMatrix } };
+    const legacyMatrix = legacyMatrixByNewId[row.id];
+    if (legacyMatrix) return { ...row, matrix: { ...row.matrix, ...legacyMatrix } };
+    return row;
+  });
+  const customRows = rows.filter((row) => !defaultIds.has(row.id) && !legacyIds.has(row.id));
+  return [...mergedDefaults, ...customRows];
+}
+
 const PERMISSION_META: Record<PermissionValue, { label: string; icon: LucideIcon; className: string; title: string }> = {
   full: {
     label: "Toàn quyền",
     icon: ShieldCheck,
     className: "bg-gradient-to-b from-emerald-400 to-green-600 text-white shadow-green-500/30",
-    title: "Toàn quyền",
+    title: "Xem, tạo, sửa, xoá, duyệt và cấu hình trong phạm vi chức năng.",
   },
   manage: {
     label: "Quản lý",
     icon: KeyRound,
     className: "bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-blue-500/30",
-    title: "Được thêm, sửa hoặc quản lý nghiệp vụ",
+    title: "Được điều phối và cập nhật nghiệp vụ; không mặc định có quyền xoá hoặc cấu hình hệ thống.",
   },
   approve: {
     label: "Duyệt",
     icon: UserCheck,
     className: "bg-gradient-to-b from-teal-400 to-emerald-600 text-white shadow-emerald-500/30",
-    title: "Được duyệt / xác nhận",
+    title: "Được xác nhận, phê duyệt hoặc chốt trạng thái; không mặc định được tạo/sửa toàn bộ.",
   },
   create: {
     label: "Tạo",
     icon: PencilLine,
     className: "bg-gradient-to-b from-sky-400 to-cyan-600 text-white shadow-cyan-500/30",
-    title: "Được tạo mới",
+    title: "Được thêm mới dữ liệu; chỉ sửa/xoá khi chức năng hoặc quyền riêng cho phép.",
   },
   own: {
     label: "Của mình",
     icon: CircleDot,
     className: "bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-amber-500/30",
-    title: "Chỉ thao tác với dữ liệu do mình tạo",
+    title: "Chỉ thao tác với dữ liệu do mình tạo hoặc được gán cho mình.",
   },
   read: {
     label: "Chỉ xem",
     icon: Eye,
     className: "bg-gradient-to-b from-slate-100 to-slate-300 text-slate-700 shadow-slate-400/20",
-    title: "Chỉ xem / tra cứu",
+    title: "Chỉ xem, tra cứu, lọc và mở chi tiết; không được thêm, sửa, xoá hoặc duyệt.",
   },
   none: {
     label: "Không",
     icon: XCircle,
     className: "bg-gradient-to-b from-rose-50 to-slate-200 text-slate-500 shadow-slate-400/10",
-    title: "Không được phép",
+    title: "Không được truy cập hoặc không được thao tác chức năng này.",
   },
 };
+
+const PERMISSION_HELP: Array<{ value: PermissionValue; description: string }> = [
+  { value: "full", description: "Xem, tạo, sửa, xoá, duyệt và cấu hình trong phạm vi chức năng." },
+  { value: "manage", description: "Điều phối và cập nhật nghiệp vụ; không mặc định có quyền xoá hoặc cấu hình hệ thống." },
+  { value: "approve", description: "Xác nhận, phê duyệt hoặc chốt trạng thái; không mặc định được tạo/sửa toàn bộ." },
+  { value: "create", description: "Thêm mới dữ liệu; chỉ sửa/xoá khi chức năng hoặc quyền riêng cho phép." },
+  { value: "own", description: "Chỉ thao tác với dữ liệu do mình tạo hoặc được gán cho mình." },
+  { value: "read", description: "Chỉ xem, tra cứu, lọc và mở chi tiết; không thêm, sửa, xoá hoặc duyệt." },
+  { value: "none", description: "Không được truy cập hoặc không được thao tác chức năng này." },
+];
 
 const EMPTY_NEW_ROLE = {
   label: "",
@@ -388,12 +557,14 @@ export default function RolesPage() {
     onError: (error) => toast.error((error as Error).message),
   });
 
-  const [permissions, setPermissions] = React.useState<PermissionRow[]>(DEFAULT_PERMISSIONS);
+  const [permissions, setPermissions] = React.useState<PermissionRow[]>(() => normalizeMergedRoleMatrix(DEFAULT_PERMISSIONS));
   const [customRoles, setCustomRoles] = React.useState<RoleColumn[]>([]);
   const [userOverrides, setUserOverrides] = React.useState<UserPermissionOverride[]>([]);
   const [editMode, setEditMode] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
   const [assignOpen, setAssignOpen] = React.useState(false);
+  const [assignUserOpen, setAssignUserOpen] = React.useState(false);
+  const [assignUserSearch, setAssignUserSearch] = React.useState("");
   const [newRole, setNewRole] = React.useState(EMPTY_NEW_ROLE);
   const [assignment, setAssignment] = React.useState({
     userId: "",
@@ -407,12 +578,13 @@ export default function RolesPage() {
   React.useEffect(() => {
     const config = rbacQuery.data?.data;
     if (!config) return;
-    setPermissions(config.permissions?.length ? config.permissions : DEFAULT_PERMISSIONS);
+    setPermissions(normalizeMergedRoleMatrix(mergeDefaultPermissions(config.permissions ?? [])));
     setCustomRoles(config.roles ?? []);
     setUserOverrides(config.userOverrides ?? []);
   }, [rbacQuery.data]);
 
   const roleColumns = React.useMemo(() => [...SYSTEM_ROLE_COLUMNS, ...customRoles], [customRoles]);
+  const matrixRoleColumns = React.useMemo(() => [...MATRIX_SYSTEM_ROLE_COLUMNS, ...customRoles], [customRoles]);
 
   const groupedRows = React.useMemo(
     () =>
@@ -427,14 +599,51 @@ export default function RolesPage() {
 
   const userList = users.data?.data ?? [];
   const permissionById = React.useMemo(() => new Map(permissions.map((item) => [item.id, item])), [permissions]);
+  const selectedAssignmentUser = React.useMemo(
+    () => userList.find((user) => user.id === assignment.userId),
+    [assignment.userId, userList]
+  );
+  const filteredAssignmentUsers = React.useMemo(() => {
+    const query = normalizeText(assignUserSearch.trim());
+    const sorted = [...userList].sort((a, b) => String(a.employeeId ?? "").localeCompare(String(b.employeeId ?? ""), "vi"));
+    if (!query) return sorted;
+    return sorted.filter((user) =>
+      normalizeText(
+        [
+          user.name,
+          user.employeeId,
+          user.email,
+          user.workEmail,
+          user.username,
+          user.position,
+          user.secondaryPosition,
+          user.department,
+          ROLES[user.role as RoleKey]?.label,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      ).includes(query)
+    );
+  }, [assignUserSearch, userList]);
 
   function saveCurrentConfig(nextPermissions = permissions, nextOverrides = userOverrides, nextRoles = customRoles) {
-    saveRbac.mutate({ permissions: nextPermissions, roles: nextRoles, userOverrides: nextOverrides });
+    saveRbac.mutate({ permissions: normalizeMergedRoleMatrix(nextPermissions), roles: nextRoles, userOverrides: nextOverrides });
   }
 
-  function updatePermissionValue(rowId: string, roleId: string, value: PermissionValue) {
+  function updatePermissionValue(rowId: string, role: RoleColumn, value: PermissionValue) {
+    const roleIds = roleMatrixIds(role);
     setPermissions((rows) =>
-      rows.map((row) => (row.id === rowId ? { ...row, matrix: { ...row.matrix, [roleId]: value } } : row))
+      rows.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              matrix: {
+                ...row.matrix,
+                ...Object.fromEntries(roleIds.map((roleId) => [roleId, value])),
+              },
+            }
+          : row
+      )
     );
   }
 
@@ -502,6 +711,8 @@ export default function RolesPage() {
 
       setUserOverrides(nextOverrides);
       setAssignOpen(false);
+      setAssignUserOpen(false);
+      setAssignUserSearch("");
       setAssignment({ userId: "", role: "", profileId: "", permissionId: "", value: "read", note: "" });
       saveCurrentConfig(permissions, nextOverrides, customRoles);
       toast.success("Đã cập nhật quyền user");
@@ -517,9 +728,10 @@ export default function RolesPage() {
   }
 
   function resetDefaultMatrix() {
-    setPermissions(DEFAULT_PERMISSIONS);
+    const nextPermissions = normalizeMergedRoleMatrix(DEFAULT_PERMISSIONS);
+    setPermissions(nextPermissions);
     setCustomRoles([]);
-    saveCurrentConfig(DEFAULT_PERMISSIONS, userOverrides, []);
+    saveCurrentConfig(nextPermissions, userOverrides, []);
   }
 
   return (
@@ -547,7 +759,7 @@ export default function RolesPage() {
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {roleColumns.map((role) => (
+        {matrixRoleColumns.map((role) => (
           <Card key={role.id} className="overflow-hidden">
             <CardContent className="relative p-4">
               <div className={cn("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", role.accent)} />
@@ -556,7 +768,7 @@ export default function RolesPage() {
                   {role.systemRole ? (
                     <RoleBadge role={role.systemRole} />
                   ) : (
-                    <span className="inline-flex rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-bold text-cyan-800">
+                    <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">
                       {role.label}
                     </span>
                   )}
@@ -643,6 +855,14 @@ export default function RolesPage() {
               ))}
             </div>
           </div>
+          <div className="grid gap-2 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-2 xl:grid-cols-3">
+            {PERMISSION_HELP.map((item) => (
+              <div key={item.value} className="flex items-start gap-2">
+                <PermissionPill value={item.value} compact />
+                <p className="min-w-0 pt-0.5 text-xs leading-5 text-muted-foreground">{item.description}</p>
+              </div>
+            ))}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -655,7 +875,7 @@ export default function RolesPage() {
                   <th className="min-w-[340px] px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
                     Chức năng
                   </th>
-                  {roleColumns.map((role) => (
+                  {matrixRoleColumns.map((role) => (
                     <th key={role.id} className="min-w-[138px] px-4 py-3 text-center text-xs font-semibold uppercase text-muted-foreground">
                       {role.label}
                     </th>
@@ -675,12 +895,12 @@ export default function RolesPage() {
                         <div className="font-semibold text-ink">{row.feature}</div>
                         <div className="mt-0.5 max-w-xl text-xs leading-5 text-muted-foreground">{row.note}</div>
                       </td>
-                      {roleColumns.map((role) => (
+                      {matrixRoleColumns.map((role) => (
                         <td key={role.id} className="px-4 py-3 text-center">
                           {isAdmin && editMode ? (
-                            <PermissionSelect value={row.matrix[role.id] ?? "none"} onChange={(value) => updatePermissionValue(row.id, role.id, value)} />
+                            <PermissionSelect value={roleMatrixValue(row.matrix, role)} onChange={(value) => updatePermissionValue(row.id, role, value)} />
                           ) : (
-                            <PermissionPill value={row.matrix[role.id] ?? "none"} />
+                            <PermissionPill value={roleMatrixValue(row.matrix, role)} />
                           )}
                         </td>
                       ))}
@@ -695,7 +915,7 @@ export default function RolesPage() {
 
       <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
         <span className="font-semibold text-ink">Ghi chú:</span> các quyền thao tác dữ liệu nhạy cảm như người dùng, phân quyền,
-        danh mục thiết bị và danh mục vật tư đang giới hạn cho Quản trị. Trưởng ca tập trung ở luồng duyệt và điều phối vận hành.
+        danh mục thiết bị và danh mục vật tư đang giới hạn cho Quản trị. Quản lý và Trưởng ca tập trung ở luồng duyệt, điều phối vận hành.
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -761,18 +981,92 @@ export default function RolesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label>User *</Label>
-                <Select value={assignment.userId} onValueChange={(value) => setAssignment((state) => ({ ...state, userId: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {userList.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.name} - {user.employeeId}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover
+                  open={assignUserOpen}
+                  onOpenChange={(open) => {
+                    setAssignUserOpen(open);
+                    if (open) setAssignUserSearch("");
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-auto min-h-10 w-full justify-between gap-3 px-3 py-2 text-left font-normal",
+                        !selectedAssignmentUser && "text-muted-foreground"
+                      )}
+                    >
+                      {selectedAssignmentUser ? (
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-ink">
+                            {selectedAssignmentUser.name} - {selectedAssignmentUser.employeeId}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                            {ROLES[selectedAssignmentUser.role as RoleKey]?.label ?? selectedAssignmentUser.role}
+                            {selectedAssignmentUser.position ? ` · ${selectedAssignmentUser.position}` : ""}
+                          </span>
+                        </span>
+                      ) : (
+                        <span>Chọn hoặc tìm user</span>
+                      )}
+                      <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-[min(560px,calc(100vw-3rem))] p-0">
+                    <div className="border-b border-border p-2">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          autoFocus
+                          value={assignUserSearch}
+                          onChange={(event) => setAssignUserSearch(event.target.value)}
+                          placeholder="Tìm theo tên, mã NV, email, chức vụ..."
+                          className="h-10 pl-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto p-1">
+                      {filteredAssignmentUsers.length === 0 ? (
+                        <div className="px-3 py-8 text-center text-sm text-muted-foreground">Không tìm thấy user phù hợp.</div>
+                      ) : (
+                        filteredAssignmentUsers.map((user) => {
+                          const selected = assignment.userId === user.id;
+                          return (
+                            <button
+                              key={user.id}
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition hover:bg-muted",
+                                selected && "bg-sky-50 text-sky-900"
+                              )}
+                              onClick={() => {
+                                setAssignment((state) => ({ ...state, userId: user.id }));
+                                setAssignUserOpen(false);
+                                setAssignUserSearch("");
+                              }}
+                            >
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-ink">
+                                {String(user.name ?? "?").trim().slice(0, 1).toUpperCase()}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-ink">
+                                  {user.name} - {user.employeeId}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                  {ROLES[user.role as RoleKey]?.label ?? user.role}
+                                  {user.position ? ` · ${user.position}` : ""}
+                                  {user.email ? ` · ${user.email}` : ""}
+                                </span>
+                              </span>
+                              {selected && <Check className="h-4 w-4 shrink-0 text-sky-700" />}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="grid gap-1.5">
                 <Label>Vai trò hệ thống</Label>

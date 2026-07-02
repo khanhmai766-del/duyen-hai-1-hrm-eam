@@ -6,7 +6,7 @@ import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
-const MANAGER = ["ADMIN", "SUPERVISOR"];
+const MANAGER = ["ADMIN", "MANAGER", "SUPERVISOR"];
 let hcCheckInUpdatedAtReady = false;
 
 async function ensureHcCheckInUpdatedAtColumn() {

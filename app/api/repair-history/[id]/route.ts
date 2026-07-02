@@ -32,13 +32,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // Approval is restricted to ADMIN/SUPERVISOR.
     const isApproving = body.approve === true;
-    if (isApproving && !["ADMIN", "SUPERVISOR"].includes(user.role)) {
-      return fail("Chỉ Trưởng ca hoặc Quản trị mới được duyệt", 403);
+    if (isApproving && !["ADMIN", "MANAGER", "SUPERVISOR"].includes(user.role)) {
+      return fail("Chỉ Quản trị, Quản lý hoặc Trưởng ca mới được duyệt", 403);
     }
 
     // Editing fields: ADMIN/SUPERVISOR any, TECHNICIAN only own, VIEWER none.
     const canEdit =
       user.role === "ADMIN" ||
+      user.role === "MANAGER" ||
       user.role === "SUPERVISOR" ||
       (user.role === "TECHNICIAN" && existing.createdById === user.id);
     if (!canEdit && !isApproving) return fail("Không đủ quyền chỉnh sửa", 403);

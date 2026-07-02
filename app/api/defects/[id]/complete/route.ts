@@ -15,7 +15,7 @@ const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position:
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
     const body = await req.json().catch(() => ({}));
 
     const defect = await prisma.defect.findUnique({ where: { id: params.id } });

@@ -16,7 +16,7 @@ const ALLOWED: Record<string, string> = {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR", "TECHNICIAN"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN"]);
 
     const form = await req.formData();
     const file = form.get("file");

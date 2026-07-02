@@ -49,7 +49,7 @@ export function IdleLogout() {
     let signedOut = false;
     let lastWrite = 0;
 
-    function doLogout() {
+    async function doLogout() {
       if (signedOut) return;
       // Đang mất mạng: hoãn lại, sự kiện "online" sẽ kích hoạt kiểm tra & đăng xuất sau.
       if (!navigator.onLine) return;
@@ -59,7 +59,12 @@ export function IdleLogout() {
       } catch {
         /* bỏ qua */
       }
-      signOut({ callbackUrl: "/login?reason=timeout" });
+      try {
+        const result = await signOut({ callbackUrl: "/login?reason=timeout", redirect: false });
+        window.location.assign(result?.url ?? "/login?reason=timeout");
+      } catch {
+        window.location.assign("/login?reason=timeout");
+      }
     }
 
     function markActivity() {

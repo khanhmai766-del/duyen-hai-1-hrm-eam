@@ -12,7 +12,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    requireRole(user, ["ADMIN", "SUPERVISOR"]);
+    requireRole(user, ["ADMIN", "MANAGER", "SUPERVISOR"]);
     const body = await req.json().catch(() => ({}));
 
     const point = await prisma.materialReplacement.findUnique({

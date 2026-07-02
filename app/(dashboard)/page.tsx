@@ -332,7 +332,7 @@ function DutyPositionCard({ m, loading }: { m?: MyDashboard; loading: boolean })
             <div className="mt-0.5 text-xs text-muted-foreground/70">{m?.unit ?? ""}</div>
           ) : m?.pendingPosition ? (
             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              Chờ Trưởng ca / Quản trị duyệt
+              Chờ Quản trị / Quản lý / Trưởng ca duyệt
             </span>
           ) : (
             <Link href="/hr/org-chart" className="mt-0.5 inline-block text-xs text-accent hover:underline">

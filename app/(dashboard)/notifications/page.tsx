@@ -138,7 +138,7 @@ export default function NotificationsPage() {
   const { position: currentPosition } = useCurrentPosition();
   const exemptFromReadConfirm = isAnnouncementReadExemptPosition(currentPosition);
   // ADMIN & Trưởng ca (SUPERVISOR) xem được ai đã/chưa đọc mệnh lệnh.
-  const isManager = role === "ADMIN" || role === "SUPERVISOR";
+  const isManager = role === "ADMIN" || role === "MANAGER" || role === "SUPERVISOR";
 
   const { data: annData, isLoading: annLoading } = useAnnouncements();
   const announcements = annData?.data ?? [];

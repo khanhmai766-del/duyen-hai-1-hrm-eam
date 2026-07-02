@@ -5,7 +5,7 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-const MANAGE_ROLES = ["ADMIN", "SUPERVISOR"];
+const MANAGE_ROLES = ["ADMIN", "MANAGER", "SUPERVISOR"];
 const SAFE_OPERATION_UNITS = ["S1", "S2"] as const;
 type SafeOperationUnit = (typeof SAFE_OPERATION_UNITS)[number];
 
