@@ -22,6 +22,10 @@ const LINKS: { href: string; icon: typeof CalendarDays; title: string; desc: str
   { href: "/hr/shift-roster", icon: CalendarDays, title: "Lịch trực ca", desc: "Phân ca theo tháng", cover: "/brand/lich-truc-ca.jpg" },
 ];
 
+function isDuyenHaiEmployeeId(employeeId?: string | null) {
+  return /^nddh\d+$/.test(normalizeText(employeeId ?? ""));
+}
+
 // "Ca vận hành" background by real-time shift (Sáng / Chiều / Đêm).
 const SHIFT_BG: Record<ShiftTypeKey, string> = {
   MORNING: "/brand/ca-sang.jpg",
@@ -50,6 +54,10 @@ export default function HrOverviewPage() {
   const { data: usersData } = useUsers();
   const shift = shiftData?.data;
   const users = usersData?.data ?? [];
+  const duyenHaiStaffCount = React.useMemo(
+    () => users.filter((u) => isDuyenHaiEmployeeId(u.employeeId)).length,
+    [users]
+  );
   // "Đang trực ca" = số người trong ca hiện tại đã được Quản trị / Trưởng ca duyệt chấm công.
   const onDuty = shift?.assignments.filter((a) => a.isApproved).length ?? 0;
 
@@ -76,7 +84,7 @@ export default function HrOverviewPage() {
       <PageHeader title="QUẢN LÝ NHÂN SỰ / CA VẬN HÀNH" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Tổng nhân sự" value={users.length} icon={Users} tint="navy" bgCover="/brand/1.jpg" />
+        <StatCard label="Tổng nhân sự" value={duyenHaiStaffCount} icon={Users} tint="navy" bgCover="/brand/1.jpg" />
         <Link href={LINKS[0].href} className="block h-full">
           <HrLinkCard item={LINKS[0]} minHeightClass="min-h-[150px]" />
         </Link>

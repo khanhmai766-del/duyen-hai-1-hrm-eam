@@ -3,7 +3,6 @@ import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { effectiveUserPosition } from "@/lib/current-position";
 import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
 import { isAnnouncementTargetForPosition } from "@/lib/announcement-targets";
 import { deleteFromS3 } from "@/lib/s3";
@@ -114,23 +113,6 @@ export async function PUT(req: NextRequest) {
         where: { id },
         data: { invalidatedAt: action === "INVALIDATE" ? new Date() : null },
       });
-      if (action === "INVALIDATE") {
-        const targetUsers = await prisma.user.findMany({
-          where: { isActive: true },
-          select: { id: true, position: true, secondaryPosition: true, currentPosition: true },
-        });
-        const targetUserIds = targetUsers
-          .filter((target) => {
-            const position = effectiveUserPosition(target);
-            return !isAnnouncementReadExemptPosition(position) && isAnnouncementTargetForPosition(item.classification, position);
-          })
-          .map((target) => target.id);
-        if (targetUserIds.length > 0) {
-          await prisma.announcementRead.deleteMany({
-            where: { announcementId: item.id, userId: { in: targetUserIds } },
-          });
-        }
-      }
       await audit(
         user.id,
         action === "INVALIDATE" ? "INVALIDATE_ANNOUNCEMENT" : "RESTORE_ANNOUNCEMENT",

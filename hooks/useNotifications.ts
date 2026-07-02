@@ -32,6 +32,7 @@ export function useNotifications() {
   const loading = announcements.isLoading;
 
   const notices: Notice[] = exemptFromReadConfirm ? [] : (announcements.data?.data ?? [])
+    .filter((a) => !a.invalidatedAt)
     .filter((a) => isAnnouncementTargetForPosition(a.classification, myPosition))
     .filter((a) => !myId || !a.reads.some((r) => r.userId === myId))
     .slice()
