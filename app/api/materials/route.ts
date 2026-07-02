@@ -27,8 +27,13 @@ type MaterialDocumentFields = {
   documentName: string | null;
 };
 
-function normalizeMaterialDocument(body: { documentUrl?: unknown; documentName?: unknown }): MaterialDocumentFields {
-  const documentUrl = String(body.documentUrl ?? "").trim() || null;
+async function normalizeMaterialDocument(body: { documentUrl?: unknown; documentName?: unknown }): Promise<MaterialDocumentFields> {
+  // Tầng 3: dán data URL cũng được đẩy lên MinIO; DB chỉ giữ URL ngắn.
+  const documentUrl = await maybeUploadDataUrl({
+    value: String(body.documentUrl ?? "").trim() || null,
+    folder: "materials/documents",
+    preset: "document-image",
+  });
   const documentName = String(body.documentName ?? "").trim() || null;
   return { documentUrl, documentName: documentUrl ? documentName : null };
 }
@@ -154,7 +159,7 @@ export async function POST(req: NextRequest) {
     const defaultSystem = body.system?.trim() || null;
     const replacements = parseReplacements(body, user.id, defaultSystem);
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" });
-    const document = normalizeMaterialDocument(body);
+    const document = await normalizeMaterialDocument(body);
     const m = await prisma.material.create({
       data: {
         code: body.code,
@@ -189,7 +194,7 @@ export async function PUT(req: NextRequest) {
         ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" })
         : undefined;
     const document = body.documentUrl !== undefined || body.documentName !== undefined
-      ? normalizeMaterialDocument(body)
+      ? await normalizeMaterialDocument(body)
       : undefined;
     await prisma.material.update({
       where: { id: body.id },

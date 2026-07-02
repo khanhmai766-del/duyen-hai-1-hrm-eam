@@ -37,7 +37,10 @@ export async function PUT(req: NextRequest) {
     await assertSeqEditable(user, seq);
     const data: Record<string, unknown> = {};
     if (body.attachedInfo !== undefined) data.attachedInfo = body.attachedInfo || null;
-    if (body.documentUrl !== undefined) data.documentUrl = body.documentUrl || null;
+    if (body.documentUrl !== undefined) {
+      // Tầng 3: dán data URL cũng được đẩy lên MinIO; DB chỉ giữ URL ngắn.
+      data.documentUrl = await maybeUploadDataUrl({ value: body.documentUrl || null, folder: "equipment/documents", preset: "document-image" });
+    }
     if (body.imageUrl !== undefined) {
       data.imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "equipment/images", preset: "image" });
     }

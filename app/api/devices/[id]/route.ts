@@ -124,7 +124,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         parentSeq,
         depth: nextSeq.split(".").length,
         attachedInfo: body.attachedInfo !== undefined ? String(body.attachedInfo || "").trim() || null : undefined,
-        documentUrl: body.documentUrl !== undefined ? String(body.documentUrl || "").trim() || null : undefined,
+        documentUrl:
+          body.documentUrl !== undefined
+            ? await maybeUploadDataUrl({
+                value: String(body.documentUrl || "").trim() || null,
+                folder: "equipment/documents",
+                preset: "document-image",
+              })
+            : undefined,
         imageUrl,
       },
     });

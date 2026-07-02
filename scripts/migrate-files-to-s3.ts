@@ -54,6 +54,19 @@ async function migrateJsonImageList(raw: string | null | undefined, folder: stri
   return JSON.stringify(next.filter(Boolean));
 }
 
+async function migrateRepairLogs() {
+  const rows = await prisma.repairLog.findMany({ select: { id: true, attachments: true } });
+  for (const row of rows) {
+    const attachments = (
+      await Promise.all(row.attachments.map((value) => migrateUrl(value, "repair-logs/attachments", "image")))
+    ).filter((value): value is string => !!value);
+    if (JSON.stringify(attachments) !== JSON.stringify(row.attachments)) {
+      await prisma.repairLog.update({ where: { id: row.id }, data: { attachments } });
+      console.log(`Đã migrate RepairLog ${row.id}`);
+    }
+  }
+}
+
 async function migrateEquipmentNodes() {
   const rows = await prisma.equipmentNode.findMany({ select: { id: true, imageUrl: true } });
   for (const row of rows) {
@@ -152,6 +165,7 @@ async function migrateRosterSchedule() {
 
 async function main() {
   console.log("Bắt đầu migrate base64/local upload sang S3...");
+  await migrateRepairLogs();
   await migrateEquipmentNodes();
   await migrateMaterials();
   await migrateDefects();

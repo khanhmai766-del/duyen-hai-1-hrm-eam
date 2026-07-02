@@ -236,7 +236,11 @@ export async function POST(req: NextRequest) {
         drawing: null,
         kks: null,
         attachedInfo: typeof body.attachedInfo === "string" ? body.attachedInfo.trim() || null : null,
-        documentUrl: typeof body.documentUrl === "string" ? body.documentUrl.trim() || null : null,
+        documentUrl: await maybeUploadDataUrl({
+          value: typeof body.documentUrl === "string" ? body.documentUrl.trim() || null : null,
+          folder: "equipment/documents",
+          preset: "document-image",
+        }),
         imageUrl,
         deviceSynced: true,
       },

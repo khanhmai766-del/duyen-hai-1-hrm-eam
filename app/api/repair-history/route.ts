@@ -6,6 +6,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { maybeUploadDataUrlList } from "@/lib/s3";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -69,7 +70,8 @@ export async function POST(req: NextRequest) {
         cost: body.cost != null ? Number(body.cost) : null,
         downtime: body.downtime != null ? Number(body.downtime) : null,
         createdById: user.id,
-        attachments: body.attachments || [],
+        // Tầng 3: base64 → MinIO, DB chỉ giữ URL ngắn.
+        attachments: await maybeUploadDataUrlList(body.attachments, "repair-logs/attachments", "image"),
       },
     });
     await audit(user.id, "CREATE_REPAIR", "RepairLog", log.id, log.title);

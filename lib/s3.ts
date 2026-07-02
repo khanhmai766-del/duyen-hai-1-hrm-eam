@@ -167,9 +167,28 @@ export async function uploadImageBufferToS3({
   });
 }
 
+// Tầng 3 — Quy ước lưu trữ: cột ảnh/tài liệu trong DB chỉ chứa URL ngắn (MinIO/link),
+// KHÔNG BAO GIỜ chứa base64. Chuỗi quá dài không phải data URL bị từ chối 400.
+const MAX_STORED_URL_LENGTH = 2048;
+
+// Response envelope 400 thuần (không import lib/api để script tsx không phải kéo next-auth).
+function storedUrlViolation(message: string) {
+  return new Response(JSON.stringify({ data: null, meta: null, error: message }), {
+    status: 400,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function maybeUploadDataUrl({ value, folder, preset = "image" }: MaybeUploadParams) {
   if (!value) return value ?? null;
-  if (!isDataUrl(value)) return value;
+  if (!isDataUrl(value)) {
+    if (value.length > MAX_STORED_URL_LENGTH) {
+      throw storedUrlViolation(
+        `Tệp/ảnh không hợp lệ: cột lưu trữ chỉ nhận URL tối đa ${MAX_STORED_URL_LENGTH} ký tự. Ảnh phải gửi dạng data URL (data:image/...) để hệ thống tự đưa lên kho tệp.`
+      );
+    }
+    return value;
+  }
   const parsed = dataUrlToBuffer(value);
   const uploaded = await uploadImageBufferToS3({
     buffer: parsed.buffer,
