@@ -227,12 +227,12 @@ export default function OrgChartPage() {
       {/* Fullscreen presentation (Viewer) — for TV / projector. ESC to exit. */}
       {viewer && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[1000] flex h-dvh w-dvw flex-col overflow-hidden bg-white p-4">
-          <div className="mb-3 flex shrink-0 items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-ink xl:text-2xl">Nhân sự trực ca vận hành</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground xl:text-sm">
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-4">
+            <div className="flex min-w-0 items-baseline gap-3">
+              <h2 className="shrink-0 text-xl font-bold text-ink xl:text-2xl">Nhân sự trực ca vận hành</h2>
+              <span className="min-w-0 truncate text-xs font-medium text-muted-foreground xl:text-sm">
                 {caLabel} · {unit}
-              </p>
+              </span>
             </div>
             <div className="flex items-center gap-3">
               {assignments.length > 0 && (
@@ -1169,7 +1169,7 @@ function SeatBar({
     <div
       className={cn(
         "group shrink-0 rounded-lg border text-center transition-all duration-300",
-        presentation ? "px-2 py-1.5" : "px-3 py-2",
+        presentation ? "flex flex-col px-2 py-1.5" : "px-3 py-2",
         s.bar,
         filled && s.filled
       )}
@@ -1198,7 +1198,7 @@ function Seat({
     <div
       className={cn(
         "group relative rounded-xl border text-center transition-all duration-300",
-        presentation ? "min-h-0 flex-1 overflow-hidden px-1.5 py-1.5" : "px-2 py-2.5",
+        presentation ? "flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 py-1" : "px-2 py-2.5",
         filled
           ? cn("bg-white hover:-translate-y-0.5", s.filled)
           : cn("border-dashed bg-muted/20 opacity-90", s.cell)
@@ -1226,8 +1226,40 @@ function Occupants({
   if (!occupants?.length) {
     return center ? <div className={cn("mt-0.5 text-muted-foreground/40", presentation ? "text-[10px]" : "text-[11px]")}>— trống —</div> : null;
   }
+  if (presentation) {
+    if (occupants.length === 3) {
+      const ordered = [...occupants].sort((a, b) => a.user.name.length - b.user.name.length);
+      const top = ordered.slice(0, 2);
+      const bottom = ordered[2];
+      return (
+        <div className={cn("mt-0.5 grid w-full min-w-0 grid-cols-2 items-center gap-x-1 gap-y-0.5", !center && "min-h-0 flex-1")}>
+          {top.map((o) => <CompactOccupant key={o.id} occupant={o} dense />)}
+          <div className="col-span-2 flex justify-center">
+            <CompactOccupant occupant={bottom} wide />
+          </div>
+        </div>
+      );
+    }
+    if (occupants.length > 3) {
+      return (
+        <div className={cn("mt-0.5 grid w-full min-w-0 grid-cols-2 items-center gap-0.5", !center && "min-h-0 flex-1")}>
+          {occupants.map((o) => <CompactOccupant key={o.id} occupant={o} dense />)}
+        </div>
+      );
+    }
+    return (
+      <div
+        className={cn("mt-0.5 grid w-full min-w-0 items-center gap-0.5", !center && "min-h-0 flex-1")}
+        style={{ gridTemplateColumns: `repeat(${occupants.length}, minmax(0, 1fr))` }}
+      >
+        {occupants.map((o) => (
+          <CompactOccupant key={o.id} occupant={o} alignAvatar={occupants.length === 1} largeAvatar={occupants.length === 1} />
+        ))}
+      </div>
+    );
+  }
   return (
-    <div className={cn("flex flex-wrap justify-center", presentation ? "mt-1 gap-x-1.5 gap-y-1" : "mt-1.5 gap-x-3 gap-y-2")}>
+    <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-2">
       {occupants.map((o) => (
         <div
           key={o.id}
@@ -1287,6 +1319,77 @@ function Occupants({
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function CompactOccupant({
+  occupant,
+  dense = false,
+  wide = false,
+  alignAvatar = false,
+  largeAvatar = false,
+}: {
+  occupant: ShiftAssignmentWithUser;
+  dense?: boolean;
+  wide?: boolean;
+  alignAvatar?: boolean;
+  largeAvatar?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-1 py-0.5 text-left animate-in fade-in zoom-in-95 duration-500",
+        alignAvatar && "mx-auto w-full max-w-[12rem] justify-start",
+        wide ? "w-full max-w-[80%] justify-center" : !alignAvatar && "justify-center"
+      )}
+    >
+      <div className="relative shrink-0">
+        <div
+          className={cn(
+            "relative flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy to-accent font-bold text-white shadow-[0_6px_12px_-8px_rgba(15,23,42,0.55)] ring-1 ring-white",
+            largeAvatar
+              ? "h-10 w-10 text-[11px] xl:h-11 xl:w-11 xl:text-xs"
+              : dense ? "h-6 w-6 text-[8px]" : "h-7 w-7 text-[8px] xl:h-8 xl:w-8 xl:text-[9px]"
+          )}
+        >
+          {occupant.user.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={occupant.user.avatarUrl} alt={occupant.user.name} className="h-full w-full object-cover" />
+          ) : (
+            initials(occupant.user.name)
+          )}
+          <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/35 to-transparent" />
+        </div>
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full text-white shadow ring-1 ring-white",
+            largeAvatar ? "h-4 w-4" : "h-3 w-3",
+            occupant.isApproved ? "bg-emerald-500" : "bg-amber-500"
+          )}
+          title={occupant.isApproved ? "Đã được duyệt" : "Chưa được duyệt"}
+        >
+          {occupant.isApproved ? <Check className={cn(largeAvatar ? "h-2.5 w-2.5" : "h-1.5 w-1.5")} /> : <Clock className={cn(largeAvatar ? "h-2.5 w-2.5" : "h-1.5 w-1.5")} />}
+        </span>
+      </div>
+      <div className="min-w-0 text-left leading-none">
+        <div
+          className={cn(
+            "min-w-0 font-bold leading-tight",
+            dense ? "break-words text-[9px] xl:text-[10px]" : "truncate text-[10px] xl:text-[11px]",
+            occupant.isApproved ? "text-ink" : "text-warning"
+          )}
+          title={occupant.user.name}
+        >
+          {occupant.user.name}
+        </div>
+        {occupant.user.phone && (
+          <div className="mt-0.5 flex min-w-0 items-center gap-0.5 text-[8px] leading-none text-muted-foreground xl:text-[9px]">
+            <Phone className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{occupant.user.phone}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
