@@ -46,8 +46,9 @@ import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { useReplacements } from "@/hooks/useReplacements";
 import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
+import { buildEquipmentTreeIndex } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
-import { deviceAllowedForPosition, positionScopeOptions } from "@/lib/position-system-scopes";
+import { normalizePositionScopeKey, normalizeScopeAccess, positionScopeOptions, scopesForPosition } from "@/lib/position-system-scopes";
 import { cn, formatDate } from "@/lib/utils";
 
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
@@ -95,6 +96,39 @@ export default function ReportsPage() {
     () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
     [allPositions]
   );
+  const equipmentIndex = React.useMemo(() => buildEquipmentTreeIndex(equipmentNodes), [equipmentNodes]);
+  const allowedDeviceCodesByPosition = React.useMemo(() => {
+    const result = new Map<string, Set<string>>();
+    for (const position of dashboardPositionOptions) {
+      const allowed = new Set<string>();
+      const explicitScopes = scopesForPosition(positionScopes, position);
+      const normalizedPosition = normalizePositionScopeKey(position);
+
+      if (!explicitScopes.length) {
+        for (const device of devices) {
+          if (!device.managingPosition || normalizePositionScopeKey(device.managingPosition) === normalizedPosition) {
+            allowed.add(device.code);
+          }
+        }
+        result.set(position, allowed);
+        continue;
+      }
+
+      const accessBySeq = new Map(explicitScopes.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
+      for (const device of devices) {
+        let current: string | null | undefined = device.code;
+        while (current) {
+          if (accessBySeq.has(current)) {
+            if (accessBySeq.get(current) !== "none") allowed.add(device.code);
+            break;
+          }
+          current = equipmentIndex.parentOf.get(current) ?? null;
+        }
+      }
+      result.set(position, allowed);
+    }
+    return result;
+  }, [dashboardPositionOptions, devices, equipmentIndex, positionScopes]);
   const totalSystemDevices = Number(devicesQuery.data?.meta?.totalSystemDevices ?? devices.length);
   const isLoading =
     devicesQuery.isLoading ||
@@ -116,7 +150,7 @@ export default function ReportsPage() {
     const positions = dashboardPositionOptions;
     const matchesPosition = (device: { code: string; system?: string | null; systemSeq?: string | null; managingPosition?: string | null }) =>
       systemPositionFilter === "ALL" ||
-      deviceAllowedForPosition(device, systemPositionFilter, equipmentNodes, positionScopes);
+      (allowedDeviceCodesByPosition.get(systemPositionFilter)?.has(device.code) ?? false);
     const systemChartDevices =
       systemPositionFilter === "ALL"
         ? devices
@@ -164,7 +198,7 @@ export default function ReportsPage() {
     const positionRows = positions
       .map((position) => ({
         name: position,
-        value: devices.filter((device) => deviceAllowedForPosition(device, position, equipmentNodes, positionScopes)).length,
+        value: allowedDeviceCodesByPosition.get(position)?.size ?? 0,
       }))
       .filter((row) => row.value > 0)
       .sort((a, b) => b.value - a.value)
@@ -292,7 +326,7 @@ export default function ReportsPage() {
       repairYearOptions,
       yearlyTrend,
     };
-  }, [dashboardPositionOptions, dateRange, defectHistory, defects, devices, equipmentNodes, materials, positionScopes, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
+  }, [allowedDeviceCodesByPosition, dashboardPositionOptions, dateRange, defectHistory, defects, devices, materials, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
 
   return (
     <div className="space-y-5 print:space-y-4">
