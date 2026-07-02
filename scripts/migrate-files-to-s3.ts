@@ -2,7 +2,7 @@ import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import path from "path";
 import { prisma } from "../lib/prisma";
-import { maybeUploadDataUrl, uploadBufferToS3, uploadImageBufferToS3 } from "../lib/s3";
+import { maybeUploadDataUrl, safeEmployeeCode, uploadBufferToS3, uploadImageBufferToS3, uploadS3Object } from "../lib/s3";
 
 type ImagePreset = "avatar" | "signature" | "image" | "document-image";
 
@@ -52,6 +52,66 @@ async function migrateJsonImageList(raw: string | null | undefined, folder: stri
   const list = raw ? (JSON.parse(raw) as string[]) : [];
   const next = await Promise.all(list.map((value) => migrateUrl(value, folder, preset)));
   return JSON.stringify(next.filter(Boolean));
+}
+
+const USER_MEDIA_RE = /^data:([^;,]+);base64,(.+)$/;
+
+const USER_MEDIA_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+/**
+ * Avatar/chữ ký user base64 → S3 theo key chuẩn của app (avatars/{mã NV}.{ext},
+ * signatures/{mã NV}.{ext} — trùng convention của /api/me và admin-user-media),
+ * ghi avatarKey/signatureKey rồi xóa base64. userWithSignedMedia/publicUserRef
+ * sẽ tự phục vụ qua proxy /api/files/s3.
+ */
+async function migrateUsers() {
+  const users = await prisma.user.findMany({
+    select: { id: true, employeeId: true, avatarUrl: true, signatureUrl: true, avatarKey: true, signatureKey: true },
+  });
+  for (const user of users) {
+    const data: Record<string, unknown> = {};
+    for (const kind of ["avatar", "signature"] as const) {
+      const value = kind === "avatar" ? user.avatarUrl : user.signatureUrl;
+      const existingKey = kind === "avatar" ? user.avatarKey : user.signatureKey;
+      if (!value) continue;
+      const match = value.match(USER_MEDIA_RE);
+      if (!match) continue; // URL thường — giữ nguyên
+      if (existingKey) {
+        // Đã có key (flow mới) mà base64 cũ vẫn còn — runtime vốn ưu tiên key, chỉ cần dọn base64.
+        if (kind === "avatar") data.avatarUrl = null;
+        else data.signatureUrl = null;
+        continue;
+      }
+      const ext = USER_MEDIA_EXT[match[1].toLowerCase()];
+      if (!ext) {
+        console.warn(`Bỏ qua ${kind} của ${user.employeeId}: định dạng ${match[1]} không hỗ trợ`);
+        continue;
+      }
+      try {
+        const key = `${kind === "avatar" ? "avatars" : "signatures"}/${safeEmployeeCode(user.employeeId)}.${ext}`;
+        await uploadS3Object({ key, body: Buffer.from(match[2], "base64"), contentType: match[1] });
+        if (kind === "avatar") {
+          data.avatarKey = key;
+          data.avatarUrl = null;
+        } else {
+          data.signatureKey = key;
+          data.signatureUrl = null;
+        }
+      } catch (error) {
+        console.warn(`Bỏ qua ${kind} của ${user.employeeId}: ${(error as Error).message}`);
+      }
+    }
+    if (Object.keys(data).length) {
+      await prisma.user.update({ where: { id: user.id }, data });
+      console.log(`Đã migrate media User ${user.employeeId}`);
+    }
+  }
 }
 
 async function migrateRepairLogs() {
@@ -165,6 +225,7 @@ async function migrateRosterSchedule() {
 
 async function main() {
   console.log("Bắt đầu migrate base64/local upload sang S3...");
+  await migrateUsers();
   await migrateRepairLogs();
   await migrateEquipmentNodes();
   await migrateMaterials();

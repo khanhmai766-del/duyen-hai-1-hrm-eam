@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
-import { maybeUploadDataUrl } from "@/lib/s3";
+import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
+// Tầng 4: avatar trong list đi qua publicUserRef (proxy theo key) — không chở base64.
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
 
 export async function GET() {
   return handle(async () => {
@@ -22,9 +23,11 @@ export async function GET() {
       include: INCLUDE,
     });
     // Cột fireSafetyImpact/environmentSafetyImpact đã thuộc model Defect nên có sẵn trong kết quả.
-    const data = defects.filter(
-      (defect) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: defect.device, system: defect.system })
-    );
+    const data = defects
+      .filter(
+        (defect) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: defect.device, system: defect.system })
+      )
+      .map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) }));
     return ok(data, { total: data.length });
   });
 }
@@ -66,6 +69,6 @@ export async function POST(req: NextRequest) {
       include: INCLUDE,
     });
     await audit(user.id, "CREATE_DEFECT", "Defect", defect.id);
-    return ok(defect);
+    return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }

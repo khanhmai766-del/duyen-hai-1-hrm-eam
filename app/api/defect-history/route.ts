@@ -2,12 +2,15 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { maybeUploadDataUrlList } from "@/lib/s3";
+import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
+// Tầng 4: avatar trong list đi qua publicUserRef (proxy theo key) — không chở base64.
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
+// Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
+const HISTORY_TAKE = 300;
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -37,11 +40,14 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { performedAt: "desc" },
       include: INCLUDE,
+      take: HISTORY_TAKE,
     });
-    const data = history.filter(
-      (item) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: item.device, system: item.system })
-    );
-    return ok(data, { total: data.length });
+    const data = history
+      .filter(
+        (item) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: item.device, system: item.system })
+      )
+      .map((item) => ({ ...item, createdBy: publicUserRef(item.createdBy) }));
+    return ok(data, { total: data.length, capped: history.length === HISTORY_TAKE });
   });
 }
 
@@ -77,6 +83,6 @@ export async function POST(req: NextRequest) {
       include: INCLUDE,
     });
     await audit(user.id, "CREATE_DEFECT_HISTORY", "DefectHistory", history.id);
-    return ok(history);
+    return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }

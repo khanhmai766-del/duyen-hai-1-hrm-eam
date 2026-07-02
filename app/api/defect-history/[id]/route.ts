@@ -2,10 +2,11 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { maybeUploadDataUrlList } from "@/lib/s3";
+import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
+// Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -37,7 +38,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       include: INCLUDE,
     });
     await audit(user.id, "UPDATE_DEFECT_HISTORY", "DefectHistory", history.id);
-    return ok(history);
+    return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }
 

@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
-import { maybeUploadDataUrl } from "@/lib/s3";
+import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
+// Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
+const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -58,7 +59,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       include: INCLUDE,
     });
     await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id);
-    return ok(defect);
+    return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }
 

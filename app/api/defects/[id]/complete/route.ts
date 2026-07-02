@@ -2,10 +2,11 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { maybeUploadDataUrlList } from "@/lib/s3";
+import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
-const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true } } };
+// Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
+const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
 
 /**
  * Đánh dấu một khiếm khuyết đã thực hiện xong:
@@ -58,6 +59,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ]);
 
     await audit(user.id, "COMPLETE_DEFECT", "Defect", defect.id, defect.requestNumber ?? undefined);
-    return ok(history);
+    return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }

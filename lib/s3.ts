@@ -289,6 +289,23 @@ export function s3ProxyUrl(key: string) {
   return `/api/files/s3?key=${encodeURIComponent(key)}`;
 }
 
+/**
+ * Tầng 4 — user nhúng trong DANH SÁCH (createdBy/doneBy...): avatar phục vụ qua
+ * proxy theo key; tuyệt đối không để base64 lọt vào payload list (mỗi avatar
+ * base64 ~20-40KB, list 50 dòng kèm avatar = hàng MB).
+ */
+export function publicUserRef<T extends { avatarUrl?: string | null; avatarKey?: string | null }>(user: T) {
+  const { avatarKey, avatarUrl, ...rest } = user;
+  return {
+    ...rest,
+    avatarUrl: avatarKey
+      ? s3ProxyUrl(avatarKey)
+      : avatarUrl && !avatarUrl.startsWith("data:")
+        ? avatarUrl
+        : null,
+  };
+}
+
 export async function userWithSignedMedia<
   T extends { avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }
 >(user: T): Promise<T> {

@@ -5,8 +5,12 @@ import { handle, ok, requireUser } from "@/lib/api";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeText } from "@/lib/nav";
+import { publicUserRef } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
+
+// Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
+const HISTORY_TAKE = 300;
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -31,8 +35,10 @@ export async function GET(req: NextRequest) {
     const logs = await prisma.materialReplacementLog.findMany({
       where,
       orderBy: { replacedAt: "desc" },
+      take: HISTORY_TAKE,
       include: {
-        doneBy: { select: { id: true, name: true, position: true, avatarUrl: true } },
+        // Tầng 4: avatar đi qua publicUserRef (proxy theo key) — không chở base64.
+        doneBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
         replacement: {
           select: {
             deviceSeq: true,
@@ -70,6 +76,7 @@ export async function GET(req: NextRequest) {
     return ok(
       visibleLogs.map((log: any) => ({
         ...log,
+        doneBy: publicUserRef(log.doneBy),
         replacement: log.replacement
           ? {
               ...log.replacement,
@@ -84,7 +91,7 @@ export async function GET(req: NextRequest) {
             }
           : null,
       })),
-      { total: visibleLogs.length }
+      { total: visibleLogs.length, capped: logs.length === HISTORY_TAKE }
     );
   });
 }

@@ -8,6 +8,9 @@ import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { maybeUploadDataUrlList } from "@/lib/s3";
 
+// Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
+const HISTORY_TAKE = 300;
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -40,8 +43,9 @@ export async function GET(req: NextRequest) {
         createdBy: { select: { id: true, name: true, position: true } },
         approvedBy: { select: { id: true, name: true } },
       },
+      take: HISTORY_TAKE,
     });
-    return ok(logs.map(withDeviceAlias), { total: logs.length });
+    return ok(logs.map(withDeviceAlias), { total: logs.length, capped: logs.length === HISTORY_TAKE });
   });
 }
 
