@@ -23,11 +23,16 @@ export function useShift(params: { date: string; shiftType?: string; unit?: stri
   return useQuery({
     queryKey: ["shift", params],
     queryFn: () => apiGet<ShiftDetail | null>(`/api/shifts?${qs.toString()}`),
+    staleTime: 15 * 1000,
   });
 }
 
 export function useShifts() {
-  return useQuery({ queryKey: ["shifts"], queryFn: () => apiGet<any[]>("/api/shifts") });
+  return useQuery({
+    queryKey: ["shifts"],
+    queryFn: () => apiGet<any[]>("/api/shifts"),
+    staleTime: 60 * 1000,
+  });
 }
 
 export interface TimesheetEntry {
@@ -68,6 +73,7 @@ export function useTimesheet(month: string) {
   return useQuery({
     queryKey: ["timesheet", month],
     queryFn: () => apiGet<Timesheet>(`/api/shifts/timesheet?month=${month}`),
+    staleTime: 60 * 1000,
   });
 }
 
@@ -92,6 +98,7 @@ export function useRosterSchedule() {
   return useQuery({
     queryKey: ["roster-schedule"],
     queryFn: () => apiGet<RosterSchedule>("/api/roster-schedule"),
+    staleTime: 10 * 60 * 1000,
   });
 }
 
@@ -125,7 +132,10 @@ export function useCheckIn() {
   return useMutation({
     mutationFn: (body: { shiftId: string; userId: string; action: string; status?: string; note?: string }) =>
       apiMutate("/api/check-in", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shift"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
   });
 }
 
@@ -190,7 +200,10 @@ export function useApproveCheckIn() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (checkInId: string) => apiMutate("/api/check-in", "PUT", { checkInId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["shift"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shift"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
   });
 }
 

@@ -15,6 +15,7 @@ export function useUsers(options: { enabled?: boolean } = {}) {
     queryKey: ["users", "summary"],
     queryFn: () => apiGet<SafeUser[]>("/api/users?summary=1"),
     enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -24,7 +25,11 @@ export function useUsers(options: { enabled?: boolean } = {}) {
  * invalidate ["users"] (khớp tiền tố, gồm cả ["users","summary"]).
  */
 export function useUsersFull() {
-  return useQuery({ queryKey: ["users"], queryFn: () => apiGet<SafeUser[]>("/api/users") });
+  return useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiGet<SafeUser[]>("/api/users"),
+    staleTime: 60 * 1000,
+  });
 }
 
 /** Danh sách "Chức vụ" phân biệt (bỏ trùng, đã sắp xếp) lấy từ người dùng. */

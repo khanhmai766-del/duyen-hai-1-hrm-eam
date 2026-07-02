@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { safeEmployeeCode, uploadS3Object, userWithSignedMedia } from "@/lib/s3";
 import { avatarUpdate } from "@/lib/user-avatar-storage";
 import { isValidCurrentPosition } from "@/lib/current-position";
+import { invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,7 @@ export async function PUT(req: NextRequest) {
 
     const updated = await prisma.user.update({ where: { id: user.id }, data });
     await audit(user.id, "UPDATE_PROFILE", "User", user.id);
+    invalidateUserSummaryCache();
     const { passwordHash, ...safe } = updated;
     return ok(await userWithSignedMedia(safe));
   });

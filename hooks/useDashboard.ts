@@ -33,6 +33,7 @@ export function useMyDashboard(month?: string) {
   return useQuery({
     queryKey: ["me-dashboard", month ?? "current"],
     queryFn: () => apiGet<MyDashboard>(`/api/me/dashboard${qs}`),
+    staleTime: 30 * 1000,
   });
 }
 
@@ -57,6 +58,7 @@ export function useSafeOperations() {
   return useQuery({
     queryKey: ["safe-operation"],
     queryFn: () => apiGet<SafeOperationSetting[]>("/api/safe-operation"),
+    staleTime: 60 * 1000,
   });
 }
 
@@ -73,6 +75,7 @@ export function useOperations(month?: string) {
   return useQuery({
     queryKey: ["operations", month ?? "recent"],
     queryFn: () => apiGet<OperationEvent[]>(`/api/operations${month ? `?month=${month}` : ""}`),
+    staleTime: 5 * 60 * 1000,
   });
 }
 

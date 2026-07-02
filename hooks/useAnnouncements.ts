@@ -51,6 +51,7 @@ export function useAnnouncements() {
   return useQuery({
     queryKey: ["announcements"],
     queryFn: () => apiGet<Announcement[]>("/api/announcements"),
+    staleTime: 30 * 1000,
   });
 }
 

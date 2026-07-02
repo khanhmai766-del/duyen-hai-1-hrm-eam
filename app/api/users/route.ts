@@ -7,6 +7,7 @@ import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3";
 import { avatarUpdate } from "@/lib/user-avatar-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-position";
+import { getOrSetUserSummaryCache, invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
@@ -60,13 +61,15 @@ export async function GET(req: NextRequest) {
     // Dùng cho sidebar (mọi trang), dropdown chọn người, danh sách chức vụ... Trang
     // Quản trị người dùng vẫn lấy bản đầy đủ qua useUsersFull().
     if (req.nextUrl.searchParams.get("summary") === "1") {
-      const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" }, select: SUMMARY_SELECT });
-      const data = users.map((u) => ({
-        ...u,
-        avatarUrl: u.avatarKey ? s3ProxyUrl(u.avatarKey) : u.avatarUrl ?? null,
-        signatureUrl: null as string | null,
-        signatureKey: null as string | null,
-      }));
+      const data = await getOrSetUserSummaryCache(async () => {
+        const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" }, select: SUMMARY_SELECT });
+        return users.map((u) => ({
+          ...u,
+          avatarUrl: u.avatarKey ? s3ProxyUrl(u.avatarKey) : u.avatarUrl ?? null,
+          signatureUrl: null as string | null,
+          signatureKey: null as string | null,
+        }));
+      });
       return ok(data);
     }
     const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" } });
@@ -133,6 +136,7 @@ export async function POST(req: NextRequest) {
       changedFields: ["created"],
       ...requestAuditMeta(req),
     });
+    invalidateUserSummaryCache();
     return ok(await safe(created));
   });
 }
@@ -221,6 +225,7 @@ export async function PUT(req: NextRequest) {
       changedFields,
       ...requestAuditMeta(req),
     });
+    invalidateUserSummaryCache();
     return ok(await safe(updated));
   });
 }
@@ -275,6 +280,7 @@ export async function DELETE(req: NextRequest) {
         changedFields: ["deleted"],
         ...requestAuditMeta(req),
       });
+      invalidateUserSummaryCache();
       return ok({ id, permanent: true });
     }
 
@@ -291,6 +297,7 @@ export async function DELETE(req: NextRequest) {
           changedFields: ["isActive"],
           ...requestAuditMeta(req),
         });
+        invalidateUserSummaryCache();
         return ok({ id, deactivated: true, message: "Người dùng có dữ liệu liên quan nên đã chuyển sang trạng thái ngừng hoạt động." });
       }
       throw e;
@@ -302,6 +309,7 @@ export async function DELETE(req: NextRequest) {
       changedFields: ["deleted"],
       ...requestAuditMeta(req),
     });
+    invalidateUserSummaryCache();
     return ok({ id });
   });
 }

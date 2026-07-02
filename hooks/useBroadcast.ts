@@ -18,6 +18,7 @@ export function useBroadcasts() {
   return useQuery({
     queryKey: ["broadcast"],
     queryFn: () => apiGet<SystemBroadcast[]>("/api/broadcast"),
+    staleTime: 60 * 1000,
     // Polling nhẹ để user đang mở web thấy thông báo mới / bị tắt mà không cần F5.
     refetchInterval: 60 * 1000,
   });
