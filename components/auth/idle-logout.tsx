@@ -14,7 +14,8 @@ const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
  * Tự động đăng xuất khi người dùng không thao tác hoặc mất sóng wifi/internet quá 15 phút,
  * buộc đăng nhập lại để vào tiếp hệ thống.
  *
- * - Chế độ Viewer của sơ đồ tổ chức ca vận hành được xem là đang trình chiếu, không tính idle.
+ * - Trang Overview và chế độ Viewer của sơ đồ tổ chức ca vận hành được xem là đang theo dõi,
+ *   không tính idle.
  * - Thao tác (chuột/bàn phím/chạm/cuộn) khi ĐANG online sẽ làm mới mốc thời gian.
  * - Mất mạng được xem là "không hoạt động" nên vẫn tính vào 15 phút; nếu tới hạn lúc đang
  *   mất mạng thì hoãn đăng xuất tới khi có mạng lại (lúc đó cookie phía server cũng đã hết hạn).
@@ -45,6 +46,8 @@ export function IdleLogout() {
         return false;
       }
     };
+    const isOverviewActive = () => window.location.pathname === "/";
+    const isKeepAlivePage = () => isOverviewActive() || isOrgChartViewerActive();
 
     let signedOut = false;
     let lastWrite = 0;
@@ -76,7 +79,7 @@ export function IdleLogout() {
     }
 
     function check() {
-      if (isOrgChartViewerActive()) {
+      if (isKeepAlivePage()) {
         writeLast(now());
         return;
       }
@@ -87,7 +90,7 @@ export function IdleLogout() {
     // Khi vào trang: nếu mốc cũ đã quá hạn (vd mở lại sau >15 phút) thì đăng xuất ngay;
     // ngược lại đặt lại mốc về thời điểm hiện tại.
     const initial = readLast();
-    if (!isOrgChartViewerActive() && initial && now() - initial >= TIMEOUT_MS) {
+    if (!isKeepAlivePage() && initial && now() - initial >= TIMEOUT_MS) {
       doLogout();
     } else {
       writeLast(now());
