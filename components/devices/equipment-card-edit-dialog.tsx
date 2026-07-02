@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ImagePicker } from "@/components/shared/image-picker";
-import { useEquipmentTree, useUpdateEquipmentNode } from "@/hooks/useEquipment";
+import { useEquipmentNode, useUpdateEquipmentNode } from "@/hooks/useEquipment";
 
 /**
  * Hộp thoại chỉnh sửa thẻ thiết bị (một node trong cây): bổ sung thông tin, tài
@@ -22,11 +22,8 @@ export function EquipmentCardEditDialog({
   seq: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data } = useEquipmentTree();
-  const node = React.useMemo(
-    () => (seq ? (data?.data ?? []).find((n) => n.seq === seq) ?? null : null),
-    [data, seq]
-  );
+  const { data, isLoading } = useEquipmentNode(seq);
+  const node = data?.data ?? null;
   const update = useUpdateEquipmentNode();
 
   const [form, setForm] = React.useState({ attachedInfo: "", documentUrl: "", imageUrl: "" });
@@ -57,7 +54,11 @@ export function EquipmentCardEditDialog({
         <DialogHeader>
           <DialogTitle>Chỉnh sửa thẻ thiết bị</DialogTitle>
         </DialogHeader>
-        {node && (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : node && (
           <div className="space-y-3">
             <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
               <div className="font-mono text-xs font-bold text-navy">{node.seq}</div>

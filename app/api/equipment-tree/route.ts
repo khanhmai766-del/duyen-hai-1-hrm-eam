@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
+import { getNormalizedEquipmentNodeList } from "@/lib/equipment-tree";
 import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 
@@ -11,9 +11,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    const normalizedNodes = await getNormalizedEquipmentNodes(prisma);
+    const normalizedNodes = await getNormalizedEquipmentNodeList(prisma);
     const visibleNodes = await filterEquipmentNodesForUser(user, normalizedNodes);
-    return ok(visibleNodes.map((node) => ({ ...node, deviceId: node.deviceId ?? null })));
+    return ok(visibleNodes.map((node) => ({
+      seq: node.seq,
+      parentSeq: node.parentSeq,
+      name: node.name,
+      drawing: node.drawing,
+      depth: node.depth,
+      deviceId: node.deviceId ?? null,
+    })));
   });
 }
 

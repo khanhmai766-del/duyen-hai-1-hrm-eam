@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
-import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
+import { useEquipmentNode, useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { useSession } from "next-auth/react";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
@@ -335,6 +335,8 @@ function DetailPanel({
 }) {
   const router = useRouter();
   const isGroup = childCount > 0;
+  const detailQuery = useEquipmentNode(isGroup ? null : node.seq);
+  const detail = detailQuery.data?.data ?? null;
 
   // Mở lý lịch của node lá trực tiếp theo số thứ tự cây thiết bị.
   async function openRecord() {
@@ -380,6 +382,27 @@ function DetailPanel({
         <DetailRow label="Bản vẽ liên quan" value={node.drawing || "—"} />
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${childCount} thiết bị con` : "Thiết bị"} />
       </div>
+
+      {!isGroup && detailQuery.isLoading && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Äang táº£i thÃ´ng tin chi tiáº¿t...
+        </div>
+      )}
+
+      {!isGroup && detail && (
+        <div className="space-y-3">
+          {detail.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={detail.imageUrl} alt={detail.name} className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
+          )}
+          {detail.attachedInfo && <DetailRow label="ThÃ´ng tin thÃªm" value={detail.attachedInfo} />}
+          {detail.documentUrl && (
+            <a href={detail.documentUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-accent hover:underline">
+              Má»Ÿ tÃ i liá»‡u Ä‘Ã­nh kÃ¨m
+            </a>
+          )}
+        </div>
+      )}
 
       {!isGroup && (
         <Button className="w-full" onClick={openRecord}>

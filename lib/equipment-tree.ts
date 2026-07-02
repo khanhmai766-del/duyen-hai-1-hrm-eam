@@ -133,6 +133,14 @@ export async function getNormalizedEquipmentNodes(prisma: PrismaClient) {
   return normalizeEquipmentNodes(nodes);
 }
 
+export async function getNormalizedEquipmentNodeList(prisma: PrismaClient) {
+  const nodes = await prisma.equipmentNode.findMany({
+    orderBy: { sort: "asc" },
+    select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true },
+  });
+  return normalizeEquipmentNodes(nodes);
+}
+
 export function buildEquipmentTreeIndex(nodes: NormalizedEquipmentNode[]) {
   const bySeq = new Map<string, NormalizedEquipmentNode>();
   nodes.forEach((node) => bySeq.set(node.seq, node));
