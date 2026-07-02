@@ -552,6 +552,18 @@ model SystemBroadcast {
   updatedAt     DateTime @default(now())
 }
 
+// Bộ đếm ngày vận hành an toàn theo tổ máy (hiển thị trên dashboard). Bảng được
+// tạo/đồng bộ bằng raw SQL trong app/api/safe-operation/route.ts; khai báo ở đây
+// để db push / migrate diff không đề nghị xoá (tránh mất mốc ngày vận hành an toàn).
+model SafeOperationSetting {
+  id          String    @id
+  unit        String    @unique
+  startedAt   DateTime?
+  pausedAt    DateTime?
+  updatedAt   DateTime  @default(now())
+  updatedById String?
+}
+
 // Cây danh mục thiết bị (nhập từ DM_ThietBi.xlsx). Phân cấp dựa trên "Số thứ tự"
 // dạng chấm (vd "1.1.1" là cha của "1.1.1.1"). Tách riêng khỏi Device vận hành:
 // khóa duy nhất là `seq` (mã thiết bị `code` có thể trùng giữa các node).
