@@ -21,11 +21,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       body.imageUrl !== undefined
         ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" })
         : undefined;
+    // Đồng bộ khóa chuẩn deviceSeq khi client gửi trường device (chỉ gán seq có thật trong cây).
+    const deviceSeq =
+      body.device !== undefined
+        ? body.device
+          ? (await prisma.equipmentNode.findUnique({ where: { seq: String(body.device) }, select: { seq: true } }))?.seq ?? null
+          : null
+        : undefined;
     const defect = await prisma.defect.update({
       where: { id: params.id },
       data: {
         unit: body.unit,
         device: body.device !== undefined ? body.device || null : undefined,
+        deviceSeq,
         system: body.system !== undefined ? body.system || null : undefined,
         severity: body.severity !== undefined ? body.severity || null : undefined,
         condition: body.condition !== undefined ? body.condition || null : undefined,

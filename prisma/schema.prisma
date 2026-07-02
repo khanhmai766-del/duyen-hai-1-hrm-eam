@@ -261,6 +261,8 @@ model RepairLog {
   approvedBy User?  @relation("ApprovedBy", fields: [approvedById], references: [id])
 
   @@index([deviceSeq])
+  // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
+  @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "repairlog_deviceseq_prefix")
   @@index([deviceSeq, startedAt])
   @@index([status])
   @@index([createdById])
@@ -331,6 +333,8 @@ model MaterialReplacement {
   logs      MaterialReplacementLog[]
 
   @@index([deviceSeq])
+  // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
+  @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "matrep_deviceseq_prefix")
   @@index([materialId])
   @@index([system])
   @@index([isActive, nextDueAt])
@@ -373,7 +377,8 @@ model EquipmentMaterial {
 model Defect {
   id            String    @id @default(cuid())
   unit          String // Tổ máy: S1 | S2
-  device        String? // Thiết bị (mã thiết bị)
+  deviceSeq     String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
+  device        String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
   system        String? // Cương vị (chức vụ phụ trách)
   severity      String? // Mức độ: "1".."4"
   condition     String? // Điều kiện thực hiện: A | B
@@ -391,12 +396,17 @@ model Defect {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  createdBy User @relation("DefectCreatedBy", fields: [createdById], references: [id])
+  createdBy User           @relation("DefectCreatedBy", fields: [createdById], references: [id])
+  node      EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
 
+  @@index([deviceSeq])
+  // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
+  @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "defect_deviceseq_prefix")
   @@index([device])
   @@index([system])
   @@index([status])
   @@index([unit, status])
+  @@index([detectedAt])
   @@index([createdAt])
   @@index([completedAt])
   @@index([createdById])
@@ -589,6 +599,7 @@ model EquipmentNode {
   repairLogs           RepairLog[]
   deviceMaterials      EquipmentMaterial[]
   materialReplacements MaterialReplacement[]
+  defects              Defect[]
 
   @@index([parentSeq])
   @@index([parentSeq, sort])

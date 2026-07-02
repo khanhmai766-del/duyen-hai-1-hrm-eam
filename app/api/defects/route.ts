@@ -39,10 +39,16 @@ export async function POST(req: NextRequest) {
     if (body.device) await assertSeqEditable(user, String(body.device));
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" });
 
+    // Khóa liên kết chuẩn với cây: chỉ gán khi "device" là seq có thật (FK không chặn giá trị lạ).
+    const deviceSeq = body.device
+      ? (await prisma.equipmentNode.findUnique({ where: { seq: String(body.device) }, select: { seq: true } }))?.seq ?? null
+      : null;
+
     const defect = await prisma.defect.create({
       data: {
         unit: body.unit,
         device: body.device || null,
+        deviceSeq,
         system: body.system || null,
         severity: body.severity || null,
         condition: body.condition || null,
