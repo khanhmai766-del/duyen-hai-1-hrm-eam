@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { invalidateShiftCache } from "@/lib/shift-response-cache";
 
 export async function POST(req: NextRequest) {
   return handle(async () => {
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
       },
     });
     await audit(user.id, "CREATE_HANDOVER", "ShiftHandover", handover.id);
+    invalidateShiftCache();
     return ok(handover);
   });
 }

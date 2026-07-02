@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { invalidateShiftCache } from "@/lib/shift-response-cache";
 
 // POST = create or update a check-in record (check in / check out / set status)
 export async function POST(req: NextRequest) {
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
         });
 
     await audit(user.id, "CHECK_IN", "CheckIn", record.id, action);
+    invalidateShiftCache();
     return ok(record);
   });
 }
@@ -45,6 +47,7 @@ export async function PUT(req: NextRequest) {
       data: { approvedBy: user.id },
     });
     await audit(user.id, "APPROVE_CHECKIN", "CheckIn", record.id);
+    invalidateShiftCache();
     return ok(record);
   });
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { shiftWindow, MAX_EARLY_CHECKINS } from "@/lib/constants";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { invalidateShiftCache } from "@/lib/shift-response-cache";
 
 /**
  * Org-chart check-in ("Điểm danh"): places the current user into a seat
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
     }
 
     await audit(user.id, "CHECK_IN", "ShiftAssignment", assignment.id, `Điểm danh: ${label}`);
+    invalidateShiftCache();
     return ok(assignment);
   });
 }
@@ -146,6 +148,7 @@ export async function DELETE(req: NextRequest) {
         await prisma.checkIn.deleteMany({ where: { shiftId: target.shiftId, userId: target.userId } });
       }
       await audit(user.id, "REMOVE_CHECKIN", "ShiftAssignment", id, "Xoá điểm danh");
+      invalidateShiftCache();
       return ok({ removed: 1 });
     }
 
@@ -183,6 +186,7 @@ export async function DELETE(req: NextRequest) {
     await prisma.checkIn.deleteMany({ where: { shiftId: shift.id, userId: user.id } });
 
     await audit(user.id, "RECALL_CHECKIN", "ShiftAssignment", shift.id, "Thu hồi điểm danh");
+    invalidateShiftCache();
     return ok({ removed: mine.length });
   });
 }
@@ -225,6 +229,7 @@ export async function PUT(req: NextRequest) {
     }
 
     await audit(user.id, "APPROVE_CHECKIN", "Shift", shift.id, approveAll ? `Duyệt hết chấm công (${res.count})` : `Duyệt chấm công (${res.count})`);
+    invalidateShiftCache();
     return ok({ approved: res.count, locked: approveAll });
   });
 }
