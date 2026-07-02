@@ -12,6 +12,7 @@ import { normalizeText } from "@/lib/nav";
 import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
@@ -245,6 +246,7 @@ export async function POST(req: NextRequest) {
     const index = buildEquipmentTreeIndex(nodes);
     const effectiveParentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
     const parent = effectiveParentSeq ? index.bySeq.get(effectiveParentSeq) ?? null : null;
+    invalidateEquipmentNodeCache();
     invalidateDeviceListCache();
     await audit(user.id, "CREATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
     return ok(toDeviceRecord({ ...node, drawing: node.drawing, attachedInfo: node.attachedInfo, documentUrl: node.documentUrl, imageUrl: node.imageUrl }, parent));

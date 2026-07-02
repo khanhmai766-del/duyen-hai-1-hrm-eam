@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { getNormalizedEquipmentNodeList } from "@/lib/equipment-tree";
 import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
+import { getCachedEquipmentNodeList, invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    const normalizedNodes = await getNormalizedEquipmentNodeList(prisma);
+    const normalizedNodes = await getCachedEquipmentNodeList();
     const visibleNodes = await filterEquipmentNodesForUser(user, normalizedNodes);
     return ok(visibleNodes.map((node) => ({
       seq: node.seq,
@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest) {
     }
     const node = await prisma.equipmentNode.update({ where: { seq }, data });
     await audit(user.id, "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.name);
+    invalidateEquipmentNodeCache();
     invalidateDeviceListCache();
     return ok({ seq: node.seq });
   });

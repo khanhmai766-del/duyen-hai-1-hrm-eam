@@ -34,6 +34,73 @@ function compareSeq(a: string, b: string) {
   return 0;
 }
 
+/**
+ * Một dòng trong cây thiết bị. Memo hóa để khi chọn/mở một node, chỉ những dòng
+ * thực sự đổi trạng thái mới vẽ lại — không kéo theo cả cây (hàng nghìn node).
+ */
+const TreeNodeRow = React.memo(function TreeNodeRow({
+  node,
+  depth,
+  hasKids,
+  kidsCount,
+  isOpen,
+  isSelected,
+  onSelect,
+  onToggle,
+}: {
+  node: EquipmentNode;
+  depth: number;
+  hasKids: boolean;
+  kidsCount: number;
+  isOpen: boolean;
+  isSelected: boolean;
+  onSelect: (seq: string) => void;
+  onToggle: (seq: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(node.seq)}
+      className={cn(
+        "group flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
+        isSelected ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted"
+      )}
+      style={{ paddingLeft: depth * 16 + 4 }}
+    >
+      {hasKids ? (
+        <span
+          role="button"
+          tabIndex={-1}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(node.seq);
+          }}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted-foreground/10"
+          title={isOpen ? "Thu gọn" : "Mở rộng"}
+        >
+          <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />
+        </span>
+      ) : (
+        <span className="h-5 w-5 shrink-0" />
+      )}
+      {hasKids ? (
+        isOpen ? (
+          <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
+        ) : (
+          <Folder className="h-4 w-4 shrink-0 text-amber-500" />
+        )
+      ) : (
+        <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
+      )}
+      <span className="min-w-0 flex-1 truncate" title={node.name}>
+        {node.name}
+      </span>
+      {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kidsCount}</span>}
+      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{node.seq}</span>
+    </button>
+  );
+});
+
 export function EquipmentTreeView() {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
@@ -109,14 +176,16 @@ export function EquipmentTreeView() {
   }, [q, nodes, bySeq, effParentOf]);
 
   const isOpen = (seq: string) => (q ? searchExpanded!.has(seq) : expanded.has(seq));
-  function toggle(seq: string) {
+  // Callback ổn định để TreeNodeRow (React.memo) không re-render khi cây vẽ lại.
+  const onToggle = React.useCallback((seq: string) => {
     setExpanded((s) => {
       const next = new Set(s);
       if (next.has(seq)) next.delete(seq);
       else next.add(seq);
       return next;
     });
-  }
+  }, []);
+  const onSelect = React.useCallback((seq: string) => setSelected(seq), []);
 
   const selectedNode = selected ? bySeq.get(selected) ?? null : null;
   React.useEffect(() => {
@@ -153,46 +222,16 @@ export function EquipmentTreeView() {
         const open = isOpen(n.seq);
         return (
           <React.Fragment key={n.seq}>
-            <button
-              type="button"
-              onClick={() => setSelected(n.seq)}
-              className={cn(
-                "group flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
-                selected === n.seq ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted"
-              )}
-              style={{ paddingLeft: depth * 16 + 4 }}
-            >
-              {hasKids ? (
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggle(n.seq);
-                  }}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted-foreground/10"
-                  title={open ? "Thu gọn" : "Mở rộng"}
-                >
-                  <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
-                </span>
-              ) : (
-                <span className="h-5 w-5 shrink-0" />
-              )}
-              {hasKids ? (
-                open ? (
-                  <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
-                ) : (
-                  <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-                )
-              ) : (
-                <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
-              )}
-              <span className="min-w-0 flex-1 truncate" title={n.name}>
-                {n.name}
-              </span>
-              {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kids.length}</span>}
-              <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{n.seq}</span>
-            </button>
+            <TreeNodeRow
+              node={n}
+              depth={depth}
+              hasKids={hasKids}
+              kidsCount={kids.length}
+              isOpen={open}
+              isSelected={selected === n.seq}
+              onSelect={onSelect}
+              onToggle={onToggle}
+            />
             {hasKids && open && renderNodes(kids, depth + 1)}
           </React.Fragment>
         );

@@ -1,9 +1,9 @@
 import { fail } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
-  getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
+import { getCachedEquipmentNodeList } from "@/lib/equipment-node-cache";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import {
@@ -61,7 +61,7 @@ export async function resolveEquipmentAccessForUser(
   user: SessionUser,
   inputNodes?: NormalizedEquipmentNode[]
 ): Promise<EquipmentAccessContext> {
-  const allNodes = inputNodes ?? await getNormalizedEquipmentNodes(prisma);
+  const allNodes = inputNodes ?? await getCachedEquipmentNodeList();
   const allIndex = buildEquipmentTreeIndex(allNodes);
   const allSeqs = new Set(allNodes.map((node) => node.seq));
   const allNames = new Set(allNodes.map((node) => normalizeText(node.name)).filter(Boolean));
@@ -143,11 +143,29 @@ export async function filterEquipmentNodesForUser(user: SessionUser, nodes: Norm
   return access.nodes;
 }
 
+// Kiểm tra quyền XEM một seq mà KHÔNG cần nạp/normalize toàn bộ 9k node: chỉ đọc
+// scopes của cương vị rồi leo cây theo tổ tiên của seq (tổ tiên hiệu lực luôn là
+// tiền tố chuỗi seq). Fail-safe: chỉ nới quyền khi cương vị chưa cấu hình riêng.
 export async function assertSeqViewable(user: SessionUser, seq: string) {
-  const access = await resolveEquipmentAccessForUser(user);
-  if (!access.canViewSeq(seq)) {
-    throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
+  if (user.role === "ADMIN") return;
+  const position = user.position ?? "";
+  if (!position) return;
+
+  const scopes = await loadPositionSystemScopeRows();
+  const explicit = scopesForPosition(scopes, position);
+  if (!explicit.length) return; // cương vị chưa cấu hình riêng → xem tất cả (giữ rule cũ)
+
+  const accessBySeq = new Map(
+    explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const)
+  );
+  let current: string | null = seq;
+  while (current) {
+    const access = accessBySeq.get(current);
+    if (access && access !== "none") return; // seq hoặc tổ tiên được cấp quyền
+    const idx = current.lastIndexOf(".");
+    current = idx > 0 ? current.slice(0, idx) : null;
   }
+  throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
 }
 
 export async function assertSeqEditable(user: SessionUser, seq: string) {
