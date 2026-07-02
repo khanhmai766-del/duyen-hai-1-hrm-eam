@@ -33,6 +33,7 @@ const HC_SELF_PERIODS = [
   { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3, cutoff: "Trước 14h30" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
+const HC_RECALL_WINDOW_MS = 30 * 60 * 1000;
 const MANAGED_GROUP_PERIODS: Array<{ value: "FULL_DAY" | "MORNING" | "AFTERNOON"; label: string }> = [
   { value: "FULL_DAY", label: "Cả ngày" },
   { value: "MORNING", label: "Buổi sáng" },
@@ -45,6 +46,13 @@ function isSelfHcGroup(group: HcGroup) {
 
 function periodLabel(content: string) {
   return HC_SELF_PERIODS.find((p) => content === `Hành chính - ${p.label}`)?.label ?? "Hành chính";
+}
+
+function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: string; updatedAt?: string } | null) {
+  if (!member || member.isRegistered) return false;
+  const markedAt = new Date(member.updatedAt || member.createdAt || "");
+  if (Number.isNaN(markedAt.getTime())) return false;
+  return Date.now() - markedAt.getTime() <= HC_RECALL_WINDOW_MS;
 }
 
 export default function AdminAttendancePage() {
@@ -86,7 +94,7 @@ export default function AdminAttendancePage() {
         <CardSkeleton />
       ) : (
         <div className="space-y-4">
-          <HanhChinhCard groups={selfHcGroups} />
+          <HanhChinhCard groups={selfHcGroups} myId={myId} />
           {managedGroups.map((g) => (
             <GroupCard key={g.id} group={g} canManage={canManage} myId={myId} />
           ))}
@@ -106,7 +114,8 @@ export default function AdminAttendancePage() {
 }
 
 /* ---- Daily administrative attendance summary ---- */
-function HanhChinhCard({ groups }: { groups: HcGroup[] }) {
+function HanhChinhCard({ groups, myId }: { groups: HcGroup[]; myId?: string }) {
+  const recall = useHcRecall();
   const entries = groups.flatMap((group) =>
     group.members
       .map((member) => ({
@@ -115,6 +124,15 @@ function HanhChinhCard({ groups }: { groups: HcGroup[] }) {
         period: periodLabel(group.content),
       }))
   );
+
+  async function doRecall(groupId: string) {
+    try {
+      await recall.mutateAsync(groupId);
+      toast.success("Đã thu hồi điểm danh hành chính");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -167,6 +185,24 @@ function HanhChinhCard({ groups }: { groups: HcGroup[] }) {
                   <span className="block whitespace-pre-wrap break-words">{m.note}</span>
                 </div>
               )}
+              {m.userId === myId && !m.isRegistered && (
+                canRecallHcCheckIn(m) ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => doRecall(m.groupId)}
+                    disabled={recall.isPending}
+                    className="mt-2 h-7 px-2 text-[11px]"
+                  >
+                    {recall.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserMinus className="h-3 w-3" />}
+                    Thu hồi
+                  </Button>
+                ) : (
+                  <div className="mt-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-500">
+                    Quá 30 phút
+                  </div>
+                )
+              )}
             </div>
           ))}
         </div>
@@ -186,6 +222,7 @@ function GroupCard({ group, canManage, myId }: { group: HcGroup; canManage: bool
 
   const approved = group.members.filter((m) => m.isApproved).length;
   const mine = group.members.find((m) => m.userId === myId);
+  const canRecallMine = canRecallHcCheckIn(mine);
 
   async function doApprove() {
     if (!group.members.length) return toast.error("Nhóm chưa có ai điểm danh");
@@ -237,9 +274,9 @@ function GroupCard({ group, canManage, myId }: { group: HcGroup; canManage: bool
             </Button>
           )}
           {mine ? (
-            <Button size="sm" variant="destructive" onClick={doRecall} disabled={recall.isPending}>
+            <Button size="sm" variant="destructive" onClick={doRecall} disabled={recall.isPending || !canRecallMine}>
               {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
-              Thu hồi điểm danh
+              {canRecallMine ? "Thu hồi điểm danh" : "Quá 30 phút"}
             </Button>
           ) : (
             <Button size="sm" variant="accent" onClick={() => setCheckInOpen(true)}>

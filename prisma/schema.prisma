@@ -493,6 +493,7 @@ model HcCheckIn {
   note       String?
   isRegistered Boolean @default(false)
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   group HcGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user  User    @relation("HcCheckInUser", fields: [userId], references: [id])

@@ -7,6 +7,16 @@ import { normalizeHcPeriod } from "@/lib/hc-period";
 export const dynamic = "force-dynamic";
 
 const MANAGER = ["ADMIN", "SUPERVISOR"];
+let hcCheckInUpdatedAtReady = false;
+
+async function ensureHcCheckInUpdatedAtColumn() {
+  if (hcCheckInUpdatedAtReady) return;
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "HcCheckIn"
+    ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `);
+  hcCheckInUpdatedAtReady = true;
+}
 
 /** Số giờ chấm công hợp lệ: 1–8. */
 function clampHours(h: unknown): number {
@@ -30,6 +40,7 @@ async function purgeExpiredHc(): Promise<void> {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
+    await ensureHcCheckInUpdatedAtColumn();
     // Enforce the 1-month retention window on every load.
     await purgeExpiredHc();
     const dateParam = req.nextUrl.searchParams.get("date");

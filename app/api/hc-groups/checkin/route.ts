@@ -16,6 +16,17 @@ const HC_SELF_PERIODS = {
 } as const;
 const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính - ${p.label}`);
 const DEFAULT_REGISTER_NOTE = "Chờ phân công";
+const RECALL_WINDOW_MS = 30 * 60 * 1000;
+let hcCheckInUpdatedAtReady = false;
+
+async function ensureHcCheckInUpdatedAtColumn() {
+  if (hcCheckInUpdatedAtReady) return;
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "HcCheckIn"
+    ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `);
+  hcCheckInUpdatedAtReady = true;
+}
 
 function dayRange(date: string | Date) {
   const base = new Date(date);
@@ -52,6 +63,11 @@ function isSameLocalDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function canRecallCheckIn(checkIn: { updatedAt?: Date | null; createdAt: Date }, now = new Date()) {
+  const markedAt = checkIn.updatedAt ?? checkIn.createdAt;
+  return now.getTime() - markedAt.getTime() <= RECALL_WINDOW_MS;
+}
+
 function isBeforeCheckInCutoff(period: keyof typeof HC_SELF_PERIODS, target: Date, now = new Date()) {
   if (!isSameLocalDay(target, now)) return false;
   const option = HC_SELF_PERIODS[period];
@@ -68,6 +84,7 @@ async function canManageHc(user: { id?: string; role?: string }) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureHcCheckInUpdatedAtColumn();
     const body = await req.json();
     const { groupId, hours, date, period, note, workNote } = body as {
       groupId?: string;
@@ -194,6 +211,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureHcCheckInUpdatedAtColumn();
     const groupId = req.nextUrl.searchParams.get("groupId");
     const checkInId = req.nextUrl.searchParams.get("checkInId");
     if (checkInId) {
@@ -211,6 +229,8 @@ export async function DELETE(req: NextRequest) {
     if (!groupId) return fail("Thiếu nhóm");
     const checkIn = await prisma.hcCheckIn.findUnique({ where: { groupId_userId: { groupId, userId: user.id } } });
     if (checkIn?.isRegistered) return fail("Đăng ký đi hành chính không được tự hủy");
+    if (!checkIn) return fail("Không tìm thấy điểm danh hành chính", 404);
+    if (!canRecallCheckIn(checkIn)) return fail("Chỉ được thu hồi trong vòng 30 phút kể từ lúc chấm công", 403);
     await prisma.hcCheckIn.deleteMany({ where: { groupId, userId: user.id, isRegistered: false } });
     await audit(user.id, "HC_RECALL", "HcCheckIn", groupId, "Thu hồi điểm danh hành chính");
     return ok({ removed: 1 });
