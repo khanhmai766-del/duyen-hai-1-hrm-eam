@@ -354,6 +354,8 @@ model MaterialReplacementLog {
   doneBy      User                @relation("MrDoneBy", fields: [doneById], references: [id])
 
   @@index([replacementId])
+  // Lịch sử "các lần thay tại điểm X, mới nhất trước" đọc thẳng từ index.
+  @@index([replacementId, replacedAt(sort: Desc)])
   @@index([doneById])
   @@index([replacedAt])
 }
@@ -370,6 +372,8 @@ model EquipmentMaterial {
   material Material      @relation(fields: [materialId], references: [id])
 
   @@index([deviceSeq])
+  // Lịch sử "vật tư đã dùng cho thiết bị X, mới nhất trước" đọc thẳng từ index.
+  @@index([deviceSeq, usedAt(sort: Desc)])
   @@index([materialId])
 }
 
@@ -400,6 +404,8 @@ model Defect {
   node      EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
 
   @@index([deviceSeq])
+  // Lịch sử "khiếm khuyết của thiết bị X, mới nhất trước" đọc thẳng từ index.
+  @@index([deviceSeq, createdAt(sort: Desc)])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
   @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "defect_deviceseq_prefix")
   @@index([device])
