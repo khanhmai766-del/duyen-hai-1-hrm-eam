@@ -15,7 +15,7 @@ import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
 import { isSelectableManagingPosition, PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
-import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
+import { createPositionAccessResolver } from "@/lib/position-system-scopes";
 import type { RepairLogWithRelations } from "@/types";
 
 export function RepairForm({
@@ -33,10 +33,11 @@ export function RepairForm({
   const { data: devicesData } = useDevices({});
   const { data: equipmentTreeData } = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
-  const positions = usePositions().filter(isSelectableManagingPosition);
-  const devices = devicesData?.data ?? [];
-  const equipmentNodes = equipmentTreeData?.data ?? [];
-  const positionScopes = scopesQuery.data?.data ?? [];
+  const allPositions = usePositions();
+  const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
+  const devices = React.useMemo(() => devicesData?.data ?? [], [devicesData]);
+  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
+  const positionScopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
   const isEdit = !!repair;
   const [deviceSearch, setDeviceSearch] = React.useState("");
   const [selectedPosition, setSelectedPosition] = React.useState(() => {
@@ -69,14 +70,22 @@ export function RepairForm({
     if (!selectedPosition && isSelectableManagingPosition(current)) setSelectedPosition(current);
   }, [currentPosition.position, selectedPosition]);
 
-  const filteredDevices = devices.filter((d) => {
-    const matchesSearch = !deviceSearch || `${d.code} ${d.name}`.toLowerCase().includes(deviceSearch.toLowerCase());
-    const matchesPosition =
-      !selectedPosition ||
-      d.id === form.deviceId ||
-      deviceAllowedForPosition(d, selectedPosition, equipmentNodes, positionScopes);
-    return matchesSearch && matchesPosition;
-  });
+  const accessResolver = React.useMemo(
+    () => createPositionAccessResolver(selectedPosition, equipmentNodes, positionScopes),
+    [selectedPosition, equipmentNodes, positionScopes]
+  );
+
+  const filteredDevices = React.useMemo(() => {
+    const query = deviceSearch.toLowerCase();
+    return devices.filter((d) => {
+      const matchesSearch = !query || `${d.code} ${d.name}`.toLowerCase().includes(query);
+      const matchesPosition =
+        !selectedPosition ||
+        d.id === form.deviceId ||
+        accessResolver.accessForDevice(d) !== "none";
+      return matchesSearch && matchesPosition;
+    });
+  }, [accessResolver, deviceSearch, devices, form.deviceId, selectedPosition]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,7 +119,8 @@ export function RepairForm({
             const nextPosition = value === "NONE" ? "" : value;
             setSelectedPosition(nextPosition);
             const selectedDevice = devices.find((device) => device.id === form.deviceId);
-            if (selectedDevice && nextPosition && !deviceAllowedForPosition(selectedDevice, nextPosition, equipmentNodes, positionScopes)) {
+            const nextResolver = createPositionAccessResolver(nextPosition, equipmentNodes, positionScopes);
+            if (selectedDevice && nextPosition && nextResolver.accessForDevice(selectedDevice) === "none") {
               set("deviceId", "");
             }
           }}

@@ -27,7 +27,7 @@ import {
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { deviceAllowedForPosition } from "@/lib/position-system-scopes";
+import { createPositionAccessResolver } from "@/lib/position-system-scopes";
 import { dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 
 function toDateInput(v: Date | string | null | undefined): string {
@@ -170,7 +170,8 @@ export function DefectForm({
       const keepDevice =
         !f.device ||
         !selectedDevice ||
-        (!system || deviceAllowedForPosition(selectedDevice, system, equipmentNodes, positionScopes));
+        !system ||
+        createPositionAccessResolver(system, equipmentNodes, positionScopes).accessForDevice(selectedDevice) !== "none";
       return {
         ...f,
         system,
