@@ -3,8 +3,6 @@ import { promises as fs } from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
-import { isAnnouncementTargetForPosition } from "@/lib/announcement-targets";
 import { deleteFromS3 } from "@/lib/s3";
 
 export const runtime = "nodejs";
@@ -29,8 +27,27 @@ async function removeAttachment(fileUrl: string | null | undefined) {
 async function ensureAnnouncementLifecycleColumns() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "Announcement"
+    ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'BULLETIN',
+    ADD COLUMN IF NOT EXISTS "classification" TEXT,
+    ADD COLUMN IF NOT EXISTS "stt" TEXT,
+    ADD COLUMN IF NOT EXISTS "orderedBy" TEXT,
     ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3),
-    ADD COLUMN IF NOT EXISTS "invalidatedAt" TIMESTAMP(3)
+    ADD COLUMN IF NOT EXISTS "invalidatedAt" TIMESTAMP(3),
+    ADD COLUMN IF NOT EXISTS "linkUrl" TEXT,
+    ADD COLUMN IF NOT EXISTS "fileUrl" TEXT,
+    ADD COLUMN IF NOT EXISTS "fileName" TEXT
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "AnnouncementRead" (
+      id TEXT PRIMARY KEY,
+      "announcementId" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "AnnouncementRead_announcementId_userId_key"
+    ON "AnnouncementRead" ("announcementId", "userId")
   `);
 }
 
@@ -87,10 +104,6 @@ export async function POST(req: NextRequest) {
         createdById: user.id,
       },
     });
-    // Người đăng chỉ được ghi nhận đã đọc nếu thuộc nhóm phải xác nhận đọc.
-    if (!isAnnouncementReadExemptPosition(user.position) && isAnnouncementTargetForPosition(item.classification, user.position)) {
-      await prisma.announcementRead.create({ data: { announcementId: item.id, userId: user.id } });
-    }
     await audit(user.id, "CREATE_ANNOUNCEMENT", "Announcement", item.id, title.trim());
     return ok(item);
   });
