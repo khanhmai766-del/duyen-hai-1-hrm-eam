@@ -8,6 +8,7 @@ import {
 } from "@/lib/equipment-tree";
 import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     });
 
     await audit(user.id, "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
+    invalidateDeviceListCache();
     const device = await findEquipmentRecord(node.seq);
     return ok(device);
   });
@@ -143,6 +145,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (childCount > 0) return fail("Không thể xóa thư mục/hệ thống đang có thiết bị con", 400);
     await prisma.equipmentNode.delete({ where: { seq } });
     await audit(user.id, "DELETE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
+    invalidateDeviceListCache();
     return ok({ id: seq, code: seq });
   });
 }

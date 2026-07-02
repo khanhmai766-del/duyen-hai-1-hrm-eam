@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 function parentSeqOf(seq: string) {
   const parts = seq.split(".");
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     await audit(user.id, "IMPORT_EQUIPMENT_NODES", "EquipmentNode", undefined, `tạo ${created}, cập nhật ${updated}`);
+    invalidateDeviceListCache();
     return ok({ created, updated, skipped });
   });
 }

@@ -11,6 +11,7 @@ import {
 import { normalizeText } from "@/lib/nav";
 import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
+import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,32 @@ type DeviceUsageStats = {
 };
 
 type DeviceListRecord = ReturnType<typeof toDeviceRecordWithStats>;
+type DeviceListResult = {
+  data: DeviceListRecord[];
+  meta: {
+    total: number;
+    totalSystemDevices: number;
+    systems: string[];
+    rootSystems: Array<{ seq: string; name: string }>;
+    byPosition: Array<{ name: string; count: number }>;
+    source: string;
+  };
+};
+
+function deviceListCacheKey(
+  user: { role?: string | null; position?: string | null },
+  params: { q: string; systemSeq?: string; systemName?: string }
+) {
+  const scope = user.role === "ADMIN"
+    ? "admin"
+    : `${user.role ?? "user"}:${normalizeText(user.position ?? "")}`;
+  return JSON.stringify({
+    scope,
+    q: params.q,
+    systemSeq: params.systemSeq ?? "",
+    systemName: params.systemName ?? "",
+  });
+}
 
 function toDeviceRecordWithStats(
   node: NormalizedEquipmentNode,
@@ -132,43 +159,51 @@ export async function GET(req: NextRequest) {
     const systemSeq = sp.get("systemSeq")?.trim();
     const systemName = sp.get("system")?.trim();
 
-    const { nodes, records } = await getDeviceLikeRecords();
-    const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
-    const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
-    const visibleIndex = buildEquipmentTreeIndex(visibleNodes);
-    const allowedSeqs = systemSeq
-      ? visibleSeqs.has(systemSeq)
-        ? getEquipmentDescendantSeqs(visibleNodes, systemSeq)
-        : new Set<string>()
-      : null;
+    const cacheKey = deviceListCacheKey(user, { q, systemSeq, systemName });
+    const result = await getOrSetDeviceListCache<DeviceListResult>(cacheKey, async () => {
+      const { nodes, records } = await getDeviceLikeRecords();
+      const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
+      const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
+      const visibleIndex = buildEquipmentTreeIndex(visibleNodes);
+      const allowedSeqs = systemSeq
+        ? visibleSeqs.has(systemSeq)
+          ? getEquipmentDescendantSeqs(visibleNodes, systemSeq)
+          : new Set<string>()
+        : null;
 
-    const devices = records
-      .filter((device) => {
-        if (!visibleSeqs.has(device.code)) return false;
-        if (allowedSeqs && !allowedSeqs.has(device.code)) return false;
-        if (!allowedSeqs && systemName && systemName !== "ALL" && device.system !== systemName) return false;
-        if (!q) return true;
-        return normalizeText([device.code, device.name, device.system].filter(Boolean).join(" ")).includes(q);
-      })
-      .sort((a, b) => compareEquipmentSeq(a.code, b.code));
+      const devices = records
+        .filter((device) => {
+          if (!visibleSeqs.has(device.code)) return false;
+          if (allowedSeqs && !allowedSeqs.has(device.code)) return false;
+          if (!allowedSeqs && systemName && systemName !== "ALL" && device.system !== systemName) return false;
+          if (!q) return true;
+          return normalizeText([device.code, device.name, device.system].filter(Boolean).join(" ")).includes(q);
+        })
+        .sort((a, b) => compareEquipmentSeq(a.code, b.code));
 
-    const systems = Array.from(
-      new Set(
-        records
-          .filter((device) => visibleSeqs.has(device.code))
-          .map((device) => device.system)
-          .filter((name): name is string => !!name)
-      )
-    ).sort((a, b) => a.localeCompare(b, "vi"));
+      const systems = Array.from(
+        new Set(
+          records
+            .filter((device) => visibleSeqs.has(device.code))
+            .map((device) => device.system)
+            .filter((name): name is string => !!name)
+        )
+      ).sort((a, b) => a.localeCompare(b, "vi"));
 
-    return ok(devices, {
-      total: devices.length,
-      totalSystemDevices: records.length,
-      systems,
-      rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
-      byPosition: await getDeviceCountsByPosition(devices, visibleIndex),
-      source: "equipment-node",
+      return {
+        data: devices,
+        meta: {
+          total: devices.length,
+          totalSystemDevices: records.length,
+          systems,
+          rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
+          byPosition: await getDeviceCountsByPosition(devices, visibleIndex),
+          source: "equipment-node",
+        },
+      };
     });
+
+    return ok(result.data, result.meta);
   });
 }
 
@@ -209,6 +244,7 @@ export async function POST(req: NextRequest) {
     const index = buildEquipmentTreeIndex(nodes);
     const effectiveParentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
     const parent = effectiveParentSeq ? index.bySeq.get(effectiveParentSeq) ?? null : null;
+    invalidateDeviceListCache();
     await audit(user.id, "CREATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
     return ok(toDeviceRecord({ ...node, drawing: node.drawing, attachedInfo: node.attachedInfo, documentUrl: node.documentUrl, imageUrl: node.imageUrl }, parent));
   });

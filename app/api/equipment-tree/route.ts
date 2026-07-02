@@ -4,6 +4,7 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { getNormalizedEquipmentNodeList } from "@/lib/equipment-tree";
 import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export async function PUT(req: NextRequest) {
     }
     const node = await prisma.equipmentNode.update({ where: { seq }, data });
     await audit(user.id, "UPDATE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.name);
+    invalidateDeviceListCache();
     return ok({ seq: node.seq });
   });
 }

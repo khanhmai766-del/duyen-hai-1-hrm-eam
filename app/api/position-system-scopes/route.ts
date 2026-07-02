@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
 import { normalizePositionScopeKey, normalizePositionScopeLabel } from "@/lib/position-system-scopes";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,7 @@ export async function PUT(req: NextRequest) {
       position,
       Array.from(bySeq.entries()).map(([seq, access]) => `${seq}:${access}`).join(", ")
     );
+    invalidateDeviceListCache();
     const rows = await listScopes();
     return ok(rows, { total: rows.length });
   });

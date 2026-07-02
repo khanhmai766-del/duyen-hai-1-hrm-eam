@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -64,6 +65,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
     });
     await audit(user.id, isApproving ? "APPROVE_REPAIR" : "UPDATE_REPAIR", "RepairLog", log.id, log.title);
+    invalidateDeviceListCache();
     return ok(log);
   });
 }
@@ -80,6 +82,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     }
     await prisma.repairLog.delete({ where: { id: params.id } });
     await audit(user.id, "DELETE_REPAIR", "RepairLog", params.id, existing.title);
+    invalidateDeviceListCache();
     return ok({ id: params.id });
   });
 }

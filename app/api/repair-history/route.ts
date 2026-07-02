@@ -4,6 +4,7 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
       },
     });
     await audit(user.id, "CREATE_REPAIR", "RepairLog", log.id, log.title);
+    invalidateDeviceListCache();
     return ok(log);
   });
 }
