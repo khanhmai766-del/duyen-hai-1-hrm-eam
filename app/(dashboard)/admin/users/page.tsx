@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileSpreadsheet, History, ImageUp, KeyRound, Pencil, PenLine, Plus, Search, ShieldAlert, Trash2, UploadCloud, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -19,7 +19,7 @@ import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
 import { useUsersFull, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
-import { apiGet } from "@/lib/fetcher";
+import { apiGet, apiMutate } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { cn, formatDateTime, initials } from "@/lib/utils";
@@ -27,7 +27,39 @@ import type { SafeUser } from "@/types";
 
 const ROLE_KEYS = Object.keys(ROLES) as RoleKey[];
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
+const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
+const NO_ROLE_PROFILE = "__none__";
 type ActivityCategory = "SYSTEM" | "SECURITY" | "ATTENDANCE" | "USER";
+type PermissionValue = "full" | "manage" | "approve" | "create" | "own" | "read" | "none";
+type RbacRoleProfile = {
+  id: string;
+  label: string;
+  desc: string;
+  scope: string;
+  accent: string;
+  custom?: boolean;
+};
+type RbacPermissionRow = {
+  id: string;
+  group: string;
+  feature: string;
+  note: string;
+  matrix: Record<string, PermissionValue>;
+};
+type UserPermissionOverride = {
+  id: string;
+  userId: string;
+  permissionId: string;
+  roleId?: string;
+  value: PermissionValue;
+  note?: string;
+  createdAt: string;
+};
+type RbacConfig = {
+  permissions: RbacPermissionRow[];
+  roles: RbacRoleProfile[];
+  userOverrides: UserPermissionOverride[];
+};
 type ActivityLogRow = {
   id: string;
   action: string;
@@ -77,6 +109,7 @@ function formatJson(value: unknown) {
 
 export default function AdminUsersPage() {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useUsersFull();
   const create = useCreateUser();
   const update = useUpdateUser();
@@ -88,6 +121,17 @@ export default function AdminUsersPage() {
     queryFn: () => apiGet<SystemAuditLogRow[]>("/api/system-audit"),
     enabled: session?.user?.role === "ADMIN",
   });
+  const rbacQuery = useQuery({
+    queryKey: ["rbac-config"],
+    queryFn: () => apiGet<RbacConfig>("/api/rbac"),
+    enabled: session?.user?.role === "ADMIN",
+  });
+  const saveRbac = useMutation({
+    mutationFn: (body: RbacConfig) => apiMutate<RbacConfig>("/api/rbac", "PUT", body),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(["rbac-config"], { data: saved, meta: null });
+    },
+  });
 
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -95,6 +139,7 @@ export default function AdminUsersPage() {
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [newUserRoleProfile, setNewUserRoleProfile] = React.useState("");
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
   const [permanentDelTarget, setPermanentDelTarget] = React.useState<SafeUser | null>(null);
@@ -115,6 +160,17 @@ export default function AdminUsersPage() {
   }
 
   const users = data?.data ?? [];
+  const rbacConfig = rbacQuery.data?.data ?? { permissions: [], roles: [], userOverrides: [] };
+  const roleProfiles = rbacConfig.roles ?? [];
+  const roleProfileByUser = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const override of rbacConfig.userOverrides ?? []) {
+      if (override.permissionId === ROLE_PROFILE_PERMISSION && override.roleId && !map.has(override.userId)) {
+        map.set(override.userId, override.roleId);
+      }
+    }
+    return map;
+  }, [rbacConfig.userOverrides]);
   const positions = usePositions();
   const nq = normalizeText(search.trim());
   const filteredUsers = users.filter(
@@ -140,10 +196,14 @@ export default function AdminUsersPage() {
   async function createUser() {
     if (!form.name || !form.email || !form.employeeId || !form.username.trim()) return toast.error("Nhập đủ thông tin bắt buộc");
     try {
-      await create.mutateAsync(form);
+      const created = await create.mutateAsync(form);
+      if (newUserRoleProfile) {
+        await changeRoleProfile(created.id, newUserRoleProfile, { silent: true });
+      }
       toast.success("Đã tạo người dùng");
       setOpen(false);
       setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+      setNewUserRoleProfile("");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -152,6 +212,39 @@ export default function AdminUsersPage() {
   async function changeRole(id: string, role: string) {
     try { await update.mutateAsync({ id, role }); toast.success("Đã cập nhật vai trò"); }
     catch (e) { toast.error((e as Error).message); }
+  }
+  async function changeRoleProfile(userId: string, roleId: string, options: { silent?: boolean } = {}) {
+    const normalizedRoleId = roleId === NO_ROLE_PROFILE ? "" : roleId;
+    if (normalizedRoleId && !roleProfiles.some((role) => role.id === normalizedRoleId)) {
+      toast.error("Phân quyền mở rộng không còn tồn tại");
+      return;
+    }
+    if (!rbacConfig.permissions.length) {
+      toast.error("Chưa có cấu hình RBAC để lưu phân quyền mở rộng");
+      return;
+    }
+    const nextOverrides = [
+      ...(rbacConfig.userOverrides ?? []).filter(
+        (item) => !(item.userId === userId && item.permissionId === ROLE_PROFILE_PERMISSION)
+      ),
+      ...(normalizedRoleId
+        ? [{
+            id: `override-${Date.now()}`,
+            userId,
+            permissionId: ROLE_PROFILE_PERMISSION,
+            roleId: normalizedRoleId,
+            value: "read" as PermissionValue,
+            note: "Gán từ trang Quản lý người dùng",
+            createdAt: new Date().toISOString(),
+          }]
+        : []),
+    ];
+    try {
+      await saveRbac.mutateAsync({ ...rbacConfig, userOverrides: nextOverrides });
+      if (!options.silent) toast.success(normalizedRoleId ? "Đã gán phân quyền mở rộng" : "Đã gỡ phân quyền mở rộng");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
   async function toggleActive(id: string, isActive: boolean) {
     try { await update.mutateAsync({ id, isActive }); toast.success(isActive ? "Đã kích hoạt" : "Đã vô hiệu hoá"); }
@@ -202,14 +295,14 @@ export default function AdminUsersPage() {
                 <TableHead className="text-center">Hình ảnh</TableHead>
                 <TableHead className="min-w-[200px]">Nhân viên</TableHead><TableHead>Mã NV</TableHead><TableHead>User</TableHead><TableHead>Email công ty</TableHead><TableHead>Email làm việc</TableHead>
                 <TableHead className="text-center">Chữ ký số</TableHead>
-                <TableHead>Phân quyền</TableHead><TableHead>Trạng thái</TableHead>
+                <TableHead>Phân quyền</TableHead><TableHead>Mở rộng</TableHead><TableHead>Trạng thái</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                     Không tìm thấy người dùng phù hợp với điều kiện lọc.
                   </TableCell>
                 </TableRow>
@@ -258,6 +351,14 @@ export default function AdminUsersPage() {
                         {ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell>
+                    <RoleProfileSelect
+                      value={roleProfileByUser.get(u.id) ?? ""}
+                      profiles={roleProfiles}
+                      disabled={rbacQuery.isLoading || saveRbac.isPending}
+                      onChange={(value) => changeRoleProfile(u.id, value)}
+                    />
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
@@ -451,6 +552,14 @@ export default function AdminUsersPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}</SelectContent>
               </Select>
+            </Field>
+            <Field label="Phân quyền mở rộng">
+              <RoleProfileSelect
+                value={newUserRoleProfile}
+                profiles={roleProfiles}
+                disabled={rbacQuery.isLoading}
+                onChange={(value) => setNewUserRoleProfile(value === NO_ROLE_PROFILE ? "" : value)}
+              />
             </Field>
             <Field label="Mật khẩu"><Input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
           </div>
@@ -971,6 +1080,39 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RoleProfileSelect({
+  value,
+  profiles,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  profiles: RbacRoleProfile[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select value={value || NO_ROLE_PROFILE} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="h-8 w-48">
+        <SelectValue placeholder="Chọn phân quyền mở rộng" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_ROLE_PROFILE}>Không gán</SelectItem>
+        {profiles.map((profile) => (
+          <SelectItem key={profile.id} value={profile.id}>
+            {profile.label}
+          </SelectItem>
+        ))}
+        {profiles.length === 0 && (
+          <SelectItem value="__empty__" disabled>
+            Chưa có phân quyền mở rộng
+          </SelectItem>
+        )}
+      </SelectContent>
+    </Select>
   );
 }
 

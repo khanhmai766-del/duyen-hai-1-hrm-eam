@@ -121,6 +121,7 @@ export default function ShiftRosterPage() {
   });
   const [posFilter, setPosFilter] = React.useState("ALL");
   const [view, setView] = React.useState<View>("roster");
+  const [timesheetPage, setTimesheetPage] = React.useState(1);
   const retentionRange = React.useMemo(() => retentionMonthRange(), []);
   const currentMonthKey = monthKey(month.year, month.month);
   const minMonthKey = monthKey(retentionRange.min.year, retentionRange.min.month);
@@ -202,6 +203,19 @@ export default function ShiftRosterPage() {
       if (byEmployeeId !== 0) return byEmployeeId;
       return a.name.localeCompare(b.name, "vi");
     });
+  const timesheetPageSize = 20;
+  const timesheetTotalPages = Math.max(1, Math.ceil(rows.length / timesheetPageSize));
+  const timesheetFirstShown = rows.length ? (timesheetPage - 1) * timesheetPageSize + 1 : 0;
+  const timesheetLastShown = Math.min(timesheetPage * timesheetPageSize, rows.length);
+  const pagedRows = rows.slice((timesheetPage - 1) * timesheetPageSize, timesheetPage * timesheetPageSize);
+
+  React.useEffect(() => {
+    setTimesheetPage(1);
+  }, [monthStr, posFilter, view]);
+
+  React.useEffect(() => {
+    setTimesheetPage((current) => Math.min(Math.max(1, current), timesheetTotalPages));
+  }, [timesheetTotalPages]);
 
   function calculatedCellValue(entries: TimesheetEntry[], hc?: { hours: number; content: string; note?: string | null }) {
     return [
@@ -561,7 +575,7 @@ export default function ShiftRosterPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((u) => (
+                  {pagedRows.map((u) => (
                     <tr key={u.id} className="border-b border-border hover:bg-muted/30">
                       <td className="sticky left-0 z-10 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center">
                         <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
@@ -640,6 +654,34 @@ export default function ShiftRosterPage() {
                   ))}
                 </tbody>
               </table>
+              <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  Hiển thị {timesheetFirstShown}-{timesheetLastShown} trong tổng số {rows.length} dòng
+                </div>
+                <div className="flex items-center gap-2 sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTimesheetPage((current) => Math.max(1, current - 1))}
+                    disabled={timesheetPage <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Trước
+                  </Button>
+                  <span className="rounded-md bg-muted px-2.5 py-1 text-xs font-bold text-ink">
+                    {timesheetPage}/{timesheetTotalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTimesheetPage((current) => Math.min(timesheetTotalPages, current + 1))}
+                    disabled={timesheetPage >= timesheetTotalPages}
+                  >
+                    Sau <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </Card>
           )}
         </>
