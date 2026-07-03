@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, ArrowLeft, Check, Loader2, UserCheck, UserMinus, ClipboardCheck, ChevronDown, Pencil, Clock3,
+  Plus, Trash2, ArrowLeft, Check, Loader2, UserCheck, UserMinus, ClipboardCheck, ChevronDown, Pencil, Clock3, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
@@ -221,6 +221,16 @@ function HanhChinhCard({
     }
   }
 
+  async function doApproveOne(groupId: string, checkInId: string) {
+    try {
+      const result = await approve.mutateAsync({ groupId, ids: [checkInId] });
+      const count = Number((result as any)?.approved ?? 0);
+      toast.success(`Đã duyệt chấm công${count ? ` (${count})` : ""}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   async function doReject(checkInId: string) {
     try {
       await reject.mutateAsync(checkInId);
@@ -297,16 +307,30 @@ function HanhChinhCard({
                 </div>
               )}
               {canApprove && !m.isApproved && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => doReject(m.id)}
-                  disabled={reject.isPending}
-                  className="mt-2 h-7 px-2 text-[11px]"
-                >
-                  {reject.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                  Không duyệt
-                </Button>
+                <div className="mt-2 flex items-center justify-center gap-1.5">
+                  <Button
+                    size="icon"
+                    variant="accent"
+                    onClick={() => doApproveOne(m.groupId, m.id)}
+                    disabled={approve.isPending}
+                    className="h-7 w-7 rounded-full bg-emerald-500 text-white hover:bg-emerald-600"
+                    title="Duyệt"
+                    aria-label={`Duyệt chấm công hành chính của ${m.user.name}`}
+                  >
+                    {approve.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="destructive"
+                    onClick={() => doReject(m.id)}
+                    disabled={reject.isPending}
+                    className="h-7 w-7 rounded-full"
+                    title="Không duyệt"
+                    aria-label={`Không duyệt chấm công hành chính của ${m.user.name}`}
+                  >
+                    {reject.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
               )}
               {m.userId === myId && !m.isRegistered && (
                 <div className="mt-2 flex flex-col gap-1">
