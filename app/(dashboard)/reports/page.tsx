@@ -33,6 +33,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,14 @@ type DeviceSignalRow = {
 };
 
 export default function ReportsPage() {
+  return (
+    <PeakProtectedRoute>
+      <ReportsPageContent />
+    </PeakProtectedRoute>
+  );
+}
+
+function ReportsPageContent() {
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
   const [systemPositionFilter, setSystemPositionFilter] = React.useState("ALL");

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { RepairTimeline } from "@/components/repair/repair-timeline";
 import { DeviceForm } from "@/components/devices/device-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
@@ -20,6 +21,14 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate } from "@/lib/utils";
 
 export default function DeviceDetailPage() {
+  return (
+    <PeakProtectedRoute>
+      <DeviceDetailPageContent />
+    </PeakProtectedRoute>
+  );
+}
+
+function DeviceDetailPageContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = useSession();

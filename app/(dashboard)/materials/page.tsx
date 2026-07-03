@@ -10,6 +10,7 @@ import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
+import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,14 @@ type MaterialEdit = Partial<Material> & {
 };
 
 export default function MaterialsPage() {
+  return (
+    <PeakProtectedRoute>
+      <MaterialsPageContent />
+    </PeakProtectedRoute>
+  );
+}
+
+function MaterialsPageContent() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();

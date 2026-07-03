@@ -9,6 +9,8 @@ import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
 import { NAV_SECTIONS as SECTIONS, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { usePeakMode } from "@/hooks/usePeakMode";
+import { isPeakBlockedHref } from "@/lib/peak-mode";
 
 const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
 
@@ -29,6 +31,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
+  const peakMode = usePeakMode();
   const pathname = usePathname();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
 
@@ -65,6 +68,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       <div className={cn("border-b border-blue-100/80 dark:border-slate-800/80", collapsed ? "p-2" : "p-3")}>
         <Link
           href="/"
+          prefetch={false}
           onClick={onNavigate}
           aria-label="Về trang chủ"
           className={cn(
@@ -97,10 +101,10 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
         {SECTIONS.map((section) => {
           const items = section.items
             .map((item) => {
-              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can));
+              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
               return children ? { ...item, children } : item;
             })
-            .filter((item) => navItemAllowed(item, role, rbac.can) || !!item.children?.length);
+            .filter((item) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(item.href)) && (navItemAllowed(item, role, rbac.can) || !!item.children?.length));
           if (!items.length) return null;
           const sectionClosed = !!closedSections[section.title];
           return (
@@ -241,6 +245,7 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
     return (
       <Link
         href={href}
+        prefetch={false}
         onClick={onNavigate}
         title={item.label}
         className={cn(
@@ -268,6 +273,7 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
     return (
       <Link
         href={item.href}
+        prefetch={false}
         onClick={onNavigate}
         className={cn(
           "group relative flex min-h-[42px] items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-semibold leading-tight transition-all duration-200",
@@ -326,6 +332,7 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
               <Link
                 key={c.href}
                 href={c.href}
+                prefetch={false}
                 onClick={onNavigate}
                 className={cn(
                   "group flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium leading-tight transition-colors",

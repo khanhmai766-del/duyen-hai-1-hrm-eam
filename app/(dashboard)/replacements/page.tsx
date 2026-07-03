@@ -10,6 +10,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
+import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
@@ -49,6 +50,14 @@ function ymLabel(m: string): string {
 }
 
 export default function ReplacementsPage() {
+  return (
+    <PeakProtectedRoute>
+      <ReplacementsPageContent />
+    </PeakProtectedRoute>
+  );
+}
+
+function ReplacementsPageContent() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();

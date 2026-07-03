@@ -48,6 +48,7 @@ import { DeviceForm } from "@/components/devices/device-form";
 import { EquipmentTreeView } from "@/components/devices/equipment-tree";
 import { ImportDialog } from "@/components/devices/import-dialog";
 import { QRModal } from "@/components/devices/qr-modal";
+import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,6 +95,14 @@ type SystemTreeRow = {
 };
 
 export default function DevicesPage() {
+  return (
+    <PeakProtectedRoute>
+      <DevicesPageContent />
+    </PeakProtectedRoute>
+  );
+}
+
+function DevicesPageContent() {
   const router = useRouter();
   const params = useSearchParams();
   const { data: session } = useSession();

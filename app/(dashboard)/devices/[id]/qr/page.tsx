@@ -7,8 +7,17 @@ import { ArrowLeft, Printer, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDevice } from "@/hooks/useDevices";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 
 export default function DeviceQrPage() {
+  return (
+    <PeakProtectedRoute>
+      <DeviceQrPageContent />
+    </PeakProtectedRoute>
+  );
+}
+
+function DeviceQrPageContent() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading } = useDevice(id);
   const device = data?.data;

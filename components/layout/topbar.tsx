@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NAV_SECTIONS, normalizeText } from "@/lib/nav";
+import { isPeakBlockedHref } from "@/lib/peak-mode";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
@@ -20,6 +21,7 @@ import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { usePeakMode } from "@/hooks/usePeakMode";
 import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -69,6 +71,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const currentPosition = useCurrentPosition();
+  const peakMode = usePeakMode();
   const router = useRouter();
   const role = session?.user?.role;
   const [q, setQ] = React.useState("");
@@ -119,9 +122,10 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const quickLinks = React.useMemo(
     () =>
       NAV_SECTIONS.flatMap((s) => s.items)
+        .filter((i) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)))
         .filter((i) => navItemAllowed(i, role, rbac.can) || i.children?.some((child) => navItemAllowed(child, role, rbac.can)))
         .map((i) => ({ label: i.label, href: i.href, icon: i.icon })),
-    [rbac.can, role]
+    [peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
   function toggleFullscreen() {
@@ -147,7 +151,11 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     () =>
       NAV_SECTIONS.flatMap((s) =>
         s.items
-          .map((i) => ({ ...i, children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can)) }))
+          .filter((i) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)))
+          .map((i) => ({
+            ...i,
+            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href))),
+          }))
           .filter((i) => navItemAllowed(i, role, rbac.can) || !!i.children?.length)
           .flatMap((i) => {
             const own = {
@@ -167,7 +175,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             return [own, ...kids];
           })
       ),
-    [rbac.can, role]
+    [peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
   const nq = normalizeText(q);
@@ -193,7 +201,8 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (results.length) go(results[0].href);
-    else if (q.trim()) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
+    else if (q.trim() && !peakMode.restrictHeavyRoutes) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
+    else if (q.trim()) toast.info("Tạm ẩn tìm kiếm thiết bị trong giờ cao điểm chấm công");
   }
 
   // "Xem tất cả" (tab Vận hành): đánh dấu đã đọc mọi mệnh lệnh đang hiển thị để
@@ -215,6 +224,11 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   // để badge reset, rồi mở trang Lịch thay thế vật tư. Khi vật tư sang chu kỳ mới
   // (nextDueAt đổi) cảnh báo sẽ xuất hiện lại.
   function handleViewAllRepl() {
+    if (peakMode.restrictHeavyRoutes) {
+      setNotifOpen(false);
+      toast.info("Tạm ẩn lịch thay thế vật tư trong giờ cao điểm chấm công");
+      return;
+    }
     setNotifOpen(false);
     const next = new Set(replAlerts.map(replAlertKey));
     setAckedReplKeys(next);
@@ -289,7 +303,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 </ul>
               ) : (
                 <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-                  Không tìm thấy. Nhấn Enter để tìm thiết bị “{q.trim()}”.
+                  {peakMode.restrictHeavyRoutes
+                    ? "Tạm ẩn tìm kiếm thiết bị trong giờ cao điểm chấm công."
+                    : `Không tìm thấy. Nhấn Enter để tìm thiết bị "${q.trim()}".`}
                 </div>
               )}
             </div>
@@ -338,7 +354,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                         const Icon = n.icon;
                         return (
                           <li key={n.id}>
-                            <Link href={n.href} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                            <Link href={n.href} prefetch={false} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                               <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", NOTICE_TONE[n.tone])}>
                                 <Icon className="h-4 w-4" />
                               </span>
@@ -375,7 +391,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                     <ul className="max-h-80 divide-y divide-border overflow-y-auto">
                       {activeReplAlerts.slice(0, 8).map((a) => (
                         <li key={a.id}>
-                          <Link href={`/materials?track=${a.materialId}`} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                          <Link href={`/materials?track=${a.materialId}`} prefetch={false} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
                               <Repeat className="h-4 w-4" />
                             </span>
@@ -417,7 +433,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                         const meta = OPERATION_TYPE[e.type as keyof typeof OPERATION_TYPE] ?? OPERATION_TYPE.OTHER;
                         return (
                           <li key={e.id}>
-                            <Link href="/" onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                            <Link href="/" prefetch={false} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
                               <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", meta.badge)}>
                                 <ClipboardList className="h-4 w-4" />
                               </span>
@@ -431,7 +447,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       })}
                     </ul>
                   )}
-                  <Link href="/" onClick={() => setNotifOpen(false)} className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
+                  <Link href="/" prefetch={false} onClick={() => setNotifOpen(false)} className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5">
                     Xem tất cả <ChevronRight className="h-4 w-4" />
                   </Link>
                 </>
@@ -458,6 +474,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                     <Link
                       key={l.href + l.label}
                       href={l.href}
+                      prefetch={false}
                       onClick={() => setGridOpen(false)}
                       className="flex flex-col items-center gap-1.5 rounded-lg p-2.5 text-center transition-colors hover:bg-muted"
                     >
@@ -537,6 +554,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
               <div className="p-1.5">
                 <Link
                   href="/account"
+                  prefetch={false}
                   onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-muted"
                 >
