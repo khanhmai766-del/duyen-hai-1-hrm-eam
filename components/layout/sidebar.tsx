@@ -104,7 +104,11 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
               const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
               return children ? { ...item, children } : item;
             })
-            .filter((item) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(item.href)) && (navItemAllowed(item, role, rbac.can) || !!item.children?.length));
+            .filter((item) => {
+              if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(item.href)) return false;
+              if (item.children) return item.children.length > 0;
+              return navItemAllowed(item, role, rbac.can);
+            });
           if (!items.length) return null;
           const sectionClosed = !!closedSections[section.title];
           return (
@@ -209,9 +213,11 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
 }
 
 function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
-  if (!item.adminOnly) return true;
   if (role === "ADMIN") return true;
-  return (item.permissionIds ?? []).some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
+  if (item.permissionIds?.length) {
+    return item.permissionIds.some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
+  }
+  return !item.adminOnly;
 }
 
 function PowerGridMark() {

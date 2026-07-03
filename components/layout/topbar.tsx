@@ -46,9 +46,11 @@ const GRID_TINTS = [
 const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
 
 function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
-  if (!item.adminOnly) return true;
   if (role === "ADMIN") return true;
-  return (item.permissionIds ?? []).some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
+  if (item.permissionIds?.length) {
+    return item.permissionIds.some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
+  }
+  return !item.adminOnly;
 }
 
 async function logout(callbackUrl = "/login") {
@@ -119,10 +121,14 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   // Quick-launch shortcuts (app grid) — top-level nav respecting admin-only.
   const quickLinks = React.useMemo(
     () =>
-      NAV_SECTIONS.flatMap((s) => s.items)
-        .filter((i) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)))
-        .filter((i) => navItemAllowed(i, role, rbac.can) || i.children?.some((child) => navItemAllowed(child, role, rbac.can)))
-        .map((i) => ({ label: i.label, href: i.href, icon: i.icon })),
+      NAV_SECTIONS.flatMap((s) =>
+        s.items.flatMap((i) => {
+          if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)) return [];
+          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
+          if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon }));
+          return navItemAllowed(i, role, rbac.can) ? [{ label: i.label, href: i.href, icon: i.icon }] : [];
+        })
+      ),
     [peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
@@ -154,9 +160,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             ...i,
             children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href))),
           }))
-          .filter((i) => navItemAllowed(i, role, rbac.can) || !!i.children?.length)
+          .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can)))
           .flatMap((i) => {
-            const own = {
+            const own = i.children ? null : {
               label: i.label,
               href: i.href,
               icon: i.icon,
@@ -170,7 +176,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
               section: `${s.title} › ${i.label}`,
               hay: normalizeText(`${c.label} ${i.label} ${s.title} ${c.keywords ?? ""}`),
             }));
-            return [own, ...kids];
+            return own ? [own, ...kids] : kids;
           })
       ),
     [peakMode.restrictHeavyRoutes, rbac.can, role]
