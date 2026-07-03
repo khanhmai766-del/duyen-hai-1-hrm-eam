@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Loader2, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -15,8 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
-import { useUpdateProfile, useUsers } from "@/hooks/useUsers";
-import { apiGet } from "@/lib/fetcher";
+import { useMeProfile, useUpdateProfile, useUsers } from "@/hooks/useUsers";
 import { cn, initials } from "@/lib/utils";
 import { ROLES, type RoleKey } from "@/lib/constants";
 import { availableUserPositions, effectiveUserPosition } from "@/lib/current-position";
@@ -34,12 +32,8 @@ export default function AccountPage() {
   const isAdmin = u?.role === "ADMIN";
   const updateProfile = useUpdateProfile();
 
-  const { data } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => apiGet<SafeUser[]>("/api/users"),
-    enabled: !!u,
-  });
-  const profile = data?.data?.find((x) => x.id === u?.id);
+  const { data } = useMeProfile({ enabled: !!u });
+  const profile = data?.data;
   const currentPosition = effectiveUserPosition(profile);
   const positionChoices = availableUserPositions(profile);
 
@@ -158,7 +152,7 @@ function EditProfileDialog({
   isAdmin: boolean;
 }) {
   const update = useUpdateProfile();
-  const { data: usersData } = useUsers();
+  const { data: usersData } = useUsers({ enabled: open });
   // Chức vụ options synced from the database — distinct (case/diacritic-insensitive),
   // with Quản đốc / Phó Quản đốc / Kỹ thuật viên excluded.
   const positionOptions = React.useMemo(() => {

@@ -36,6 +36,17 @@ function isS3ProxyUrl(value: string) {
   return value.startsWith("/api/files/s3?") || value.includes("/api/files/s3?");
 }
 
+export async function GET() {
+  return handle(async () => {
+    const user = await requireUser();
+    await ensureUserCurrentPositionColumn();
+    const profile = await prisma.user.findUnique({ where: { id: user.id } });
+    if (!profile) return fail("Tài khoản không hợp lệ", 401);
+    const { passwordHash, ...safe } = profile;
+    return ok(await userWithSignedMedia(safe));
+  });
+}
+
 async function signatureUpdate(value: unknown, employeeId: string) {
   if (value === undefined) return {};
   const raw = String(value ?? "").trim();

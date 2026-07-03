@@ -32,6 +32,16 @@ export function useUsersFull() {
   });
 }
 
+export function useMeProfile(options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
+  return useQuery({
+    queryKey: ["me"],
+    queryFn: () => apiGet<SafeUser>("/api/me"),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
 /** Danh sách "Chức vụ" phân biệt (bỏ trùng, đã sắp xếp) lấy từ người dùng. */
 export function usePositions(options: { enabled?: boolean } = {}): string[] {
   const { data } = useUsers(options);
@@ -85,6 +95,7 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) => apiMutate<SafeUser>("/api/me", "PUT", body),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["me"] });
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
       qc.invalidateQueries({ queryKey: ["announcements"] });

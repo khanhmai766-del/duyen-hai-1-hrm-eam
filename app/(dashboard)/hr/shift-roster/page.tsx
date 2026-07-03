@@ -115,14 +115,15 @@ export default function ShiftRosterPage() {
   const rbac = useRbacAccess();
   const canManageRosterPdf = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
 
-  const { data, isLoading } = useUsers();
-  const users = (data?.data ?? []).filter((u) => u.isActive);
   const [month, setMonth] = React.useState(() => {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const [posFilter, setPosFilter] = React.useState("ALL");
   const [view, setView] = React.useState<View>("roster");
+  const shouldLoadTimesheet = view === "timesheet";
+  const { data, isLoading } = useUsers({ enabled: shouldLoadTimesheet });
+  const users = shouldLoadTimesheet ? (data?.data ?? []).filter((u) => u.isActive) : [];
   const [timesheetPage, setTimesheetPage] = React.useState(1);
   const retentionRange = React.useMemo(() => retentionMonthRange(), []);
   const currentMonthKey = monthKey(month.year, month.month);
@@ -130,7 +131,7 @@ export default function ShiftRosterPage() {
   const maxMonthKey = monthKey(retentionRange.max.year, retentionRange.max.month);
 
   const monthStr = `${month.year}-${String(month.month + 1).padStart(2, "0")}`;
-  const timesheet = useTimesheet(monthStr);
+  const timesheet = useTimesheet(monthStr, { enabled: shouldLoadTimesheet });
   const updateOverride = useUpdateTimesheetOverride(monthStr);
   const canEditTimesheet = Boolean(timesheet.data?.data?.canEdit || canManageRosterPdf);
   const [editCell, setEditCell] = React.useState<{

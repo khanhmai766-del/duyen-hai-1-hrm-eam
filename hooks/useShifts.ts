@@ -69,10 +69,12 @@ export interface Timesheet {
 }
 
 /** Approved attendance (bảng công) for a month — `month` is "YYYY-MM". */
-export function useTimesheet(month: string) {
+export function useTimesheet(month: string, options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
   return useQuery({
     queryKey: ["timesheet", month],
     queryFn: () => apiGet<Timesheet>(`/api/shifts/timesheet?month=${month}`),
+    enabled,
     staleTime: 60 * 1000,
   });
 }
@@ -94,10 +96,12 @@ export interface RosterSchedule {
 }
 
 /** The official roster PDF (Lịch trực ca) uploaded by an admin. */
-export function useRosterSchedule() {
+export function useRosterSchedule(options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
   return useQuery({
     queryKey: ["roster-schedule"],
     queryFn: () => apiGet<RosterSchedule>("/api/roster-schedule"),
+    enabled,
     staleTime: 10 * 60 * 1000,
   });
 }
