@@ -29,6 +29,29 @@ const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
 
 const UNITS = ["Vận hành 1", "Vận hành 2"];
 
+const CHECK_IN_SUCCESS_MESSAGES: Record<string, string[]> = {
+  MORNING: [
+    "Chào ca sáng! Hãy giữ tâm thế tỉnh táo, kỷ cương và hoàn thành xuất sắc ca trực hôm nay nhé 👍",
+    "Chấm công ca sáng hoàn tất. Chúc ca trực suôn sẻ, dòng điện thông suốt ❤",
+    "Điểm danh ca sáng thành công! Chúc bạn một ca trực an toàn, vận hành ổn định.🙌",
+  ],
+  AFTERNOON: [
+    "Điểm danh ca chiều thành công! Chúc bạn luôn tập trung, bảo đảm an toàn vận hành.",
+    "Chào ca chiều! Chúc bạn giữ vững năng lượng để hoàn thành tốt ca trực hôm nay. 💪",
+    "Chấm công ca chiều hoàn tất. Kỷ cương vững vàng, vận hành an toàn, thông suốt. 👍",
+  ],
+  NIGHT: [
+    "Điểm danh ca đêm thành công! Cảm ơn sự cống hiến thầm lặng của bạn. Chúc ca đêm an toàn tuyệt đối! ❤",
+    "Chào ca đêm! Hãy luôn tỉnh táo, tuân thủ nghiêm ngặt quy trình an toàn để giữ vững dòng điện nhé. 💖",
+    "Chấm công ca đêm hoàn tất. Chúc bạn một ca trực bình an, hoàn thành tốt nhiệm vụ. 🥰",
+  ],
+};
+
+function randomCheckInSuccessMessage(shiftType: string) {
+  const messages = CHECK_IN_SUCCESS_MESSAGES[shiftType] ?? CHECK_IN_SUCCESS_MESSAGES.MORNING;
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
 /** Local YYYY-MM-DD (avoids the UTC shift of toISOString). */
 function localDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -77,12 +100,23 @@ export default function OrgChartPage() {
   const { data: session } = useSession();
   const [checkInOpen, setCheckInOpen] = React.useState(false);
   const [recallDone, setRecallDone] = React.useState(false);
+  const [checkInSuccessMessage, setCheckInSuccessMessage] = React.useState("");
   const [viewer, setViewer] = React.useState(false);
   const [approveOpen, setApproveOpen] = React.useState(false);
   const recall = useRecallCheckIn();
   const rbac = useRbacAccess();
 
   const canApprove = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
+
+  React.useEffect(() => {
+    if (!checkInSuccessMessage) return;
+    const timer = window.setTimeout(() => setCheckInSuccessMessage(""), 4000);
+    return () => window.clearTimeout(timer);
+  }, [checkInSuccessMessage]);
+
+  function showCheckInSuccessMessage() {
+    setCheckInSuccessMessage(randomCheckInSuccessMessage(shiftType));
+  }
 
   const dateLabel = date.split("-").reverse().join("-");
   const caLabel = `${SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? ""} ${dateLabel}`.trim();
@@ -202,7 +236,8 @@ export default function OrgChartPage() {
         </Button>
       </PageHeader>
 
-      <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} date={date} shiftType={shiftType} unit={unit} />
+      <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} date={date} shiftType={shiftType} unit={unit} onSuccess={showCheckInSuccessMessage} />
+      <CheckInSuccessOverlay message={checkInSuccessMessage} />
       <ApproveAttendanceDialog
         open={approveOpen}
         onOpenChange={setApproveOpen}
@@ -322,18 +357,34 @@ export default function OrgChartPage() {
   );
 }
 
+function CheckInSuccessOverlay({ message }: { message: string }) {
+  if (!message) return null;
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[1200] flex items-center justify-center px-4">
+      <div className="max-w-lg animate-in fade-in-0 zoom-in-95 rounded-2xl border border-emerald-200 bg-white/95 px-6 py-5 text-center shadow-[0_24px_80px_-30px_rgba(15,23,42,0.55)] ring-1 ring-white/70 backdrop-blur">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <CheckCircle2 className="h-7 w-7" />
+        </div>
+        <p className="text-base font-bold leading-7 text-ink sm:text-lg">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 function CheckInDialog({
   open,
   onOpenChange,
   date,
   shiftType,
   unit,
+  onSuccess,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   date: string;
   shiftType: string;
   unit: string;
+  onSuccess: () => void;
 }) {
   const { data: session } = useSession();
   const currentPosition = useCurrentPosition();
@@ -370,8 +421,8 @@ function CheckInDialog({
     if (!position) return toast.error("Vui lòng chọn cương vị");
     try {
       await checkIn.mutateAsync({ date, shiftType, unit, positionLabel: position, hours, swap, swapNote: swap ? swapNote : "" });
-      toast.success(`Đã điểm danh: ${position}`);
       onOpenChange(false);
+      onSuccess();
     } catch (e) {
       toast.error((e as Error).message);
     }
