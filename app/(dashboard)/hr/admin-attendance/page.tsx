@@ -313,22 +313,22 @@ function HanhChinhCard({
                     variant="accent"
                     onClick={() => doApproveOne(m.groupId, m.id)}
                     disabled={approve.isPending}
-                    className="h-7 w-7 rounded-full bg-emerald-500 text-white hover:bg-emerald-600"
+                    className="h-6 w-6 rounded-full bg-emerald-500 text-white hover:bg-emerald-600 [&_svg]:size-3"
                     title="Duyệt"
                     aria-label={`Duyệt chấm công hành chính của ${m.user.name}`}
                   >
-                    {approve.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    {approve.isPending ? <Loader2 className="animate-spin" /> : <Check />}
                   </Button>
                   <Button
                     size="icon"
                     variant="destructive"
                     onClick={() => doReject(m.id)}
                     disabled={reject.isPending}
-                    className="h-7 w-7 rounded-full"
+                    className="h-6 w-6 rounded-full [&_svg]:size-3"
                     title="Không duyệt"
                     aria-label={`Không duyệt chấm công hành chính của ${m.user.name}`}
                   >
-                    {reject.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                    {reject.isPending ? <Loader2 className="animate-spin" /> : <X />}
                   </Button>
                 </div>
               )}
