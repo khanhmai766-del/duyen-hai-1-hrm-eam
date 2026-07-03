@@ -40,6 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           defectId: defect.id,
           unit: defect.unit,
           device: defect.device,
+          deviceSeq: defect.deviceSeq, // khóa chuẩn kế thừa từ phiếu khiếm khuyết (Tầng 1)
           system: defect.system,
           requestType: body.requestType?.trim() || defect.requestType,
           content: body.content?.trim() || defect.content,

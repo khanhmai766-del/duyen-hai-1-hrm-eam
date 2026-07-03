@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
@@ -24,8 +24,13 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.RepairLogWhereInput = {};
     const access = await resolveEquipmentAccessForUser(user);
-    if (access.hasExplicitScopes) where.deviceSeq = { in: Array.from(access.visibleSeqs) };
-    if (deviceId) where.deviceSeq = access.canViewSeq(deviceId) ? deviceId : "__NO_ACCESS__";
+    if (deviceId) {
+      where.deviceSeq = access.canViewSeq(deviceId) ? deviceId : "__NO_ACCESS__";
+    } else {
+      // Lọc quyền bằng prefix nhánh (index text_pattern_ops) — không gửi IN-list nghìn seq.
+      const scopeWhere = equipmentSeqWhere(access.branchFilter, "deviceSeq") as Prisma.RepairLogWhereInput | null;
+      if (scopeWhere) where.AND = [scopeWhere];
+    }
     if (status && status !== "ALL") where.status = status as any;
     if (priority && priority !== "ALL") where.priority = priority as any;
     if (technicianId && technicianId !== "ALL") where.createdById = technicianId;

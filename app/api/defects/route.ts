@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -17,15 +17,25 @@ export async function GET() {
     const access = await resolveEquipmentAccessForUser(user);
     // Ẩn các phiếu đã xử lý quá 2 tuần khỏi danh sách (lịch sử vẫn giữ riêng).
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây (index text_pattern_ops);
+    // phiếu chưa gắn thiết bị (deviceSeq null) vẫn lấy về, xét tiếp bằng rule text bên dưới.
+    const scopeWhere = equipmentSeqWhere(access.branchFilter, "deviceSeq");
     const defects = await prisma.defect.findMany({
-      where: { NOT: { AND: [{ status: "DA_XU_LY" }, { completedAt: { lt: cutoff } }] } },
+      where: {
+        NOT: { AND: [{ status: "DA_XU_LY" }, { completedAt: { lt: cutoff } }] },
+        ...(scopeWhere ? { AND: [{ OR: [scopeWhere, { deviceSeq: null }] }] } : {}),
+      },
       orderBy: { createdAt: "desc" },
       include: INCLUDE,
     });
     // Cột fireSafetyImpact/environmentSafetyImpact đã thuộc model Defect nên có sẵn trong kết quả.
     const data = defects
       .filter(
-        (defect) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: defect.device, system: defect.system })
+        (defect) =>
+          !access.hasExplicitScopes ||
+          // Có deviceSeq → đã qua lọc SQL; chỉ phiếu chưa gắn thiết bị mới xét rule text cũ.
+          !!defect.deviceSeq ||
+          access.canViewDeviceLike({ device: defect.device, system: defect.system })
       )
       .map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) }));
     return ok(data, { total: data.length });

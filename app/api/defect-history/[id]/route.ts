@@ -21,11 +21,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (existing.device) await assertSeqEditable(user, existing.device);
     if (body.device) await assertSeqEditable(user, String(body.device));
 
+    // Đồng bộ khóa chuẩn deviceSeq khi client gửi trường device (chỉ gán seq có thật).
+    const deviceSeq =
+      body.device !== undefined
+        ? body.device?.trim()
+          ? (await prisma.equipmentNode.findUnique({ where: { seq: body.device.trim() }, select: { seq: true } }))?.seq ?? null
+          : null
+        : undefined;
+
     const history = await prisma.defectHistory.update({
       where: { id: params.id },
       data: {
         unit: body.unit !== undefined ? body.unit : undefined,
         device: body.device !== undefined ? body.device?.trim() || null : undefined,
+        deviceSeq,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         requestType: body.requestType !== undefined ? body.requestType?.trim() || null : undefined,
         workOrderNumber: body.workOrderNumber !== undefined ? body.workOrderNumber?.trim() || null : undefined,

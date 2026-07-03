@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
@@ -35,6 +35,10 @@ export async function GET(req: NextRequest) {
         ...(to ? { lte: new Date(`${to}T23:59:59`) } : {}),
       };
     }
+    // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây; bản ghi chưa gắn
+    // thiết bị (deviceSeq null) vẫn lấy về, xét tiếp bằng rule text bên dưới.
+    const scopeWhere = equipmentSeqWhere(access.branchFilter, "deviceSeq");
+    if (scopeWhere) where.AND = [{ OR: [scopeWhere, { deviceSeq: null }] }];
 
     const history = await prisma.defectHistory.findMany({
       where,
@@ -44,7 +48,11 @@ export async function GET(req: NextRequest) {
     });
     const data = history
       .filter(
-        (item) => !access.hasExplicitScopes || access.canViewDeviceLike({ device: item.device, system: item.system })
+        (item) =>
+          !access.hasExplicitScopes ||
+          // Có deviceSeq → đã qua lọc SQL; chỉ bản ghi chưa gắn thiết bị mới xét rule text cũ.
+          !!item.deviceSeq ||
+          access.canViewDeviceLike({ device: item.device, system: item.system })
       )
       .map((item) => ({ ...item, createdBy: publicUserRef(item.createdBy) }));
     return ok(data, { total: data.length, capped: history.length === HISTORY_TAKE });
@@ -66,10 +74,17 @@ export async function POST(req: NextRequest) {
       "defect-history/images",
       "image"
     );
+    // Khóa liên kết chuẩn với cây: chỉ gán khi "device" là seq có thật.
+    const deviceValue = body.device?.trim() || null;
+    const deviceSeq = deviceValue
+      ? (await prisma.equipmentNode.findUnique({ where: { seq: deviceValue }, select: { seq: true } }))?.seq ?? null
+      : null;
+
     const history = await prisma.defectHistory.create({
       data: {
         unit: body.unit,
-        device: body.device?.trim() || null,
+        device: deviceValue,
+        deviceSeq,
         system: body.system?.trim() || null,
         requestType: body.requestType?.trim() || null,
         workOrderNumber: body.workOrderNumber?.trim() || null,

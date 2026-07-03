@@ -8,12 +8,46 @@ import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import {
   createPositionAccessResolver,
+  normalizePositionScopeKey,
   normalizeScopeAccess,
   scopesForPosition,
   type PositionSystemScope,
 } from "@/lib/position-system-scopes";
 
 type SessionUser = { role?: string | null; position?: string | null };
+
+/**
+ * Bộ lọc phạm vi thiết bị của một cương vị, dạng biểu diễn được trong SQL:
+ * - "all": không giới hạn (admin / chưa cấu hình scope).
+ * - "branches": vài nhánh gốc được cấp (include) trừ vài nhánh bị chặn (exclude)
+ *   → query bằng prefix seq (deviceSeq = root OR LIKE 'root.%'), chạy trên index
+ *   text_pattern_ops, KHÔNG phụ thuộc tổng kích thước bảng.
+ * - "list": cấu trúc scope lồng nhau phức tạp (cấp lại bên trong nhánh bị chặn)
+ *   không biểu diễn được bằng prefix → fallback IN-list.
+ */
+export type EquipmentBranchFilter =
+  | { kind: "all" }
+  | { kind: "branches"; include: string[]; exclude: string[] }
+  | { kind: "list"; seqs: string[] };
+
+/**
+ * Dựng điều kiện Prisma where cho một cột chứa seq theo bộ lọc phạm vi.
+ * Trả null nếu không cần lọc ("all").
+ */
+export function equipmentSeqWhere(
+  filter: EquipmentBranchFilter,
+  column: string
+): Record<string, unknown> | null {
+  if (filter.kind === "all") return null;
+  if (filter.kind === "list") return { [column]: { in: filter.seqs } };
+  if (!filter.include.length) return { [column]: { in: [] } }; // có scope nhưng toàn "none" → không thấy gì
+  const branchOr = (root: string) => [{ [column]: root }, { [column]: { startsWith: `${root}.` } }];
+  const include = { OR: filter.include.flatMap(branchOr) };
+  if (!filter.exclude.length) return include;
+  return {
+    AND: [include, ...filter.exclude.map((root) => ({ NOT: { OR: branchOr(root) } }))],
+  };
+}
 
 type DeviceLike = {
   code: string;
@@ -30,6 +64,7 @@ export type EquipmentAccessContext = {
   editableSeqs: Set<string>;
   visibleSystemNames: Set<string>;
   editableSystemNames: Set<string>;
+  branchFilter: EquipmentBranchFilter;
   canViewSeq: (seq?: string | null) => boolean;
   canEditSeq: (seq?: string | null) => boolean;
   canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => boolean;
@@ -57,11 +92,47 @@ function hasExplicitScopes(scopes: PositionSystemScope[], position: string) {
   return scopesForPosition(scopes, position).length > 0;
 }
 
+// Cache access-context: theo (mảng node, cương vị) với TTL. Chỉ ~10-20 cương vị và
+// scope hiếm khi đổi — không cần dựng lại index 9k node + quyền trên mỗi request.
+// WeakMap theo mảng node: node-cache refresh → mảng mới → entry cũ tự bị bỏ.
+const ACCESS_CACHE_TTL_MS = 60_000;
+type CachedAccess = { ctx: EquipmentAccessContext; expiresAt: number; generation: number };
+const accessCacheByNodes = new WeakMap<NormalizedEquipmentNode[], Map<string, CachedAccess>>();
+let accessGeneration = 0;
+
+/** Gọi khi admin đổi phân quyền hệ thống (PositionSystemScope) để quyền mới áp dụng ngay. */
+export function invalidateEquipmentAccessCache() {
+  accessGeneration++;
+}
+
 export async function resolveEquipmentAccessForUser(
   user: SessionUser,
   inputNodes?: NormalizedEquipmentNode[]
 ): Promise<EquipmentAccessContext> {
-  const allNodes = inputNodes ?? await getCachedEquipmentNodeList();
+  const allNodes = inputNodes ?? (await getCachedEquipmentNodeList());
+  const cacheKey =
+    user.role === "ADMIN" || !(user.position ?? "")
+      ? "__unrestricted__"
+      : `pos:${normalizePositionScopeKey(user.position)}`;
+
+  let byPosition = accessCacheByNodes.get(allNodes);
+  if (!byPosition) {
+    byPosition = new Map();
+    accessCacheByNodes.set(allNodes, byPosition);
+  }
+  const hit = byPosition.get(cacheKey);
+  const now = Date.now();
+  if (hit && hit.expiresAt > now && hit.generation === accessGeneration) return hit.ctx;
+
+  const ctx = await buildEquipmentAccessContext(user, allNodes);
+  byPosition.set(cacheKey, { ctx, expiresAt: now + ACCESS_CACHE_TTL_MS, generation: accessGeneration });
+  return ctx;
+}
+
+async function buildEquipmentAccessContext(
+  user: SessionUser,
+  allNodes: NormalizedEquipmentNode[]
+): Promise<EquipmentAccessContext> {
   const allIndex = buildEquipmentTreeIndex(allNodes);
   const allSeqs = new Set(allNodes.map((node) => node.seq));
   const allNames = new Set(allNodes.map((node) => normalizeText(node.name)).filter(Boolean));
@@ -74,6 +145,7 @@ export async function resolveEquipmentAccessForUser(
     editableSeqs: allSeqs,
     visibleSystemNames: allNames,
     editableSystemNames: allNames,
+    branchFilter: { kind: "all" } as EquipmentBranchFilter,
     canViewSeq: () => true,
     canEditSeq: () => true,
     canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => {
@@ -93,10 +165,21 @@ export async function resolveEquipmentAccessForUser(
 
   const visibleSeqs = new Set<string>();
   const editableSeqs = new Set<string>();
+  // recordSeqs = node có quyền thật (≠ none) — hẹp hơn visibleSeqs (visibleSeqs kèm
+  // tổ tiên chỉ để vẽ đường dẫn cây, không cấp quyền xem DỮ LIỆU gắn vào tổ tiên).
+  const recordSeqs = new Set<string>();
+  const includeRoots: string[] = [];
+  const excludeRoots: string[] = [];
   const accessResolver = createPositionAccessResolver(position, allNodes, scopes);
   for (const node of allNodes) {
     const access = accessResolver.accessForSeq(node.seq);
+    const parentSeq = allIndex.parentOf.get(node.seq) ?? null;
+    const parentAccess = parentSeq ? accessResolver.accessForSeq(parentSeq) : "none";
+    // Ranh giới chuyển quyền = gốc một nhánh include/exclude (giữa 2 ranh giới quyền đồng nhất).
+    if (access !== "none" && parentAccess === "none") includeRoots.push(node.seq);
+    if (access === "none" && parentAccess !== "none") excludeRoots.push(node.seq);
     if (access === "none") continue;
+    recordSeqs.add(node.seq);
     if (access === "edit") editableSeqs.add(node.seq);
 
     let current: string | null | undefined = node.seq;
@@ -105,6 +188,21 @@ export async function resolveEquipmentAccessForUser(
       current = allIndex.parentOf.get(current) ?? null;
     }
   }
+
+  // Nhánh include nằm BÊN TRONG một nhánh exclude (cấp lại sâu hơn chỗ đã chặn):
+  // biểu thức prefix OR/NOT không mô tả được → fallback IN-list cho đúng tuyệt đối.
+  const excludeRootSet = new Set(excludeRoots);
+  const hasNestedInclude = includeRoots.some((root) => {
+    let current = allIndex.parentOf.get(root) ?? null;
+    while (current) {
+      if (excludeRootSet.has(current)) return true;
+      current = allIndex.parentOf.get(current) ?? null;
+    }
+    return false;
+  });
+  const branchFilter: EquipmentBranchFilter = hasNestedInclude
+    ? { kind: "list", seqs: Array.from(recordSeqs) }
+    : { kind: "branches", include: includeRoots, exclude: excludeRoots };
 
   const visibleNodes = allNodes.filter((node) => visibleSeqs.has(node.seq));
   const visibleSystemNames = new Set(visibleNodes.map((node) => normalizeText(node.name)).filter(Boolean));
@@ -123,6 +221,7 @@ export async function resolveEquipmentAccessForUser(
     editableSeqs,
     visibleSystemNames,
     editableSystemNames,
+    branchFilter,
     canViewSeq: (seq?: string | null) => !!seq && visibleSeqs.has(seq),
     canEditSeq: (seq?: string | null) => !!seq && editableSeqs.has(seq),
     canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => {

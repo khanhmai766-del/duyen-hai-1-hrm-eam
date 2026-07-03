@@ -425,7 +425,8 @@ model DefectHistory {
   id              String   @id @default(cuid())
   defectId        String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
   unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
-  device          String? // Thiết bị (mã thiết bị) — đồng bộ danh mục Thiết bị
+  deviceSeq       String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq) — dùng lọc quyền/nhánh bằng SQL
+  device          String? // Thiết bị (mã thiết bị) — snapshot text, giữ lại khi node bị xóa
   system          String? // Cương vị (snapshot theo khiếm khuyết)
   requestType     String? // PCT (loại yêu cầu: Cơ | Điện | Hóa | …) — đồng bộ "Yêu Cầu"
   workOrderNumber String? // Số phiếu công tác thực hiện
@@ -437,8 +438,14 @@ model DefectHistory {
   createdById     String
   createdAt       DateTime @default(now())
 
-  createdBy User @relation("DefectHistoryCreatedBy", fields: [createdById], references: [id])
+  createdBy User           @relation("DefectHistoryCreatedBy", fields: [createdById], references: [id])
+  node      EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
 
+  @@index([deviceSeq])
+  // Lịch sử "của thiết bị X, mới nhất trước" đọc thẳng từ index.
+  @@index([deviceSeq, performedAt(sort: Desc)])
+  // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
+  @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "defecthistory_deviceseq_prefix")
   @@index([device])
   @@index([system])
   @@index([performedAt])
@@ -606,6 +613,7 @@ model EquipmentNode {
   deviceMaterials      EquipmentMaterial[]
   materialReplacements MaterialReplacement[]
   defects              Defect[]
+  defectHistories      DefectHistory[]
 
   @@index([parentSeq])
   @@index([parentSeq, sort])
