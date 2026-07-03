@@ -16,6 +16,7 @@ import {
   Archive,
   Workflow,
   BellRing,
+  ClipboardList,
 } from "lucide-react";
 
 export interface NavItem {
@@ -63,8 +64,14 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, keywords: "device thiet bi may moc esp fgd boiler turbine" },
       { label: "Khiếm khuyết thiết bị", href: "/defects", icon: ShieldAlert, keywords: "defect su co fault khiem khuyet" },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
+    ],
+  },
+  {
+    title: "QUẢN LÝ VẬT TƯ",
+    items: [
       { label: "Danh mục vật tư", href: "/materials", icon: Package, keywords: "material vat tu phu tung ton kho" },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
+      { label: "Quy trình thay thế", href: "/documents/procedures", icon: ClipboardList, keywords: "quy trinh thay the vat tu huong dan checklist procedure replacement" },
     ],
   },
   {

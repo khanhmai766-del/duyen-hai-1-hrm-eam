@@ -30,6 +30,8 @@ export interface ForumPost {
   updatedAt: string;
   author: ForumAuthor;
   replies: ForumReply[];
+  likeCount: number;
+  likedByMe: boolean;
 }
 
 export interface ForumFilters {
@@ -87,6 +89,14 @@ export function useUpdateForumReply() {
   return useMutation({
     mutationFn: ({ id, content, attachments }: { id: string; content: string; attachments?: string[] }) =>
       apiMutate<{ id: string }>(`/api/forum/replies/${id}`, "PUT", { content, attachments }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+  });
+}
+
+export function useToggleForumLike() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (postId: string) => apiMutate<{ liked: boolean }>(`/api/forum/${postId}/likes`, "POST"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
   });
 }

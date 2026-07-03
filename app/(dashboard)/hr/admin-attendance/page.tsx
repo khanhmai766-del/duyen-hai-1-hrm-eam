@@ -420,7 +420,7 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
           </Badge>
           {canApprove && (
             <Button size="sm" onClick={doApprove} disabled={approve.isPending}
-              className="bg-amber-400 text-amber-950 hover:bg-amber-500">
+              className="bg-amber-500 text-white hover:bg-amber-600 hover:text-white disabled:text-white [&_svg]:text-white">
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
               Duyệt chấm công
             </Button>

@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import {
   BookOpenText,
   FileText,
+  Heart,
+  MessageCircle,
   Link2,
   MessageSquareText,
   Pencil,
@@ -27,12 +29,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useCreateForumPost,
   useCreateForumReply,
   useDeleteForumPost,
   useDeleteForumReply,
   useForumPosts,
+  useToggleForumLike,
   useUpdateForumPost,
   useUpdateForumReply,
   type ForumAuthor,
@@ -71,6 +75,7 @@ export default function ForumPage() {
   const [form, setForm] = React.useState(DEFAULT_FORM);
   const [replyDrafts, setReplyDrafts] = React.useState<Record<string, string>>({});
   const [replyLinks, setReplyLinks] = React.useState<Record<string, string>>({});
+  const [expandedReplies, setExpandedReplies] = React.useState<Record<string, boolean>>({});
   const [deletePostTarget, setDeletePostTarget] = React.useState<ForumPost | null>(null);
   const [deleteReplyTarget, setDeleteReplyTarget] = React.useState<ForumReply | null>(null);
 
@@ -147,6 +152,7 @@ export default function ForumPage() {
       });
       setReplyDrafts((s) => ({ ...s, [postId]: "" }));
       setReplyLinks((s) => ({ ...s, [postId]: "" }));
+      setExpandedReplies((s) => ({ ...s, [postId]: true }));
       toast.success("Đã gửi phản hồi");
     } catch (e) {
       toast.error((e as Error).message);
@@ -261,8 +267,11 @@ export default function ForumPage() {
               post={post}
               reply={replyDrafts[post.id] ?? ""}
               replyLinks={replyLinks[post.id] ?? ""}
+              repliesOpen={expandedReplies[post.id] ?? false}
               setReply={(v) => setReplyDrafts((s) => ({ ...s, [post.id]: v }))}
               setReplyLinks={(v) => setReplyLinks((s) => ({ ...s, [post.id]: v }))}
+              onToggleReplies={() => setExpandedReplies((s) => ({ ...s, [post.id]: !(s[post.id] ?? false) }))}
+              onOpenReplies={() => setExpandedReplies((s) => ({ ...s, [post.id]: true }))}
               onReply={() => submitReply(post.id)}
               replying={createReply.isPending}
               canWrite={canWriteForum}
@@ -324,8 +333,11 @@ function ForumPostCard({
   post,
   reply,
   replyLinks,
+  repliesOpen,
   setReply,
   setReplyLinks,
+  onToggleReplies,
+  onOpenReplies,
   onReply,
   replying,
   canWrite,
@@ -341,8 +353,11 @@ function ForumPostCard({
   post: ForumPost;
   reply: string;
   replyLinks: string;
+  repliesOpen: boolean;
   setReply: (v: string) => void;
   setReplyLinks: (v: string) => void;
+  onToggleReplies: () => void;
+  onOpenReplies: () => void;
   onReply: () => void;
   replying: boolean;
   canWrite: boolean;
@@ -358,9 +373,13 @@ function ForumPostCard({
   const category = CATEGORIES.find((c) => c.value === post.category) ?? CATEGORIES[1];
   const Icon = category.icon;
   const updateReply = useUpdateForumReply();
+  const toggleLike = useToggleForumLike();
   const [editingReplyId, setEditingReplyId] = React.useState<string | null>(null);
   const [editDraft, setEditDraft] = React.useState("");
   const [editLinks, setEditLinks] = React.useState("");
+  const likeCount = post.likeCount ?? 0;
+  const replyCount = post.replies.length;
+  const commenterNames = uniqueNames(post.replies.map((item) => item.author.name));
 
   function startEditReply(r: ForumReply) {
     setEditingReplyId(r.id);
@@ -419,10 +438,72 @@ function ForumPostCard({
           </div>
         </div>
         {post.attachments.length > 0 && <AttachmentList links={post.attachments} />}
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
+                <Heart className="h-3 w-3 fill-current" />
+              </span>
+              {likeCount} lượt thích
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:text-blue-700 hover:ring-blue-200"
+                  disabled={replyCount === 0}
+                >
+                  <MessageCircle className="h-4 w-4 text-blue-600" />
+                  {replyCount} bình luận
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[min(320px,90vw)] p-3">
+                <PeopleList title="Người đã bình luận" empty="Chưa có bình luận" names={commenterNames} />
+              </PopoverContent>
+            </Popover>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => toggleLike.mutate(post.id)}
+              disabled={toggleLike.isPending}
+              className={cn(
+                "rounded-full px-4 font-bold transition-all duration-200",
+                post.likedByMe
+                  ? "border-rose-200 bg-rose-50 text-rose-600 shadow-sm shadow-rose-200/60 hover:bg-rose-100 hover:text-rose-700"
+                  : "bg-white text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              )}
+            >
+              <Heart className={cn("h-4 w-4 transition-all duration-200", post.likedByMe && "scale-110 fill-current")} />
+              Thích
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onToggleReplies}
+              className={cn(
+                "rounded-full px-4 font-bold transition-all duration-200",
+                repliesOpen ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800" : "bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+              )}
+            >
+              <MessageCircle className={cn("h-4 w-4", repliesOpen && "fill-blue-100 text-blue-700")} />
+              {repliesOpen ? "Thu gọn" : "Phản hồi"}
+            </Button>
+          </div>
+        </div>
       </div>
 
+      {repliesOpen && (
       <div className="space-y-3 bg-muted/20 p-4">
-        <div className="text-sm font-bold text-ink">Phản hồi ({post.replies.length})</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-bold text-ink">Phản hồi ({post.replies.length})</div>
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-ink" onClick={onToggleReplies}>
+            Thu gọn
+          </Button>
+        </div>
         {post.replies.map((r) => (
           <div key={r.id} className="rounded-xl border border-border bg-white p-3">
             <div className="flex items-start justify-between gap-3">
@@ -467,6 +548,14 @@ function ForumPostCard({
           </div>
         )}
       </div>
+      )}
+      {!repliesOpen && canWrite && (
+        <div className="border-t border-border bg-muted/20 px-4 py-3">
+          <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground hover:bg-white hover:text-blue-700" onClick={onOpenReplies}>
+            <MessageCircle className="h-4 w-4" /> Viết phản hồi
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -534,6 +623,29 @@ function Metric({ label, value }: { label: string; value: number }) {
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
+}
+
+function PeopleList({ title, empty, names }: { title: string; empty: string; names: string[] }) {
+  return (
+    <div>
+      <div className="mb-2 text-sm font-extrabold text-ink">{title}</div>
+      {names.length ? (
+        <div className="max-h-64 space-y-1 overflow-auto pr-1">
+          {names.map((name) => (
+            <div key={name} className="rounded-lg bg-muted/60 px-3 py-2 text-sm font-semibold text-slate-700">
+              {name}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">{empty}</div>
+      )}
+    </div>
+  );
+}
+
+function uniqueNames(names: string[]) {
+  return Array.from(new Set(names.filter(Boolean)));
 }
 
 function splitLines(value: string) {

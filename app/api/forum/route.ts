@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ensureForumPostLikeTable } from "@/lib/forum-likes";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 const AUTHOR_SELECT = `
@@ -36,9 +37,25 @@ const REPLIES_SELECT = `
   ), '[]'::json)
 `;
 
+function likesSelect(currentUserParam: number) {
+  return `
+    (
+      SELECT COUNT(*)::int
+      FROM "ForumPostLike" l
+      WHERE l."postId" = p.id
+    ) AS "likeCount",
+    EXISTS (
+      SELECT 1
+      FROM "ForumPostLike" ml
+      WHERE ml."postId" = p.id AND ml."userId" = $${currentUserParam}
+    ) AS "likedByMe"
+  `;
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await ensureForumPostLikeTable();
     const sp = req.nextUrl.searchParams;
     const category = sp.get("category")?.trim();
     const q = sp.get("q")?.trim();
@@ -54,6 +71,9 @@ export async function GET(req: NextRequest) {
       where.push(`(p.title ILIKE $${params.length} OR p.content ILIKE $${params.length} OR EXISTS (SELECT 1 FROM unnest(p.tags) tag WHERE tag ILIKE $${params.length}))`);
     }
 
+    const currentUserParam = params.length + 1;
+    params.push(user.id);
+
     const sql = `
       SELECT
         p.id,
@@ -66,7 +86,8 @@ export async function GET(req: NextRequest) {
         p."createdAt",
         p."updatedAt",
         ${AUTHOR_SELECT} AS author,
-        ${REPLIES_SELECT} AS replies
+        ${REPLIES_SELECT} AS replies,
+        ${likesSelect(currentUserParam)}
       FROM "ForumPost" p
       JOIN "User" u ON u.id = p."authorId"
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}

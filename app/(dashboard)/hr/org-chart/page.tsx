@@ -200,7 +200,7 @@ export default function OrgChartPage() {
           <Button
             size="sm"
             onClick={() => setApproveOpen(true)}
-            className="text-white"
+            className="text-white hover:text-white [&_svg]:text-white"
           >
             <ClipboardCheck className="h-4 w-4" /> Duyệt chấm công
           </Button>
