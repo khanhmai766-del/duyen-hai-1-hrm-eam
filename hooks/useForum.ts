@@ -12,6 +12,7 @@ export interface ForumAuthor {
 
 export interface ForumReply {
   id: string;
+  postId: string;
   content: string;
   attachments: string[];
   createdAt: string;
@@ -29,7 +30,7 @@ export interface ForumPost {
   createdAt: string;
   updatedAt: string;
   author: ForumAuthor;
-  replies: ForumReply[];
+  replyCount: number;
   likeCount: number;
   likedByMe: boolean;
 }
@@ -58,6 +59,14 @@ export function useForumPosts(filters: ForumFilters) {
   });
 }
 
+export function useForumReplies(postId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["forum-replies", postId],
+    queryFn: () => apiGet<ForumReply[]>(`/api/forum/${postId}/replies`),
+    enabled: enabled && !!postId,
+  });
+}
+
 export function useCreateForumPost() {
   const qc = useQueryClient();
   return useMutation({
@@ -71,7 +80,10 @@ export function useCreateForumReply() {
   return useMutation({
     mutationFn: ({ postId, content, attachments }: { postId: string; content: string; attachments?: string[] }) =>
       apiMutate<{ id: string }>(`/api/forum/${postId}/replies`, "POST", { content, attachments }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["forum-posts"] });
+      qc.invalidateQueries({ queryKey: ["forum-replies", variables.postId] });
+    },
   });
 }
 
@@ -89,7 +101,10 @@ export function useUpdateForumReply() {
   return useMutation({
     mutationFn: ({ id, content, attachments }: { id: string; content: string; attachments?: string[] }) =>
       apiMutate<{ id: string }>(`/api/forum/replies/${id}`, "PUT", { content, attachments }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["forum-posts"] });
+      qc.invalidateQueries({ queryKey: ["forum-replies"] });
+    },
   });
 }
 
@@ -113,6 +128,9 @@ export function useDeleteForumReply() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate<{ id: string }>(`/api/forum/replies/${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["forum-posts"] });
+      qc.invalidateQueries({ queryKey: ["forum-replies"] });
+    },
   });
 }

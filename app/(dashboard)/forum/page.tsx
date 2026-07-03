@@ -29,13 +29,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useCreateForumPost,
   useCreateForumReply,
   useDeleteForumPost,
   useDeleteForumReply,
   useForumPosts,
+  useForumReplies,
   useToggleForumLike,
   useUpdateForumPost,
   useUpdateForumReply,
@@ -201,7 +201,7 @@ export default function ForumPage() {
           <div className="text-sm font-bold text-ink">Không gian chia sẻ</div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <Metric label="Chủ đề" value={rows.length} />
-            <Metric label="Phản hồi" value={rows.reduce((sum, p) => sum + p.replies.length, 0)} />
+            <Metric label="Phản hồi" value={rows.reduce((sum, p) => sum + (p.replyCount ?? 0), 0)} />
           </div>
         </Card>
       </div>
@@ -374,12 +374,13 @@ function ForumPostCard({
   const Icon = category.icon;
   const updateReply = useUpdateForumReply();
   const toggleLike = useToggleForumLike();
+  const repliesQuery = useForumReplies(post.id, repliesOpen);
   const [editingReplyId, setEditingReplyId] = React.useState<string | null>(null);
   const [editDraft, setEditDraft] = React.useState("");
   const [editLinks, setEditLinks] = React.useState("");
+  const replies = repliesQuery.data?.data ?? [];
   const likeCount = post.likeCount ?? 0;
-  const replyCount = post.replies.length;
-  const commenterNames = uniqueNames(post.replies.map((item) => item.author.name));
+  const replyCount = post.replyCount ?? 0;
 
   function startEditReply(r: ForumReply) {
     setEditingReplyId(r.id);
@@ -446,21 +447,14 @@ function ForumPostCard({
               </span>
               {likeCount} lượt thích
             </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:text-blue-700 hover:ring-blue-200"
-                  disabled={replyCount === 0}
-                >
-                  <MessageCircle className="h-4 w-4 text-blue-600" />
-                  {replyCount} bình luận
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-[min(320px,90vw)] p-3">
-                <PeopleList title="Người đã bình luận" empty="Chưa có bình luận" names={commenterNames} />
-              </PopoverContent>
-            </Popover>
+            <button
+              type="button"
+              onClick={onToggleReplies}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:text-blue-700 hover:ring-blue-200"
+            >
+              <MessageCircle className="h-4 w-4 text-blue-600" />
+              {replyCount} bình luận
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button
@@ -499,12 +493,24 @@ function ForumPostCard({
       {repliesOpen && (
       <div className="space-y-3 bg-muted/20 p-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-bold text-ink">Phản hồi ({post.replies.length})</div>
+          <div className="text-sm font-bold text-ink">Phản hồi ({replyCount})</div>
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-ink" onClick={onToggleReplies}>
             Thu gọn
           </Button>
         </div>
-        {post.replies.map((r) => (
+        {repliesQuery.isLoading && (
+          <div className="space-y-2">
+            {[1, 2].map((item) => (
+              <div key={item} className="h-20 animate-pulse rounded-xl border border-border bg-white/70" />
+            ))}
+          </div>
+        )}
+        {!repliesQuery.isLoading && replies.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border bg-white px-3 py-4 text-sm text-muted-foreground">
+            Chưa có phản hồi nào cho chủ đề này.
+          </div>
+        )}
+        {!repliesQuery.isLoading && replies.map((r) => (
           <div key={r.id} className="rounded-xl border border-border bg-white p-3">
             <div className="flex items-start justify-between gap-3">
               <AuthorInline author={r.author} date={r.createdAt} />
@@ -623,29 +629,6 @@ function Metric({ label, value }: { label: string; value: number }) {
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
-}
-
-function PeopleList({ title, empty, names }: { title: string; empty: string; names: string[] }) {
-  return (
-    <div>
-      <div className="mb-2 text-sm font-extrabold text-ink">{title}</div>
-      {names.length ? (
-        <div className="max-h-64 space-y-1 overflow-auto pr-1">
-          {names.map((name) => (
-            <div key={name} className="rounded-lg bg-muted/60 px-3 py-2 text-sm font-semibold text-slate-700">
-              {name}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">{empty}</div>
-      )}
-    </div>
-  );
-}
-
-function uniqueNames(names: string[]) {
-  return Array.from(new Set(names.filter(Boolean)));
 }
 
 function splitLines(value: string) {

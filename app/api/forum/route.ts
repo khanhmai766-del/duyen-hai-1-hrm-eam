@@ -14,27 +14,12 @@ const AUTHOR_SELECT = `
   )
 `;
 
-const REPLIES_SELECT = `
-  COALESCE((
-    SELECT json_agg(
-      json_build_object(
-        'id', r.id,
-        'content', r.content,
-        'attachments', r.attachments,
-        'createdAt', r."createdAt",
-        'author', json_build_object(
-          'id', ru.id,
-          'name', ru.name,
-          'position', ru.position,
-          'avatarUrl', ru."avatarUrl"
-        )
-      )
-      ORDER BY r."createdAt" ASC
-    )
+const REPLY_COUNT_SELECT = `
+  (
+    SELECT COUNT(*)::int
     FROM "ForumReply" r
-    JOIN "User" ru ON ru.id = r."authorId"
     WHERE r."postId" = p.id
-  ), '[]'::json)
+  ) AS "replyCount"
 `;
 
 function likesSelect(currentUserParam: number) {
@@ -86,7 +71,7 @@ export async function GET(req: NextRequest) {
         p."createdAt",
         p."updatedAt",
         ${AUTHOR_SELECT} AS author,
-        ${REPLIES_SELECT} AS replies,
+        ${REPLY_COUNT_SELECT},
         ${likesSelect(currentUserParam)}
       FROM "ForumPost" p
       JOIN "User" u ON u.id = p."authorId"

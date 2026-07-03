@@ -4,6 +4,40 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  return handle(async () => {
+    await requireUser();
+    const exists = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM "ForumPost" WHERE id = $1 LIMIT 1`,
+      params.id
+    );
+    if (!exists.length) return fail("Không tìm thấy chủ đề", 404);
+
+    const replies = await prisma.$queryRawUnsafe(
+      `
+        SELECT
+          r.id,
+          r."postId",
+          r.content,
+          r.attachments,
+          r."createdAt",
+          json_build_object(
+            'id', u.id,
+            'name', u.name,
+            'position', u.position,
+            'avatarUrl', u."avatarUrl"
+          ) AS author
+        FROM "ForumReply" r
+        JOIN "User" u ON u.id = r."authorId"
+        WHERE r."postId" = $1
+        ORDER BY r."createdAt" ASC
+      `,
+      params.id
+    );
+    return ok(replies);
+  });
+}
+
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
