@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const HISTORY_INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
     }
 
-    const performedAt = body.performedAt ? new Date(body.performedAt) : new Date();
+    const performedAt = body.performedAt ? parseDateInput(body.performedAt) : new Date();
     const images = await maybeUploadDataUrlList(
       Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [],
       "defect-history/images",

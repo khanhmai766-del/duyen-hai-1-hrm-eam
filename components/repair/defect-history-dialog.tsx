@@ -14,14 +14,13 @@ import { useCreateDefectHistory, useUpdateDefectHistory, type DefectHistoryItem 
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_UNITS, DEFECT_REQUEST_TYPES, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import { formatDateInput } from "@/lib/utils";
 
 function todayInput(): string {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateInput();
 }
 function toDateInput(v: Date | string | null | undefined): string {
-  if (!v) return "";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  return formatDateInput(v);
 }
 
 const NONE = "__none__";

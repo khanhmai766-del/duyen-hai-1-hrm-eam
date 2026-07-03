@@ -71,7 +71,9 @@ function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: strin
 export default function AdminAttendancePage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const canManage = rbac.can("hc-attendance-check-in", ["create", "manage", "full"]) || rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
+  const canCreateHcGroup = rbac.can("hc-attendance-check-in", ["create", "manage", "full"]);
+  const canManageHcGroup = rbac.can("hc-attendance-check-in", ["manage", "full"]);
+  const canApproveHc = rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
   const myId = session?.user?.id;
 
   const [date, setDate] = React.useState(() => vietnamDateInput());
@@ -121,7 +123,7 @@ export default function AdminAttendancePage() {
         <Button variant="accent" onClick={openSelfCheckIn} disabled={isLoading}>
           <UserCheck className="h-4 w-4" /> Chấm công hành chính
         </Button>
-        {canManage && (
+        {canCreateHcGroup && (
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" /> Thêm nhóm
           </Button>
@@ -134,7 +136,7 @@ export default function AdminAttendancePage() {
         <div className="space-y-4">
           <HanhChinhCard groups={selfHcGroups} myId={myId} />
           {managedGroups.map((g) => (
-            <GroupCard key={g.id} group={g} canManage={canManage} myId={myId} />
+            <GroupCard key={g.id} group={g} canManage={canManageHcGroup} canApprove={canApproveHc} myId={myId} />
           ))}
         </div>
       )}
@@ -250,7 +252,7 @@ function HanhChinhCard({ groups, myId }: { groups: HcGroup[]; myId?: string }) {
 }
 
 /* ---- One administrative group ---- */
-function GroupCard({ group, canManage, myId }: { group: HcGroup; canManage: boolean; myId?: string }) {
+function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; canManage: boolean; canApprove: boolean; myId?: string }) {
   const approve = useHcApprove();
   const checkIn = useHcCheckIn();
   const recall = useHcRecall();
@@ -304,7 +306,7 @@ function GroupCard({ group, canManage, myId }: { group: HcGroup; canManage: bool
           <Badge variant={approved === group.members.length && group.members.length > 0 ? "accent" : "secondary"} className="gap-1.5">
             <Check className="h-3.5 w-3.5" /> {approved}/{group.members.length} đã duyệt
           </Badge>
-          {canManage && (
+          {canApprove && (
             <Button size="sm" onClick={doApprove} disabled={approve.isPending}
               className="bg-amber-400 text-amber-950 hover:bg-amber-500">
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}

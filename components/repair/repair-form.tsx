@@ -16,6 +16,7 @@ import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
 import { isSelectableManagingPosition, PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
 import { createPositionAccessResolver } from "@/lib/position-system-scopes";
+import { formatDateTimeInput } from "@/lib/utils";
 import type { RepairLogWithRelations } from "@/types";
 
 export function RepairForm({
@@ -55,8 +56,8 @@ export function RepairForm({
     description: repair?.description ?? "",
     priority: repair?.priority ?? "MEDIUM",
     status: repair?.status ?? "OPEN",
-    startedAt: repair?.startedAt ? new Date(repair.startedAt).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-    completedAt: repair?.completedAt ? new Date(repair.completedAt).toISOString().slice(0, 16) : "",
+    startedAt: repair?.startedAt ? formatDateTimeInput(repair.startedAt) : formatDateTimeInput(),
+    completedAt: repair?.completedAt ? formatDateTimeInput(repair.completedAt) : "",
     cost: repair?.cost?.toString() ?? "",
     downtime: repair?.downtime?.toString() ?? "",
   });

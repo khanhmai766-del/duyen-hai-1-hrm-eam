@@ -68,7 +68,7 @@ export default function HrOverviewPage() {
   const shift = shiftData?.data;
   const users = usersData?.data ?? [];
   const duyenHaiStaffCount = React.useMemo(
-    () => users.filter((u) => isDuyenHaiEmployeeId(u.employeeId)).length,
+    () => users.filter((u) => u.isActive && isDuyenHaiEmployeeId(u.employeeId)).length,
     [users]
   );
   // "Đang trực ca" = số người trong ca hiện tại đã được Quản trị / Trưởng ca duyệt chấm công.

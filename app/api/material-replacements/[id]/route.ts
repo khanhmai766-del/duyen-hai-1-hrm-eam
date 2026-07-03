@@ -5,6 +5,7 @@ import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-a
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
@@ -78,8 +79,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         intervalMonths,
         intervalNote: body.intervalNote !== undefined ? body.intervalNote?.trim() || null : undefined,
-        lastReplacedAt: body.lastReplacedAt ? new Date(body.lastReplacedAt) : undefined,
-        nextDueAt: body.nextDueAt ? new Date(body.nextDueAt) : undefined,
+        lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : undefined,
+        nextDueAt: body.nextDueAt ? parseDateInput(body.nextDueAt) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
         isActive: body.isActive,
       },

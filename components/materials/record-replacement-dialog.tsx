@@ -11,19 +11,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { replDueText } from "@/components/materials/replacement-badge";
 import { useRecordReplacement, type ReplacementItem } from "@/hooks/useReplacements";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateInput } from "@/lib/utils";
 
 /** Hộp thoại ghi nhận một lần thay thế vật tư → dời hạn kế tiếp. */
 export function RecordReplacementDialog({ point, onClose }: { point: ReplacementItem | null; onClose: () => void }) {
   const record = useRecordReplacement();
-  const [replacedAt, setReplacedAt] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [replacedAt, setReplacedAt] = React.useState(() => formatDateInput());
   const [quantity, setQuantity] = React.useState("");
   const [note, setNote] = React.useState("");
   const [deductStock, setDeductStock] = React.useState(true);
 
   React.useEffect(() => {
     if (point) {
-      setReplacedAt(new Date().toISOString().slice(0, 10));
+      setReplacedAt(formatDateInput());
       setQuantity("");
       setNote("");
       setDeductStock(true);

@@ -5,6 +5,7 @@ import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-a
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
@@ -42,7 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         requestNumber: body.requestNumber !== undefined ? body.requestNumber?.trim() || null : undefined,
         content: body.content !== undefined ? body.content?.trim() || null : undefined,
         status: body.status,
-        detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? new Date(body.detectedAt) : null) : undefined,
+        detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? parseDateInput(body.detectedAt) : null) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
         imageUrl,
         // Khi gửi 1 trong 2 trường ảnh hưởng thì cập nhật cả hai (giữ nguyên hành vi cũ);

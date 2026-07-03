@@ -50,7 +50,7 @@ import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/
 import { buildEquipmentTreeIndex } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
 import { normalizePositionScopeKey, normalizeScopeAccess, positionScopeOptions, scopesForPosition } from "@/lib/position-system-scopes";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, dateRange, formatDate } from "@/lib/utils";
 
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
 const DUYEN_HAI_3D_MODEL_URL =
@@ -1089,8 +1089,8 @@ function EmptyPanel({ text }: { text: string }) {
 }
 
 function makeDateRange(from: string, to: string) {
-  const start = from ? new Date(`${from}T00:00:00`) : null;
-  const end = to ? new Date(`${to}T23:59:59`) : null;
+  const start = from ? dateRange(from).start : null;
+  const end = to ? dateRange(to).end : null;
   return { start, end };
 }
 

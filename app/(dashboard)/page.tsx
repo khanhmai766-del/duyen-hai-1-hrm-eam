@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { OPERATION_TYPE, OPERATION_TYPE_ORDER, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
 import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/lib/links";
-import { initials, cn } from "@/lib/utils";
+import { formatDateInput, initials, cn, parseDateInput } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
 import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent, type SafeOperationSetting } from "@/hooks/useDashboard";
@@ -732,7 +732,7 @@ const EVENT_TONES = {
 function eventDateTone(date: string | Date): keyof typeof EVENT_TONES {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const d = new Date(date);
+  const d = parseDateInput(date);
   d.setHours(0, 0, 0, 0);
   if (d.getTime() > today.getTime()) return "future";
   if (d.getTime() === today.getTime()) return "today";
@@ -741,9 +741,7 @@ function eventDateTone(date: string | Date): keyof typeof EVENT_TONES {
 
 // Định dạng ngày về YYYY-MM-DD theo giờ địa phương cho <input type="date">.
 function toDateInputValue(value: string | Date): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return formatDateInput(value);
 }
 
 function OperationInfoCard({ canManage }: { canManage: boolean }) {

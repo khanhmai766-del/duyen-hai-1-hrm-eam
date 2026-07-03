@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { dateRange, parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +32,8 @@ export async function GET(req: NextRequest) {
     if (device) where.device = { contains: device, mode: "insensitive" };
     if (from || to) {
       where.performedAt = {
-        ...(from ? { gte: new Date(from) } : {}),
-        ...(to ? { lte: new Date(`${to}T23:59:59`) } : {}),
+        ...(from ? { gte: dateRange(from).start } : {}),
+        ...(to ? { lte: dateRange(to).end } : {}),
       };
     }
     // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây; bản ghi chưa gắn
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
         system: body.system?.trim() || null,
         requestType: body.requestType?.trim() || null,
         workOrderNumber: body.workOrderNumber?.trim() || null,
-        performedAt: body.performedAt ? new Date(body.performedAt) : new Date(),
+        performedAt: body.performedAt ? parseDateInput(body.performedAt) : new Date(),
         result: body.result?.trim() || null,
         content: body.content?.trim() || null,
         requestNumber: body.requestNumber?.trim() || null,

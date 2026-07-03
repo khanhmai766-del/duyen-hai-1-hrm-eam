@@ -26,14 +26,12 @@ import {
   isPositionAllowedForDefectUnit,
   isSelectableManagingPosition,
 } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { cn, formatDateInput } from "@/lib/utils";
 import { createPositionAccessResolver } from "@/lib/position-system-scopes";
 import { dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 
 function toDateInput(v: Date | string | null | undefined): string {
-  if (!v) return "";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  return formatDateInput(v);
 }
 
 const NONE = "__none__";

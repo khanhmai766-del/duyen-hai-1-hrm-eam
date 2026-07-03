@@ -16,7 +16,6 @@ import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
-import { useMarkAnnouncementRead } from "@/hooks/useAnnouncements";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
@@ -90,7 +89,6 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   // Cảnh báo thay thế vật tư đã được "xem" (lưu client theo khóa id:nextDueAt).
   const [ackedReplKeys, setAckedReplKeys] = React.useState<Set<string>>(new Set());
   const { notices, loading: notifLoading } = useNotifications();
-  const markRead = useMarkAnnouncementRead();
   const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
   const { data: opsData, isLoading: opsLoading } = useOperations();
   // Tab Nội bộ trên chuông chỉ phản chiếu đúng các mục đang hiển thị trong
@@ -203,21 +201,6 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     if (results.length) go(results[0].href);
     else if (q.trim() && !peakMode.restrictHeavyRoutes) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
     else if (q.trim()) toast.info("Tạm ẩn tìm kiếm thiết bị trong giờ cao điểm chấm công");
-  }
-
-  // "Xem tất cả" (tab Vận hành): đánh dấu đã đọc mọi mệnh lệnh đang hiển thị để
-  // badge cảnh báo reset, rồi mở trang Mệnh lệnh sản xuất.
-  async function handleViewAllOps() {
-    setNotifOpen(false);
-    const ids = notices.map((n) => n.id.replace(/^ann-/, ""));
-    if (ids.length) {
-      try {
-        await Promise.all(ids.map((id) => markRead.mutateAsync(id)));
-      } catch {
-        // Không chặn điều hướng nếu một vài lượt đánh dấu lỗi.
-      }
-    }
-    router.push("/notifications");
   }
 
   // "Mở lịch thay thế vật tư": đánh dấu đã xem mọi cảnh báo hiện tại (lưu client)
@@ -368,13 +351,6 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       })}
                     </ul>
                   )}
-                  <button
-                    type="button"
-                    onClick={handleViewAllOps}
-                    className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent/5"
-                  >
-                    Xem tất cả <ChevronRight className="h-4 w-4" />
-                  </button>
                 </>
               )}
 

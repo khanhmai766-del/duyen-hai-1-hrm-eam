@@ -7,6 +7,7 @@ import { addMonths, replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 const INCLUDE = {
   material: {
@@ -108,8 +109,8 @@ export async function POST(req: NextRequest) {
     const material = await prisma.material.findUnique({ where: { id: body.materialId } });
     if (!material) return fail("Không tìm thấy vật tư", 404);
 
-    const base = body.lastReplacedAt ? new Date(body.lastReplacedAt) : new Date();
-    const nextDueAt = body.nextDueAt ? new Date(body.nextDueAt) : addMonths(base, intervalMonths);
+    const base = body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : new Date();
+    const nextDueAt = body.nextDueAt ? parseDateInput(body.nextDueAt) : addMonths(base, intervalMonths);
 
     const point = await prisma.materialReplacement.create({
       data: {
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
         system: body.system?.trim() || material.system || null,
         intervalMonths,
         intervalNote: body.intervalNote?.trim() || null,
-        lastReplacedAt: body.lastReplacedAt ? new Date(body.lastReplacedAt) : null,
+        lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : null,
         nextDueAt,
         note: body.note?.trim() || null,
         createdById: user.id,

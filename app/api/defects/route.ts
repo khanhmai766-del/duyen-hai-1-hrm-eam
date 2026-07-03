@@ -5,6 +5,7 @@ import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } f
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
         requestNumber: body.requestNumber?.trim() || null,
         content: body.content?.trim() || null,
         status: body.status || "CHUA_XU_LY",
-        detectedAt: body.detectedAt ? new Date(body.detectedAt) : null,
+        detectedAt: body.detectedAt ? parseDateInput(body.detectedAt) : null,
         note: body.note?.trim() || null,
         imageUrl,
         fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),

@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { userWithSignedMedia } from "@/lib/s3";
 import { normalizeHcPeriod } from "@/lib/hc-period";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { dateRange, parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +45,7 @@ export async function GET(req: NextRequest) {
     // Enforce the 1-month retention window on every load.
     await purgeExpiredHc();
     const dateParam = req.nextUrl.searchParams.get("date");
-    const base = dateParam ? new Date(dateParam) : new Date();
-    const start = new Date(base);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(base);
-    end.setHours(23, 59, 59, 999);
+    const { start, end } = dateRange(dateParam);
 
     const groups = await prisma.hcGroup.findMany({
       where: { date: { gte: start, lte: end } },
@@ -88,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     const group = await prisma.hcGroup.create({
       data: {
-        date: new Date(date),
+        date: parseDateInput(date),
         content: content.trim(),
         hours: clampHours(hours),
         period: groupPeriod,

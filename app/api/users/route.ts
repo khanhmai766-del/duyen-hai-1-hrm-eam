@@ -8,7 +8,7 @@ import { avatarUpdate } from "@/lib/user-avatar-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-position";
 import { getOrSetUserSummaryCache, invalidateUserSummaryCache } from "@/lib/user-summary-cache";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
@@ -145,12 +145,17 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền cập nhật người dùng");
     await ensureUserSecondaryPositionColumn();
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     if (body.resetPassword) {
       const before = await prisma.user.findUnique({ where: { id: body.id } });
+      if (!before) return fail("Không tìm thấy người dùng", 404);
+      const canManageUsers = await hasPermissionLevel(user, "user-manage", ["manage", "full"]);
+      if (!canManageUsers) {
+        await requirePermissionLevel(user, "user-reset-viewer-password", ["approve", "manage", "full"], "Không đủ quyền reset mật khẩu Người xem");
+        if (before.role !== "VIEWER") return fail("Chỉ được reset mật khẩu tài khoản Người xem", 403);
+      }
       const updated = await prisma.user.update({
         where: { id: body.id },
         data: {
@@ -170,6 +175,7 @@ export async function PUT(req: NextRequest) {
       });
       return ok(await safe(updated));
     }
+    await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền cập nhật người dùng");
     const before = await prisma.user.findUnique({ where: { id: body.id } });
     const data: any = {};
     if (body.role) data.role = body.role;

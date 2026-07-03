@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       data: {
         type: body.type,
         title: body.title,
-        date: new Date(body.date),
+        date: parseDateInput(body.date),
         note: body.note || null,
         createdById: user.id,
       },
@@ -66,7 +67,7 @@ export async function PUT(req: NextRequest) {
       data: {
         type: body.type,
         title: body.title,
-        date: new Date(body.date),
+        date: parseDateInput(body.date),
         note: body.note || null,
       },
     });

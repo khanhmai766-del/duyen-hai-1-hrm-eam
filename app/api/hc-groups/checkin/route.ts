@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { normalizeHcPeriod } from "@/lib/hc-period";
+import { dateRange as localDateRange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +30,7 @@ async function ensureHcCheckInUpdatedAtColumn() {
 }
 
 function dayRange(date: string | Date) {
-  const base = new Date(date);
-  const start = new Date(base);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(base);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
+  return localDateRange(date);
 }
 
 function startOfDay(d: Date) {

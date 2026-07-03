@@ -275,8 +275,15 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
     id: "hc-attendance-approve",
     group: "Nhân sự / Hành chính",
-    feature: "Duyệt chấm công hành chính và chỉnh bảng công",
-    note: "Duyệt danh sách hành chính, xác nhận giờ công và điều chỉnh thủ công các ô bảng công khi cần.",
+    feature: "Duyệt chấm công hành chính",
+    note: "Duyệt danh sách hành chính, xác nhận giờ công và phê duyệt đăng ký đi hành chính.",
+    matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "timesheet-edit",
+    group: "Nhân sự / Hành chính",
+    feature: "Chỉnh bảng công",
+    note: "Điều chỉnh thủ công các ô bảng công khi cần, độc lập với quyền duyệt chấm công hành chính.",
     matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
@@ -285,6 +292,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     feature: "Quản lý tài khoản người dùng",
     note: "Tạo tài khoản, cập nhật hồ sơ, đổi vai trò hệ thống, khóa/mở hoặc vô hiệu hóa nhân sự.",
     matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "user-reset-viewer-password",
+    group: "Quản trị người dùng",
+    feature: "Reset mật khẩu Người xem",
+    note: "Đặt lại mật khẩu mặc định cho tài khoản vai trò Người xem; không áp dụng cho Quản trị, Quản lý, Trưởng ca hoặc Kỹ thuật viên.",
+    matrix: { ADMIN: "approve", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "rbac-manage",
@@ -473,6 +487,7 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
     "shift-operation-approve": existingById.get("shift-approve")?.matrix,
     "hc-attendance-check-in": existingById.get("shift-check-in")?.matrix,
     "hc-attendance-approve": existingById.get("shift-approve")?.matrix,
+    "timesheet-edit": existingById.get("hc-attendance-approve")?.matrix ?? existingById.get("shift-approve")?.matrix,
     "user-manage": existingById.get("user-admin")?.matrix,
     "rbac-manage": existingById.get("user-admin")?.matrix,
   };
@@ -480,7 +495,7 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
   const legacyIds = new Set(["dashboard-read", "shift-check-in", "shift-approve", "user-admin"]);
   const mergedDefaults = DEFAULT_PERMISSIONS.map((row) => {
     const existing = existingById.get(row.id);
-    if (existing) return existing;
+    if (existing) return { ...row, matrix: { ...row.matrix, ...existing.matrix } };
     if (row.group === "Tổng quan" && legacyOverviewMatrix) return { ...row, matrix: { ...row.matrix, ...legacyOverviewMatrix } };
     const legacyMatrix = legacyMatrixByNewId[row.id];
     if (legacyMatrix) return { ...row, matrix: { ...row.matrix, ...legacyMatrix } };

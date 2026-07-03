@@ -11,11 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDevices } from "@/hooks/useDevices";
 import { useCreateReplacement, useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
 import { addMonths } from "@/lib/constants";
+import { formatDateInput } from "@/lib/utils";
 
 function toDateInput(v: Date | string | null | undefined): string {
-  if (!v) return "";
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  return formatDateInput(v);
 }
 
 const NO_SYSTEM = "__none__";

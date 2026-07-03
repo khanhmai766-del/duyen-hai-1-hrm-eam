@@ -5,7 +5,7 @@ import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
-const APPROVE_PERMISSION_ID = "shift-operation-approve";
+const EDIT_TIMESHEET_PERMISSION_ID = "timesheet-edit";
 
 function retentionMonthRange(now = new Date()) {
   const current = { year: now.getFullYear(), month: now.getMonth() };
@@ -33,7 +33,7 @@ function isDateInRetention(date: string) {
 }
 
 async function canEditTimesheet(user: { id?: string; role?: string }) {
-  return hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
+  return hasAssignedApprovePermission(user, EDIT_TIMESHEET_PERMISSION_ID);
 }
 
 async function ensureTimesheetOverrideTable() {

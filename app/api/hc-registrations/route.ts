@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { userWithSignedMedia } from "@/lib/s3";
+import { parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ const APPROVE_PERMISSION_ID = "hc-attendance-approve";
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Ra ca sáng", "Hành chính - Buổi chiều"];
 
 function dayStart(date: string | null) {
-  const d = date ? new Date(date) : new Date();
+  const d = parseDateInput(date);
   d.setHours(0, 0, 0, 0);
   return d;
 }

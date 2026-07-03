@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
@@ -38,7 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         requestType: body.requestType !== undefined ? body.requestType?.trim() || null : undefined,
         workOrderNumber: body.workOrderNumber !== undefined ? body.workOrderNumber?.trim() || null : undefined,
-        performedAt: body.performedAt !== undefined ? (body.performedAt ? new Date(body.performedAt) : undefined) : undefined,
+        performedAt: body.performedAt !== undefined ? (body.performedAt ? parseDateInput(body.performedAt) : undefined) : undefined,
         result: body.result !== undefined ? body.result?.trim() || null : undefined,
         content: body.content !== undefined ? body.content?.trim() || null : undefined,
         requestNumber: body.requestNumber !== undefined ? body.requestNumber?.trim() || null : undefined,

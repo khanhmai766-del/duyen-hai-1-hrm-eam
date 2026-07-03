@@ -5,6 +5,7 @@ import { buildEquipmentTreeIndex, getNormalizedEquipmentNodes } from "@/lib/equi
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { dateRange } from "@/lib/utils";
 
 async function getLeafEquipmentCount() {
   const nodes = await getNormalizedEquipmentNodes(prisma);
@@ -17,8 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
     const sp = req.nextUrl.searchParams;
-    const from = sp.get("from") ? new Date(sp.get("from")!) : undefined;
-    const to = sp.get("to") ? new Date(sp.get("to")! + "T23:59:59") : undefined;
+    const from = sp.get("from") ? dateRange(sp.get("from")).start : undefined;
+    const to = sp.get("to") ? dateRange(sp.get("to")).end : undefined;
     const dateFilter = from || to ? { gte: from, lte: to } : undefined;
 
     switch (params.type) {

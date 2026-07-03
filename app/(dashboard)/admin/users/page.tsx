@@ -112,9 +112,10 @@ export default function AdminUsersPage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManageUsers = rbac.can("user-manage", ["manage", "full"]);
+  const canResetViewerPassword = rbac.can("user-reset-viewer-password", ["approve", "manage", "full"]);
   const canViewActivityLog = rbac.can("system_audit_log:view", ["read", "manage", "full"]);
   const canManageRbac = rbac.can("rbac-manage", ["full"]);
-  const canOpenPage = canManageUsers || canViewActivityLog || canManageRbac;
+  const canOpenPage = canManageUsers || canResetViewerPassword || canViewActivityLog || canManageRbac;
   const queryClient = useQueryClient();
   const { data, isLoading } = useUsersFull();
   const create = useCreateUser();
@@ -285,13 +286,17 @@ export default function AdminUsersPage() {
             {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={() => window.open("/admin/export-users", "_blank")}>
-          <Download className="h-4 w-4" /> Xuất danh sách
-        </Button>
-        <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
+        {canManageUsers && (
+          <>
+            <Button variant="outline" onClick={() => window.open("/admin/export-users", "_blank")}>
+              <Download className="h-4 w-4" /> Xuất danh sách
+            </Button>
+            <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
+          </>
+        )}
       </PageHeader>
 
-      <AdminUserUploadPanel />
+      {canManageUsers && <AdminUserUploadPanel />}
 
       {isLoading ? <TableSkeleton /> : (
         <Card>
@@ -351,7 +356,7 @@ export default function AdminUsersPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Select value={u.role} onValueChange={(v) => changeRole(u.id, v)}>
+                    <Select value={u.role} onValueChange={(v) => changeRole(u.id, v)} disabled={!canManageUsers}>
                       <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}
@@ -362,7 +367,7 @@ export default function AdminUsersPage() {
                     <RoleProfileSelect
                       value={roleProfileByUser.get(u.id) ?? ""}
                       profiles={roleProfiles}
-                      disabled={rbacQuery.isLoading || saveRbac.isPending}
+                      disabled={!canManageUsers || rbacQuery.isLoading || saveRbac.isPending}
                       onChange={(value) => changeRoleProfile(u.id, value)}
                     />
                   </TableCell>
@@ -370,6 +375,7 @@ export default function AdminUsersPage() {
                     <div className="flex flex-col items-start gap-1.5">
                       <button
                         onClick={() => toggleActive(u.id, !u.isActive)}
+                        disabled={!canManageUsers}
                         title={u.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
                         className={`relative h-7 w-12 rounded-full shadow-inner ring-1 transition-all duration-300 ${
                           u.isActive
@@ -394,26 +400,39 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" title="Chỉnh sửa" onClick={() => setEditTarget(u)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" title="Reset mật khẩu về password123" onClick={() => setResetTarget(u)}>
-                        <KeyRound className="h-4 w-4 text-amber-600" />
-                      </Button>
-                      <Button variant="ghost" size="icon" title="Xoá an toàn / ngừng hoạt động" onClick={() => setDelTarget(u)}>
-                        <Archive className="h-4 w-4 text-amber-600" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Xoá vĩnh viễn"
-                        onClick={() => {
-                          setPermanentDelTarget(u);
-                          setPermanentConfirm("");
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-700" />
-                      </Button>
+                      {canManageUsers && (
+                        <Button variant="ghost" size="icon" title="Chỉnh sửa" onClick={() => setEditTarget(u)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {(canManageUsers || (canResetViewerPassword && u.role === "VIEWER")) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={u.role === "VIEWER" ? "Reset mật khẩu Người xem về password123" : "Reset mật khẩu về password123"}
+                          onClick={() => setResetTarget(u)}
+                        >
+                          <KeyRound className="h-4 w-4 text-amber-600" />
+                        </Button>
+                      )}
+                      {canManageUsers && (
+                        <>
+                          <Button variant="ghost" size="icon" title="Xoá an toàn / ngừng hoạt động" onClick={() => setDelTarget(u)}>
+                            <Archive className="h-4 w-4 text-amber-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Xoá vĩnh viễn"
+                            onClick={() => {
+                              setPermanentDelTarget(u);
+                              setPermanentConfirm("");
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-700" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

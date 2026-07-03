@@ -1,5 +1,6 @@
 // Centralized domain constants: statuses, roles, shift types, and their UI metadata.
 import { normalizeText } from "@/lib/nav";
+import { parseDateInput } from "@/lib/utils";
 
 export const REPAIR_STATUS = {
   OPEN: { label: "Mở", badge: "bg-slate-100 text-slate-700", dot: "#64748B", step: 0 },
@@ -78,7 +79,7 @@ export function realtimeShift(now: Date = new Date()): { date: string; shiftType
  * Dùng để xác định ca đã kết thúc hay chưa (reset card cương vị, đếm ca sớm).
  */
 export function shiftWindow(date: Date | string, shiftType: string): { start: Date; end: Date } {
-  const d = new Date(date);
+  const d = parseDateInput(date);
   d.setHours(0, 0, 0, 0);
   const at = (base: Date, h: number) => {
     const x = new Date(base);

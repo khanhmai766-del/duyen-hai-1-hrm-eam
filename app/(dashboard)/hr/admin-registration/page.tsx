@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -23,8 +22,8 @@ import {
   useHcUpdateRegistrationNote,
   type HcRegistration,
 } from "@/hooks/useHcAttendance";
-import { apiGet } from "@/lib/fetcher";
-import { cn, initials } from "@/lib/utils";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { cn, formatDateInput, formatDate as formatVietnamDate, initials, parseDateInput } from "@/lib/utils";
 
 const HC_SELF_PERIODS = [
   { value: "FULL_DAY", label: "Cả ngày" },
@@ -33,17 +32,6 @@ const HC_SELF_PERIODS = [
   { value: "AFTERNOON", label: "Buổi chiều" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((period) => `Hành chính - ${period.label}`);
-const APPROVE_PERMISSION_ID = "shift-operation-approve";
-const APPROVE_PERMISSION_VALUES = new Set(["approve", "manage", "full"]);
-
-interface RbacConfig {
-  permissions?: Array<{ id: string; matrix?: Record<string, string> }>;
-  userOverrides?: Array<{ userId: string; permissionId: string; roleId?: string; value?: string }>;
-}
-
-function formatDateInput(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 function addCalendarDays(from: Date, days: number) {
   const date = new Date(from);
@@ -59,36 +47,18 @@ function isBeforeRegistrationCutoff(now = new Date()) {
 }
 
 function formatDateLabel(date: string) {
-  return new Date(date).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatVietnamDate(parseDateInput(date));
 }
 
 function periodLabel(content: string) {
   return HC_SELF_PERIODS.find((period) => content === `Hành chính - ${period.label}`)?.label ?? "Hành chính";
 }
 
-function hasAssignedApprovePermission(config: RbacConfig | undefined, userId: string | undefined, role: string | undefined) {
-  if (!config || !userId) return false;
-  const permission = config.permissions?.find((item) => item.id === APPROVE_PERMISSION_ID);
-  if (APPROVE_PERMISSION_VALUES.has(permission?.matrix?.[role ?? ""] ?? "none")) return true;
-  return (config.userOverrides ?? []).some((override) => {
-    if (override.userId !== userId) return false;
-    if (override.permissionId === APPROVE_PERMISSION_ID) return APPROVE_PERMISSION_VALUES.has(override.value ?? "none");
-    if (override.permissionId !== "__ROLE_PROFILE__" || !override.roleId) return false;
-    return APPROVE_PERMISSION_VALUES.has(override.value ?? "none") || APPROVE_PERMISSION_VALUES.has(permission?.matrix?.[override.roleId] ?? "none");
-  });
-}
-
 export default function AdministrativeRegistrationPage() {
   const { data: session } = useSession();
+  const rbac = useRbacAccess();
   const myId = session?.user?.id;
-  const rbacQuery = useQuery({
-    queryKey: ["rbac-config"],
-    queryFn: () => apiGet<RbacConfig>("/api/rbac"),
-    enabled: !!session?.user,
-  });
-  const canManage =
-    ["ADMIN", "TECHNICIAN"].includes(session?.user?.role ?? "") ||
-    hasAssignedApprovePermission(rbacQuery.data?.data, myId, session?.user?.role);
+  const canManage = rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
   const [now, setNow] = React.useState(() => new Date());
   const registrationOpen = isBeforeRegistrationCutoff(now);
   const minRegisterDate = React.useMemo(() => formatDateInput(addCalendarDays(new Date(), 2)), []);

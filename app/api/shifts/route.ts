@@ -9,6 +9,7 @@ import {
   invalidateShiftCache,
   shiftDetailCacheKey,
 } from "@/lib/shift-response-cache";
+import { dateRange, parseDateInput } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -20,11 +21,7 @@ export async function GET(req: NextRequest) {
 
     // For org-chart / check-in we usually want one shift; otherwise list.
     if (date) {
-      const day = new Date(date);
-      const start = new Date(day);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(day);
-      end.setHours(23, 59, 59, 999);
+      const { start, end } = dateRange(date);
 
       const shift = await getOrSetShiftDetailCache(shiftDetailCacheKey({ date, shiftType, unit }), async () => {
         const record = await prisma.shift.findFirst({
@@ -119,7 +116,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const shift = await prisma.shift.create({
       data: {
-        date: new Date(body.date),
+        date: parseDateInput(body.date),
         shiftType: body.shiftType,
         unit: body.unit,
       },

@@ -13,11 +13,12 @@ import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
+import { formatDateInput } from "@/lib/utils";
 
 const NONE = "__none__";
 
 function todayInput(): string {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateInput();
 }
 
 export function CompleteDefectDialog({

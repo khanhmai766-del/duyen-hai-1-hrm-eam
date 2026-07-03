@@ -15,14 +15,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useShift, useCheckIn, useApproveCheckIn, useCreateHandover } from "@/hooks/useShifts";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { CHECKIN_STATUS, SHIFT_TYPE } from "@/lib/constants";
-import { formatTime, initials, cn } from "@/lib/utils";
+import { formatDateInput, formatTime, initials, cn } from "@/lib/utils";
 import type { CheckInWithUser, ShiftAssignmentWithUser } from "@/types";
 
 export default function CheckInPage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canApproveCheckIn = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
-  const date = new Date().toISOString().slice(0, 10);
+  const date = formatDateInput();
   const { data, isLoading } = useShift({ date });
   const shift = data?.data;
   const checkIn = useCheckIn();

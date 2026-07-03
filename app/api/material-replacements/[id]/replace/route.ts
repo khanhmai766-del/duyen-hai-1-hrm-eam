@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { parseDateInput } from "@/lib/utils";
 
 /**
  * Ghi nhận một lần thay thế vật tư tại điểm thay thế (chỉ ADMIN/Trưởng ca):
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return fail("Cương vị của bạn không có quyền thao tác trên điểm thay thế này", 403);
     }
 
-    const replacedAt = body.replacedAt ? new Date(body.replacedAt) : new Date();
+    const replacedAt = body.replacedAt ? parseDateInput(body.replacedAt) : new Date();
     const qty = body.quantity != null && body.quantity !== "" ? Number(body.quantity) : null;
     const useQty = Number.isFinite(qty as number) && (qty as number) > 0 ? (qty as number) : null;
 

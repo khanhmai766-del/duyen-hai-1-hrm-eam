@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { maybeUploadDataUrlList } from "@/lib/s3";
+import { dateRange } from "@/lib/utils";
 
 // Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
 const HISTORY_TAKE = 300;
@@ -36,8 +37,8 @@ export async function GET(req: NextRequest) {
     if (technicianId && technicianId !== "ALL") where.createdById = technicianId;
     if (from || to) {
       where.startedAt = {};
-      if (from) where.startedAt.gte = new Date(from);
-      if (to) where.startedAt.lte = new Date(to + "T23:59:59");
+      if (from) where.startedAt.gte = dateRange(from).start;
+      if (to) where.startedAt.lte = dateRange(to).end;
     }
 
     const logs = await prisma.repairLog.findMany({

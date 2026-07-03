@@ -4,6 +4,7 @@ import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
 import { shiftWindow, MAX_EARLY_CHECKINS } from "@/lib/constants";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { invalidateShiftCache } from "@/lib/shift-response-cache";
+import { dateRange, parseDateInput } from "@/lib/utils";
 
 /**
  * Org-chart check-in ("Điểm danh"): places the current user into a seat
@@ -38,11 +39,8 @@ export async function POST(req: NextRequest) {
         : user.id;
 
     // Find the shift for this day/type/unit, or create it.
-    const day = new Date(date);
-    const start = new Date(day);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(day);
-    end.setHours(23, 59, 59, 999);
+    const day = parseDateInput(date);
+    const { start, end } = dateRange(day);
 
     let shift = await prisma.shift.findFirst({
       where: { date: { gte: start, lte: end }, shiftType: shiftType as any, unit },
@@ -158,11 +156,7 @@ export async function DELETE(req: NextRequest) {
     const unit = sp.get("unit");
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
 
-    const day = new Date(date);
-    const start = new Date(day);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(day);
-    end.setHours(23, 59, 59, 999);
+    const { start, end } = dateRange(date);
 
     const shift = await prisma.shift.findFirst({
       where: { date: { gte: start, lte: end }, shiftType: shiftType as any, unit },
@@ -208,11 +202,7 @@ export async function PUT(req: NextRequest) {
     };
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
 
-    const day = new Date(date);
-    const start = new Date(day);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(day);
-    end.setHours(23, 59, 59, 999);
+    const { start, end } = dateRange(date);
 
     const shift = await prisma.shift.findFirst({
       where: { date: { gte: start, lte: end }, shiftType: shiftType as any, unit },
