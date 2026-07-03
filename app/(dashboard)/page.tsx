@@ -86,10 +86,11 @@ export default function DashboardPage() {
       {/* Stat row — all four cards stretch to the user-photo card's height */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:items-stretch">
         {/* 1 — Current user: full-bleed photo with overlaid name/title */}
-        <Card className="relative min-h-[230px] overflow-hidden border-0 text-white">
+        <Link href="/account" className="group block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2" aria-label="Mở thông tin cá nhân">
+          <Card className="relative min-h-[230px] overflow-hidden border-0 text-white transition-shadow group-hover:shadow-md">
           {m?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={m.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={m.avatarUrl} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-navy text-3xl font-bold text-white/90">
               {initials(session?.user?.name ?? "?")}
@@ -116,21 +117,24 @@ export default function DashboardPage() {
               {currentPosition.position || session?.user?.employeeId}
             </div>
           </div>
-        </Card>
+          </Card>
+        </Link>
 
         {/* 2 — Working days this month */}
-        {me.isLoading ? (
-          <StatCardSkeleton />
-        ) : (
-          <StatCard
-            label="Ngày công trong tháng"
-            value={m?.workingDays ?? 0}
-            icon={CalendarCheck}
-            tint="green"
-            hint="Quy đổi 8 giờ = 1 ngày công"
-            bgCover="/brand/ngay-cong.jpg"
-          />
-        )}
+        <Link href="/hr/shift-roster" className="block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2" aria-label="Mở lịch trực ca, bảng công">
+          {me.isLoading ? (
+            <StatCardSkeleton />
+          ) : (
+            <StatCard
+              label="Ngày công trong tháng"
+              value={m?.workingDays ?? 0}
+              icon={CalendarCheck}
+              tint="green"
+              hint="Quy đổi 8 giờ = 1 ngày công"
+              bgCover="/brand/ngay-cong.jpg"
+            />
+          )}
+        </Link>
 
         {/* 3 — Current duty position (with system control-screen background) */}
         <DutyPositionCard m={m} loading={me.isLoading} />
