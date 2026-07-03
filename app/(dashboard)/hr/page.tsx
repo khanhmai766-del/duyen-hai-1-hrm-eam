@@ -39,16 +39,29 @@ const SHIFT_ICON: Record<ShiftTypeKey, typeof CalendarDays> = {
   AFTERNOON: Sunset,
   NIGHT: Moon,
 };
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+function vietnamDateInput(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
 
 export default function HrOverviewPage() {
   // Current operating shift by real clock — drives the "Ca vận hành" card + its
   // background, and which shift the "Đang trực ca" count refers to.
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60000);
+    const t = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(t);
   }, []);
   const { date, shiftType: curShift } = realtimeShift(now);
+  const today = React.useMemo(() => vietnamDateInput(now), [now]);
 
   const { data: shiftData } = useShift({ date, shiftType: curShift });
   const { data: usersData } = useUsers();
@@ -63,7 +76,6 @@ export default function HrOverviewPage() {
 
   // "Chấm công hành chính" = số lượt chấm công hành chính HÔM NAY đã được
   // Quản trị / Trưởng ca duyệt (m.isApproved trên các nhóm hành chính trong ngày).
-  const today = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const { data: hcData } = useHcGroups(today);
   const approvedHc =
     hcData?.data?.reduce((sum, g) => sum + g.members.filter((m) => m.isApproved).length, 0) ?? 0;
