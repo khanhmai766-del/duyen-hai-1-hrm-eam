@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { normalizeHcPeriod } from "@/lib/hc-period";
+import { normalizeText } from "@/lib/nav";
 import { dateRange as localDateRange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính
 const DEFAULT_REGISTER_NOTE = "Chờ phân công";
 const RECALL_WINDOW_MS = 5 * 60 * 1000;
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const HC_SELF_AUTO_APPROVE_POSITIONS = ["quan doc", "pho quan doc", "ky thuat vien", "thong ke"];
 let hcCheckInUpdatedAtReady = false;
 
 async function ensureHcCheckInUpdatedAtColumn() {
@@ -75,6 +77,11 @@ async function canManageHc(user: { id?: string; role?: string }) {
   return hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
 }
 
+function isAutoApprovedHcPosition(position?: string | null) {
+  const normalized = normalizeText(position ?? "");
+  return HC_SELF_AUTO_APPROVE_POSITIONS.some((keyword) => normalized.includes(keyword));
+}
+
 /** POST — current user checks themselves into a group, or registers HC directly. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
@@ -102,6 +109,7 @@ export async function POST(req: NextRequest) {
       const cleanNote = note?.trim() || null;
       const cleanWorkNote = workNote?.trim() || null;
       const registerNote = cleanNote ?? DEFAULT_REGISTER_NOTE;
+      const autoApproveSelfCheckIn = !hasNote && isAutoApprovedHcPosition(user.position);
       const existingRegistration = await prisma.hcCheckIn.findFirst({
         where: {
           userId: user.id,
@@ -166,14 +174,14 @@ export async function POST(req: NextRequest) {
         where: { groupId_userId: { groupId: group.id, userId: user.id } },
         update: {
           hours: option.hours,
-          isApproved: false,
+          isApproved: autoApproveSelfCheckIn,
           ...(hasNote ? { note: registerNote, isRegistered: true } : { note: cleanWorkNote, isRegistered: false }),
         },
         create: {
           groupId: group.id,
           userId: user.id,
           hours: option.hours,
-          isApproved: false,
+          isApproved: autoApproveSelfCheckIn,
           isRegistered: hasNote,
           note: hasNote ? registerNote : cleanWorkNote,
         },

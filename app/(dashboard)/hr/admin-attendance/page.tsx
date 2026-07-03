@@ -24,6 +24,7 @@ import {
   useHcUpdateWorkNote, useHcCancelRegistration,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { normalizeText } from "@/lib/nav";
 import { cn, initials } from "@/lib/utils";
 import { HC_PERIOD_LABEL, normalizeHcPeriod } from "@/lib/hc-period";
 
@@ -42,6 +43,7 @@ const MANAGED_GROUP_PERIODS: Array<{ value: "FULL_DAY" | "MORNING" | "AFTERNOON"
   { value: "MORNING", label: "Buổi sáng" },
   { value: "AFTERNOON", label: "Buổi chiều" },
 ];
+const HC_SELF_AUTO_APPROVE_POSITIONS = ["quan doc", "pho quan doc", "ky thuat vien", "thong ke"];
 
 function vietnamDateInput(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -67,6 +69,11 @@ function periodSlots(period?: string | null) {
   if (normalized === "FULL_DAY") return ["MORNING", "AFTERNOON"];
   if (normalized === "AFTERNOON") return ["AFTERNOON"];
   return ["MORNING"];
+}
+
+function isAutoApprovedHcPosition(position?: string | null) {
+  const normalized = normalizeText(position ?? "");
+  return HC_SELF_AUTO_APPROVE_POSITIONS.some((keyword) => normalized.includes(keyword));
 }
 
 function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: string; updatedAt?: string } | null) {
@@ -573,6 +580,7 @@ function GroupDialog({
 function SelfAdministrativeCheckInDialog({
   open, onOpenChange, date, groups, myId,
 }: { open: boolean; onOpenChange: (o: boolean) => void; date: string; groups: HcGroup[]; myId?: string }) {
+  const { data: session } = useSession();
   const checkIn = useHcCheckIn();
   const updateWorkNote = useHcUpdateWorkNote();
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
@@ -602,7 +610,16 @@ function SelfAdministrativeCheckInDialog({
         toast.success("Đã cập nhật nội dung công việc");
       } else {
         await checkIn.mutateAsync({ date, period, workNote });
-        toast.success(myCheckIn ? "Đã cập nhật buổi chấm công hành chính, chờ duyệt" : "Đã chấm công hành chính, chờ duyệt");
+        const autoApproved = isAutoApprovedHcPosition(session?.user?.position);
+        toast.success(
+          myCheckIn
+            ? autoApproved
+              ? "Đã cập nhật buổi chấm công hành chính"
+              : "Đã cập nhật buổi chấm công hành chính, chờ duyệt"
+            : autoApproved
+              ? "Đã chấm công hành chính"
+              : "Đã chấm công hành chính, chờ duyệt"
+        );
       }
       onOpenChange(false);
     } catch (e) {
