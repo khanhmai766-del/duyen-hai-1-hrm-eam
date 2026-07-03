@@ -110,7 +110,7 @@ export default function OrgChartPage() {
 
   React.useEffect(() => {
     if (!checkInSuccessMessage) return;
-    const timer = window.setTimeout(() => setCheckInSuccessMessage(""), 4000);
+    const timer = window.setTimeout(() => setCheckInSuccessMessage(""), 5000);
     return () => window.clearTimeout(timer);
   }, [checkInSuccessMessage]);
 
@@ -360,12 +360,14 @@ export default function OrgChartPage() {
 function CheckInSuccessOverlay({ message }: { message: string }) {
   if (!message) return null;
   return (
-    <div className="pointer-events-none fixed inset-0 z-[1200] flex items-center justify-center px-4">
-      <div className="max-w-lg animate-in fade-in-0 zoom-in-95 rounded-2xl border border-emerald-200 bg-white/95 px-6 py-5 text-center shadow-[0_24px_80px_-30px_rgba(15,23,42,0.55)] ring-1 ring-white/70 backdrop-blur">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-          <CheckCircle2 className="h-7 w-7" />
+    <div className="pointer-events-none fixed inset-0 z-[1200] flex items-center justify-center px-5">
+      <div className="w-full max-w-2xl animate-in fade-in-0 zoom-in-95 rounded-3xl border border-emerald-200/80 bg-white/95 px-7 py-6 text-center shadow-[0_28px_90px_-34px_rgba(15,23,42,0.65)] ring-1 ring-white/80 backdrop-blur-md sm:px-9">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-lg shadow-emerald-500/25 ring-1 ring-white/70">
+          <CheckCircle2 className="h-8 w-8" />
         </div>
-        <p className="text-base font-bold leading-7 text-ink sm:text-lg">{message}</p>
+        <p className="mx-auto max-w-[58ch] text-[17px] font-extrabold leading-8 text-ink [text-wrap:balance] sm:text-xl sm:leading-9">
+          {message}
+        </p>
       </div>
     </div>
   );
