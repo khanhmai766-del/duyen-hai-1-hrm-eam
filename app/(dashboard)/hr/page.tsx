@@ -104,7 +104,7 @@ export default function HrOverviewPage() {
           <StatCard label="Quản lý hành chính" value={approvedHc} icon={Network} tint="blue" bgCover="/brand/cham-cong-hc.jpg" cta="Mở" />
         </Link>
         <Link href="/hr/admin-registration" className="block h-full">
-          <StatCard label="Đăng ký đi hành chính" value="HC" icon={CalendarPlus} tint="amber" bgCover="/brand/cham-cong-hc.jpg" cta="Đăng ký" />
+          <StatCard label="Đăng ký đi hành chính" value="HC" icon={CalendarPlus} tint="amber" bgCover="/brand/bg-nhansu.jfif" cta="Đăng ký" />
         </Link>
       </div>
 
