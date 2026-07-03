@@ -164,6 +164,7 @@ export async function GET(req: NextRequest) {
     const cacheKey = deviceListCacheKey(user, { q, systemSeq, systemName });
     const result = await getOrSetDeviceListCache<DeviceListResult>(cacheKey, async () => {
       const { nodes, records } = await getDeviceLikeRecords();
+      const totalSystemDevices = nodes.length;
       const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
       const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
       const visibleIndex = buildEquipmentTreeIndex(visibleNodes);
@@ -196,7 +197,7 @@ export async function GET(req: NextRequest) {
         data: devices,
         meta: {
           total: devices.length,
-          totalSystemDevices: records.length,
+          totalSystemDevices,
           systems,
           rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
           byPosition: await getDeviceCountsByPosition(devices, visibleIndex),
