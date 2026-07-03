@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -112,6 +113,8 @@ function hcWorkNote(hc: { note?: string | null }) {
 
 export default function ShiftRosterPage() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const rbac = useRbacAccess();
   const canManageRosterPdf = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
 
@@ -120,7 +123,7 @@ export default function ShiftRosterPage() {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const [posFilter, setPosFilter] = React.useState("ALL");
-  const [view, setView] = React.useState<View>("roster");
+  const [view, setView] = React.useState<View>(() => (searchParams.get("view") === "timesheet" ? "timesheet" : "roster"));
   const shouldLoadTimesheet = view === "timesheet";
   const { data, isLoading } = useUsers({ enabled: shouldLoadTimesheet });
   const users = shouldLoadTimesheet ? (data?.data ?? []).filter((u) => u.isActive) : [];
@@ -144,6 +147,15 @@ export default function ShiftRosterPage() {
     override?: TimesheetOverride;
   } | null>(null);
   const [editValue, setEditValue] = React.useState("");
+
+  React.useEffect(() => {
+    setView(searchParams.get("view") === "timesheet" ? "timesheet" : "roster");
+  }, [searchParams]);
+
+  function changeView(nextView: View) {
+    setView(nextView);
+    router.replace(nextView === "timesheet" ? "/hr/shift-roster?view=timesheet" : "/hr/shift-roster", { scroll: false });
+  }
   // Map "userId:day" → shift attendance entries. A day can contain multiple
   // shift records, e.g. V2 plus 4V3 for a 12-hour work stretch.
   const tsMap = React.useMemo(() => {
@@ -452,7 +464,7 @@ export default function ShiftRosterPage() {
         {/* View toggle: official roster PDF vs approved timesheet */}
         <div className="flex rounded-lg border border-border p-1">
           <button
-            onClick={() => setView("roster")}
+            onClick={() => changeView("roster")}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               view === "roster" ? "bg-navy text-white" : "text-muted-foreground hover:bg-muted"
@@ -461,7 +473,7 @@ export default function ShiftRosterPage() {
             Lịch trực ca
           </button>
           <button
-            onClick={() => setView("timesheet")}
+            onClick={() => changeView("timesheet")}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               view === "timesheet" ? "bg-emerald-600 text-white" : "text-muted-foreground hover:bg-muted"

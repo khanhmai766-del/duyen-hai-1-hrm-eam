@@ -121,7 +121,7 @@ export default function DashboardPage() {
         </Link>
 
         {/* 2 — Working days this month */}
-        <Link href="/hr/shift-roster" className="block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2" aria-label="Mở lịch trực ca, bảng công">
+        <Link href="/hr/shift-roster?view=timesheet" className="block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2" aria-label="Mở lịch trực ca, bảng công">
           {me.isLoading ? (
             <StatCardSkeleton />
           ) : (
