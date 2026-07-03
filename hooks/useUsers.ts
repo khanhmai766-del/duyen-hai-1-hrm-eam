@@ -19,16 +19,57 @@ export function useUsers(options: { enabled?: boolean } = {}) {
   });
 }
 
+type AdminUsersParams = {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  position?: string;
+  enabled?: boolean;
+};
+
+export type AdminUsersPage = {
+  rows: SafeUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 /**
- * Bản đầy đủ (kèm avatarUrl/signatureUrl base64) — CHỈ dùng ở trang cần chữ ký,
- * ví dụ Quản trị người dùng. Query key ["users"] vẫn được làm mới bởi các mutation
- * invalidate ["users"] (khớp tiền tố, gồm cả ["users","summary"]).
+ * Bản đầy đủ legacy. Giữ lại cho tương thích, nhưng chỉ chạy khi caller bật enabled.
  */
-export function useUsersFull() {
+export function useUsersFull(options: { enabled?: boolean } = {}) {
+  const { enabled = true } = options;
   return useQuery({
     queryKey: ["users"],
     queryFn: () => apiGet<SafeUser[]>("/api/users"),
+    enabled,
     staleTime: 60 * 1000,
+  });
+}
+
+export function useAdminUsers(params: AdminUsersParams = {}) {
+  const { enabled = true, page = 1, pageSize = 10, q = "", position = "ALL" } = params;
+  return useQuery({
+    queryKey: ["admin-users", { page, pageSize, q, position }],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      qs.set("page", String(page));
+      qs.set("pageSize", String(pageSize));
+      if (q.trim()) qs.set("q", q.trim());
+      if (position && position !== "ALL") qs.set("position", position);
+      return apiGet<AdminUsersPage>(`/api/admin/users?${qs.toString()}`);
+    },
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAdminUserDetail(id: string | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ["admin-user", id],
+    queryFn: () => apiGet<SafeUser>(`/api/admin/users/${id}`),
+    enabled: enabled && !!id,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -61,7 +102,10 @@ export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: any) => apiMutate<SafeUser>("/api/users", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    },
   });
 }
 
@@ -69,7 +113,11 @@ export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { id: string } & Record<string, unknown>) => apiMutate<SafeUser>("/api/users", "PUT", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    onSuccess: (_data, body) => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["admin-user", body.id] });
+    },
   });
 }
 
@@ -77,7 +125,10 @@ export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate<{ id: string; deactivated?: boolean; message?: string; permanent?: boolean }>(`/api/users?id=${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    },
   });
 }
 
@@ -86,7 +137,10 @@ export function usePermanentDeleteUser() {
   return useMutation({
     mutationFn: (body: { id: string; confirmation: string }) =>
       apiMutate<{ id: string; permanent: boolean }>(`/api/users?id=${body.id}&permanent=true`, "DELETE", { confirmation: body.confirmation }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+    },
   });
 }
 

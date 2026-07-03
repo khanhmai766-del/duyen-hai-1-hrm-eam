@@ -18,11 +18,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RoleBadge } from "@/components/devices/status-badge";
 import { AvatarPicker } from "@/components/shared/avatar-picker";
 import { SignaturePad } from "@/components/shared/signature-pad";
-import { useUsersFull, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
+import { useAdminUserDetail, useAdminUsers, useCreateUser, useUpdateUser, useDeleteUser, usePermanentDeleteUser, usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
-import { normalizeText } from "@/lib/nav";
 import { cn, formatDateTime, initials } from "@/lib/utils";
 import type { SafeUser } from "@/types";
 
@@ -117,7 +116,6 @@ export default function AdminUsersPage() {
   const canManageRbac = rbac.can("rbac-manage", ["full"]);
   const canOpenPage = canManageUsers || canResetViewerPassword || canViewActivityLog || canManageRbac;
   const queryClient = useQueryClient();
-  const { data, isLoading } = useUsersFull();
   const create = useCreateUser();
   const update = useUpdateUser();
   const del = useDeleteUser();
@@ -137,6 +135,7 @@ export default function AdminUsersPage() {
     mutationFn: (body: RbacConfig) => apiMutate<RbacConfig>("/api/rbac", "PUT", body),
     onSuccess: (saved) => {
       queryClient.setQueryData(["rbac-config"], { data: saved, meta: null });
+      queryClient.invalidateQueries({ queryKey: ["rbac-me"] });
     },
   });
 
@@ -155,18 +154,17 @@ export default function AdminUsersPage() {
   const [auditTab, setAuditTab] = React.useState<"activity" | "system">("activity");
   const [activityDetail, setActivityDetail] = React.useState<ActivityLogRow | null>(null);
   const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
+  const usersQuery = useAdminUsers({
+    page,
+    pageSize,
+    q: search,
+    position: positionFilter,
+    enabled: canOpenPage && !rbac.isLoading,
+  });
 
-  if (session && !canOpenPage && !rbac.isLoading) {
-    return (
-      <Card><CardContent className="flex flex-col items-center gap-2 py-16 text-center">
-        <ShieldAlert className="h-10 w-10 text-destructive" />
-        <p className="font-medium text-ink">Bạn không có quyền truy cập trang này</p>
-        <p className="text-sm text-muted-foreground">Bạn chưa được cấp quyền quản trị người dùng hoặc xem nhật ký hệ thống.</p>
-      </CardContent></Card>
-    );
-  }
-
-  const users = data?.data ?? [];
+  const usersPage = usersQuery.data?.data;
+  const users = usersPage?.rows ?? [];
+  const totalUsers = usersPage?.total ?? 0;
   const rbacConfig = rbacQuery.data?.data ?? { permissions: [], roles: [], userOverrides: [] };
   const roleProfiles = rbacConfig.roles ?? [];
   const roleProfileByUser = React.useMemo(() => {
@@ -178,17 +176,11 @@ export default function AdminUsersPage() {
     }
     return map;
   }, [rbacConfig.userOverrides]);
-  const positions = usePositions();
-  const nq = normalizeText(search.trim());
-  const filteredUsers = users.filter(
-    (u) =>
-      (!nq || normalizeText(`${u.name} ${u.employeeId} ${u.username ?? ""}`).includes(nq)) &&
-      (positionFilter === "ALL" || u.position === positionFilter || u.secondaryPosition === positionFilter)
-  );
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
-  const firstShown = filteredUsers.length ? (page - 1) * pageSize + 1 : 0;
-  const lastShown = Math.min(page * pageSize, filteredUsers.length);
-  const pagedUsers = filteredUsers.slice((page - 1) * pageSize, page * pageSize);
+  const positions = usePositions({ enabled: canOpenPage && !rbac.isLoading });
+  const totalPages = Math.max(1, Math.ceil(totalUsers / pageSize));
+  const firstShown = totalUsers ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, totalUsers);
+  const pagedUsers = users;
   const auditRows = (audit.data?.data ?? []).slice(0, 50);
   const systemAuditRows = (systemAudit.data?.data ?? []).slice(0, 100);
 
@@ -199,6 +191,16 @@ export default function AdminUsersPage() {
   React.useEffect(() => {
     setPage((current) => Math.min(Math.max(1, current), totalPages));
   }, [totalPages]);
+
+  if (session && !canOpenPage && !rbac.isLoading) {
+    return (
+      <Card><CardContent className="flex flex-col items-center gap-2 py-16 text-center">
+        <ShieldAlert className="h-10 w-10 text-destructive" />
+        <p className="font-medium text-ink">Bạn không có quyền truy cập trang này</p>
+        <p className="text-sm text-muted-foreground">Bạn chưa được cấp quyền quản trị người dùng hoặc xem nhật ký hệ thống.</p>
+      </CardContent></Card>
+    );
+  }
 
   async function createUser() {
     if (!form.name || !form.email || !form.employeeId || !form.username.trim()) return toast.error("Nhập đủ thông tin bắt buộc");
@@ -298,7 +300,7 @@ export default function AdminUsersPage() {
 
       {canManageUsers && <AdminUserUploadPanel />}
 
-      {isLoading ? <TableSkeleton /> : (
+      {usersQuery.isLoading ? <TableSkeleton /> : (
         <Card>
           <Table>
             <TableHeader>
@@ -311,7 +313,7 @@ export default function AdminUsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.length === 0 && (
+              {users.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                     Không tìm thấy người dùng phù hợp với điều kiện lọc.
@@ -441,7 +443,7 @@ export default function AdminUsersPage() {
           </Table>
           <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <div>
-              Hiển thị {firstShown}-{lastShown} trong tổng số {filteredUsers.length} bản ghi
+              Hiển thị {firstShown}-{lastShown} trong tổng số {totalUsers} bản ghi
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <span>Hiển thị</span>
@@ -1039,25 +1041,28 @@ function Metric({ label, value, tone = "normal" }: { label: string; value: numbe
 
 function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose: () => void }) {
   const update = useUpdateUser();
+  const detail = useAdminUserDetail(target?.id, !!target);
+  const activeTarget = detail.data?.data ?? target;
   const [form, setForm] = React.useState<any>(null);
 
   React.useEffect(() => {
-    if (target)
+    if (activeTarget)
       setForm({
-        name: target.name,
-        email: target.email,
-        workEmail: target.workEmail ?? "",
-        username: target.username ?? "",
-        employeeId: target.employeeId,
-        phone: target.phone ?? "",
-        position: target.position ?? "",
-        secondaryPosition: target.secondaryPosition ?? "",
-        department: target.department ?? "",
-        avatarUrl: target.avatarUrl ?? "",
-        signatureUrl: target.signatureUrl ?? "",
-        role: target.role,
+        name: activeTarget.name,
+        email: activeTarget.email,
+        workEmail: activeTarget.workEmail ?? "",
+        username: activeTarget.username ?? "",
+        employeeId: activeTarget.employeeId,
+        phone: activeTarget.phone ?? "",
+        position: activeTarget.position ?? "",
+        secondaryPosition: activeTarget.secondaryPosition ?? "",
+        department: activeTarget.department ?? "",
+        avatarUrl: activeTarget.avatarUrl ?? "",
+        signatureUrl: activeTarget.signatureUrl ?? "",
+        role: activeTarget.role,
       });
-  }, [target]);
+    else setForm(null);
+  }, [activeTarget]);
 
   async function save() {
     if (!target || !form) return;
@@ -1074,7 +1079,12 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
     <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>Chỉnh sửa: {target?.name}</DialogTitle></DialogHeader>
-        {form && (
+        {detail.isLoading && (
+          <div className="rounded-lg border border-dashed border-border bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+            Đang tải thông tin người dùng...
+          </div>
+        )}
+        {form && !detail.isLoading && (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Hình ảnh" className="col-span-2">
               <AvatarPicker value={form.avatarUrl} onChange={(v) => setForm({ ...form, avatarUrl: v })} name={form.name} />

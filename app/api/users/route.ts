@@ -4,11 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
 import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3";
-import { avatarUpdate } from "@/lib/user-avatar-storage";
+import { avatarUpdate, signatureUpdate } from "@/lib/user-avatar-storage";
 import { DEFAULT_PASSWORD } from "@/lib/password-policy";
 import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-position";
 import { getOrSetUserSummaryCache, invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { requireUserAdminReadAccess } from "@/lib/user-admin-access";
 
 export const dynamic = "force-dynamic";
 const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
@@ -56,23 +57,24 @@ async function safe<T extends { passwordHash?: string; avatarUrl?: string | null
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     await ensureUserSecondaryPositionColumn();
     // ?summary=1 → trả bản nhẹ (bỏ chữ ký base64; avatar qua proxy S3 nếu đã migrate).
-    // Dùng cho sidebar (mọi trang), dropdown chọn người, danh sách chức vụ... Trang
-    // Quản trị người dùng vẫn lấy bản đầy đủ qua useUsersFull().
+    // Dùng cho sidebar (mọi trang), dropdown chọn người, danh sách chức vụ...
+    // Quản trị người dùng dùng /api/admin/users để phân trang từ server.
     if (req.nextUrl.searchParams.get("summary") === "1") {
       const data = await getOrSetUserSummaryCache(async () => {
         const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" }, select: SUMMARY_SELECT });
         return users.map((u) => ({
           ...u,
-          avatarUrl: u.avatarKey ? s3ProxyUrl(u.avatarKey) : u.avatarUrl ?? null,
+          avatarUrl: u.avatarKey ? s3ProxyUrl(u.avatarKey) : u.avatarUrl && !u.avatarUrl.startsWith("data:") ? u.avatarUrl : null,
           signatureUrl: null as string | null,
           signatureKey: null as string | null,
         }));
       });
       return ok(data);
     }
+    await requireUserAdminReadAccess(user);
     const users = await prisma.user.findMany({ orderBy: { employeeId: "asc" } });
     return ok(await Promise.all(users.map(safe)));
   });
@@ -100,6 +102,7 @@ export async function POST(req: NextRequest) {
     if (exists) return fail("Email, user hoặc mã nhân viên đã tồn tại");
     const password = String(body.password || DEFAULT_PASSWORD);
     const avatarData = await avatarUpdate(body.avatarUrl, body.employeeId);
+    const signatureData = await signatureUpdate(body.signatureUrl, body.employeeId);
     const initialPositions = {
       position: body.position || null,
       secondaryPosition: body.secondaryPosition || null,
@@ -122,10 +125,11 @@ export async function POST(req: NextRequest) {
         currentPosition: initialCurrentPosition,
         department: body.department || null,
         avatarUrl: null,
-        signatureUrl: body.signatureUrl || null,
+        signatureUrl: null,
         avatarKey: body.avatarKey || null,
         signatureKey: body.signatureKey || null,
         ...avatarData,
+        ...signatureData,
         passwordHash: await bcrypt.hash(password, 10),
         mustChangePassword: password === DEFAULT_PASSWORD,
         passwordChangedAt: new Date(),
@@ -186,8 +190,6 @@ export async function PUT(req: NextRequest) {
     if (body.currentPosition !== undefined) data.currentPosition = body.currentPosition || null;
     if (body.department !== undefined) data.department = body.department;
     if (body.phone !== undefined) data.phone = body.phone;
-    if (body.signatureUrl !== undefined) data.signatureUrl = body.signatureUrl || null;
-    if (body.signatureKey !== undefined) data.signatureKey = body.signatureKey || null;
     if (body.email) data.email = String(body.email).trim().toLowerCase();
     if (body.workEmail !== undefined) data.workEmail = String(body.workEmail || "").trim().toLowerCase() || null;
     if (body.username !== undefined) data.username = String(body.username || "").trim() || null;
@@ -217,6 +219,8 @@ export async function PUT(req: NextRequest) {
     const employeeId = String(data.employeeId ?? before?.employeeId ?? "").trim();
     Object.assign(data, await avatarUpdate(body.avatarUrl, employeeId));
     if (body.avatarKey !== undefined && body.avatarUrl === undefined) data.avatarKey = body.avatarKey || null;
+    Object.assign(data, await signatureUpdate(body.signatureUrl, employeeId));
+    if (body.signatureKey !== undefined && body.signatureUrl === undefined) data.signatureKey = body.signatureKey || null;
 
     const updated = await prisma.user.update({ where: { id: body.id }, data });
     const beforeSafe = before ? await safe(before) : null;

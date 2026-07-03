@@ -77,6 +77,16 @@ export async function assignedPermissionLevel(user: { id?: string; role?: string
   if (user.role === "ADMIN") return "full";
   if (!user.id) return "none";
   const config = await readRbacConfig();
+  return assignedPermissionLevelFromConfig(user, permissionId, config);
+}
+
+function assignedPermissionLevelFromConfig(
+  user: { id?: string; role?: string },
+  permissionId: string,
+  config: RbacConfig | null
+): PermissionLevel {
+  if (user.role === "ADMIN") return "full";
+  if (!user.id) return "none";
   if (!config) return permissionLevel(DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""]);
 
   const permissions = Array.isArray(config.permissions) ? config.permissions : [];
@@ -92,6 +102,15 @@ export async function assignedPermissionLevel(user: { id?: string; role?: string
     });
 
   return strongestPermission([roleValue, ...overrideValues]);
+}
+
+export async function assignedPermissionMap(user: { id?: string; role?: string }) {
+  const config = await readRbacConfig();
+  const configPermissionIds = Array.isArray(config?.permissions) ? config.permissions.map((permission) => permission.id) : [];
+  const permissionIds = Array.from(new Set([...Object.keys(DEFAULT_RBAC_MATRIX), ...configPermissionIds]));
+  return Object.fromEntries(
+    permissionIds.map((permissionId) => [permissionId, assignedPermissionLevelFromConfig(user, permissionId, config)])
+  ) as Record<string, PermissionLevel>;
 }
 
 export async function hasAssignedPermissionLevel(

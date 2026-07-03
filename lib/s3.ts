@@ -309,7 +309,8 @@ export function publicUserRef<T extends { avatarUrl?: string | null; avatarKey?:
 export async function userWithSignedMedia<
   T extends { avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }
 >(user: T): Promise<T> {
-  const avatarUrl = user.avatarKey ? s3ProxyUrl(user.avatarKey) : user.avatarUrl ?? null;
-  const signatureUrl = user.signatureKey ? s3ProxyUrl(user.signatureKey) : user.signatureUrl ?? null;
+  const cleanStoredUrl = (value?: string | null) => (value && !value.startsWith("data:") ? value : null);
+  const avatarUrl = user.avatarKey ? s3ProxyUrl(user.avatarKey) : cleanStoredUrl(user.avatarUrl);
+  const signatureUrl = user.signatureKey ? s3ProxyUrl(user.signatureKey) : cleanStoredUrl(user.signatureUrl);
   return { ...user, avatarUrl, signatureUrl };
 }

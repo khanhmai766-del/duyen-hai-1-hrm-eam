@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,7 +108,12 @@ function normalizeUserOverrides(value: unknown) {
 
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    const canReadConfig =
+      user.role === "ADMIN" ||
+      (await hasPermissionLevel(user, "rbac-manage", ["full"])) ||
+      (await hasPermissionLevel(user, "user-manage", ["manage", "full"]));
+    if (!canReadConfig) return fail("Không đủ quyền xem cấu hình phân quyền", 403);
 
     const rows = await prisma.$queryRawUnsafe<{ value: string }[]>(
       `SELECT value FROM "RbacConfig" WHERE key = $1 LIMIT 1`,

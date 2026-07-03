@@ -1,14 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { safeEmployeeCode, uploadS3Object, userWithSignedMedia } from "@/lib/s3";
-import { avatarUpdate } from "@/lib/user-avatar-storage";
+import { userWithSignedMedia } from "@/lib/s3";
+import { avatarUpdate, signatureUpdate } from "@/lib/user-avatar-storage";
 import { isValidCurrentPosition } from "@/lib/current-position";
 import { invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 
 export const dynamic = "force-dynamic";
-
-const DATA_URL_RE = /^data:([^;,]+);base64,(.+)$/;
 
 async function ensureUserCurrentPositionColumn() {
   await prisma.$executeRawUnsafe(`
@@ -16,24 +14,6 @@ async function ensureUserCurrentPositionColumn() {
     ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT
   `);
-}
-
-function extensionForMime(mimeType: string) {
-  switch (mimeType.toLowerCase()) {
-    case "image/jpeg":
-    case "image/jpg":
-      return "jpg";
-    case "image/png":
-      return "png";
-    case "image/webp":
-      return "webp";
-    default:
-      throw new Error("Chỉ chấp nhận ảnh jpg, png hoặc webp");
-  }
-}
-
-function isS3ProxyUrl(value: string) {
-  return value.startsWith("/api/files/s3?") || value.includes("/api/files/s3?");
 }
 
 export async function GET() {
@@ -45,27 +25,6 @@ export async function GET() {
     const { passwordHash, ...safe } = profile;
     return ok(await userWithSignedMedia(safe));
   });
-}
-
-async function signatureUpdate(value: unknown, employeeId: string) {
-  if (value === undefined) return {};
-  const raw = String(value ?? "").trim();
-  if (!raw) return { signatureUrl: null, signatureKey: null };
-  if (isS3ProxyUrl(raw)) return {};
-  const match = raw.match(DATA_URL_RE);
-  if (!match) return { signatureUrl: raw, signatureKey: null };
-
-  const mimeType = match[1];
-  const ext = extensionForMime(mimeType);
-  const code = safeEmployeeCode(employeeId);
-  const key = `signatures/${code}.${ext}`;
-  await uploadS3Object({
-    key,
-    body: Buffer.from(match[2], "base64"),
-    contentType: mimeType,
-    originalName: `${code}.${ext}`,
-  });
-  return { signatureUrl: null, signatureKey: key };
 }
 
 // Self-service profile update. Everyone may edit employeeId / phone / email làm việc /

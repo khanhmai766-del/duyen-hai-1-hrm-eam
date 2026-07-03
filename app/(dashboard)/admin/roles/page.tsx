@@ -581,6 +581,7 @@ export default function RolesPage() {
     mutationFn: (body: RbacConfig) => apiMutate<RbacConfig>("/api/rbac", "PUT", body),
     onSuccess: (data) => {
       queryClient.setQueryData(["rbac-config"], { data, meta: null });
+      queryClient.invalidateQueries({ queryKey: ["rbac-me"] });
       toast.success("Đã lưu cấu hình phân quyền");
     },
     onError: (error) => toast.error((error as Error).message),
