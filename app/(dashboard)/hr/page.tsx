@@ -40,19 +40,15 @@ const SHIFT_ICON: Record<ShiftTypeKey, typeof CalendarDays> = {
   NIGHT: Moon,
 };
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
-const STAFF_POSITION_PRIORITY = [
-  "quan doc",
-  "pho quan doc",
-  "ky thuat vien",
-  "thong ke",
-  "truong ca",
-  "truong kip",
-];
-
 function staffPositionRank(position?: string | null) {
   const normalized = normalizeText(position ?? "");
-  const index = STAFF_POSITION_PRIORITY.findIndex((keyword) => normalized.includes(keyword));
-  return index >= 0 ? index : STAFF_POSITION_PRIORITY.length;
+  if (normalized.includes("pho quan doc")) return 1;
+  if (normalized.includes("quan doc")) return 0;
+  if (normalized.includes("ky thuat vien")) return 2;
+  if (normalized.includes("thong ke")) return 3;
+  if (normalized.includes("truong ca")) return 4;
+  if (normalized.includes("truong kip")) return 5;
+  return 6;
 }
 
 function compareStaff(a: SafeUser, b: SafeUser) {
