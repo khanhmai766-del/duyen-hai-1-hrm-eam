@@ -885,11 +885,14 @@ export default function RolesPage() {
               ))}
             </div>
           </div>
-          <div className="grid gap-2 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 rounded-xl border border-border bg-slate-50/80 p-3 md:grid-cols-2 2xl:grid-cols-3">
             {PERMISSION_HELP.map((item) => (
-              <div key={item.value} className="flex items-start gap-2">
+              <div
+                key={item.value}
+                className="grid min-h-[54px] grid-cols-[112px_minmax(0,1fr)] items-start gap-3 rounded-lg bg-white/75 px-3 py-2 ring-1 ring-border/70"
+              >
                 <PermissionPill value={item.value} compact />
-                <p className="min-w-0 pt-0.5 text-xs leading-5 text-muted-foreground">{item.description}</p>
+                <p className="min-w-0 text-[12px] leading-5 text-muted-foreground">{item.description}</p>
               </div>
             ))}
           </div>
@@ -899,14 +902,14 @@ export default function RolesPage() {
             <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  <th className="w-[170px] px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+                  <th className="w-[170px] px-4 py-3.5 text-left text-xs font-semibold uppercase text-muted-foreground">
                     Nhóm
                   </th>
-                  <th className="min-w-[340px] px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">
+                  <th className="min-w-[360px] px-4 py-3.5 text-left text-xs font-semibold uppercase text-muted-foreground">
                     Chức năng
                   </th>
                   {matrixRoleColumns.map((role) => (
-                    <th key={role.id} className="min-w-[138px] px-4 py-3 text-center text-xs font-semibold uppercase text-muted-foreground">
+                    <th key={role.id} className="min-w-[148px] px-4 py-3.5 text-center text-xs font-semibold uppercase leading-4 text-muted-foreground">
                       {role.label}
                     </th>
                   ))}
@@ -917,16 +920,16 @@ export default function RolesPage() {
                   rows.map((row, index) => (
                     <tr key={row.id} className="border-b border-border last:border-0">
                       {index === 0 && (
-                        <td rowSpan={rows.length} className="border-r border-border bg-muted/25 px-4 py-4 align-top">
-                          <div className="sticky top-16 font-semibold text-ink">{group}</div>
+                        <td rowSpan={rows.length} className="border-r border-border bg-muted/25 px-4 py-5 align-top">
+                          <div className="sticky top-16 text-sm font-semibold leading-5 text-ink">{group}</div>
                         </td>
                       )}
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-ink">{row.feature}</div>
-                        <div className="mt-0.5 max-w-xl text-xs leading-5 text-muted-foreground">{row.note}</div>
+                      <td className="px-4 py-4">
+                        <div className="text-[14px] font-semibold leading-5 text-ink">{row.feature}</div>
+                        <div className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">{row.note}</div>
                       </td>
                       {matrixRoleColumns.map((role) => (
-                        <td key={role.id} className="px-4 py-3 text-center">
+                        <td key={role.id} className="px-4 py-4 text-center align-middle">
                           {isAdmin && editMode ? (
                             <PermissionSelect value={roleMatrixValue(row.matrix, role)} onChange={(value) => updatePermissionValue(row.id, role, value)} />
                           ) : (
@@ -1179,7 +1182,7 @@ export default function RolesPage() {
 function PermissionSelect({ value, onChange }: { value: PermissionValue; onChange: (value: PermissionValue) => void }) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next as PermissionValue)}>
-      <SelectTrigger className="mx-auto h-9 w-[128px]">
+      <SelectTrigger className="mx-auto h-9 w-[132px]">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -1200,15 +1203,15 @@ function PermissionPill({ value, compact = false }: { value: PermissionValue; co
     <span
       title={meta.title}
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-full font-semibold ring-1 ring-white/50",
-        compact ? "px-2.5 py-1 text-[11px]" : "min-w-[98px] px-3 py-1.5 text-xs shadow-md",
+        "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full font-semibold leading-none ring-1 ring-white/50 whitespace-nowrap",
+        compact ? "h-7 min-w-[104px] px-3 text-[11px]" : "h-9 min-w-[112px] px-3 text-xs shadow-md",
         meta.className
       )}
     >
       {value === "full" ? (
-        <CheckCircle2 className="h-3.5 w-3.5" />
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
       ) : (
-        <Icon className="h-3.5 w-3.5" />
+        <Icon className="h-3.5 w-3.5 shrink-0" />
       )}
       {meta.label}
     </span>

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw, Search, X } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -124,6 +124,7 @@ export default function ShiftRosterPage() {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
   const [posFilter, setPosFilter] = React.useState("ALL");
+  const [employeeFilter, setEmployeeFilter] = React.useState("");
   const [view, setView] = React.useState<View>(() => (searchParams.get("view") === "timesheet" ? "timesheet" : "roster"));
   const shouldLoadTimesheet = view === "timesheet";
   const { data, isLoading } = useUsers({ enabled: shouldLoadTimesheet });
@@ -209,9 +210,11 @@ export default function ShiftRosterPage() {
     comparePositionPriority
   );
   // Bảng công scope: người được quyền chỉnh xem toàn bộ, người khác xem dòng của mình.
+  const employeeQuery = normalizeText(employeeFilter.trim());
   const rows = users
     .filter((u) => canEditTimesheet || u.id === session?.user?.id)
     .filter((u) => posFilter === "ALL" || u.position === posFilter)
+    .filter((u) => !canEditTimesheet || !employeeQuery || normalizeText(`${u.name} ${u.employeeId ?? ""}`).includes(employeeQuery))
     .sort((a, b) => {
       const byPosition = comparePositionPriority(a.position, b.position);
       if (byPosition !== 0) return byPosition;
@@ -227,7 +230,7 @@ export default function ShiftRosterPage() {
 
   React.useEffect(() => {
     setTimesheetPage(1);
-  }, [monthStr, posFilter, view]);
+  }, [monthStr, posFilter, employeeFilter, view]);
 
   React.useEffect(() => {
     setTimesheetPage((current) => Math.min(Math.max(1, current), timesheetTotalPages));
@@ -580,7 +583,33 @@ export default function ShiftRosterPage() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="sticky left-0 z-20 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center text-xs font-semibold uppercase text-muted-foreground">Mã NV</th>
-                    <th className="sticky left-[110px] z-20 w-[220px] min-w-[220px] border-r border-border bg-white px-4 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">Nhân viên</th>
+                    <th className="sticky left-[110px] z-20 w-[280px] min-w-[280px] border-r border-border bg-white px-4 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="shrink-0">Nhân viên</span>
+                        {canEditTimesheet && (
+                          <div className="relative w-[148px]">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                            <input
+                              value={employeeFilter}
+                              onChange={(event) => setEmployeeFilter(event.target.value)}
+                              placeholder="Tìm tên"
+                              className="h-7 w-full rounded-md border border-slate-200 bg-slate-50 pl-8 pr-7 text-xs font-medium normal-case text-ink outline-none transition focus:border-sky-300 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                              aria-label="Tìm tên nhân viên trong bảng công"
+                            />
+                            {employeeFilter && (
+                              <button
+                                type="button"
+                                onClick={() => setEmployeeFilter("")}
+                                className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                                aria-label="Xóa bộ lọc tên nhân viên"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </th>
                     {days.map((d) => {
                       const dow = new Date(month.year, month.month, d).getDay();
                       const weekend = dow === 0 || dow === 6;
@@ -596,7 +625,7 @@ export default function ShiftRosterPage() {
                       <td className="sticky left-0 z-10 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center">
                         <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
                       </td>
-                      <td className="sticky left-[110px] z-10 w-[220px] min-w-[220px] border-r border-border bg-white px-4 py-2">
+                      <td className="sticky left-[110px] z-10 w-[280px] min-w-[280px] border-r border-border bg-white px-4 py-2">
                         <div className="font-medium text-ink">{u.name}</div>
                         <div className="text-xs text-muted-foreground">{u.position}</div>
                       </td>
