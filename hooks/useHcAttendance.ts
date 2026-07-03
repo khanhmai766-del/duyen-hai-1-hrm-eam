@@ -70,7 +70,11 @@ export function useDeleteHcGroup() {
 export function useHcCheckIn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { groupId: string; hours: number } | { date: string; period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON"; note?: string; workNote?: string }) =>
+    mutationFn: (
+      body:
+        | { groupId: string; hours: number }
+        | { date: string; period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON"; note?: string; workNote?: string }
+    ) =>
       apiMutate("/api/hc-groups/checkin", "POST", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
@@ -104,6 +108,19 @@ export function useHcApprove() {
 }
 
 export function useHcUpdateRegistrationNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { groupId: string; id: string; note: string }) =>
+      apiMutate("/api/hc-groups/checkin", "PUT", { groupId: body.groupId, ids: [body.id], note: body.note, action: "NOTE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
+  });
+}
+
+export function useHcUpdateWorkNote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { groupId: string; id: string; note: string }) =>

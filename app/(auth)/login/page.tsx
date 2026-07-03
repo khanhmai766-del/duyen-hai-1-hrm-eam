@@ -62,7 +62,7 @@ function LoginInner() {
   React.useEffect(() => {
     if (params.get("reason") === "timeout") {
       toast.warning("Phiên đăng nhập đã hết hạn", {
-        description: "Bạn đã không hoạt động hoặc mất kết nối quá 15 phút. Vui lòng đăng nhập lại.",
+        description: "Bạn đã không hoạt động hoặc mất kết nối quá 30 phút. Vui lòng đăng nhập lại.",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

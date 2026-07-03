@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
-  Plus, Trash2, ArrowLeft, Check, Loader2, UserCheck, UserMinus, ClipboardCheck, ChevronDown, Pencil,
+  Plus, Trash2, ArrowLeft, Check, Loader2, UserCheck, UserMinus, ClipboardCheck, ChevronDown, Pencil, Clock3,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useHcGroups, useCreateHcGroup, useUpdateHcGroup, useDeleteHcGroup,
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
+  useHcUpdateWorkNote, useHcCancelRegistration,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn, initials } from "@/lib/utils";
@@ -34,7 +35,7 @@ const HC_SELF_PERIODS = [
   { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3 },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
-const HC_RECALL_WINDOW_MS = 30 * 60 * 1000;
+const HC_RECALL_WINDOW_MS = 5 * 60 * 1000;
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const MANAGED_GROUP_PERIODS: Array<{ value: "FULL_DAY" | "MORNING" | "AFTERNOON"; label: string }> = [
   { value: "FULL_DAY", label: "Cả ngày" },
@@ -61,6 +62,13 @@ function periodLabel(content: string) {
   return HC_SELF_PERIODS.find((p) => content === `Hành chính - ${p.label}`)?.label ?? "Hành chính";
 }
 
+function periodSlots(period?: string | null) {
+  const normalized = normalizeHcPeriod(period);
+  if (normalized === "FULL_DAY") return ["MORNING", "AFTERNOON"];
+  if (normalized === "AFTERNOON") return ["AFTERNOON"];
+  return ["MORNING"];
+}
+
 function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: string; updatedAt?: string } | null) {
   if (!member || member.isRegistered) return false;
   const markedAt = new Date(member.updatedAt || member.createdAt || "");
@@ -85,6 +93,19 @@ export default function AdminAttendancePage() {
   const groups = data?.data ?? [];
   const selfHcGroups = groups.filter(isSelfHcGroup);
   const managedGroups = groups.filter((g) => !isSelfHcGroup(g));
+  const visibleSelfHcGroups = React.useMemo(() => {
+    const managedSlotByUser = new Set(
+      managedGroups.flatMap((group) =>
+        group.members.flatMap((member) => periodSlots(group.period).map((slot) => `${member.userId}:${slot}`))
+      )
+    );
+    return selfHcGroups.map((group) => ({
+      ...group,
+      members: group.members.filter((member) =>
+        periodSlots(group.period).some((slot) => !managedSlotByUser.has(`${member.userId}:${slot}`))
+      ),
+    }));
+  }, [managedGroups, selfHcGroups]);
   const openSelfCheckIn = React.useCallback(() => {
     setDate(vietnamDateInput());
     setFollowToday(true);
@@ -134,7 +155,7 @@ export default function AdminAttendancePage() {
         <CardSkeleton />
       ) : (
         <div className="space-y-4">
-          <HanhChinhCard groups={selfHcGroups} myId={myId} />
+          <HanhChinhCard groups={visibleSelfHcGroups} myId={myId} canApprove={canApproveHc} onEditMine={openSelfCheckIn} />
           {managedGroups.map((g) => (
             <GroupCard key={g.id} group={g} canManage={canManageHcGroup} canApprove={canApproveHc} myId={myId} />
           ))}
@@ -154,8 +175,20 @@ export default function AdminAttendancePage() {
 }
 
 /* ---- Daily administrative attendance summary ---- */
-function HanhChinhCard({ groups, myId }: { groups: HcGroup[]; myId?: string }) {
+function HanhChinhCard({
+  groups,
+  myId,
+  canApprove,
+  onEditMine,
+}: {
+  groups: HcGroup[];
+  myId?: string;
+  canApprove: boolean;
+  onEditMine: () => void;
+}) {
   const recall = useHcRecall();
+  const approve = useHcApprove();
+  const reject = useHcCancelRegistration();
   const entries = groups.flatMap((group) =>
     group.members
       .map((member) => ({
@@ -164,11 +197,34 @@ function HanhChinhCard({ groups, myId }: { groups: HcGroup[]; myId?: string }) {
         period: periodLabel(group.content),
       }))
   );
+  const approved = entries.filter((entry) => entry.isApproved).length;
+  const pendingGroups = groups.filter((group) => group.members.some((member) => !member.isApproved));
+  const myEntry = entries.find((entry) => entry.userId === myId && !entry.isRegistered);
 
   async function doRecall(groupId: string) {
     try {
       await recall.mutateAsync(groupId);
       toast.success("Đã thu hồi điểm danh hành chính");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function doApproveAll() {
+    if (!pendingGroups.length) return toast.error("Không có chấm công chờ duyệt");
+    try {
+      const results = await Promise.all(pendingGroups.map((group) => approve.mutateAsync({ groupId: group.id })));
+      const count = results.reduce<number>((sum, result) => sum + Number((result as any)?.approved ?? 0), 0);
+      toast.success(`Đã duyệt chấm công (${count})`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function doReject(checkInId: string) {
+    try {
+      await reject.mutateAsync(checkInId);
+      toast.success("Đã không duyệt chấm công hành chính");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -182,9 +238,25 @@ function HanhChinhCard({ groups, myId }: { groups: HcGroup[]; myId?: string }) {
           <div className="text-xs text-muted-foreground">Nhân viên đi hành chính trong ngày</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={entries.length > 0 ? "accent" : "secondary"} className="gap-1.5">
-            <UserCheck className="h-3.5 w-3.5" /> {entries.length} đã ghi nhận
+          <Badge variant={approved === entries.length && entries.length > 0 ? "accent" : "secondary"} className="gap-1.5">
+            <UserCheck className="h-3.5 w-3.5" /> {approved}/{entries.length} đã duyệt
           </Badge>
+          {myEntry && (
+            <Button size="sm" variant="outline" onClick={onEditMine}>
+              <Pencil className="h-4 w-4" /> Cập nhật nội dung
+            </Button>
+          )}
+          {canApprove && entries.length > 0 && (
+            <Button
+              size="sm"
+              onClick={doApproveAll}
+              disabled={approve.isPending || pendingGroups.length === 0}
+              className="bg-amber-400 text-amber-950 hover:bg-amber-500"
+            >
+              {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+              Duyệt chấm công
+            </Button>
+          )}
         </div>
       </div>
       {entries.length === 0 ? (
@@ -215,33 +287,42 @@ function HanhChinhCard({ groups, myId }: { groups: HcGroup[]; myId?: string }) {
               </div>
               <div className="mt-1.5 line-clamp-2 text-xs font-medium text-ink">{m.user.name}</div>
               <div className="text-[11px] text-accent">{m.period}</div>
-              {m.isRegistered && (
-                <Badge variant={m.isApproved ? "accent" : "secondary"} className="mt-1 text-[10px]">
-                  {m.isApproved ? "Đã duyệt" : "Chờ duyệt"}
-                </Badge>
-              )}
+              <Badge variant={m.isApproved ? "accent" : "secondary"} className="mt-1 gap-1 text-[10px]">
+                {m.isApproved ? <Check className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}
+                {m.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+              </Badge>
               {m.note && (
                 <div className="mt-2 w-full rounded-md bg-amber-50 px-2 py-1.5 text-left text-[11px] leading-4 text-amber-900">
                   <span className="block whitespace-pre-wrap break-words">{m.note}</span>
                 </div>
               )}
+              {canApprove && !m.isApproved && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => doReject(m.id)}
+                  disabled={reject.isPending}
+                  className="mt-2 h-7 px-2 text-[11px]"
+                >
+                  {reject.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                  Không duyệt
+                </Button>
+              )}
               {m.userId === myId && !m.isRegistered && (
-                canRecallHcCheckIn(m) ? (
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => doRecall(m.groupId)}
-                    disabled={recall.isPending}
-                    className="mt-2 h-7 px-2 text-[11px]"
-                  >
-                    {recall.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserMinus className="h-3 w-3" />}
-                    Thu hồi
-                  </Button>
-                ) : (
-                  <div className="mt-2 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-500">
-                    Quá 30 phút
-                  </div>
-                )
+                <div className="mt-2 flex flex-col gap-1">
+                  {canRecallHcCheckIn(m) && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => doRecall(m.groupId)}
+                      disabled={recall.isPending}
+                      className="h-7 px-2 text-[11px]"
+                    >
+                      {recall.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserMinus className="h-3 w-3" />}
+                      Thu hồi
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           ))}
@@ -314,10 +395,12 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
             </Button>
           )}
           {mine ? (
-            <Button size="sm" variant="destructive" onClick={doRecall} disabled={recall.isPending || !canRecallMine}>
-              {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
-              {canRecallMine ? "Thu hồi điểm danh" : "Quá 30 phút"}
-            </Button>
+            canRecallMine && (
+              <Button size="sm" variant="destructive" onClick={doRecall} disabled={recall.isPending}>
+                {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
+                Thu hồi điểm danh
+              </Button>
+            )
           ) : (
             <Button size="sm" variant="accent" onClick={() => setCheckInOpen(true)}>
               <UserCheck className="h-4 w-4" /> Điểm danh
@@ -345,7 +428,7 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
       ) : (
         <div className="flex flex-wrap gap-4 p-4">
           {group.members.map((m) => (
-            <div key={m.id} className="flex w-28 flex-col items-center text-center">
+            <div key={m.id} className="flex w-40 flex-col items-center text-center">
               <div className="relative h-14 w-14">
                 <div className={cn(
                   "flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white ring-2",
@@ -366,6 +449,10 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
               </div>
               <div className="mt-1.5 line-clamp-2 text-xs font-medium text-ink">{m.user.name}</div>
               <div className="text-[11px] text-accent">{m.hours} giờ</div>
+              <Badge variant={m.isApproved ? "accent" : "secondary"} className="mt-1 gap-1 text-[10px]">
+                {m.isApproved ? <Check className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}
+                {m.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+              </Badge>
             </div>
           ))}
         </div>
@@ -463,6 +550,7 @@ function SelfAdministrativeCheckInDialog({
   open, onOpenChange, date, groups, myId,
 }: { open: boolean; onOpenChange: (o: boolean) => void; date: string; groups: HcGroup[]; myId?: string }) {
   const checkIn = useHcCheckIn();
+  const updateWorkNote = useHcUpdateWorkNote();
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
   const [workNote, setWorkNote] = React.useState("");
 
@@ -482,8 +570,16 @@ function SelfAdministrativeCheckInDialog({
 
   async function save() {
     try {
-      await checkIn.mutateAsync({ date, period, workNote });
-      toast.success(myCheckIn ? "Đã cập nhật chấm công hành chính" : "Đã chấm công hành chính");
+      const current = myCheckIn
+        ? HC_SELF_PERIODS.find((p) => myCheckIn.group.content === `Hành chính - ${p.label}`)
+        : undefined;
+      if (myCheckIn && current?.value === period) {
+        await updateWorkNote.mutateAsync({ groupId: myCheckIn.group.id, id: myCheckIn.member.id, note: workNote });
+        toast.success("Đã cập nhật nội dung công việc");
+      } else {
+        await checkIn.mutateAsync({ date, period, workNote });
+        toast.success(myCheckIn ? "Đã cập nhật buổi chấm công hành chính, chờ duyệt" : "Đã chấm công hành chính, chờ duyệt");
+      }
       onOpenChange(false);
     } catch (e) {
       toast.error((e as Error).message);
@@ -525,8 +621,8 @@ function SelfAdministrativeCheckInDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Huỷ</Button>
-          <Button onClick={save} disabled={checkIn.isPending}>
-            {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận
+          <Button onClick={save} disabled={checkIn.isPending || updateWorkNote.isPending}>
+            {(checkIn.isPending || updateWorkNote.isPending) && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -535,18 +631,27 @@ function SelfAdministrativeCheckInDialog({
 }
 
 /* ---- Self check-in dialog (pick hours) ---- */
-function CheckInDialog({ open, onOpenChange, group }: { open: boolean; onOpenChange: (o: boolean) => void; group: HcGroup }) {
+function CheckInDialog({
+  open,
+  onOpenChange,
+  group,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  group: HcGroup;
+}) {
   const checkIn = useHcCheckIn();
   const [hours, setHours] = React.useState(group.hours);
 
   React.useEffect(() => {
-    if (open) setHours(group.hours);
+    if (!open) return;
+    setHours(group.hours);
   }, [open, group.hours]);
 
   async function save() {
     try {
       await checkIn.mutateAsync({ groupId: group.id, hours });
-      toast.success("Đã điểm danh xong");
+      toast.success("Đã ghi nhận chấm công, chờ duyệt");
       onOpenChange(false);
     } catch (e) {
       toast.error((e as Error).message);

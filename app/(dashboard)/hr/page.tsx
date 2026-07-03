@@ -40,6 +40,26 @@ const SHIFT_ICON: Record<ShiftTypeKey, typeof CalendarDays> = {
   NIGHT: Moon,
 };
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const STAFF_POSITION_PRIORITY = [
+  "quan doc",
+  "pho quan doc",
+  "ky thuat vien",
+  "thong ke",
+  "truong ca",
+  "truong kip",
+];
+
+function staffPositionRank(position?: string | null) {
+  const normalized = normalizeText(position ?? "");
+  const index = STAFF_POSITION_PRIORITY.findIndex((keyword) => normalized.includes(keyword));
+  return index >= 0 ? index : STAFF_POSITION_PRIORITY.length;
+}
+
+function compareStaff(a: SafeUser, b: SafeUser) {
+  const byPosition = staffPositionRank(a.position) - staffPositionRank(b.position);
+  if (byPosition !== 0) return byPosition;
+  return a.name.localeCompare(b.name, "vi");
+}
 
 function vietnamDateInput(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -67,6 +87,7 @@ export default function HrOverviewPage() {
   const { data: usersData } = useUsers();
   const shift = shiftData?.data;
   const users = usersData?.data ?? [];
+  const sortedUsers = React.useMemo(() => [...users].sort(compareStaff), [users]);
   const duyenHaiStaffCount = React.useMemo(
     () => users.filter((u) => u.isActive && isDuyenHaiEmployeeId(u.employeeId)).length,
     [users]
@@ -87,9 +108,9 @@ export default function HrOverviewPage() {
   // Search the full list by name or position (accent-insensitive).
   const filtered = React.useMemo(() => {
     const k = normalizeText(q);
-    if (!k) return users;
-    return users.filter((u) => normalizeText(`${u.name} ${u.position ?? ""}`).includes(k));
-  }, [users, q]);
+    if (!k) return sortedUsers;
+    return sortedUsers.filter((u) => normalizeText(`${u.name} ${u.position ?? ""}`).includes(k));
+  }, [sortedUsers, q]);
 
   return (
     <div className="space-y-6">
@@ -130,7 +151,7 @@ export default function HrOverviewPage() {
           )}
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {users.slice(0, PREVIEW_COUNT).map((u) => (
+          {sortedUsers.slice(0, PREVIEW_COUNT).map((u) => (
             <PersonCard key={u.id} u={u} />
           ))}
         </CardContent>

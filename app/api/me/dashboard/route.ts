@@ -3,9 +3,31 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
 import { s3ProxyUrl } from "@/lib/s3";
-import { aggregateHcHoursByPeriod } from "@/lib/hc-period";
+import { aggregateHcHoursByPeriod, normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
+
+const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Buổi chiều", "Hành chính - Ra ca sáng"];
+
+function periodSlots(period?: string | null) {
+  const normalized = normalizeHcPeriod(period);
+  if (normalized === "FULL_DAY") return ["MORNING", "AFTERNOON"];
+  if (normalized === "AFTERNOON") return ["AFTERNOON"];
+  return ["MORNING"];
+}
+
+function adjustedSelfHcEntry(c: { hours: number; group: { period: string | null } }, managedSlots: Set<string>) {
+  const period = normalizeHcPeriod(c.group.period);
+  const selfSlots = periodSlots(period);
+  const remainingSlots = selfSlots.filter((slot) => !managedSlots.has(slot));
+  if (remainingSlots.length === 0) return null;
+  if (period === "FULL_DAY") {
+    if (remainingSlots.length === 2) return { hours: c.hours, period };
+    const slot = remainingSlots[0];
+    return { hours: Math.min(4, c.hours), period: slot };
+  }
+  return { hours: c.hours, period };
+}
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -53,13 +75,25 @@ export async function GET(req: NextRequest) {
         isApproved: true,
         group: { date: { gte: monthStart, lte: monthEnd } },
       },
-      include: { group: { select: { date: true, period: true } } },
+      include: { group: { select: { date: true, content: true, period: true } } },
     });
+    const managedSlotsByDay = new Map<number, Set<string>>();
+    for (const c of monthHc) {
+      if (HC_SELF_CONTENTS.includes(c.group.content)) continue;
+      const day = c.group.date.getDate();
+      const slots = managedSlotsByDay.get(day) ?? new Set<string>();
+      periodSlots(c.group.period).forEach((slot) => slots.add(slot));
+      managedSlotsByDay.set(day, slots);
+    }
     const adminMap = new Map<number, Array<{ hours: number; period: string | null }>>();
     for (const c of monthHc) {
       const d = c.group.date.getDate();
+      const override = HC_SELF_CONTENTS.includes(c.group.content)
+        ? adjustedSelfHcEntry(c, managedSlotsByDay.get(d) ?? new Set())
+        : { hours: c.hours, period: c.group.period };
+      if (!override) continue;
       const entries = adminMap.get(d) ?? [];
-      entries.push({ hours: c.hours, period: c.group.period });
+      entries.push({ hours: override.hours, period: override.period });
       adminMap.set(d, entries);
     }
     const adminDays = Array.from(adminMap, ([day, entries]) => ({

@@ -20,9 +20,9 @@ async function ensureLoginLockColumns() {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Phiên hết hạn sau 15 phút không hoạt động (cookie tự hết hạn khi tab đóng/mất mạng);
+  // Phiên hết hạn sau 30 phút không hoạt động (cookie tự hết hạn khi tab đóng/mất mạng);
   // updateAge để phiên "trượt" làm mới khi người dùng còn đang thao tác (xem refetchInterval ở SessionProvider).
-  session: { strategy: "jwt", maxAge: 15 * 60, updateAge: 5 * 60 },
+  session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 5 * 60 },
   trustHost: true,
   pages: {
     signIn: "/login",

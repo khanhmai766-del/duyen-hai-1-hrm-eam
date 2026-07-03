@@ -26,6 +26,7 @@ import type { ShiftAssignmentWithUser, CheckInWithUser } from "@/types";
 
 const HOURS_OPTIONS = [4, 6, 8];
 const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
+const VIEWER_REFRESH_INTERVAL_MS = 10_000;
 
 const UNITS = ["Vận hành 1", "Vận hành 2"];
 
@@ -159,7 +160,10 @@ export default function OrgChartPage() {
     };
   }, [viewer]);
 
-  const { data, isLoading } = useShift({ date, shiftType, unit });
+  const { data, isLoading } = useShift(
+    { date, shiftType, unit },
+    { refetchInterval: viewer ? VIEWER_REFRESH_INTERVAL_MS : false }
+  );
   const shift = data?.data;
   const assignments = (shift?.assignments ?? []) as ShiftAssignmentWithUser[];
   const checkIns = shift?.checkIns ?? [];

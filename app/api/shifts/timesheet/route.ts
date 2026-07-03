@@ -2,10 +2,35 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser, handle } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
 const EDIT_TIMESHEET_PERMISSION_ID = "timesheet-edit";
+const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Buổi chiều", "Hành chính - Ra ca sáng"];
+
+function periodSlots(period?: string | null) {
+  const normalized = normalizeHcPeriod(period);
+  if (normalized === "FULL_DAY") return ["MORNING", "AFTERNOON"];
+  if (normalized === "AFTERNOON") return ["AFTERNOON"];
+  return ["MORNING"];
+}
+
+function adjustedSelfHcEntry(c: {
+  hours: number;
+  group: { period: string | null };
+}, managedSlots: Set<string>) {
+  const period = normalizeHcPeriod(c.group.period);
+  const selfSlots = periodSlots(period);
+  const remainingSlots = selfSlots.filter((slot) => !managedSlots.has(slot));
+  if (remainingSlots.length === 0) return null;
+  if (period === "FULL_DAY") {
+    if (remainingSlots.length === 2) return { hours: c.hours, period };
+    const slot = remainingSlots[0];
+    return { hours: Math.min(4, c.hours), period: slot };
+  }
+  return { hours: c.hours, period };
+}
 
 function retentionMonthRange(now = new Date()) {
   const current = { year: now.getFullYear(), month: now.getMonth() };
@@ -144,14 +169,31 @@ export async function GET(req: NextRequest) {
       },
       select: { userId: true, hours: true, note: true, group: { select: { date: true, content: true, period: true } } },
     });
-    const hcEntries = hcCheckIns.map((c) => ({
-      userId: c.userId,
-      day: c.group.date.getDate(),
-      hours: c.hours,
-      content: c.group.content,
-      period: c.group.period,
-      note: c.note,
-    }));
+    const managedSlotsByUserDay = new Map<string, Set<string>>();
+    for (const c of hcCheckIns) {
+      if (HC_SELF_CONTENTS.includes(c.group.content)) continue;
+      const key = `${c.userId}:${c.group.date.getDate()}`;
+      const slots = managedSlotsByUserDay.get(key) ?? new Set<string>();
+      periodSlots(c.group.period).forEach((slot) => slots.add(slot));
+      managedSlotsByUserDay.set(key, slots);
+    }
+    const hcEntries = hcCheckIns
+      .map((c) => {
+        const day = c.group.date.getDate();
+        const override = HC_SELF_CONTENTS.includes(c.group.content)
+          ? adjustedSelfHcEntry(c, managedSlotsByUserDay.get(`${c.userId}:${day}`) ?? new Set())
+          : { hours: c.hours, period: c.group.period };
+        if (!override) return null;
+        return {
+          userId: c.userId,
+          day,
+          hours: override.hours,
+          content: c.group.content,
+          period: override.period,
+          note: c.note,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
     const overrideRows = await prisma.$queryRawUnsafe<
       {

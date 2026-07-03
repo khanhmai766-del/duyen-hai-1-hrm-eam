@@ -15,7 +15,10 @@ export interface ShiftDetail {
   handovers: any[];
 }
 
-export function useShift(params: { date: string; shiftType?: string; unit?: string }) {
+export function useShift(
+  params: { date: string; shiftType?: string; unit?: string },
+  options: { refetchInterval?: number | false } = {}
+) {
   const qs = new URLSearchParams();
   qs.set("date", params.date);
   if (params.shiftType) qs.set("shiftType", params.shiftType);
@@ -24,6 +27,8 @@ export function useShift(params: { date: string; shiftType?: string; unit?: stri
     queryKey: ["shift", params],
     queryFn: () => apiGet<ShiftDetail | null>(`/api/shifts?${qs.toString()}`),
     staleTime: 15 * 1000,
+    refetchInterval: options.refetchInterval,
+    refetchIntervalInBackground: Boolean(options.refetchInterval),
   });
 }
 
