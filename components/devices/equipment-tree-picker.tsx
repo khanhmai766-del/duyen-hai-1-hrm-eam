@@ -34,6 +34,7 @@ export function EquipmentTreePicker({
   position,
   rootSeq,
   accessFilter,
+  includeLeaves = false,
   placeholder = "Chọn thư mục hệ thống",
   disabled = false,
 }: {
@@ -42,6 +43,7 @@ export function EquipmentTreePicker({
   position?: string | null; // cương vị quản lý đang chọn — lọc nhóm hệ thống theo cương vị
   rootSeq?: string | null; // chỉ duyệt trong nhánh con của node này (vd lọc thiết bị theo hệ thống)
   accessFilter?: "edit"; // chỉ hiện hệ thống cương vị có quyền Sửa (mọi cấp); chưa cấu hình → hiện tất cả
+  includeLeaves?: boolean; // hiện cả thiết bị cấp cuối (node lá) và cho chọn — mặc định chỉ hiện thư mục
   placeholder?: string;
   disabled?: boolean;
 }) {
@@ -117,11 +119,11 @@ export function EquipmentTreePicker({
   // Lọc nhóm gốc: nếu lọc theo quyền Sửa thì dùng editVisibleSeqs; ngược lại theo rule cương vị.
   const filteredRoots = React.useMemo(() => {
     return roots.filter((node) => {
-      if (!folderSeqs.has(node.seq)) return false;
+      if (!includeLeaves && !folderSeqs.has(node.seq)) return false;
       if (editVisibleSeqs) return editVisibleSeqs.has(node.seq);
       return rootAllowedForPosition(node, position, scopes);
     });
-  }, [roots, position, folderSeqs, scopes, editVisibleSeqs]);
+  }, [roots, position, folderSeqs, scopes, editVisibleSeqs, includeLeaves]);
 
   // Khi mở popup, tự bung đường dẫn tới mục đang chọn để thấy ngay.
   React.useEffect(() => {
@@ -144,7 +146,7 @@ export function EquipmentTreePicker({
     const searchExpanded = new Set<string>();
     let matchCount = 0;
     for (const n of nodes) {
-      if (!folderSeqs.has(n.seq)) continue;
+      if (!includeLeaves && !folderSeqs.has(n.seq)) continue;
       if (editVisibleSeqs && !editVisibleSeqs.has(n.seq)) continue;
       if (normalizeText([n.seq, n.name].filter(Boolean).join(" ")).includes(q)) {
         matchCount++;
@@ -158,7 +160,7 @@ export function EquipmentTreePicker({
       }
     }
     return { visible, searchExpanded, matchCount };
-  }, [q, nodes, bySeq, effParentOf, folderSeqs, editVisibleSeqs]);
+  }, [q, nodes, bySeq, effParentOf, folderSeqs, editVisibleSeqs, includeLeaves]);
 
   function toggle(seq: string) {
     setExpanded((s) => {
@@ -181,7 +183,7 @@ export function EquipmentTreePicker({
     const walk = (list: EquipmentNode[], depth: number) => {
       for (const n of list) {
         if (visible && !visible.has(n.seq)) continue;
-        if (!folderSeqs.has(n.seq)) continue;
+        if (!includeLeaves && !folderSeqs.has(n.seq)) continue;
         if (editVisibleSeqs && !editVisibleSeqs.has(n.seq)) continue;
         const kids = childrenOf.get(n.seq) ?? [];
         const open = q ? !!searchExpanded?.has(n.seq) : expanded.has(n.seq);
@@ -191,7 +193,7 @@ export function EquipmentTreePicker({
     };
     walk(filteredRoots, 0);
     return rows;
-  }, [filteredRoots, visible, folderSeqs, editVisibleSeqs, childrenOf, expanded, searchExpanded, q]);
+  }, [filteredRoots, visible, folderSeqs, editVisibleSeqs, childrenOf, expanded, searchExpanded, q, includeLeaves]);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -202,10 +204,13 @@ export function EquipmentTreePicker({
     getItemKey: (index) => flatRows[index]?.node.seq ?? index,
   });
 
-  // Popover mount trễ: đo lại khi mở để virtualizer bắt được khung cuộn.
+  // Popover mount trễ: đo lại SAU khi khung cuộn đã layout (rAF), và mỗi khi số
+  // dòng đổi — đo ngay lúc mở popup khung còn cao 0px sẽ không vẽ được dòng nào.
   React.useEffect(() => {
-    if (open) rowVirtualizer.measure();
-  }, [open, rowVirtualizer]);
+    if (!open) return;
+    const id = requestAnimationFrame(() => rowVirtualizer.measure());
+    return () => cancelAnimationFrame(id);
+  }, [open, flatRows.length, rowVirtualizer]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -283,7 +288,8 @@ export function EquipmentTreePicker({
                       type="button"
                       onClick={() => {
                         onChange(n);
-                        toggle(n.seq);
+                        if (hasKids) toggle(n.seq);
+                        else pick(n); // node lá: chọn xong đóng popup luôn
                       }}
                       className={cn(
                         "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",

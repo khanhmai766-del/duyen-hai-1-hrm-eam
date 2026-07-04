@@ -40,7 +40,8 @@ export function ReplacementPointsEditor({
             <EquipmentTreePicker
               value={row.deviceSeq ?? ""}
               onChange={(node) => update(i, { deviceSeq: node?.seq ?? null, system: node?.name ?? null })}
-              placeholder="Chọn hệ thống"
+              includeLeaves
+              placeholder="Chọn hệ thống / thiết bị"
             />
           </div>
           <div>
