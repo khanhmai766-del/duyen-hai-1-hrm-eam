@@ -39,7 +39,7 @@ export function ReplacementPointsEditor({
     <div className="space-y-2">
       {rows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-          Chưa gán hệ thống/thiết bị nào. Bấm “Thêm điểm dùng” để khai báo nơi dùng, chu kỳ và số lượng cần thay.
+          Chưa gán hệ thống/thiết bị nào. Bấm “Thêm thiết bị theo dõi” để khai báo nơi dùng, chu kỳ và số lượng cần thay.
         </div>
       )}
       {rows.map((row, i) => (
@@ -113,7 +113,7 @@ export function ReplacementPointsEditor({
         </div>
       ))}
       <Button type="button" variant="outline" size="sm" onClick={add}>
-        <Plus className="h-4 w-4" /> Thêm điểm dùng
+        <Plus className="h-4 w-4" /> Thêm thiết bị theo dõi
       </Button>
     </div>
   );

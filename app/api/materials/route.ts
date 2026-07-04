@@ -90,6 +90,7 @@ type ReplacementInput = {
   location?: string | null; // tên thiết bị nhập tay (khi không chọn từ cây)
   deviceCount?: unknown; // số lượng thiết bị tại điểm này
   managingPosition?: string | null; // cương vị quản lý điểm này
+  isActive?: unknown; // true = đang theo dõi thời gian thay thế (bật từ panel chi tiết, KHÔNG bật khi thêm mới từ form)
   intervalMonths?: unknown;
   intervalNote?: string | null;
   quantity?: unknown;
@@ -107,6 +108,9 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     location: entry.location?.trim() || null,
     deviceCount: Math.max(1, Math.round(Number(entry.deviceCount)) || 1),
     managingPosition: entry.managingPosition?.trim() || null,
+    // Thêm thiết bị theo dõi từ form KHÔNG tự kích hoạt đếm thời gian;
+    // chỉ giữ trạng thái true khi dòng cũ đã được bật theo dõi trước đó.
+    isActive: entry.isActive === true,
     quantity,
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,

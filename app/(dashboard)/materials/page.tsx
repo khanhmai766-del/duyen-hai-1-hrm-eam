@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, Play, CircleCheck, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -21,11 +21,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
+import { useUpdateReplacement } from "@/hooks/useReplacements";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { MATERIAL_CATEGORIES } from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { cn } from "@/lib/utils";
+import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
 
 // Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
@@ -173,6 +174,7 @@ function MaterialsPageContent() {
         location: r.location,
         deviceCount: r.deviceCount ?? 1,
         managingPosition: r.managingPosition,
+        isActive: r.isActive,
         quantity: r.quantity,
         intervalMonths: r.intervalMonths,
         intervalNote: r.intervalNote,
@@ -618,6 +620,32 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
 /** Panel bung: chỉ liệt kê chi tiết các điểm thay thế dạng bảng (hệ thống · chu kỳ · số lượng). */
 function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
   const points = m.replacements ?? [];
+  const upd = useUpdateReplacement();
+
+  // Bật theo dõi thời gian: mốc tính từ hôm nay, đến hạn = hôm nay + chu kỳ.
+  async function startTracking(p: NonNullable<MaterialWithDevices["replacements"]>[number]) {
+    try {
+      const due = new Date();
+      due.setMonth(due.getMonth() + (p.intervalMonths || 12));
+      await upd.mutateAsync({
+        id: p.id,
+        isActive: true,
+        lastReplacedAt: formatDateInput(new Date()),
+        nextDueAt: formatDateInput(due),
+      });
+      toast.success("Đã bật theo dõi — điểm này xuất hiện trong Lịch thay thế vật tư");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+  async function stopTracking(id: string) {
+    try {
+      await upd.mutateAsync({ id, isActive: false });
+      toast.success("Đã ngừng theo dõi điểm này");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
   if (points.length === 0) {
     return (
       <div className="space-y-3">
@@ -644,6 +672,7 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
               <th className="w-[120px] px-4 py-2 text-center font-semibold">SL thiết bị</th>
               <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
               <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
+              <th className="w-[150px] px-4 py-2 text-center font-semibold">Theo dõi</th>
             </tr>
           </thead>
           <tbody>
@@ -655,6 +684,29 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
                 <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
                 <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                <td className="px-4 py-2.5 text-center">
+                  {p.isActive ? (
+                    <button
+                      type="button"
+                      disabled={upd.isPending}
+                      onClick={() => stopTracking(p.id)}
+                      title="Đang theo dõi thời gian thay thế — bấm để ngừng"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-200"
+                    >
+                      <CircleCheck className="h-3.5 w-3.5" /> Đang theo dõi
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={upd.isPending}
+                      onClick={() => startTracking(p)}
+                      title="Bắt đầu theo dõi thời gian thay thế cho hệ thống này"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-accent/50 bg-accent/5 px-2.5 py-1 text-[11.5px] font-semibold text-accent transition-colors hover:bg-accent/15"
+                    >
+                      <Play className="h-3.5 w-3.5" /> Theo dõi
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
