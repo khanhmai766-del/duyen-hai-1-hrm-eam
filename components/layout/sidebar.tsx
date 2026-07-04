@@ -111,13 +111,22 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
               ) : (
                 <div className="px-2 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.18)]" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.18)]" />
+                    <span className="shrink-0 whitespace-nowrap text-[11.5px] font-black uppercase tracking-[0.08em] text-slate-600 dark:text-slate-200">
                       {section.title}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setClosedSections((state) => ({ ...state, [section.title]: !sectionClosed }))}
+                      onClick={() =>
+                        setClosedSections(
+                          Object.fromEntries(
+                            sections.map((candidate) => [
+                              candidate.title,
+                              candidate.title === section.title ? !sectionClosed : true,
+                            ])
+                          )
+                        )
+                      }
                       className="ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm ring-1 ring-blue-100 transition-all hover:text-accent hover:shadow-md dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:hover:text-sky-300"
                       aria-label={sectionClosed ? `Sổ ${section.title}` : `Thu gọn ${section.title}`}
                       title={sectionClosed ? "Sổ danh mục" : "Thu gọn danh mục"}
