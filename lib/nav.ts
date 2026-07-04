@@ -72,7 +72,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Danh mục vật tư", href: "/materials", icon: Package, keywords: "material vat tu phu tung ton kho" },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
-      { label: "Quy trình thay thế", href: "/replacement-procedures", icon: ClipboardList, keywords: "quy trinh thay the vat tu huong dan checklist procedure replacement" },
+      { label: "Theo dõi vật tư", href: "/replacement-procedures", icon: ClipboardList, keywords: "theo doi vat tu quy trinh thay the huong dan checklist procedure replacement" },
     ],
   },
   {
