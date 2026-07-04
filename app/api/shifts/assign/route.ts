@@ -1,10 +1,39 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { shiftWindow, MAX_EARLY_CHECKINS } from "@/lib/constants";
+import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { invalidateShiftCache } from "@/lib/shift-response-cache";
 import { dateRange, parseDateInput } from "@/lib/utils";
+
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+function vietnamMonthParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return { year: Number(values.year), month: Number(values.month) };
+}
+
+function shiftDateMonthParts(value: string | Date) {
+  if (value instanceof Date) return vietnamMonthParts(value);
+  const match = value.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (match) return { year: Number(match[1]), month: Number(match[2]) };
+  return vietnamMonthParts(parseDateInput(value));
+}
+
+function isCurrentVietnamMonth(value: string | Date, now = new Date()) {
+  const current = vietnamMonthParts(now);
+  const target = shiftDateMonthParts(value);
+  return target.year === current.year && target.month === current.month;
+}
+
+function currentMonthRestrictionMessage() {
+  return "Chỉ được điểm danh, thu hồi hoặc duyệt ca trong tháng hiện tại.";
+}
 
 /**
  * Org-chart check-in ("Điểm danh"): places the current user into a seat
@@ -27,6 +56,7 @@ export async function POST(req: NextRequest) {
     if (!date || !shiftType || !unit || !positionLabel?.trim()) {
       return fail("Thiếu thông tin ca trực hoặc cương vị");
     }
+    if (!isCurrentVietnamMonth(date)) return fail(currentMonthRestrictionMessage(), 400);
     await requirePermissionLevel(user, "shift-operation-check-in", ["create", "manage", "full"], "Không đủ quyền điểm danh ca vận hành");
     const label = positionLabel.trim();
     const canApproveShift = await hasPermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"]);
@@ -55,26 +85,6 @@ export async function POST(req: NextRequest) {
     const managerAddingUser = !!body.userId && canApproveShift;
     if (shift.isAttendanceLocked && !managerAddingUser) {
       return fail("Ca trực đã được duyệt hết và khóa điểm danh.", 403);
-    }
-
-    // Điểm danh sớm: nếu ca chưa bắt đầu (tương lai) → tính là "điểm danh sớm".
-    // Mỗi user chỉ được đặt trước tối đa MAX_EARLY_CHECKINS ca trực.
-    const now = new Date();
-    const targetStart = shiftWindow(day, shiftType).start;
-    const alreadyInTarget = shift.assignments.some((a) => a.userId === targetUserId);
-    if (targetStart.getTime() > now.getTime() && !alreadyInTarget) {
-      const since = new Date(now);
-      since.setHours(0, 0, 0, 0);
-      const futureSeats = await prisma.shiftAssignment.findMany({
-        where: { userId: targetUserId, shiftId: { not: shift.id }, shift: { date: { gte: since } } },
-        include: { shift: { select: { date: true, shiftType: true } } },
-      });
-      const earlyCount = futureSeats.filter(
-        (a) => shiftWindow(a.shift.date, a.shift.shiftType).start.getTime() > now.getTime()
-      ).length;
-      if (earlyCount >= MAX_EARLY_CHECKINS) {
-        return fail(`Chỉ được điểm danh sớm tối đa ${MAX_EARLY_CHECKINS} ca trực.`, 400);
-      }
     }
 
     // Decide where the seat hangs in the hierarchy.
@@ -137,12 +147,15 @@ export async function DELETE(req: NextRequest) {
     const id = sp.get("id");
     if (id) {
       await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền thu hồi điểm danh");
-      const target = await prisma.shiftAssignment.findUnique({ where: { id } });
+      const target = await prisma.shiftAssignment.findUnique({
+        where: { id },
+        include: { shift: { select: { date: true, isAttendanceLocked: true } } },
+      });
       if (!target) return fail("Không tìm thấy phân công", 404);
-      const targetShift = await prisma.shift.findUnique({ where: { id: target.shiftId }, select: { isAttendanceLocked: true } });
+      if (!isCurrentVietnamMonth(target.shift.date)) return fail(currentMonthRestrictionMessage(), 400);
       await prisma.shiftAssignment.updateMany({ where: { parentId: id }, data: { parentId: target.parentId } });
       await prisma.shiftAssignment.delete({ where: { id } });
-      if (!targetShift?.isAttendanceLocked || !target.isApproved) {
+      if (!target.shift.isAttendanceLocked || !target.isApproved) {
         await prisma.checkIn.deleteMany({ where: { shiftId: target.shiftId, userId: target.userId } });
       }
       await audit(user.id, "REMOVE_CHECKIN", "ShiftAssignment", id, "Xoá điểm danh");
@@ -155,6 +168,7 @@ export async function DELETE(req: NextRequest) {
     const shiftType = sp.get("shiftType");
     const unit = sp.get("unit");
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
+    if (!isCurrentVietnamMonth(date)) return fail(currentMonthRestrictionMessage(), 400);
 
     const { start, end } = dateRange(date);
 
@@ -201,6 +215,7 @@ export async function PUT(req: NextRequest) {
       ids?: string[];
     };
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
+    if (!isCurrentVietnamMonth(date)) return fail(currentMonthRestrictionMessage(), 400);
 
     const { start, end } = dateRange(date);
 

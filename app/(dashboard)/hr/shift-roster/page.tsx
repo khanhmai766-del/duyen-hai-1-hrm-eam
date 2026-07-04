@@ -623,7 +623,7 @@ export default function ShiftRosterPage() {
               {canEditTimesheet
                 ? "Bảng công của toàn bộ nhân sự — "
                 : "Bảng công của bạn — "}
-              chỉ lưu trữ 2 tháng gần nhất;{" "}
+              tháng trước lưu đến hết ngày 15 của tháng hiện tại;{" "}
               hiển thị ca đã điểm danh trên sơ đồ tổ chức ca; ca <span className="font-medium text-red-600">chưa duyệt được tô đỏ</span>.
               Nếu số giờ khác 8 thì mã ca có tiền tố giờ, ví dụ <span className="font-medium text-ink">4V3</span>;
               kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>; nếu HC có nội dung công việc thì rê chuột lên ô để xem.

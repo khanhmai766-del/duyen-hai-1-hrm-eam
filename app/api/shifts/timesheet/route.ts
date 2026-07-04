@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 
 const EDIT_TIMESHEET_PERMISSION_ID = "timesheet-edit";
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Buổi chiều", "Hành chính - Ra ca sáng"];
+const TIMESHEET_PREVIOUS_MONTH_KEEP_UNTIL_DAY = 15;
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 function periodSlots(period?: string | null) {
   const normalized = normalizeHcPeriod(period);
@@ -32,12 +34,28 @@ function adjustedSelfHcEntry(c: {
   return { hours: c.hours, period };
 }
 
+function vietnamCalendarParts(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    year: Number(values.year),
+    month: Number(values.month) - 1,
+    day: Number(values.day),
+  };
+}
+
 function retentionMonthRange(now = new Date()) {
-  const current = { year: now.getFullYear(), month: now.getMonth() };
-  const start = new Date(current.year, current.month - 1, 1);
+  const current = vietnamCalendarParts(now);
+  const keepPreviousMonth = current.day <= TIMESHEET_PREVIOUS_MONTH_KEEP_UNTIL_DAY;
+  const start = new Date(current.year, current.month - (keepPreviousMonth ? 1 : 0), 1);
   return {
     min: { year: start.getFullYear(), month: start.getMonth() },
-    max: current,
+    max: { year: current.year, month: current.month },
   };
 }
 
@@ -246,7 +264,7 @@ export async function PUT(req: NextRequest) {
 
     if (!userId) return fail("Thiếu nhân viên cần chỉnh công");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Ngày bảng công không hợp lệ");
-    if (!isDateInRetention(date)) return fail("Bảng công chỉ lưu trữ và chỉnh sửa trong 2 tháng gần nhất", 400);
+    if (!isDateInRetention(date)) return fail("Bảng công tháng trước chỉ lưu đến ngày 15 của tháng hiện tại", 400);
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
     if (!target) return fail("Không tìm thấy nhân viên", 404);
 

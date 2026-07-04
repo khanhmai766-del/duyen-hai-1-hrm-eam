@@ -402,7 +402,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "operation-events",
     group: "Thông tin vận hành",
     feature: "Lịch diễn tập và thông tin nội bộ",
-    note: "Cập nhật lịch diễn tập sự cố, PCCC và ghi chú vận hành trong 3 tháng gần nhất.",
+    note: "Cập nhật lịch diễn tập sự cố, PCCC và ghi chú vận hành trong 1 tháng gần nhất.",
     matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   },
   {

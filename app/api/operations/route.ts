@@ -6,17 +6,23 @@ import { parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-// Retention: keep only the trailing 3 months of operation events.
+// Retention: keep only the trailing 1 month of operation events so the
+// internal information board resets regularly for the next month's updates.
 function retentionCutoff(): Date {
   const d = new Date();
-  d.setMonth(d.getMonth() - 3);
+  d.setMonth(d.getMonth() - 1);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+async function purgeExpiredOperations() {
+  await prisma.operationEvent.deleteMany({ where: { date: { lt: retentionCutoff() } } });
 }
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
+    await purgeExpiredOperations();
     const sp = req.nextUrl.searchParams;
     const month = sp.get("month"); // optional "YYYY-MM"
     let where: any = { date: { gte: retentionCutoff() } };
@@ -48,8 +54,8 @@ export async function POST(req: NextRequest) {
         createdById: user.id,
       },
     });
-    // Quarterly retention: drop anything older than 3 months whenever new data is added.
-    await prisma.operationEvent.deleteMany({ where: { date: { lt: retentionCutoff() } } });
+    // Monthly retention: drop anything older than 1 month whenever new data is added.
+    await purgeExpiredOperations();
     await audit(user.id, "CREATE_OPERATION", "OperationEvent", event.id, event.title);
     return ok(event);
   });

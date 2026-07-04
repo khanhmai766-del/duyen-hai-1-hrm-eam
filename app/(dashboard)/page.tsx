@@ -811,7 +811,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
       </CardHeader>
       <CardContent>
         <p className="mb-2 text-xs text-muted-foreground">
-          Lịch diễn tập sự cố, diễn tập PCCC (do Trưởng ca cập nhật) — lưu dữ liệu 3 tháng gần nhất.
+          Lịch diễn tập sự cố, diễn tập PCCC (do Trưởng ca cập nhật) — lưu dữ liệu 1 tháng gần nhất.
         </p>
         {isLoading ? (
           <div className="h-24" />

@@ -108,6 +108,17 @@ export default function OrgChartPage() {
   const rbac = useRbacAccess();
 
   const canApprove = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
+  const currentMonthBounds = React.useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    return {
+      min: localDate(new Date(year, month, 1)),
+      max: localDate(new Date(year, month + 1, 0)),
+    };
+  }, []);
+  const selectedDateAllowed = date >= currentMonthBounds.min && date <= currentMonthBounds.max;
+  const monthRestrictionTitle = "Chỉ được điểm danh, thu hồi hoặc duyệt ca trong tháng hiện tại";
 
   React.useEffect(() => {
     if (!checkInSuccessMessage) return;
@@ -200,6 +211,8 @@ export default function OrgChartPage() {
           <Button
             size="sm"
             onClick={() => setApproveOpen(true)}
+            disabled={!selectedDateAllowed}
+            title={!selectedDateAllowed ? monthRestrictionTitle : undefined}
             className="text-white hover:text-white [&_svg]:text-white"
           >
             <ClipboardCheck className="h-4 w-4" /> Duyệt chấm công
@@ -217,7 +230,13 @@ export default function OrgChartPage() {
               <Lock className="h-4 w-4" /> Đã duyệt — khoá thu hồi
             </Button>
           ) : (
-            <Button size="sm" variant="destructive" onClick={handleRecall} disabled={recall.isPending}>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleRecall}
+              disabled={recall.isPending || !selectedDateAllowed}
+              title={!selectedDateAllowed ? monthRestrictionTitle : undefined}
+            >
               {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
               Thu hồi điểm danh
             </Button>
@@ -225,14 +244,14 @@ export default function OrgChartPage() {
         ) : (
           <Button
             size="sm"
-            variant={attendanceLocked ? "outline" : "accent"}
+            variant={attendanceLocked || !selectedDateAllowed ? "outline" : "accent"}
             onClick={() => setCheckInOpen(true)}
-            disabled={attendanceLocked}
+            disabled={attendanceLocked || !selectedDateAllowed}
             className={attendanceLocked ? "cursor-not-allowed text-muted-foreground" : undefined}
-            title={attendanceLocked ? "Ca trực đã duyệt hết — điểm danh đã khóa" : undefined}
+            title={attendanceLocked ? "Ca trực đã duyệt hết — điểm danh đã khóa" : !selectedDateAllowed ? monthRestrictionTitle : undefined}
           >
             {attendanceLocked ? <Lock className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-            {attendanceLocked ? "Đã khóa điểm danh" : "Điểm danh"}
+            {attendanceLocked ? "Đã khóa điểm danh" : !selectedDateAllowed ? "Ngoài tháng hiện tại" : "Điểm danh"}
           </Button>
         )}
         <Button size="sm" variant="outline" onClick={openViewer}>
@@ -303,6 +322,8 @@ export default function OrgChartPage() {
             <Input
               type="date"
               value={date}
+              min={currentMonthBounds.min}
+              max={currentMonthBounds.max}
               onChange={(e) => { setDate(e.target.value); setAutoFollow(false); }}
               className="h-9 w-44 shrink-0 bg-white text-sm"
             />
