@@ -164,6 +164,7 @@ function MaterialsPageContent() {
         system: r.system,
         location: r.location,
         deviceCount: r.deviceCount ?? 1,
+        managingPosition: r.managingPosition,
         quantity: r.quantity,
         intervalMonths: r.intervalMonths,
         intervalNote: r.intervalNote,

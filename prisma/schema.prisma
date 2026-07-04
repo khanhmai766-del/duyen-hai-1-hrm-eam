@@ -335,6 +335,7 @@ model MaterialReplacement {
   system         String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
   quantity       Int      @default(1) // dung tích/số lượng cần thay CHO MỖI thiết bị (theo ĐVT của vật tư)
   deviceCount    Int      @default(1) // số lượng thiết bị tại điểm này
+  managingPosition String? // cương vị quản lý (đồng bộ danh sách với form khiếm khuyết)
   intervalMonths Int // chu kỳ thay thế (tháng)
   intervalNote   String? // ghi chú chu kỳ, vd "2500h"
   lastReplacedAt DateTime? // lần thay gần nhất (user nhập)

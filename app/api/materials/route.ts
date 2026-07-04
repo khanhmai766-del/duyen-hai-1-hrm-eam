@@ -89,6 +89,7 @@ type ReplacementInput = {
   system?: string | null;
   location?: string | null; // tên thiết bị nhập tay (khi không chọn từ cây)
   deviceCount?: unknown; // số lượng thiết bị tại điểm này
+  managingPosition?: string | null; // cương vị quản lý điểm này
   intervalMonths?: unknown;
   intervalNote?: string | null;
   quantity?: unknown;
@@ -105,6 +106,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     system: entry.system?.trim() || defaultSystem || null,
     location: entry.location?.trim() || null,
     deviceCount: Math.max(1, Math.round(Number(entry.deviceCount)) || 1),
+    managingPosition: entry.managingPosition?.trim() || null,
     quantity,
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,

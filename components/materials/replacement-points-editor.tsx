@@ -4,8 +4,13 @@ import * as React from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
+import { usePositions } from "@/hooks/useUsers";
+import { isSelectableManagingPosition } from "@/lib/constants";
 import type { MaterialReplacementInput } from "@/hooks/useMaterials";
+
+const NO_POSITION = "__NONE__";
 
 /**
  * Bảng "điểm dùng / thay thế" cho một vật tư: mỗi dòng = 1 hệ thống/thiết bị +
@@ -21,6 +26,10 @@ export function ReplacementPointsEditor({
   onChange: (rows: MaterialReplacementInput[]) => void;
 }) {
   const rows = value ?? [];
+  // Cương vị quản lý: cùng nguồn với ô "Cương Vị" của form nhập khiếm khuyết
+  // (chức vụ từ Quản lý người dùng, lọc bỏ nhóm quản đốc/thống kê/kỹ thuật viên).
+  const allPositions = usePositions();
+  const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
   const update = (index: number, patch: Partial<MaterialReplacementInput>) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   const add = () => onChange([...rows, { deviceSeq: null, system: null, intervalMonths: 6, quantity: 1 }]);
@@ -35,7 +44,7 @@ export function ReplacementPointsEditor({
       )}
       {rows.map((row, i) => (
         <div key={i} className="space-y-2 rounded-lg border border-border bg-muted/20 p-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className="min-w-0">
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Hệ thống / thiết bị</label>
               <EquipmentTreePicker
@@ -52,6 +61,21 @@ export function ReplacementPointsEditor({
                 onChange={(e) => update(i, { location: e.target.value })}
                 placeholder="VD: Bơm dầu bôi trơn máy nghiền A"
               />
+            </div>
+            <div className="min-w-0">
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Cương vị quản lý</label>
+              <Select
+                value={row.managingPosition || NO_POSITION}
+                onValueChange={(v) => update(i, { managingPosition: v === NO_POSITION ? null : v })}
+              >
+                <SelectTrigger aria-label="Chọn cương vị quản lý"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_POSITION}>— Không chọn —</SelectItem>
+                  {positions.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="grid grid-cols-[1fr_1fr_1fr_36px] items-end gap-2">
