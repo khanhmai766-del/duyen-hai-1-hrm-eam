@@ -203,8 +203,8 @@ function MaterialsPageContent() {
         )}
       </PageHeader>
 
-      {/* Tab loại vật tư — chuyển đổi qua lại như tab Thư mục lưu trữ */}
-      <div className="flex flex-wrap gap-1 border-b border-border">
+      {/* Tab loại vật tư — chuyển đổi qua lại như tab Thư mục lưu trữ; ô tìm kiếm cùng hàng bên phải */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-border">
         {MATERIAL_CATEGORY_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -220,12 +220,12 @@ function MaterialsPageContent() {
             {tab.key}
           </button>
         ))}
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="ml-auto pb-2">
           <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="sm:w-72" />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         {canManage && selected.size > 0 && (
           <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-red-50 px-3 py-2">
             <span className="text-sm font-medium text-ink">Đã chọn {selected.size} vật tư</span>
