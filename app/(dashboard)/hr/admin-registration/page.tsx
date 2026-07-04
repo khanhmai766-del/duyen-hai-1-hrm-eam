@@ -274,6 +274,8 @@ function RegistrationDateRow({
   const cancelRegistration = useHcCancelRegistration();
   const updateNote = useHcUpdateRegistrationNote();
   const [editing, setEditing] = React.useState(false);
+  const [reviewMode, setReviewMode] = React.useState(false);
+  const [reviewingId, setReviewingId] = React.useState<string | null>(null);
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const approvedCount = registrations.filter((registration) => registration.isApproved).length;
   const pendingRegistrations = registrations.filter((registration) => !registration.isApproved);
@@ -284,18 +286,27 @@ function RegistrationDateRow({
     setNotes(Object.fromEntries(registrations.map((registration) => [registration.id, registration.note ?? ""])));
   }, [registrations]);
 
-  async function approveDateGroup() {
+  async function approveRegistration(registration: HcRegistration) {
     try {
-      const byGroup = new Map<string, string[]>();
-      for (const registration of pendingRegistrations) {
-        byGroup.set(registration.group.id, [...(byGroup.get(registration.group.id) ?? []), registration.id]);
-      }
-      for (const [groupId, ids] of byGroup) {
-        await approve.mutateAsync({ groupId, ids });
-      }
-      toast.success("Đã duyệt đăng ký đi hành chính trong ngày");
+      setReviewingId(registration.id);
+      await approve.mutateAsync({ groupId: registration.group.id, ids: [registration.id] });
+      toast.success(`Đã duyệt đăng ký của ${registration.user.name}`);
     } catch (err) {
       toast.error((err as Error).message);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  async function rejectRegistration(registration: HcRegistration) {
+    try {
+      setReviewingId(registration.id);
+      await cancelRegistration.mutateAsync(registration.id);
+      toast.success(`Đã không duyệt đăng ký của ${registration.user.name}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setReviewingId(null);
     }
   }
 
@@ -338,9 +349,9 @@ function RegistrationDateRow({
         )}
         {(canManage || canEditNote) && (
           <div className="space-y-2 border-t border-dashed border-slate-200 pt-3">
-            {canManage && pendingRegistrations.length > 0 && (
-              <Button className="w-full justify-center" size="sm" variant="accent" onClick={approveDateGroup} disabled={approve.isPending}>
-                {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Duyệt
+            {canManage && registrations.length > 0 && (
+              <Button className="w-full justify-center" size="sm" variant={reviewMode ? "outline" : "accent"} onClick={() => setReviewMode((open) => !open)}>
+                <Check className="h-4 w-4" /> {reviewMode ? "Ẩn duyệt" : "Duyệt"}
               </Button>
             )}
             {canEditNote && (
@@ -360,7 +371,38 @@ function RegistrationDateRow({
       <div className="min-w-0 space-y-3">
         <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3 min-[1800px]:grid-cols-4">
           {registrations.map((registration) => (
-            <div key={registration.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div key={registration.id} className="relative min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              {canManage && reviewMode && (
+                <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-slate-200 bg-white/95 p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => approveRegistration(registration)}
+                    disabled={registration.isApproved || reviewingId === registration.id}
+                    title={registration.isApproved ? "Đã duyệt" : "Duyệt đăng ký"}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300",
+                      registration.isApproved
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-white text-emerald-600 ring-1 ring-emerald-200 hover:bg-emerald-500 hover:text-white hover:shadow-md",
+                      reviewingId === registration.id && "cursor-wait opacity-60"
+                    )}
+                  >
+                    {reviewingId === registration.id && approve.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rejectRegistration(registration)}
+                    disabled={reviewingId === registration.id}
+                    title="Không duyệt đăng ký"
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-full bg-white text-red-600 ring-1 ring-red-200 transition-all hover:bg-red-500 hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-300",
+                      reviewingId === registration.id && "cursor-wait opacity-60"
+                    )}
+                  >
+                    {reviewingId === registration.id && cancelRegistration.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              )}
               <div className="flex items-start gap-3">
                 {registration.user.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -370,7 +412,7 @@ function RegistrationDateRow({
                     {initials(registration.user.name)}
                   </div>
                 )}
-                <div className="min-w-0 flex-1">
+                <div className={cn("min-w-0 flex-1", canManage && reviewMode && "pr-16")}>
                   <div className="truncate font-semibold text-ink">{registration.user.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">

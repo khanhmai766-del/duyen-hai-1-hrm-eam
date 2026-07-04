@@ -7,7 +7,7 @@ type ToasterProps = React.ComponentProps<typeof Sonner>;
 export function Toaster(props: ToasterProps) {
   return (
     <Sonner
-      position="top-right"
+      position="bottom-right"
       toastOptions={{
         classNames: {
           toast: "rounded-lg border border-border bg-white text-ink shadow-md",
