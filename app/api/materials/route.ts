@@ -87,6 +87,7 @@ function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?
 type ReplacementInput = {
   deviceSeq?: string | null;
   system?: string | null;
+  location?: string | null; // tên thiết bị nhập tay (khi không chọn từ cây)
   intervalMonths?: unknown;
   intervalNote?: string | null;
   quantity?: unknown;
@@ -101,6 +102,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
   return {
     deviceSeq: entry.deviceSeq?.trim() || null,
     system: entry.system?.trim() || defaultSystem || null,
+    location: entry.location?.trim() || null,
     quantity,
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,
@@ -114,7 +116,8 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
 function parseReplacements(body: { replacements?: unknown }, userId: string, defaultSystem: string | null) {
   if (!Array.isArray(body.replacements)) return [];
   return body.replacements
-    .filter((r: ReplacementInput) => r && (String(r.deviceSeq ?? "").trim() || String(r.system ?? "").trim()))
+    .filter((r: ReplacementInput) =>
+      r && (String(r.deviceSeq ?? "").trim() || String(r.system ?? "").trim() || String(r.location ?? "").trim()))
     .map((r: ReplacementInput) => buildReplacementCreate(r, userId, defaultSystem));
 }
 

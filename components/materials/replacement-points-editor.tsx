@@ -34,37 +34,49 @@ export function ReplacementPointsEditor({
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="grid grid-cols-[minmax(0,1fr)_84px_92px_36px] items-end gap-2 rounded-lg border border-border bg-muted/20 p-2">
-          <div className="min-w-0">
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Hệ thống / thiết bị</label>
-            <EquipmentTreePicker
-              value={row.deviceSeq ?? ""}
-              onChange={(node) => update(i, { deviceSeq: node?.seq ?? null, system: node?.name ?? null })}
-              includeLeaves
-              placeholder="Chọn hệ thống / thiết bị"
-            />
+        <div key={i} className="space-y-2 rounded-lg border border-border bg-muted/20 p-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="min-w-0">
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Hệ thống / thiết bị</label>
+              <EquipmentTreePicker
+                value={row.deviceSeq ?? ""}
+                onChange={(node) => update(i, { deviceSeq: node?.seq ?? null, system: node?.name ?? null })}
+                includeLeaves
+                placeholder="Chọn hệ thống / thiết bị"
+              />
+            </div>
+            <div className="min-w-0">
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Thiết bị (nhập tay)</label>
+              <Input
+                value={row.location ?? ""}
+                onChange={(e) => update(i, { location: e.target.value })}
+                placeholder="VD: Bơm dầu bôi trơn máy nghiền A"
+              />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ (tháng)</label>
-            <Input
-              type="number"
-              min={1}
-              value={row.intervalMonths ?? 6}
-              onChange={(e) => update(i, { intervalMonths: Number(e.target.value) })}
-            />
+          <div className="grid grid-cols-[1fr_1fr_36px] items-end gap-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ (tháng)</label>
+              <Input
+                type="number"
+                min={1}
+                value={row.intervalMonths ?? 6}
+                onChange={(e) => update(i, { intervalMonths: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">SL cần{unit ? ` (${unit})` : ""}</label>
+              <Input
+                type="number"
+                min={0}
+                value={row.quantity ?? 1}
+                onChange={(e) => update(i, { quantity: Number(e.target.value) })}
+              />
+            </div>
+            <Button type="button" variant="ghost" size="icon" className="mb-0.5 text-muted-foreground hover:text-destructive" title="Xoá điểm" onClick={() => remove(i)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">SL cần{unit ? ` (${unit})` : ""}</label>
-            <Input
-              type="number"
-              min={0}
-              value={row.quantity ?? 1}
-              onChange={(e) => update(i, { quantity: Number(e.target.value) })}
-            />
-          </div>
-          <Button type="button" variant="ghost" size="icon" className="mb-0.5 text-muted-foreground hover:text-destructive" title="Xoá điểm" onClick={() => remove(i)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
         </div>
       ))}
       <Button type="button" variant="outline" size="sm" onClick={add}>

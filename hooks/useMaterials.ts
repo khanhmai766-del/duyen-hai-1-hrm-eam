@@ -10,6 +10,7 @@ export interface MaterialReplacementPoint {
   deviceSeq: string | null;
   deviceId: string | null;
   system: string | null;
+  location: string | null; // tên thiết bị nhập tay
   quantity: number;
   intervalMonths: number;
   intervalNote: string | null;
@@ -43,6 +44,7 @@ export function useMaterials() {
 export type MaterialReplacementInput = {
   deviceSeq?: string | null;
   system?: string | null;
+  location?: string | null;
   quantity?: number;
   intervalMonths?: number;
   intervalNote?: string | null;

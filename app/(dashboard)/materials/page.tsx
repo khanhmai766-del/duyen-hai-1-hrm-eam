@@ -82,7 +82,7 @@ function MaterialsPageContent() {
   // Nhãn "điểm dùng" = danh sách hệ thống/thiết bị mà vật tư này được gán (từ các điểm thay thế).
   const deviceLabel = React.useCallback((m: MaterialWithDevices) => {
     const names = Array.from(
-      new Set((m.replacements ?? []).map((r) => r.device?.name || r.system || "").filter(Boolean))
+      new Set((m.replacements ?? []).map((r) => r.device?.name || r.location || r.system || "").filter(Boolean))
     );
     return names.join(", ");
   }, []);
@@ -162,6 +162,7 @@ function MaterialsPageContent() {
       replacements: (m.replacements ?? []).map((r) => ({
         deviceSeq: r.deviceSeq,
         system: r.system,
+        location: r.location,
         quantity: r.quantity,
         intervalMonths: r.intervalMonths,
         intervalNote: r.intervalNote,
@@ -394,7 +395,6 @@ function MaterialsPageContent() {
               </Field>
               <Field label="Tồn kho hiện có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
               <Field label="Định mức tối thiểu"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
-              <Field label="Ghi chú" className="col-span-2"><Input value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
               <Field label="Tài liệu đính kèm" className="col-span-2">
                 <MaterialDocumentField
                   url={edit.documentUrl ?? ""}
@@ -624,7 +624,7 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
           <tbody>
             {points.map((p) => (
               <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.system || "—"}</td>
+                <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.location || p.system || "—"}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
                 <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity} {m.unit}</td>
               </tr>
