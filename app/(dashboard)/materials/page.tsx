@@ -631,7 +631,7 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
           <tbody>
             {points.map((p) => (
               <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-2.5 font-medium text-ink">{p.device?.name || p.system || "—"}</td>
+                <td className="px-4 py-2.5 font-medium uppercase text-ink">{p.device?.name || p.system || "—"}</td>
                 <td className="px-4 py-2.5 text-ink">{p.location || "—"}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
