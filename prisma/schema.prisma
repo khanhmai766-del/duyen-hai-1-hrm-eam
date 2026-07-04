@@ -308,6 +308,7 @@ model Material {
   minStock  Int      @default(0)
   location  String?
   system    String? // hệ thống thiết bị: Lò Hơi, Máy Nghiền, ESP, FGD...
+  category  String? // loại vật tư: Dầu bôi trơn, Bi nghiền than, Lõi lọc dầu, Thiết bị C&I, Vật tư tiêu hao
   imageUrl  String? // ảnh minh hoạ vật tư (public URL)
   documentUrl  String? // tài liệu đính kèm (PDF hoặc link)
   documentName String? // tên file tài liệu đính kèm

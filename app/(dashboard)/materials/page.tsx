@@ -23,7 +23,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
-import { MATERIAL_SYSTEMS } from "@/lib/constants";
+import { MATERIAL_CATEGORIES } from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
@@ -53,7 +53,7 @@ function MaterialsPageContent() {
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
-  const [systemFilter, setSystemFilter] = React.useState("ALL");
+  const [categoryFilter, setCategoryFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
@@ -89,9 +89,9 @@ function MaterialsPageContent() {
   const materials = (data?.data ?? []).filter(
     (m) =>
       (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
-      (systemFilter === "ALL" || m.system === systemFilter)
+      (categoryFilter === "ALL" || m.category === categoryFilter)
   );
-  const isFiltered = q.trim() !== "" || systemFilter !== "ALL";
+  const isFiltered = q.trim() !== "" || categoryFilter !== "ALL";
 
   // Bỏ chọn những dòng không còn trong danh sách đang hiển thị (vd sau khi lọc/xoá).
   // Dùng chuỗi id ổn định làm dependency để effect chỉ chạy khi tập hiển thị đổi,
@@ -195,14 +195,14 @@ function MaterialsPageContent() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="sm:w-72" />
-          <Select value={systemFilter} onValueChange={setSystemFilter}>
-            <SelectTrigger className="sm:w-56" aria-label="Lọc theo hệ thống">
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="sm:w-56" aria-label="Lọc theo loại vật tư">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Tất cả hệ thống</SelectItem>
-              {MATERIAL_SYSTEMS.map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
+              <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
+              {MATERIAL_CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -226,10 +226,10 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? "Không có vật tư nào khớp với từ khoá / hệ thống đang lọc. Thử bỏ bớt điều kiện lọc."
+              ? "Không có vật tư nào khớp với từ khoá / loại vật tư đang lọc. Thử bỏ bớt điều kiện lọc."
               : "Chưa có vật tư nào trong kho."
           }
-          action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setSystemFilter("ALL"); } } : undefined}
+          action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setCategoryFilter("ALL"); } } : undefined}
         />
       ) : (
         <Card className="overflow-hidden">
@@ -381,6 +381,17 @@ function MaterialsPageContent() {
                 <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
               </Field>
               <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <Field label="Loại vật tư" className="col-span-2">
+                <Select value={edit.category ?? "NONE"} onValueChange={(v) => setEdit({ ...edit, category: v === "NONE" ? null : v })}>
+                  <SelectTrigger aria-label="Chọn loại vật tư"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">— Chưa phân loại —</SelectItem>
+                    {MATERIAL_CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Tồn kho hiện có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
               <Field label="Định mức tối thiểu"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
               <Field label="Ghi chú" className="col-span-2"><Input value={edit.note ?? ""} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>

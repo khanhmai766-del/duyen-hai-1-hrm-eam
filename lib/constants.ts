@@ -259,19 +259,13 @@ export const DEFECT_STATUS = {
 export type DefectStatusKey = keyof typeof DEFECT_STATUS;
 export const DEFECT_STATUS_ORDER: DefectStatusKey[] = ["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "DA_XU_LY"];
 
-/** Hệ thống thiết bị nhà máy — dùng cho phân loại vật tư. */
-export const MATERIAL_SYSTEMS = [
-  "Lò Hơi",
-  "Máy Nghiền",
-  "Thải Xỉ",
-  "ESP",
-  "FGD",
-  "Máy Phó",
-  "Trợ Thủ",
-  "Máy Nén Khí",
-  "NH3 - Lò hơi phụ",
-  "XLNT",
-  "XLN Hỗn hợp",
+/** Loại vật tư — dùng cho bộ lọc và phân loại trong Danh mục vật tư. */
+export const MATERIAL_CATEGORIES = [
+  "Dầu bôi trơn",
+  "Bi nghiền than",
+  "Lõi lọc dầu",
+  "Thiết bị C&I",
+  "Vật tư tiêu hao",
 ] as const;
 
 // ---- Tiện ích thời gian dùng chung ----
