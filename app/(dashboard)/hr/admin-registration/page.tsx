@@ -54,6 +54,10 @@ function periodLabel(content: string) {
   return HC_SELF_PERIODS.find((period) => content === `Hành chính - ${period.label}`)?.label ?? "Hành chính";
 }
 
+function registrationDateKey(registration: HcRegistration) {
+  return formatDateInput(parseDateInput(registration.group.date));
+}
+
 export default function AdministrativeRegistrationPage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
@@ -211,6 +215,26 @@ function RegistrationList({
   canManage: boolean;
   myId?: string;
 }) {
+  const groups = React.useMemo(() => {
+    const map = new Map<string, HcRegistration[]>();
+    for (const registration of registrations) {
+      const key = registrationDateKey(registration);
+      const items = map.get(key) ?? [];
+      items.push(registration);
+      map.set(key, items);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, items]) => ({
+        date,
+        registrations: items.sort((a, b) => {
+          const periodOrder = periodLabel(a.group.content).localeCompare(periodLabel(b.group.content), "vi");
+          if (periodOrder !== 0) return periodOrder;
+          return a.user.name.localeCompare(b.user.name, "vi");
+        }),
+      }));
+  }, [registrations]);
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b border-border">
@@ -223,8 +247,8 @@ function RegistrationList({
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">Chưa có đăng ký đi hành chính.</div>
         ) : (
           <div className="divide-y divide-border">
-            {registrations.map((registration) => (
-              <RegistrationRow key={registration.id} registration={registration} canManage={canManage} myId={myId} />
+            {groups.map((group) => (
+              <RegistrationDateRow key={group.date} date={group.date} registrations={group.registrations} canManage={canManage} myId={myId} />
             ))}
           </div>
         )}
@@ -233,94 +257,146 @@ function RegistrationList({
   );
 }
 
-function RegistrationRow({ registration, canManage, myId }: { registration: HcRegistration; canManage: boolean; myId?: string }) {
+function RegistrationDateRow({
+  date,
+  registrations,
+  canManage,
+  myId,
+}: {
+  date: string;
+  registrations: HcRegistration[];
+  canManage: boolean;
+  myId?: string;
+}) {
   const approve = useHcApprove();
   const cancelRegistration = useHcCancelRegistration();
   const updateNote = useHcUpdateRegistrationNote();
   const [editing, setEditing] = React.useState(false);
-  const [note, setNote] = React.useState(registration.note ?? "");
+  const [notes, setNotes] = React.useState<Record<string, string>>({});
+  const approvedCount = registrations.filter((registration) => registration.isApproved).length;
+  const pendingRegistrations = registrations.filter((registration) => !registration.isApproved);
+  const editableRegistrations = registrations.filter((registration) => canManage || registration.userId === myId);
+  const canEditNote = editableRegistrations.length > 0;
 
   React.useEffect(() => {
-    setNote(registration.note ?? "");
-  }, [registration.note]);
+    setNotes(Object.fromEntries(registrations.map((registration) => [registration.id, registration.note ?? ""])));
+  }, [registrations]);
 
-  async function approveOne() {
+  async function approveDateGroup() {
     try {
-      await approve.mutateAsync({ groupId: registration.group.id, ids: [registration.id] });
-      toast.success("Đã duyệt đăng ký đi hành chính");
+      const byGroup = new Map<string, string[]>();
+      for (const registration of pendingRegistrations) {
+        byGroup.set(registration.group.id, [...(byGroup.get(registration.group.id) ?? []), registration.id]);
+      }
+      for (const [groupId, ids] of byGroup) {
+        await approve.mutateAsync({ groupId, ids });
+      }
+      toast.success("Đã duyệt đăng ký đi hành chính trong ngày");
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  async function cancelOne() {
+  async function cancelDateGroup() {
     try {
-      await cancelRegistration.mutateAsync(registration.id);
-      toast.success("Đã hủy đăng ký đi hành chính");
+      for (const registration of registrations) {
+        await cancelRegistration.mutateAsync(registration.id);
+      }
+      toast.success("Đã hủy đăng ký đi hành chính trong ngày");
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  async function saveNote() {
+  async function saveNotes() {
     try {
-      await updateNote.mutateAsync({ groupId: registration.group.id, id: registration.id, note });
+      for (const registration of editableRegistrations) {
+        await updateNote.mutateAsync({ groupId: registration.group.id, id: registration.id, note: notes[registration.id] ?? "" });
+      }
       toast.success("Đã cập nhật nội dung công việc");
       setEditing(false);
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
-  const canEditNote = canManage || registration.userId === myId;
 
   return (
-    <div className="grid gap-3 p-4 lg:grid-cols-[150px_1fr_auto] lg:items-start">
-      <div>
-        <div className="text-sm font-semibold text-ink">{formatDateLabel(registration.group.date)}</div>
-        <div className="text-xs text-accent">{periodLabel(registration.group.content)}</div>
-        <Badge variant={registration.isApproved ? "accent" : "secondary"} className="mt-2 gap-1.5">
-          {registration.isApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
-          {registration.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+    <div className="grid gap-4 p-4 xl:grid-cols-[150px_1fr_170px] xl:items-start">
+      <div className="space-y-2">
+        <div>
+          <div className="text-base font-bold text-ink">{formatDateLabel(date)}</div>
+          <div className="text-xs text-muted-foreground">{registrations.length} nhân sự đăng ký</div>
+        </div>
+        <Badge variant={pendingRegistrations.length ? "secondary" : "accent"} className="gap-1.5">
+          {pendingRegistrations.length ? <Clock3 className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          {pendingRegistrations.length ? `${pendingRegistrations.length} chờ duyệt` : "Đã duyệt"}
         </Badge>
+        {approvedCount > 0 && pendingRegistrations.length > 0 && (
+          <div className="text-xs font-medium text-accent">{approvedCount}/{registrations.length} đã duyệt</div>
+        )}
       </div>
 
-      <div className="min-w-0">
-        <div className="flex items-center gap-3">
-          {registration.user.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={registration.user.avatarUrl} alt={registration.user.name} className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-border" />
-          ) : (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">
-              {initials(registration.user.name)}
+      <div className="min-w-0 space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          {registrations.map((registration) => (
+            <div key={registration.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="flex items-start gap-3">
+                {registration.user.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={registration.user.avatarUrl} alt={registration.user.name} className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-border" />
+                ) : (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">
+                    {initials(registration.user.name)}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-ink">{registration.user.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                      {periodLabel(registration.group.content)}
+                    </span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", registration.isApproved ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                      {registration.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className={cn("mt-2 rounded-md px-3 py-2 text-xs leading-5", registration.note ? "bg-amber-50 text-amber-950" : "bg-muted text-muted-foreground")}>
+                {registration.note || "Chưa có nội dung công việc."}
+              </div>
             </div>
-          )}
-          <div className="min-w-0">
-            <div className="truncate font-semibold text-ink">{registration.user.name}</div>
-            <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
-          </div>
+          ))}
         </div>
 
         {editing ? (
-          <div className="mt-3 space-y-2">
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
+          <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/50 p-3">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {editableRegistrations.map((registration) => (
+                <div key={registration.id} className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">{registration.user.name}</Label>
+                  <Textarea
+                    value={notes[registration.id] ?? ""}
+                    onChange={(e) => setNotes((state) => ({ ...state, [registration.id]: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={saveNote} disabled={updateNote.isPending}>
+              <Button size="sm" onClick={saveNotes} disabled={updateNote.isPending}>
                 {updateNote.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lưu nội dung
               </Button>
               <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Huỷ</Button>
             </div>
           </div>
-        ) : (
-          <div className={cn("mt-3 rounded-md px-3 py-2 text-sm", registration.note ? "bg-amber-50 text-amber-950" : "bg-muted text-muted-foreground")}>
-            {registration.note || "Chưa có nội dung công việc."}
-          </div>
-        )}
+        ) : null}
       </div>
 
       {(canManage || canEditNote) && (
-        <div className="flex flex-wrap gap-2 lg:w-40 lg:flex-col">
-          {canManage && !registration.isApproved && (
-            <Button size="sm" variant="accent" onClick={approveOne} disabled={approve.isPending}>
+        <div className="flex flex-wrap gap-2 xl:flex-col">
+          {canManage && pendingRegistrations.length > 0 && (
+            <Button size="sm" variant="accent" onClick={approveDateGroup} disabled={approve.isPending}>
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Duyệt
             </Button>
           )}
@@ -330,7 +406,7 @@ function RegistrationRow({ registration, canManage, myId }: { registration: HcRe
             </Button>
           )}
           {canManage && (
-            <Button size="sm" variant="destructive" onClick={cancelOne} disabled={cancelRegistration.isPending}>
+            <Button size="sm" variant="destructive" onClick={cancelDateGroup} disabled={cancelRegistration.isPending}>
               {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy đăng ký
             </Button>
           )}
