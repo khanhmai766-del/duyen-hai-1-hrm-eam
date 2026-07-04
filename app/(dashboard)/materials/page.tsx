@@ -624,6 +624,7 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
             <tr className="border-b border-border text-muted-foreground">
               <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
               <th className="px-4 py-2 text-left font-semibold">Thiết bị</th>
+              <th className="px-4 py-2 text-left font-semibold">Cương vị quản lý</th>
               <th className="w-[120px] px-4 py-2 text-center font-semibold">SL thiết bị</th>
               <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
               <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
@@ -634,6 +635,7 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
               <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
                 <td className="px-4 py-2.5 font-medium uppercase text-ink">{p.device?.name || p.system || "—"}</td>
                 <td className="px-4 py-2.5 text-ink">{p.location || "—"}</td>
+                <td className="px-4 py-2.5 text-ink">{p.managingPosition || "—"}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
                 <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
