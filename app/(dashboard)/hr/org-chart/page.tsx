@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useShift, useCheckInOrg, useRecallCheckIn, useApproveAttendance, useRemoveAssignment } from "@/hooks/useShifts";
+import { useHcGroups, type HcMember, type HcGroup } from "@/hooks/useHcAttendance";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useUsers } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -29,6 +30,44 @@ const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
 const VIEWER_REFRESH_INTERVAL_MS = 10_000;
 
 const UNITS = ["Vận hành 1", "Vận hành 2"];
+
+const MANAGEMENT_SEATS = [
+  { title: "Quản đốc" },
+  { title: "Phó quản đốc" },
+  { title: "Kỹ thuật viên" },
+  { title: "Thống kê" },
+] as const;
+const HC_SELF_CONTENT_PREFIX = "Hành chính - ";
+
+const MANAGEMENT_TONE_STYLES: Record<
+  (typeof MANAGEMENT_SEATS)[number]["title"],
+  { cell: string; title: string; person: string; avatar: string }
+> = {
+  "Quản đốc": {
+    cell: "border-rose-200 bg-rose-50/80 shadow-[0_12px_24px_-18px_rgba(225,29,72,0.55)]",
+    title: "text-rose-700",
+    person: "bg-white/85",
+    avatar: "bg-rose-700",
+  },
+  "Phó quản đốc": {
+    cell: "border-sky-200 bg-sky-50/85 shadow-[0_12px_24px_-18px_rgba(2,132,199,0.55)]",
+    title: "text-sky-700",
+    person: "bg-white/85",
+    avatar: "bg-sky-700",
+  },
+  "Kỹ thuật viên": {
+    cell: "border-emerald-200 bg-emerald-50/85 shadow-[0_12px_24px_-18px_rgba(5,150,105,0.55)]",
+    title: "text-emerald-700",
+    person: "bg-white/85",
+    avatar: "bg-emerald-700",
+  },
+  "Thống kê": {
+    cell: "border-amber-200 bg-amber-50/85 shadow-[0_12px_24px_-18px_rgba(217,119,6,0.5)]",
+    title: "text-amber-700",
+    person: "bg-white/85",
+    avatar: "bg-amber-700",
+  },
+};
 
 const CHECK_IN_SUCCESS_MESSAGES: Record<string, string[]> = {
   MORNING: [
@@ -175,7 +214,9 @@ export default function OrgChartPage() {
     { date, shiftType, unit },
     { refetchInterval: viewer ? VIEWER_REFRESH_INTERVAL_MS : false }
   );
+  const { data: hcGroupsData } = useHcGroups(date);
   const shift = data?.data;
+  const hcGroups = hcGroupsData?.data ?? [];
   const assignments = (shift?.assignments ?? []) as ShiftAssignmentWithUser[];
   const checkIns = shift?.checkIns ?? [];
   const approved = assignments.filter((a) => a.isApproved).length;
@@ -308,7 +349,7 @@ export default function OrgChartPage() {
             </div>
           </div>
           <div className="min-h-0 flex-1">
-            <OrgTemplateChart assignments={assignments} checkIns={checkIns} presentation />
+            <OrgTemplateChart assignments={assignments} checkIns={checkIns} hcGroups={hcGroups} presentation />
           </div>
         </div>,
         document.body
@@ -377,7 +418,7 @@ export default function OrgChartPage() {
         </div>
       </Card>
 
-      {isLoading ? <CardSkeleton /> : <OrgTemplateChart assignments={assignments} checkIns={checkIns} />}
+      {isLoading ? <CardSkeleton /> : <OrgTemplateChart assignments={assignments} checkIns={checkIns} hcGroups={hcGroups} />}
     </div>
   );
 }
@@ -1128,10 +1169,12 @@ const TONE_STYLES: Record<OrgTone | "chief", { bar: string; cell: string; title:
 function OrgTemplateChart({
   assignments,
   checkIns,
+  hcGroups = [],
   presentation = false,
 }: {
   assignments: ShiftAssignmentWithUser[];
   checkIns?: CheckInWithUser[];
+  hcGroups?: HcGroup[];
   presentation?: boolean;
 }) {
   // Group occupants by the exact seat title they checked into.
@@ -1161,6 +1204,10 @@ function OrgTemplateChart({
       });
   }, [assignments, checkIns]);
 
+  const now = useMinuteClock();
+  const showManagementColumn = isManagementColumnTime(now);
+  const managementSeatGroups = React.useMemo(() => managementSlotsFromHcGroups(hcGroups), [hcGroups]);
+
   return (
     <div
       className={cn(
@@ -1169,35 +1216,43 @@ function OrgTemplateChart({
           : "space-y-4 overflow-x-auto rounded-xl border border-border bg-white p-4"
       )}
     >
-      {/* Chief */}
-      <SeatBar title={ORG_CHIEF} occupants={byTitle.get(ORG_CHIEF)} tone="chief" presentation={presentation} />
+      <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex min-w-[1180px] items-stretch gap-4")}>
+        <div className={cn(presentation ? "flex min-w-0 flex-1 flex-col gap-2" : "min-w-0 flex-1 space-y-4")}>
+          {/* Chief */}
+          <SeatBar title={ORG_CHIEF} occupants={byTitle.get(ORG_CHIEF)} tone="chief" presentation={presentation} />
 
-      {/* Leads + their seat columns */}
-      <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex flex-col gap-4 lg:flex-row lg:items-stretch")}>
-        {ORG_LEADS.map((lead) => (
-          <div
-            key={lead.title}
-            className={cn(
-              presentation ? "flex min-w-0 flex-col gap-1.5 rounded-lg p-1.5" : "min-w-[260px] space-y-2 rounded-lg p-2",
-              TONE_STYLES[lead.tone].block
-            )}
-            style={{ flex: lead.columns.length }}
-          >
-            <SeatBar title={lead.title} occupants={byTitle.get(lead.title)} tone={lead.tone} presentation={presentation} />
-            <div
-              className={cn(presentation ? "grid min-h-0 flex-1 gap-1.5" : "grid gap-2")}
-              style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}
-            >
-              {lead.columns.map((col, i) => (
-                <div key={i} className={cn(presentation ? "flex min-h-0 flex-col gap-1.5" : "flex flex-col gap-2")}>
-                  {col.map((seat) => (
-                    <Seat key={seat} title={seat} occupants={byTitle.get(seat)} tone={lead.tone} presentation={presentation} />
+          {/* Leads + their seat columns */}
+          <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex flex-col gap-4 lg:flex-row lg:items-stretch")}>
+            {ORG_LEADS.map((lead) => (
+              <div
+                key={lead.title}
+                className={cn(
+                  presentation ? "flex min-w-0 flex-col gap-1.5 rounded-lg p-1.5" : "min-w-[260px] space-y-2 rounded-lg p-2",
+                  TONE_STYLES[lead.tone].block
+                )}
+                style={{ flex: lead.columns.length }}
+              >
+                <SeatBar title={lead.title} occupants={byTitle.get(lead.title)} tone={lead.tone} presentation={presentation} />
+                <div
+                  className={cn(presentation ? "grid min-h-0 flex-1 gap-1.5" : "grid gap-2")}
+                  style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}
+                >
+                  {lead.columns.map((col, i) => (
+                    <div key={i} className={cn(presentation ? "flex min-h-0 flex-col gap-1.5" : "flex flex-col gap-2")}>
+                      {col.map((seat) => (
+                        <Seat key={seat} title={seat} occupants={byTitle.get(seat)} tone={lead.tone} presentation={presentation} />
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+
+        {showManagementColumn && managementSeatGroups.length > 0 && (
+          <ManagementColumn groups={managementSeatGroups} presentation={presentation} />
+        )}
       </div>
 
       {/* Legend */}
@@ -1210,7 +1265,7 @@ function OrgTemplateChart({
       )}
 
       {/* VHV trực đổi ca */}
-      {swapRows.length > 0 && (
+      {!presentation && swapRows.length > 0 && (
         <div className={cn("shrink-0 rounded-lg border border-amber-200 bg-amber-50/60", presentation ? "p-2" : "p-3")}>
           <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700">
             <Repeat className="h-3.5 w-3.5" /> VHV trực đổi ca
@@ -1226,6 +1281,138 @@ function OrgTemplateChart({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function useMinuteClock() {
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const timer = window.setInterval(tick, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
+function isManagementColumnTime(now: Date) {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  return minutes >= 7 * 60 + 30 && minutes <= 17 * 60;
+}
+
+function managementSlotsFromHcGroups(groups: HcGroup[]) {
+  const members = groups
+    .filter((group) => group.content.startsWith(HC_SELF_CONTENT_PREFIX))
+    .flatMap((group) => group.members)
+    .filter((member) => !member.isRegistered);
+
+  const used = new Set<string>();
+  return MANAGEMENT_SEATS
+    .map((seat) => {
+      const matched = members
+        .filter((member) => !used.has(member.userId) && userMatchesManagementSeat(member, seat.title))
+        .sort((a, b) => {
+          const byCheckInTime = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          if (byCheckInTime !== 0) return byCheckInTime;
+          return a.user.name.localeCompare(b.user.name, "vi");
+        });
+
+      matched.forEach((member) => used.add(member.userId));
+      return { ...seat, members: matched };
+    })
+    .filter((seat) => seat.members.length > 0);
+}
+
+function memberPositionValues(member: HcMember) {
+  return [member.user.position]
+    .map((value) => normalizeText(value ?? ""))
+    .filter(Boolean);
+}
+
+function userMatchesManagementSeat(member: HcMember, title: string) {
+  const positions = memberPositionValues(member);
+  const key = normalizeText(title);
+  if (key === "quan doc") return positions.some((p) => p.includes("quan doc") && !p.includes("pho"));
+  if (key === "pho quan doc") return positions.some((p) => p.includes("pho quan doc"));
+  if (key === "ky thuat vien") return positions.some((p) => p.includes("ky thuat vien") || p.includes("ky thuat"));
+  if (key === "thong ke") return positions.some((p) => p.includes("thong ke"));
+  return positions.some((p) => p === key);
+}
+
+function ManagementColumn({
+  groups,
+  presentation = false,
+}: {
+  groups: Array<(typeof MANAGEMENT_SEATS)[number] & { members: HcMember[] }>;
+  presentation?: boolean;
+}) {
+  return (
+    <aside
+      className={cn(
+        "h-fit shrink-0 self-start rounded-xl border border-indigo-200 bg-indigo-50/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.75),0_18px_40px_-30px_rgba(79,70,229,0.65)]",
+        presentation ? "w-[190px] p-1.5 xl:w-[220px]" : "w-[240px] p-2"
+      )}
+    >
+      <div className={cn(presentation ? "flex min-h-0 flex-col gap-1.5" : "space-y-2")}>
+        {groups.map((group) => (
+          <div
+            key={group.title}
+            className={cn("rounded-lg border", MANAGEMENT_TONE_STYLES[group.title].cell, presentation ? "p-1.5" : "p-2")}
+          >
+            <div className={cn("font-extrabold leading-tight", MANAGEMENT_TONE_STYLES[group.title].title, presentation ? "text-[10px]" : "text-[11px]")}>
+              {group.title}
+            </div>
+            <div className={cn(presentation ? "mt-1 space-y-1" : "mt-1.5 space-y-1.5")}>
+              {group.members.map((member) => (
+                <ManagementPerson key={member.id} member={member} tone={group.title} presentation={presentation} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function ManagementPerson({
+  member,
+  tone,
+  presentation = false,
+}: {
+  member: HcMember;
+  tone: (typeof MANAGEMENT_SEATS)[number]["title"];
+  presentation?: boolean;
+}) {
+  const user = member.user;
+  const s = MANAGEMENT_TONE_STYLES[tone];
+  return (
+    <div className={cn("flex min-w-0 items-center gap-2 rounded-md text-left", s.person, presentation ? "px-1 py-0.5" : "px-2 py-1.5")}>
+      <div
+        className={cn(
+          "flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ring-1 ring-white",
+          s.avatar,
+          presentation ? "h-11 w-11 text-xs xl:h-12 xl:w-12 xl:text-sm" : "h-12 w-12 text-xs"
+        )}
+      >
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+        ) : (
+          initials(user.name)
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className={cn("break-words font-bold leading-snug text-ink", presentation ? "text-[9px] xl:text-[10px]" : "text-xs")} title={user.name}>
+          {user.name}
+        </div>
+        {user.phone && (
+          <div className={cn("mt-0.5 flex min-w-0 items-center gap-0.5 font-bold text-slate-950", presentation ? "text-[8px] xl:text-[9px]" : "text-[10px]")}>
+            <Phone className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{user.phone}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
