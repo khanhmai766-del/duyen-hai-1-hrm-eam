@@ -53,6 +53,7 @@ export interface TicketViewer {
 export function useMaterialTickets() {
   return useQuery({
     queryKey: ["material-tickets"],
+    staleTime: 60_000, // 60s không refetch lại, giảm request lên server
     queryFn: async () => {
       const res = await apiGet<MaterialTicket[]>("/api/material-tickets");
       return { tickets: res.data, viewer: (res.meta?.viewer ?? null) as TicketViewer | null };
