@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, Play, CircleCheck, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, CircleCheck, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -622,26 +622,33 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
   const points = m.replacements ?? [];
   const upd = useUpdateReplacement();
 
-  // Bật theo dõi thời gian: mốc tính từ hôm nay, đến hạn = hôm nay + chu kỳ.
-  async function startTracking(p: NonNullable<MaterialWithDevices["replacements"]>[number]) {
+  // Form "Thêm điểm theo dõi" cho một dòng thiết bị: nhập mốc lần thay gần nhất
+  // + chu kỳ rồi mới bắt đầu đếm thời gian (giống Thêm điểm ở drawer Theo dõi).
+  type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
+  const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
+  const [trackDate, setTrackDate] = React.useState("");
+  const [trackMonths, setTrackMonths] = React.useState(12);
+
+  function openTracking(p: PanelPoint) {
+    setTrackDate(formatDateInput(new Date()));
+    setTrackMonths(p.intervalMonths || 12);
+    setTracking(p);
+  }
+  async function confirmTracking() {
+    if (!tracking) return;
     try {
-      const due = new Date();
-      due.setMonth(due.getMonth() + (p.intervalMonths || 12));
+      const months = Math.max(1, Math.round(trackMonths) || 12);
+      const due = new Date(trackDate ? `${trackDate}T08:00:00` : Date.now());
+      due.setMonth(due.getMonth() + months);
       await upd.mutateAsync({
-        id: p.id,
+        id: tracking.id,
         isActive: true,
-        lastReplacedAt: formatDateInput(new Date()),
+        intervalMonths: months,
+        lastReplacedAt: trackDate || formatDateInput(new Date()),
         nextDueAt: formatDateInput(due),
       });
-      toast.success("Đã bật theo dõi — điểm này xuất hiện trong Lịch thay thế vật tư");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
-  async function stopTracking(id: string) {
-    try {
-      await upd.mutateAsync({ id, isActive: false });
-      toast.success("Đã ngừng theo dõi điểm này");
+      toast.success("Đã thêm điểm theo dõi — xem trong Lịch thay thế vật tư");
+      setTracking(null);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -686,24 +693,21 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
                 <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                 <td className="px-4 py-2.5 text-center">
                   {p.isActive ? (
-                    <button
-                      type="button"
-                      disabled={upd.isPending}
-                      onClick={() => stopTracking(p.id)}
-                      title="Đang theo dõi thời gian thay thế — bấm để ngừng"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-200"
+                    <span
+                      title="Đang theo dõi thời gian thay thế (quản lý trong drawer Theo dõi thay thế)"
+                      className="inline-flex cursor-default items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700"
                     >
                       <CircleCheck className="h-3.5 w-3.5" /> Đang theo dõi
-                    </button>
+                    </span>
                   ) : (
                     <button
                       type="button"
                       disabled={upd.isPending}
-                      onClick={() => startTracking(p)}
-                      title="Bắt đầu theo dõi thời gian thay thế cho hệ thống này"
-                      className="inline-flex items-center gap-1.5 rounded-full border border-accent/50 bg-accent/5 px-2.5 py-1 text-[11.5px] font-semibold text-accent transition-colors hover:bg-accent/15"
+                      onClick={() => openTracking(p)}
+                      title="Thêm điểm theo dõi thời gian thay thế cho thiết bị này"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90"
                     >
-                      <Play className="h-3.5 w-3.5" /> Theo dõi
+                      <Plus className="h-3.5 w-3.5" /> Thêm điểm
                     </button>
                   )}
                 </td>
@@ -712,6 +716,38 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
           </tbody>
         </table>
       </div>
+
+      {/* Form thêm điểm theo dõi: nhập mốc lần thay gần nhất + chu kỳ trước khi bắt đầu đếm */}
+      <Dialog open={!!tracking} onOpenChange={(o) => !o && setTracking(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thêm điểm theo dõi</DialogTitle>
+          </DialogHeader>
+          {tracking && (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                <div className="font-semibold uppercase text-ink">{tracking.device?.name || tracking.system || "—"}</div>
+                {tracking.location && <div className="text-muted-foreground">Thiết bị: {tracking.location}</div>}
+              </div>
+              <Field label="Lần thay gần nhất">
+                <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
+              </Field>
+              <Field label="Chu kỳ thay thế (tháng)">
+                <Input type="number" min={1} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
+              </Field>
+              <p className="text-xs text-muted-foreground">
+                Sau khi lưu, điểm này được đếm thời gian và xuất hiện trong Lịch thay thế vật tư với cảnh báo đến hạn.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTracking(null)}>Huỷ</Button>
+            <Button onClick={confirmTracking} disabled={upd.isPending || !trackDate}>
+              {upd.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Thêm điểm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
