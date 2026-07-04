@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -27,6 +27,14 @@ import { MATERIAL_CATEGORIES } from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn } from "@/lib/utils";
 import type { Material } from "@/types";
+
+// Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
+const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon: LucideIcon }[] = [
+  { key: "Dầu bôi trơn", icon: Droplet },
+  { key: "Lõi lọc dầu", icon: Filter },
+  { key: "Thiết bị C&I", icon: Cpu },
+  { key: "Vật tư tiêu hao", icon: Boxes },
+];
 
 type MaterialEdit = Partial<Material> & {
   id?: string;
@@ -53,7 +61,7 @@ function MaterialsPageContent() {
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
-  const [categoryFilter, setCategoryFilter] = React.useState("ALL");
+  const [categoryFilter, setCategoryFilter] = React.useState<string>(MATERIAL_CATEGORIES[0]);
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
@@ -89,9 +97,9 @@ function MaterialsPageContent() {
   const materials = (data?.data ?? []).filter(
     (m) =>
       (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
-      (categoryFilter === "ALL" || m.category === categoryFilter)
+      m.category === categoryFilter
   );
-  const isFiltered = q.trim() !== "" || categoryFilter !== "ALL";
+  const isFiltered = q.trim() !== "";
 
   // Bỏ chọn những dòng không còn trong danh sách đang hiển thị (vd sau khi lọc/xoá).
   // Dùng chuỗi id ổn định làm dependency để effect chỉ chạy khi tập hiển thị đổi,
@@ -195,20 +203,28 @@ function MaterialsPageContent() {
         )}
       </PageHeader>
 
+      {/* Tab loại vật tư — chuyển đổi qua lại như tab Thư mục lưu trữ */}
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {MATERIAL_CATEGORY_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            aria-pressed={categoryFilter === tab.key}
+            onClick={() => setCategoryFilter(tab.key)}
+            className={cn(
+              "-mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+              categoryFilter === tab.key ? "border-navy text-navy" : "border-transparent text-muted-foreground hover:text-ink"
+            )}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.key}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="sm:w-72" />
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="sm:w-56" aria-label="Lọc theo loại vật tư">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
-              {MATERIAL_CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         {canManage && selected.size > 0 && (
           <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-red-50 px-3 py-2">
@@ -229,10 +245,10 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? "Không có vật tư nào khớp với từ khoá / loại vật tư đang lọc. Thử bỏ bớt điều kiện lọc."
-              : "Chưa có vật tư nào trong kho."
+              ? `Không có vật tư nào khớp từ khoá trong loại "${categoryFilter}". Thử bỏ từ khoá hoặc chuyển tab khác.`
+              : `Chưa có vật tư nào thuộc loại "${categoryFilter}".`
           }
-          action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setCategoryFilter("ALL"); } } : undefined}
+          action={isFiltered ? { label: "Xoá từ khoá", onClick: () => setQ("") } : undefined}
         />
       ) : (
         <Card className="overflow-hidden">

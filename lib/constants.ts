@@ -259,10 +259,9 @@ export const DEFECT_STATUS = {
 export type DefectStatusKey = keyof typeof DEFECT_STATUS;
 export const DEFECT_STATUS_ORDER: DefectStatusKey[] = ["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "DA_XU_LY"];
 
-/** Loại vật tư — dùng cho bộ lọc và phân loại trong Danh mục vật tư. */
+/** Loại vật tư — dùng cho tab phân loại trong Danh mục vật tư. */
 export const MATERIAL_CATEGORIES = [
   "Dầu bôi trơn",
-  "Bi nghiền than",
   "Lõi lọc dầu",
   "Thiết bị C&I",
   "Vật tư tiêu hao",
