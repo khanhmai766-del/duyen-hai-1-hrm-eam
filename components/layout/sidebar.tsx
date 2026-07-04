@@ -20,19 +20,11 @@ function pathActive(pathname: string, href: string) {
   return pathname === base || pathname.startsWith(base + "/");
 }
 
-function sectionHasActiveItem(pathname: string, items: NavItem[]) {
-  return items.some((item) => {
-    if (pathActive(pathname, item.href)) return true;
-    return item.children?.some((child) => pathActive(pathname, child.href)) ?? false;
-  });
-}
-
 export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
   const peakMode = usePeakMode();
-  const pathname = usePathname();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
   const positionCarrier = React.useMemo(
     () => ({
@@ -53,14 +45,6 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
 
   const { data: usersData } = useUsers();
   const admins = (usersData?.data ?? []).filter((u) => u.role === "ADMIN");
-
-  React.useEffect(() => {
-    for (const section of sections) {
-      if (sectionHasActiveItem(pathname, section.items)) {
-        setClosedSections((state) => (state[section.title] ? { ...state, [section.title]: false } : state));
-      }
-    }
-  }, [pathname, sections]);
 
   const timeStr = now
     ? now.toLocaleString("vi-VN", {
@@ -107,7 +91,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       </div>
 
       <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
-        {sections.map((section) => {
+        {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
               const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
@@ -119,7 +103,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
               return navItemAllowed(item, role, rbac.can);
             });
           if (!items.length) return null;
-          const sectionClosed = !!closedSections[section.title];
+          const sectionClosed = closedSections[section.title] ?? sectionIndex !== 0;
           return (
             <div key={section.title}>
               {collapsed ? (

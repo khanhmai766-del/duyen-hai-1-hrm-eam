@@ -116,13 +116,26 @@ export default function AdministrativeRegistrationPage() {
       <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày, trước 16h30 và chờ người có quyền duyệt" />
 
       <Card className="overflow-hidden">
-        <CardHeader className="border-b border-border">
-          <CardTitle className="flex items-center gap-2">
-            <CalendarPlus className="h-5 w-5 text-accent" /> Thông tin đăng ký
-          </CardTitle>
+        <CardHeader className="grid gap-3 border-b border-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+          <div className="min-w-0 space-y-2">
+            <CardTitle className="flex items-center gap-2">
+              <CalendarPlus className="h-5 w-5 text-accent" /> Thông tin đăng ký
+            </CardTitle>
+            <div className="max-w-3xl rounded-md bg-amber-50 px-3 py-1.5 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+              Đăng ký phải gửi trước 16h30. Sau khi gửi không thể tự hủy. Người có quyền duyệt có thể duyệt hoặc hủy đăng ký.
+            </div>
+          </div>
+          <div className="flex shrink-0 justify-end gap-2">
+            <Button asChild variant="outline">
+              <Link href="/hr">Huỷ</Link>
+            </Button>
+            <Button type="submit" form="hc-registration-form" disabled={checkIn.isPending || !!myRegistration || !registrationOpen}>
+              {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {myRegistration ? "Đã đăng ký" : "Gửi đăng ký"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="pt-5">
-          <form onSubmit={save} className="space-y-4">
+          <form id="hc-registration-form" onSubmit={save} className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-[220px_220px_1fr]">
               <div>
                 <Label className="mb-1.5 block text-muted-foreground">Ngày đăng ký</Label>
@@ -174,22 +187,11 @@ export default function AdministrativeRegistrationPage() {
                 <span>Bạn đã đăng ký ngày này. Cập nhật nội dung tại danh sách đăng ký phía dưới.</span>
               </div>
             )}
-            <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Đăng ký phải gửi trước 16h30. Sau khi gửi không thể tự hủy. Người có quyền duyệt có thể duyệt hoặc hủy đăng ký.
-            </div>
             {!registrationOpen && (
               <div className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
                 Đã quá 16h30, không thể gửi đăng ký đi hành chính mới trong hôm nay.
               </div>
             )}
-            <div className="flex justify-end gap-2">
-              <Button asChild variant="outline">
-                <Link href="/hr">Huỷ</Link>
-              </Button>
-              <Button type="submit" disabled={checkIn.isPending || !!myRegistration || !registrationOpen}>
-                {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {myRegistration ? "Đã đăng ký" : "Gửi đăng ký"}
-              </Button>
-            </div>
           </form>
         </CardContent>
       </Card>
