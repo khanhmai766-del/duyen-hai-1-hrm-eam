@@ -318,6 +318,7 @@ model Material {
 
   deviceMaterials EquipmentMaterial[]
   replacements    MaterialReplacement[]
+  ticketItems     MaterialTicketItem[]
 
   @@index([system])
   @@index([quantity])
@@ -629,6 +630,7 @@ model EquipmentNode {
   materialReplacements MaterialReplacement[]
   defects              Defect[]
   defectHistories      DefectHistory[]
+  ticketItems          MaterialTicketItem[]
 
   @@index([parentSeq])
   @@index([parentSeq, sort])
@@ -678,4 +680,66 @@ model OilGun {
 
   @@unique([machine, code])
   @@index([machine])
+}
+
+// Phiếu thay thế vật tư (2 luồng: Đề xuất chuẩn & Ứng xử lý gấp).
+model MaterialTicket {
+  id     String @id @default(cuid())
+  code   String @unique // VT-2026-0001 (luồng Ứng có hậu tố U)
+  type   String // "DE_XUAT" | "UNG"
+  unit   String // Tổ máy: S1 | S2
+  status String // máy trạng thái theo type
+
+  assignedPosition String  // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)
+  materialCategory String? // Loại vật tư: "Dầu bôi trơn" | "Lọc dầu" | "Hóa chất" | "Bi nghiền"
+
+  bbktNumber     String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở B0; Ứng: bổ sung sau PDF)
+  pctNumber      String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
+  proposalNumber String? // số phiếu đề xuất vật tư (Thống kê nhập)
+  completionNote String? // thông tin xác nhận thay thế xong
+  chiHuyName     String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
+  docUrl         String? // file Word BBNT trên MinIO
+  rejectedReason String?
+
+  // dấu vết từng bước: id + tên hiển thị (đóng băng tại thời điểm thao tác)
+  createdById        String
+  createdByName      String
+  proposedById       String?
+  proposedByName     String?
+  proposedByPosition String?
+  proposedAt         DateTime?
+  confirmedById      String?
+  confirmedByName    String?
+  confirmedAt        DateTime? // mốc tính quy tắc 2 ngày (luồng đề xuất)
+  statsById          String?
+  statsByName        String?
+  statsAt            DateTime?
+  completedById      String?
+  completedByName    String? // Trưởng Ca/TK xuất file — in vào Hội đồng nghiệm thu
+  completedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items MaterialTicketItem[]
+
+  @@index([status])
+  @@index([unit, status])
+  @@index([type])
+  @@index([assignedPosition])
+}
+
+model MaterialTicketItem {
+  id         String @id @default(cuid())
+  ticketId   String
+  materialId String
+  deviceSeq  String // thiết bị theo EquipmentNode.seq (chung key với toàn hệ)
+  quantity   Int    @default(1)
+
+  ticket   MaterialTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  material Material       @relation(fields: [materialId], references: [id])
+  device   EquipmentNode  @relation(fields: [deviceSeq], references: [seq])
+
+  @@index([ticketId])
+  @@index([deviceSeq])
 }
