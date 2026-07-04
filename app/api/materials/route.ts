@@ -66,8 +66,8 @@ function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?
     deviceId: r.deviceSeq,
     device: equipmentNodeToDevice(r.device),
   }));
-  // Tổng nhu cầu 1 chu kỳ = Σ số lượng tất cả điểm thay thế; đề xuất thêm = thiếu hụt so với tồn kho.
-  const totalNeed = replacements.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+  // Tổng nhu cầu 1 chu kỳ = Σ (dung tích mỗi thiết bị × số thiết bị) các điểm; đề xuất thêm = thiếu hụt so với tồn kho.
+  const totalNeed = replacements.reduce((sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.deviceCount) || 1), 0);
   const shortfall = Math.max(0, totalNeed - (Number(material.quantity) || 0));
   return {
     ...material,
@@ -88,6 +88,7 @@ type ReplacementInput = {
   deviceSeq?: string | null;
   system?: string | null;
   location?: string | null; // tên thiết bị nhập tay (khi không chọn từ cây)
+  deviceCount?: unknown; // số lượng thiết bị tại điểm này
   intervalMonths?: unknown;
   intervalNote?: string | null;
   quantity?: unknown;
@@ -103,6 +104,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     deviceSeq: entry.deviceSeq?.trim() || null,
     system: entry.system?.trim() || defaultSystem || null,
     location: entry.location?.trim() || null,
+    deviceCount: Math.max(1, Math.round(Number(entry.deviceCount)) || 1),
     quantity,
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,

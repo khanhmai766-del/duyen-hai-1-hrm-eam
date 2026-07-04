@@ -11,6 +11,7 @@ export interface MaterialReplacementPoint {
   deviceId: string | null;
   system: string | null;
   location: string | null; // tên thiết bị nhập tay
+  deviceCount: number; // số lượng thiết bị tại điểm này
   quantity: number;
   intervalMonths: number;
   intervalNote: string | null;
@@ -45,6 +46,7 @@ export type MaterialReplacementInput = {
   deviceSeq?: string | null;
   system?: string | null;
   location?: string | null;
+  deviceCount?: number;
   quantity?: number;
   intervalMonths?: number;
   intervalNote?: string | null;
