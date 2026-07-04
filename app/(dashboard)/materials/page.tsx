@@ -394,8 +394,8 @@ function MaterialsPageContent() {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Tồn kho hiện có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
-              <Field label="Định mức tối thiểu"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
+              <Field label="Hiện Có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
+              <Field label="Số liệu ERP"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
               <Field label="Tài liệu đính kèm" className="col-span-2">
                 <MaterialDocumentField
                   url={edit.documentUrl ?? ""}
