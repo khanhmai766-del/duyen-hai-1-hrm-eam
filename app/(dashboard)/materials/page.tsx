@@ -186,7 +186,7 @@ function MaterialsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
-        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, tonKho: m.quantity, dinhMucToiThieu: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
+        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
         {canManage && (
           <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
@@ -251,7 +251,8 @@ function MaterialsPageContent() {
                 <TableHead className="text-center">Mã vật tư</TableHead>
                 <TableHead className="text-center">Tên vật tư</TableHead>
                 <TableHead className="text-center">ĐVT</TableHead>
-                <TableHead className="text-center">Tồn kho</TableHead>
+                <TableHead className="text-center">Hiện có</TableHead>
+                <TableHead className="text-center">Số liệu ERP</TableHead>
                 <TableHead className="text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
@@ -307,6 +308,9 @@ function MaterialsPageContent() {
                         <span className="font-semibold tabular-nums text-ink">{m.quantity}</span>
                       </div>
                     </TableCell>
+                    <TableCell className="text-center">
+                      <span className="font-semibold tabular-nums text-ink">{m.minStock}</span>
+                    </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
@@ -327,7 +331,7 @@ function MaterialsPageContent() {
                   </TableRow>
                   {expanded && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
+                      <TableCell colSpan={canManage ? 7 : 6} className="px-6 py-4">
                         <MaterialExpandedDetails m={m} />
                       </TableCell>
                     </TableRow>
