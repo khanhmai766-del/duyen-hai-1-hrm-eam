@@ -321,7 +321,7 @@ function RegistrationDateRow({
   }
 
   return (
-    <div className="grid gap-4 p-4 xl:grid-cols-[150px_1fr_170px] xl:items-start">
+    <div className="grid gap-4 p-4 xl:grid-cols-[170px_minmax(0,1fr)] xl:items-start">
       <div className="space-y-2">
         <div>
           <div className="text-base font-bold text-ink">{formatDateLabel(date)}</div>
@@ -334,10 +334,29 @@ function RegistrationDateRow({
         {approvedCount > 0 && pendingRegistrations.length > 0 && (
           <div className="text-xs font-medium text-accent">{approvedCount}/{registrations.length} đã duyệt</div>
         )}
+        {(canManage || canEditNote) && (
+          <div className="space-y-2 border-t border-dashed border-slate-200 pt-3">
+            {canManage && pendingRegistrations.length > 0 && (
+              <Button className="w-full justify-center" size="sm" variant="accent" onClick={approveDateGroup} disabled={approve.isPending}>
+                {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Duyệt
+              </Button>
+            )}
+            {canEditNote && (
+              <Button className="w-full justify-center" size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4" /> Sửa nội dung
+              </Button>
+            )}
+            {canManage && (
+              <Button className="w-full justify-center" size="sm" variant="destructive" onClick={cancelDateGroup} disabled={cancelRegistration.isPending}>
+                {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy đăng ký
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="min-w-0 space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3 min-[1800px]:grid-cols-4">
           {registrations.map((registration) => (
             <div key={registration.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
               <div className="flex items-start gap-3">
@@ -393,25 +412,6 @@ function RegistrationDateRow({
         ) : null}
       </div>
 
-      {(canManage || canEditNote) && (
-        <div className="flex flex-wrap gap-2 xl:flex-col">
-          {canManage && pendingRegistrations.length > 0 && (
-            <Button size="sm" variant="accent" onClick={approveDateGroup} disabled={approve.isPending}>
-              {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Duyệt
-            </Button>
-          )}
-          {canEditNote && (
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-              <Pencil className="h-4 w-4" /> Sửa nội dung
-            </Button>
-          )}
-          {canManage && (
-            <Button size="sm" variant="destructive" onClick={cancelDateGroup} disabled={cancelRegistration.isPending}>
-              {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy đăng ký
-            </Button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
