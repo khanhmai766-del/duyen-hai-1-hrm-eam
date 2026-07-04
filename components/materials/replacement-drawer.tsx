@@ -12,7 +12,7 @@ import { ReplacementPointForm } from "@/components/materials/replacement-point-f
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import {
   useReplacements,
-  useDeleteReplacement,
+  useUpdateReplacement,
   type ReplacementItem,
 } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -30,9 +30,9 @@ export function ReplacementDrawer({
 }) {
   const rbac = useRbacAccess();
   const canManage = rbac.can("replacement-manage", ["create", "manage", "full"]);
-  const canDelete = rbac.can("replacement-manage", ["full"]);
   const { data, isLoading } = useReplacements(material ? { materialId: material.id } : {});
-  const del = useDeleteReplacement();
+  // Nút xóa chỉ GỠ MỐC THEO DÕI (isActive=false) — không xóa dữ liệu thiết bị đã khai báo.
+  const upd = useUpdateReplacement();
   const points = data?.data ?? [];
   const counts = (data?.meta?.counts as { OVERDUE: number; DUE_SOON: number; OK: number }) ?? { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
 
@@ -113,8 +113,8 @@ export function ReplacementDrawer({
                   {canManage && (
                     <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                   )}
-                  {canDelete && (
-                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-red-50" onClick={() => setDelTarget(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  {canManage && (
+                    <Button size="sm" variant="ghost" title="Xoá mốc theo dõi (không xoá dữ liệu thiết bị)" className="text-destructive hover:bg-red-50" onClick={() => setDelTarget(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   )}
                 </div>
               </div>
@@ -146,15 +146,15 @@ export function ReplacementDrawer({
       <ConfirmDialog
         open={!!delTarget}
         onOpenChange={(o) => !o && setDelTarget(null)}
-        title="Xoá điểm thay thế?"
-        description="Xoá điểm thay thế này và toàn bộ lịch sử thay thế của nó?"
-        confirmLabel="Xoá"
-        loading={del.isPending}
+        title="Xoá mốc theo dõi thay thế?"
+        description="Chỉ gỡ điểm này khỏi theo dõi thời gian thay thế. Dữ liệu thiết bị đã khai báo trong Danh mục vật tư vẫn giữ nguyên — cột Theo dõi sẽ hiện lại nút “Thêm điểm” để bật theo dõi lại khi cần."
+        confirmLabel="Xoá theo dõi"
+        loading={upd.isPending}
         onConfirm={async () => {
           if (!delTarget) return;
           try {
-            await del.mutateAsync(delTarget.id);
-            toast.success("Đã xoá điểm thay thế");
+            await upd.mutateAsync({ id: delTarget.id, isActive: false });
+            toast.success("Đã xoá mốc theo dõi — dữ liệu thiết bị vẫn giữ nguyên");
             setDelTarget(null);
           } catch (e) {
             toast.error((e as Error).message);
