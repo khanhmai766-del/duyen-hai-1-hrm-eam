@@ -79,8 +79,7 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
     originalName: `${d.code}-BBNT.docx`,
   });
 
-  // Ưu tiên URL công khai (VPS đặt S3_PUBLIC_URL / S3_PUBLIC_BASE_URL);
-  // thiếu thì phục vụ qua proxy của app để không phụ thuộc bucket public.
-  const base = (process.env.S3_PUBLIC_URL || process.env.S3_PUBLIC_BASE_URL || "").replace(/\/+$/, "");
-  return { key, url: base ? `${base}/${key}` : s3ProxyUrl(key) };
+  // Link tải qua proxy của app (/api/files/s3): chỉ người đã đăng nhập tải được,
+  // không phụ thuộc bucket policy công khai trên MinIO.
+  return { key, url: s3ProxyUrl(key) };
 }
