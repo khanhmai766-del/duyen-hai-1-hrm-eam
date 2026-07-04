@@ -309,7 +309,7 @@ export function EquipmentTreePicker({
                       ) : (
                         <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
                       )}
-                      <span className="min-w-0 flex-1 truncate" title={n.name}>
+                      <span className={cn("min-w-0 flex-1 truncate", hasKids && "uppercase")} title={n.name}>
                         {n.name}
                       </span>
                       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{row.kidsCount}</span>}
