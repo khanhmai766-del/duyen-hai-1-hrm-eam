@@ -18,6 +18,7 @@ import {
   BellRing,
   ClipboardList,
 } from "lucide-react";
+import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
 export interface NavItem {
   label: string;
@@ -84,6 +85,41 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
+const STATISTICS_ALLOWED_SECTION_KEYS = new Set(["quan ly nguoi dung", "quan ly vat tu"]);
+
+function navPathMatches(pathname: string, href: string) {
+  const base = href.split("?")[0];
+  if (base === "/") return pathname === "/";
+  return pathname === base || pathname.startsWith(base + "/");
+}
+
+function positionValue(input?: PositionCarrier | string | null) {
+  if (typeof input === "string") return input;
+  return effectiveUserPosition(input);
+}
+
+export function isStatisticsPosition(input?: PositionCarrier | string | null) {
+  const position = normalizeText(positionValue(input) ?? "");
+  return position === "thong ke" || position.includes("thong ke");
+}
+
+export function navSectionAllowedForPosition(section: NavSection, input?: PositionCarrier | string | null) {
+  if (!isStatisticsPosition(input)) return true;
+  return STATISTICS_ALLOWED_SECTION_KEYS.has(normalizeText(section.title));
+}
+
+export function navSectionsForPosition(input?: PositionCarrier | string | null) {
+  return NAV_SECTIONS.filter((section) => navSectionAllowedForPosition(section, input));
+}
+
+export function pathAllowedForPosition(pathname: string, input?: PositionCarrier | string | null) {
+  if (!isStatisticsPosition(input)) return true;
+  if (navPathMatches(pathname, "/account")) return true;
+  return navSectionsForPosition(input).some((section) =>
+    section.items.some((item) => navPathMatches(pathname, item.href) || item.children?.some((child) => navPathMatches(pathname, child.href)))
+  );
+}
 
 /** Strip Vietnamese diacritics for accent-insensitive search. */
 export function normalizeText(s: string): string {

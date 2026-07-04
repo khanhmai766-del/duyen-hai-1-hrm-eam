@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NAV_SECTIONS, normalizeText } from "@/lib/nav";
+import { isStatisticsPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
 import { isPeakBlockedHref } from "@/lib/peak-mode";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
@@ -113,6 +113,16 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const { data: dash } = useMyDashboard();
   const avatarUrl = dash?.data?.avatarUrl ?? null;
   const accountSubtitle = currentPosition.position || ROLES[role as RoleKey]?.label || role || "";
+  const positionCarrier = React.useMemo(
+    () => ({
+      position: currentPosition.position || session?.user?.position,
+      secondaryPosition: session?.user?.secondaryPosition,
+      currentPosition: currentPosition.position || session?.user?.currentPosition,
+    }),
+    [currentPosition.position, session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition]
+  );
+  const navSections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
+  const statisticsNavRestricted = isStatisticsPosition(positionCarrier);
 
   React.useEffect(() => {
     if (forcePasswordChange) setPasswordOpen(true);
@@ -121,7 +131,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   // Quick-launch shortcuts (app grid) — top-level nav respecting admin-only.
   const quickLinks = React.useMemo(
     () =>
-      NAV_SECTIONS.flatMap((s) =>
+      navSections.flatMap((s) =>
         s.items.flatMap((i) => {
           if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)) return [];
           const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
@@ -129,7 +139,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           return navItemAllowed(i, role, rbac.can) ? [{ label: i.label, href: i.href, icon: i.icon }] : [];
         })
       ),
-    [peakMode.restrictHeavyRoutes, rbac.can, role]
+    [navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
   function toggleFullscreen() {
@@ -153,7 +163,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   // Flatten nav (respecting admin-only) into searchable targets across both groups.
   const targets = React.useMemo(
     () =>
-      NAV_SECTIONS.flatMap((s) =>
+      navSections.flatMap((s) =>
         s.items
           .filter((i) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)))
           .map((i) => ({
@@ -179,7 +189,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             return own ? [own, ...kids] : kids;
           })
       ),
-    [peakMode.restrictHeavyRoutes, rbac.can, role]
+    [navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
   const nq = normalizeText(q);
@@ -205,6 +215,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (results.length) go(results[0].href);
+    else if (q.trim() && statisticsNavRestricted) toast.info("Chức vụ Thống kê chỉ tìm trong các mục được phân quyền");
     else if (q.trim() && !peakMode.restrictHeavyRoutes) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
     else if (q.trim()) toast.info("Tạm ẩn tìm kiếm thiết bị trong giờ cao điểm chấm công");
   }

@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { ChevronDown, Clock, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
-import { NAV_SECTIONS as SECTIONS, type NavItem } from "@/lib/nav";
+import { navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { usePeakMode } from "@/hooks/usePeakMode";
 import { isPeakBlockedHref } from "@/lib/peak-mode";
@@ -34,6 +34,15 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const peakMode = usePeakMode();
   const pathname = usePathname();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
+  const positionCarrier = React.useMemo(
+    () => ({
+      position: session?.user?.position,
+      secondaryPosition: session?.user?.secondaryPosition,
+      currentPosition: session?.user?.currentPosition,
+    }),
+    [session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition]
+  );
+  const sections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
 
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
@@ -46,12 +55,12 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const admins = (usersData?.data ?? []).filter((u) => u.role === "ADMIN");
 
   React.useEffect(() => {
-    for (const section of SECTIONS) {
+    for (const section of sections) {
       if (sectionHasActiveItem(pathname, section.items)) {
         setClosedSections((state) => (state[section.title] ? { ...state, [section.title]: false } : state));
       }
     }
-  }, [pathname]);
+  }, [pathname, sections]);
 
   const timeStr = now
     ? now.toLocaleString("vi-VN", {
@@ -98,7 +107,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
       </div>
 
       <nav className={cn("flex-1 space-y-5 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
-        {SECTIONS.map((section) => {
+        {sections.map((section) => {
           const items = section.items
             .map((item) => {
               const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));

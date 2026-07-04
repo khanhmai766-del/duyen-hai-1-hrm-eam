@@ -38,6 +38,19 @@ import { toast } from "sonner";
 type View = "roster" | "timesheet";
 
 type Code = "MORNING" | "AFTERNOON" | "NIGHT" | "OFF";
+type TimesheetLine = "primary" | "blank" | "extra";
+type HcCell = { hours: number; content: string; note: string | null };
+
+const HC_SELF_CONTENT_KEYS = [
+  "hanh chinh - ca ngay",
+  "hanh chinh - buoi sang",
+  "hanh chinh - buoi chieu",
+  "hanh chinh - ra ca sang",
+];
+
+function isSelfHcContent(content: string) {
+  return HC_SELF_CONTENT_KEYS.includes(normalizeText(content));
+}
 
 function cellMeta(code: Code) {
   if (code === "OFF") return { short: "N", color: "#F1F5F9", text: "#64748B", label: "Nghỉ" };
@@ -178,17 +191,17 @@ export default function ShiftRosterPage() {
     });
     return m;
   }, [timesheet.data]);
-  // Map "userId:day" → approved administrative (HC) attendance for that day.
-  // Same-period entries keep the highest hours; different periods are summed.
-  const hcMap = React.useMemo(() => {
+  function buildHcMap(kind: "self" | "extra") {
     const grouped = new Map<string, Array<{ hours: number; content: string; note: string | null; period: string | null }>>();
     (timesheet.data?.data?.hcEntries ?? []).forEach((e) => {
+      const self = isSelfHcContent(e.content);
+      if ((kind === "self" && !self) || (kind === "extra" && self)) return;
       const k = `${e.userId}:${e.day}`;
       const entries = grouped.get(k) ?? [];
       entries.push({ hours: e.hours, content: e.content, note: e.note, period: e.period });
       grouped.set(k, entries);
     });
-    const m = new Map<string, { hours: number; content: string; note: string | null }>();
+    const m = new Map<string, HcCell>();
     grouped.forEach((entries, key) => {
       const shiftEntries = tsMap.get(key) ?? [];
       const hasMorningShift = shiftEntries.some((entry) => entry.shiftType === "MORNING");
@@ -200,7 +213,11 @@ export default function ShiftRosterPage() {
       });
     });
     return m;
-  }, [timesheet.data, tsMap]);
+  }
+
+  // Dòng 1: công hành chính cá nhân; dòng 3: công chấm thêm/theo nhóm.
+  const hcSelfMap = React.useMemo(() => buildHcMap("self"), [timesheet.data, tsMap]);
+  const hcExtraMap = React.useMemo(() => buildHcMap("extra"), [timesheet.data, tsMap]);
 
   const daysInMonth = new Date(month.year, month.month + 1, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -290,19 +307,28 @@ export default function ShiftRosterPage() {
     });
   }
 
-  function timesheetCellText(userId: string, day: number, includePending = true) {
+  function timesheetLineCellText(userId: string, day: number, line: TimesheetLine, includePending = true) {
     const override = overrideMap.get(`${userId}:${day}`);
-    if (override) return override.value;
+    if (override) return line === "primary" ? override.value : "";
+    if (line === "blank") return "";
     const entries = tsMap.get(`${userId}:${day}`) ?? [];
-    const hc = hcMap.get(`${userId}:${day}`);
+    const hc = line === "primary" ? hcSelfMap.get(`${userId}:${day}`) : hcExtraMap.get(`${userId}:${day}`);
+    if (line === "extra") return hc ? formatHours(hc.hours) : "";
     return [
       ...entries.map((entry) => `${shiftEntryLabel(entry)}${includePending && !entry.isApproved ? " (chưa duyệt)" : ""}`),
       ...(hc ? [formatHours(hc.hours)] : []),
     ].join(", ");
   }
 
-  function hcCommentText(user: { id: string; name: string; employeeId: string }, day: number) {
-    const hc = hcMap.get(`${user.id}:${day}`);
+  function timesheetCellText(userId: string, day: number, includePending = true) {
+    return [
+      timesheetLineCellText(userId, day, "primary", includePending),
+      timesheetLineCellText(userId, day, "extra", includePending),
+    ].filter(Boolean).join(", ");
+  }
+
+  function hcCommentText(user: { id: string; name: string; employeeId: string }, day: number, line: TimesheetLine = "primary") {
+    const hc = line === "extra" ? hcExtraMap.get(`${user.id}:${day}`) : hcSelfMap.get(`${user.id}:${day}`);
     const note = hcWorkNote(hc ?? {});
     if (!note) return "";
     return `${user.employeeId} - ${user.name.toLocaleUpperCase("vi-VN")}:\n${note}`;
@@ -311,12 +337,20 @@ export default function ShiftRosterPage() {
   // ---- Bảng công exports (người có quyền → all staff, others → self) ----
   function exportCsv() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
-    const headers = ["Mã NV", "Nhân viên", "Chức vụ", ...days.map(String)];
+    const headers = ["Mã NV", "Nhân viên", "Chức vụ", "Dòng", ...days.map(String)];
     const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const lines = [headers.map(esc).join(",")];
     rows.forEach((u) => {
-      const cells = days.map((d) => timesheetCellText(u.id, d));
-      lines.push([u.employeeId, u.name, u.position ?? "", ...cells].map(esc).join(","));
+      (["primary", "blank", "extra"] as TimesheetLine[]).forEach((line, index) => {
+        const cells = days.map((d) => timesheetLineCellText(u.id, d, line));
+        lines.push([
+          index === 0 ? u.employeeId : "",
+          index === 0 ? u.name : "",
+          index === 0 ? (u.position ?? "") : "",
+          index + 1,
+          ...cells,
+        ].map(esc).join(","));
+      });
     });
     const csv = "﻿" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -332,18 +366,21 @@ export default function ShiftRosterPage() {
   async function exportExcel() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
     const XLSX = await import("xlsx");
-    const headers = ["Mã NV", "Nhân viên", "Chức vụ", ...days.map(String)];
+    const headers = ["Mã NV", "Nhân viên", "Chức vụ", "Dòng", ...days.map(String)];
     const table = [
       [`Bảng công trực ca - Phân xưởng Vận hành 1`],
       [`Tháng ${month.month + 1}/${month.year}`],
       [],
       headers,
-      ...rows.map((u) => [
-        u.employeeId,
-        u.name,
-        u.position ?? "",
-        ...days.map((d) => timesheetCellText(u.id, d)),
-      ]),
+      ...rows.flatMap((u) =>
+        (["primary", "blank", "extra"] as TimesheetLine[]).map((line, index) => [
+          index === 0 ? u.employeeId : "",
+          index === 0 ? u.name : "",
+          index === 0 ? (u.position ?? "") : "",
+          index + 1,
+          ...days.map((d) => timesheetLineCellText(u.id, d, line)),
+        ])
+      ),
     ];
     const sheet = XLSX.utils.aoa_to_sheet(table);
     sheet["!merges"] = [
@@ -354,18 +391,21 @@ export default function ShiftRosterPage() {
       { wch: 12 },
       { wch: 28 },
       { wch: 24 },
+      { wch: 7 },
       ...days.map(() => ({ wch: 9 })),
     ];
     const firstDataRow = 4; // zero-based row index: title, month, blank, header, data...
-    const firstDayCol = 3;
+    const firstDayCol = 4;
     rows.forEach((u, rowIndex) => {
-      days.forEach((day, dayIndex) => {
-        const comment = hcCommentText(u, day);
-        if (!comment) return;
-        const ref = XLSX.utils.encode_cell({ r: firstDataRow + rowIndex, c: firstDayCol + dayIndex });
-        const cell = sheet[ref] ?? { t: "s", v: "" };
-        cell.c = [{ a: "PowerPlant EAM", t: comment }];
-        sheet[ref] = cell;
+      (["primary", "blank", "extra"] as TimesheetLine[]).forEach((line, lineIndex) => {
+        days.forEach((day, dayIndex) => {
+          const comment = hcCommentText(u, day, line);
+          if (!comment) return;
+          const ref = XLSX.utils.encode_cell({ r: firstDataRow + rowIndex * 3 + lineIndex, c: firstDayCol + dayIndex });
+          const cell = sheet[ref] ?? { t: "s", v: "" };
+          cell.c = [{ a: "PowerPlant EAM", t: comment }];
+          sheet[ref] = cell;
+        });
       });
     });
     const workbook = XLSX.utils.book_new();
@@ -378,29 +418,42 @@ export default function ShiftRosterPage() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
     const scope = canEditTimesheet ? "Toàn bộ nhân sự" : "Cá nhân";
     const dayTh = days.map((d) => `<th>${d}</th>`).join("");
+    const escHtml = (value: unknown) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     const bodyRows = rows
       .map((u, i) => {
-        const tds = days
-          .map((d) => {
-            const override = overrideMap.get(`${u.id}:${d}`);
-            if (override) return `<td><span class="shift-chip manual">${override.value.replace(/</g, "&lt;")}</span></td>`;
-            const entries = tsMap.get(`${u.id}:${d}`) ?? [];
-            const hc = hcMap.get(`${u.id}:${d}`);
-            if (!entries.length && !hc) return "<td></td>";
-            const inner = entries
-              .map((entry) => {
-                const m = entry.isApproved
-                  ? cellMeta(entry.shiftType as Code)
-                  : { color: "#DC2626", text: "#ffffff" };
-                return `<span class="shift-chip" style="background:${m.color};color:${m.text}">${shiftEntryLabel(entry)}</span>`;
+        const lineRows = (["primary", "blank", "extra"] as TimesheetLine[])
+          .map((line, lineIndex) => {
+            const tds = days
+              .map((d) => {
+                const override = overrideMap.get(`${u.id}:${d}`);
+                if (override) return `<td>${line === "primary" ? `<span class="shift-chip manual">${escHtml(override.value)}</span>` : ""}</td>`;
+                if (line === "blank") return "<td></td>";
+                const entries = line === "primary" ? (tsMap.get(`${u.id}:${d}`) ?? []) : [];
+                const hc = line === "primary" ? hcSelfMap.get(`${u.id}:${d}`) : hcExtraMap.get(`${u.id}:${d}`);
+                if (!entries.length && !hc) return "<td></td>";
+                const inner = entries
+                  .map((entry) => {
+                    const m = entry.isApproved
+                      ? cellMeta(entry.shiftType as Code)
+                      : { color: "#DC2626", text: "#ffffff" };
+                    return `<span class="shift-chip" style="background:${m.color};color:${m.text}">${shiftEntryLabel(entry)}</span>`;
+                  })
+                  .join("") + (hc ? `<span class="shift-chip" style="background:${hcMeta(hc.content).bg};color:${hcMeta(hc.content).text}">${formatHours(hc.hours)}</span>` : "");
+                return `<td>${inner}</td>`;
               })
-              .join("") + (hc ? `<span class="shift-chip" style="background:${hcMeta(hc.content).bg};color:${hcMeta(hc.content).text}">${formatHours(hc.hours)}</span>` : "");
-            return `<td>${inner}</td>`;
+              .join("");
+            const metaCells = lineIndex === 0
+              ? `<td rowspan="3">${i + 1}</td><td rowspan="3">${escHtml(u.employeeId)}</td><td rowspan="3" class="l">${escHtml(u.name)}</td><td rowspan="3" class="l">${escHtml(u.position)}</td>`
+              : "";
+            return `<tr class="${line === "extra" ? "extra-line" : line === "blank" ? "blank-line" : ""}">${metaCells}<td class="line-no">${lineIndex + 1}</td>${tds}</tr>`;
           })
           .join("");
-        const name = (u.name ?? "").replace(/</g, "&lt;");
-        const pos = (u.position ?? "").replace(/</g, "&lt;");
-        return `<tr><td>${i + 1}</td><td>${u.employeeId}</td><td class="l">${name}</td><td class="l">${pos}</td>${tds}</tr>`;
+        return lineRows;
       })
       .join("");
     // Page margins (mm) — kept small so more room for content on a single sheet.
@@ -418,6 +471,9 @@ export default function ShiftRosterPage() {
   th,td { border:1px solid #cbd5e1; padding:2px 3px; text-align:center; }
   th { background:#f1f5f9; }
   td.l, th.l { text-align:left; white-space:nowrap; }
+  tr.blank-line td { height:18px; background:#fbfdff; }
+  tr.extra-line td { background:#f8fafc; }
+  .line-no { width:16px; color:#64748b; font-size:8px; }
   .shift-chip { display:inline-block; min-width:18px; margin:1px; border-radius:3px; padding:1px 3px; font-weight:700; }
   .shift-chip.manual { background:#0f172a; color:#ffffff; border:1px solid #38bdf8; }
   .legend { margin-top:8px; font-size:10px; }
@@ -428,7 +484,7 @@ export default function ShiftRosterPage() {
     <h1>Bảng công trực ca — Phân xưởng Vận hành 1</h1>
     <p class="sub">Tháng ${month.month + 1}/${month.year} · ${scope} · Ca chưa duyệt được tô đỏ</p>
     <table>
-      <thead><tr><th>STT</th><th>Mã NV</th><th class="l">Họ tên</th><th class="l">Chức vụ</th>${dayTh}</tr></thead>
+      <thead><tr><th>STT</th><th>Mã NV</th><th class="l">Họ tên</th><th class="l">Chức vụ</th><th>Dòng</th>${dayTh}</tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
     <p class="legend">
@@ -571,6 +627,7 @@ export default function ShiftRosterPage() {
               hiển thị ca đã điểm danh trên sơ đồ tổ chức ca; ca <span className="font-medium text-red-600">chưa duyệt được tô đỏ</span>.
               Nếu số giờ khác 8 thì mã ca có tiền tố giờ, ví dụ <span className="font-medium text-ink">4V3</span>;
               kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>; nếu HC có nội dung công việc thì rê chuột lên ô để xem.
+              Mỗi nhân sự hiển thị 3 dòng: dòng 1 công trực ca/hành chính, dòng 2 dự phòng, dòng 3 công chấm thêm theo nhóm.
               {canEditTimesheet ? " Người được phân quyền có thể bấm vào từng ô để chỉnh giá trị hiển thị." : " Dữ liệu chỉ xem, không chỉnh tay."}
             </p>
           </Card>
@@ -621,87 +678,107 @@ export default function ShiftRosterPage() {
                 </thead>
                 <tbody>
                   {pagedRows.map((u) => (
-                    <tr key={u.id} className="border-b border-border hover:bg-muted/30">
-                      <td className="sticky left-0 z-10 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center">
-                        <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
-                      </td>
-                      <td className="sticky left-[110px] z-10 w-[280px] min-w-[280px] border-r border-border bg-white px-4 py-2">
-                        <div className="font-medium text-ink">{u.name}</div>
-                        <div className="text-xs text-muted-foreground">{u.position}</div>
-                      </td>
-                      {days.map((d) => {
-                        const entries = tsMap.get(`${u.id}:${d}`) ?? [];
-                        const hc = hcMap.get(`${u.id}:${d}`);
-                        const override = overrideMap.get(`${u.id}:${d}`);
-                        const open = () => openEditCell({ user: u, day: d, entries, hc, override });
-                        return (
-                          <td
-                            key={d}
-                            className={cn(
-                              "group relative border-l border-slate-200 p-0.5 text-center",
-                              canEditTimesheet && "cursor-pointer hover:bg-sky-50/60"
-                            )}
-                            onClick={open}
-                            title={canEditTimesheet ? "Bấm để chỉnh ô bảng công" : undefined}
-                          >
-                            <div className="mx-auto flex min-h-8 min-w-10 flex-col items-center justify-center gap-0.5">
-                              {override ? (
-                                <span
-                                  className="flex min-h-7 min-w-8 items-center justify-center rounded border border-sky-300 bg-slate-800 px-1 text-[11px] font-bold text-white shadow-sm"
-                                  title={`${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`}
-                                >
-                                  {override.value}
-                                </span>
-                              ) : entries.length || hc != null ? (
-                                <>
-                                  {entries.map((entry) => {
-                                    const meta = entry.isApproved
-                                      ? cellMeta(entry.shiftType as Code)
-                                      : { color: "#DC2626", text: "#ffffff", label: "Chưa duyệt" };
-                                    return (
-                                      <span
-                                        key={`${entry.shiftType}-${entry.hours}-${entry.isApproved ? "ok" : "pending"}`}
-                                        className="flex min-h-7 min-w-8 items-center justify-center rounded px-1 text-[11px] font-bold"
-                                        style={{ background: meta.color, color: meta.text }}
-                                        title={`${u.name} · Ngày ${d}: ${SHIFT_TYPE[entry.shiftType as keyof typeof SHIFT_TYPE]?.label ?? entry.shiftType} — ${entry.hours} giờ${entry.isApproved ? " (đã duyệt)" : " (chưa duyệt)"}`}
-                                      >
-                                        {shiftEntryLabel(entry)}
-                                      </span>
-                                    );
-                                  })}
-                                  {hc != null && (() => {
-                                    const hm = hcMeta(hc.content);
-                                    const workNote = hcWorkNote(hc);
-                                    return (
-                                      <span
-                                        className="flex h-7 w-8 items-center justify-center rounded text-[10px] font-bold"
-                                        style={{ background: hm.bg, color: hm.text }}
-                                        title={workNote ? `${u.name} · Ngày ${d}: ${workNote}` : undefined}
-                                      >
-                                        {formatHours(hc.hours)}
-                                      </span>
-                                    );
-                                  })()}
-                                </>
-                              ) : (
-                                <span className="mx-auto flex h-8 w-8 items-center justify-center text-[11px] text-slate-300">·</span>
-                              )}
-                            </div>
-                            {canEditTimesheet && (
-                              <span className="pointer-events-none absolute right-0.5 top-0.5 hidden rounded bg-white/90 p-0.5 text-sky-700 shadow-sm ring-1 ring-sky-100 group-hover:block">
-                                <PencilLine className="h-3 w-3" />
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                    <React.Fragment key={u.id}>
+                      {(["primary", "blank", "extra"] as TimesheetLine[]).map((line, lineIndex) => (
+                        <tr
+                          key={`${u.id}-${line}`}
+                          className={cn(
+                            lineIndex === 2 ? "border-b-2 border-slate-300" : "border-b border-slate-100",
+                            "hover:bg-muted/20"
+                          )}
+                        >
+                          {lineIndex === 0 && (
+                            <>
+                              <td rowSpan={3} className="sticky left-0 z-10 w-[110px] min-w-[110px] border-r border-slate-200 bg-white px-3 py-2 text-center align-middle">
+                                <span className="font-mono text-xs font-medium text-ink">{u.employeeId}</span>
+                              </td>
+                              <td rowSpan={3} className="sticky left-[110px] z-10 w-[280px] min-w-[280px] border-r border-border bg-white px-4 py-2 align-middle">
+                                <div className="font-medium text-ink">{u.name}</div>
+                                <div className="text-xs text-muted-foreground">{u.position}</div>
+                              </td>
+                            </>
+                          )}
+                          {days.map((d) => {
+                            const override = overrideMap.get(`${u.id}:${d}`);
+                            const entries = line === "primary" ? (tsMap.get(`${u.id}:${d}`) ?? []) : [];
+                            const hc = line === "primary" ? hcSelfMap.get(`${u.id}:${d}`) : line === "extra" ? hcExtraMap.get(`${u.id}:${d}`) : undefined;
+                            const showOverride = !!override && line === "primary";
+                            const editableCell = canEditTimesheet && line !== "blank";
+                            const open = () => openEditCell({ user: u, day: d, entries, hc, override });
+                            return (
+                              <td
+                                key={`${line}-${d}`}
+                                className={cn(
+                                  "group relative h-10 border-l border-slate-200 p-0.5 text-center",
+                                  line === "blank" && "bg-slate-50/40",
+                                  line === "extra" && "bg-slate-50/70",
+                                  editableCell && "cursor-pointer hover:bg-sky-50/70"
+                                )}
+                                onClick={editableCell ? open : undefined}
+                                title={editableCell ? "Bấm để chỉnh ô bảng công" : undefined}
+                              >
+                                <div className="mx-auto flex min-h-8 min-w-10 items-center justify-center gap-0.5">
+                                  {line === "blank" ? (
+                                    <span className="h-8 w-8" aria-hidden="true" />
+                                  ) : showOverride ? (
+                                    <span
+                                      className="flex min-h-7 min-w-8 items-center justify-center rounded border border-sky-300 bg-slate-800 px-1 text-[11px] font-bold text-white shadow-sm"
+                                      title={`${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`}
+                                    >
+                                      {override.value}
+                                    </span>
+                                  ) : !override && (entries.length || hc != null) ? (
+                                    <>
+                                      {entries.map((entry) => {
+                                        const meta = entry.isApproved
+                                          ? cellMeta(entry.shiftType as Code)
+                                          : { color: "#DC2626", text: "#ffffff", label: "Chưa duyệt" };
+                                        return (
+                                          <span
+                                            key={`${entry.shiftType}-${entry.hours}-${entry.isApproved ? "ok" : "pending"}`}
+                                            className="flex min-h-7 min-w-8 items-center justify-center rounded px-1 text-[11px] font-bold"
+                                            style={{ background: meta.color, color: meta.text }}
+                                            title={`${u.name} · Ngày ${d}: ${SHIFT_TYPE[entry.shiftType as keyof typeof SHIFT_TYPE]?.label ?? entry.shiftType} — ${entry.hours} giờ${entry.isApproved ? " (đã duyệt)" : " (chưa duyệt)"}`}
+                                          >
+                                            {shiftEntryLabel(entry)}
+                                          </span>
+                                        );
+                                      })}
+                                      {hc != null && (() => {
+                                        const hm = hcMeta(hc.content);
+                                        const workNote = hcWorkNote(hc);
+                                        return (
+                                          <span
+                                            className="flex h-7 w-8 items-center justify-center rounded text-[10px] font-bold"
+                                            style={{ background: hm.bg, color: hm.text }}
+                                            title={workNote ? `${u.name} · Ngày ${d}: ${workNote}` : `${u.name} · Ngày ${d}: ${hc.content}`}
+                                          >
+                                            {formatHours(hc.hours)}
+                                          </span>
+                                        );
+                                      })()}
+                                    </>
+                                  ) : (
+                                    <span className="mx-auto flex h-8 w-8 items-center justify-center text-[11px] text-slate-300">·</span>
+                                  )}
+                                </div>
+                                {editableCell && (
+                                  <span className="pointer-events-none absolute right-0.5 top-0.5 hidden rounded bg-white/90 p-0.5 text-sky-700 shadow-sm ring-1 ring-sky-100 group-hover:block">
+                                    <PencilLine className="h-3 w-3" />
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
               <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  Hiển thị {timesheetFirstShown}-{timesheetLastShown} trong tổng số {rows.length} dòng
+                  Hiển thị {timesheetFirstShown}-{timesheetLastShown} trong tổng số {rows.length} nhân sự
                 </div>
                 <div className="flex items-center gap-2 sm:justify-end">
                   <Button

@@ -2,17 +2,36 @@
 
 import * as React from "react";
 import { useIsFetching, useIsMutating } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { BroadcastModal } from "@/components/shared/broadcast-modal";
 import { PowerLoadingOverlay } from "@/components/shared/power-loading-overlay";
+import { pathAllowedForPosition } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession();
+  const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
   const loadingCount = useIsFetching() + useIsMutating();
+  const positionCarrier = React.useMemo(
+    () => ({
+      position: session?.user?.position,
+      secondaryPosition: session?.user?.secondaryPosition,
+      currentPosition: session?.user?.currentPosition,
+    }),
+    [session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition]
+  );
+  const blockedByPosition = !pathAllowedForPosition(pathname, positionCarrier);
+
+  React.useEffect(() => {
+    if (blockedByPosition) router.replace("/");
+  }, [blockedByPosition, router]);
 
   return (
     <div className="flex min-h-screen bg-warmwhite dark:bg-background">
@@ -43,7 +62,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <Topbar onMenuClick={() => setMobileOpen(true)} onToggleSidebar={() => setCollapsed((c) => !c)} />
-        <main className="flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">{children}</main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">
+          {blockedByPosition ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm font-medium text-amber-800 shadow-sm">
+              Chức vụ Thống kê chỉ được truy cập các mục Quản lý người dùng và Quản lý vật tư.
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </div>
 
       {/* Thông báo hệ thống giữa màn hình (do Quản trị phát) */}
