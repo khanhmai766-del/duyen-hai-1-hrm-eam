@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Plus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
-  AlertTriangle, Ban, Download, Boxes, Timer, CircleCheck, Circle, CircleDot, Loader2,
+  AlertTriangle, Ban, Download, Timer, CircleCheck, Circle, CircleDot, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -51,10 +51,15 @@ const ORDER: Record<string, string[]> = {
 const fmt = (s?: string | null) =>
   s ? new Date(s).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
 
-export default function MaterialTicketBoard() {
+export default function MaterialTicketBoard({
+  creating = false,
+  onCloseCreate,
+}: {
+  creating?: boolean;
+  onCloseCreate?: () => void;
+} = {}) {
   const { data, isLoading } = useMaterialTickets();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState("ALL");
 
   const tickets = data?.tickets ?? [];
@@ -68,20 +73,6 @@ export default function MaterialTicketBoard() {
   return (
     <div className="mtw">
       <style>{CSS}</style>
-
-      <header className="head">
-        <div className="head-l">
-          <div className="head-ic"><Boxes size={20} /></div>
-          <div>
-            <h1>Thay thế vật tư</h1>
-          </div>
-        </div>
-        {viewer?.canCreate && (
-          <button className="btn primary" onClick={() => setCreating(true)}>
-            <Plus size={15} /> Tạo phiếu thay thế vật tư
-          </button>
-        )}
-      </header>
 
       {myTurn.length > 0 && (
         <div className="turn">
@@ -132,7 +123,7 @@ export default function MaterialTicketBoard() {
         {!isLoading && shown.length === 0 && <div className="empty">Không có phiếu nào.</div>}
       </div>
 
-      {creating && <CreateDialog onClose={() => setCreating(false)} onOpen={setOpenId} />}
+      {creating && <CreateDialog onClose={() => onCloseCreate?.()} onOpen={setOpenId} />}
 
       {open && (
         <>
