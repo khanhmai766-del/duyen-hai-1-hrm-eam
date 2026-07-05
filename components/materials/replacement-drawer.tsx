@@ -87,7 +87,14 @@ export function ReplacementDrawer({
                       ) : (
                         <span className="truncate">Chưa chọn thiết bị</span>
                       )}
-                      {p.unit && <span className="shrink-0 rounded bg-navy/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-navy">{p.unit}</span>}
+                      {p.unit && (
+                        <span
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-semibold"
+                          style={unitBadgeStyle(p.unit)}
+                        >
+                          {p.unit}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Repeat className="h-3 w-3" /> {replacementIntervalLabel(p.intervalMonths, p.intervalNote)}</span>
@@ -152,6 +159,13 @@ export function ReplacementDrawer({
       />
     </div>
   );
+}
+
+// Màu badge tổ máy: S1 giữ navy như cũ; S2 tím cánh sen; COMMON nâu hạt dẻ.
+function unitBadgeStyle(unit: string): React.CSSProperties {
+  if (unit === "S2") return { background: "rgba(192,38,211,0.13)", color: "#a21caf" };
+  if (unit === "COMMON") return { background: "rgba(149,69,53,0.15)", color: "#8a4030" };
+  return { background: "rgba(30,58,95,0.10)", color: "#1E3A5F" };
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
