@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   CalendarCheck,
@@ -32,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { OPERATION_TYPE, OPERATION_TYPE_ORDER, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
 import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/lib/links";
+import { normalizeText } from "@/lib/nav";
 import { formatDateInput, initials, cn, parseDateInput } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
@@ -137,7 +139,7 @@ export default function DashboardPage() {
         </Link>
 
         {/* 3 — Current duty position (with system control-screen background) */}
-        <DutyPositionCard m={m} loading={me.isLoading} />
+        <DutyPositionCard m={m} loading={me.isLoading} userPosition={currentPosition.position || session?.user?.position} />
 
         {/* 4 — Live weather, with location-photo background */}
         <WeatherCard />
@@ -269,8 +271,24 @@ function ContactCard() {
   );
 }
 
+const ADMIN_ATTENDANCE_CARD_POSITIONS = ["quan doc", "pho quan doc", "ky thuat vien", "thong ke"];
+
+function shouldOpenAdminAttendance(position?: string | null) {
+  const normalized = normalizeText(position ?? "");
+  return ADMIN_ATTENDANCE_CARD_POSITIONS.some((item) => normalized.includes(item));
+}
+
 /* ---- Current duty position, with the system control-screen as background ---- */
-function DutyPositionCard({ m, loading }: { m?: MyDashboard; loading: boolean }) {
+function DutyPositionCard({
+  m,
+  loading,
+  userPosition,
+}: {
+  m?: MyDashboard;
+  loading: boolean;
+  userPosition?: string | null;
+}) {
+  const router = useRouter();
   // The seat title to display — approved first, otherwise the pending one.
   const label = m?.position ?? m?.pendingPosition ?? null;
   const isPending = !m?.position && !!m?.pendingPosition;
@@ -316,8 +334,34 @@ function DutyPositionCard({ m, loading }: { m?: MyDashboard; loading: boolean })
   }
 
   // Plain variant: no assigned seat (or a seat without a dedicated image).
-  return (
-    <Card className="h-full bg-navy/5">
+  const hasDutyPosition = !!m?.position;
+  const attendanceHref = shouldOpenAdminAttendance(userPosition) ? "/hr/admin-attendance" : "/hr/org-chart";
+  const attendanceLabel = shouldOpenAdminAttendance(userPosition)
+    ? "Chấm công hành chính"
+    : "Điểm danh tại sơ đồ tổ chức ca";
+  const canOpenAttendance = !hasDutyPosition && !m?.pendingPosition;
+  const openAttendanceCard = () => {
+    if (canOpenAttendance) router.push(attendanceHref);
+  };
+  const handleAttendanceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!canOpenAttendance) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      router.push(attendanceHref);
+    }
+  };
+
+  const card = (
+    <Card
+      role={canOpenAttendance ? "link" : undefined}
+      tabIndex={canOpenAttendance ? 0 : undefined}
+      onClick={openAttendanceCard}
+      onKeyDown={handleAttendanceKeyDown}
+      className={cn(
+        "h-full bg-navy/5",
+        canOpenAttendance && "cursor-pointer transition-colors hover:border-accent/45 hover:bg-accent/5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+      )}
+    >
       <CardContent className="flex h-full flex-col justify-between p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-secondary to-[#4a3219] text-white shadow-lg ring-1 ring-white/40 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/25">
@@ -334,21 +378,23 @@ function DutyPositionCard({ m, loading }: { m?: MyDashboard; loading: boolean })
             {label ?? (loading ? "…" : "Chưa điểm danh")}
           </div>
           <div className="mt-1 text-sm font-medium text-muted-foreground">Cương vị trực ca</div>
-          {m?.position ? (
+          {hasDutyPosition ? (
             <div className="mt-0.5 text-xs text-muted-foreground/70">{m?.unit ?? ""}</div>
           ) : m?.pendingPosition ? (
             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
               Chờ Quản trị / Quản lý / Trưởng ca duyệt
             </span>
           ) : (
-            <Link href="/hr/org-chart" className="mt-0.5 inline-block text-xs text-accent hover:underline">
-              Điểm danh tại sơ đồ tổ chức ca →
+            <Link href={attendanceHref} className="mt-0.5 inline-block text-xs text-accent hover:underline" onClick={(event) => event.stopPropagation()}>
+              {attendanceLabel} →
             </Link>
           )}
         </div>
       </CardContent>
     </Card>
   );
+
+  return card;
 }
 
 /* ---- Live weather card — follows the user's GPS location: weather + place name

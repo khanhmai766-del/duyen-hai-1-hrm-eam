@@ -788,30 +788,32 @@ export default function RolesPage() {
         )}
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {matrixRoleColumns.map((role) => (
-          <Card key={role.id} className="overflow-hidden">
-            <CardContent className="relative p-4">
-              <div className={cn("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", role.accent)} />
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  {role.systemRole ? (
-                    <RoleBadge role={role.systemRole} />
-                  ) : (
-                    <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">
-                      {role.label}
-                    </span>
-                  )}
-                  <p className="mt-2 text-sm font-semibold text-ink">{role.scope}</p>
+      <div className="-mx-4 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+        <div className="grid min-w-[980px] grid-cols-5 gap-2.5 xl:min-w-0">
+          {matrixRoleColumns.map((role) => (
+            <Card key={role.id} className="min-w-0 overflow-hidden">
+              <CardContent className="relative min-h-[132px] p-3">
+                <div className={cn("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", role.accent)} />
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="min-w-0">
+                    {role.systemRole ? (
+                      <RoleBadge role={role.systemRole} className="whitespace-nowrap px-2 text-[11px] font-bold leading-5" />
+                    ) : (
+                      <span className="inline-flex max-w-full whitespace-nowrap rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-bold leading-5 text-blue-800">
+                        {role.label}
+                      </span>
+                    )}
+                    <p className="mt-2 line-clamp-1 text-[13px] font-bold leading-5 text-ink">{role.scope}</p>
+                  </div>
+                  <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-md", role.accent)}>
+                    <Lock className="h-4 w-4" />
+                  </div>
                 </div>
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg", role.accent)}>
-                  <Lock className="h-5 w-5" />
-                </div>
-              </div>
-              <p className="mt-2 text-sm leading-5 text-muted-foreground">{role.desc}</p>
-            </CardContent>
-          </Card>
-        ))}
+                <p className="mt-2 line-clamp-2 text-[12.5px] leading-5 text-muted-foreground">{role.desc}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       {isAdmin && (
