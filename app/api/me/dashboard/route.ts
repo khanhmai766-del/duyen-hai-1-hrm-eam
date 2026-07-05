@@ -126,12 +126,20 @@ export async function GET(req: NextRequest) {
       select: { status: true, checkInAt: true, approvedBy: true },
     });
 
-    // Đã CHẤM CÔNG HÀNH CHÍNH hôm nay? (Quản đốc/Phó Quản đốc… — self check-in HC)
+    // Đã CHẤM CÔNG HÀNH CHÍNH hôm nay? (Quản đốc/Phó Quản đốc/Kỹ thuật viên/Thống kê).
+    // Server chạy UTC nhưng HcGroup.date lưu theo NGÀY VIỆT NAM (midnight UTC của ngày VN),
+    // nên phải tính "hôm nay" theo giờ VN để khớp — tránh lệch ngày lúc 0–7h sáng.
+    const vnParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(now);
+    const vn = Object.fromEntries(vnParts.map((p) => [p.type, p.value]));
+    const hcDayStart = new Date(`${vn.year}-${vn.month}-${vn.day}T00:00:00.000Z`);
+    const hcDayEnd = new Date(`${vn.year}-${vn.month}-${vn.day}T23:59:59.999Z`);
     const adminSelfToday = await prisma.hcCheckIn.findFirst({
       where: {
         userId: user.id,
         isRegistered: false,
-        group: { date: { gte: dayStart, lte: dayEnd }, content: { in: HC_SELF_CONTENTS } },
+        group: { date: { gte: hcDayStart, lte: hcDayEnd }, content: { in: HC_SELF_CONTENTS } },
       },
       select: { id: true },
     });
