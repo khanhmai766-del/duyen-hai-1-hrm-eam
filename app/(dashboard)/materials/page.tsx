@@ -96,10 +96,16 @@ function MaterialsPageContent() {
     );
     return names.join(", ");
   }, []);
-  // Khối quản lý của vật tư = các khối suy ra từ cương vị quản lý của các điểm thay thế.
+  // Khối quản lý của vật tư = các khối suy ra từ cương vị quản lý của các DÒNG KHAI BÁO
+  // (isActive=false) — khớp đúng với danh sách điểm hiện trong panel chi tiết.
   const materialBlocks = React.useCallback(
     (m: MaterialWithDevices) =>
-      new Set((m.replacements ?? []).map((r) => blockForPosition(r.managingPosition)).filter(Boolean)),
+      new Set(
+        (m.replacements ?? [])
+          .filter((r) => !r.isActive)
+          .map((r) => blockForPosition(r.managingPosition))
+          .filter(Boolean)
+      ),
     []
   );
   const materials = (data?.data ?? []).filter(
@@ -373,7 +379,7 @@ function MaterialsPageContent() {
                   {expanded && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={canManage ? 7 : 6} className="px-6 py-4">
-                        <MaterialExpandedDetails m={m} onOpenTracking={() => setReplMaterial(m)} />
+                        <MaterialExpandedDetails m={m} blockFilter={blockFilter} onOpenTracking={() => setReplMaterial(m)} />
                       </TableCell>
                     </TableRow>
                   )}
@@ -642,8 +648,12 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
 /** Panel bung: liệt kê các DÒNG KHAI BÁO thiết bị (isActive=false). Nút "Thêm điểm"
  *  tạo MỘT BẢN GHI THEO DÕI riêng (isActive=true) nên bấm được nhiều lần — dòng
  *  khai báo và nút giữ nguyên; điểm theo dõi quản lý trong drawer Theo dõi thay thế. */
-function MaterialExpandedDetails({ m, onOpenTracking }: { m: MaterialWithDevices; onOpenTracking?: () => void }) {
-  const points = (m.replacements ?? []).filter((r) => !r.isActive);
+function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m: MaterialWithDevices; blockFilter?: string; onOpenTracking?: () => void }) {
+  // Chỉ hiện dòng khai báo (isActive=false); nếu đang lọc theo khối cụ thể thì
+  // chỉ hiện các điểm có cương vị quản lý thuộc đúng khối đó.
+  const points = (m.replacements ?? []).filter(
+    (r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter)
+  );
   const createPoint = useCreateReplacement();
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
