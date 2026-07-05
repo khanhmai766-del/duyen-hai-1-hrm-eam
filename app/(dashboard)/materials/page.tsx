@@ -24,7 +24,7 @@ import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials,
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { useCreateReplacement } from "@/hooks/useReplacements";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS } from "@/lib/constants";
+import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition } from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
@@ -63,6 +63,7 @@ function MaterialsPageContent() {
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
   const [categoryFilter, setCategoryFilter] = React.useState<string>(MATERIAL_CATEGORIES[0]);
+  const [blockFilter, setBlockFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
@@ -95,12 +96,19 @@ function MaterialsPageContent() {
     );
     return names.join(", ");
   }, []);
+  // Khối quản lý của vật tư = các khối suy ra từ cương vị quản lý của các điểm thay thế.
+  const materialBlocks = React.useCallback(
+    (m: MaterialWithDevices) =>
+      new Set((m.replacements ?? []).map((r) => blockForPosition(r.managingPosition)).filter(Boolean)),
+    []
+  );
   const materials = (data?.data ?? []).filter(
     (m) =>
       (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
-      m.category === categoryFilter
+      m.category === categoryFilter &&
+      (blockFilter === "ALL" || materialBlocks(m).has(blockFilter))
   );
-  const isFiltered = q.trim() !== "";
+  const isFiltered = q.trim() !== "" || blockFilter !== "ALL";
 
   // Bỏ chọn những dòng không còn trong danh sách đang hiển thị (vd sau khi lọc/xoá).
   // Dùng chuỗi id ổn định làm dependency để effect chỉ chạy khi tập hiển thị đổi,
@@ -225,7 +233,18 @@ function MaterialsPageContent() {
             {tab.key}
           </button>
         ))}
-        <div className="ml-auto pb-2">
+        <div className="ml-auto flex items-center gap-2 pb-2">
+          <Select value={blockFilter} onValueChange={setBlockFilter}>
+            <SelectTrigger className="w-44" aria-label="Lọc theo khối quản lý">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả khối</SelectItem>
+              {EQUIPMENT_BLOCKS.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="sm:w-72" />
         </div>
       </div>
@@ -250,10 +269,10 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? `Không có vật tư nào khớp từ khoá trong loại "${categoryFilter}". Thử bỏ từ khoá hoặc chuyển tab khác.`
+              ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}". Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
               : `Chưa có vật tư nào thuộc loại "${categoryFilter}".`
           }
-          action={isFiltered ? { label: "Xoá từ khoá", onClick: () => setQ("") } : undefined}
+          action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setBlockFilter("ALL"); } } : undefined}
         />
       ) : (
         <Card className="overflow-hidden">
