@@ -66,8 +66,11 @@ function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?
     deviceId: r.deviceSeq,
     device: equipmentNodeToDevice(r.device),
   }));
-  // Tổng nhu cầu 1 chu kỳ = Σ (dung tích mỗi thiết bị × số thiết bị) các điểm; đề xuất thêm = thiếu hụt so với tồn kho.
-  const totalNeed = replacements.reduce((sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.deviceCount) || 1), 0);
+  // Tổng nhu cầu 1 chu kỳ = Σ (dung tích × số thiết bị) các DÒNG KHAI BÁO (isActive=false);
+  // điểm theo dõi thời gian (isActive=true) là bản sao nên không cộng lặp.
+  const totalNeed = replacements
+    .filter((r) => !r.isActive)
+    .reduce((sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.deviceCount) || 1), 0);
   const shortfall = Math.max(0, totalNeed - (Number(material.quantity) || 0));
   return {
     ...material,
@@ -225,11 +228,12 @@ export async function PUT(req: NextRequest) {
     if (document !== undefined) {
       await updateMaterialDocument(body.id, document);
     }
-    // Đồng bộ điểm thay thế (chỉ khi payload có gửi mảng replacements): xoá hết rồi tạo lại theo form.
+    // Đồng bộ DÒNG KHAI BÁO thiết bị (isActive=false) theo form: xoá rồi tạo lại.
+    // Các ĐIỂM THEO DÕI thời gian (isActive=true, tạo từ nút "Thêm điểm") GIỮ NGUYÊN.
     if (Array.isArray(body.replacements)) {
       const current = await prisma.material.findUnique({ where: { id: body.id }, select: { system: true } });
       const replacements = parseReplacements(body, user.id, defaultSystem ?? current?.system ?? null);
-      await prisma.materialReplacement.deleteMany({ where: { materialId: body.id } });
+      await prisma.materialReplacement.deleteMany({ where: { materialId: body.id, isActive: false } });
       for (const data of replacements) {
         await prisma.materialReplacement.create({ data: { ...data, materialId: body.id } });
       }

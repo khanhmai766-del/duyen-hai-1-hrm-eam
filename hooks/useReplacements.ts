@@ -98,6 +98,16 @@ function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["materials"] });
 }
 
+/** Tạo một điểm theo dõi thời gian thay thế (bản ghi riêng, isActive=true). */
+export function useCreateReplacement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ReplacementInput) =>
+      apiMutate<ReplacementItem>("/api/material-replacements", "POST", body),
+    onSuccess: () => invalidate(qc),
+  });
+}
+
 export function useUpdateReplacement() {
   const qc = useQueryClient();
   return useMutation({

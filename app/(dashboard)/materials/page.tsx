@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, CircleCheck, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -23,9 +23,10 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
+import { useCreateReplacement } from "@/hooks/useReplacements";
 import { MATERIAL_CATEGORIES } from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { cn } from "@/lib/utils";
+import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
 
 // Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
@@ -167,18 +168,21 @@ function MaterialsPageContent() {
   function materialForEdit(m: MaterialWithDevices): MaterialEdit {
     return {
       ...m,
-      replacements: (m.replacements ?? []).map((r) => ({
-        deviceSeq: r.deviceSeq,
-        system: r.system,
-        location: r.location,
-        deviceCount: r.deviceCount ?? 1,
-        managingPosition: r.managingPosition,
-        isActive: r.isActive,
-        quantity: r.quantity,
-        intervalMonths: r.intervalMonths,
-        intervalNote: r.intervalNote,
-        lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
-      })),
+      // Form Sửa chỉ nạp DÒNG KHAI BÁO (isActive=false); điểm theo dõi (isActive=true)
+      // là bản ghi riêng, quản lý trong drawer — không đưa vào form để tránh bị ghi đè.
+      replacements: (m.replacements ?? [])
+        .filter((r) => !r.isActive)
+        .map((r) => ({
+          deviceSeq: r.deviceSeq,
+          system: r.system,
+          location: r.location,
+          deviceCount: r.deviceCount ?? 1,
+          managingPosition: r.managingPosition,
+          quantity: r.quantity,
+          intervalMonths: r.intervalMonths,
+          intervalNote: r.intervalNote,
+          lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
+        })),
     };
   }
 
@@ -616,9 +620,48 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
   return null;
 }
 
-/** Panel bung: chỉ liệt kê chi tiết các điểm thay thế dạng bảng (hệ thống · chu kỳ · số lượng). */
+/** Panel bung: liệt kê các DÒNG KHAI BÁO thiết bị (isActive=false). Nút "Thêm điểm"
+ *  tạo MỘT BẢN GHI THEO DÕI riêng (isActive=true) nên bấm được nhiều lần — dòng
+ *  khai báo và nút giữ nguyên; điểm theo dõi quản lý trong drawer Theo dõi thay thế. */
 function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
-  const points = m.replacements ?? [];
+  const points = (m.replacements ?? []).filter((r) => !r.isActive);
+  const createPoint = useCreateReplacement();
+
+  type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
+  const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
+  const [trackDate, setTrackDate] = React.useState("");
+  const [trackMonths, setTrackMonths] = React.useState(12);
+
+  function openTracking(p: PanelPoint) {
+    setTrackDate(formatDateInput(new Date()));
+    setTrackMonths(p.intervalMonths || 12);
+    setTracking(p);
+  }
+  async function confirmTracking() {
+    if (!tracking) return;
+    try {
+      const months = Math.max(1, Math.round(trackMonths) || 12);
+      const due = new Date(trackDate ? `${trackDate}T08:00:00` : Date.now());
+      due.setMonth(due.getMonth() + months);
+      await createPoint.mutateAsync({
+        materialId: m.id,
+        deviceSeq: tracking.deviceSeq,
+        system: tracking.system,
+        location: tracking.location,
+        managingPosition: tracking.managingPosition,
+        quantity: tracking.quantity,
+        deviceCount: tracking.deviceCount ?? 1,
+        intervalMonths: months,
+        lastReplacedAt: trackDate || formatDateInput(new Date()),
+        nextDueAt: formatDateInput(due),
+      });
+      toast.success("Đã thêm điểm theo dõi — xem trong Theo dõi thay thế / Lịch thay thế vật tư");
+      setTracking(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   if (points.length === 0) {
     return (
       <div className="space-y-3">
@@ -658,27 +701,53 @@ function MaterialExpandedDetails({ m }: { m: MaterialWithDevices }) {
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
                 <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                 <td className="px-4 py-2.5 text-center">
-                  {p.isActive ? (
-                    <span
-                      title="Đang theo dõi thời gian thay thế (quản lý trong drawer Theo dõi thay thế)"
-                      className="inline-flex cursor-default items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700"
-                    >
-                      <CircleCheck className="h-3.5 w-3.5" /> Đang theo dõi
-                    </span>
-                  ) : (
-                    <span
-                      title="Điểm này chưa theo dõi thời gian thay thế"
-                      className="inline-flex cursor-default items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11.5px] font-semibold text-slate-600"
-                    >
-                      Chưa theo dõi
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    disabled={createPoint.isPending}
+                    onClick={() => openTracking(p)}
+                    title="Tạo điểm theo dõi thời gian thay thế cho thiết bị này (tạo được nhiều lần)"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Thêm điểm
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Form tạo điểm theo dõi: nhập mốc lần thay gần nhất + chu kỳ */}
+      <Dialog open={!!tracking} onOpenChange={(o) => !o && setTracking(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thêm điểm theo dõi</DialogTitle>
+          </DialogHeader>
+          {tracking && (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                <div className="font-semibold uppercase text-ink">{tracking.device?.name || tracking.system || "—"}</div>
+                {tracking.location && <div className="text-muted-foreground">Thiết bị: {tracking.location}</div>}
+              </div>
+              <Field label="Lần thay gần nhất">
+                <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
+              </Field>
+              <Field label="Chu kỳ thay thế (tháng)">
+                <Input type="number" min={1} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
+              </Field>
+              <p className="text-xs text-muted-foreground">
+                Mỗi lần bấm tạo một điểm theo dõi mới trong Lịch thay thế vật tư — dòng khai báo này giữ nguyên và có thể thêm điểm tiếp.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTracking(null)}>Huỷ</Button>
+            <Button onClick={confirmTracking} disabled={createPoint.isPending || !trackDate}>
+              {createPoint.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Thêm điểm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

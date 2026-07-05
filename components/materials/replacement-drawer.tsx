@@ -12,7 +12,7 @@ import { ReplacementPointForm } from "@/components/materials/replacement-point-f
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import {
   useReplacements,
-  useUpdateReplacement,
+  useDeleteReplacement,
   type ReplacementItem,
 } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -31,8 +31,9 @@ export function ReplacementDrawer({
   const rbac = useRbacAccess();
   const canManage = rbac.can("replacement-manage", ["create", "manage", "full"]);
   const { data, isLoading } = useReplacements(material ? { materialId: material.id } : {});
-  // Nút xóa chỉ GỠ MỐC THEO DÕI (isActive=false) — không xóa dữ liệu thiết bị đã khai báo.
-  const upd = useUpdateReplacement();
+  // Điểm theo dõi là bản ghi RIÊNG (tạo từ nút "Thêm điểm"); xoá ở đây chỉ xoá điểm
+  // theo dõi này — dòng khai báo thiết bị trong Danh mục vật tư là bản ghi khác, vẫn còn.
+  const del = useDeleteReplacement();
   const points = data?.data ?? [];
   const counts = (data?.meta?.counts as { OVERDUE: number; DUE_SOON: number; OK: number }) ?? { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
 
@@ -133,15 +134,15 @@ export function ReplacementDrawer({
       <ConfirmDialog
         open={!!delTarget}
         onOpenChange={(o) => !o && setDelTarget(null)}
-        title="Xoá mốc theo dõi thay thế?"
-        description="Chỉ gỡ điểm này khỏi theo dõi thời gian thay thế. Dữ liệu thiết bị đã khai báo trong Danh mục vật tư vẫn giữ nguyên."
+        title="Xoá điểm theo dõi thay thế?"
+        description="Xoá điểm theo dõi này khỏi Lịch thay thế vật tư. Dữ liệu thiết bị đã khai báo trong Danh mục vật tư vẫn giữ nguyên — có thể bấm “Thêm điểm” để theo dõi lại khi cần."
         confirmLabel="Xoá theo dõi"
-        loading={upd.isPending}
+        loading={del.isPending}
         onConfirm={async () => {
           if (!delTarget) return;
           try {
-            await upd.mutateAsync({ id: delTarget.id, isActive: false });
-            toast.success("Đã xoá mốc theo dõi — dữ liệu thiết bị vẫn giữ nguyên");
+            await del.mutateAsync(delTarget.id);
+            toast.success("Đã xoá điểm theo dõi — dữ liệu thiết bị vẫn giữ nguyên");
             setDelTarget(null);
           } catch (e) {
             toast.error((e as Error).message);
