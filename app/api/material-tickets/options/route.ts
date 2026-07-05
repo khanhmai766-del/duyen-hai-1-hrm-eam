@@ -24,7 +24,7 @@ export async function GET() {
       : [];
 
     const materials = await prisma.material.findMany({
-      select: { id: true, code: true, name: true, unit: true, quantity: true },
+      select: { id: true, code: true, name: true, unit: true, quantity: true, category: true },
       orderBy: { name: "asc" },
     });
 

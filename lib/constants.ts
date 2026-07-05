@@ -267,6 +267,15 @@ export const MATERIAL_CATEGORIES = [
   "Vật tư tiêu hao",
 ] as const;
 
+/** Ánh xạ loại vật tư của PHIẾU thay thế (materialCategory) → loại trong Danh mục
+ *  vật tư (Material.category): dùng để lọc dropdown vật tư ở bước Đề xuất/Nhập liệu. */
+export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
+  "Dầu bôi trơn": "Dầu bôi trơn",
+  "Lọc dầu": "Lõi lọc dầu",
+  "Hóa chất": "Vật tư tiêu hao",
+  "Bi nghiền": "Vật tư tiêu hao",
+};
+
 // ---- Tiện ích thời gian dùng chung ----
 
 /** Số ngày còn lại đến hạn (âm = đã quá hạn). */

@@ -10,6 +10,7 @@ import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction,
   actionsFor, type MaterialTicket, type TicketViewer,
 } from "@/hooks/useMaterialTickets";
+import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 
 /* ============ meta hiển thị ============ */
 const C = {
@@ -350,6 +351,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     setItems((a) => a.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const itemsValid = items.every((i) => i.materialId && i.deviceSeq && i.quantity >= 1);
 
+  // Lọc vật tư theo LOẠI của phiếu: loại phiếu (Dầu bôi trơn/Lọc dầu/Hóa chất/Bi nghiền)
+  // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
+  const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
+  const materialOptions = (opts?.materials ?? []).filter((m) => !wantCategory || m.category === wantCategory);
+
   const ItemsForm = (
     <div className="frm-items">
       {items.map((it, i) => (
@@ -361,8 +367,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             ))}
           </select>
           <select value={it.materialId} onChange={(e) => edit(i, "materialId", e.target.value)}>
-            <option value="">— Vật tư —</option>
-            {(opts?.materials ?? []).map((m) => (
+            <option value="">{wantCategory ? `— Vật tư (${wantCategory}) —` : "— Vật tư —"}</option>
+            {materialOptions.map((m) => (
               <option key={m.id} value={m.id}>{m.name} (tồn: {m.quantity} {m.unit})</option>
             ))}
           </select>
