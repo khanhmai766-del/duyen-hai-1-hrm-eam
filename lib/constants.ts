@@ -214,8 +214,8 @@ const BLOCK_LO_POSITIONS = ["lò trưởng", "lò phó", "máy nghiền", "thả
 const BLOCK_TURBINE_POSITIONS = ["máy trưởng", "máy phó", "trợ thủ", "trạm bơm tuần hoàn"];
 const BLOCK_DIEN_POSITIONS = ["trưởng kíp điện", "trực chính điện", "trực phụ điện"];
 const BLOCK_IC_POSITIONS = ["thiết bị đo lường điều khiển", "i&c"];
-// Cương vị điều hành/quản lý — KHÔNG gắn với khối thiết bị nào (hiển thị trống).
-const BLOCK_NONE_POSITIONS = ["TK Lò máy", "trưởng ca", "chung"];
+// Khối BOP — danh sách tường minh (KHÔNG còn là mặc định cho phần còn lại).
+const BLOCK_BOP_POSITIONS = ["khí nén", "nh3", "trạm bơm nước thô", "xln"];
 
 /**
  * Khối quản lý theo cương vị (so khớp không phân biệt hoa/thường & dấu, theo chứa từ khoá):
@@ -223,18 +223,18 @@ const BLOCK_NONE_POSITIONS = ["TK Lò máy", "trưởng ca", "chung"];
  *  - Máy Trưởng/Máy Phó/Trợ Thủ/Trạm Bơm Tuần Hoàn → Khối Turbine
  *  - Trưởng kíp điện/Trực chính điện/Trực phụ điện → Khối Điện
  *  - Thiết bị đo lường điều khiển / I&C → Khối I&C
- *  - Trưởng kíp Lò máy/Trưởng ca → không thuộc khối (trả về "")
- *  - còn lại (Trạm bơm nước thô, XLNT, XLN hỗn hợp, NH3 - Lò hơi phụ, Khí Nén - Nhà Dầu…) → Khối BOP
+ *  - Khí Nén – Nhà Dầu / NH3 - Lò hơi phụ / Trạm bơm nước thô / XLN hỗn hợp / XLNT → Khối BOP
+ *  - còn lại (Trưởng ca, TK Lò máy, cương vị khác…) → không thuộc khối nào (trả về "")
  */
 export function blockForPosition(position?: string | null): string {
-  if (!position) return "Khối BOP";
+  if (!position) return "";
   const p = normalizeText(position);
-  if (BLOCK_NONE_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "";
   if (BLOCK_LO_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Lò Hơi";
   if (BLOCK_TURBINE_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Turbine";
   if (BLOCK_DIEN_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối Điện";
   if (BLOCK_IC_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối I&C";
-  return "Khối BOP";
+  if (BLOCK_BOP_POSITIONS.some((k) => p.includes(normalizeText(k)))) return "Khối BOP";
+  return "";
 }
 
 /**
