@@ -29,6 +29,17 @@ export function isStats(position?: string | null) {
   return norm(position).includes("thống kê");
 }
 
+/** Ai được TẠO phiếu thay thế vật tư:
+ *  - Quản trị (role ADMIN)
+ *  - Kỹ thuật viên (role TECHNICIAN hoặc chức vụ "Kỹ thuật viên")
+ *  - Trưởng Ca / Trưởng Kíp (gồm TK Lò máy, Trưởng kíp điện) */
+export function canCreateTicket(user: { role?: string | null; position?: string | null }) {
+  if (user.role === "ADMIN") return true;
+  if (user.role === "TECHNICIAN") return true;
+  if (norm(user.position).includes("kỹ thuật viên")) return true;
+  return isShiftLeader(user.position);
+}
+
 /** Lấy danh sách systemSeq được phân giao cho một cương vị (PositionSystemScope) */
 export async function getPositionScopes(position?: string | null): Promise<string[]> {
   if (!position) return [];

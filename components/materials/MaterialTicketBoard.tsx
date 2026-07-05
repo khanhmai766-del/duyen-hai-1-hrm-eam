@@ -74,10 +74,9 @@ export default function MaterialTicketBoard() {
           <div className="head-ic"><Boxes size={20} /></div>
           <div>
             <h1>Thay thế vật tư</h1>
-            <p>Phiếu Đề xuất &amp; Ứng vật tư · phân quyền theo cương vị{viewer?.position ? ` · Bạn: ${viewer.position}` : ""}</p>
           </div>
         </div>
-        {viewer?.isShiftLeader && (
+        {viewer?.canCreate && (
           <button className="btn primary" onClick={() => setCreating(true)}>
             <Plus size={15} /> Tạo phiếu thay thế vật tư
           </button>

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isStats, getPositionScopes, nextTicketCode } from "@/lib/material-workflow";
+import { isShiftLeader, isStats, canCreateTicket, getPositionScopes, nextTicketCode } from "@/lib/material-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
         position: user.position ?? null,
         isShiftLeader: isShiftLeader(user.position),
         isStats: isStats(user.position),
+        canCreate: canCreateTicket(user),
         hasScope: scopes.length > 0,
       },
     });
@@ -63,8 +64,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!isShiftLeader(user.position)) {
-      return fail("Chỉ Trưởng Ca / Trưởng Kíp được tạo phiếu thay thế vật tư", 403);
+    if (!canCreateTicket(user)) {
+      return fail("Chỉ Quản trị, Kỹ thuật viên, Trưởng Ca / Trưởng Kíp được tạo phiếu thay thế vật tư", 403);
     }
     const body = await req.json();
     const type = body.type === "UNG" ? "UNG" : body.type === "DE_XUAT" ? "DE_XUAT" : null;

@@ -47,6 +47,7 @@ export interface TicketViewer {
   position: string | null;
   isShiftLeader: boolean;
   isStats: boolean;
+  canCreate: boolean;
   hasScope: boolean;
 }
 
