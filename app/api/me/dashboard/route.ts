@@ -126,6 +126,16 @@ export async function GET(req: NextRequest) {
       select: { status: true, checkInAt: true, approvedBy: true },
     });
 
+    // Đã CHẤM CÔNG HÀNH CHÍNH hôm nay? (Quản đốc/Phó Quản đốc… — self check-in HC)
+    const adminSelfToday = await prisma.hcCheckIn.findFirst({
+      where: {
+        userId: user.id,
+        isRegistered: false,
+        group: { date: { gte: dayStart, lte: dayEnd }, content: { in: HC_SELF_CONTENTS } },
+      },
+      select: { id: true },
+    });
+
     // Avatar lives in the DB (not the session token) — surface it here.
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
@@ -148,6 +158,7 @@ export async function GET(req: NextRequest) {
       dutyShiftType: duty ? (duty.shift.shiftType as string) : null,
       checkedInToday: !!todayCheckIn?.checkInAt,
       checkInStatus: todayCheckIn?.status ?? null,
+      adminCheckedInToday: !!adminSelfToday,
       month: mo + 1,
       year: y,
     });

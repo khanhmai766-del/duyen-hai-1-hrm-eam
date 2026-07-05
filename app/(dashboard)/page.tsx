@@ -353,6 +353,31 @@ function DutyPositionCard({
     }
   };
 
+  // Quản đốc/Phó Quản đốc đã chấm công hành chính hôm nay → nền ảnh phòng điều khiển.
+  // Tự reset về trạng thái thường sau 18h tối (theo giờ máy người dùng = giờ VN).
+  const adminAttendanceActive = opensAdminAttendance && !!m?.adminCheckedInToday && new Date().getHours() < 18;
+  if (adminAttendanceActive) {
+    return (
+      <Card className="relative h-full min-h-[230px] overflow-hidden border-0 text-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/chucvu/cham-cong-hanh-chinh.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
+        <div className="absolute right-3 top-3">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+            ✓ Đã chấm công
+          </span>
+        </div>
+        <div className="absolute inset-x-0 bottom-0 p-4">
+          <div className="text-xs font-medium text-white/85 [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">Chấm công hành chính</div>
+          <div className="truncate text-lg font-bold leading-tight [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">Đã điểm danh hôm nay</div>
+          {userPosition && (
+            <div className="truncate text-sm text-white/85 [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">{userPosition}</div>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
   const card = (
     <Card
       role={canOpenAttendance ? "link" : undefined}

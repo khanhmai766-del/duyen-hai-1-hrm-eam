@@ -24,6 +24,7 @@ export interface MyDashboard {
   dutyShiftType: string | null;
   checkedInToday: boolean;
   checkInStatus: string | null;
+  adminCheckedInToday: boolean;
   month: number;
   year: number;
 }
