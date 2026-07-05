@@ -90,7 +90,7 @@ export function ReplacementDrawer({
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Repeat className="h-3 w-3" /> {replacementIntervalLabel(p.intervalMonths, p.intervalNote)}</span>
-                      {(p.system ?? p.material.system) && <span>Hệ thống: {p.system ?? p.material.system}</span>}
+                      {p.location && <span>Thiết bị: {p.location}</span>}
                       <span>Lần gần nhất: {formatDate(p.lastReplacedAt)}</span>
                       <span>Đến hạn: {formatDate(p.nextDueAt)}</span>
                     </div>
