@@ -6,7 +6,7 @@ import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { canManageMaterialCatalog } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -165,7 +165,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền thêm vật tư");
+    if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được thêm vật tư", 403);
     const body = await req.json();
     if (!body.code || !body.name || !body.unit) return fail("Thiếu thông tin bắt buộc");
     const exists = await prisma.material.findUnique({ where: { code: body.code } });
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
+    if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được cập nhật vật tư", 403);
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
@@ -252,7 +252,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["full"], "Không đủ quyền xoá vật tư");
+    if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được xoá vật tư", 403);
 
     // Gom danh sách id cần xoá từ query (đơn) hoặc body (hàng loạt).
     const single = req.nextUrl.searchParams.get("id");

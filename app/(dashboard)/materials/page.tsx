@@ -24,8 +24,7 @@ import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials,
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { useCreateReplacement } from "@/hooks/useReplacements";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition } from "@/lib/constants";
-import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog } from "@/lib/constants";
 import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
 
@@ -55,8 +54,8 @@ export default function MaterialsPage() {
 function MaterialsPageContent() {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const rbac = useRbacAccess();
-  const canManage = rbac.can("material-manage", ["create", "manage", "full"]);
+  // Xem bảng: mọi cương vị. Thao tác (Thêm/Sửa/Xoá/Xuất): Quản đốc/Phó Quản đốc/Kỹ thuật viên/Quản trị.
+  const canManage = canManageMaterialCatalog({ role, position: session?.user?.position });
   const { data, isLoading } = useMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
@@ -214,11 +213,13 @@ function MaterialsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
-        <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
         {canManage && (
-          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, replacements: [] }); }}>
-            <Plus className="h-4 w-4" /> Thêm vật tư
-          </Button>
+          <>
+            <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
+            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, replacements: [] }); }}>
+              <Plus className="h-4 w-4" /> Thêm vật tư
+            </Button>
+          </>
         )}
       </PageHeader>
 

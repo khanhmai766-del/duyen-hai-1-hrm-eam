@@ -276,6 +276,16 @@ export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
   "Bi nghiền": "Vật tư tiêu hao",
 };
 
+/** Ai được THAO TÁC Danh mục vật tư (thêm/sửa/xoá/xuất): Quản trị (ADMIN),
+ *  Kỹ thuật viên (role TECHNICIAN hoặc chức vụ), Quản đốc / Phó Quản đốc.
+ *  Xem nội dung bảng thì mọi cương vị đều được. */
+export function canManageMaterialCatalog(user: { role?: string | null; position?: string | null }): boolean {
+  if (user.role === "ADMIN") return true;
+  if (user.role === "TECHNICIAN") return true;
+  const p = normalizeText(user.position ?? "");
+  return p.includes("quan doc") || p.includes("ky thuat vien");
+}
+
 // ---- Tiện ích thời gian dùng chung ----
 
 /** Số ngày còn lại đến hạn (âm = đã quá hạn). */
