@@ -38,6 +38,13 @@ const MANAGEMENT_SEATS = [
   { title: "Thống kê" },
 ] as const;
 const HC_SELF_CONTENT_PREFIX = "Hành chính - ";
+const EXPANDED_ORG_SEAT_ROWS: Record<string, number> = {
+  "I&C": 2,
+};
+
+function orgSeatGridSpan(title: string) {
+  return EXPANDED_ORG_SEAT_ROWS[title] ?? 1;
+}
 
 const MANAGEMENT_TONE_STYLES: Record<
   (typeof MANAGEMENT_SEATS)[number]["title"],
@@ -981,9 +988,15 @@ function ApproveAttendanceDialog({
                       <EditableSeat title={lead.title} tone={lead.tone} {...seatProps} />
                       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}>
                         {lead.columns.map((col, i) => (
-                          <div key={i} className="flex flex-col gap-2">
+                          <div key={i} className="grid gap-2" style={{ gridAutoRows: "minmax(5.5rem, auto)" }}>
                             {col.map((seat) => (
-                              <EditableSeat key={seat} title={seat} tone={lead.tone} {...seatProps} />
+                              <EditableSeat
+                                key={seat}
+                                title={seat}
+                                tone={lead.tone}
+                                style={{ gridRow: `span ${orgSeatGridSpan(seat)} / span ${orgSeatGridSpan(seat)}` }}
+                                {...seatProps}
+                              />
                             ))}
                           </div>
                         ))}
@@ -1040,6 +1053,7 @@ function EditableSeat({
   onAdd,
   onApprove,
   onRemove,
+  style,
 }: {
   title: string;
   tone: OrgTone | "chief";
@@ -1047,11 +1061,12 @@ function EditableSeat({
   onAdd: (title: string) => void;
   onApprove: (id: string) => void;
   onRemove: (id: string) => void;
+  style?: React.CSSProperties;
 }) {
   const s = TONE_STYLES[tone];
   const occupants = byTitle.get(title) ?? [];
   return (
-    <div className={cn("rounded-lg border px-2 py-2 text-center", s.cell)}>
+    <div className={cn("rounded-lg border px-2 py-2 text-center", s.cell)} style={style}>
       <div className={cn("text-[11px] font-semibold leading-tight", s.title)}>{title}</div>
       <div className="mt-1 space-y-1.5">
         {occupants.map((o) => (
@@ -1238,9 +1253,20 @@ function OrgTemplateChart({
                   style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}
                 >
                   {lead.columns.map((col, i) => (
-                    <div key={i} className={cn(presentation ? "flex min-h-0 flex-col gap-1.5" : "flex flex-col gap-2")}>
+                    <div
+                      key={i}
+                      className={cn(presentation ? "grid min-h-0 gap-1.5" : "grid gap-2")}
+                      style={{ gridAutoRows: presentation ? "minmax(0, 1fr)" : "minmax(5.5rem, auto)" }}
+                    >
                       {col.map((seat) => (
-                        <Seat key={seat} title={seat} occupants={byTitle.get(seat)} tone={lead.tone} presentation={presentation} />
+                        <Seat
+                          key={seat}
+                          title={seat}
+                          occupants={byTitle.get(seat)}
+                          tone={lead.tone}
+                          presentation={presentation}
+                          style={{ gridRow: `span ${orgSeatGridSpan(seat)} / span ${orgSeatGridSpan(seat)}` }}
+                        />
                       ))}
                     </div>
                   ))}
@@ -1452,11 +1478,13 @@ function Seat({
   occupants,
   tone,
   presentation = false,
+  style,
 }: {
   title: string;
   occupants?: ShiftAssignmentWithUser[];
   tone: OrgTone;
   presentation?: boolean;
+  style?: React.CSSProperties;
 }) {
   const s = TONE_STYLES[tone];
   const filled = !!occupants?.length;
@@ -1469,10 +1497,11 @@ function Seat({
           ? cn(s.cell, "hover:-translate-y-0.5", s.filled)
           : cn("border-dashed bg-muted/20 opacity-90", s.cell)
       )}
+      style={style}
     >
       <div className={cn(presentation ? "text-[10px] font-semibold leading-tight xl:text-[11px]" : "text-[11px] font-semibold leading-tight", s.title)}>{title}</div>
       {filled ? (
-        <Occupants occupants={occupants} presentation={presentation} />
+        <Occupants occupants={occupants} presentation={presentation} stacked={presentation && orgSeatGridSpan(title) > 1} />
       ) : (
         <div className={cn("mt-1 text-muted-foreground/40", presentation ? "text-[10px]" : "text-[11px]")}>— trống —</div>
       )}
@@ -1484,15 +1513,24 @@ function Occupants({
   occupants,
   center,
   presentation = false,
+  stacked = false,
 }: {
   occupants?: ShiftAssignmentWithUser[];
   center?: boolean;
   presentation?: boolean;
+  stacked?: boolean;
 }) {
   if (!occupants?.length) {
     return center ? <div className={cn("mt-0.5 text-muted-foreground/40", presentation ? "text-[10px]" : "text-[11px]")}>— trống —</div> : null;
   }
   if (presentation) {
+    if (stacked && occupants.length === 2) {
+      return (
+        <div className={cn("mt-1 flex w-full min-w-0 flex-col justify-center gap-1", !center && "min-h-0 flex-1")}>
+          {occupants.map((o) => <CompactOccupant key={o.id} occupant={o} wide largeAvatar />)}
+        </div>
+      );
+    }
     if (occupants.length === 3) {
       const ordered = [...occupants].sort((a, b) => a.user.name.length - b.user.name.length);
       const top = ordered.slice(0, 2);
