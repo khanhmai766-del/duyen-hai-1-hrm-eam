@@ -69,7 +69,10 @@ export function useTicketOptions(enabled: boolean) {
     queryFn: async () => {
       const res = await apiGet<{
         devices: { seq: string; name: string; depth: number }[];
-        materials: { id: string; code: string; name: string; unit: string; quantity: number; category: string | null }[];
+        materials: {
+          id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
+          devices: { seq: string; label: string }[];
+        }[];
         positions: string[];
       }>("/api/material-tickets/options");
       return res.data;

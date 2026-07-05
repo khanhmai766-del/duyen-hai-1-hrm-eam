@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import {
-  isShiftLeader, isStats, getPositionScopes, seqInScope, statsLockRemaining,
+  isShiftLeader, isStats, statsLockRemaining,
 } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 
@@ -61,17 +61,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         Array.isArray(body.items) ? body.items : [];
       if (items.length === 0) return "Phiếu phải có ít nhất 1 vật tư";
 
-      const scopes = await getPositionScopes(user.position);
-      if (scopes.length === 0) return "Cương vị của bạn chưa được phân giao hệ thống thiết bị";
       for (const it of items) {
         if (!it.materialId || !it.deviceSeq || !(it.quantity >= 1)) return "Dòng vật tư thiếu thông tin";
-        if (!seqInScope(it.deviceSeq, scopes)) {
-          return `Thiết bị ${it.deviceSeq} nằm ngoài phạm vi phân giao của cương vị bạn`;
+      }
+      // Mỗi cặp (vật tư, thiết bị) phải là điểm đã KHAI BÁO trong Danh mục vật tư
+      // (dropdown thiết bị lấy từ chính danh sách này).
+      const matIds = [...new Set(items.map((i) => i.materialId))];
+      const decls = await prisma.materialReplacement.findMany({
+        where: { materialId: { in: matIds }, isActive: false, deviceSeq: { not: null } },
+        select: { materialId: true, deviceSeq: true },
+      });
+      const declSet = new Set(decls.map((d) => `${d.materialId}::${d.deviceSeq}`));
+      for (const it of items) {
+        if (!declSet.has(`${it.materialId}::${it.deviceSeq}`)) {
+          return "Vật tư và thiết bị đã chọn không khớp danh mục vật tư";
         }
       }
-      const matIds = [...new Set(items.map((i) => i.materialId))];
-      const found = await prisma.material.count({ where: { id: { in: matIds } } });
-      if (found !== matIds.length) return "Có vật tư không tồn tại trong danh mục";
 
       await prisma.materialTicketItem.deleteMany({ where: { ticketId: t!.id } });
       await prisma.materialTicketItem.createMany({

@@ -358,15 +358,20 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   const ItemsForm = (
     <div className="frm-items">
-      {items.map((it, i) => (
+      {items.map((it, i) => {
+        const rowMat = materialOptions.find((m) => m.id === it.materialId);
+        const deviceOptions = rowMat?.devices ?? [];
+        return (
         <div key={i} className="frm-item">
-          <select value={it.deviceSeq} onChange={(e) => edit(i, "deviceSeq", e.target.value)}>
-            <option value="">— Thiết bị (theo cương vị) —</option>
-            {(opts?.devices ?? []).map((d) => (
-              <option key={d.seq} value={d.seq}>{" ".repeat(Math.min(d.depth ?? 0, 6) * 2)}{d.seq} · {d.name}</option>
+          <select value={it.deviceSeq} disabled={!it.materialId}
+            onChange={(e) => edit(i, "deviceSeq", e.target.value)}>
+            <option value="">{it.materialId ? "— Thiết bị —" : "— Chọn vật tư trước —"}</option>
+            {deviceOptions.map((d) => (
+              <option key={d.seq} value={d.seq}>{d.label}</option>
             ))}
           </select>
-          <select value={it.materialId} onChange={(e) => edit(i, "materialId", e.target.value)}>
+          <select value={it.materialId}
+            onChange={(e) => setItems((a) => a.map((x, j) => (j === i ? { ...x, materialId: e.target.value, deviceSeq: "" } : x)))}>
             <option value="">{wantCategory ? `— Vật tư (${wantCategory}) —` : "— Vật tư —"}</option>
             {materialOptions.map((m) => (
               <option key={m.id} value={m.id}>{m.name} (tồn: {m.quantity} {m.unit})</option>
@@ -376,7 +381,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             onChange={(e) => edit(i, "quantity", Math.max(1, +e.target.value || 1))} />
           {items.length > 1 && <button className="mini" onClick={() => setItems((a) => a.filter((_, j) => j !== i))}><X size={13} /></button>}
         </div>
-      ))}
+      );
+      })}
       <button className="btn tiny" onClick={() => setItems((a) => [...a, { materialId: "", deviceSeq: "", quantity: 1 }])}>
         <Plus size={13} /> Thêm vật tư
       </button>
