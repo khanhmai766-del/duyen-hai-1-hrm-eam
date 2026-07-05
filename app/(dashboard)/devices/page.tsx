@@ -68,6 +68,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
+import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
 import { formatDate, cn } from "@/lib/utils";
@@ -188,9 +189,21 @@ function DevicesPageContent() {
 
   const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
 
+  // Toàn bộ cây thiết bị để xuất báo cáo ở tab "Cây thiết bị" (dedupe với EquipmentTreeView).
+  const { data: treeData } = useEquipmentTree();
+  const treeExportRows = React.useMemo(() => buildTreeExportRows(treeData?.data ?? []), [treeData]);
+
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
+        {view === "tree" && (
+          <ExportButton
+            rows={treeExportRows}
+            filename="cay-thiet-bi"
+            title="Danh mục cây thiết bị"
+            widths={{ seq: 12, level: 6, name: 40, parentName: 32, classification: 20, drawing: 16, hasProfile: 10 }}
+          />
+        )}
         {shouldLoadDevices && (
           <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
         )}
@@ -312,6 +325,56 @@ function DevicesPageContent() {
 
 function lastRepair(d: DeviceListItem) {
   return d.repairLogs?.[0]?.startedAt ? formatDate(d.repairLogs[0].startedAt) : "—";
+}
+
+/** So sánh số thứ tự theo từng đoạn số (1.1.10 sau 1.1.2). */
+function compareSeq(a: string, b: string) {
+  const pa = a.split(".");
+  const pb = b.split(".");
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = i < pa.length ? Number(pa[i]) : -1;
+    const y = i < pb.length ? Number(pb[i]) : -1;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+/** Dựng dữ liệu xuất báo cáo cho TOÀN BỘ cây thiết bị (sắp theo số thứ tự phân cấp). */
+function buildTreeExportRows(nodes: EquipmentNode[]): Record<string, unknown>[] {
+  const bySeq = new Map(nodes.map((n) => [n.seq, n]));
+  // Cha hiệu lực = tổ tiên gần nhất có thật; đếm số con trực tiếp cho cột "Phân loại".
+  const effParent = new Map<string, string | null>();
+  const childCount = new Map<string, number>();
+  for (const n of nodes) {
+    let parent: string | null = n.parentSeq && bySeq.has(n.parentSeq) ? n.parentSeq : null;
+    if (!parent) {
+      const parts = n.seq.split(".");
+      parts.pop();
+      while (parts.length) {
+        const p = parts.join(".");
+        if (bySeq.has(p)) { parent = p; break; }
+        parts.pop();
+      }
+    }
+    effParent.set(n.seq, parent);
+    if (parent) childCount.set(parent, (childCount.get(parent) ?? 0) + 1);
+  }
+  return [...nodes]
+    .sort((a, b) => compareSeq(a.seq, b.seq))
+    .map((n) => {
+      const kids = childCount.get(n.seq) ?? 0;
+      const parentSeq = effParent.get(n.seq);
+      const parent = parentSeq ? bySeq.get(parentSeq) : null;
+      return {
+        seq: n.seq,
+        level: (n.depth ?? 0) + 1,
+        name: n.name,
+        parentName: parent ? `${parent.seq} · ${parent.name}` : "(Gốc)",
+        classification: kids > 0 ? `Nhóm — ${kids} thiết bị con` : "Thiết bị",
+        drawing: n.drawing || "",
+        hasProfile: n.deviceId ? "Có" : "",
+      };
+    });
 }
 
 function systemRowQrValue(row: SystemTreeRow) {
