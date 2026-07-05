@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { X, Plus, Pencil, Trash2, RefreshCw, Cpu, CalendarClock, Repeat } from "lucide-react";
+import { X, Pencil, Trash2, RefreshCw, Cpu, CalendarClock, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -36,7 +36,6 @@ export function ReplacementDrawer({
   const points = data?.data ?? [];
   const counts = (data?.meta?.counts as { OVERDUE: number; DUE_SOON: number; OK: number }) ?? { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
 
-  const [formOpen, setFormOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
   const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
@@ -58,16 +57,13 @@ export function ReplacementDrawer({
           <button onClick={onClose} className="rounded-md p-1.5 hover:bg-muted"><X className="h-4 w-4" /></button>
         </div>
 
-        {/* Summary + add */}
+        {/* Summary */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
           <div className="flex flex-wrap gap-1.5 text-xs">
             <Stat label="Quá hạn" value={counts.OVERDUE} tone="text-red-700 bg-red-50" />
             <Stat label="Sắp đến hạn" value={counts.DUE_SOON} tone="text-amber-700 bg-amber-50" />
             <Stat label="Còn hạn" value={counts.OK} tone="text-green-700 bg-green-50" />
           </div>
-          {canManage && (
-            <Button size="sm" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4" /> Thêm điểm</Button>
-          )}
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -77,7 +73,6 @@ export function ReplacementDrawer({
             <div className="flex flex-col items-center gap-2 py-10 text-center">
               <CalendarClock className="h-8 w-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">Chưa có điểm thay thế nào cho vật tư này.</p>
-              {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4" /> Thêm điểm thay thế</Button>}
             </div>
           ) : (
             points.map((p) => (
@@ -123,14 +118,6 @@ export function ReplacementDrawer({
         </div>
       </div>
 
-      {/* Add */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>Thêm điểm thay thế</DialogTitle></DialogHeader>
-          <ReplacementPointForm materialId={material.id} defaultSystem={material.system ?? null} onDone={() => setFormOpen(false)} />
-        </DialogContent>
-      </Dialog>
-
       {/* Edit */}
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
@@ -147,7 +134,7 @@ export function ReplacementDrawer({
         open={!!delTarget}
         onOpenChange={(o) => !o && setDelTarget(null)}
         title="Xoá mốc theo dõi thay thế?"
-        description="Chỉ gỡ điểm này khỏi theo dõi thời gian thay thế. Dữ liệu thiết bị đã khai báo trong Danh mục vật tư vẫn giữ nguyên — cột Theo dõi sẽ hiện lại nút “Thêm điểm” để bật theo dõi lại khi cần."
+        description="Chỉ gỡ điểm này khỏi theo dõi thời gian thay thế. Dữ liệu thiết bị đã khai báo trong Danh mục vật tư vẫn giữ nguyên."
         confirmLabel="Xoá theo dõi"
         loading={upd.isPending}
         onConfirm={async () => {

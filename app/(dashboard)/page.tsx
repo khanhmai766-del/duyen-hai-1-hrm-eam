@@ -335,10 +335,12 @@ function DutyPositionCard({
 
   // Plain variant: no assigned seat (or a seat without a dedicated image).
   const hasDutyPosition = !!m?.position;
-  const attendanceHref = shouldOpenAdminAttendance(userPosition) ? "/hr/admin-attendance" : "/hr/org-chart";
-  const attendanceLabel = shouldOpenAdminAttendance(userPosition)
+  const opensAdminAttendance = shouldOpenAdminAttendance(userPosition);
+  const attendanceHref = opensAdminAttendance ? "/hr/admin-attendance" : "/hr/org-chart";
+  const attendanceLabel = opensAdminAttendance
     ? "Chấm công hành chính"
     : "Điểm danh tại sơ đồ tổ chức ca";
+  const positionHint = opensAdminAttendance ? "Hãy nhấn vào đây" : "Cương vị trực ca";
   const canOpenAttendance = !hasDutyPosition && !m?.pendingPosition;
   const openAttendanceCard = () => {
     if (canOpenAttendance) router.push(attendanceHref);
@@ -377,7 +379,7 @@ function DutyPositionCard({
           <div className="text-xl font-bold leading-tight text-ink">
             {label ?? (loading ? "…" : "Chưa điểm danh")}
           </div>
-          <div className="mt-1 text-sm font-medium text-muted-foreground">Cương vị trực ca</div>
+          <div className="mt-1 max-w-full truncate whitespace-nowrap text-sm font-medium text-muted-foreground">{positionHint}</div>
           {hasDutyPosition ? (
             <div className="mt-0.5 text-xs text-muted-foreground/70">{m?.unit ?? ""}</div>
           ) : m?.pendingPosition ? (
@@ -385,7 +387,7 @@ function DutyPositionCard({
               Chờ Quản trị / Quản lý / Trưởng ca duyệt
             </span>
           ) : (
-            <Link href={attendanceHref} className="mt-0.5 inline-block text-xs text-accent hover:underline" onClick={(event) => event.stopPropagation()}>
+            <Link href={attendanceHref} className="mt-0.5 inline-flex max-w-full whitespace-nowrap text-xs text-accent hover:underline" onClick={(event) => event.stopPropagation()}>
               {attendanceLabel} →
             </Link>
           )}

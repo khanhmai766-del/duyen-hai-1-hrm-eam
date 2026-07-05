@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDevices } from "@/hooks/useDevices";
-import { useCreateReplacement, useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
+import { useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
 import { addMonths } from "@/lib/constants";
 import { formatDateInput } from "@/lib/utils";
 
@@ -33,8 +33,6 @@ export function ReplacementPointForm({
   defaultSystem?: string | null;
   onDone?: () => void;
 }) {
-  const isEdit = !!point;
-  const create = useCreateReplacement();
   const update = useUpdateReplacement();
   const { data: devicesData } = useDevices({});
   const devices = devicesData?.data ?? [];
@@ -46,7 +44,7 @@ export function ReplacementPointForm({
   const [form, setForm] = React.useState({
     deviceId: point?.deviceId ?? "",
     managingPosition: "",
-    system: isEdit ? (point?.system ?? "") : (defaultSystem ?? ""),
+    system: point ? (point.system ?? "") : (defaultSystem ?? ""),
     intervalMonths: String(point?.intervalMonths ?? 6),
     intervalNote: point?.intervalNote ?? "",
     lastReplacedAt: toDateInput(point?.lastReplacedAt),
@@ -157,16 +155,16 @@ export function ReplacementPointForm({
       note: form.note,
     };
     try {
-      if (isEdit) await update.mutateAsync({ id: point!.id, ...payload });
-      else await create.mutateAsync(payload);
-      toast.success(isEdit ? "Đã cập nhật điểm thay thế" : "Đã thêm điểm thay thế");
+      if (!point) return toast.error("Không tìm thấy điểm thay thế cần cập nhật");
+      await update.mutateAsync({ id: point.id, ...payload });
+      toast.success("Đã cập nhật điểm thay thế");
       onDone?.();
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  const pending = create.isPending || update.isPending;
+  const pending = update.isPending;
 
   return (
     <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -229,7 +227,7 @@ export function ReplacementPointForm({
       <div className="flex justify-end gap-2 pt-1 sm:col-span-2">
         <Button type="submit" disabled={pending}>
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isEdit ? "Lưu thay đổi" : "Thêm điểm thay thế"}
+          Lưu thay đổi
         </Button>
       </div>
     </form>

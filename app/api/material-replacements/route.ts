@@ -1,13 +1,13 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
-import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { addMonths, replacementDueStatus } from "@/lib/constants";
+import { handle, ok, requireUser } from "@/lib/api";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { parseDateInput } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 const INCLUDE = {
   material: {
@@ -45,7 +45,6 @@ function mapPoint(point: any) {
       : point.material,
   };
 }
-
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -91,52 +90,5 @@ export async function GET(req: NextRequest) {
     }
 
     return ok(filtered.map(mapPoint), { total: filtered.length, counts, warn: counts.OVERDUE + counts.DUE_SOON });
-  });
-}
-
-export async function POST(req: NextRequest) {
-  return handle(async () => {
-    const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền tạo điểm thay thế vật tư");
-    const body = await req.json();
-
-    if (!body.materialId || !body.intervalMonths) return fail("Thiếu thông tin bắt buộc (vật tư, chu kỳ)");
-    if (!body.deviceId) return fail("Chọn thiết bị");
-    await assertSeqEditable(user, String(body.deviceId));
-    const intervalMonths = Number(body.intervalMonths);
-    if (!Number.isFinite(intervalMonths) || intervalMonths < 1) return fail("Chu kỳ phải là số tháng hợp lệ (>= 1)");
-
-    const material = await prisma.material.findUnique({ where: { id: body.materialId } });
-    if (!material) return fail("Không tìm thấy vật tư", 404);
-
-    const base = body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : new Date();
-    const nextDueAt = body.nextDueAt ? parseDateInput(body.nextDueAt) : addMonths(base, intervalMonths);
-
-    const point = await prisma.materialReplacement.create({
-      data: {
-        materialId: body.materialId,
-        deviceSeq: body.deviceId,
-        location: null,
-        system: body.system?.trim() || material.system || null,
-        intervalMonths,
-        intervalNote: body.intervalNote?.trim() || null,
-        lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : null,
-        nextDueAt,
-        note: body.note?.trim() || null,
-        createdById: user.id,
-      },
-      include: INCLUDE,
-    });
-    const linked = await prisma.equipmentMaterial.findFirst({
-      where: { materialId: body.materialId, deviceSeq: body.deviceId },
-      select: { id: true },
-    });
-    if (!linked) {
-      await prisma.equipmentMaterial.create({
-        data: { materialId: body.materialId, deviceSeq: body.deviceId, quantity: 1 },
-      });
-    }
-    await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, material.code);
-    return ok(mapPoint(point));
   });
 }

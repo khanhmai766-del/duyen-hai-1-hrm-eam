@@ -98,14 +98,6 @@ function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["materials"] });
 }
 
-export function useCreateReplacement() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ReplacementInput) => apiMutate<ReplacementItem>("/api/material-replacements", "POST", body),
-    onSuccess: () => invalidate(qc),
-  });
-}
-
 export function useUpdateReplacement() {
   const qc = useQueryClient();
   return useMutation({
