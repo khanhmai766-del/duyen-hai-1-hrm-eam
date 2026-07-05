@@ -629,27 +629,38 @@ function MaterialExpandedDetails({ m, onOpenTracking }: { m: MaterialWithDevices
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
 
-  // Bấm "+Thêm điểm" tạo NGAY điểm theo dõi (mốc hôm nay + chu kỳ đã khai báo)
-  // rồi mở drawer Theo dõi thay thế để thấy điểm vừa thêm.
-  async function addTracking(p: PanelPoint) {
+  // Bấm "+Thêm điểm" mở form nhập mốc; xác nhận tạo điểm theo dõi rồi TỰ MỞ
+  // drawer "Theo dõi thay thế vật tư" để xem điểm vừa thêm.
+  const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
+  const [trackDate, setTrackDate] = React.useState("");
+  const [trackMonths, setTrackMonths] = React.useState(12);
+
+  function openTracking(p: PanelPoint) {
+    setTrackDate(formatDateInput(new Date()));
+    setTrackMonths(p.intervalMonths || 12);
+    setTracking(p);
+  }
+  async function confirmTracking() {
+    if (!tracking) return;
     try {
-      const months = Math.max(1, p.intervalMonths || 12);
-      const due = new Date();
+      const months = Math.max(1, Math.round(trackMonths) || 12);
+      const due = new Date(trackDate ? `${trackDate}T08:00:00` : Date.now());
       due.setMonth(due.getMonth() + months);
       await createPoint.mutateAsync({
         materialId: m.id,
-        deviceSeq: p.deviceSeq,
-        system: p.system,
-        location: p.location,
-        managingPosition: p.managingPosition,
-        quantity: p.quantity,
-        deviceCount: p.deviceCount ?? 1,
+        deviceSeq: tracking.deviceSeq,
+        system: tracking.system,
+        location: tracking.location,
+        managingPosition: tracking.managingPosition,
+        quantity: tracking.quantity,
+        deviceCount: tracking.deviceCount ?? 1,
         intervalMonths: months,
-        lastReplacedAt: formatDateInput(new Date()),
+        lastReplacedAt: trackDate || formatDateInput(new Date()),
         nextDueAt: formatDateInput(due),
       });
       toast.success("Đã thêm điểm theo dõi");
-      onOpenTracking?.();
+      setTracking(null);
+      onOpenTracking?.(); // mở drawer Theo dõi thay thế
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -697,7 +708,7 @@ function MaterialExpandedDetails({ m, onOpenTracking }: { m: MaterialWithDevices
                   <button
                     type="button"
                     disabled={createPoint.isPending}
-                    onClick={() => addTracking(p)}
+                    onClick={() => openTracking(p)}
                     title="Thêm điểm theo dõi thời gian thay thế cho thiết bị này (tạo được nhiều lần)"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
                   >
@@ -709,6 +720,38 @@ function MaterialExpandedDetails({ m, onOpenTracking }: { m: MaterialWithDevices
           </tbody>
         </table>
       </div>
+
+      {/* Form nhập mốc; xác nhận sẽ tạo điểm theo dõi và tự mở drawer Theo dõi thay thế */}
+      <Dialog open={!!tracking} onOpenChange={(o) => !o && setTracking(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Thêm điểm theo dõi</DialogTitle>
+          </DialogHeader>
+          {tracking && (
+            <div className="space-y-3">
+              <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                <div className="font-semibold uppercase text-ink">{tracking.device?.name || tracking.system || "—"}</div>
+                {tracking.location && <div className="text-muted-foreground">Thiết bị: {tracking.location}</div>}
+              </div>
+              <Field label="Lần thay gần nhất">
+                <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
+              </Field>
+              <Field label="Chu kỳ thay thế (tháng)">
+                <Input type="number" min={1} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
+              </Field>
+              <p className="text-xs text-muted-foreground">
+                Mỗi lần bấm tạo một điểm theo dõi mới trong Lịch thay thế vật tư — dòng khai báo này giữ nguyên và có thể thêm điểm tiếp.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTracking(null)}>Huỷ</Button>
+            <Button onClick={confirmTracking} disabled={createPoint.isPending || !trackDate}>
+              {createPoint.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Thêm điểm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
