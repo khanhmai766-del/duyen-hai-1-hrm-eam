@@ -87,6 +87,7 @@ export function ReplacementDrawer({
                       ) : (
                         <span className="truncate">Chưa chọn thiết bị</span>
                       )}
+                      {p.unit && <span className="shrink-0 rounded bg-navy/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-navy">{p.unit}</span>}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Repeat className="h-3 w-3" /> {replacementIntervalLabel(p.intervalMonths, p.intervalNote)}</span>
