@@ -529,6 +529,7 @@ const CSS = `
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow:hidden;}
 .row{display:grid;grid-template-columns:1.2fr .8fr .5fr .9fr 1fr .95fr;gap:8px;align-items:center;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(6){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
