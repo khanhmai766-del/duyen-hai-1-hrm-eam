@@ -23,6 +23,7 @@ import {
   Clock,
   Undo2,
   Minus,
+  ChevronDown,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
@@ -947,6 +948,71 @@ function SafeOperationUnitRow({
   getContinuousTotal: (unit: SafeOperationUnit) => number;
   isOperating: boolean;
 }) {
+  // Thu gọn/mở rộng 3 dòng thời gian NGỪNG (dự phòng / sửa chữa / sự cố).
+  const [showStops, setShowStops] = React.useState(false);
+  const topRows = SAFE_OPERATION_ROWS.filter((r) => r.key === "safe" || r.key === "continuous");
+  const stopRows = SAFE_OPERATION_ROWS.filter((r) => STOPPABLE_KEYS.includes(r.key as EditableSafeOpRowKey));
+  const stopTotalMs = getTotal(unit, "standby") + getTotal(unit, "maintenance") + getTotal(unit, "incident");
+
+  const renderRow = ({ key, label, icon: Icon, color, bg, valueColor }: (typeof SAFE_OPERATION_ROWS)[number]) => {
+    const isStoppable = key !== "safe" && STOPPABLE_KEYS.includes(key as EditableSafeOpRowKey);
+    const totalMs =
+      key === "safe"
+        ? getSafeTotal(unit)
+        : key === "continuous"
+          ? getContinuousTotal(unit)
+          : isStoppable
+            ? getTotal(unit, key)
+            : 0;
+    const isPrimary = key === "safe" || key === "continuous";
+    const isWarning = key === "maintenance" || key === "incident";
+
+    return (
+      <div
+        key={key}
+        className={cn(
+          "grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-2 border-b border-sky-100 last:border-b-0 sm:grid-cols-[3.75rem_minmax(0,0.78fr)_minmax(11rem,1.22fr)] sm:gap-2.5 xl:grid-cols-[4rem_minmax(0,0.86fr)_minmax(12rem,1.2fr)]",
+          isPrimary ? "py-2.5" : "py-1.5",
+        )}
+      >
+        <div className="flex justify-center">
+          {key === "safe" ? (
+            <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-lg border text-white shadow-sm", bg)} title={label}>
+              <Icon className={cn(color, "h-5 w-5")} />
+            </div>
+          ) : canManage ? (
+            <button
+              type="button"
+              onClick={() => onIconClick(unit, key as EditableSafeOpRowKey, label)}
+              className={cn("inline-flex items-center justify-center rounded-lg border transition-all hover:-translate-y-0.5 hover:shadow-md", isPrimary ? "h-10 w-10" : "h-8 w-8", bg)}
+              title={`Cài đặt ${label}`}
+            >
+              <Icon className={cn(color, isPrimary ? "h-5 w-5" : "h-4 w-4")} />
+            </button>
+          ) : (
+            <div className={cn("inline-flex items-center justify-center rounded-lg border", isPrimary ? "h-10 w-10" : "h-8 w-8", bg)} title={label}>
+              <Icon className={cn(color, isPrimary ? "h-5 w-5" : "h-4 w-4")} />
+            </div>
+          )}
+        </div>
+        <div className={cn("min-w-0 font-black leading-tight text-blue-950 sm:border-r sm:border-sky-300 sm:pr-4", isPrimary ? "text-sm lg:text-base" : "text-xs lg:text-sm")}>
+          {label}
+        </div>
+        <div
+          className={cn(
+            "col-span-2 pl-[calc(3.5rem+0.5rem)] text-left font-black tabular-nums sm:col-span-1 sm:pl-4 sm:text-right",
+            "whitespace-nowrap",
+            isPrimary ? "text-[clamp(0.95rem,1.18vw,1.125rem)]" : "text-[clamp(0.82rem,1vw,1rem)]",
+            valueColor,
+            isWarning && "tracking-tight",
+          )}
+        >
+          {formatDuration(totalMs)}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-sky-300/90 bg-white shadow-[0_14px_32px_rgba(14,116,144,0.10)] ring-1 ring-white">
       <div className="relative flex items-baseline justify-center gap-2.5 px-4 py-5">
@@ -957,86 +1023,31 @@ function SafeOperationUnitRow({
         </span>
       </div>
       <div className="flex-1 px-3 py-2 sm:px-4">
-        {SAFE_OPERATION_ROWS.map(({ key, label, icon: Icon, color, bg, valueColor }) => {
-          const isStoppable = key !== "safe" && STOPPABLE_KEYS.includes(key as EditableSafeOpRowKey);
-          const totalMs =
-            key === "safe"
-              ? getSafeTotal(unit)
-              : key === "continuous"
-                ? getContinuousTotal(unit)
-                : isStoppable
-                  ? getTotal(unit, key)
-                  : 0;
-          const isPrimary = key === "safe" || key === "continuous";
-          const isWarning = key === "maintenance" || key === "incident";
-
-          return (
-            <div
-              key={key}
-              className={cn(
-                "grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-2 border-b border-sky-100 last:border-b-0 sm:grid-cols-[3.75rem_minmax(0,0.78fr)_minmax(11rem,1.22fr)] sm:gap-2.5 xl:grid-cols-[4rem_minmax(0,0.86fr)_minmax(12rem,1.2fr)]",
-                isPrimary ? "py-2.5" : "py-1.5",
-              )}
-            >
-              <div className="flex justify-center">
-                {key === "safe" ? (
-                  <div
-                    className={cn(
-                      "inline-flex h-10 w-10 items-center justify-center rounded-lg border text-white shadow-sm",
-                      bg,
-                    )}
-                    title={label}
-                  >
-                    <Icon className={cn(color, "h-5 w-5")} />
-                  </div>
-                ) : canManage ? (
-                  <button
-                    type="button"
-                    onClick={() => onIconClick(unit, key as EditableSafeOpRowKey, label)}
-                    className={cn(
-                      "inline-flex items-center justify-center rounded-lg border transition-all hover:-translate-y-0.5 hover:shadow-md",
-                      isPrimary ? "h-10 w-10" : "h-8 w-8",
-                      bg,
-                    )}
-                    title={`Cài đặt ${label}`}
-                  >
-                    <Icon className={cn(color, isPrimary ? "h-5 w-5" : "h-4 w-4")} />
-                  </button>
-                ) : (
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center rounded-lg border",
-                      isPrimary ? "h-10 w-10" : "h-8 w-8",
-                      bg,
-                    )}
-                    title={label}
-                  >
-                    <Icon className={cn(color, isPrimary ? "h-5 w-5" : "h-4 w-4")} />
-                  </div>
-                )}
-              </div>
-              <div
-                className={cn(
-                  "min-w-0 font-black leading-tight text-blue-950 sm:border-r sm:border-sky-300 sm:pr-4",
-                  isPrimary ? "text-sm lg:text-base" : "text-xs lg:text-sm",
-                )}
-              >
-                {label}
-              </div>
-              <div
-                className={cn(
-                  "col-span-2 pl-[calc(3.5rem+0.5rem)] text-left font-black tabular-nums sm:col-span-1 sm:pl-4 sm:text-right",
-                  "whitespace-nowrap",
-                  isPrimary ? "text-[clamp(0.95rem,1.18vw,1.125rem)]" : "text-[clamp(0.82rem,1vw,1rem)]",
-                  valueColor,
-                  isWarning && "tracking-tight",
-                )}
-              >
-                {formatDuration(totalMs)}
-              </div>
-            </div>
-          );
-        })}
+        {/* Vận hành an toàn + liên tục — luôn hiện */}
+        {topRows.map(renderRow)}
+        {/* Nút thu gọn / mở rộng chi tiết thời gian ngừng */}
+        <button
+          type="button"
+          onClick={() => setShowStops((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 border-b border-sky-100 py-2 text-sm font-black text-blue-900 transition-colors hover:text-blue-700"
+        >
+          <span className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
+              <Clock className="h-4 w-4 text-slate-500" />
+            </span>
+            {showStops ? "Ẩn chi tiết thời gian ngừng" : "Chi tiết thời gian ngừng"}
+          </span>
+          <span className="flex items-center gap-2">
+            {!showStops && (
+              <span className="text-xs font-bold text-slate-400">
+                Tổng: {stopTotalMs > 0 ? formatDuration(stopTotalMs) : "Không có"}
+              </span>
+            )}
+            <ChevronDown className={cn("h-4 w-4 text-blue-800 transition-transform", showStops && "rotate-180")} />
+          </span>
+        </button>
+        {/* 3 dòng ngừng — chỉ hiện khi mở rộng */}
+        {showStops && stopRows.map(renderRow)}
       </div>
       <div
         className={cn(
