@@ -1680,14 +1680,14 @@ function ProcedurePositionPicker({
   }
 
   return (
-    <Popover>
+    <Popover modal>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="h-10 justify-between px-3 font-normal">
           <span className="truncate">{label}</span>
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(380px,90vw)] p-0">
+      <PopoverContent align="start" className="w-[min(380px,90vw)] p-0" onWheel={(event) => event.stopPropagation()}>
         <div className="border-b p-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
             <Checkbox
@@ -1697,7 +1697,7 @@ function ProcedurePositionPicker({
             Tất cả cương vị
           </label>
         </div>
-        <div className="max-h-72 overflow-y-auto p-2">
+        <div className="max-h-[min(18rem,calc(100vh-12rem))] overflow-y-auto overscroll-contain p-2">
           {positions.length ? (
             positions.map((position) => (
               <label key={position} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted">
