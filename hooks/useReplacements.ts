@@ -139,3 +139,20 @@ export function useRecordReplacement() {
     },
   });
 }
+
+export function useUpdateReplacementLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: ReplacementInput & { id: string }) =>
+      apiMutate<ReplacementLogItem>(`/api/material-replacements/history/${id}`, "PUT", body),
+    onSuccess: () => invalidate(qc),
+  });
+}
+
+export function useDeleteReplacementLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate(`/api/material-replacements/history/${id}`, "DELETE"),
+    onSuccess: () => invalidate(qc),
+  });
+}

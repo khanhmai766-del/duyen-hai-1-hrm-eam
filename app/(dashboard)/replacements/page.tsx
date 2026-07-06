@@ -17,13 +17,18 @@ import { ReplacementPointForm } from "@/components/materials/replacement-point-f
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useReplacements,
   useReplacementHistory,
   useDeleteReplacement,
+  useDeleteReplacementLog,
+  useUpdateReplacementLog,
   type ReplacementItem,
   type ReplacementDevice,
   type ReplacementLogItem,
@@ -34,7 +39,7 @@ import {
   replacementDueStatus,
   replacementIntervalLabel,
 } from "@/lib/constants";
-import { formatDate, cn, initials } from "@/lib/utils";
+import { formatDate, formatDateInput, cn, initials } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 type TabKey = "schedule" | "history";
@@ -79,6 +84,7 @@ function ReplacementsPageContent() {
 
   const { data, isLoading } = useReplacements({ q: debouncedQ });
   const del = useDeleteReplacement();
+  const delLog = useDeleteReplacementLog();
   const all = data?.data ?? [];
   const linkedDeviceOf = (p: { device: ReplacementDevice | null; material: { deviceMaterials?: Array<{ device: ReplacementDevice }> } }) =>
     p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
@@ -99,6 +105,8 @@ function ReplacementsPageContent() {
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
   const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
+  const [editLogTarget, setEditLogTarget] = React.useState<ReplacementLogItem | null>(null);
+  const [delLogTarget, setDelLogTarget] = React.useState<ReplacementLogItem | null>(null);
 
   /* ---- Tab 2: Lịch sử thay thế (history) ---- */
   const [historyQ, setHistoryQ] = React.useState("");
@@ -347,6 +355,7 @@ function ReplacementsPageContent() {
                     <TableHead className="text-center">Số lượng</TableHead>
                     <TableHead>Ghi chú</TableHead>
                     <TableHead className="text-center">Người thực hiện</TableHead>
+                    <TableHead className="text-center">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -365,6 +374,35 @@ function ReplacementsPageContent() {
                       <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground" title={l.note ?? undefined}>{l.note || "—"}</TableCell>
                       <TableCell className="text-center">
                         <UserAvatar user={l.doneBy} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center gap-2">
+                          {canManage && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              title="Chỉnh sửa"
+                              onClick={() => setEditLogTarget(l)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              title="Xóa"
+                              onClick={() => setDelLogTarget(l)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {!canManage && !canDelete && <span className="text-sm text-muted-foreground">—</span>}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -385,6 +423,8 @@ function ReplacementsPageContent() {
 
       <RecordReplacementDialog point={recordTarget} onClose={() => setRecordTarget(null)} />
 
+      <ReplacementLogEditDialog log={editLogTarget} onClose={() => setEditLogTarget(null)} />
+
       <ConfirmDialog
         open={!!delTarget}
         onOpenChange={(o) => !o && setDelTarget(null)}
@@ -403,7 +443,85 @@ function ReplacementsPageContent() {
           }
         }}
       />
+
+      <ConfirmDialog
+        open={!!delLogTarget}
+        onOpenChange={(o) => !o && setDelLogTarget(null)}
+        title="Xoá ghi nhận thay thế?"
+        description="Chỉ xoá bản ghi lịch sử thay thế này, không tự khôi phục điểm theo dõi đã lưu trữ."
+        confirmLabel="Xoá"
+        loading={delLog.isPending}
+        onConfirm={async () => {
+          if (!delLogTarget) return;
+          try {
+            await delLog.mutateAsync(delLogTarget.id);
+            toast.success("Đã xoá ghi nhận thay thế");
+            setDelLogTarget(null);
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        }}
+      />
     </div>
+  );
+}
+
+function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | null; onClose: () => void }) {
+  const update = useUpdateReplacementLog();
+  const [replacedAt, setReplacedAt] = React.useState("");
+  const [quantity, setQuantity] = React.useState("");
+  const [note, setNote] = React.useState("");
+
+  React.useEffect(() => {
+    if (!log) return;
+    setReplacedAt(formatDateInput(log.replacedAt));
+    setQuantity(log.quantity != null ? String(log.quantity) : "");
+    setNote(log.note ?? "");
+  }, [log]);
+
+  async function submit() {
+    if (!log) return;
+    try {
+      await update.mutateAsync({ id: log.id, replacedAt, quantity: quantity || null, note });
+      toast.success("Đã cập nhật ghi nhận thay thế");
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <Dialog open={!!log} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Chỉnh sửa ghi nhận thay thế</DialogTitle></DialogHeader>
+        {log && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted/50 p-3 text-sm">
+              <div className="font-medium text-ink">{log.replacement?.material.name ?? "Vật tư"}</div>
+              <div className="font-mono text-xs text-navy">{log.replacement?.material.code ?? ""}</div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="mb-1.5 block">Ngày thay thế</Label>
+                <Input type="date" value={replacedAt} onChange={(e) => setReplacedAt(e.target.value)} />
+              </div>
+              <div>
+                <Label className="mb-1.5 block">Số lượng</Label>
+                <Input type="number" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <div>
+              <Label className="mb-1.5 block">Ghi chú</Label>
+              <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Nội dung ghi chú..." />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose} disabled={update.isPending}>Huỷ</Button>
+              <Button onClick={submit} disabled={update.isPending || !replacedAt}>Lưu thay đổi</Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

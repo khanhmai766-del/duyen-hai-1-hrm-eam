@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     const type = body.type === "UNG" ? "UNG" : body.type === "DE_XUAT" ? "DE_XUAT" : null;
     if (!type) return fail("Loại phiếu không hợp lệ");
     const unit = String(body.unit || "").trim();
-    if (!["S1", "S2"].includes(unit)) return fail("Tổ máy không hợp lệ");
+    if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
     const bbkt = String(body.bbktNumber || "").trim();
     if (type === "DE_XUAT" && !bbkt) return fail("Luồng Đề xuất bắt buộc nhập số BBKT khi tạo phiếu");
 

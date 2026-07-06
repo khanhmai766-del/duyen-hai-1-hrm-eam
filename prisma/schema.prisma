@@ -691,7 +691,7 @@ model MaterialTicket {
   id     String @id @default(cuid())
   code   String @unique // VT-2026-0001 (luồng Ứng có hậu tố U)
   type   String // "DE_XUAT" | "UNG"
-  unit   String // Tổ máy: S1 | S2
+  unit   String // Tổ máy: S1 | S2 | COMMON
   status String // máy trạng thái theo type
 
   assignedPosition String  // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)

@@ -73,7 +73,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail("Chỉ người tạo phiếu hoặc Quản trị được sửa phiếu", 403);
       const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
       const unit = String(body.unit || "").trim();
-      if (!["S1", "S2"].includes(unit)) return fail("Tổ máy không hợp lệ");
+      if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
       const assignedPosition = String(body.assignedPosition || "").trim();
       if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao");
       const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });

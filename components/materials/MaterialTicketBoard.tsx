@@ -99,7 +99,7 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Loại</span><span>Tổ máy</span><span>Số BBKT</span><span>Phiếu đề xuất</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
+          <span>Loại</span><span>Tổ máy</span><span>Số BBKT</span><span>Phiếu đề xuất</span><span>Tên vật tư</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
         {!isLoading && shown.map((t) => {
@@ -109,12 +109,15 @@ export default function MaterialTicketBoard({
           const done = t.status === "HOAN_TAT" ? order.length : idx;
           const mine = actionsFor(t, viewer).length > 0;
           const canEdit = !!viewer && (viewer.id === t.createdById || viewer.isAdmin);
+          const materialNames = Array.from(new Set(t.items.map((i) => i.material?.name).filter(Boolean)));
+          const materialText = materialNames.length ? materialNames.join(", ") : "—";
           return (
             <button key={t.id} className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(t.id)}>
-              <span>
+              <span className="kind-cell">
                 {t.type === "UNG"
                   ? <span className="tag ung"><Zap size={11} /> Ứng</span>
                   : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
+                <small className="kind-sub">{t.assignedPosition}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
               </span>
               <span>{t.unit}</span>
               <span className="soft">{t.bbktNumber || "—"}</span>
@@ -122,9 +125,8 @@ export default function MaterialTicketBoard({
                 {t.proposalNumber
                   ? <span className="code">{t.proposalNumber}</span>
                   : <span className="nophieu">Chưa có phiếu đề xuất</span>}
-                <br />
-                <small className="soft">{t.assignedPosition}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
               </span>
+              <span className="material-name" title={materialText}>{materialText}</span>
               <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>{meta.label}</span>
               <span className="dots">{order.slice(0, order.length - 1).map((s, i) => (
                 <i key={s} className={i < done ? "d on" : i === done && t.status !== "HOAN_TAT" ? "d cur" : "d"} />
@@ -192,6 +194,7 @@ export default function MaterialTicketBoard({
 
 /* ================= tạo phiếu ================= */
 const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
+const UNITS = ["S1", "S2", "COMMON"];
 
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>(null);
@@ -252,7 +255,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         ) : (
           <div className="frm">
             <label>Tổ máy</label>
-            <div className="seg2">{["S1", "S2"].map((u) => (
+            <div className="seg2">{UNITS.map((u) => (
               <button key={u} className={unit === u ? "on" : ""} onClick={() => setUnit(u)}>{u}</button>
             ))}</div>
 
@@ -344,7 +347,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <button className="x" onClick={onClose}><X size={16} /></button></div>
         <div className="frm">
           <label>Tổ máy</label>
-          <div className="seg2">{["S1", "S2"].map((u) => (
+          <div className="seg2">{UNITS.map((u) => (
             <button key={u} className={unit === u ? "on" : ""} onClick={() => setUnit(u)}>{u}</button>
           ))}</div>
 
@@ -679,12 +682,12 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
-.row{display:grid;grid-template-columns:.82fr .58fr .9fr 1.35fr 1fr .78fr 74px;gap:8px;align-items:center;min-width:960px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:.95fr .52fr .82fr 1.15fr 1.32fr 1fr .76fr 74px;gap:8px;align-items:center;min-width:1080px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
 .op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
-.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7){text-align:center;justify-self:stretch;}
+.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
@@ -694,6 +697,9 @@ const CSS = `
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;}
 .tag.ung{background:${C.ungBg};color:${C.ung};}
 .tag.dx{background:${C.accent}14;color:${C.accent};}
+.kind-cell{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
+.kind-sub{display:block;max-width:100%;color:${C.soft};font-size:10.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-name{display:block;min-width:0;color:${C.navy};font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dots{display:flex;justify-content:center;gap:4px;}
 .d{width:9px;height:9px;border-radius:50%;background:#e2e8f0;}
 .d.on{background:${C.ok};}
@@ -728,7 +734,7 @@ const CSS = `
 .material-cards button small{display:block;margin-top:3px;font-size:10.5px;font-weight:700;color:${C.soft};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .material-empty{grid-column:1/-1;border:1px dashed ${C.line};background:#fbfbfa;border-radius:10px;padding:11px 12px;text-align:center;font-size:12px;font-weight:600;color:${C.soft};}
 .frm input:focus,.act input:focus,.act textarea:focus{border-color:${C.accent};}
-.seg2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.seg2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .seg2 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg2 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
@@ -770,5 +776,5 @@ const CSS = `
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
-@media(max-width:640px){.panel{width:100%;}.row{min-width:820px;grid-template-columns:.82fr .58fr .82fr 1.18fr .92fr .72fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}}
+@media(max-width:640px){.panel{width:100%;}.row{min-width:980px;grid-template-columns:.95fr .52fr .78fr 1.05fr 1.2fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}}
 `;
