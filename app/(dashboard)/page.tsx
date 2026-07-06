@@ -1040,15 +1040,15 @@ function SafeOperationUnitRow({
         {/* Vận hành an toàn + liên tục — khung nhấn xanh, luôn hiện */}
         <div className="relative my-2 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white py-2.5 pl-4 pr-3">
           <div className="absolute inset-y-2.5 left-0 w-1.5 rounded-full bg-emerald-500" />
-          {/* Vận hành an toàn — nổi bật */}
-          <div className="flex items-center gap-3">
-            <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 text-white shadow-sm" title="Vận hành an toàn">
-              <ShieldCheck className="h-5 w-5" />
+          {/* Vận hành an toàn — nhãn trái, giá trị phải */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 text-white shadow-sm" title="Vận hành an toàn">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-black text-emerald-950 sm:text-base">Vận hành an toàn</span>
             </div>
-            <div className="min-w-0">
-              <div className="text-xs font-bold text-slate-500">Vận hành an toàn</div>
-              <div className="text-lg font-black leading-tight text-emerald-700 sm:text-xl">{formatDuration(getSafeTotal(unit))}</div>
-            </div>
+            <span className="whitespace-nowrap text-lg font-black leading-none tabular-nums text-emerald-700 sm:text-xl">{formatDuration(getSafeTotal(unit))}</span>
           </div>
           <div className="my-2 border-t border-emerald-100" />
           {/* Vận hành liên tục — gọn */}
