@@ -10,7 +10,7 @@ import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
   actionsFor, type MaterialTicket, type TicketViewer,
 } from "@/hooks/useMaterialTickets";
-import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 
 /* ============ meta hiển thị ============ */
 const C = {
@@ -204,10 +204,15 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [assigned, setAssigned] = useState("");
   const [category, setCategory] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
+  const [proposedQuantity, setProposedQuantity] = useState(1);
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
   const assignedKey = positionKey(assigned);
+  const positionOptions = useMemo(
+    () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
+    [opts?.positions, unit]
+  );
   const materialCards = useMemo(() => {
     if (!materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
@@ -227,12 +232,26 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     }
   }, [materialCards, selectedMaterialId]);
 
+  function selectUnit(nextUnit: string) {
+    setUnit(nextUnit);
+    setSelectedMaterialId("");
+    setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
+  }
+
   async function submit() {
     try {
       const res = await create.mutateAsync({
         type: type!, unit, bbktNumber: bbkt.trim() || undefined,
         assignedPosition: assigned, materialCategory: category,
       });
+      try {
+        sessionStorage.setItem(
+          `material-ticket-draft:${res.id}`,
+          JSON.stringify({ materialId: selectedMaterialId, quantity: proposedQuantity })
+        );
+      } catch {
+        // Không chặn tạo phiếu nếu trình duyệt không cho lưu nháp tạm.
+      }
       toast.success(`Đã tạo phiếu ${res.code}`);
       onClose();
       onOpen(res.id);
@@ -262,13 +281,13 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
           <div className="frm">
             <label>Tổ máy</label>
             <div className="seg2">{UNITS.map((u) => (
-              <button key={u} className={unit === u ? "on" : ""} onClick={() => setUnit(u)}>{u}</button>
+              <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
             ))}</div>
 
             <label>Cương vị được giao thực hiện *</label>
             <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
-              {(opts?.positions ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+              {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
 
             <label>Loại vật tư *</label>
@@ -305,10 +324,21 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
 
             {type === "DE_XUAT" ? (
-              <>
-                <label>Số Biên Bản Kiểm Tra (BBKT) *</label>
-                <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
-              </>
+              <div className="bbkt-grid">
+                <div className="field">
+                  <label>Số Biên Bản Kiểm Tra (BBKT) *</label>
+                  <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
+                </div>
+                <div className="field qty-field">
+                  <label>Số lượng đề xuất</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={proposedQuantity}
+                    onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </div>
+              </div>
             ) : (
               <p className="note ung"><Zap size={13} /> Luồng Ứng: số BBKT sẽ bổ sung sau bước xác nhận xuất file.</p>
             )}
@@ -335,6 +365,15 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const [category, setCategory] = useState(t.materialCategory ?? "");
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
+  const positionOptions = useMemo(
+    () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
+    [opts?.positions, unit]
+  );
+
+  function selectUnit(nextUnit: string) {
+    setUnit(nextUnit);
+    setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
+  }
 
   async function submit() {
     try {
@@ -358,13 +397,13 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
         <div className="frm">
           <label>Tổ máy</label>
           <div className="seg2">{UNITS.map((u) => (
-            <button key={u} className={unit === u ? "on" : ""} onClick={() => setUnit(u)}>{u}</button>
+            <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
           ))}</div>
 
           <label>Cương vị được giao thực hiện *</label>
           <select value={assigned} onChange={(e) => setAssigned(e.target.value)}>
             <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
-            {(opts?.positions ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+            {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
 
           <label>Loại vật tư *</label>
@@ -487,6 +526,23 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [pct, setPct] = useState("");
   const [chiHuy, setChiHuy] = useState("");
   const [reason, setReason] = useState("");
+
+  React.useEffect(() => {
+    if (!needItems) return;
+    try {
+      const raw = sessionStorage.getItem(`material-ticket-draft:${t.id}`);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { materialId?: string; quantity?: number };
+      setItems([{
+        materialId: draft.materialId ?? "",
+        deviceSeq: "",
+        quantity: Math.max(1, Number(draft.quantity) || 1),
+      }]);
+      sessionStorage.removeItem(`material-ticket-draft:${t.id}`);
+    } catch {
+      // Bỏ qua nháp tạm nếu dữ liệu sessionStorage không hợp lệ.
+    }
+  }, [needItems, t.id]);
 
   if (["HOAN_TAT", "TU_CHOI"].includes(t.status)) return null;
 
@@ -732,6 +788,9 @@ const CSS = `
 .card.ung svg{color:${C.ung};}
 .frm{padding:18px;display:flex;flex-direction:column;gap:9px;}
 .frm label{font-size:12.5px;font-weight:600;color:${C.navy};}
+.field{display:flex;flex-direction:column;gap:7px;min-width:0;}
+.bbkt-grid{display:grid;grid-template-columns:minmax(0,1fr) 142px;gap:10px;align-items:end;}
+.qty-field input{text-align:center;font-weight:800;color:${C.navy};}
 .frm input,.frm select,.act input,.act select,.act textarea,.frm-item select,.frm-item input{border:1.5px solid ${C.line};border-radius:10px;padding:10px 12px;font-size:13px;outline:0;width:100%;background:#fff;}
 .cats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cats button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:13px;cursor:pointer;color:#64748b;transition:.15s;}
@@ -786,5 +845,5 @@ const CSS = `
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
-@media(max-width:640px){.panel{width:100%;}.row{min-width:980px;grid-template-columns:.95fr .52fr .78fr 1.05fr 1.2fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}}
+@media(max-width:640px){.panel{width:100%;}.row{min-width:980px;grid-template-columns:.95fr .52fr .78fr 1.05fr 1.2fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 `;
