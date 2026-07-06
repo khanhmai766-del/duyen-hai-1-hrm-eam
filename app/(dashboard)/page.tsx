@@ -1015,12 +1015,27 @@ function SafeOperationUnitRow({
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-sky-300/90 bg-white shadow-[0_14px_32px_rgba(14,116,144,0.10)] ring-1 ring-white">
-      <div className="relative flex items-baseline justify-center gap-2.5 px-4 py-5">
+      <div className="relative flex items-center justify-between gap-2.5 px-4 py-4">
         <div className="absolute inset-x-8 bottom-0 h-px bg-blue-800/55" />
-        <span className="text-xl font-black uppercase leading-none tracking-normal text-blue-900 sm:text-2xl">Tổ máy</span>
-        <span className="text-4xl font-black leading-none text-blue-900 drop-shadow-[0_2px_0_rgba(125,211,252,0.35)] sm:text-5xl">
-          {unit}
-        </span>
+        {/* Trái: TỔ MÁY (trên) + S1/S2 (dưới) */}
+        <div className="flex flex-col leading-none">
+          <span className="text-sm font-black uppercase tracking-wide text-blue-900 sm:text-base">Tổ máy</span>
+          <span className="mt-0.5 text-4xl font-black leading-none text-blue-900 drop-shadow-[0_2px_0_rgba(125,211,252,0.35)] sm:text-5xl">
+            {unit}
+          </span>
+        </div>
+        {/* Phải: trạng thái vận hành */}
+        <div
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-black shadow-sm sm:text-base",
+            isOperating ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-slate-50 text-slate-600",
+          )}
+        >
+          <span className={cn("flex h-7 w-7 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
+            {isOperating ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />}
+          </span>
+          {isOperating ? "Tổ máy đang vận hành" : "Tổ máy ngừng"}
+        </div>
       </div>
       <div className="flex-1 px-3 py-2 sm:px-4">
         {/* Vận hành an toàn + liên tục — luôn hiện */}
@@ -1048,22 +1063,6 @@ function SafeOperationUnitRow({
         </button>
         {/* 3 dòng ngừng — chỉ hiện khi mở rộng */}
         {showStops && stopRows.map(renderRow)}
-      </div>
-      <div
-        className={cn(
-          "relative flex min-h-[4.25rem] items-center justify-center gap-2 border-t px-4 py-0 text-base font-black sm:text-lg",
-          isOperating ? "border-sky-200 bg-sky-50 text-emerald-700" : "border-slate-100 bg-slate-50 text-slate-600",
-        )}
-      >
-        <span className="pointer-events-none absolute right-4 top-2 grid grid-cols-5 gap-1 opacity-25">
-          {Array.from({ length: 20 }).map((_, index) => (
-            <span key={index} className="h-1 w-1 rounded-full bg-sky-500" />
-          ))}
-        </span>
-        <span className={cn("flex h-8 w-8 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
-          {isOperating ? <ShieldCheck className="h-5 w-5" /> : <X className="h-5 w-5" />}
-        </span>
-        {isOperating ? "Tổ máy đang vận hành" : "Tổ máy ngừng"}
       </div>
     </div>
   );
