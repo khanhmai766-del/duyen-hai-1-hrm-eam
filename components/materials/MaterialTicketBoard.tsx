@@ -111,8 +111,13 @@ export default function MaterialTicketBoard({
           const canEdit = !!viewer && (viewer.id === t.createdById || viewer.isAdmin);
           return (
             <button key={t.id} className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(t.id)}>
-              <span><span className="code">{t.code}</span><br />
-                <small className="soft">{t.assignedPosition}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small></span>
+              <span>
+                {t.proposalNumber
+                  ? <span className="code">{t.proposalNumber}</span>
+                  : <span className="nophieu">Chưa có phiếu đề xuất</span>}
+                <br />
+                <small className="soft">{t.assignedPosition}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
+              </span>
               <span>{t.type === "UNG"
                 ? <span className="tag ung"><Zap size={11} /> Ứng</span>
                 : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}</span>
@@ -644,6 +649,7 @@ const CSS = `
 .row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
 .code{font-family:Poppins,Inter,sans-serif;font-weight:600;color:${C.navy};}
+.nophieu{display:inline-block;background:${C.warnBg};color:${C.warn};font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;}
 .soft{color:${C.soft};}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;}
 .tag.ung{background:${C.ungBg};color:${C.ung};}
