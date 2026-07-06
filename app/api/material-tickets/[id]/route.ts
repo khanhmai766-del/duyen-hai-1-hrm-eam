@@ -1,9 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import {
-  isShiftLeader, isStats, statsLockRemaining,
-} from "@/lib/material-workflow";
+import { isShiftLeader, isStats } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 
 export const dynamic = "force-dynamic";
@@ -148,15 +146,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B2 — Thống kê nhập số phiếu ĐXVT (khóa tối thiểu 2 ngày sau xác nhận)
+    // B2 — Thống kê nhập số phiếu ĐXVT (CHỈ cương vị Thống kê; không còn khóa 2 ngày)
     if (action === "stats") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_THONG_KE") return fail("Phiếu không ở bước Thống kê");
       if (!isStats(user.position)) return fail("Chỉ cương vị Thống kê được thao tác bước này", 403);
-      const left = statsLockRemaining(t.confirmedAt);
-      if (left > 0) {
-        const h = Math.ceil(left / 3600e3);
-        return fail(`Chưa đủ 2 ngày kể từ khi xác nhận — còn ${Math.floor(h / 24)} ngày ${h % 24} giờ`);
-      }
       const num = String(body.proposalNumber || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
       const up = await prisma.materialTicket.update({

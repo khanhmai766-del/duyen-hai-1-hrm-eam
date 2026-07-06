@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Plus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
-  AlertTriangle, Ban, Download, Timer, CircleCheck, Circle, CircleDot, Loader2,
+  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,7 +35,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "B0", label: "Tạo phiếu + BBKT", who: "Trưởng Ca/TK" },
     { key: "CHO_DE_XUAT", label: "Đề xuất vật tư", who: "Cương vị phân giao" },
     { key: "CHO_XAC_NHAN", label: "Xác nhận (kho)", who: "Trưởng Ca/TK" },
-    { key: "CHO_THONG_KE", label: "Thống kê (≥2 ngày)", who: "Thống kê" },
+    { key: "CHO_THONG_KE", label: "Thống kê", who: "Thống kê" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + Word", who: "Trưởng Ca/TK" },
   ],
   UNG: [
@@ -174,7 +174,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
           <div className="pick">
             <button className="card dx" onClick={() => setType("DE_XUAT")}>
               <ClipboardList size={26} /><b>Đề xuất vật tư</b>
-              <span>Quy trình chuẩn: BBKT → Đề xuất → duyệt kho → thống kê (≥2 ngày) → nghiệm thu</span>
+              <span>Quy trình chuẩn: BBKT → Đề xuất → duyệt kho → thống kê → nghiệm thu</span>
             </button>
             <button className="card ung" onClick={() => setType("UNG")}>
               <Zap size={26} /><b>Ứng vật tư</b>
@@ -425,23 +425,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   }
 
   if (acts.includes("stats")) {
-    const left = t.confirmedAt ? 2 * 86400e3 - (Date.now() - new Date(t.confirmedAt).getTime()) : 0;
-    const locked = left > 0;
-    const h = Math.ceil(left / 3600e3);
     return (
       <div className="act">
         <label className="lb">Bước 2 — Nhập số phiếu đề xuất vật tư</label>
-        {locked ? (
-          <div className="lockbox"><Timer size={15} /> Còn khóa <b>{Math.floor(h / 24)} ngày {h % 24} giờ</b> (tối thiểu 2 ngày sau xác nhận).</div>
-        ) : (
-          <>
-            <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={num} onChange={(e) => setNum(e.target.value)} />
-            <button className="btn primary big" disabled={!num.trim() || act.isPending}
-              onClick={() => run({ action: "stats", proposalNumber: num }, "Đã nhập số phiếu")}>
-              <Check size={15} /> Xác nhận → chuyển Nghiệm thu
-            </button>
-          </>
-        )}
+        <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={num} onChange={(e) => setNum(e.target.value)} />
+        <button className="btn primary big" disabled={!num.trim() || act.isPending}
+          onClick={() => run({ action: "stats", proposalNumber: num }, "Đã nhập số phiếu")}>
+          <Check size={15} /> Xác nhận → chuyển Nghiệm thu
+        </button>
       </div>
     );
   }

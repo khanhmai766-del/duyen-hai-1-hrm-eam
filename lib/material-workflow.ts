@@ -55,15 +55,6 @@ export function seqInScope(deviceSeq: string, scopes: string[]) {
   return scopes.some((s) => deviceSeq === s || deviceSeq.startsWith(s + "."));
 }
 
-/** Quy tắc 2 ngày cho bước Thống kê (luồng Đề xuất) */
-export const STATS_LOCK_MS = 2 * 24 * 60 * 60 * 1000;
-
-export function statsLockRemaining(confirmedAt?: Date | null): number {
-  if (!confirmedAt) return STATS_LOCK_MS;
-  const left = STATS_LOCK_MS - (Date.now() - new Date(confirmedAt).getTime());
-  return Math.max(0, left);
-}
-
 /** Sinh số phiếu: VT-<năm>-<số thứ tự 4 chữ số>[U nếu Ứng] */
 export async function nextTicketCode(type: "DE_XUAT" | "UNG") {
   const year = new Date().getFullYear();
