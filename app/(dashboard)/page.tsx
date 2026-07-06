@@ -509,12 +509,12 @@ const SAFE_OPERATION_TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
   hour12: false,
 });
 
-const SAFE_OPERATION_ROWS: { key: SafeOpRowKey; label: string; icon: React.ElementType; color: string; bg: string }[] = [
-  { key: "safe", label: "Vận hành an toàn", icon: ShieldCheck, color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200" },
-  { key: "continuous", label: "Vận hành liên tục", icon: Activity, color: "text-blue-600", bg: "bg-blue-50 hover:bg-blue-100 border-blue-200" },
-  { key: "standby", label: "Ngừng dự phòng", icon: Clock, color: "text-slate-500", bg: "bg-slate-50 hover:bg-slate-100 border-slate-200" },
-  { key: "maintenance", label: "Ngừng sửa chữa bảo dưỡng", icon: Wrench, color: "text-amber-600", bg: "bg-amber-50 hover:bg-amber-100 border-amber-200" },
-  { key: "incident", label: "Ngừng sự cố", icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 hover:bg-red-100 border-red-200" },
+const SAFE_OPERATION_ROWS: { key: SafeOpRowKey; label: string; icon: React.ElementType; color: string; bg: string; valueColor: string }[] = [
+  { key: "safe", label: "Vận hành an toàn", icon: ShieldCheck, color: "text-emerald-700", bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200", valueColor: "text-emerald-700" },
+  { key: "continuous", label: "Vận hành liên tục", icon: Activity, color: "text-blue-700", bg: "bg-blue-50 hover:bg-blue-100 border-blue-200", valueColor: "text-blue-800" },
+  { key: "standby", label: "Ngừng dự phòng", icon: Clock, color: "text-blue-900", bg: "bg-sky-50 hover:bg-sky-100 border-sky-200", valueColor: "text-blue-900" },
+  { key: "maintenance", label: "Ngừng sửa chữa bảo dưỡng", icon: Wrench, color: "text-orange-600", bg: "bg-orange-50 hover:bg-orange-100 border-orange-200", valueColor: "text-orange-600" },
+  { key: "incident", label: "Ngừng sự cố", icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 hover:bg-red-100 border-red-200", valueColor: "text-red-600" },
 ];
 
 type EditingTarget = { unit: SafeOperationUnit; rowKey: EditableSafeOpRowKey; label: string } | null;
@@ -715,18 +715,27 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   }
 
   return (
-    <Card className="overflow-hidden border-emerald-200/80 bg-gradient-to-br from-white via-white to-emerald-50/60">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-normal text-emerald-700">
-          <ShieldCheck className="h-4 w-4" />
-          Thời gian vận hành an toàn (Safe Operation)
-        </CardTitle>
+    <Card className="overflow-hidden border-sky-200/90 bg-[#f8fcff] shadow-[0_18px_45px_rgba(14,74,140,0.10)]">
+      <CardHeader className="relative overflow-hidden border-b border-sky-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#f4fbff_100%)] px-4 pb-0 pt-3 sm:px-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_16%,rgba(59,130,246,0.12),transparent_18%),radial-gradient(circle_at_88%_12%,rgba(14,165,233,0.10),transparent_16%)]" />
+        <div className="relative flex flex-col gap-0.5">
+          <CardTitle className="flex items-start gap-3 text-xl font-black uppercase leading-tight tracking-normal text-blue-900 sm:items-center sm:text-2xl lg:text-3xl">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-800 shadow-sm sm:h-12 sm:w-12">
+              <ShieldCheck className="h-6 w-6" />
+            </span>
+            <span>
+              Thời gian vận hành an toàn
+              <span className="ml-1 whitespace-nowrap text-blue-800/85">(Safe Operation)</span>
+            </span>
+          </CardTitle>
+          <SafeOperationProcessStrip />
+        </div>
       </CardHeader>
-      <CardContent className="grid gap-3 lg:grid-cols-2">
+      <CardContent className="grid gap-4 bg-[linear-gradient(180deg,#f7fcff_0%,#ffffff_42%)] p-3 lg:grid-cols-2 lg:p-4">
         {isLoading ? (
           <>
-            <div className="h-72 rounded-lg border border-emerald-100 bg-white/70" />
-            <div className="h-72 rounded-lg border border-emerald-100 bg-white/70" />
+            <div className="h-96 rounded-lg border border-sky-200 bg-white/70" />
+            <div className="h-96 rounded-lg border border-sky-200 bg-white/70" />
           </>
         ) : (
           SAFE_OPERATION_UNITS.map((unit) => (
@@ -891,6 +900,36 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   );
 }
 
+function SafeOperationProcessStrip() {
+  const stages = ["Nhiên liệu", "Lò hơi", "Tuabin - máy phát", "Điện năng", "Nhà máy nhiệt điện Duyên Hải 1"];
+
+  return (
+    <div className="relative">
+      <div className="overflow-hidden border-b-[3px] border-blue-800/90">
+        <div className="relative h-[118px] sm:h-[140px] lg:h-[162px]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/safe-operation-lineart.png"
+            alt="Minh họa dây chuyền nhiên liệu, lò hơi, tuabin, điện năng và nhà máy nhiệt điện Duyên Hải"
+            className="absolute inset-0 h-full w-full object-fill"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-white/90 px-2 py-1 sm:grid-cols-5">
+          {stages.map((stage, index) => (
+            <div key={stage} className="flex min-w-0 items-center justify-center gap-2">
+              {index > 0 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
+              <span className="text-center text-[10px] font-black uppercase leading-tight text-blue-900 sm:text-[11px] lg:text-xs">
+                {stage}
+              </span>
+              {index < stages.length - 1 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SafeOperationUnitRow({
   unit,
   canManage,
@@ -909,15 +948,16 @@ function SafeOperationUnitRow({
   isOperating: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-emerald-200 bg-white/85 shadow-sm">
-      {/* Unit header — centered */}
-      <div className="flex flex-col items-center border-b border-emerald-100 py-3">
-        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Tổ máy</div>
-        <div className="mt-1 text-4xl font-extrabold leading-none text-emerald-700">{unit}</div>
+    <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-sky-300/90 bg-white shadow-[0_14px_32px_rgba(14,116,144,0.10)] ring-1 ring-white">
+      <div className="relative flex items-baseline justify-center gap-2.5 px-4 py-5">
+        <div className="absolute inset-x-8 bottom-0 h-px bg-blue-800/55" />
+        <span className="text-xl font-black uppercase leading-none tracking-normal text-blue-900 sm:text-2xl">Tổ máy</span>
+        <span className="text-4xl font-black leading-none text-blue-900 drop-shadow-[0_2px_0_rgba(125,211,252,0.35)] sm:text-5xl">
+          {unit}
+        </span>
       </div>
-      {/* 5 rows */}
-      <div className="divide-y divide-emerald-100">
-        {SAFE_OPERATION_ROWS.map(({ key, label, icon: Icon, color, bg }) => {
+      <div className="flex-1 px-3 py-2 sm:px-4">
+        {SAFE_OPERATION_ROWS.map(({ key, label, icon: Icon, color, bg, valueColor }) => {
           const isStoppable = key !== "safe" && STOPPABLE_KEYS.includes(key as EditableSafeOpRowKey);
           const totalMs =
             key === "safe"
@@ -927,63 +967,91 @@ function SafeOperationUnitRow({
                 : isStoppable
                   ? getTotal(unit, key)
                   : 0;
-          const isLarge = key === "safe" || key === "continuous";
+          const isPrimary = key === "safe" || key === "continuous";
+          const isWarning = key === "maintenance" || key === "incident";
 
           return (
-            <div key={key} className={cn("flex items-center justify-between gap-2 px-4", isLarge ? "py-5" : "py-2.5")}>
-              <span className={cn("flex items-center text-slate-600", isLarge ? "gap-3 text-base font-medium" : "gap-2 text-sm")}>
+            <div
+              key={key}
+              className={cn(
+                "grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-2 border-b border-sky-100 last:border-b-0 sm:grid-cols-[3.75rem_minmax(0,0.78fr)_minmax(11rem,1.22fr)] sm:gap-2.5 xl:grid-cols-[4rem_minmax(0,0.86fr)_minmax(12rem,1.2fr)]",
+                isPrimary ? "py-2.5" : "py-1.5",
+              )}
+            >
+              <div className="flex justify-center">
                 {key === "safe" ? (
                   <div
                     className={cn(
-                      "inline-flex items-center justify-center rounded-md border",
-                      isLarge ? "h-10 w-10" : "h-7 w-7",
+                      "inline-flex h-10 w-10 items-center justify-center rounded-lg border text-white shadow-sm",
                       bg,
                     )}
                     title={label}
                   >
-                    <Icon className={cn(color, isLarge ? "h-5 w-5" : "h-4 w-4")} />
+                    <Icon className={cn(color, "h-5 w-5")} />
                   </div>
                 ) : canManage ? (
                   <button
                     type="button"
                     onClick={() => onIconClick(unit, key as EditableSafeOpRowKey, label)}
                     className={cn(
-                      "inline-flex items-center justify-center rounded-md border transition-colors",
-                      isLarge ? "h-10 w-10" : "h-7 w-7",
+                      "inline-flex items-center justify-center rounded-lg border transition-all hover:-translate-y-0.5 hover:shadow-md",
+                      isPrimary ? "h-10 w-10" : "h-8 w-8",
                       bg,
                     )}
                     title={`Cài đặt ${label}`}
                   >
-                    <Icon className={cn(color, isLarge ? "h-5 w-5" : "h-4 w-4")} />
+                    <Icon className={cn(color, isPrimary ? "h-5 w-5" : "h-4 w-4")} />
                   </button>
                 ) : (
                   <div
                     className={cn(
-                      "inline-flex items-center justify-center rounded-md border",
-                      isLarge ? "h-10 w-10" : "h-7 w-7",
+                      "inline-flex items-center justify-center rounded-lg border",
+                      isPrimary ? "h-10 w-10" : "h-8 w-8",
                       bg,
                     )}
                     title={label}
                   >
-                    <Icon className={cn(color, isLarge ? "h-5 w-5" : "h-4 w-4")} />
+                    <Icon className={cn(color, isPrimary ? "h-5 w-5" : "h-4 w-4")} />
                   </div>
                 )}
+              </div>
+              <div
+                className={cn(
+                  "min-w-0 font-black leading-tight text-blue-950 sm:border-r sm:border-sky-300 sm:pr-4",
+                  isPrimary ? "text-sm lg:text-base" : "text-xs lg:text-sm",
+                )}
+              >
                 {label}
-              </span>
-              <span className={cn("whitespace-nowrap font-bold tabular-nums text-emerald-700", isLarge ? "text-lg" : "text-sm")}>
+              </div>
+              <div
+                className={cn(
+                  "col-span-2 pl-[calc(3.5rem+0.5rem)] text-left font-black tabular-nums sm:col-span-1 sm:pl-4 sm:text-right",
+                  "whitespace-nowrap",
+                  isPrimary ? "text-[clamp(0.95rem,1.18vw,1.125rem)]" : "text-[clamp(0.82rem,1vw,1rem)]",
+                  valueColor,
+                  isWarning && "tracking-tight",
+                )}
+              >
                 {formatDuration(totalMs)}
-              </span>
+              </div>
             </div>
           );
         })}
       </div>
       <div
         className={cn(
-          "flex items-center justify-center gap-2 border-t px-4 py-3 text-sm font-bold",
-          isOperating ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-slate-100 bg-slate-50 text-slate-600",
+          "relative flex min-h-[4.25rem] items-center justify-center gap-2 border-t px-4 py-0 text-base font-black sm:text-lg",
+          isOperating ? "border-sky-200 bg-sky-50 text-emerald-700" : "border-slate-100 bg-slate-50 text-slate-600",
         )}
       >
-        {isOperating ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />}
+        <span className="pointer-events-none absolute right-4 top-2 grid grid-cols-5 gap-1 opacity-25">
+          {Array.from({ length: 20 }).map((_, index) => (
+            <span key={index} className="h-1 w-1 rounded-full bg-sky-500" />
+          ))}
+        </span>
+        <span className={cn("flex h-8 w-8 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
+          {isOperating ? <ShieldCheck className="h-5 w-5" /> : <X className="h-5 w-5" />}
+        </span>
         {isOperating ? "Tổ máy đang vận hành" : "Tổ máy ngừng"}
       </div>
     </div>
