@@ -76,7 +76,7 @@ export default function DashboardPage() {
   const m = me.data?.data;
 
   return (
-    <div className="space-y-6">
+    <div className="-mt-2 space-y-4 lg:-mt-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="shrink-0">
           <h1 className="text-2xl font-bold tracking-tight text-ink">
