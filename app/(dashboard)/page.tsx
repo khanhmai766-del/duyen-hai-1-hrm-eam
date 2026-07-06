@@ -717,20 +717,8 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
 
   return (
     <Card className="overflow-hidden border-sky-200/90 bg-[#f8fcff] shadow-[0_18px_45px_rgba(14,74,140,0.10)]">
-      <CardHeader className="relative overflow-hidden border-b border-sky-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#f4fbff_100%)] px-4 pb-0 pt-3 sm:px-6">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_16%,rgba(59,130,246,0.12),transparent_18%),radial-gradient(circle_at_88%_12%,rgba(14,165,233,0.10),transparent_16%)]" />
-        <div className="relative flex flex-col gap-0.5">
-          <CardTitle className="flex items-start gap-3 text-xl font-black uppercase leading-tight tracking-normal text-blue-900 sm:items-center sm:text-2xl lg:text-3xl">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-800 shadow-sm sm:h-12 sm:w-12">
-              <ShieldCheck className="h-6 w-6" />
-            </span>
-            <span>
-              Thời gian vận hành an toàn
-              <span className="ml-2 whitespace-nowrap align-middle text-xs font-semibold tracking-wider text-slate-400 sm:text-sm">Safe Operation</span>
-            </span>
-          </CardTitle>
-          <SafeOperationProcessStrip />
-        </div>
+      <CardHeader className="relative overflow-hidden border-b-[3px] border-blue-800/90 p-0">
+        <SafeOperationProcessStrip />
       </CardHeader>
       <CardContent className="grid gap-4 bg-[linear-gradient(180deg,#f7fcff_0%,#ffffff_42%)] p-3 lg:grid-cols-2 lg:p-4">
         {isLoading ? (
@@ -906,26 +894,37 @@ function SafeOperationProcessStrip() {
 
   return (
     <div className="relative">
-      <div className="overflow-hidden border-b-[3px] border-blue-800/90">
-        <div className="relative h-[118px] sm:h-[140px] lg:h-[162px]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/safe-operation-lineart.png"
-            alt="Minh họa dây chuyền nhiên liệu, lò hơi, tuabin, điện năng và nhà máy nhiệt điện Duyên Hải"
-            className="absolute inset-0 h-full w-full object-fill"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 bg-white/90 px-2 py-1 sm:grid-cols-5">
-          {stages.map((stage, index) => (
-            <div key={stage} className="flex min-w-0 items-center justify-center gap-2">
-              {index > 0 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
-              <span className="text-center text-[10px] font-black uppercase leading-tight text-blue-900 sm:text-[11px] lg:text-xs">
-                {stage}
-              </span>
-              {index < stages.length - 1 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
-            </div>
-          ))}
-        </div>
+      {/* Ảnh nền dây chuyền + tiêu đề overlay lên trên */}
+      <div className="relative h-[150px] w-full overflow-hidden sm:h-[185px] lg:h-[215px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/safe-operation-bg.png"
+          alt="Sơ đồ dây chuyền nhà máy nhiệt điện Duyên Hải 1: nhiên liệu, lò hơi, tuabin, điện năng"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        {/* Lớp phủ sáng phía trên giúp chữ tiêu đề nổi rõ, dễ đọc */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-white via-white/70 to-transparent" />
+        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-3 text-xl font-black uppercase leading-tight tracking-normal text-blue-900 sm:px-6 sm:text-2xl lg:text-3xl">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white/90 text-blue-800 shadow-sm sm:h-12 sm:w-12">
+            <ShieldCheck className="h-6 w-6" />
+          </span>
+          <span>
+            Thời gian vận hành an toàn
+            <span className="ml-2 whitespace-nowrap align-middle text-xs font-semibold tracking-wider text-slate-500 sm:text-sm">Safe Operation</span>
+          </span>
+        </CardTitle>
+      </div>
+      {/* Chú thích các công đoạn */}
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t-[3px] border-blue-800/90 bg-white/95 px-2 py-1 sm:grid-cols-5">
+        {stages.map((stage, index) => (
+          <div key={stage} className="flex min-w-0 items-center justify-center gap-2">
+            {index > 0 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
+            <span className="text-center text-[10px] font-black uppercase leading-tight text-blue-900 sm:text-[11px] lg:text-xs">
+              {stage}
+            </span>
+            {index < stages.length - 1 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
+          </div>
+        ))}
       </div>
     </div>
   );
