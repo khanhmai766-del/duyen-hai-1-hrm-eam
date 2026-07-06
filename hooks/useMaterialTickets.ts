@@ -73,6 +73,7 @@ export function useTicketOptions(enabled: boolean) {
         devices: { seq: string; name: string; depth: number }[];
         materials: {
           id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
+          managingPositions: string[];
           devices: { seq: string; label: string }[];
         }[];
         positions: string[];

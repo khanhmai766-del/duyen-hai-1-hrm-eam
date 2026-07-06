@@ -195,6 +195,7 @@ export default function MaterialTicketBoard({
 /* ================= tạo phiếu ================= */
 const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
 const UNITS = ["S1", "S2", "COMMON"];
+const positionKey = (value?: string | null) => (value ?? "").trim().toLocaleLowerCase("vi");
 
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>(null);
@@ -206,10 +207,15 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
+  const assignedKey = positionKey(assigned);
   const materialCards = useMemo(() => {
     if (!materialCategoryLabel) return [];
-    return (opts?.materials ?? []).filter((m) => m.category === materialCategoryLabel);
-  }, [materialCategoryLabel, opts?.materials]);
+    return (opts?.materials ?? []).filter((m) => {
+      const matchesCategory = m.category === materialCategoryLabel;
+      const matchesPosition = !assignedKey || m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      return matchesCategory && matchesPosition;
+    });
+  }, [assignedKey, materialCategoryLabel, opts?.materials]);
 
   React.useEffect(() => {
     if (!materialCards.length) {
@@ -260,7 +266,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             ))}</div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => setAssigned(e.target.value)}>
+            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {(opts?.positions ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -290,7 +296,11 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   </button>
                 ))
               ) : (
-                <div className="material-empty">Chưa có vật tư thuộc loại này trong danh mục</div>
+                <div className="material-empty">
+                  {assigned
+                    ? "Chưa có mã vật tư đã link với cương vị này trong danh mục"
+                    : "Chưa có vật tư thuộc loại này trong danh mục"}
+                </div>
               )}
             </div>
 

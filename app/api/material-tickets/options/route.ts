@@ -30,7 +30,7 @@ export async function GET() {
         id: true, code: true, name: true, unit: true, quantity: true, category: true,
         replacements: {
           where: { isActive: false, deviceSeq: { not: null } },
-          select: { deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
+          select: { deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
           orderBy: { createdAt: "asc" },
         },
       },
@@ -38,14 +38,16 @@ export async function GET() {
     });
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
+      const positions = new Set<string>();
       const mdevices: { seq: string; label: string }[] = [];
       for (const r of m.replacements) {
+        if (r.managingPosition) positions.add(r.managingPosition);
         const seq = r.deviceSeq!;
         if (seen.has(seq)) continue;
         seen.add(seq);
         mdevices.push({ seq, label: r.location || r.device?.name || r.system || seq });
       }
-      return { id: m.id, code: m.code, name: m.name, unit: m.unit, quantity: m.quantity, category: m.category, devices: mdevices };
+      return { id: m.id, code: m.code, name: m.name, unit: m.unit, quantity: m.quantity, category: m.category, managingPositions: [...positions], devices: mdevices };
     });
 
     // Danh sách cương vị có phân giao cây thiết bị -> để Trưởng Ca chọn khi tạo phiếu
