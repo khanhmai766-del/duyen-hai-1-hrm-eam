@@ -16,10 +16,13 @@ import {
   CalendarDays,
   Trash2,
   Pencil,
-  Play,
-  Equal,
   X,
-  MoreHorizontal,
+  Activity,
+  Wrench,
+  AlertTriangle,
+  Clock,
+  Undo2,
+  Minus,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
@@ -30,14 +33,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
 import { OPERATION_TYPE, OPERATION_TYPE_ORDER, SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
 import { SUPPORT_LINKS, CONTROL_ROOM_CONTACTS, type SupportLinkGroup } from "@/lib/links";
 import { normalizeText } from "@/lib/nav";
 import { formatDateInput, initials, cn, parseDateInput } from "@/lib/utils";
 import { weatherScene, PLANT_LOCATION } from "@/lib/weather";
 import { positionImage } from "@/lib/position-image";
-import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent, type SafeOperationSetting } from "@/hooks/useDashboard";
+import { useMyDashboard, useWeather, useUserLocation, usePlaceInfo, useOperations, useCreateOperation, useUpdateOperation, useDeleteOperation, useSafeOperations, useUpdateSafeOperation, type MyDashboard, type OperationEvent } from "@/hooks/useDashboard";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { toast } from "sonner";
@@ -488,127 +491,210 @@ function WeatherCard() {
   );
 }
 
-/* ---- Safe operation realtime counter ---- */
+/* ---- Safe operation ---- */
 type SafeOperationUnit = "S1" | "S2";
 const SAFE_OPERATION_UNITS: SafeOperationUnit[] = ["S1", "S2"];
-const SAFE_OPERATION_TIME_ZONE = "Asia/Ho_Chi_Minh";
-const SAFE_OPERATION_IMAGE_SRC = process.env.NEXT_PUBLIC_SAFE_OPERATION_IMAGE_URL || "/brand/duyen-hai-plant.jpg";
 
-function vietnamDateParts(value: string | Date) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: SAFE_OPERATION_TIME_ZONE,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return {
-    day: get("day"),
-    month: get("month"),
-    year: get("year"),
-    hour: get("hour"),
-    minute: get("minute"),
-  };
+type SafeOpRowKey = "safe" | "continuous" | "maintenance" | "incident" | "standby";
+type EditableSafeOpRowKey = Exclude<SafeOpRowKey, "safe">;
+const STOPPABLE_KEYS: EditableSafeOpRowKey[] = ["standby", "maintenance", "incident"];
+
+const SAFE_OPERATION_ROWS: { key: SafeOpRowKey; label: string; icon: React.ElementType; color: string; bg: string }[] = [
+  { key: "safe", label: "Vận hành an toàn", icon: ShieldCheck, color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200" },
+  { key: "continuous", label: "Vận hành liên tục", icon: Activity, color: "text-blue-600", bg: "bg-blue-50 hover:bg-blue-100 border-blue-200" },
+  { key: "standby", label: "Ngừng dự phòng", icon: Clock, color: "text-slate-500", bg: "bg-slate-50 hover:bg-slate-100 border-slate-200" },
+  { key: "maintenance", label: "Ngừng sửa chữa bảo dưỡng", icon: Wrench, color: "text-amber-600", bg: "bg-amber-50 hover:bg-amber-100 border-amber-200" },
+  { key: "incident", label: "Ngừng sự cố", icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 hover:bg-red-100 border-red-200" },
+];
+
+type EditingTarget = { unit: SafeOperationUnit; rowKey: EditableSafeOpRowKey; label: string } | null;
+
+type TimeEntry = {
+  id: string;
+  start: string;   // datetime-local value
+  end: string;
+  reason: string | null;
+  durationMs: number;
+  added: boolean;   // already added to total?
+};
+
+/** Composite key for entries/totals maps */
+function entryKey(unit: SafeOperationUnit, rowKey: SafeOpRowKey) {
+  return `${unit}-${rowKey}`;
 }
 
-function dateTimeInputValue(value?: string | Date | null) {
-  if (!value) return "";
-  const parts = vietnamDateParts(value);
-  if (!parts) return "";
-  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+function durationMs(start: string, end: string) {
+  return Math.max(0, new Date(end).getTime() - new Date(start).getTime());
 }
 
-function parseSafeStartInput(value: string) {
-  const raw = value.trim();
-  const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
-  if (!match) return null;
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  const hour = match[4] ? Number(match[4]) : 0;
-  const minute = match[5] ? Number(match[5]) : 0;
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-  const check = new Date(Date.UTC(year, month - 1, day, hour, minute));
-  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+07:00`;
+function formatDuration(ms: number) {
+  const totalMinutes = Math.floor(ms / 60_000);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  return `${days} ngày ${hours} giờ ${minutes} phút`;
 }
 
-function formatSafeStart(value?: string | Date | null) {
-  if (!value) return "Chưa thiết lập";
-  const parts = vietnamDateParts(value);
-  if (!parts) return "Chưa thiết lập";
-  return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}/${parts.year}`;
+function formatDateTime(v: string) {
+  const d = new Date(v);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mi} ${dd}/${mm}`;
 }
 
-function safeElapsedParts(startedAt?: string | Date | null, now = new Date(), pausedAt?: string | Date | null) {
-  const start = startedAt ? new Date(startedAt) : null;
-  if (!start || Number.isNaN(start.getTime())) return { days: 0, hours: 0, minutes: 0 };
-  const pause = pausedAt ? new Date(pausedAt) : null;
-  const effectiveNow = pause && !Number.isNaN(pause.getTime()) ? pause : now;
-  const ms = Math.max(0, effectiveNow.getTime() - start.getTime());
-  const dayMs = 24 * 60 * 60 * 1000;
-  const hourMs = 60 * 60 * 1000;
-  const minuteMs = 60 * 1000;
-  const days = Math.floor(ms / dayMs);
-  const hours = Math.floor((ms % dayMs) / hourMs);
-  const minutes = Math.floor((ms % hourMs) / minuteMs);
-  return { days, hours, minutes };
+function formatEntryRange(start: string, end: string) {
+  return `${formatDateTime(start)} → ${formatDateTime(end)}`;
 }
 
 function SafeOperationCard({ canManage }: { canManage: boolean }) {
   const { data, isLoading } = useSafeOperations();
-  const update = useUpdateSafeOperation();
-  const settings = data?.data ?? [];
-  const byUnit = React.useMemo(() => new Map(settings.map((item) => [item.unit, item])), [settings]);
-  const [now, setNow] = React.useState(() => new Date());
-  const [editingUnit, setEditingUnit] = React.useState<SafeOperationUnit | null>(null);
-  const [draftStart, setDraftStart] = React.useState("");
+  const updateSafeOperation = useUpdateSafeOperation();
+  const events = data?.data ?? [];
 
+  const [editing, setEditing] = React.useState<EditingTarget>(null);
+  const [draftStart, setDraftStart] = React.useState("");
+  const [draftEnd, setDraftEnd] = React.useState("");
+  const [draftReason, setDraftReason] = React.useState("");
+  
+  // Live clock for safe-operation elapsed calculation
+  const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
-  function openStartDialog(unit: SafeOperationUnit) {
-    setEditingUnit(unit);
-    setDraftStart(dateTimeInputValue(byUnit.get(unit)?.startedAt) || dateTimeInputValue(new Date()));
+  // Compute entries and totals from events
+  const entries: Record<string, TimeEntry[]> = {};
+  const totals: Record<string, number> = {};
+  const continuousStarts: Record<string, string> = {};
+
+  for (const event of events) {
+    if (event.category === "continuous") {
+      continuousStarts[event.unit] = event.startedAt;
+      continue;
+    }
+    const k = entryKey(event.unit as SafeOperationUnit, event.category as SafeOpRowKey);
+    if (!entries[k]) entries[k] = [];
+    
+    let dur = 0;
+    if (event.startedAt && event.endedAt) {
+      dur = new Date(event.endedAt).getTime() - new Date(event.startedAt).getTime();
+    }
+    
+    entries[k].push({
+      id: event.id,
+      start: event.startedAt,
+      end: event.endedAt || "",
+      reason: event.reason,
+      durationMs: dur,
+      added: event.isAdded,
+    });
+    
+    if (event.isAdded) {
+      totals[k] = (totals[k] ?? 0) + dur;
+    }
   }
 
-  async function saveStart() {
-    if (!editingUnit) return;
-    if (!draftStart) return toast.error("Chọn ngày bắt đầu vận hành an toàn");
-    const startedAt = parseSafeStartInput(draftStart);
-    if (!startedAt) return toast.error("Nhập thời gian theo định dạng DD/MM/YYYY HH:mm");
+  function openTimeDialog(unit: SafeOperationUnit, rowKey: EditableSafeOpRowKey, label: string) {
+    setEditing({ unit, rowKey, label });
+    setDraftStart("");
+    setDraftEnd("");
+    setDraftReason("");
+  }
+
+  async function handleSave() {
+    if (!editing) return;
+    if (!draftStart) return toast.error("Vui lòng nhập thời gian bắt đầu");
+
     try {
-      await update.mutateAsync({ unit: editingUnit, action: "SET_START", startedAt });
-      toast.success(`Đã cập nhật mốc vận hành an toàn ${editingUnit}`);
-      setEditingUnit(null);
+      if (editing.rowKey === "continuous") {
+        await updateSafeOperation.mutateAsync({ unit: editing.unit, action: "ADD_ENTRY", category: "continuous", start: draftStart });
+        toast.success(`Đã lưu thời gian bắt đầu cho ${editing.label} - ${editing.unit}`);
+        setEditing(null);
+        return;
+      }
+
+      if (!draftEnd) return toast.error("Vui lòng nhập thời gian kết thúc");
+      if (new Date(draftEnd) <= new Date(draftStart)) return toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
+      if ((editing.rowKey === "maintenance" || editing.rowKey === "incident") && !draftReason.trim()) {
+        return toast.error("Vui lòng nhập lý do");
+      }
+
+      await updateSafeOperation.mutateAsync({
+        unit: editing.unit,
+        action: "ADD_ENTRY",
+        category: editing.rowKey,
+        start: draftStart,
+        end: draftEnd,
+        reason: draftReason.trim() || undefined,
+      });
+      toast.success(`Đã thêm mốc thời gian cho ${editing.label} - ${editing.unit}`);
+      setDraftStart("");
+      setDraftEnd("");
+      setDraftReason("");
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  async function togglePause(unit: SafeOperationUnit) {
+  async function addEntryToTotal(unit: SafeOperationUnit, rowKey: EditableSafeOpRowKey, entryId: string) {
     try {
-      await update.mutateAsync({ unit, action: "TOGGLE_PAUSE" });
-      toast.success("Đã cập nhật trạng thái bộ đếm");
+      await updateSafeOperation.mutateAsync({ unit, action: "TOGGLE_ENTRY", entryId, isAdded: true });
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  async function reset(unit: SafeOperationUnit) {
+  async function undoEntry(unit: SafeOperationUnit, rowKey: EditableSafeOpRowKey, entryId: string) {
     try {
-      await update.mutateAsync({ unit, action: "RESET" });
-      toast.success(`Đã reset thời gian vận hành an toàn ${unit}`);
+      await updateSafeOperation.mutateAsync({ unit, action: "TOGGLE_ENTRY", entryId, isAdded: false });
     } catch (err) {
       toast.error((err as Error).message);
     }
+  }
+
+  async function removeEntry(unit: SafeOperationUnit, rowKey: EditableSafeOpRowKey, entryId: string) {
+    try {
+      await updateSafeOperation.mutateAsync({ unit, action: "REMOVE_ENTRY", entryId });
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function resetEntries() {
+    if (!editing) return;
+    try {
+      await updateSafeOperation.mutateAsync({ unit: editing.unit, action: "RESET_CATEGORY", category: editing.rowKey });
+      toast.success(`Đã reset ${editing.label} - ${editing.unit}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  function getTotal(unit: SafeOperationUnit, rowKey: SafeOpRowKey) {
+    return totals[entryKey(unit, rowKey)] ?? 0;
+  }
+
+  // Entries for the currently open dialog
+  const dialogEntries = editing ? [...(entries[entryKey(editing.unit, editing.rowKey)] ?? [])].reverse() : [];
+
+  /** Vận hành an toàn = (now - 1/1 năm nay) - tổng 3 mục ngừng */
+  function getSafeTotal(unit: SafeOperationUnit) {
+    const startOfYear = new Date(now.getFullYear(), 0, 1); // Jan 1 00:00 local
+    const elapsedMs = Math.max(0, now.getTime() - startOfYear.getTime());
+    const stopMs =
+      getTotal(unit, "standby") +
+      getTotal(unit, "maintenance") +
+      getTotal(unit, "incident");
+    return Math.max(0, elapsedMs - stopMs);
+  }
+
+  function getContinuousTotal(unit: SafeOperationUnit) {
+    const startStr = continuousStarts[unit];
+    if (!startStr) return 0;
+    return Math.max(0, now.getTime() - new Date(startStr).getTime());
   }
 
   return (
@@ -622,48 +708,166 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
       <CardContent className="grid gap-3 lg:grid-cols-2">
         {isLoading ? (
           <>
-            <div className="h-[118px] rounded-lg border border-emerald-100 bg-white/70" />
-            <div className="h-[118px] rounded-lg border border-emerald-100 bg-white/70" />
+            <div className="h-72 rounded-lg border border-emerald-100 bg-white/70" />
+            <div className="h-72 rounded-lg border border-emerald-100 bg-white/70" />
           </>
         ) : (
           SAFE_OPERATION_UNITS.map((unit) => (
             <SafeOperationUnitRow
               key={unit}
               unit={unit}
-              setting={byUnit.get(unit)}
-              now={now}
               canManage={canManage}
-              saving={update.isPending}
-              onOpenStart={() => openStartDialog(unit)}
-              onTogglePause={() => togglePause(unit)}
-              onReset={() => reset(unit)}
+              onIconClick={openTimeDialog}
+              getTotal={getTotal}
+              getSafeTotal={getSafeTotal}
+              getContinuousTotal={getContinuousTotal}
+              isOperating={Boolean(continuousStarts[unit])}
             />
           ))
         )}
       </CardContent>
-      <Dialog open={!!editingUnit} onOpenChange={(open) => !open && setEditingUnit(null)}>
-        <DialogContent className="sm:max-w-sm">
+
+      {/* Dialog chọn mốc thời gian */}
+      <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Nhập thời gian bắt đầu vận hành {editingUnit}</DialogTitle>
+            <DialogTitle className="text-base">
+              {editing?.label} — {editing?.unit}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>Ngày giờ bắt đầu</Label>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={draftStart}
-              onChange={(event) => setDraftStart(event.target.value)}
-              placeholder="DD/MM/YYYY HH:mm"
-            />
-            <div className="text-xs text-muted-foreground">Ví dụ: 25/12/2025 14:00</div>
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <Label>Thời gian bắt đầu</Label>
+              <Input
+                type="datetime-local"
+                value={draftStart}
+                onChange={(e) => setDraftStart(e.target.value)}
+              />
+            </div>
+            {editing?.rowKey !== "continuous" && (
+              <div className="space-y-2">
+                <Label>Thời gian kết thúc</Label>
+                <Input
+                  type="datetime-local"
+                  value={draftEnd}
+                  onChange={(e) => setDraftEnd(e.target.value)}
+                />
+              </div>
+            )}
+            {(editing?.rowKey === "maintenance" || editing?.rowKey === "incident") && (
+              <div className="space-y-2">
+                <Label>Lý do</Label>
+                <Textarea
+                  value={draftReason}
+                  onChange={(e) => setDraftReason(e.target.value)}
+                  placeholder="Nhập lý do"
+                  rows={3}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingUnit(null)}>Hủy</Button>
-            <Button onClick={saveStart} disabled={update.isPending}>
-              {update.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button variant="outline" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button onClick={handleSave} disabled={updateSafeOperation.isPending}>
+              {updateSafeOperation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Lưu
             </Button>
           </DialogFooter>
+
+          {/* Danh sách entries đã nhập (Cho các mục ngừng) */}
+          {editing && editing.rowKey !== "continuous" && dialogEntries.length > 0 && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase text-slate-500">Các mốc đã nhập ({dialogEntries.length})</div>
+                <button
+                  type="button"
+                  onClick={resetEntries}
+                  className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
+                  title="Xóa tất cả và reset về 0"
+                >
+                  <X className="h-3 w-3" />
+                  Reset
+                </button>
+              </div>
+              <div className="max-h-[min(36vh,20rem)] space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+                {dialogEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-xs",
+                      entry.added ? "bg-emerald-50/60 text-slate-400" : "bg-slate-50 text-slate-600",
+                    )}
+                  >
+                    <span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                      <span className="min-w-0 flex flex-col gap-0.5">
+                        <span>{formatEntryRange(entry.start, entry.end)}</span>
+                        {entry.reason && <span className="break-words text-[11px] text-slate-500">Lý do: {entry.reason}</span>}
+                      </span>
+                      <span className="font-medium text-slate-500">({formatDuration(entry.durationMs)})</span>
+                    </span>
+                    {!entry.added ? (
+                      <span className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => editing && addEntryToTotal(editing.unit, editing.rowKey, entry.id)}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100"
+                          title="Cộng vào tổng"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => editing && removeEntry(editing.unit, editing.rowKey, entry.id)}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-red-300 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                          title="Xóa mốc này"
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => editing && undoEntry(editing.unit, editing.rowKey, entry.id)}
+                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100"
+                        title="Hoàn tác"
+                      >
+                        <Undo2 className="h-3 w-3" />
+                        Hoàn tác
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reset cho Vận hành liên tục */}
+          {editing && editing.rowKey === "continuous" && continuousStarts[editing.unit] && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold uppercase text-slate-500">
+                  Đang đếm từ: {formatDateTime(continuousStarts[editing.unit])}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSafeOperation.mutate(
+                      { unit: editing.unit, action: "RESET_CATEGORY", category: "continuous" },
+                      {
+                        onSuccess: () => toast.success(`Đã reset Vận hành liên tục - ${editing.unit}`),
+                        onError: (err) => toast.error((err as Error).message),
+                      },
+                    );
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
+                  title="Xóa thời gian bắt đầu"
+                >
+                  <X className="h-3 w-3" />
+                  Reset
+                </button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Card>
@@ -672,124 +876,99 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
 
 function SafeOperationUnitRow({
   unit,
-  setting,
-  now,
   canManage,
-  saving,
-  onOpenStart,
-  onTogglePause,
-  onReset,
+  onIconClick,
+  getTotal,
+  getSafeTotal,
+  getContinuousTotal,
+  isOperating,
 }: {
   unit: SafeOperationUnit;
-  setting?: SafeOperationSetting;
-  now: Date;
   canManage: boolean;
-  saving: boolean;
-  onOpenStart: () => void;
-  onTogglePause: () => void;
-  onReset: () => void;
+  onIconClick: (unit: SafeOperationUnit, rowKey: EditableSafeOpRowKey, label: string) => void;
+  getTotal: (unit: SafeOperationUnit, rowKey: SafeOpRowKey) => number;
+  getSafeTotal: (unit: SafeOperationUnit) => number;
+  getContinuousTotal: (unit: SafeOperationUnit) => number;
+  isOperating: boolean;
 }) {
-  const elapsed = safeElapsedParts(setting?.startedAt, now, setting?.pausedAt);
-  const paused = Boolean(setting?.pausedAt);
-  const hasStarted = Boolean(setting?.startedAt);
   return (
-    <div className="relative grid gap-4 rounded-lg border border-emerald-200 bg-white/85 p-3 pr-12 shadow-sm md:grid-cols-[172px_minmax(0,1fr)] md:items-center">
-      {canManage && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="icon"
-              variant="outline"
-              className="absolute right-3 top-3 h-8 w-8 rounded-md bg-white/95 shadow-sm"
-              disabled={saving}
-              title="Tác vụ vận hành an toàn"
-            >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreHorizontal className="h-3.5 w-3.5" />}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="bottom" className="w-56">
-            <DropdownMenuLabel className="text-xs text-muted-foreground">Tác vụ {unit}</DropdownMenuLabel>
-            <DropdownMenuItem onClick={onOpenStart} disabled={saving}>
-              <Play className="h-4 w-4 fill-current" />
-              Nhập mốc bắt đầu
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onTogglePause} disabled={saving || !hasStarted}>
-              <Equal className="h-4 w-4" />
-              {paused ? "Tiếp tục bộ đếm" : "Tạm dừng bộ đếm"}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onReset} disabled={saving} className="text-red-600 focus:text-red-700">
-              <X className="h-4 w-4" />
-              Reset về 0
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      <div className="relative min-h-[104px] border-emerald-100 md:border-r md:pr-4">
-        <div className="flex h-full items-center gap-3">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={SAFE_OPERATION_IMAGE_SRC}
-              alt=""
-              className="h-full w-full object-cover"
-              onError={(event) => {
-                event.currentTarget.src = "/brand/duyen-hai-plant.jpg";
-              }}
-            />
-          </div>
-          <div>
-            <div className="whitespace-nowrap text-xs font-bold uppercase text-slate-700">Tổ máy</div>
-            <div className="text-4xl font-extrabold leading-none text-emerald-700">{unit}</div>
-          </div>
-        </div>
+    <div className="rounded-lg border border-emerald-200 bg-white/85 shadow-sm">
+      {/* Unit header — centered */}
+      <div className="flex flex-col items-center border-b border-emerald-100 py-3">
+        <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Tổ máy</div>
+        <div className="mt-1 text-4xl font-extrabold leading-none text-emerald-700">{unit}</div>
       </div>
+      {/* 5 rows */}
+      <div className="divide-y divide-emerald-100">
+        {SAFE_OPERATION_ROWS.map(({ key, label, icon: Icon, color, bg }) => {
+          const isStoppable = key !== "safe" && STOPPABLE_KEYS.includes(key as EditableSafeOpRowKey);
+          const totalMs =
+            key === "safe"
+              ? getSafeTotal(unit)
+              : key === "continuous"
+                ? getContinuousTotal(unit)
+                : isStoppable
+                  ? getTotal(unit, key)
+                  : 0;
+          const isLarge = key === "safe" || key === "continuous";
 
-      <div className="min-w-0">
-        <div className="min-w-0">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-700">
-              {hasStarted ? paused ? "Đang tạm dừng bộ đếm" : "Đang vận hành an toàn" : "Chưa bắt đầu bộ đếm"}
+          return (
+            <div key={key} className={cn("flex items-center justify-between gap-2 px-4", isLarge ? "py-5" : "py-2.5")}>
+              <span className={cn("flex items-center text-slate-600", isLarge ? "gap-3 text-base font-medium" : "gap-2 text-sm")}>
+                {key === "safe" ? (
+                  <div
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-md border",
+                      isLarge ? "h-10 w-10" : "h-7 w-7",
+                      bg,
+                    )}
+                    title={label}
+                  >
+                    <Icon className={cn(color, isLarge ? "h-5 w-5" : "h-4 w-4")} />
+                  </div>
+                ) : canManage ? (
+                  <button
+                    type="button"
+                    onClick={() => onIconClick(unit, key as EditableSafeOpRowKey, label)}
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-md border transition-colors",
+                      isLarge ? "h-10 w-10" : "h-7 w-7",
+                      bg,
+                    )}
+                    title={`Cài đặt ${label}`}
+                  >
+                    <Icon className={cn(color, isLarge ? "h-5 w-5" : "h-4 w-4")} />
+                  </button>
+                ) : (
+                  <div
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-md border",
+                      isLarge ? "h-10 w-10" : "h-7 w-7",
+                      bg,
+                    )}
+                    title={label}
+                  >
+                    <Icon className={cn(color, isLarge ? "h-5 w-5" : "h-4 w-4")} />
+                  </div>
+                )}
+                {label}
+              </span>
+              <span className={cn("whitespace-nowrap font-bold tabular-nums text-emerald-700", isLarge ? "text-lg" : "text-sm")}>
+                {formatDuration(totalMs)}
+              </span>
             </div>
-            <div className="mt-1 grid min-w-0 grid-cols-3 gap-1 text-emerald-700 sm:gap-2">
-              <ElapsedNumber value={elapsed.days} label="ngày" />
-              <ElapsedNumber value={elapsed.hours} label="giờ" pad />
-              <ElapsedNumber value={elapsed.minutes} label="phút" pad />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-100 pt-2">
-          <span className="text-xs font-medium text-slate-600">Kể từ: {formatSafeStart(setting?.startedAt)}</span>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold",
-              hasStarted ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
-            )}
-          >
-            {hasStarted ? <ShieldCheck className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-            {hasStarted ? "Không có sự cố" : "Tổ máy ngừng"}
-          </span>
-        </div>
+          );
+        })}
       </div>
-    </div>
-  );
-}
-
-function ElapsedNumber({ value, label, pad = false }: { value: number; label: string; pad?: boolean }) {
-  const display = pad ? String(value).padStart(2, "0") : String(value);
-  const lengthClass =
-    display.length >= 5
-      ? "text-[clamp(1.65rem,2.3vw,2.35rem)]"
-      : display.length >= 4
-        ? "text-[clamp(1.8rem,2.65vw,2.65rem)]"
-        : "text-[clamp(1.95rem,2.95vw,2.9rem)]";
-  return (
-    <div className="flex min-w-0 flex-col items-center justify-end border-r border-emerald-100 px-1.5 last:border-r-0">
-      <span className={cn("block max-w-full whitespace-nowrap text-center font-extrabold leading-none tabular-nums tracking-normal", lengthClass)}>
-        {display}
-      </span>
-      <span className="mt-1.5 block text-center text-[11px] font-bold leading-none text-slate-600 sm:text-xs">{label}</span>
+      <div
+        className={cn(
+          "flex items-center justify-center gap-2 border-t px-4 py-3 text-sm font-bold",
+          isOperating ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-slate-100 bg-slate-50 text-slate-600",
+        )}
+      >
+        {isOperating ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />}
+        {isOperating ? "Tổ máy đang vận hành" : "Tổ máy ngừng"}
+      </div>
     </div>
   );
 }

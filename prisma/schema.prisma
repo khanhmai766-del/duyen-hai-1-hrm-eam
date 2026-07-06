@@ -747,3 +747,20 @@ model MaterialTicketItem {
   @@index([ticketId])
   @@index([deviceSeq])
 }
+
+// Lưu các mốc thời gian cho phần Vận hành an toàn (Safe Operation).
+// Các CHECK constraint và partial unique index cho "continuous" được áp bằng
+// prisma/add_safe_op_events.sql vì Prisma chưa biểu diễn được partial index.
+model SafeOperationEvent {
+  id         String    @id @default(cuid())
+  unit       String    // "S1" hoặc "S2"
+  category   String    // "continuous", "standby", "maintenance", "incident"
+  startedAt  DateTime
+  endedAt    DateTime?
+  reason     String?
+  isAdded    Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([unit, category])
+  @@index([createdAt])
+}

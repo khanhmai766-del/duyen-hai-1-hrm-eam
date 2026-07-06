@@ -55,19 +55,36 @@ export interface SafeOperationSetting {
   updatedAt: string;
 }
 
+export type SafeOperationEvent = {
+  id: string;
+  unit: "S1" | "S2";
+  category: "continuous" | "standby" | "maintenance" | "incident";
+  startedAt: string;
+  endedAt: string | null;
+  reason: string | null;
+  isAdded: boolean;
+  createdAt: string;
+};
+
 export function useSafeOperations() {
   return useQuery({
     queryKey: ["safe-operation"],
-    queryFn: () => apiGet<SafeOperationSetting[]>("/api/safe-operation"),
+    queryFn: () => apiGet<SafeOperationEvent[]>("/api/safe-operation"),
     staleTime: 60 * 1000,
   });
 }
 
+export type UpdateSafeOperationPayload = 
+  | { unit: "S1" | "S2"; action: "ADD_ENTRY"; category: SafeOperationEvent["category"]; start: string; end?: string; reason?: string }
+  | { unit: "S1" | "S2"; action: "TOGGLE_ENTRY"; entryId: string; isAdded: boolean }
+  | { unit: "S1" | "S2"; action: "REMOVE_ENTRY"; entryId: string }
+  | { unit: "S1" | "S2"; action: "RESET_CATEGORY"; category: SafeOperationEvent["category"] };
+
 export function useUpdateSafeOperation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { unit: "S1" | "S2"; action: "SET_START"; startedAt: string } | { unit: "S1" | "S2"; action: "TOGGLE_PAUSE" | "RESET" }) =>
-      apiMutate<SafeOperationSetting>("/api/safe-operation", "PUT", body),
+    mutationFn: (body: UpdateSafeOperationPayload) =>
+      apiMutate<SafeOperationEvent[]>("/api/safe-operation", "PUT", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["safe-operation"] }),
   });
 }
