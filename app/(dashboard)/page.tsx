@@ -904,7 +904,7 @@ function SafeOperationProcessStrip() {
         />
         {/* Lớp phủ sáng phía trên giúp chữ tiêu đề nổi rõ, dễ đọc */}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-white via-white/70 to-transparent" />
-        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-3 text-xl font-black uppercase leading-tight tracking-normal text-blue-900 sm:px-6 sm:text-2xl lg:text-3xl">
+        <CardTitle className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-3 text-lg font-black uppercase leading-tight tracking-normal text-blue-900 sm:px-6 sm:text-xl lg:text-2xl">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white/90 text-blue-800 shadow-sm sm:h-12 sm:w-12">
             <ShieldCheck className="h-6 w-6" />
           </span>
