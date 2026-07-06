@@ -99,7 +99,7 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Phiếu</span><span>Loại</span><span>Tổ máy</span><span>Số BBKT</span><span>Tiến trình</span><span>Trạng thái</span><span>Thao tác</span>
+          <span>Loại</span><span>Tổ máy</span><span>Số BBKT</span><span>Phiếu đề xuất</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
         {!isLoading && shown.map((t) => {
@@ -112,21 +112,23 @@ export default function MaterialTicketBoard({
           return (
             <button key={t.id} className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(t.id)}>
               <span>
+                {t.type === "UNG"
+                  ? <span className="tag ung"><Zap size={11} /> Ứng</span>
+                  : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
+              </span>
+              <span>{t.unit}</span>
+              <span className="soft">{t.bbktNumber || "—"}</span>
+              <span>
                 {t.proposalNumber
                   ? <span className="code">{t.proposalNumber}</span>
                   : <span className="nophieu">Chưa có phiếu đề xuất</span>}
                 <br />
                 <small className="soft">{t.assignedPosition}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
               </span>
-              <span>{t.type === "UNG"
-                ? <span className="tag ung"><Zap size={11} /> Ứng</span>
-                : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}</span>
-              <span>{t.unit}</span>
-              <span className="soft">{t.bbktNumber || "—"}</span>
+              <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>{meta.label}</span>
               <span className="dots">{order.slice(0, order.length - 1).map((s, i) => (
                 <i key={s} className={i < done ? "d on" : i === done && t.status !== "HOAN_TAT" ? "d cur" : "d"} />
               ))}</span>
-              <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>{meta.label}</span>
               <span className="ops">
                 {canEdit ? (
                   <>
@@ -197,8 +199,24 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [bbkt, setBbkt] = useState("");
   const [assigned, setAssigned] = useState("");
   const [category, setCategory] = useState("");
+  const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
+  const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
+  const materialCards = useMemo(() => {
+    if (!materialCategoryLabel) return [];
+    return (opts?.materials ?? []).filter((m) => m.category === materialCategoryLabel);
+  }, [materialCategoryLabel, opts?.materials]);
+
+  React.useEffect(() => {
+    if (!materialCards.length) {
+      if (selectedMaterialId) setSelectedMaterialId("");
+      return;
+    }
+    if (!materialCards.some((m) => m.id === selectedMaterialId)) {
+      setSelectedMaterialId(materialCards[0].id);
+    }
+  }, [materialCards, selectedMaterialId]);
 
   async function submit() {
     try {
@@ -247,8 +265,30 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => setCategory(c)}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); }}>{c}</button>
               ))}
+            </div>
+
+            <label>Tên vật tư</label>
+            <div className="material-cards">
+              {!category ? (
+                <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
+              ) : materialCards.length ? (
+                materialCards.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={selectedMaterialId === m.id ? "on" : ""}
+                    onClick={() => setSelectedMaterialId(m.id)}
+                    title={`${m.code} - ${m.name}`}
+                  >
+                    <span>{m.name}</span>
+                    <small>{m.code}</small>
+                  </button>
+                ))
+              ) : (
+                <div className="material-empty">Chưa có vật tư thuộc loại này trong danh mục</div>
+              )}
             </div>
 
             {type === "DE_XUAT" ? (
@@ -638,13 +678,13 @@ const CSS = `
 .btn.big{width:100%;justify-content:center;padding:13px;font-size:14px;margin-top:8px;}
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
-.list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow:hidden;}
-.row{display:grid;grid-template-columns:1.2fr .8fr .5fr .9fr 1fr .95fr 74px;gap:8px;align-items:center;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
+.row{display:grid;grid-template-columns:.82fr .58fr .9fr 1.35fr 1fr .78fr 74px;gap:8px;align-items:center;min-width:960px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
 .op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
-.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(6){text-align:center;justify-self:stretch;}
+.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
@@ -654,11 +694,11 @@ const CSS = `
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;}
 .tag.ung{background:${C.ungBg};color:${C.ung};}
 .tag.dx{background:${C.accent}14;color:${C.accent};}
-.dots{display:flex;gap:4px;}
+.dots{display:flex;justify-content:center;gap:4px;}
 .d{width:9px;height:9px;border-radius:50%;background:#e2e8f0;}
 .d.on{background:${C.ok};}
 .d.cur{background:${C.accent};box-shadow:0 0 0 3px ${C.accent}30;}
-.st{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:9px;text-align:center;}
+.st{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:9px;text-align:center;white-space:nowrap;}
 .empty{padding:40px;text-align:center;color:${C.soft};display:flex;gap:8px;align-items:center;justify-content:center;}
 .spin{animation:mtwspin 1s linear infinite;}@keyframes mtwspin{to{transform:rotate(360deg);}}
 .ovl{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:40;}
@@ -680,6 +720,13 @@ const CSS = `
 .cats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cats button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:13px;cursor:pointer;color:#64748b;transition:.15s;}
 .cats button.on{border-color:${C.accent};background:${C.accent}10;color:${C.accent};}
+.material-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.material-cards button{min-height:50px;padding:9px 11px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;text-align:left;color:${C.navy};cursor:pointer;transition:.15s;overflow:hidden;}
+.material-cards button:hover{border-color:${C.accent};box-shadow:0 8px 18px rgba(37,99,235,.08);}
+.material-cards button.on{border-color:${C.accent};background:${C.accent}0f;box-shadow:0 0 0 1px ${C.accent}22;}
+.material-cards button span{display:block;font-size:12.5px;font-weight:800;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-cards button small{display:block;margin-top:3px;font-size:10.5px;font-weight:700;color:${C.soft};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-empty{grid-column:1/-1;border:1px dashed ${C.line};background:#fbfbfa;border-radius:10px;padding:11px 12px;text-align:center;font-size:12px;font-weight:600;color:${C.soft};}
 .frm input:focus,.act input:focus,.act textarea:focus{border-color:${C.accent};}
 .seg2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .seg2 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
@@ -723,5 +770,5 @@ const CSS = `
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
-@media(max-width:640px){.panel{width:100%;}.row{grid-template-columns:1fr .7fr .9fr auto;}.row span:nth-child(3),.row span:nth-child(4),.row span:nth-child(5){display:none;}}
+@media(max-width:640px){.panel{width:100%;}.row{min-width:820px;grid-template-columns:.82fr .58fr .82fr 1.18fr .92fr .72fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}}
 `;
