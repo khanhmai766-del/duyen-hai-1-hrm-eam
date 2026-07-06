@@ -4,7 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { normalizeHcPeriod } from "@/lib/hc-period";
 import { normalizeText } from "@/lib/nav";
-import { dateRange as localDateRange } from "@/lib/utils";
+import { dateRange as localDateRange, vietnamNow, vietnamTodayUtcMidnight } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -41,20 +41,17 @@ function startOfDay(d: Date) {
   return x;
 }
 
-function addCalendarDays(from: Date, days: number) {
-  const d = startOfDay(from);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
 function canRegisterForDate(target: Date, now = new Date()) {
-  return startOfDay(target).getTime() >= addCalendarDays(now, 2).getTime();
+  // Phải đăng ký trước tối thiểu 2 ngày — mốc "hôm nay" tính theo giờ VN.
+  const minAllowed = vietnamTodayUtcMidnight(now);
+  minAllowed.setUTCDate(minAllowed.getUTCDate() + 2);
+  return startOfDay(target).getTime() >= minAllowed.getTime();
 }
 
 function isBeforeRegistrationCutoff(now = new Date()) {
-  const cutoff = new Date(now);
-  cutoff.setHours(16, 30, 0, 0);
-  return now.getTime() < cutoff.getTime();
+  // Trước 16h30 GIỜ VIỆT NAM (server chạy UTC).
+  const vn = vietnamNow(now);
+  return vn.getUTCHours() * 60 + vn.getUTCMinutes() < 16 * 60 + 30;
 }
 
 function vietnamDateInput(date = new Date()) {

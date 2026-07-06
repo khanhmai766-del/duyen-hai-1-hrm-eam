@@ -61,6 +61,21 @@ export function dateRange(date: Date | string | null | undefined): { start: Date
   return { start, end };
 }
 
+// ── Tiện ích GIỜ VIỆT NAM (server chạy UTC) ──
+// Dùng khi cần so "bây giờ / hôm nay" theo giờ VN thay vì giờ server.
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** "Bây giờ" quy về giờ VN — đọc bằng getUTCHours()/getUTCMinutes()… để lấy giá trị theo VN. */
+export function vietnamNow(now: Date = new Date()): Date {
+  return new Date(now.getTime() + VN_OFFSET_MS);
+}
+
+/** UTC-midnight của NGÀY VIỆT NAM hôm nay — khớp cách lưu date-only (parseDateInput trên server UTC). */
+export function vietnamTodayUtcMidnight(now: Date = new Date()): Date {
+  const vn = vietnamNow(now);
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()));
+}
+
 export function formatCurrency(value: number | null | undefined): string {
   if (value == null) return "—";
   return new Intl.NumberFormat("vi-VN", {

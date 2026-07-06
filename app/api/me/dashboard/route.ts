@@ -4,6 +4,7 @@ import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
 import { s3ProxyUrl } from "@/lib/s3";
 import { aggregateHcHoursByPeriod, normalizeHcPeriod } from "@/lib/hc-period";
+import { vietnamTodayUtcMidnight } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -129,12 +130,10 @@ export async function GET(req: NextRequest) {
     // Đã CHẤM CÔNG HÀNH CHÍNH hôm nay? (Quản đốc/Phó Quản đốc/Kỹ thuật viên/Thống kê).
     // Server chạy UTC nhưng HcGroup.date lưu theo NGÀY VIỆT NAM (midnight UTC của ngày VN),
     // nên phải tính "hôm nay" theo giờ VN để khớp — tránh lệch ngày lúc 0–7h sáng.
-    const vnParts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
-    }).formatToParts(now);
-    const vn = Object.fromEntries(vnParts.map((p) => [p.type, p.value]));
-    const hcDayStart = new Date(`${vn.year}-${vn.month}-${vn.day}T00:00:00.000Z`);
-    const hcDayEnd = new Date(`${vn.year}-${vn.month}-${vn.day}T23:59:59.999Z`);
+    const hcDayStart = vietnamTodayUtcMidnight(now);
+    const hcDayEnd = new Date(hcDayStart);
+    hcDayEnd.setUTCDate(hcDayEnd.getUTCDate() + 1);
+    hcDayEnd.setUTCMilliseconds(-1);
     const adminSelfToday = await prisma.hcCheckIn.findFirst({
       where: {
         userId: user.id,

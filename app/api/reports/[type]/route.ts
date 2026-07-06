@@ -5,7 +5,7 @@ import { buildEquipmentTreeIndex, getNormalizedEquipmentNodes } from "@/lib/equi
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { dateRange } from "@/lib/utils";
+import { dateRange, vietnamTodayUtcMidnight } from "@/lib/utils";
 
 async function getLeafEquipmentCount() {
   const nodes = await getNormalizedEquipmentNodes(prisma);
@@ -39,10 +39,11 @@ export async function GET(req: NextRequest, { params }: { params: { type: string
             include: { deviceMaterials: { select: { deviceSeq: true } } },
           }),
           (async () => {
-            const start = new Date();
-            start.setHours(0, 0, 0, 0);
-            const end = new Date();
-            end.setHours(23, 59, 59, 999);
+            // "Ca hôm nay" theo NGÀY VIỆT NAM (shift.date lưu UTC-midnight của ngày VN).
+            const start = vietnamTodayUtcMidnight();
+            const end = new Date(start);
+            end.setUTCDate(end.getUTCDate() + 1);
+            end.setUTCMilliseconds(-1);
             return prisma.shift.findFirst({
               where: { date: { gte: start, lte: end } },
               include: {
