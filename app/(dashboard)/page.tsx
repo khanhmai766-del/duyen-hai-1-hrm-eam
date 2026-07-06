@@ -895,7 +895,7 @@ function SafeOperationProcessStrip() {
   return (
     <div className="relative">
       {/* Ảnh nền dây chuyền + tiêu đề overlay lên trên */}
-      <div className="relative h-[150px] w-full overflow-hidden sm:h-[185px] lg:h-[215px]">
+      <div className="relative h-[120px] w-full overflow-hidden sm:h-[148px] lg:h-[172px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/brand/safe-operation-bg.png"
@@ -1013,43 +1013,43 @@ function SafeOperationUnitRow({
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-sky-300/90 bg-white shadow-[0_14px_32px_rgba(14,116,144,0.10)] ring-1 ring-white">
-      <div className="relative flex items-center justify-between gap-2.5 px-4 py-4">
+      <div className="relative flex items-center gap-4 px-4 py-3">
         <div className="absolute inset-x-8 bottom-0 h-px bg-blue-800/55" />
         {/* Trái: TỔ MÁY (trên) + S1/S2 (dưới) */}
         <div className="flex flex-col leading-none">
-          <span className="text-sm font-black uppercase tracking-wide text-blue-900 sm:text-base">Tổ máy</span>
-          <span className="mt-0.5 text-4xl font-black leading-none text-blue-900 drop-shadow-[0_2px_0_rgba(125,211,252,0.35)] sm:text-5xl">
+          <span className="text-xs font-black uppercase tracking-wide text-blue-900 sm:text-sm">Tổ máy</span>
+          <span className="mt-0.5 text-3xl font-black leading-none text-blue-900 drop-shadow-[0_2px_0_rgba(125,211,252,0.35)] sm:text-4xl">
             {unit}
           </span>
         </div>
-        {/* Phải: trạng thái vận hành */}
+        {/* Kế bên: trạng thái vận hành an toàn */}
         <div
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-black shadow-sm sm:text-base",
+            "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-black shadow-sm",
             isOperating ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-slate-50 text-slate-600",
           )}
         >
-          <span className={cn("flex h-7 w-7 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
-            {isOperating ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />}
+          <span className={cn("flex h-6 w-6 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
+            {isOperating ? <ShieldCheck className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
           </span>
-          {isOperating ? "Đang vận hành" : "Ngừng"}
+          {isOperating ? "Vận hành an toàn" : "Ngừng"}
         </div>
       </div>
-      <div className="flex-1 px-3 py-2 sm:px-4">
+      <div className="flex-1 px-3 py-1.5 sm:px-4">
         {/* Vận hành an toàn + liên tục — khung nhấn xanh, luôn hiện */}
-        <div className="relative my-2 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white py-2.5 pl-4 pr-3">
-          <div className="absolute inset-y-2.5 left-0 w-1.5 rounded-full bg-emerald-500" />
+        <div className="relative my-1.5 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white py-2 pl-4 pr-3">
+          <div className="absolute inset-y-2 left-0 w-1.5 rounded-full bg-emerald-500" />
           {/* Vận hành an toàn — nhãn trái, giá trị phải */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3">
-              <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 text-white shadow-sm" title="Vận hành an toàn">
-                <ShieldCheck className="h-5 w-5" />
+            <div className="flex items-center gap-2.5">
+              <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 text-white shadow-sm" title="Vận hành an toàn">
+                <ShieldCheck className="h-[18px] w-[18px]" />
               </div>
-              <span className="text-sm font-black text-emerald-950 sm:text-base">Vận hành an toàn</span>
+              <span className="text-sm font-black text-emerald-950">Vận hành an toàn</span>
             </div>
-            <span className="whitespace-nowrap text-lg font-black leading-none tabular-nums text-emerald-700 sm:text-xl">{formatDuration(getSafeTotal(unit))}</span>
+            <span className="whitespace-nowrap text-base font-black leading-none tabular-nums text-emerald-700 sm:text-lg">{formatDuration(getSafeTotal(unit))}</span>
           </div>
-          <div className="my-2 border-t border-emerald-100" />
+          <div className="my-1.5 border-t border-emerald-100" />
           {/* Vận hành liên tục — gọn */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1076,10 +1076,10 @@ function SafeOperationUnitRow({
         <button
           type="button"
           onClick={() => setShowStops((v) => !v)}
-          className="flex w-full items-center justify-between gap-2 border-b border-sky-100 py-2 text-sm font-black text-blue-900 transition-colors hover:text-blue-700"
+          className="flex w-full items-center justify-between gap-2 border-b border-sky-100 py-1.5 text-sm font-black text-blue-900 transition-colors hover:text-blue-700"
         >
           <span className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
               <Clock className="h-4 w-4 text-slate-500" />
             </span>
             {showStops ? "Ẩn chi tiết thời gian ngừng" : "Chi tiết thời gian ngừng"}
