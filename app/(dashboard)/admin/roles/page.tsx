@@ -266,10 +266,17 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "hc-attendance-group-create",
+    group: "Nhân sự / Hành chính",
+    feature: "Tạo nhóm hành chính",
+    note: "Tạo nhóm hành chính theo ngày, buổi, số giờ và nội dung công việc; cấp Quản lý/Toàn quyền được sửa hoặc xoá nhóm.",
+    matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "none" },
+  },
+  {
     id: "hc-attendance-check-in",
     group: "Nhân sự / Hành chính",
     feature: "Đăng ký và chấm công hành chính",
-    note: "Tạo nhóm hành chính, đăng ký nhân sự và ghi nhận chấm công hành chính trong ngày.",
+    note: "Đăng ký nhân sự và ghi nhận chấm công hành chính trong ngày; không bao gồm quyền tạo nhóm hành chính.",
     matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
   },
   {
@@ -485,6 +492,7 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
   const legacyMatrixByNewId: Record<string, Record<string, PermissionValue> | undefined> = {
     "shift-operation-check-in": existingById.get("shift-check-in")?.matrix,
     "shift-operation-approve": existingById.get("shift-approve")?.matrix,
+    "hc-attendance-group-create": existingById.get("hc-attendance-check-in")?.matrix ?? existingById.get("shift-check-in")?.matrix,
     "hc-attendance-check-in": existingById.get("shift-check-in")?.matrix,
     "hc-attendance-approve": existingById.get("shift-approve")?.matrix,
     "timesheet-edit": existingById.get("hc-attendance-approve")?.matrix ?? existingById.get("shift-approve")?.matrix,

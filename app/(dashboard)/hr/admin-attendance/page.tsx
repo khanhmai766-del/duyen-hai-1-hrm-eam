@@ -86,8 +86,8 @@ function canRecallHcCheckIn(member?: { isRegistered?: boolean; createdAt?: strin
 export default function AdminAttendancePage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const canCreateHcGroup = rbac.can("hc-attendance-check-in", ["create", "manage", "full"]);
-  const canManageHcGroup = rbac.can("hc-attendance-check-in", ["manage", "full"]);
+  const canCreateHcGroup = rbac.can("hc-attendance-group-create", ["create", "manage", "full"]);
+  const canManageHcGroup = rbac.can("hc-attendance-group-create", ["manage", "full"]);
   const canApproveHc = rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
   const myId = session?.user?.id;
 

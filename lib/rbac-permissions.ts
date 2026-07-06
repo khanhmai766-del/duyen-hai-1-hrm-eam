@@ -6,6 +6,9 @@ const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
 const APPROVE_LEVELS = new Set(["approve", "manage", "full"]);
 const MANAGE_LEVELS = new Set(["manage", "full"]);
 const VIEW_LEVELS = new Set(["read", "own", "create", "approve", "manage", "full"]);
+const FALLBACK_PERMISSION_IDS: Record<string, string[]> = {
+  "hc-attendance-group-create": ["hc-attendance-check-in"],
+};
 export type PermissionLevel = "none" | "read" | "own" | "create" | "approve" | "manage" | "full";
 
 const PERMISSION_RANK: Record<PermissionLevel, number> = {
@@ -92,13 +95,25 @@ function assignedPermissionLevelFromConfig(
   const permissions = Array.isArray(config.permissions) ? config.permissions : [];
   const overrides = Array.isArray(config.userOverrides) ? config.userOverrides : [];
   const targetPermission = permissions.find((item) => item.id === permissionId);
-  const roleValue = targetPermission?.matrix?.[user.role ?? ""] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""];
+  const fallbackPermissionIds = targetPermission ? [] : (FALLBACK_PERMISSION_IDS[permissionId] ?? []);
+  const fallbackPermission = fallbackPermissionIds
+    .map((id) => permissions.find((item) => item.id === id))
+    .find(Boolean);
+  const roleValue =
+    targetPermission?.matrix?.[user.role ?? ""] ??
+    fallbackPermission?.matrix?.[user.role ?? ""] ??
+    DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""];
   const overrideValues = overrides
     .filter((override) => override.userId === user.id)
     .flatMap((override) => {
-      if (override.permissionId === permissionId) return [override.value];
+      if (override.permissionId === permissionId || fallbackPermissionIds.includes(override.permissionId)) return [override.value];
       if (override.permissionId !== ROLE_PROFILE_PERMISSION || !override.roleId) return [];
-      return [override.value, targetPermission?.matrix?.[override.roleId] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[override.roleId]];
+      return [
+        override.value,
+        targetPermission?.matrix?.[override.roleId] ??
+          fallbackPermission?.matrix?.[override.roleId] ??
+          DEFAULT_RBAC_MATRIX[permissionId]?.[override.roleId],
+      ];
     });
 
   return strongestPermission([roleValue, ...overrideValues]);

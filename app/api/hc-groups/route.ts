@@ -73,11 +73,11 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** POST /api/hc-groups — create a group (ADMIN / Trưởng ca). */
+/** POST /api/hc-groups — create a managed administrative group. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "hc-attendance-check-in", ["create", "manage", "full"], "Không đủ quyền tạo nhóm hành chính");
+    await requirePermissionLevel(user, "hc-attendance-group-create", ["create", "manage", "full"], "Không đủ quyền tạo nhóm hành chính");
     const body = await req.json();
     const { date, content, hours, unit, period } = body as { date: string; content: string; hours?: number; unit?: string; period?: string };
     if (!date || !content?.trim()) return fail("Thiếu ngày hoặc nội dung");
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "hc-attendance-check-in", ["manage", "full"], "Không đủ quyền sửa nhóm hành chính");
+    await requirePermissionLevel(user, "hc-attendance-group-create", ["manage", "full"], "Không đủ quyền sửa nhóm hành chính");
     const body = await req.json();
     const { id, content, hours, period } = body as { id: string; content?: string; hours?: number; period?: string };
     if (!id) return fail("Thiếu id nhóm");
@@ -126,7 +126,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "hc-attendance-check-in", ["manage", "full"], "Không đủ quyền xoá nhóm hành chính");
+    await requirePermissionLevel(user, "hc-attendance-group-create", ["manage", "full"], "Không đủ quyền xoá nhóm hành chính");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id nhóm");
     await prisma.hcGroup.delete({ where: { id } });
