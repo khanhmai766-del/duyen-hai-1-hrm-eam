@@ -950,7 +950,6 @@ function SafeOperationUnitRow({
 }) {
   // Thu gọn/mở rộng 3 dòng thời gian NGỪNG (dự phòng / sửa chữa / sự cố).
   const [showStops, setShowStops] = React.useState(false);
-  const topRows = SAFE_OPERATION_ROWS.filter((r) => r.key === "safe" || r.key === "continuous");
   const stopRows = SAFE_OPERATION_ROWS.filter((r) => STOPPABLE_KEYS.includes(r.key as EditableSafeOpRowKey));
   const stopTotalMs = getTotal(unit, "standby") + getTotal(unit, "maintenance") + getTotal(unit, "incident");
 
@@ -1038,8 +1037,42 @@ function SafeOperationUnitRow({
         </div>
       </div>
       <div className="flex-1 px-3 py-2 sm:px-4">
-        {/* Vận hành an toàn + liên tục — luôn hiện */}
-        {topRows.map(renderRow)}
+        {/* Vận hành an toàn + liên tục — khung nhấn xanh, luôn hiện */}
+        <div className="relative my-2 overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white py-2.5 pl-4 pr-3">
+          <div className="absolute inset-y-2.5 left-0 w-1.5 rounded-full bg-emerald-500" />
+          {/* Vận hành an toàn — nổi bật */}
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 text-white shadow-sm" title="Vận hành an toàn">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-slate-500">Vận hành an toàn</div>
+              <div className="text-lg font-black leading-tight text-emerald-700 sm:text-xl">{formatDuration(getSafeTotal(unit))}</div>
+            </div>
+          </div>
+          <div className="my-2 border-t border-emerald-100" />
+          {/* Vận hành liên tục — gọn */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={() => onIconClick(unit, "continuous", "Vận hành liên tục")}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                  title="Cài đặt Vận hành liên tục"
+                >
+                  <Activity className="h-4 w-4 text-blue-700" />
+                </button>
+              ) : (
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50" title="Vận hành liên tục">
+                  <Activity className="h-4 w-4 text-blue-700" />
+                </div>
+              )}
+              <span className="text-sm font-black text-blue-950">Vận hành liên tục</span>
+            </div>
+            <span className="whitespace-nowrap font-black tabular-nums text-blue-800">{formatDuration(getContinuousTotal(unit))}</span>
+          </div>
+        </div>
         {/* Nút thu gọn / mở rộng chi tiết thời gian ngừng */}
         <button
           type="button"
