@@ -3,11 +3,11 @@
 import React, { useMemo, useState } from "react";
 import {
   Plus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
-  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2,
+  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction,
+  useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
   actionsFor, type MaterialTicket, type TicketViewer,
 } from "@/hooks/useMaterialTickets";
 import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
@@ -62,6 +62,9 @@ export default function MaterialTicketBoard({
   const { data, isLoading } = useMaterialTickets();
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState("ALL");
+  const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
+  const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
+  const del = useDeleteTicket();
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
@@ -96,7 +99,7 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Phiếu</span><span>Loại</span><span>Tổ máy</span><span>Số BBKT</span><span>Tiến trình</span><span>Trạng thái</span>
+          <span>Phiếu</span><span>Loại</span><span>Tổ máy</span><span>Số BBKT</span><span>Tiến trình</span><span>Trạng thái</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
         {!isLoading && shown.map((t) => {
@@ -105,6 +108,7 @@ export default function MaterialTicketBoard({
           const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(t.status);
           const done = t.status === "HOAN_TAT" ? order.length : idx;
           const mine = actionsFor(t, viewer).length > 0;
+          const canEdit = !!viewer && (viewer.id === t.createdById || viewer.isAdmin);
           return (
             <button key={t.id} className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(t.id)}>
               <span><span className="code">{t.code}</span><br />
@@ -118,6 +122,16 @@ export default function MaterialTicketBoard({
                 <i key={s} className={i < done ? "d on" : i === done && t.status !== "HOAN_TAT" ? "d cur" : "d"} />
               ))}</span>
               <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>{meta.label}</span>
+              <span className="ops">
+                {canEdit ? (
+                  <>
+                    <span role="button" tabIndex={0} title="Sửa phiếu" className="op"
+                      onClick={(e) => { e.stopPropagation(); setEditTicket(t); }}><Pencil size={14} /></span>
+                    <span role="button" tabIndex={0} title="Xóa phiếu" className="op del"
+                      onClick={(e) => { e.stopPropagation(); setDelTicket(t); }}><Trash2 size={14} /></span>
+                  </>
+                ) : <span className="soft">—</span>}
+              </span>
             </button>
           );
         })}
@@ -125,6 +139,37 @@ export default function MaterialTicketBoard({
       </div>
 
       {creating && <CreateDialog onClose={() => onCloseCreate?.()} onOpen={setOpenId} />}
+
+      {editTicket && <EditDialog t={editTicket} onClose={() => setEditTicket(null)} />}
+
+      {delTicket && (
+        <>
+          <div className="ovl" onClick={() => setDelTicket(null)} />
+          <div className="dlg" style={{ width: 420 }}>
+            <div className="dlg-h"><b>Xóa phiếu {delTicket.code}?</b>
+              <button className="x" onClick={() => setDelTicket(null)}><X size={16} /></button></div>
+            <div className="frm">
+              <p className="note" style={{ background: C.badBg, color: C.bad }}>
+                <AlertTriangle size={13} /> Xóa vĩnh viễn phiếu này và toàn bộ vật tư trong phiếu. Không thể hoàn tác.
+              </p>
+              <div className="frm-f">
+                <button className="btn ghost" onClick={() => setDelTicket(null)}>Hủy</button>
+                <button className="btn danger" disabled={del.isPending}
+                  onClick={async () => {
+                    try {
+                      await del.mutateAsync(delTicket.id);
+                      toast.success(`Đã xóa phiếu ${delTicket.code}`);
+                      if (openId === delTicket.id) setOpenId(null);
+                      setDelTicket(null);
+                    } catch (e) { toast.error(e instanceof Error ? e.message : "Xóa thất bại"); }
+                  }}>
+                  {del.isPending ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />} Xóa phiếu
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {open && (
         <>
@@ -219,6 +264,70 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
           </div>
         )}
+      </div>
+    </>
+  );
+}
+
+/* ================= sửa thông tin phiếu ================= */
+function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) {
+  const [unit, setUnit] = useState(t.unit);
+  const [bbkt, setBbkt] = useState(t.bbktNumber ?? "");
+  const [assigned, setAssigned] = useState(t.assignedPosition);
+  const [category, setCategory] = useState(t.materialCategory ?? "");
+  const { data: opts } = useTicketOptions(true);
+  const act = useTicketAction(t.id);
+
+  async function submit() {
+    try {
+      await act.mutateAsync({
+        action: "editInfo", unit, bbktNumber: bbkt.trim() || undefined,
+        assignedPosition: assigned, materialCategory: category,
+      });
+      toast.success(`Đã cập nhật phiếu ${t.code}`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Cập nhật thất bại");
+    }
+  }
+
+  return (
+    <>
+      <div className="ovl" onClick={onClose} />
+      <div className="dlg">
+        <div className="dlg-h"><b>Sửa phiếu {t.code}</b>
+          <button className="x" onClick={onClose}><X size={16} /></button></div>
+        <div className="frm">
+          <label>Tổ máy</label>
+          <div className="seg2">{["S1", "S2"].map((u) => (
+            <button key={u} className={unit === u ? "on" : ""} onClick={() => setUnit(u)}>{u}</button>
+          ))}</div>
+
+          <label>Cương vị được giao thực hiện *</label>
+          <select value={assigned} onChange={(e) => setAssigned(e.target.value)}>
+            <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
+            {(opts?.positions ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+
+          <label>Loại vật tư *</label>
+          <div className="cats">
+            {CATEGORIES.map((c) => (
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => setCategory(c)}>{c}</button>
+            ))}
+          </div>
+
+          <label>Số Biên Bản Kiểm Tra (BBKT){t.type === "DE_XUAT" ? " *" : " (nếu có)"}</label>
+          <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
+
+          <div className="frm-f">
+            <button className="btn ghost" onClick={onClose}>Hủy</button>
+            <button className="btn primary"
+              disabled={act.isPending || !assigned || !category || (t.type === "DE_XUAT" && !bbkt.trim())}
+              onClick={submit}>
+              {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -525,7 +634,11 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow:hidden;}
-.row{display:grid;grid-template-columns:1.2fr .8fr .5fr .9fr 1fr .95fr;gap:8px;align-items:center;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:1.2fr .8fr .5fr .9fr 1fr .95fr 74px;gap:8px;align-items:center;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.ops{display:flex;gap:6px;justify-content:center;}
+.op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
+.op:hover{border-color:${C.accent};color:${C.accent};}
+.op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
 .row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(6){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
@@ -604,5 +717,5 @@ const CSS = `
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
-@media(max-width:640px){.panel{width:100%;}.row{grid-template-columns:1fr .7fr .9fr;}.row span:nth-child(3),.row span:nth-child(4),.row span:nth-child(5){display:none;}}
+@media(max-width:640px){.panel{width:100%;}.row{grid-template-columns:1fr .7fr .9fr auto;}.row span:nth-child(3),.row span:nth-child(4),.row span:nth-child(5){display:none;}}
 `;

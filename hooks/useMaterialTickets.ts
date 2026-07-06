@@ -27,6 +27,7 @@ export interface MaterialTicket {
   chiHuyName: string | null;
   docUrl: string | null;
   rejectedReason: string | null;
+  createdById: string;
   createdByName: string;
   proposedByName: string | null;
   proposedByPosition: string | null;
@@ -48,6 +49,7 @@ export interface TicketViewer {
   isShiftLeader: boolean;
   isStats: boolean;
   canCreate: boolean;
+  isAdmin: boolean;
   hasScope: boolean;
 }
 
@@ -97,6 +99,14 @@ export function useTicketAction(id: string | null) {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       apiMutate<MaterialTicket>(`/api/material-tickets/${id}`, "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["material-tickets"] }),
+  });
+}
+
+export function useDeleteTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate(`/api/material-tickets/${id}`, "DELETE"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["material-tickets"] }),
   });
 }

@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
         isShiftLeader: isShiftLeader(user.position),
         isStats: isStats(user.position),
         canCreate: canCreateTicket(user),
+        isAdmin: user.role === "ADMIN",
         hasScope: scopes.length > 0,
       },
     });

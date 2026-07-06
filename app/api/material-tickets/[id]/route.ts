@@ -42,6 +42,20 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   });
 }
 
+// DELETE /api/material-tickets/[id] — Xóa phiếu. Chỉ NGƯỜI TẠO hoặc QUẢN TRỊ.
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  return handle(async () => {
+    const user = await requireUser();
+    const t = await getTicket(params.id);
+    if (!t) return fail("Không tìm thấy phiếu", 404);
+    if (t.createdById !== user.id && user.role !== "ADMIN")
+      return fail("Chỉ người tạo phiếu hoặc Quản trị được xóa phiếu", 403);
+    await prisma.materialTicket.delete({ where: { id: t.id } });
+    await audit(user.id, "MT_DELETE", "MaterialTicket", t.id, `${t.code}: xóa phiếu`);
+    return ok({ id: t.id });
+  });
+}
+
 // PUT /api/material-tickets/[id]   { action, ...payload }
 // Mọi khóa (trạng thái × cương vị × phạm vi × 2 ngày) thi hành TẠI ĐÂY.
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -51,6 +65,32 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const action = String(body.action || "");
     const t = await getTicket(params.id);
     if (!t) return fail("Không tìm thấy phiếu", 404);
+
+    // Sửa THÔNG TIN CƠ BẢN của phiếu (Tổ máy, số BBKT, cương vị giao, loại vật tư).
+    // Chỉ NGƯỜI TẠO hoặc QUẢN TRỊ; không phụ thuộc trạng thái phiếu.
+    if (action === "editInfo") {
+      if (t.createdById !== user.id && user.role !== "ADMIN")
+        return fail("Chỉ người tạo phiếu hoặc Quản trị được sửa phiếu", 403);
+      const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
+      const unit = String(body.unit || "").trim();
+      if (!["S1", "S2"].includes(unit)) return fail("Tổ máy không hợp lệ");
+      const assignedPosition = String(body.assignedPosition || "").trim();
+      if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao");
+      const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
+      if (scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+      const materialCategory = String(body.materialCategory || "").trim();
+      if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
+      const bbkt = String(body.bbktNumber || "").trim();
+      if (t.type === "DE_XUAT" && !bbkt) return fail("Luồng Đề xuất bắt buộc có số BBKT");
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: { unit, assignedPosition, materialCategory, bbktNumber: bbkt || t.bbktNumber },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_EDIT_INFO", "MaterialTicket", t.id, `${t.code}: sửa thông tin phiếu`);
+      return ok(up);
+    }
+
     if (["HOAN_TAT", "TU_CHOI"].includes(t.status)) return fail("Phiếu đã khóa, không thể thao tác");
 
     /* ---------- helper ghi items (dùng cho propose & ungEntry) ---------- */
