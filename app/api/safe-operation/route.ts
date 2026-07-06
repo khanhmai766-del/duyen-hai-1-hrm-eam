@@ -10,6 +10,7 @@ const SAFE_OPERATION_UNITS = ["S1", "S2"] as const;
 type SafeOperationUnit = (typeof SAFE_OPERATION_UNITS)[number];
 const SAFE_OPERATION_CATEGORIES = ["continuous", "standby", "maintenance", "incident"] as const;
 type SafeOperationCategory = (typeof SAFE_OPERATION_CATEGORIES)[number];
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function parseUnit(value: unknown): SafeOperationUnit | null {
   const unit = String(value ?? "").trim().toUpperCase();
@@ -26,21 +27,32 @@ function parseLocalDateTime(value: unknown) {
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) return null;
   const [, year, month, day, hour, minute, second = "00"] = match;
+  const expected = {
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+    minute: Number(minute),
+    second: Number(second),
+  };
   const date = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second),
+    Date.UTC(
+      expected.year,
+      expected.month - 1,
+      expected.day,
+      expected.hour,
+      expected.minute,
+      expected.second,
+    ) - VIETNAM_OFFSET_MS,
   );
+  const vietnamWallTime = new Date(date.getTime() + VIETNAM_OFFSET_MS);
   if (
     Number.isNaN(date.getTime()) ||
-    date.getFullYear() !== Number(year) ||
-    date.getMonth() !== Number(month) - 1 ||
-    date.getDate() !== Number(day) ||
-    date.getHours() !== Number(hour) ||
-    date.getMinutes() !== Number(minute)
+    vietnamWallTime.getUTCFullYear() !== expected.year ||
+    vietnamWallTime.getUTCMonth() !== expected.month - 1 ||
+    vietnamWallTime.getUTCDate() !== expected.day ||
+    vietnamWallTime.getUTCHours() !== expected.hour ||
+    vietnamWallTime.getUTCMinutes() !== expected.minute
   ) {
     return null;
   }
@@ -59,19 +71,9 @@ type SafeOperationEventRow = {
 };
 
 async function listSafeOperationEvents() {
-  return prisma.$queryRaw<SafeOperationEventRow[]>`
-    SELECT
-      "id",
-      "unit",
-      "category",
-      "startedAt",
-      "endedAt",
-      "reason",
-      "isAdded",
-      "createdAt"
-    FROM "SafeOperationEvent"
-    ORDER BY "createdAt" ASC
-  `;
+  return prisma.safeOperationEvent.findMany({
+    orderBy: { createdAt: "asc" },
+  }) as Promise<SafeOperationEventRow[]>;
 }
 
 export async function GET() {

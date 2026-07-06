@@ -498,6 +498,16 @@ const SAFE_OPERATION_UNITS: SafeOperationUnit[] = ["S1", "S2"];
 type SafeOpRowKey = "safe" | "continuous" | "maintenance" | "incident" | "standby";
 type EditableSafeOpRowKey = Exclude<SafeOpRowKey, "safe">;
 const STOPPABLE_KEYS: EditableSafeOpRowKey[] = ["standby", "maintenance", "incident"];
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+const SAFE_OPERATION_TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: VIETNAM_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  day: "2-digit",
+  month: "2-digit",
+  hour12: false,
+});
 
 const SAFE_OPERATION_ROWS: { key: SafeOpRowKey; label: string; icon: React.ElementType; color: string; bg: string }[] = [
   { key: "safe", label: "Vận hành an toàn", icon: ShieldCheck, color: "text-emerald-600", bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200" },
@@ -537,15 +547,22 @@ function formatDuration(ms: number) {
 
 function formatDateTime(v: string) {
   const d = new Date(v);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mi} ${dd}/${mm}`;
+  if (Number.isNaN(d.getTime())) return "--:-- --/--";
+  const parts = SAFE_OPERATION_TIME_FORMATTER.formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "--";
+  return `${get("hour")}:${get("minute")} ${get("day")}/${get("month")}`;
 }
 
 function formatEntryRange(start: string, end: string) {
   return `${formatDateTime(start)} → ${formatDateTime(end)}`;
+}
+
+function vietnamCalendarYear(date: Date) {
+  return new Date(date.getTime() + VIETNAM_OFFSET_MS).getUTCFullYear();
+}
+
+function vietnamYearStartInstant(year: number) {
+  return new Date(Date.UTC(year, 0, 1) - VIETNAM_OFFSET_MS);
 }
 
 function SafeOperationCard({ canManage }: { canManage: boolean }) {
@@ -682,7 +699,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
 
   /** Vận hành an toàn = (now - 1/1 năm nay) - tổng 3 mục ngừng */
   function getSafeTotal(unit: SafeOperationUnit) {
-    const startOfYear = new Date(now.getFullYear(), 0, 1); // Jan 1 00:00 local
+    const startOfYear = vietnamYearStartInstant(vietnamCalendarYear(now));
     const elapsedMs = Math.max(0, now.getTime() - startOfYear.getTime());
     const stopMs =
       getTotal(unit, "standby") +
