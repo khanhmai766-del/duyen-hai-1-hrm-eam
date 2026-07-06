@@ -726,7 +726,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
             </span>
             <span>
               Thời gian vận hành an toàn
-              <span className="ml-1 whitespace-nowrap text-blue-800/85">(Safe Operation)</span>
+              <span className="ml-2 whitespace-nowrap align-middle text-xs font-semibold tracking-wider text-slate-400 sm:text-sm">Safe Operation</span>
             </span>
           </CardTitle>
           <SafeOperationProcessStrip />
@@ -1033,7 +1033,7 @@ function SafeOperationUnitRow({
           <span className={cn("flex h-7 w-7 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
             {isOperating ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />}
           </span>
-          {isOperating ? "Tổ máy đang vận hành" : "Tổ máy ngừng"}
+          {isOperating ? "Đang vận hành" : "Ngừng"}
         </div>
       </div>
       <div className="flex-1 px-3 py-2 sm:px-4">
