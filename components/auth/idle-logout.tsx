@@ -63,6 +63,11 @@ export function IdleLogout() {
         /* bỏ qua */
       }
       try {
+        await fetch("/api/auth/logout-audit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "timeout" }),
+        }).catch(() => null);
         const result = await signOut({ callbackUrl: "/login?reason=timeout", redirect: false });
         window.location.assign(result?.url ?? "/login?reason=timeout");
       } catch {

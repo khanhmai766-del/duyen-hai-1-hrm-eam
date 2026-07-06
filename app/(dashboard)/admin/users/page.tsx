@@ -22,6 +22,7 @@ import { useAdminUserDetail, useAdminUsers, useCreateUser, useUpdateUser, useDel
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import { ROLES, type RoleKey } from "@/lib/constants";
+import { passwordPolicyMessage } from "@/lib/password-policy";
 import { cn, formatDateTime, initials } from "@/lib/utils";
 import type { SafeUser } from "@/types";
 
@@ -151,6 +152,7 @@ export default function AdminUsersPage() {
   const [permanentDelTarget, setPermanentDelTarget] = React.useState<SafeUser | null>(null);
   const [permanentConfirm, setPermanentConfirm] = React.useState("");
   const [resetTarget, setResetTarget] = React.useState<SafeUser | null>(null);
+  const [resetPasswordForm, setResetPasswordForm] = React.useState({ newPassword: "", confirmPassword: "" });
   const [auditTab, setAuditTab] = React.useState<"activity" | "system">("activity");
   const [activityDetail, setActivityDetail] = React.useState<ActivityLogRow | null>(null);
   const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
@@ -221,6 +223,10 @@ export default function AdminUsersPage() {
   async function changeRole(id: string, role: string) {
     try { await update.mutateAsync({ id, role }); toast.success("Đã cập nhật vai trò"); }
     catch (e) { toast.error((e as Error).message); }
+  }
+  function openResetPassword(user: SafeUser) {
+    setResetTarget(user);
+    setResetPasswordForm({ newPassword: "", confirmPassword: "" });
   }
   async function changeRoleProfile(userId: string, roleId: string, options: { silent?: boolean } = {}) {
     const normalizedRoleId = roleId === NO_ROLE_PROFILE ? "" : roleId;
@@ -411,8 +417,8 @@ export default function AdminUsersPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          title={u.role === "VIEWER" ? "Reset mật khẩu Người xem về password123" : "Reset mật khẩu về password123"}
-                          onClick={() => setResetTarget(u)}
+                          title={u.role === "VIEWER" ? "Reset mật khẩu Người xem" : "Reset mật khẩu"}
+                          onClick={() => openResetPassword(u)}
                         >
                           <KeyRound className="h-4 w-4 text-amber-600" />
                         </Button>
@@ -600,25 +606,74 @@ export default function AdminUsersPage() {
       {/* Edit user */}
       <EditUserDialog target={editTarget} onClose={() => setEditTarget(null)} />
 
-      {/* Delete user */}
-      <ConfirmDialog
+      {/* Reset password */}
+      <Dialog
         open={!!resetTarget}
-        onOpenChange={(o) => !o && setResetTarget(null)}
-        title="Reset mật khẩu?"
-        description={`Đặt lại mật khẩu tài khoản "${resetTarget?.name}" về password123. Người dùng sẽ phải đổi mật khẩu trong lần đăng nhập tiếp theo.`}
-        confirmLabel="Reset mật khẩu"
-        loading={update.isPending}
-        onConfirm={async () => {
-          if (!resetTarget) return;
-          try {
-            await update.mutateAsync({ id: resetTarget.id, resetPassword: true });
-            toast.success("Đã reset mật khẩu", { description: "Mật khẩu mặc định là password123." });
+        onOpenChange={(o) => {
+          if (!o) {
             setResetTarget(null);
-          } catch (e) {
-            toast.error((e as Error).message);
+            setResetPasswordForm({ newPassword: "", confirmPassword: "" });
           }
         }}
-      />
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset mật khẩu</DialogTitle>
+            <DialogDescription>
+              Đặt mật khẩu tạm cho tài khoản &quot;{resetTarget?.name}&quot;. Người dùng sẽ phải đổi mật khẩu sau khi đăng nhập.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Field label="Mật khẩu tạm">
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={resetPasswordForm.newPassword}
+                onChange={(e) => setResetPasswordForm((current) => ({ ...current, newPassword: e.target.value }))}
+              />
+            </Field>
+            <Field label="Xác nhận mật khẩu tạm">
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={resetPasswordForm.confirmPassword}
+                onChange={(e) => setResetPasswordForm((current) => ({ ...current, confirmPassword: e.target.value }))}
+              />
+            </Field>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Mật khẩu cần tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Mật khẩu không được ghi vào nhật ký hệ thống.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetTarget(null)} disabled={update.isPending}>Huỷ</Button>
+            <Button
+              onClick={async () => {
+                if (!resetTarget) return;
+                const policyError = passwordPolicyMessage(resetPasswordForm.newPassword);
+                if (policyError) return toast.error(policyError);
+                if (resetPasswordForm.newPassword !== resetPasswordForm.confirmPassword) {
+                  return toast.error("Xác nhận mật khẩu tạm không khớp");
+                }
+                try {
+                  await update.mutateAsync({
+                    id: resetTarget.id,
+                    resetPassword: true,
+                    newPassword: resetPasswordForm.newPassword,
+                  });
+                  toast.success("Đã reset mật khẩu", { description: "Người dùng sẽ phải đổi mật khẩu sau khi đăng nhập." });
+                  setResetTarget(null);
+                  setResetPasswordForm({ newPassword: "", confirmPassword: "" });
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
+              }}
+              disabled={update.isPending}
+            >
+              Reset mật khẩu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete user */}
       <ConfirmDialog

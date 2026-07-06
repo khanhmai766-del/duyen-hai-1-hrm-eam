@@ -13,6 +13,10 @@ prisma/dev.db
 .pgdata
 public/uploads
 
+# Dữ liệu export người dùng/nhân sự không đưa vào Git
+users_export*.json
+*_users_export*.json
+
 # Tệp người dùng tải lên & video nền dung lượng lớn (cấp riêng khi triển khai)
 # Giữ riêng video nền trang đăng nhập (bg.mp4 — đã ghép bg1–bg3) để deploy cùng code.
 public/videos/*

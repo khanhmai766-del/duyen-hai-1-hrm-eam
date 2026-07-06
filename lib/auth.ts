@@ -6,6 +6,7 @@ import { readLoginToken } from "@/lib/webauthn";
 import { isDefaultPassword, isPasswordExpired } from "@/lib/password-policy";
 import { effectiveUserPosition } from "@/lib/current-position";
 import { MAX_FAILED_LOGIN_ATTEMPTS } from "@/lib/login-security";
+import { writeActivityLog } from "@/lib/activity-log";
 
 let loginLockColumnsReady = false;
 
@@ -17,6 +18,19 @@ async function ensureLoginLockColumns() {
     ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
   `);
   loginLockColumnsReady = true;
+}
+
+async function auditLogin(user: { id: string; name: string | null }, action: "LOGIN" | "WEBAUTHN_LOGIN", detail: string) {
+  await writeActivityLog({
+    actorUserId: user.id,
+    actorName: user.name,
+    action,
+    targetType: "User",
+    targetId: user.id,
+    detail,
+  }).catch((error) => {
+    console.warn("Không thể ghi audit đăng nhập", error);
+  });
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -51,6 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (mustChangePassword && !user.mustChangePassword) {
             await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
           }
+          await auditLogin(user, "WEBAUTHN_LOGIN", "Đăng nhập bằng vân tay/passkey");
           return {
             id: user.id,
             name: user.name,
@@ -92,6 +107,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (mustChangePassword && !user.mustChangePassword) {
           await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
         }
+        await auditLogin(user, "LOGIN", "Đăng nhập bằng mật khẩu");
 
         // NOTE: avatarUrl is intentionally NOT returned here. Avatars may be
         // large base64 data URLs; putting them in the JWT bloats the session

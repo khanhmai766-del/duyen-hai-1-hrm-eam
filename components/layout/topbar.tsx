@@ -61,6 +61,11 @@ async function logout(callbackUrl = "/login") {
     // bỏ qua nếu storage không khả dụng
   }
   try {
+    await fetch("/api/auth/logout-audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "manual" }),
+    }).catch(() => null);
     const result = await signOut({ callbackUrl, redirect: false });
     window.location.assign(result?.url ?? callbackUrl);
   } catch {

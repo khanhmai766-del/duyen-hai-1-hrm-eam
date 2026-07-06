@@ -5,7 +5,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
 import { s3ProxyUrl, userWithSignedMedia } from "@/lib/s3";
 import { avatarUpdate, signatureUpdate } from "@/lib/user-avatar-storage";
-import { DEFAULT_PASSWORD } from "@/lib/password-policy";
+import { DEFAULT_PASSWORD, passwordPolicyMessage } from "@/lib/password-policy";
 import { effectiveUserPosition, isValidCurrentPosition } from "@/lib/current-position";
 import { getOrSetUserSummaryCache, invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
@@ -155,6 +155,10 @@ export async function PUT(req: NextRequest) {
     if (body.resetPassword) {
       const before = await prisma.user.findUnique({ where: { id: body.id } });
       if (!before) return fail("Không tìm thấy người dùng", 404);
+      const newPassword = String(body.newPassword ?? "");
+      if (!newPassword) return fail("Vui lòng nhập mật khẩu tạm thời");
+      const policyError = passwordPolicyMessage(newPassword);
+      if (policyError) return fail(policyError);
       const canManageUsers = await hasPermissionLevel(user, "user-manage", ["manage", "full"]);
       if (!canManageUsers) {
         await requirePermissionLevel(user, "user-reset-viewer-password", ["approve", "manage", "full"], "Không đủ quyền reset mật khẩu Người xem");
@@ -163,7 +167,7 @@ export async function PUT(req: NextRequest) {
       const updated = await prisma.user.update({
         where: { id: body.id },
         data: {
-          passwordHash: await bcrypt.hash(DEFAULT_PASSWORD, 10),
+          passwordHash: await bcrypt.hash(newPassword, 10),
           mustChangePassword: true,
           passwordChangedAt: new Date(),
           failedLoginAttempts: 0,

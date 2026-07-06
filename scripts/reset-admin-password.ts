@@ -1,6 +1,6 @@
 import { PrismaClient, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { DEFAULT_PASSWORD, passwordPolicyMessage } from "../lib/password-policy";
+import { passwordPolicyMessage } from "../lib/password-policy";
 
 const CONFIRM_ENV = "ADMIN_RESET_CONFIRM";
 const CONFIRM_VALUE = "RESET_ADMIN";
@@ -16,8 +16,8 @@ Cách dùng:
   ${CONFIRM_ENV}=${CONFIRM_VALUE} npm run admin:reset -- <email|user|ma-nhan-vien> [mat-khau-moi]
 
 Ghi chú:
-  - Nếu bỏ trống mật khẩu mới, script sẽ đặt về "${DEFAULT_PASSWORD}".
-  - Có thể truyền mật khẩu qua biến môi trường ${PASSWORD_ENV}.
+  - Bắt buộc truyền mật khẩu tạm qua tham số [mat-khau-moi] hoặc biến môi trường ${PASSWORD_ENV}.
+  - Mật khẩu tạm phải đáp ứng chính sách mật khẩu mạnh.
   - Tài khoản sẽ được mở khóa, kích hoạt lại và bắt buộc đổi mật khẩu sau khi đăng nhập.
   - Script chỉ reset tài khoản có role ADMIN.
 `);
@@ -131,20 +131,18 @@ async function main() {
     return;
   }
 
-  const password = args[1] ?? process.env[PASSWORD_ENV] ?? DEFAULT_PASSWORD;
+  const password = args[1] ?? process.env[PASSWORD_ENV];
   if (!password) {
-    console.error("Mật khẩu mới không được để trống.");
+    console.error(`Thiếu mật khẩu tạm. Hãy truyền [mat-khau-moi] hoặc biến môi trường ${PASSWORD_ENV}.`);
     process.exitCode = 1;
     return;
   }
 
-  if (password !== DEFAULT_PASSWORD) {
-    const policyError = passwordPolicyMessage(password);
-    if (policyError) {
-      console.error(policyError);
-      process.exitCode = 1;
-      return;
-    }
+  const policyError = passwordPolicyMessage(password);
+  if (policyError) {
+    console.error(policyError);
+    process.exitCode = 1;
+    return;
   }
 
   const lowerLogin = login.toLowerCase();
@@ -184,11 +182,7 @@ async function main() {
 
   console.log(`Đã reset mật khẩu và mở khóa ADMIN: ${updated.name} (${updated.email}).`);
   console.log("Tài khoản đã được kích hoạt và sẽ phải đổi mật khẩu sau khi đăng nhập.");
-  if (password === DEFAULT_PASSWORD) {
-    console.log(`Mật khẩu tạm thời: ${DEFAULT_PASSWORD}`);
-  } else {
-    console.log("Mật khẩu tạm thời: giá trị đã truyền vào script.");
-  }
+  console.log("Mật khẩu tạm thời: giá trị đã truyền vào script.");
 }
 
 main()
