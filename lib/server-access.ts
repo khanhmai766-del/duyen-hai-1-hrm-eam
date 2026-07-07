@@ -4,6 +4,7 @@ import {
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { getCachedEquipmentNodeList } from "@/lib/equipment-node-cache";
+import { positionAllowsOilSoot } from "@/lib/oil-soot-access";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import {
@@ -265,6 +266,23 @@ export async function assertSeqViewable(user: SessionUser, seq: string) {
     current = idx > 0 ? current.slice(0, idx) : null;
   }
   throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
+}
+
+// Chặn cứng server: dữ liệu vòi đốt / vòi thổi bụi chỉ cho ADMIN hoặc chức vụ
+// (chính/phụ) thuộc danh sách cho phép. Đọc cả chức vụ phụ từ DB (session chỉ có
+// chức vụ chính) để khớp đúng hành vi client.
+export async function assertOilSootAccess(user: { id?: string; role?: string | null; position?: string | null }) {
+  if (user.role === "ADMIN") return;
+  const positions: Array<string | null | undefined> = [user.position];
+  if (user.id) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { position: true, secondaryPosition: true },
+    });
+    positions.push(dbUser?.position, dbUser?.secondaryPosition);
+  }
+  if (positionAllowsOilSoot(positions)) return;
+  throw fail("Cương vị của bạn không có quyền xem dữ liệu vòi đốt / vòi thổi bụi", 403);
 }
 
 export async function assertSeqEditable(user: SessionUser, seq: string) {

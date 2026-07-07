@@ -5,6 +5,8 @@ import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { maybeUploadDataUrlList } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
+import { OIL_SOOT_GATED_CATEGORIES } from "@/lib/oil-soot-access";
+import { assertOilSootAccess } from "@/lib/server-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +63,13 @@ async function requireDocumentPermission(
   category: string,
   action: "read" | "create" | "manage" | "delete"
 ) {
+  // Vòi đốt / vòi thổi bụi: chặn cứng theo chức vụ. Đọc → chỉ cần chức vụ (thay RBAC);
+  // ghi → chức vụ + RBAC như thường.
+  if (OIL_SOOT_GATED_CATEGORIES.has(category)) {
+    await assertOilSootAccess(user);
+    if (action === "read") return;
+  }
+
   const permissionId = documentPermissionId(category);
   if (permissionId) {
     const levels = action === "read" ? readLevels() : action === "create" ? createLevels() : action === "manage" ? manageLevels() : fullLevels();

@@ -10,7 +10,7 @@ import OilGunBoard from "@/components/oil-guns/OilGunBoard";
 import type { DocumentCategory } from "@/hooks/useDocuments";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
-import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
+import { OIL_SOOT_GATED_CATEGORIES, positionAllowsOilSoot } from "@/lib/oil-soot-access";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { cn } from "@/lib/utils";
 
@@ -76,22 +76,6 @@ const ARCHIVE_TABS: ArchiveTab[] = [
     emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu vòi thổi bụi tại đây.",
   },
 ];
-// Hai tab này chỉ hiện cho các chức vụ dưới đây (+ quyền ADMIN). Khớp diacritic-
-// insensitive, tự bỏ hậu tố tổ máy (S1/S2). "ktv" là alias của "Kỹ thuật viên".
-const POSITION_GATED_TABS = new Set<ArchiveTab["key"]>(["OIL_GUN_DATA", "SOOT_BLOWER_DATA"]);
-const OIL_SOOT_ALLOWED_POSITION_KEYS = new Set(
-  [
-    "Quản đốc",
-    "Phó quản đốc",
-    "Kỹ thuật viên",
-    "KTV",
-    "Trưởng ca",
-    "TK Lò máy",
-    "Lò trưởng",
-    "Lò phó",
-  ].map(normalizePositionScopeKey)
-);
-
 const UNIT_TAGS = [
   { label: "S1", value: "S1" },
   { label: "S2", value: "S2" },
@@ -119,16 +103,14 @@ export default function ArchiveDocumentsPage() {
   // Được xem 2 tab vòi đốt/vòi thổi bụi nếu: ADMIN, hoặc có ít nhất một chức vụ
   // (chính hoặc phụ) nằm trong danh sách cho phép.
   const canSeeOilSootTabs = React.useMemo(
-    () =>
-      isAdmin ||
-      currentPosition.options.some((pos) => OIL_SOOT_ALLOWED_POSITION_KEYS.has(normalizePositionScopeKey(pos))),
+    () => isAdmin || positionAllowsOilSoot(currentPosition.options),
     [isAdmin, currentPosition.options]
   );
   const [activeTab, setActiveTab] = React.useState<ArchiveTab["key"]>("GRID_SEPARATION");
   const visibleTabs = React.useMemo(
     () =>
       ARCHIVE_TABS.filter((item) => {
-        if (POSITION_GATED_TABS.has(item.key)) return canSeeOilSootTabs;
+        if (OIL_SOOT_GATED_CATEGORIES.has(item.key)) return canSeeOilSootTabs;
         const permissionId = archiveCategoryPermissionId(item.key);
         return permissionId ? rbac.can(permissionId, ["read", "own", "create", "approve", "manage", "full"]) : true;
       }),

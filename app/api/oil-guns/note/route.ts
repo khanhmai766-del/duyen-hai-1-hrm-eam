@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { assertOilSootAccess } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await assertOilSootAccess(user); // chức vụ được phép
     await requirePermissionLevel(user, "archive-oil-gun-data", ["manage", "full"], "Không đủ quyền cập nhật ghi chú vòi dầu");
 
     const body = await req.json();

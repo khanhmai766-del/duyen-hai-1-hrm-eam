@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { assertOilSootAccess } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ function hasDefect(g: { defectSccn?: string | null; defectScd?: string | null })
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "archive-oil-gun-data", ["read", "own", "create", "approve", "manage", "full"], "Không đủ quyền xem dữ liệu vòi dầu");
+    await assertOilSootAccess(user); // chặn cứng theo chức vụ (thay cho RBAC ở đọc)
     const machine = req.nextUrl.searchParams.get("machine") || "S1";
     const [guns, noteRow] = await Promise.all([
       prisma.oilGun.findMany({ where: { machine }, orderBy: { position: "asc" } }),
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await assertOilSootAccess(user); // chức vụ được phép
     await requirePermissionLevel(user, "archive-oil-gun-data", ["manage", "full"], "Không đủ quyền cập nhật dữ liệu vòi dầu");
 
     const body = await req.json();
