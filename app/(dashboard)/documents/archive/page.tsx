@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Droplet, Flame, TrendingUp, Unplug, Wind } from "lucide-react";
 import { DocumentCatalogPage } from "@/components/documents/document-catalog-page";
+import { Button } from "@/components/ui/button";
 import OilGunBoard from "@/components/oil-guns/OilGunBoard";
 import type { DocumentCategory } from "@/hooks/useDocuments";
 import { cn } from "@/lib/utils";
@@ -193,6 +195,15 @@ export default function ArchiveDocumentsPage() {
       customContent={activeTab === "OIL_GUN_DATA" ? <OilGunBoard /> : undefined}
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
       backupFilenamePrefix={BACKUP_FILENAME_PREFIX[activeTab]}
+      beforeTagFilter={
+        activeTab === "GRID_SEPARATION" ? (
+          <Link href="/documents/archive/bgts-tuabin-ngung">
+            <Button type="button" variant="outline" className="h-10 whitespace-nowrap">
+              BGTS Tuabin Ngừng
+            </Button>
+          </Link>
+        ) : undefined
+      }
       afterHeader={
         <div className="flex flex-wrap gap-1 border-b border-border">
           {ARCHIVE_TABS.map((item) => (

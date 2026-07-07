@@ -19,6 +19,7 @@ import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
+import { useMeProfile } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { usePeakMode } from "@/hooks/usePeakMode";
 import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
@@ -98,6 +99,8 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const { notices, loading: notifLoading } = useNotifications();
   const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
   const { data: opsData, isLoading: opsLoading } = useOperations();
+  const { data: profileData } = useMeProfile();
+  const profile = profileData?.data ?? null;
   // Tab Nội bộ trên chuông chỉ phản chiếu đúng các mục đang hiển thị trong
   // "Thông tin nội bộ" ở Overview: hôm nay hoặc sắp tới, không lấy lịch đã qua.
   const internalEvents = React.useMemo(() => {
@@ -116,15 +119,31 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const activeReplAlerts = replAlerts.filter((a) => !ackedReplKeys.has(replAlertKey(a)));
   const totalAlerts = notices.length + activeReplAlerts.length;
   const { data: dash } = useMyDashboard();
-  const avatarUrl = dash?.data?.avatarUrl ?? null;
-  const accountSubtitle = currentPosition.position || ROLES[role as RoleKey]?.label || role || "";
+  const displayName = session?.user?.name || profile?.name || "Tài khoản";
+  const displayRole = role || profile?.role || "";
+  const avatarUrl = dash?.data?.avatarUrl ?? profile?.avatarUrl ?? null;
+  const accountSubtitle =
+    currentPosition.position ||
+    profile?.currentPosition ||
+    profile?.position ||
+    ROLES[displayRole as RoleKey]?.label ||
+    displayRole ||
+    "";
   const positionCarrier = React.useMemo(
     () => ({
-      position: currentPosition.position || session?.user?.position,
-      secondaryPosition: session?.user?.secondaryPosition,
-      currentPosition: currentPosition.position || session?.user?.currentPosition,
+      position: currentPosition.position || session?.user?.position || profile?.position,
+      secondaryPosition: session?.user?.secondaryPosition || profile?.secondaryPosition,
+      currentPosition: currentPosition.position || session?.user?.currentPosition || profile?.currentPosition,
     }),
-    [currentPosition.position, session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition]
+    [
+      currentPosition.position,
+      profile?.currentPosition,
+      profile?.position,
+      profile?.secondaryPosition,
+      session?.user?.currentPosition,
+      session?.user?.position,
+      session?.user?.secondaryPosition,
+    ]
   );
   const navSections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
   const statisticsNavRestricted = isStatisticsPosition(positionCarrier);
@@ -521,7 +540,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             aria-label="Tài khoản"
           >
             <div className="hidden text-right leading-tight sm:block">
-              <div className="max-w-[160px] truncate text-sm font-bold text-navy">{session?.user?.name ?? "—"}</div>
+              <div className="max-w-[160px] truncate text-sm font-bold text-navy">{displayName}</div>
               {accountSubtitle && (
                 <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   {accountSubtitle}
@@ -531,9 +550,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-200 text-sm font-bold text-navy shadow-md ring-1 ring-white/70">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt={session?.user?.name ?? ""} className="h-full w-full object-cover" />
+                <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
               ) : (
-                initials(session?.user?.name ?? "?")
+                initials(displayName)
               )}
             </div>
             <ChevronDown className={cn("hidden h-4 w-4 text-muted-foreground transition-transform sm:block", profileOpen && "rotate-180")} />
@@ -546,13 +565,13 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-violet-100 to-indigo-200 text-sm font-bold text-navy ring-1 ring-white/70">
                   {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={avatarUrl} alt={session?.user?.name ?? ""} className="h-full w-full object-cover" />
+                    <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
                   ) : (
-                    initials(session?.user?.name ?? "?")
+                    initials(displayName)
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-ink">{session?.user?.name ?? "—"}</div>
+                  <div className="truncate text-sm font-bold text-ink">{displayName}</div>
                   <div className="truncate text-xs text-muted-foreground">{accountSubtitle}</div>
                 </div>
               </div>

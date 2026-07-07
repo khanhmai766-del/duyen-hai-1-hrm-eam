@@ -690,6 +690,64 @@ model OilGun {
   @@index([machine])
 }
 
+// BGTS Tuabin ngừng: bảng ghi thông số DCS theo ngày, dùng trong Thư mục lưu trữ
+// > Dữ liệu tách lưới > BGTS Tuabin Ngừng. API tạo/đồng bộ bảng bằng raw SQL để
+// bổ sung an toàn trên DB dev hiện có; khai báo ở đây để db push không đề nghị xoá.
+model BgtsTurbineShutdownRecord {
+  id                String   @id
+  unit              String
+  date              String   // YYYY-MM-DD
+  dayShiftSigner    String?
+  middleShiftSigner String?
+  nightShiftSigner  String?
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+
+  rows BgtsTurbineShutdownRow[]
+
+  @@unique([unit, date])
+  @@index([date])
+}
+
+model BgtsTurbineShutdownRow {
+  id                                      String  @id
+  recordId                                String
+  timeHour                                Int
+  turbineLubeOilPressure                  Float?
+  shaftJackingOilPressure                 Float?
+  rotateSpeed                             Float?
+  turningGearElectricity                  Float?
+  eccentricity                            Float?
+  hpMpCasingExpansionLeft                 Float?
+  hpMpCasingExpansionRight                Float?
+  axialDisplacement                       Float?
+  hpMpCasingDifferentialExpansion         Float?
+  lpCasingDifferentialExpansion           Float?
+  hpMainSteamValveWallTempInside          Float?
+  hpMainSteamValveWallTempOutside         Float?
+  hpRegulatingValveWallTempInside         Float?
+  hpRegulatingValveWallTempOutside        Float?
+  hpInnerCasingLowerPartTempInside        Float?
+  hpInnerCasingLowerPartTempOutside       Float?
+  hpExhaustOuterCasingInnerWallTempTop    Float?
+  hpExhaustOuterCasingInnerWallTempLower  Float?
+  hpExhaustPipeTempLeft1                  Float?
+  hpExhaustPipeTempLeft2                  Float?
+  hpExhaustPipeTempRight1                 Float?
+  hpExhaustPipeTempRight2                 Float?
+  mpIntakeMetalTempInnerWall              Float?
+  mpIntakeMetalTempOuterWall              Float?
+  mpExhaustInnerWallTempTop               Float?
+  mpExhaustInnerWallTempLower             Float?
+
+  record BgtsTurbineShutdownRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@unique([recordId, timeHour])
+  @@index([recordId])
+}
+
 // Phiếu thay thế vật tư (2 luồng: Đề xuất chuẩn & Ứng xử lý gấp).
 model MaterialTicket {
   id     String @id @default(cuid())

@@ -215,6 +215,7 @@ interface DocumentCatalogPageProps {
   wideNameNarrowLinkLayout?: boolean;
   hideDocumentIcon?: boolean;
   customContent?: React.ReactNode;
+  beforeTagFilter?: React.ReactNode;
 }
 
 export function DocumentCatalogPage({
@@ -263,6 +264,7 @@ export function DocumentCatalogPage({
   wideNameNarrowLinkLayout = false,
   hideDocumentIcon = false,
   customContent,
+  beforeTagFilter,
 }: DocumentCatalogPageProps) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
@@ -756,6 +758,7 @@ export function DocumentCatalogPage({
           </div>
           {(hasTagField || hasYearField) && (
             <div className="flex flex-wrap items-center gap-2">
+              {beforeTagFilter}
               {hasTagField && (
                 <Select value={tagFilter} onValueChange={setTagFilter}>
                   <SelectTrigger className="h-10 w-40" aria-label={`Lọc theo ${tagLabel?.toLowerCase() ?? "tổ máy"}`}>
