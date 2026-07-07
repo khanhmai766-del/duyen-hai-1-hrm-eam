@@ -186,12 +186,7 @@ export function AnnualBackupExport<T>({
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-2 rounded-2xl border border-sky-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#eef7ff_55%,#f5fffb_100%)] p-1.5 shadow-[0_12px_26px_rgba(30,64,175,0.12)]",
-        className
-      )}
-    >
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
       <label className="flex h-9 items-center gap-2 rounded-xl border border-sky-200 bg-white/90 px-2 text-xs font-medium text-muted-foreground shadow-sm">
         <CalendarDays className="h-3.5 w-3.5 text-navy" />
         <select
