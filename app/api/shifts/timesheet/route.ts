@@ -298,6 +298,7 @@ export async function PUT(req: NextRequest) {
     }
 
     if (value.length > 40) return fail("Giá trị ô bảng công tối đa 40 ký tự");
+    if (note && note.length > 500) return fail("Nội dung ô bảng công tối đa 500 ký tự");
     await prisma.$executeRawUnsafe(
       `
         INSERT INTO "TimesheetOverride" ("userId", date, value, note, "updatedById", "updatedAt")

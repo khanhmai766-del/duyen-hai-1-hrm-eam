@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useUsers } from "@/hooks/useUsers";
 import {
   useTimesheet,
@@ -168,6 +169,7 @@ export default function ShiftRosterPage() {
     override?: TimesheetOverride;
   } | null>(null);
   const [editValue, setEditValue] = React.useState("");
+  const [editNote, setEditNote] = React.useState("");
 
   React.useEffect(() => {
     setView(searchParams.get("view") === "timesheet" ? "timesheet" : "roster");
@@ -286,6 +288,7 @@ export default function ShiftRosterPage() {
     };
     setEditCell(next);
     setEditValue(next.value || calculated);
+    setEditNote(params.override?.note ?? "");
   }
 
   async function saveOverride(value = editValue) {
@@ -295,9 +298,11 @@ export default function ShiftRosterPage() {
         userId: editCell.userId,
         date: editCell.date,
         value: value.trim(),
+        note: value.trim() ? editNote.trim() : undefined,
       });
       toast.success(value.trim() ? "Đã cập nhật ô bảng công" : "Đã xoá giá trị chỉnh tay");
       setEditCell(null);
+      setEditNote("");
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -333,11 +338,12 @@ export default function ShiftRosterPage() {
     ].filter(Boolean).join(", ");
   }
 
-  function hcCommentText(user: { id: string; name: string; employeeId: string }, day: number, line: TimesheetLine = "primary") {
+  function timesheetCommentText(user: { id: string; name: string; employeeId: string }, day: number, line: TimesheetLine = "primary") {
+    const override = line === "primary" ? overrideMap.get(`${user.id}:${day}`) : undefined;
     const hc = line === "extra" ? hcExtraMap.get(`${user.id}:${day}`) : hcSelfMap.get(`${user.id}:${day}`);
-    const note = hcWorkNote(hc ?? {});
-    if (!note) return "";
-    return `${user.employeeId} - ${user.name.toLocaleUpperCase("vi-VN")}:\n${note}`;
+    const notes = [override?.note?.trim(), hcWorkNote(hc ?? {})].filter(Boolean);
+    if (!notes.length) return "";
+    return `${user.employeeId} - ${user.name.toLocaleUpperCase("vi-VN")}:\n${notes.join("\n\n")}`;
   }
 
   // ---- Bảng công exports (người có quyền → all staff, others → self) ----
@@ -405,11 +411,13 @@ export default function ShiftRosterPage() {
     rows.forEach((u, rowIndex) => {
       (["primary", "blank", "extra"] as TimesheetLine[]).forEach((line, lineIndex) => {
         days.forEach((day, dayIndex) => {
-          const comment = hcCommentText(u, day, line);
+          const comment = timesheetCommentText(u, day, line);
           if (!comment) return;
           const ref = XLSX.utils.encode_cell({ r: firstDataRow + rowIndex * 3 + lineIndex, c: firstDayCol + dayIndex });
           const cell = sheet[ref] ?? { t: "s", v: "" };
-          cell.c = [{ a: "PowerPlant EAM", t: comment }];
+          const comments = [{ a: "PowerPlant EAM", t: comment }] as any;
+          comments.hidden = true;
+          cell.c = comments;
           sheet[ref] = cell;
         });
       });
@@ -733,7 +741,10 @@ export default function ShiftRosterPage() {
                                   ) : showOverride ? (
                                     <span
                                       className="flex min-h-7 min-w-8 items-center justify-center rounded border border-sky-300 bg-slate-800 px-1 text-[11px] font-bold text-white shadow-sm"
-                                      title={`${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`}
+                                      title={[
+                                        `${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`,
+                                        override.note?.trim() ? override.note.trim() : "",
+                                      ].filter(Boolean).join("\n")}
                                     >
                                       {override.value}
                                     </span>
@@ -840,6 +851,19 @@ export default function ShiftRosterPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   Mặc định hiện tại: <span className="font-medium text-ink">{editCell.calculated || "trống"}</span>
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nội dung (nếu có)</Label>
+                <Textarea
+                  value={editNote}
+                  onChange={(event) => setEditNote(event.target.value)}
+                  placeholder="Nhập nội dung để hiển thị dạng comment khi xuất Excel"
+                  maxLength={500}
+                  className="min-h-[96px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Nội dung này sẽ nằm trong comment ẩn của ô khi xuất Excel.
                 </p>
               </div>
             </div>
