@@ -14,6 +14,8 @@ export const OIL_SOOT_ALLOWED_POSITIONS = [
   "TK Lò máy",
   "Lò trưởng",
   "Lò phó",
+  "Thiết bị đo lường điều khiển",
+  "I&C",
 ];
 
 const ALLOWED_KEYS = new Set(OIL_SOOT_ALLOWED_POSITIONS.map(normalizePositionScopeKey));
