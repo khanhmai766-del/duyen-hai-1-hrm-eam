@@ -21,6 +21,9 @@ export interface BgtsTuabinNgungRecord {
   dayShiftSigner: string | null;
   middleShiftSigner: string | null;
   nightShiftSigner: string | null;
+  dayShiftConfirmedAt: string | null;
+  middleShiftConfirmedAt: string | null;
+  nightShiftConfirmedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,12 +33,30 @@ export interface BgtsTuabinNgungData {
   rows: BgtsTuabinNgungRow[];
 }
 
+export interface BgtsTuabinNgungArchiveItem {
+  id: string;
+  unit: string;
+  date: string;
+  dayShiftSigner: string | null;
+  middleShiftSigner: string | null;
+  nightShiftSigner: string | null;
+  dayShiftConfirmedAt: string | null;
+  middleShiftConfirmedAt: string | null;
+  nightShiftConfirmedAt: string | null;
+  updatedAt: string;
+}
+
+export interface BgtsTuabinNgungArchiveData {
+  items: BgtsTuabinNgungArchiveItem[];
+}
+
 export interface BgtsTuabinNgungInput {
   unit: string;
   date: string;
   dayShiftSigner?: string | null;
   middleShiftSigner?: string | null;
   nightShiftSigner?: string | null;
+  confirmShift?: "day" | "middle" | "night";
   rows: BgtsTuabinNgungRow[];
 }
 
@@ -67,12 +88,26 @@ export function useBgtsTuabinNgung(unit: string, date: string) {
   });
 }
 
+export function useBgtsTuabinNgungArchive(unit: string) {
+  return useQuery({
+    queryKey: ["bgts-tuabin-ngung-archive", unit],
+    queryFn: async () => {
+      const res = await apiGet<BgtsTuabinNgungArchiveData>(
+        `/api/bgts-tuabin-ngung?unit=${encodeURIComponent(unit)}&archive=1`
+      );
+      return res.data;
+    },
+    enabled: Boolean(unit),
+  });
+}
+
 export function useSaveBgtsTuabinNgung() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: BgtsTuabinNgungInput) => apiMutate<BgtsTuabinNgungData>("/api/bgts-tuabin-ngung", "POST", body),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["bgts-tuabin-ngung", variables.unit, variables.date] });
+      qc.invalidateQueries({ queryKey: ["bgts-tuabin-ngung-archive", variables.unit] });
     },
   });
 }

@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, CalendarDays, FileSpreadsheet, Loader2, Save } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, FileSpreadsheet, Loader2, Plus, Save } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,7 @@ import {
   mergeBgtsRows,
   type BgtsTuabinNgungRow,
   useBgtsTuabinNgung,
+  useBgtsTuabinNgungArchive,
   useSaveBgtsTuabinNgung,
 } from "@/hooks/useBgtsTuabinNgung";
 import {
@@ -30,6 +32,32 @@ const UNIT_OPTIONS = [
   { label: "S1", value: "S1" },
   { label: "S2", value: "S2" },
 ];
+const SHIFT_CONFIGS = [
+  {
+    key: "day",
+    label: "Ca sáng",
+    signerField: "dayShiftSigner",
+    confirmedAtField: "dayShiftConfirmedAt",
+    hours: [7, 9, 11, 13],
+  },
+  {
+    key: "middle",
+    label: "Ca chiều",
+    signerField: "middleShiftSigner",
+    confirmedAtField: "middleShiftConfirmedAt",
+    hours: [15, 17, 19, 21],
+  },
+  {
+    key: "night",
+    label: "Ca đêm",
+    signerField: "nightShiftSigner",
+    confirmedAtField: "nightShiftConfirmedAt",
+    hours: [23, 1, 3, 5],
+  },
+] as const;
+
+type ShiftKey = (typeof SHIFT_CONFIGS)[number]["key"];
+type ShiftConfig = (typeof SHIFT_CONFIGS)[number];
 
 function todayString() {
   const date = new Date();
@@ -56,6 +84,18 @@ function originalFieldName(field: (typeof BGTS_TUABIN_NGUNG_FIELDS)[number]) {
   return field.excelHeader.filter(Boolean).join(" - ");
 }
 
+function shiftForHour(hour: number) {
+  return SHIFT_CONFIGS.find((shift) => (shift.hours as readonly number[]).includes(hour));
+}
+
+function formatConfirmTime(value?: string | null) {
+  if (!value) return "";
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (!match) return value;
+  const [, year, month, day, hour, minute, second] = match;
+  return `${hour}:${minute}:${second} ${day}/${month}/${year}`;
+}
+
 export default function BgtsTuabinNgungPage() {
   const [unit, setUnit] = React.useState("S1");
   const [date, setDate] = React.useState(todayString());
@@ -63,8 +103,10 @@ export default function BgtsTuabinNgungPage() {
   const [dayShiftSigner, setDayShiftSigner] = React.useState("");
   const [middleShiftSigner, setMiddleShiftSigner] = React.useState("");
   const [nightShiftSigner, setNightShiftSigner] = React.useState("");
+  const [confirmingShift, setConfirmingShift] = React.useState<ShiftConfig | null>(null);
 
   const query = useBgtsTuabinNgung(unit, date);
+  const archiveQuery = useBgtsTuabinNgungArchive(unit);
   const saveMutation = useSaveBgtsTuabinNgung();
   const rbac = useRbacAccess();
   const canSave = rbac.can("archive-grid-separation", ["create", "manage", "full"]);
@@ -87,6 +129,19 @@ export default function BgtsTuabinNgungPage() {
       ),
     [rows]
   );
+  const confirmedAtByShift = {
+    day: query.data?.record?.dayShiftConfirmedAt ?? null,
+    middle: query.data?.record?.middleShiftConfirmedAt ?? null,
+    night: query.data?.record?.nightShiftConfirmedAt ?? null,
+  } satisfies Record<ShiftKey, string | null>;
+  const confirmingShiftSigner =
+    confirmingShift?.key === "day"
+      ? dayShiftSigner
+      : confirmingShift?.key === "middle"
+        ? middleShiftSigner
+        : confirmingShift?.key === "night"
+          ? nightShiftSigner
+          : "";
 
   function updateCell(rowIndex: number, field: BgtsTuabinNgungFieldKey, value: string) {
     setRows((current) =>
@@ -94,7 +149,12 @@ export default function BgtsTuabinNgungPage() {
     );
   }
 
-  async function saveRecord() {
+  function rowLocked(hour: number) {
+    const shift = shiftForHour(hour);
+    return shift ? Boolean(confirmedAtByShift[shift.key]) : false;
+  }
+
+  async function saveRecord(confirmShift?: ShiftKey, successMessage?: string) {
     if (!canSave) {
       toast.error("Bạn không có quyền lưu BGTS Tuabin ngừng");
       return;
@@ -106,12 +166,18 @@ export default function BgtsTuabinNgungPage() {
         dayShiftSigner,
         middleShiftSigner,
         nightShiftSigner,
+        confirmShift,
         rows,
       });
-      toast.success("Đã lưu BGTS Tuabin ngừng");
+      toast.success(successMessage ?? (confirmShift ? "Đã xác nhận ca" : "Đã lưu BGTS Tuabin ngừng"));
+      if (confirmShift) setConfirmingShift(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không thể lưu BGTS Tuabin ngừng");
+      toast.error(error instanceof Error ? error.message : confirmShift ? "Không thể xác nhận ca" : "Không thể lưu BGTS Tuabin ngừng");
     }
+  }
+
+  async function archiveRecord() {
+    await saveRecord(undefined, "Đã lưu vào danh sách lưu trữ");
   }
 
   async function exportExcel() {
@@ -309,15 +375,31 @@ export default function BgtsTuabinNgungPage() {
             <Metric label="Ô thông số đã nhập" value={String(enteredCells)} />
             <Metric label="Trạng thái" value={query.data?.record ? "Đã có bản ghi" : "Bảng mới"} />
           </div>
-          <div className="flex flex-wrap gap-2 lg:justify-end">
-            <Button type="button" variant="outline" onClick={exportExcel} disabled={query.isLoading}>
-              <FileSpreadsheet className="h-4 w-4" />
-              Xuất Excel
-            </Button>
-            <Button type="button" onClick={saveRecord} disabled={saveMutation.isPending || query.isLoading || !canSave}>
-              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Lưu bảng
-            </Button>
+          <div className="grid w-full grid-cols-2 gap-2 lg:w-[390px]">
+              <Button type="button" variant="outline" className="h-10 w-full justify-center" onClick={archiveRecord} disabled={saveMutation.isPending || query.isLoading || !canSave}>
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Lưu trữ
+              </Button>
+              <Select value={archiveQuery.data?.items.some((item) => item.date === date) ? date : undefined} onValueChange={setDate}>
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder={archiveQuery.isLoading ? "Đang tải lưu trữ..." : "Lưu trữ"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(archiveQuery.data?.items ?? []).map((item) => (
+                    <SelectItem key={item.id} value={item.date}>
+                      {formatDateForExcel(item.date)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" className="h-10 w-full justify-center" onClick={exportExcel} disabled={query.isLoading}>
+                <FileSpreadsheet className="h-4 w-4" />
+                Xuất Excel
+              </Button>
+              <Button type="button" className="h-10 w-full justify-center" onClick={() => saveRecord()} disabled={saveMutation.isPending || query.isLoading || !canSave}>
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Lưu bảng
+              </Button>
           </div>
         </div>
       </Card>
@@ -369,7 +451,7 @@ export default function BgtsTuabinNgungPage() {
                       step="any"
                       className="h-7 w-14 min-w-0 rounded-sm border-slate-200 px-1 text-right text-[11px]"
                       value={row[field.key] ?? ""}
-                      disabled={!canSave}
+                      disabled={!canSave || rowLocked(row.timeHour)}
                       onChange={(event) => updateCell(rowIndex, field.key, event.target.value)}
                       title={row[field.key] === null || row[field.key] === undefined ? "" : String(row[field.key])}
                       aria-label={`${originalFieldName(field)} lúc ${row.timeHour} giờ`}
@@ -385,19 +467,105 @@ export default function BgtsTuabinNgungPage() {
       <Card className="border-slate-200 bg-white p-4">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-2">
-            <Label>Ca ngày ký tên</Label>
-            <Input value={dayShiftSigner} onChange={(event) => setDayShiftSigner(event.target.value)} disabled={!canSave} placeholder="Nhập tên người ký ca ngày" />
+            <Label>Ca sáng ký tên</Label>
+            <Input value={dayShiftSigner} onChange={(event) => setDayShiftSigner(event.target.value)} disabled={!canSave || Boolean(confirmedAtByShift.day)} placeholder="Nhập tên người ký ca sáng" />
+            <ShiftConfirm
+              label="Ca sáng"
+              hours="7, 9, 11, 13"
+              confirmedAt={confirmedAtByShift.day}
+              disabled={!canSave || saveMutation.isPending || query.isLoading}
+              onConfirm={() => setConfirmingShift(SHIFT_CONFIGS[0])}
+            />
           </div>
           <div className="space-y-2">
-            <Label>Ca giữa ký tên</Label>
-            <Input value={middleShiftSigner} onChange={(event) => setMiddleShiftSigner(event.target.value)} disabled={!canSave} placeholder="Nhập tên người ký ca giữa" />
+            <Label>Ca chiều ký tên</Label>
+            <Input value={middleShiftSigner} onChange={(event) => setMiddleShiftSigner(event.target.value)} disabled={!canSave || Boolean(confirmedAtByShift.middle)} placeholder="Nhập tên người ký ca chiều" />
+            <ShiftConfirm
+              label="Ca chiều"
+              hours="15, 17, 19, 21"
+              confirmedAt={confirmedAtByShift.middle}
+              disabled={!canSave || saveMutation.isPending || query.isLoading}
+              onConfirm={() => setConfirmingShift(SHIFT_CONFIGS[1])}
+            />
           </div>
           <div className="space-y-2">
             <Label>Ca đêm ký tên</Label>
-            <Input value={nightShiftSigner} onChange={(event) => setNightShiftSigner(event.target.value)} disabled={!canSave} placeholder="Nhập tên người ký ca đêm" />
+            <Input value={nightShiftSigner} onChange={(event) => setNightShiftSigner(event.target.value)} disabled={!canSave || Boolean(confirmedAtByShift.night)} placeholder="Nhập tên người ký ca đêm" />
+            <ShiftConfirm
+              label="Ca đêm"
+              hours="23, 1, 3, 5"
+              confirmedAt={confirmedAtByShift.night}
+              disabled={!canSave || saveMutation.isPending || query.isLoading}
+              onConfirm={() => setConfirmingShift(SHIFT_CONFIGS[2])}
+            />
           </div>
         </div>
       </Card>
+
+      <Dialog open={!!confirmingShift} onOpenChange={(open) => !open && setConfirmingShift(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác nhận {confirmingShift?.label.toLowerCase()} ký tên</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Thao tác này sẽ khóa tên người ký và toàn bộ thông số trong các khung giờ của {confirmingShift?.label.toLowerCase()}.
+              Sau khi xác nhận sẽ không mở khóa được.
+            </p>
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800">
+              Vui lòng kiểm tra kỹ trước khi xác nhận.
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div><b>Người ký:</b> {confirmingShiftSigner || "Chưa nhập"}</div>
+              <div><b>Khung giờ:</b> {confirmingShift?.hours.join(", ")}</div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmingShift(null)} disabled={saveMutation.isPending}>
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              onClick={() => confirmingShift && saveRecord(confirmingShift.key)}
+              disabled={!confirmingShift || saveMutation.isPending || !canSave}
+            >
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Xác nhận khóa {confirmingShift?.label.toLowerCase()}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ShiftConfirm({
+  label,
+  hours,
+  confirmedAt,
+  disabled,
+  onConfirm,
+}: {
+  label: string;
+  hours: string;
+  confirmedAt?: string | null;
+  disabled: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+      <div className="mb-2 text-[11px] text-muted-foreground">Khung giờ: {hours}</div>
+      {confirmedAt ? (
+        <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Đã xác nhận: {formatConfirmTime(confirmedAt)}
+        </div>
+      ) : (
+        <Button type="button" size="sm" variant="outline" className="h-8 w-full" disabled={disabled} onClick={onConfirm}>
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {label} ký tên
+        </Button>
+      )}
     </div>
   );
 }
