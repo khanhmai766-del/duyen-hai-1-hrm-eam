@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { maybeUploadDataUrlList } from "@/lib/s3";
-import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,86 @@ const OPERATION_DOCUMENT_CATEGORIES = new Set(["PROCEDURE", "PID"]);
 function documentPermissionId(category: string) {
   if (category === "PROCEDURE") return "document-procedure";
   if (category === "PID") return "document-pid";
+  return archiveCategoryPermissionId(category);
+}
+
+function documentPermissionLabel(category: string) {
+  if (category === "GRID_SEPARATION") return "dữ liệu tách lưới";
+  if (category === "STARTUP_DATA") return "dữ liệu khởi động";
+  if (category === "BOILER_CALIBRATION") return "dữ liệu hiệu chỉnh lò";
+  if (category === "MAJOR_REPAIR") return "sửa chữa lớn";
+  if (category === "OIL_GUN_DATA") return "dữ liệu vòi dầu";
+  if (category === "SOOT_BLOWER_DATA") return "dữ liệu vòi thổi bụi";
+  if (category === "PROCEDURE") return "quy trình";
+  if (category === "PID") return "sơ đồ P&ID";
+  return "hồ sơ lưu trữ";
+}
+
+function documentPermissionMessage(action: "xem" | "thêm" | "chỉnh sửa" | "xoá", category: string) {
+  return `Bạn không có quyền ${action} ${documentPermissionLabel(category)}`;
+}
+
+function readLevels() {
+  return ["read", "own", "create", "approve", "manage", "full"] as const;
+}
+
+function createLevels() {
+  return ["create", "manage", "full"] as const;
+}
+
+function manageLevels() {
+  return ["manage", "full"] as const;
+}
+
+function fullLevels() {
+  return ["full"] as const;
+}
+
+function isOperationDocumentPermission(permissionId: string | null) {
+  return permissionId === "document-procedure" || permissionId === "document-pid";
+}
+
+async function requireDocumentPermission(
+  user: { id?: string; role?: string },
+  category: string,
+  action: "read" | "create" | "manage" | "delete"
+) {
+  const permissionId = documentPermissionId(category);
+  if (permissionId) {
+    const levels = action === "read" ? readLevels() : action === "create" ? createLevels() : action === "manage" ? manageLevels() : fullLevels();
+    const verb = action === "read" ? "xem" : action === "create" ? "thêm" : action === "manage" ? "chỉnh sửa" : "xoá";
+    const genericMessage = isOperationDocumentPermission(permissionId)
+      ? action === "read"
+        ? "Bạn không có quyền xem tài liệu vận hành"
+        : action === "create"
+          ? "Bạn không có quyền thêm tài liệu vận hành"
+          : action === "manage"
+            ? "Bạn không có quyền chỉnh sửa tài liệu"
+            : "Bạn không có quyền xoá tài liệu"
+      : documentPermissionMessage(verb, category);
+    await requirePermissionLevel(user, permissionId, [...levels], genericMessage);
+    return;
+  }
+
+  if (action === "read") {
+    await requirePermissionLevel(user, "archive-read", [...readLevels()], "Bạn không có quyền xem hồ sơ lưu trữ");
+    return;
+  }
+  if (action === "create") {
+    await requirePermissionLevel(user, "archive-create-delete", [...createLevels()], "Bạn không có quyền thêm hồ sơ lưu trữ");
+    return;
+  }
+  if (action === "manage") {
+    await requirePermissionLevel(user, "archive-edit", [...manageLevels()], "Bạn không có quyền chỉnh sửa hồ sơ lưu trữ");
+    return;
+  }
+  await requirePermissionLevel(user, "archive-create-delete", [...fullLevels()], "Bạn không có quyền xoá hồ sơ lưu trữ");
+}
+
+function documentEditPermissionId(category: string) {
+  const permissionId = documentPermissionId(category);
+  if (permissionId) return permissionId;
+  if (ARCHIVE_EDIT_CATEGORIES.has(category)) return "archive-edit";
   return null;
 }
 
@@ -51,10 +132,11 @@ function normalizeBody(body: Record<string, unknown>) {
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
 
     const category = normalizeCategory(req.nextUrl.searchParams.get("category"));
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
+    await requireDocumentPermission(user, category, "read");
 
     const items = await prisma.$queryRawUnsafe(
       `
@@ -106,12 +188,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as Record<string, unknown>;
     const category = normalizeCategory(String(body.category ?? ""));
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
-    const documentPermission = documentPermissionId(category);
-    if (documentPermission) {
-      await requirePermissionLevel(user, documentPermission, ["create", "manage", "full"], "Bạn không có quyền thêm tài liệu vận hành");
-    } else {
-      await requirePermissionLevel(user, "archive-create-delete", ["create", "manage", "full"], "Bạn không có quyền thêm hồ sơ lưu trữ");
-    }
+    await requireDocumentPermission(user, category, "create");
 
     const payload = normalizeBody(body);
     payload.attachmentUrls = await maybeUploadDataUrlList(payload.attachmentUrls, "digital-documents/attachments", "document-image");
@@ -155,11 +232,8 @@ export async function PUT(req: NextRequest) {
     const category = normalizeCategory(String(body.category ?? ""));
     if (!id) return fail("Thiếu id tài liệu");
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
-    const documentPermission = documentPermissionId(category);
-    if (documentPermission) {
-      await requirePermissionLevel(user, documentPermission, ["manage", "full"], "Bạn không có quyền chỉnh sửa tài liệu");
-    } else if (ARCHIVE_EDIT_CATEGORIES.has(category)) {
-      await requirePermissionLevel(user, "archive-edit", ["manage", "full"], "Bạn không có quyền chỉnh sửa hồ sơ lưu trữ");
+    if (documentEditPermissionId(category)) {
+      await requireDocumentPermission(user, category, "manage");
     } else {
       return fail("Bạn không có quyền chỉnh sửa tài liệu", 403);
     }
@@ -220,12 +294,7 @@ export async function DELETE(req: NextRequest) {
     const category = normalizeCategory(req.nextUrl.searchParams.get("category"));
     if (!id) return fail("Thiếu id tài liệu");
     if (!category) return fail("Danh mục tài liệu không hợp lệ");
-    const documentPermission = documentPermissionId(category);
-    if (documentPermission) {
-      await requirePermissionLevel(user, documentPermission, ["full"], "Bạn không có quyền xoá tài liệu");
-    } else if (!(await hasPermissionLevel(user, "archive-create-delete", ["full"]))) {
-      throw fail("Bạn không có quyền xoá hồ sơ lưu trữ", 403);
-    }
+    await requireDocumentPermission(user, category, "delete");
 
     const deleted = await prisma.$executeRawUnsafe(
       `DELETE FROM "DigitalDocument" WHERE id = $1 AND category = $2`,

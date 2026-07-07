@@ -23,6 +23,7 @@ import {
   BGTS_TUABIN_NGUNG_FIELD_KEYS,
   type BgtsTuabinNgungFieldKey,
 } from "@/lib/bgts-tuabin-ngung";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { cn } from "@/lib/utils";
 
 const UNIT_OPTIONS = [
@@ -65,6 +66,8 @@ export default function BgtsTuabinNgungPage() {
 
   const query = useBgtsTuabinNgung(unit, date);
   const saveMutation = useSaveBgtsTuabinNgung();
+  const rbac = useRbacAccess();
+  const canSave = rbac.can("archive-grid-separation", ["create", "manage", "full"]);
 
   React.useEffect(() => {
     if (!query.data) return;
@@ -92,6 +95,10 @@ export default function BgtsTuabinNgungPage() {
   }
 
   async function saveRecord() {
+    if (!canSave) {
+      toast.error("Bạn không có quyền lưu BGTS Tuabin ngừng");
+      return;
+    }
     try {
       await saveMutation.mutateAsync({
         unit,
@@ -307,7 +314,7 @@ export default function BgtsTuabinNgungPage() {
               <FileSpreadsheet className="h-4 w-4" />
               Xuất Excel
             </Button>
-            <Button type="button" onClick={saveRecord} disabled={saveMutation.isPending || query.isLoading}>
+            <Button type="button" onClick={saveRecord} disabled={saveMutation.isPending || query.isLoading || !canSave}>
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Lưu bảng
             </Button>
@@ -362,6 +369,7 @@ export default function BgtsTuabinNgungPage() {
                       step="any"
                       className="h-9 min-w-[112px] border-slate-200 text-right text-sm"
                       value={row[field.key] ?? ""}
+                      disabled={!canSave}
                       onChange={(event) => updateCell(rowIndex, field.key, event.target.value)}
                       aria-label={`${originalFieldName(field)} lúc ${row.timeHour} giờ`}
                     />
@@ -377,15 +385,15 @@ export default function BgtsTuabinNgungPage() {
         <div className="grid gap-3 md:grid-cols-3">
           <div className="space-y-2">
             <Label>Ca ngày ký tên</Label>
-            <Input value={dayShiftSigner} onChange={(event) => setDayShiftSigner(event.target.value)} placeholder="Nhập tên người ký ca ngày" />
+            <Input value={dayShiftSigner} onChange={(event) => setDayShiftSigner(event.target.value)} disabled={!canSave} placeholder="Nhập tên người ký ca ngày" />
           </div>
           <div className="space-y-2">
             <Label>Ca giữa ký tên</Label>
-            <Input value={middleShiftSigner} onChange={(event) => setMiddleShiftSigner(event.target.value)} placeholder="Nhập tên người ký ca giữa" />
+            <Input value={middleShiftSigner} onChange={(event) => setMiddleShiftSigner(event.target.value)} disabled={!canSave} placeholder="Nhập tên người ký ca giữa" />
           </div>
           <div className="space-y-2">
             <Label>Ca đêm ký tên</Label>
-            <Input value={nightShiftSigner} onChange={(event) => setNightShiftSigner(event.target.value)} placeholder="Nhập tên người ký ca đêm" />
+            <Input value={nightShiftSigner} onChange={(event) => setNightShiftSigner(event.target.value)} disabled={!canSave} placeholder="Nhập tên người ký ca đêm" />
           </div>
         </div>
       </Card>

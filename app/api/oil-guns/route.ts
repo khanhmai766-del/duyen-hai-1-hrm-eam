@@ -16,7 +16,8 @@ const VALID_STATUS = ["available", "unavailable"];
 // GET /api/oil-guns?machine=S1  -> danh sách vòi của tổ máy, theo thứ tự sơ đồ
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requirePermissionLevel(user, "archive-oil-gun-data", ["read", "own", "create", "approve", "manage", "full"], "Không đủ quyền xem dữ liệu vòi dầu");
     const machine = req.nextUrl.searchParams.get("machine") || "S1";
     const guns = await prisma.oilGun.findMany({
       where: { machine },
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "archive-edit", ["manage", "full"], "Không đủ quyền cập nhật dữ liệu vòi dầu");
+    await requirePermissionLevel(user, "archive-oil-gun-data", ["manage", "full"], "Không đủ quyền cập nhật dữ liệu vòi dầu");
 
     const body = await req.json();
     const machine = String(body.machine || "").trim();
@@ -44,7 +45,12 @@ export async function PUT(req: NextRequest) {
     if (!machine || !code) return fail("Thiếu tổ máy hoặc mã vòi");
     if (body.status && !VALID_STATUS.includes(body.status)) return fail("Trạng thái không hợp lệ");
 
-    const defect = typeof body.defect === "string" ? body.defect.trim() || null : undefined;
+    const defect =
+      typeof body.defect === "string"
+        ? body.defect.trim() || null
+        : body.defect === null
+          ? null
+          : undefined;
 
     const gun = await prisma.oilGun.upsert({
       where: { machine_code: { machine, code } },

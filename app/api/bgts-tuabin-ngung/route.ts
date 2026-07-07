@@ -148,7 +148,8 @@ async function loadRecord(unit: string, date: string) {
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requirePermissionLevel(user, "archive-grid-separation", ["read", "own", "create", "approve", "manage", "full"], "Bạn không có quyền xem BGTS Tuabin ngừng");
     await ensureTables();
 
     const unit = normalizeUnit(req.nextUrl.searchParams.get("unit"));
@@ -163,7 +164,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "archive-edit", ["create", "manage", "full"], "Bạn không có quyền lưu BGTS Tuabin ngừng");
+    await requirePermissionLevel(user, "archive-grid-separation", ["create", "manage", "full"], "Bạn không có quyền lưu BGTS Tuabin ngừng");
     await ensureTables();
 
     const body = (await req.json()) as Record<string, unknown>;

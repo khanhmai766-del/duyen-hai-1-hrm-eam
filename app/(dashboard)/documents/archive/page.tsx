@@ -7,6 +7,8 @@ import { DocumentCatalogPage } from "@/components/documents/document-catalog-pag
 import { Button } from "@/components/ui/button";
 import OilGunBoard from "@/components/oil-guns/OilGunBoard";
 import type { DocumentCategory } from "@/hooks/useDocuments";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { cn } from "@/lib/utils";
 
 type ArchiveTab = {
@@ -91,8 +93,22 @@ const BACKUP_FILENAME_PREFIX: Record<ArchiveTab["key"], string> = {
 };
 
 export default function ArchiveDocumentsPage() {
+  const rbac = useRbacAccess();
   const [activeTab, setActiveTab] = React.useState<ArchiveTab["key"]>("GRID_SEPARATION");
-  const activeConfig = ARCHIVE_TABS.find((item) => item.key === activeTab) ?? ARCHIVE_TABS[0];
+  const visibleTabs = React.useMemo(
+    () =>
+      ARCHIVE_TABS.filter((item) => {
+        const permissionId = archiveCategoryPermissionId(item.key);
+        return permissionId ? rbac.can(permissionId, ["read", "own", "create", "approve", "manage", "full"]) : true;
+      }),
+    [rbac]
+  );
+  React.useEffect(() => {
+    if (visibleTabs.length && !visibleTabs.some((item) => item.key === activeTab)) {
+      setActiveTab(visibleTabs[0].key);
+    }
+  }, [activeTab, visibleTabs]);
+  const activeConfig = visibleTabs.find((item) => item.key === activeTab) ?? visibleTabs[0] ?? ARCHIVE_TABS[0];
   const usesArchiveTimelineLayout =
     activeTab === "BOILER_CALIBRATION" ||
     activeTab === "GRID_SEPARATION" ||
@@ -100,6 +116,14 @@ export default function ArchiveDocumentsPage() {
     activeTab === "MAJOR_REPAIR" ||
     activeTab === "OIL_GUN_DATA" ||
     activeTab === "SOOT_BLOWER_DATA";
+
+  if (!rbac.isLoading && visibleTabs.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+        Bạn không có quyền xem các phần trong thư mục lưu trữ.
+      </div>
+    );
+  }
 
   return (
     <DocumentCatalogPage
@@ -206,7 +230,7 @@ export default function ArchiveDocumentsPage() {
       }
       afterHeader={
         <div className="flex flex-wrap gap-1 border-b border-border">
-          {ARCHIVE_TABS.map((item) => (
+          {visibleTabs.map((item) => (
             <ArchiveTabButton
               key={item.key}
               active={activeTab === item.key}

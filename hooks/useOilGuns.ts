@@ -22,6 +22,15 @@ export interface OilGunSummary {
   unavailable: number;
 }
 
+function summarizeOilGuns(guns: OilGun[]): OilGunSummary {
+  return {
+    total: guns.length,
+    available: guns.filter((g) => g.status === "available" && !g.defect?.trim()).length,
+    defective: guns.filter((g) => g.status === "available" && !!g.defect?.trim()).length,
+    unavailable: guns.filter((g) => g.status === "unavailable").length,
+  };
+}
+
 export function useOilGuns(machine: string) {
   return useQuery({
     queryKey: ["oil-guns", machine],
@@ -43,6 +52,14 @@ export function useUpdateOilGun() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: OilGunUpdate) => apiMutate<OilGun>("/api/oil-guns", "PUT", body),
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ["oil-guns", vars.machine] }),
+    onSuccess: (updated, vars) => {
+      qc.setQueryData<{ guns: OilGun[]; summary?: OilGunSummary }>(["oil-guns", vars.machine], (current) => {
+        if (!current) return current;
+
+        const guns = current.guns.map((gun) => (gun.id === updated.id ? updated : gun));
+        return { guns, summary: summarizeOilGuns(guns) };
+      });
+      return qc.invalidateQueries({ queryKey: ["oil-guns", vars.machine] });
+    },
   });
 }

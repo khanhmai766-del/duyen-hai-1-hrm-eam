@@ -37,6 +37,12 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "archive-create-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "archive-edit": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   "archive-backup": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  "archive-grid-separation": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
+  "archive-startup-data": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
+  "archive-boiler-calibration": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
+  "archive-major-repair": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
+  "archive-oil-gun-data": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
+  "archive-soot-blower-data": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   "forum-write": { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "create" },
   "forum-moderate": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
 };

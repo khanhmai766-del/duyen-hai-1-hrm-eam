@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOilGuns, useUpdateOilGun, type OilGun } from "@/hooks/useOilGuns";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 /* Bố trí vòi theo bảng vận hành: mỗi mảng con là 1 cụm vị trí liền nhau trên sơ đồ. */
 const REAR_GROUPS = [
@@ -27,6 +28,13 @@ const C = {
 };
 
 type Tone = { key: "ok" | "warn" | "bad"; c: string; bg: string; line: string; label: string };
+type OilGunDraft = { status: "available" | "unavailable"; defect: string };
+type LastSavedChange = {
+  machine: string;
+  code: string;
+  previous: { status: "available" | "unavailable"; defect: string | null };
+};
+
 function tone(g?: OilGun): Tone {
   if (!g || g.status === "unavailable")
     return { key: "bad", c: C.bad, bg: C.badBg, line: C.badLine, label: "Không khả dụng" };
@@ -39,10 +47,13 @@ export default function OilGunBoard() {
   const [machine, setMachine] = useState("S1");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ status: "available" | "unavailable"; defect: string } | null>(null);
+  const [draft, setDraft] = useState<OilGunDraft | null>(null);
+  const [lastSavedChange, setLastSavedChange] = useState<LastSavedChange | null>(null);
 
   const { data, isLoading } = useOilGuns(machine);
   const update = useUpdateOilGun();
+  const rbac = useRbacAccess();
+  const canManageOilGuns = rbac.can("archive-oil-gun-data", ["manage", "full"]);
 
   const byCode = useMemo(() => {
     const m = new Map<string, OilGun>();
@@ -52,6 +63,14 @@ export default function OilGunBoard() {
 
   const summary = data?.summary ?? { total: 0, available: 0, defective: 0, unavailable: 0 };
   const selectedGun = selected ? byCode.get(selected) : undefined;
+  const undoSnapshot =
+    selected && lastSavedChange?.machine === machine && lastSavedChange.code === selected
+      ? lastSavedChange.previous
+      : null;
+  const draftDirty = !!draft && (
+    draft.status !== (selectedGun?.status ?? "available") ||
+    draft.defect !== (selectedGun?.defect ?? "")
+  );
 
   function openGun(code: string) {
     const g = byCode.get(code);
@@ -62,16 +81,56 @@ export default function OilGunBoard() {
 
   async function saveDraft() {
     if (!selected || !draft) return;
+    if (!canManageOilGuns) {
+      toast.error("Không đủ quyền cập nhật dữ liệu vòi dầu");
+      return;
+    }
+    const previous = {
+      status: selectedGun?.status ?? "available",
+      defect: selectedGun?.defect ?? null,
+    };
+
     try {
       await update.mutateAsync({
         machine, code: selected,
         status: draft.status,
         defect: draft.defect.trim() || null,
       });
+      setLastSavedChange({ machine, code: selected, previous });
       toast.success(`Đã cập nhật vòi ${selected}`);
       closePanel();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Cập nhật thất bại");
+    }
+  }
+
+  async function undoChange() {
+    if (!selected || !draft) return;
+
+    if (draftDirty || !undoSnapshot) {
+      setDraft({
+        status: selectedGun?.status ?? "available",
+        defect: selectedGun?.defect ?? "",
+      });
+      return;
+    }
+
+    try {
+      if (!canManageOilGuns) {
+        toast.error("Không đủ quyền cập nhật dữ liệu vòi dầu");
+        return;
+      }
+      await update.mutateAsync({
+        machine,
+        code: selected,
+        status: undoSnapshot.status,
+        defect: undoSnapshot.defect,
+      });
+      setLastSavedChange(null);
+      toast.success(`Đã hoàn tác vòi ${selected} về trạng thái trước khi lưu`);
+      closePanel();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Hoàn tác thất bại");
     }
   }
 
@@ -162,10 +221,12 @@ export default function OilGunBoard() {
               <label className="ogb-field-label">Trạng thái khả dụng</label>
               <div className="ogb-seg">
                 <button className={draft.status === "available" ? "on ok" : ""}
+                  disabled={!canManageOilGuns}
                   onClick={() => setDraft({ ...draft, status: "available" })}>
                   <Check size={16} /> Khả dụng
                 </button>
                 <button className={draft.status === "unavailable" ? "on bad" : ""}
+                  disabled={!canManageOilGuns}
                   onClick={() => setDraft({ ...draft, status: "unavailable" })}>
                   <X size={16} /> Không khả dụng
                 </button>
@@ -177,7 +238,11 @@ export default function OilGunBoard() {
               <textarea className="ogb-textarea" rows={5}
                 placeholder="Mô tả khiếm khuyết của vòi (thiếu sensor, mòn đầu mồi lửa, kẹt van…). Để trống nếu vòi không có khiếm khuyết."
                 value={draft.defect}
+                disabled={!canManageOilGuns}
                 onChange={(e) => setDraft({ ...draft, defect: e.target.value })} />
+              {!canManageOilGuns && (
+                <p className="ogb-note">Bạn chỉ có quyền xem dữ liệu vòi dầu.</p>
+              )}
               {draft.status === "available" && draft.defect.trim() && (
                 <p className="ogb-note warn">
                   <AlertTriangle size={13} /> Vòi vẫn khả dụng nhưng có khiếm khuyết — sẽ hiển thị màu cam để theo dõi.
@@ -193,11 +258,10 @@ export default function OilGunBoard() {
             </div>
 
             <div className="ogb-panel-foot">
-              <button className="ogb-btn ghost"
-                onClick={() => setDraft({ status: selectedGun?.status ?? "available", defect: selectedGun?.defect ?? "" })}>
+              <button className="ogb-btn ghost" onClick={undoChange} disabled={update.isPending || !canManageOilGuns}>
                 <RotateCcw size={15} /> Hoàn tác
               </button>
-              <button className="ogb-btn primary" onClick={saveDraft} disabled={update.isPending}>
+              <button className="ogb-btn primary" onClick={saveDraft} disabled={update.isPending || !canManageOilGuns}>
                 {update.isPending ? <Loader2 className="spin" size={15} /> : <Save size={15} />} Lưu thay đổi
               </button>
             </div>

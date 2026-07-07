@@ -37,6 +37,7 @@ import {
   useUpsertDocument,
 } from "@/hooks/useDocuments";
 import { EQUIPMENT_BLOCKS, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
@@ -272,7 +273,8 @@ export function DocumentCatalogPage({
   const documentPermission =
     category === "PROCEDURE" ? "document-procedure" :
     category === "PID" ? "document-pid" :
-    null;
+    archiveCategoryPermissionId(category);
+  const archiveTabPermission = archiveCategoryPermissionId(category);
   const canImportProcedure = category === "PROCEDURE" && rbac.can("document-procedure", ["create", "manage", "full"]);
   const canCreate = documentPermission
     ? rbac.can(documentPermission, ["create", "manage", "full"])
@@ -283,7 +285,7 @@ export function DocumentCatalogPage({
   const canDelete = documentPermission
     ? rbac.can(documentPermission, ["full"])
     : rbac.can("archive-create-delete", ["full"]);
-  const canBackup = rbac.can("archive-backup", ["full"]);
+  const canBackup = archiveTabPermission ? rbac.can(archiveTabPermission, ["full"]) : rbac.can("archive-backup", ["full"]);
   const hasActions = canEdit || canDelete;
   const needsPositionOptions = showEquipmentScope || canImportProcedure;
   const docs = useDocuments(category);
