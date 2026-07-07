@@ -393,7 +393,7 @@ function Wall({ groups, byCode, onOpen, highlight, selected }: {
 }
 
 const CSS = `
-.ogb-root{--navy:${C.navy};--accent:${C.accent};font-family:var(--font-sans),system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0;color:#1f2430;background:${C.cream};padding:20px;border-radius:20px;position:relative;min-height:640px;}
+.ogb-root{--navy:${C.navy};--accent:${C.accent};font-family:var(--font-sans),system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0;color:#1f2430;background:${C.cream};padding:12px 20px 20px;border-radius:20px;position:relative;min-height:auto;margin-top:6px !important;}
 .ogb-root *{box-sizing:border-box;letter-spacing:0;}
 .ogb-root button,.ogb-root input,.ogb-root textarea{font-family:inherit;}
 .ogb-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
