@@ -7,6 +7,7 @@ import {
   BookOpenText,
   FileText,
   Heart,
+  Archive,
   MessageCircle,
   Link2,
   MessageSquareText,
@@ -25,13 +26,16 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   useCreateForumPost,
   useCreateForumReply,
+  useCloseForumPost,
   useDeleteForumPost,
   useDeleteForumReply,
   useForumPosts,
@@ -44,6 +48,10 @@ import {
   type ForumReply,
 } from "@/hooks/useForum";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { normalizeText } from "@/lib/nav";
+import { ALL_ANNOUNCEMENT_POSITIONS } from "@/lib/announcement-targets";
+import { forumTargetPositionsLabel } from "@/lib/forum-targets";
+import { announcementPositionLabel, announcementShiftRosterPositionOptions } from "@/lib/positions";
 import { cn, formatDateTime, initials } from "@/lib/utils";
 
 const CATEGORIES = [
@@ -60,6 +68,7 @@ const DEFAULT_FORM = {
   category: "DISCUSSION",
   tags: "",
   attachments: "",
+  targetPositions: [ALL_ANNOUNCEMENT_POSITIONS] as string[],
 };
 
 export default function ForumPage() {
@@ -78,19 +87,38 @@ export default function ForumPage() {
   const [expandedReplies, setExpandedReplies] = React.useState<Record<string, boolean>>({});
   const [deletePostTarget, setDeletePostTarget] = React.useState<ForumPost | null>(null);
   const [deleteReplyTarget, setDeleteReplyTarget] = React.useState<ForumReply | null>(null);
+  const [closePostTarget, setClosePostTarget] = React.useState<ForumPost | null>(null);
+  const [closeSummary, setCloseSummary] = React.useState("");
+  const [showClosedBox, setShowClosedBox] = React.useState(false);
+  const composeRef = React.useRef<HTMLDivElement>(null);
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
 
-  const posts = useForumPosts({ category, q });
+  const posts = useForumPosts({ category, q, status: showClosedBox ? "CLOSED" : "OPEN" });
+  const closedPosts = useForumPosts({ status: "CLOSED" });
   const createPost = useCreateForumPost();
   const updatePost = useUpdateForumPost();
+  const closePost = useCloseForumPost();
   const createReply = useCreateForumReply();
   const deletePost = useDeleteForumPost();
   const deleteReply = useDeleteForumReply();
   const rows = posts.data?.data ?? [];
+  const closedCount = closedPosts.data?.data?.length ?? 0;
+  const positionOptions = React.useMemo(() => announcementShiftRosterPositionOptions(), []);
 
   const postValid = form.title.trim().length > 0 && form.content.trim().length > 0;
   const savingPost = createPost.isPending || updatePost.isPending;
 
+  React.useEffect(() => {
+    if (!composeOpen || !editingPost) return;
+    const frame = window.requestAnimationFrame(() => {
+      composeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      titleInputRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [composeOpen, editingPost]);
+
   function openCreate() {
+    setShowClosedBox(false);
     setEditingPost(null);
     setForm(DEFAULT_FORM);
     setComposeOpen(true);
@@ -104,12 +132,34 @@ export default function ForumPage() {
       category: post.category,
       tags: post.tags.join(", "),
       attachments: post.attachments.join("\n"),
+      targetPositions: post.targetPositions ?? [],
     });
     setComposeOpen(true);
   }
 
+  function targetsAllPositions() {
+    return form.targetPositions.includes(ALL_ANNOUNCEMENT_POSITIONS);
+  }
+
+  function setTargetPositions(next: string[]) {
+    setForm((f) => ({ ...f, targetPositions: next }));
+  }
+
+  function toggleTargetPosition(position: string, checked: boolean) {
+    setForm((f) => {
+      const current = (f.targetPositions ?? []).filter((item) => item !== ALL_ANNOUNCEMENT_POSITIONS);
+      const positionKey = normalizeText(announcementPositionLabel(position));
+      const otherPositions = current.filter((item) => normalizeText(announcementPositionLabel(item)) !== positionKey);
+      const next = checked
+        ? Array.from(new Set([...otherPositions, announcementPositionLabel(position)]))
+        : otherPositions;
+      return { ...f, targetPositions: next };
+    });
+  }
+
   async function submitPost() {
     if (!postValid) return;
+    if (form.targetPositions.length === 0) return toast.error("Chọn cương vị nhận thông báo");
     try {
       const payload = {
         title: form.title,
@@ -117,6 +167,7 @@ export default function ForumPage() {
         category: form.category,
         tags: splitLines(form.tags),
         attachments: splitLines(form.attachments),
+        targetPositions: form.targetPositions,
       };
       if (editingPost) {
         await updatePost.mutateAsync({ id: editingPost.id, ...payload });
@@ -137,6 +188,24 @@ export default function ForumPage() {
     try {
       await updatePost.mutateAsync({ id: post.id, isPinned: !post.isPinned });
       toast.success(post.isPinned ? "Đã bỏ ghim chủ đề" : "Đã ghim chủ đề");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  function openClosePost(post: ForumPost) {
+    setClosePostTarget(post);
+    setCloseSummary("");
+  }
+
+  async function submitClosePost() {
+    if (!closePostTarget) return;
+    if (!closeSummary.trim()) return toast.error("Vui lòng nhập tóm tắt ý chính trước khi đóng chủ đề");
+    try {
+      await closePost.mutateAsync({ id: closePostTarget.id, closeSummary });
+      toast.success("Đã đóng chủ đề và lưu vào hộp đã kết thúc");
+      setClosePostTarget(null);
+      setCloseSummary("");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -166,11 +235,16 @@ export default function ForumPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="FORUM KỸ THUẬT" description="Trao đổi kinh nghiệm, chia sẻ tài liệu, quy trình, sơ đồ và bản vẽ vận hành">
-        {canWriteForum && (
-          <Button onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
-            <Plus className="h-4 w-4" /> Chủ đề mới
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant={showClosedBox ? "default" : "outline"} onClick={() => { setShowClosedBox((v) => !v); setComposeOpen(false); setEditingPost(null); }}>
+            <Archive className="h-4 w-4" /> Chủ đề đã kết thúc{closedCount ? ` (${closedCount})` : ""}
           </Button>
-        )}
+          {canWriteForum && (
+            <Button onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
+              <Plus className="h-4 w-4" /> Chủ đề mới
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -207,7 +281,7 @@ export default function ForumPage() {
       </div>
 
       {composeOpen && (
-        <Card className="p-4">
+        <Card ref={composeRef} className="p-4 scroll-mt-4">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-bold text-ink">{editingPost ? "Sửa chủ đề" : "Tạo chủ đề mới"}</div>
             <Button variant="ghost" size="icon" onClick={() => { setComposeOpen(false); setEditingPost(null); }}><X className="h-4 w-4" /></Button>
@@ -224,11 +298,46 @@ export default function ForumPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Tiêu đề *</label>
-              <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="VD: Chia sẻ quy trình xử lý rung quạt khói IDF..." />
+              <Input ref={titleInputRef} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="VD: Chia sẻ quy trình xử lý rung quạt khói IDF..." />
             </div>
             <div className="lg:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Nội dung trao đổi *</label>
               <Textarea value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={4} placeholder="Nhập mô tả, kinh nghiệm xử lý, câu hỏi kỹ thuật..." />
+            </div>
+            <div className="lg:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Cương vị nhận thông báo</label>
+              <div className="rounded-lg border border-border p-3">
+                <label className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-ink hover:bg-muted/60">
+                  <Checkbox
+                    checked={targetsAllPositions()}
+                    onCheckedChange={(checked) => setTargetPositions(checked ? [ALL_ANNOUNCEMENT_POSITIONS] : [])}
+                  />
+                  Tất cả cương vị
+                </label>
+                {!targetsAllPositions() && (
+                  <div className="mt-2 grid max-h-44 gap-1 overflow-y-auto pr-1 sm:grid-cols-2">
+                    {positionOptions.length === 0 ? (
+                      <div className="px-2 py-3 text-sm text-muted-foreground">Chưa có dữ liệu cương vị.</div>
+                    ) : (
+                      positionOptions.map((position) => {
+                        const selected = form.targetPositions.some((item) => normalizeText(announcementPositionLabel(item)) === normalizeText(position));
+                        return (
+                          <label key={position} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-muted/60">
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={(checked) => toggleTargetPosition(position, !!checked)}
+                            />
+                            <span className="min-w-0 truncate">{position}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Chỉ nhân viên thuộc cương vị được chọn mới nhận thông báo chủ đề này.
+                </div>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Tag</label>
@@ -255,9 +364,9 @@ export default function ForumPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           icon={MessageSquareText}
-          title="Chưa có chủ đề Forum"
-          description="Tạo chủ đề đầu tiên để chia sẻ tài liệu, quy trình hoặc câu hỏi kỹ thuật với ca/kíp."
-          action={canWriteForum ? { label: "Tạo chủ đề", onClick: openCreate } : undefined}
+          title={showClosedBox ? "Chưa có chủ đề đã kết thúc" : "Chưa có chủ đề Forum"}
+          description={showClosedBox ? "Các chủ đề đã đóng kèm tóm tắt ý chính sẽ xuất hiện tại đây." : "Tạo chủ đề đầu tiên để chia sẻ tài liệu, quy trình hoặc câu hỏi kỹ thuật với ca/kíp."}
+          action={!showClosedBox && canWriteForum ? { label: "Tạo chủ đề", onClick: openCreate } : undefined}
         />
       ) : (
         <div className="space-y-4">
@@ -275,10 +384,12 @@ export default function ForumPage() {
               onReply={() => submitReply(post.id)}
               replying={createReply.isPending}
               canWrite={canWriteForum}
+              isClosedBox={showClosedBox}
               isAdmin={canModerateForum}
               canManagePost={canManage(post.author.id)}
               canManageReply={(authorId) => canManage(authorId)}
               onEditPost={() => openEditPost(post)}
+              onClosePost={() => openClosePost(post)}
               onTogglePin={() => togglePin(post)}
               pinning={updatePost.isPending}
               onDeletePost={() => setDeletePostTarget(post)}
@@ -306,6 +417,34 @@ export default function ForumPage() {
           }
         }}
       />
+
+      <Dialog open={!!closePostTarget} onOpenChange={(open) => { if (!open) { setClosePostTarget(null); setCloseSummary(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Đóng chủ đề Forum</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm font-semibold text-ink">
+              {closePostTarget?.title}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Tóm tắt ý chính, thiết thực *</label>
+              <Textarea
+                value={closeSummary}
+                onChange={(e) => setCloseSummary(e.target.value)}
+                rows={5}
+                placeholder="Ghi lại các kết luận, kinh nghiệm, khuyến nghị hoặc điểm cần áp dụng sau trao đổi..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setClosePostTarget(null); setCloseSummary(""); }}>Hủy</Button>
+            <Button onClick={submitClosePost} disabled={closePost.isPending || !closeSummary.trim()}>
+              <Archive className="h-4 w-4" /> Đóng chủ đề
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleteReplyTarget}
@@ -341,10 +480,12 @@ function ForumPostCard({
   onReply,
   replying,
   canWrite,
+  isClosedBox,
   isAdmin,
   canManagePost,
   canManageReply,
   onEditPost,
+  onClosePost,
   onTogglePin,
   pinning,
   onDeletePost,
@@ -361,10 +502,12 @@ function ForumPostCard({
   onReply: () => void;
   replying: boolean;
   canWrite: boolean;
+  isClosedBox: boolean;
   isAdmin: boolean;
   canManagePost: boolean;
   canManageReply: (authorId: string) => boolean;
   onEditPost: () => void;
+  onClosePost: () => void;
   onTogglePin: () => void;
   pinning: boolean;
   onDeletePost: () => void;
@@ -381,6 +524,7 @@ function ForumPostCard({
   const replies = repliesQuery.data?.data ?? [];
   const likeCount = post.likeCount ?? 0;
   const replyCount = post.replyCount ?? 0;
+  const isClosed = !!post.closedAt;
 
   function startEditReply(r: ForumReply) {
     setEditingReplyId(r.id);
@@ -401,23 +545,25 @@ function ForumPostCard({
   return (
     <Card className={cn("overflow-hidden", post.isPinned && "ring-1 ring-amber-300")}>
       <div className="border-b border-border bg-white p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              {post.isPinned && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
-                  <Pin className="h-3.5 w-3.5" /> Đã ghim
-                </span>
-              )}
-              <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold", category.tone)}>
-                <Icon className="h-3.5 w-3.5" /> {category.label}
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {post.isPinned && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
+                <Pin className="h-3.5 w-3.5" /> Đã ghim
               </span>
-              {post.tags.map((tag) => <Badge key={tag} variant="outline">#{tag}</Badge>)}
-            </div>
-            <h2 className="text-lg font-black text-ink">{post.title}</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{post.content}</p>
+            )}
+            {isClosed && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                <Archive className="h-3.5 w-3.5" /> Đã kết thúc
+              </span>
+            )}
+            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold", category.tone)}>
+              <Icon className="h-3.5 w-3.5" /> {category.label}
+            </span>
+            {!!post.targetPositions?.length && <Badge variant="secondary">Cương vị: {forumTargetPositionsLabel(post.targetPositions)}</Badge>}
+            {post.tags.map((tag) => <Badge key={tag} variant="outline">#{tag}</Badge>)}
           </div>
-          <div className="flex shrink-0 items-start gap-2">
+          <div className="flex shrink-0 items-start gap-2 md:justify-end">
             <AuthorBlock author={post.author} date={post.createdAt} edited={post.updatedAt !== post.createdAt} />
             <div className="flex items-center">
               {isAdmin && (
@@ -425,9 +571,14 @@ function ForumPostCard({
                   {post.isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                 </Button>
               )}
-              {canManagePost && (
+              {canManagePost && !isClosed && (
                 <Button variant="ghost" size="icon" title="Sửa chủ đề" className="text-muted-foreground hover:text-accent" onClick={onEditPost}>
                   <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {canManagePost && !isClosed && (
+                <Button variant="ghost" size="icon" title="Đóng chủ đề" className="text-muted-foreground hover:text-slate-700" onClick={onClosePost}>
+                  <Archive className="h-4 w-4" />
                 </Button>
               )}
               {canManagePost && (
@@ -438,7 +589,18 @@ function ForumPostCard({
             </div>
           </div>
         </div>
+        <h2 className="text-lg font-black text-ink">{post.title}</h2>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{post.content}</p>
         {post.attachments.length > 0 && <AttachmentList links={post.attachments} />}
+        {isClosed && post.closeSummary && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <div className="text-xs font-bold uppercase tracking-wide text-emerald-700">Tổng kết chủ đề</div>
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-950">{post.closeSummary}</p>
+            <div className="mt-2 text-xs text-emerald-700">
+              Đóng bởi {post.closedBy?.name ?? "—"} lúc {formatDateTime(post.closedAt)}
+            </div>
+          </div>
+        )}
         <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
@@ -542,7 +704,7 @@ function ForumPostCard({
             )}
           </div>
         ))}
-        {canWrite && (
+        {canWrite && !isClosed && !isClosedBox && (
           <div className="grid gap-2 rounded-xl border border-dashed border-border bg-white p-3">
             <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
             <Input value={replyLinks} onChange={(e) => setReplyLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
@@ -555,7 +717,7 @@ function ForumPostCard({
         )}
       </div>
       )}
-      {!repliesOpen && canWrite && (
+      {!repliesOpen && canWrite && !isClosed && !isClosedBox && (
         <div className="border-t border-border bg-muted/20 px-4 py-3">
           <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground hover:bg-white hover:text-blue-700" onClick={onOpenReplies}>
             <MessageCircle className="h-4 w-4" /> Viết phản hồi

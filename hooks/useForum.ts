@@ -26,10 +26,16 @@ export interface ForumPost {
   category: string;
   tags: string[];
   attachments: string[];
+  targetPositions: string[];
   isPinned: boolean;
+  closeSummary: string | null;
+  closedAt: string | null;
+  closedBy: ForumAuthor | null;
   createdAt: string;
   updatedAt: string;
   author: ForumAuthor;
+  replyAuthorIds: string[];
+  latestReply: ForumReply | null;
   replyCount: number;
   likeCount: number;
   likedByMe: boolean;
@@ -38,6 +44,7 @@ export interface ForumPost {
 export interface ForumFilters {
   category?: string;
   q?: string;
+  status?: "OPEN" | "CLOSED";
 }
 
 export interface ForumPostInput {
@@ -46,16 +53,19 @@ export interface ForumPostInput {
   category: string;
   tags?: string[];
   attachments?: string[];
+  targetPositions?: string[];
 }
 
 export function useForumPosts(filters: ForumFilters) {
   const params = new URLSearchParams();
   if (filters.category && filters.category !== "ALL") params.set("category", filters.category);
   if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.status) params.set("status", filters.status);
   const qs = params.toString();
   return useQuery({
     queryKey: ["forum-posts", filters],
     queryFn: () => apiGet<ForumPost[]>(`/api/forum${qs ? `?${qs}` : ""}`),
+    refetchInterval: 60 * 1000,
   });
 }
 
@@ -92,6 +102,15 @@ export function useUpdateForumPost() {
   return useMutation({
     mutationFn: ({ id, ...body }: { id: string } & Partial<ForumPostInput> & { isPinned?: boolean }) =>
       apiMutate<{ id: string }>(`/api/forum/${id}`, "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+  });
+}
+
+export function useCloseForumPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, closeSummary }: { id: string; closeSummary: string }) =>
+      apiMutate<{ id: string }>(`/api/forum/${id}`, "PUT", { action: "CLOSE", closeSummary }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
   });
 }

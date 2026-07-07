@@ -14,7 +14,7 @@ import { isStatisticsPosition, navSectionsForPosition, normalizeText } from "@/l
 import { isPeakBlockedHref } from "@/lib/peak-mode";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
-import { useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
+import { acknowledgeForumNotice, useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useReplacementAlerts } from "@/hooks/useReplacements";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
@@ -351,7 +351,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                   ) : notices.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
                       <Bell className="h-7 w-7 text-muted-foreground/40" />
-                      <span className="text-sm text-muted-foreground">Không có mệnh lệnh sản xuất mới</span>
+                      <span className="text-sm text-muted-foreground">Không có thông báo vận hành mới</span>
                     </div>
                   ) : (
                     <ul className="max-h-80 divide-y divide-border overflow-y-auto">
@@ -359,7 +359,15 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                         const Icon = n.icon;
                         return (
                           <li key={n.id}>
-                            <Link href={n.href} prefetch={false} onClick={() => setNotifOpen(false)} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
+                            <Link
+                              href={n.href}
+                              prefetch={false}
+                              onClick={() => {
+                                if (n.id.startsWith("forum-")) acknowledgeForumNotice(n.id.replace(/^forum-/, ""));
+                                setNotifOpen(false);
+                              }}
+                              className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+                            >
                               <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", NOTICE_TONE[n.tone])}>
                                 <Icon className="h-4 w-4" />
                               </span>

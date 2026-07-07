@@ -2,7 +2,10 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ensureForumLifecycleColumns } from "@/lib/forum-targets-server";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+
+const viTime = (column: string) => `to_char(${column}, 'YYYY-MM-DD"T"HH24:MI:SS.MS') || '+07:00'`;
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -20,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           r."postId",
           r.content,
           r.attachments,
-          r."createdAt",
+          ${viTime('r."createdAt"')} AS "createdAt",
           json_build_object(
             'id', u.id,
             'name', u.name,
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "forum-write", ["create", "manage", "full"], "Không đủ quyền phản hồi forum");
+    await ensureForumLifecycleColumns();
     const body = await req.json();
     const content = String(body.content ?? "").trim();
     const attachments = normalizeList(body.attachments, 5);
@@ -53,6 +57,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       params.id
     );
     if (!exists.length) return fail("Không tìm thấy chủ đề", 404);
+    const closed = await prisma.$queryRawUnsafe<Array<{ closed: boolean }>>(
+      `SELECT ("closedAt" IS NOT NULL) AS closed FROM "ForumPost" WHERE id = $1 LIMIT 1`,
+      params.id
+    );
+    if (closed[0]?.closed) return fail("Chủ đề đã kết thúc, không thể gửi phản hồi mới", 400);
 
     const id = randomUUID();
     await prisma.$executeRawUnsafe(

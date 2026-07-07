@@ -118,7 +118,11 @@ model ForumPost {
   category    String   @default("DISCUSSION")
   tags        String[]
   attachments String[]
+  targetPositions String[] @default([])
   isPinned    Boolean  @default(false)
+  closeSummary String?
+  closedAt    DateTime?
+  closedById  String?
   authorId    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
