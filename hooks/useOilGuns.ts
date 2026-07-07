@@ -14,6 +14,10 @@ export interface OilGun {
   defectSccn: string | null; // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
   defectScd: string | null; // Khiếm khuyết SCĐ (sửa chữa điện)
   forceFlame: boolean; // Force tín hiệu ngọn lửa vòi dầu
+  coalStatus: "available" | "unavailable"; // lớp vòi than
+  coalDefectNote: string | null; // khiếm khuyết vòi than (1 ô)
+  coalUpdatedBy: string | null;
+  coalUpdatedAt: string | null;
   updatedBy: string | null;
   updatedAt: string;
 }
@@ -69,6 +73,8 @@ export interface OilGunUpdate {
   defectSccn?: string | null;
   defectScd?: string | null;
   forceFlame?: boolean;
+  coalStatus?: "available" | "unavailable";
+  coalDefectNote?: string | null;
 }
 
 export function useUpdateOilGun() {

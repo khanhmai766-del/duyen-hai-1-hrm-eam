@@ -685,6 +685,11 @@ model OilGun {
   defectSccn String? // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
   defectScd  String? // Khiếm khuyết SCĐ (sửa chữa điện)
   forceFlame Boolean @default(false) // Force tín hiệu ngọn lửa vòi dầu
+  // Lớp vòi than — chung vị trí với vòi dầu (Hướng A: cột song song)
+  coalStatus     String    @default("available") // available | unavailable
+  coalDefectNote String? // khiếm khuyết vòi than (1 ô, vì than ít)
+  coalUpdatedBy  String?
+  coalUpdatedAt  DateTime?
   updatedBy String?  // tên người cập nhật gần nhất
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())

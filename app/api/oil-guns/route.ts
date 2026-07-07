@@ -64,6 +64,11 @@ export async function PUT(req: NextRequest) {
     const defectScd =
       body.defectScd === null ? null : typeof body.defectScd === "string" ? body.defectScd.trim() || null : undefined;
     const forceFlame = typeof body.forceFlame === "boolean" ? body.forceFlame : undefined;
+    // Lớp vòi than
+    const coalStatus = body.coalStatus && VALID_STATUS.includes(body.coalStatus) ? body.coalStatus : undefined;
+    const coalDefectNote =
+      body.coalDefectNote === null ? null : typeof body.coalDefectNote === "string" ? body.coalDefectNote.trim() || null : undefined;
+    const coalTouched = coalStatus !== undefined || coalDefectNote !== undefined;
 
     const gun = await prisma.oilGun.upsert({
       where: { machine_code: { machine, code } },
@@ -72,6 +77,9 @@ export async function PUT(req: NextRequest) {
         ...(defectSccn !== undefined ? { defectSccn } : {}),
         ...(defectScd !== undefined ? { defectScd } : {}),
         ...(forceFlame !== undefined ? { forceFlame } : {}),
+        ...(coalStatus !== undefined ? { coalStatus } : {}),
+        ...(coalDefectNote !== undefined ? { coalDefectNote } : {}),
+        ...(coalTouched ? { coalUpdatedBy: user.name ?? null, coalUpdatedAt: new Date() } : {}),
         updatedBy: user.name ?? null,
       },
       create: {
@@ -82,6 +90,10 @@ export async function PUT(req: NextRequest) {
         defectSccn: defectSccn ?? null,
         defectScd: defectScd ?? null,
         forceFlame: forceFlame ?? false,
+        coalStatus: coalStatus ?? "available",
+        coalDefectNote: coalDefectNote ?? null,
+        coalUpdatedBy: coalTouched ? user.name ?? null : null,
+        coalUpdatedAt: coalTouched ? new Date() : null,
         updatedBy: user.name ?? null,
       },
     });

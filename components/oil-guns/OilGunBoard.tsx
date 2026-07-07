@@ -2,12 +2,13 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  Flame, Wrench, Check, X, Save, AlertTriangle,
+  Flame, Wrench, Check, X, Save,
   Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOilGuns, useUpdateOilGun, useUpdateOilGunNote, type OilGun } from "@/hooks/useOilGuns";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { derive, summarizeBurners, type DisplayStatus, type Layer } from "@/lib/burner-status";
 
 /* Bố trí vòi theo bảng vận hành: mỗi mảng con là 1 cụm vị trí liền nhau trên sơ đồ. */
 const REAR_GROUPS = [
@@ -27,30 +28,35 @@ const C = {
   chamber1: "#f59e0b", chamber2: "#dc2626",
 };
 
-type Tone = { key: "ok" | "warn" | "bad"; c: string; bg: string; line: string; label: string };
-type OilGunDraft = { status: "available" | "unavailable"; defectSccn: string; defectScd: string; forceFlame: boolean };
-type LastSavedChange = {
-  machine: string;
-  code: string;
-  previous: { status: "available" | "unavailable"; defectSccn: string | null; defectScd: string | null; forceFlame: boolean };
+type Style = { c: string; bg: string; line: string; label: string };
+function styleOf(status: DisplayStatus): Style {
+  if (status === "unavailable") return { c: C.bad, bg: C.badBg, line: C.badLine, label: "Không khả dụng" };
+  if (status === "defect") return { c: C.warn, bg: C.warnBg, line: C.warnLine, label: "Có khiếm khuyết" };
+  return { c: C.ok, bg: C.okBg, line: C.okLine, label: "Khả dụng" };
+}
+// Draft gộp cả 2 lớp — panel chi tiết nhập/sửa cho cả vòi dầu lẫn vòi than một lượt.
+type OilGunDraft = {
+  status: "available" | "unavailable"; defectSccn: string; defectScd: string; forceFlame: boolean;
+  coalStatus: "available" | "unavailable"; coalDefectNote: string;
 };
-function gunHasDefect(g?: Pick<OilGun, "defectSccn" | "defectScd"> | null) {
-  return !!(g?.defectSccn?.trim() || g?.defectScd?.trim());
+function draftFromGun(g?: OilGun): OilGunDraft {
+  return {
+    status: g?.status ?? "available",
+    defectSccn: g?.defectSccn ?? "",
+    defectScd: g?.defectScd ?? "",
+    forceFlame: g?.forceFlame ?? false,
+    coalStatus: g?.coalStatus ?? "available",
+    coalDefectNote: g?.coalDefectNote ?? "",
+  };
 }
-function tone(g?: OilGun): Tone {
-  if (!g || g.status === "unavailable")
-    return { key: "bad", c: C.bad, bg: C.badBg, line: C.badLine, label: "Không khả dụng" };
-  if (gunHasDefect(g))
-    return { key: "warn", c: C.warn, bg: C.warnBg, line: C.warnLine, label: "Khả dụng · có khiếm khuyết" };
-  return { key: "ok", c: C.ok, bg: C.okBg, line: C.okLine, label: "Khả dụng" };
-}
+const LAYER_LABEL: Record<Layer, string> = { oil: "Vòi dầu", coal: "Vòi than" };
 
 export default function OilGunBoard() {
   const [machine, setMachine] = useState("S1");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [layer, setLayer] = useState<Layer>("oil"); // lớp đang xem: dầu | than
   const [draft, setDraft] = useState<OilGunDraft | null>(null);
-  const [lastSavedChange, setLastSavedChange] = useState<LastSavedChange | null>(null);
 
   const { data, isLoading } = useOilGuns(machine);
   const update = useUpdateOilGun();
@@ -79,39 +85,22 @@ export default function OilGunBoard() {
     return m;
   }, [data]);
 
-  const summary = data?.summary ?? { total: 0, available: 0, defective: 0, unavailable: 0 };
+  // Đếm 4 thẻ theo lớp đang chọn (cùng logic derive nên luôn khớp màu ô).
+  const summary = useMemo(() => summarizeBurners(data?.guns ?? [], layer), [data, layer]);
   const selectedGun = selected ? byCode.get(selected) : undefined;
-  const undoSnapshot =
-    selected && lastSavedChange?.machine === machine && lastSavedChange.code === selected
-      ? lastSavedChange.previous
-      : null;
-  const draftDirty = !!draft && (
-    draft.status !== (selectedGun?.status ?? "available") ||
-    draft.defectSccn !== (selectedGun?.defectSccn ?? "") ||
-    draft.defectScd !== (selectedGun?.defectScd ?? "") ||
-    draft.forceFlame !== (selectedGun?.forceFlame ?? false)
-  );
 
   function openGun(code: string) {
-    const g = byCode.get(code);
     setSelected(code);
-    setDraft({ status: g?.status ?? "available", defectSccn: g?.defectSccn ?? "", defectScd: g?.defectScd ?? "", forceFlame: g?.forceFlame ?? false });
+    setDraft(draftFromGun(byCode.get(code)));
   }
   function closePanel() { setSelected(null); setDraft(null); }
 
   async function saveDraft() {
     if (!selected || !draft) return;
     if (!canManageOilGuns) {
-      toast.error("Không đủ quyền cập nhật dữ liệu vòi dầu");
+      toast.error("Không đủ quyền cập nhật dữ liệu vòi đốt");
       return;
     }
-    const previous = {
-      status: selectedGun?.status ?? "available",
-      defectSccn: selectedGun?.defectSccn ?? null,
-      defectScd: selectedGun?.defectScd ?? null,
-      forceFlame: selectedGun?.forceFlame ?? false,
-    };
-
     try {
       await update.mutateAsync({
         machine, code: selected,
@@ -119,8 +108,9 @@ export default function OilGunBoard() {
         defectSccn: draft.defectSccn.trim() || null,
         defectScd: draft.defectScd.trim() || null,
         forceFlame: draft.forceFlame,
+        coalStatus: draft.coalStatus,
+        coalDefectNote: draft.coalDefectNote.trim() || null,
       });
-      setLastSavedChange({ machine, code: selected, previous });
       toast.success(`Đã cập nhật vòi ${selected}`);
       closePanel();
     } catch (e) {
@@ -128,38 +118,9 @@ export default function OilGunBoard() {
     }
   }
 
-  async function undoChange() {
-    if (!selected || !draft) return;
-
-    if (draftDirty || !undoSnapshot) {
-      setDraft({
-        status: selectedGun?.status ?? "available",
-        defectSccn: selectedGun?.defectSccn ?? "",
-        defectScd: selectedGun?.defectScd ?? "",
-        forceFlame: selectedGun?.forceFlame ?? false,
-      });
-      return;
-    }
-
-    try {
-      if (!canManageOilGuns) {
-        toast.error("Không đủ quyền cập nhật dữ liệu vòi dầu");
-        return;
-      }
-      await update.mutateAsync({
-        machine,
-        code: selected,
-        status: undoSnapshot.status,
-        defectSccn: undoSnapshot.defectSccn,
-        defectScd: undoSnapshot.defectScd,
-        forceFlame: undoSnapshot.forceFlame,
-      });
-      setLastSavedChange(null);
-      toast.success(`Đã hoàn tác vòi ${selected} về trạng thái trước khi lưu`);
-      closePanel();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Hoàn tác thất bại");
-    }
+  // Hoàn tác = bỏ chỉnh sửa chưa lưu, đưa cả 2 lớp về giá trị đã lưu.
+  function resetDraft() {
+    setDraft(draftFromGun(selectedGun));
   }
 
   const q = query.trim().toUpperCase();
@@ -175,6 +136,13 @@ export default function OilGunBoard() {
           </div>
         </div>
         <div className="ogb-head-actions">
+          <div className="ogb-machine ogb-layer">
+            {(["oil", "coal"] as Layer[]).map((l) => (
+              <button key={l} className={layer === l ? "on" : ""} onClick={() => setLayer(l)}>
+                {l === "oil" ? <Droplet size={14} /> : <Flame size={14} />} {LAYER_LABEL[l]}
+              </button>
+            ))}
+          </div>
           <div className="ogb-machine">
             {["S1", "S2"].map((m) => (
               <button key={m} className={machine === m ? "on" : ""} onClick={() => setMachine(m)}>
@@ -186,7 +154,7 @@ export default function OilGunBoard() {
       </header>
 
       <div className="ogb-stats">
-        <Stat label="Tổng vòi dầu" value={summary.total} c={C.navy} icon={<Droplet size={16} />} />
+        <Stat label={`Tổng ${LAYER_LABEL[layer].toLowerCase()}`} value={summary.total} c={C.navy} icon={<Droplet size={16} />} />
         <Stat label="Khả dụng" value={summary.available} c={C.ok} icon={<Check size={16} />} />
         <Stat label="Có khiếm khuyết" value={summary.defective} c={C.warn} icon={<Wrench size={16} />} />
         <Stat label="Không khả dụng" value={summary.unavailable} c={C.bad} icon={<X size={16} />} />
@@ -198,29 +166,30 @@ export default function OilGunBoard() {
 
       <div className="ogb-board-wrap">
         {isLoading ? (
-          <div className="ogb-loading"><Loader2 className="spin" size={22} /> Đang tải sơ đồ vòi dầu…</div>
+          <div className="ogb-loading"><Loader2 className="spin" size={22} /> Đang tải sơ đồ vòi đốt…</div>
         ) : summary.total === 0 ? (
           <div className="ogb-empty">
             <Droplet size={30} />
-            <b>Chưa có dữ liệu vòi dầu cho tổ máy {machine}</b>
+            <b>Chưa có dữ liệu vòi đốt cho tổ máy {machine}</b>
             <span>Chạy <code>node prisma/seed-oil-guns.mjs</code> để khởi tạo 36 vòi.</span>
           </div>
         ) : (
           <>
             <div className="ogb-board">
               <div className="ogb-wall-label">Tường sau</div>
-              <Wall groups={REAR_GROUPS} byCode={byCode} onOpen={openGun} highlight={q} selected={selected} />
+              <Wall groups={REAR_GROUPS} byCode={byCode} layer={layer} onOpen={openGun} highlight={q} selected={selected} />
               <div className="ogb-chamber">
                 <Flame size={22} /><span>BUỒNG ĐỐT {machine}</span><Flame size={22} />
               </div>
-              <Wall groups={FRONT_GROUPS} byCode={byCode} onOpen={openGun} highlight={q} selected={selected} />
+              <Wall groups={FRONT_GROUPS} byCode={byCode} layer={layer} onOpen={openGun} highlight={q} selected={selected} />
               <div className="ogb-wall-label">Tường trước</div>
             </div>
             <div className="ogb-legend">
               <span><i style={{ background: C.ok }} /> Khả dụng</span>
               <span><i style={{ background: C.warn }} /> Có khiếm khuyết</span>
               <span><i style={{ background: C.bad }} /> Không khả dụng</span>
-              <span className="hint">Bấm vào một vòi để cập nhật trạng thái &amp; khiếm khuyết</span>
+              <span><Flame size={12} style={{ color: "#f97316" }} /> Cần force tín hiệu lửa</span>
+              <span className="hint">Đang xem lớp <b>{LAYER_LABEL[layer]}</b> · bấm một vòi để sửa cả 2 lớp</span>
             </div>
           </>
         )}
@@ -261,44 +230,50 @@ export default function OilGunBoard() {
               <button className="ogb-panel-x" onClick={closePanel} aria-label="Đóng"><X size={18} /></button>
               <div className="ogb-panel-title">
                 <span className="ogb-panel-code">{selected}</span>
-                <span className="ogb-panel-sub">Vòi dầu · Buồng đốt {machine}</span>
+                <span className="ogb-panel-sub">Buồng đốt {machine}</span>
               </div>
-              <span className="ogb-panel-badge" style={{ background: tone({ ...(selectedGun as OilGun), status: draft.status, defectSccn: draft.defectSccn, defectScd: draft.defectScd } as OilGun).c }}>
-                {tone({ ...(selectedGun as OilGun), status: draft.status, defectSccn: draft.defectSccn, defectScd: draft.defectScd } as OilGun).label}
-              </span>
+              {(() => {
+                const row = layer === "oil"
+                  ? { status: draft.status, defectSccn: draft.defectSccn, defectScd: draft.defectScd, forceFlame: draft.forceFlame }
+                  : { coalStatus: draft.coalStatus, coalDefectNote: draft.coalDefectNote };
+                const st = styleOf(derive(row, layer).status);
+                return <span className="ogb-panel-badge" style={{ background: st.c }}>{LAYER_LABEL[layer]}: {st.label}</span>;
+              })()}
             </div>
 
             <div className="ogb-panel-body">
+              {!canManageOilGuns && (
+                <p className="ogb-note" style={{ marginTop: 0, marginBottom: 14 }}>Bạn chỉ có quyền xem dữ liệu vòi đốt.</p>
+              )}
+
+              {/* ===== Vòi dầu ===== */}
+              <div className="ogb-section-title"><Droplet size={14} /> Vòi dầu</div>
               <label className="ogb-field-label">Trạng thái khả dụng</label>
               <div className="ogb-seg">
-                <button className={draft.status === "available" ? "on ok" : ""}
-                  disabled={!canManageOilGuns}
+                <button className={draft.status === "available" ? "on ok" : ""} disabled={!canManageOilGuns}
                   onClick={() => setDraft({ ...draft, status: "available" })}>
                   <Check size={16} /> Khả dụng
                 </button>
-                <button className={draft.status === "unavailable" ? "on bad" : ""}
-                  disabled={!canManageOilGuns}
+                <button className={draft.status === "unavailable" ? "on bad" : ""} disabled={!canManageOilGuns}
                   onClick={() => setDraft({ ...draft, status: "unavailable" })}>
                   <X size={16} /> Không khả dụng
                 </button>
               </div>
 
-              <label className="ogb-field-label" style={{ marginTop: 18 }}>
+              <label className="ogb-field-label" style={{ marginTop: 16 }}>
                 <Wrench size={14} /> Khiếm khuyết SCCN <span className="ogb-field-hint">(sửa chữa cơ nhiệt)</span>
               </label>
-              <textarea className="ogb-textarea" rows={4}
+              <textarea className="ogb-textarea" rows={3}
                 placeholder="Khiếm khuyết cơ nhiệt: mòn đầu mồi lửa, kẹt van, rò dầu… Để trống nếu không có."
-                value={draft.defectSccn}
-                disabled={!canManageOilGuns}
+                value={draft.defectSccn} disabled={!canManageOilGuns}
                 onChange={(e) => setDraft({ ...draft, defectSccn: e.target.value })} />
 
-              <label className="ogb-field-label" style={{ marginTop: 16 }}>
+              <label className="ogb-field-label" style={{ marginTop: 14 }}>
                 <Wrench size={14} /> Khiếm khuyết SCĐ <span className="ogb-field-hint">(sửa chữa điện)</span>
               </label>
-              <textarea className="ogb-textarea" rows={4}
+              <textarea className="ogb-textarea" rows={3}
                 placeholder="Khiếm khuyết điện: sensor không phát hiện ngọn lửa, hỏng biến áp đánh lửa… Để trống nếu không có."
-                value={draft.defectScd}
-                disabled={!canManageOilGuns}
+                value={draft.defectScd} disabled={!canManageOilGuns}
                 onChange={(e) => setDraft({ ...draft, defectScd: e.target.value })} />
 
               <label className={`ogb-check ${draft.forceFlame ? "on" : ""} ${!canManageOilGuns ? "disabled" : ""}`}>
@@ -311,14 +286,27 @@ export default function OilGunBoard() {
                 </span>
               </label>
 
-              {!canManageOilGuns && (
-                <p className="ogb-note">Bạn chỉ có quyền xem dữ liệu vòi dầu.</p>
-              )}
-              {draft.status === "available" && (draft.defectSccn.trim() || draft.defectScd.trim()) && (
-                <p className="ogb-note warn">
-                  <AlertTriangle size={13} /> Vòi vẫn khả dụng nhưng có khiếm khuyết — sẽ hiển thị màu cam để theo dõi.
-                </p>
-              )}
+              {/* ===== Vòi than ===== */}
+              <div className="ogb-section-title" style={{ marginTop: 22 }}><Flame size={14} /> Vòi than</div>
+              <label className="ogb-field-label">Trạng thái khả dụng</label>
+              <div className="ogb-seg">
+                <button className={draft.coalStatus === "available" ? "on ok" : ""} disabled={!canManageOilGuns}
+                  onClick={() => setDraft({ ...draft, coalStatus: "available" })}>
+                  <Check size={16} /> Khả dụng
+                </button>
+                <button className={draft.coalStatus === "unavailable" ? "on bad" : ""} disabled={!canManageOilGuns}
+                  onClick={() => setDraft({ ...draft, coalStatus: "unavailable" })}>
+                  <X size={16} /> Không khả dụng
+                </button>
+              </div>
+
+              <label className="ogb-field-label" style={{ marginTop: 16 }}>
+                <Wrench size={14} /> Khiếm khuyết vòi than
+              </label>
+              <textarea className="ogb-textarea" rows={3}
+                placeholder="Mô tả khiếm khuyết vòi than (thiếu dây quang, sensor kẹt xỉ…). Để trống nếu không có."
+                value={draft.coalDefectNote} disabled={!canManageOilGuns}
+                onChange={(e) => setDraft({ ...draft, coalDefectNote: e.target.value })} />
 
               {selectedGun?.updatedBy && (
                 <div className="ogb-meta">
@@ -329,7 +317,7 @@ export default function OilGunBoard() {
             </div>
 
             <div className="ogb-panel-foot">
-              <button className="ogb-btn ghost" onClick={undoChange} disabled={update.isPending || !canManageOilGuns}>
+              <button className="ogb-btn ghost" onClick={resetDraft} disabled={update.isPending || !canManageOilGuns}>
                 <RotateCcw size={15} /> Hoàn tác
               </button>
               <button className="ogb-btn primary" onClick={saveDraft} disabled={update.isPending || !canManageOilGuns}>
@@ -355,8 +343,8 @@ function Stat({ label, value, c, icon }: { label: string; value: number; c: stri
   );
 }
 
-function Wall({ groups, byCode, onOpen, highlight, selected }: {
-  groups: string[][]; byCode: Map<string, OilGun>; onOpen: (c: string) => void; highlight: string; selected: string | null;
+function Wall({ groups, byCode, layer, onOpen, highlight, selected }: {
+  groups: string[][]; byCode: Map<string, OilGun>; layer: Layer; onOpen: (c: string) => void; highlight: string; selected: string | null;
 }) {
   const codes = groups.flat();
 
@@ -364,25 +352,24 @@ function Wall({ groups, byCode, onOpen, highlight, selected }: {
     <div className="ogb-wall">
       {codes.map((code) => {
         const g = byCode.get(code);
-        const t = tone(g);
-        const hasDefect = gunHasDefect(g);
-        const defectText = [
-          g?.defectSccn?.trim() && `SCCN: ${g.defectSccn.trim()}`,
-          g?.defectScd?.trim() && `SCĐ: ${g.defectScd.trim()}`,
-        ].filter(Boolean).join(" · ");
+        const d = derive(g ?? {}, layer);
+        const st = styleOf(d.status);
+        const defectText = layer === "oil"
+          ? [g?.defectSccn?.trim() && `SCCN: ${g.defectSccn.trim()}`, g?.defectScd?.trim() && `SCĐ: ${g.defectScd.trim()}`].filter(Boolean).join(" · ")
+          : (g?.coalDefectNote?.trim() ?? "");
         const dim = highlight && !code.includes(highlight);
         return (
           <button key={code}
             className={`ogb-gun ${selected === code ? "active" : ""} ${dim ? "dim" : ""}`}
-            style={{ background: t.bg, borderColor: selected === code ? C.accent : t.line }}
+            style={{ background: st.bg, borderColor: selected === code ? C.accent : st.line }}
             onClick={() => onOpen(code)}
-            title={`${code} — ${t.label}${defectText ? " · " + defectText : ""}`}>
-            <span className="ogb-gun-dot" style={{ background: t.c }} />
+            title={`${code} — ${st.label}${defectText ? " · " + defectText : ""}${d.showFire ? " · cần force tín hiệu lửa" : ""}`}>
+            {d.showFire
+              ? <Flame className="ogb-gun-fire" size={12} />
+              : <span className="ogb-gun-dot" style={{ background: st.c }} />}
             <span className="ogb-gun-code" style={{ color: C.navy }}>{code}</span>
-            <span className="ogb-gun-line" style={{ color: t.c }}>
-              {g?.status === "unavailable" ? "Không khả dụng" : "Khả dụng"}
-            </span>
-            {hasDefect && <Wrench className="ogb-gun-wrench" size={12} style={{ color: t.c }} />}
+            <span className="ogb-gun-line" style={{ color: st.c }}>{st.label}</span>
+            {d.status === "defect" && <Wrench className="ogb-gun-wrench" size={12} style={{ color: st.c }} />}
           </button>
         );
       })}
@@ -437,6 +424,7 @@ const CSS = `
 .ogb-gun-code{font-weight:700;font-size:15px;line-height:1.1;}
 .ogb-gun-line{font-size:9.5px;font-weight:600;white-space:normal;line-height:1.2;overflow-wrap:break-word;}
 .ogb-gun-wrench{position:absolute;top:9px;right:22px;}
+.ogb-gun-fire{position:absolute;top:8px;right:8px;color:#f97316;}
 .ogb-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px dashed ${C.line};font-size:12.5px;color:#475569;}
 .ogb-legend span{display:inline-flex;align-items:center;gap:7px;}
 .ogb-legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
@@ -454,6 +442,7 @@ const CSS = `
 .ogb-panel-body{padding:22px;flex:1;overflow-y:auto;}
 .ogb-field-label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:${C.navy};margin-bottom:9px;}
 .ogb-field-hint{font-weight:500;font-size:11.5px;color:#94a3b8;}
+.ogb-section-title{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px;color:${C.navy};padding-bottom:9px;margin-bottom:12px;border-bottom:2px solid ${C.line};}
 .ogb-check{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:11px 13px;border:1.5px solid ${C.line};border-radius:12px;cursor:pointer;transition:.15s;background:#fff;}
 .ogb-check:hover{border-color:#c7ccd6;}
 .ogb-check.on{border-color:${C.accent};background:#eff4ff;}

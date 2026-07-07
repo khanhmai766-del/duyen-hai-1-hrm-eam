@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS "OilGun" (
   "defectSccn" TEXT,
   "defectScd" TEXT,
   "forceFlame" BOOLEAN NOT NULL DEFAULT false,
+  "coalStatus" TEXT NOT NULL DEFAULT 'available',
+  "coalDefectNote" TEXT,
+  "coalUpdatedBy" TEXT,
+  "coalUpdatedAt" TIMESTAMP(3),
   "updatedBy" TEXT,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
