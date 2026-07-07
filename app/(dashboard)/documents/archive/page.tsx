@@ -58,7 +58,7 @@ const ARCHIVE_TABS: ArchiveTab[] = [
   },
   {
     key: "OIL_GUN_DATA",
-    label: "Dữ liệu vòi dầu",
+    label: "Dữ liệu vòi đốt",
     icon: Droplet,
     description: "Lưu trữ đường dẫn dữ liệu vòi dầu phục vụ tra cứu và tổng hợp vận hành",
     emptyTitle: "Chưa có dữ liệu vòi dầu",
@@ -204,7 +204,7 @@ export default function ArchiveDocumentsPage() {
             : activeTab === "MAJOR_REPAIR"
               ? "Sửa chữa lớn"
               : activeTab === "OIL_GUN_DATA"
-                ? "Dữ liệu vòi dầu"
+                ? "Dữ liệu vòi đốt"
                 : activeTab === "SOOT_BLOWER_DATA"
                   ? "Dữ liệu vòi thổi bụi"
                   : undefined

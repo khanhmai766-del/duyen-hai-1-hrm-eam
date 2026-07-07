@@ -171,7 +171,7 @@ export default function OilGunBoard() {
       <header className="ogb-head">
         <div className="ogb-head-left">
           <div>
-            <h1>Sơ Đồ Khả Dụng Vòi Dầu - Tổ Máy: {machine}</h1>
+            <h1>Sơ Đồ Khả Dụng Vòi Đốt - Tổ Máy: {machine}</h1>
           </div>
         </div>
         <div className="ogb-head-actions">
