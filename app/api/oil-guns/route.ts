@@ -13,6 +13,11 @@ const REAR = new Set([
 
 const VALID_STATUS = ["available", "unavailable"];
 
+// Vòi có khiếm khuyết khi 1 trong 2 ô SCCN/SCĐ có nội dung.
+function hasDefect(g: { defectSccn?: string | null; defectScd?: string | null }) {
+  return !!(g.defectSccn?.trim() || g.defectScd?.trim());
+}
+
 // GET /api/oil-guns?machine=S1  -> danh sách vòi của tổ máy, theo thứ tự sơ đồ
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -25,8 +30,8 @@ export async function GET(req: NextRequest) {
     });
     const summary = {
       total: guns.length,
-      available: guns.filter((g) => g.status === "available" && !g.defect?.trim()).length,
-      defective: guns.filter((g) => g.status === "available" && !!g.defect?.trim()).length,
+      available: guns.filter((g) => g.status === "available" && !hasDefect(g)).length,
+      defective: guns.filter((g) => g.status === "available" && hasDefect(g)).length,
       unavailable: guns.filter((g) => g.status === "unavailable").length,
     };
     return ok(guns, { machine, summary });
@@ -45,18 +50,18 @@ export async function PUT(req: NextRequest) {
     if (!machine || !code) return fail("Thiếu tổ máy hoặc mã vòi");
     if (body.status && !VALID_STATUS.includes(body.status)) return fail("Trạng thái không hợp lệ");
 
-    const defect =
-      typeof body.defect === "string"
-        ? body.defect.trim() || null
-        : body.defect === null
-          ? null
-          : undefined;
+    // null (từ cơ chế hoàn tác) → xóa ô; chuỗi → lưu; thiếu → giữ nguyên.
+    const defectSccn =
+      body.defectSccn === null ? null : typeof body.defectSccn === "string" ? body.defectSccn.trim() || null : undefined;
+    const defectScd =
+      body.defectScd === null ? null : typeof body.defectScd === "string" ? body.defectScd.trim() || null : undefined;
 
     const gun = await prisma.oilGun.upsert({
       where: { machine_code: { machine, code } },
       update: {
         ...(body.status ? { status: body.status } : {}),
-        ...(defect !== undefined ? { defect } : {}),
+        ...(defectSccn !== undefined ? { defectSccn } : {}),
+        ...(defectScd !== undefined ? { defectScd } : {}),
         updatedBy: user.name ?? null,
       },
       create: {
@@ -64,7 +69,8 @@ export async function PUT(req: NextRequest) {
         code,
         wall: REAR.has(code) ? "REAR" : "FRONT",
         status: body.status || "available",
-        defect: defect ?? null,
+        defectSccn: defectSccn ?? null,
+        defectScd: defectScd ?? null,
         updatedBy: user.name ?? null,
       },
     });
@@ -74,7 +80,7 @@ export async function PUT(req: NextRequest) {
       "UPDATE_OIL_GUN",
       "OilGun",
       gun.id,
-      `${machine}/${code} → ${gun.status}${gun.defect ? " (có khiếm khuyết)" : ""}`
+      `${machine}/${code} → ${gun.status}${hasDefect(gun) ? " (có khiếm khuyết)" : ""}`
     );
     return ok(gun);
   });

@@ -10,7 +10,9 @@ export interface OilGun {
   wall: "REAR" | "FRONT";
   position: number;
   status: "available" | "unavailable";
-  defect: string | null;
+  defect: string | null; // legacy — giữ tương thích, không dùng để nhập mới
+  defectSccn: string | null; // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
+  defectScd: string | null; // Khiếm khuyết SCĐ (sửa chữa điện)
   updatedBy: string | null;
   updatedAt: string;
 }
@@ -22,11 +24,15 @@ export interface OilGunSummary {
   unavailable: number;
 }
 
+function oilGunHasDefect(g: OilGun) {
+  return !!(g.defectSccn?.trim() || g.defectScd?.trim());
+}
+
 function summarizeOilGuns(guns: OilGun[]): OilGunSummary {
   return {
     total: guns.length,
-    available: guns.filter((g) => g.status === "available" && !g.defect?.trim()).length,
-    defective: guns.filter((g) => g.status === "available" && !!g.defect?.trim()).length,
+    available: guns.filter((g) => g.status === "available" && !oilGunHasDefect(g)).length,
+    defective: guns.filter((g) => g.status === "available" && oilGunHasDefect(g)).length,
     unavailable: guns.filter((g) => g.status === "unavailable").length,
   };
 }
@@ -45,7 +51,8 @@ export interface OilGunUpdate {
   machine: string;
   code: string;
   status?: "available" | "unavailable";
-  defect?: string | null;
+  defectSccn?: string | null;
+  defectScd?: string | null;
 }
 
 export function useUpdateOilGun() {

@@ -138,6 +138,8 @@ CREATE TABLE IF NOT EXISTS "OilGun" (
   position INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'available',
   defect TEXT,
+  "defectSccn" TEXT,
+  "defectScd" TEXT,
   "updatedBy" TEXT,
   "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP

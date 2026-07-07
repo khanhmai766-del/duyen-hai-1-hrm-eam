@@ -28,17 +28,19 @@ const C = {
 };
 
 type Tone = { key: "ok" | "warn" | "bad"; c: string; bg: string; line: string; label: string };
-type OilGunDraft = { status: "available" | "unavailable"; defect: string };
+type OilGunDraft = { status: "available" | "unavailable"; defectSccn: string; defectScd: string };
 type LastSavedChange = {
   machine: string;
   code: string;
-  previous: { status: "available" | "unavailable"; defect: string | null };
+  previous: { status: "available" | "unavailable"; defectSccn: string | null; defectScd: string | null };
 };
-
+function gunHasDefect(g?: Pick<OilGun, "defectSccn" | "defectScd"> | null) {
+  return !!(g?.defectSccn?.trim() || g?.defectScd?.trim());
+}
 function tone(g?: OilGun): Tone {
   if (!g || g.status === "unavailable")
     return { key: "bad", c: C.bad, bg: C.badBg, line: C.badLine, label: "Không khả dụng" };
-  if (g.defect?.trim())
+  if (gunHasDefect(g))
     return { key: "warn", c: C.warn, bg: C.warnBg, line: C.warnLine, label: "Khả dụng · có khiếm khuyết" };
   return { key: "ok", c: C.ok, bg: C.okBg, line: C.okLine, label: "Khả dụng" };
 }
@@ -69,13 +71,14 @@ export default function OilGunBoard() {
       : null;
   const draftDirty = !!draft && (
     draft.status !== (selectedGun?.status ?? "available") ||
-    draft.defect !== (selectedGun?.defect ?? "")
+    draft.defectSccn !== (selectedGun?.defectSccn ?? "") ||
+    draft.defectScd !== (selectedGun?.defectScd ?? "")
   );
 
   function openGun(code: string) {
     const g = byCode.get(code);
     setSelected(code);
-    setDraft({ status: g?.status ?? "available", defect: g?.defect ?? "" });
+    setDraft({ status: g?.status ?? "available", defectSccn: g?.defectSccn ?? "", defectScd: g?.defectScd ?? "" });
   }
   function closePanel() { setSelected(null); setDraft(null); }
 
@@ -87,14 +90,16 @@ export default function OilGunBoard() {
     }
     const previous = {
       status: selectedGun?.status ?? "available",
-      defect: selectedGun?.defect ?? null,
+      defectSccn: selectedGun?.defectSccn ?? null,
+      defectScd: selectedGun?.defectScd ?? null,
     };
 
     try {
       await update.mutateAsync({
         machine, code: selected,
         status: draft.status,
-        defect: draft.defect.trim() || null,
+        defectSccn: draft.defectSccn.trim() || null,
+        defectScd: draft.defectScd.trim() || null,
       });
       setLastSavedChange({ machine, code: selected, previous });
       toast.success(`Đã cập nhật vòi ${selected}`);
@@ -110,7 +115,8 @@ export default function OilGunBoard() {
     if (draftDirty || !undoSnapshot) {
       setDraft({
         status: selectedGun?.status ?? "available",
-        defect: selectedGun?.defect ?? "",
+        defectSccn: selectedGun?.defectSccn ?? "",
+        defectScd: selectedGun?.defectScd ?? "",
       });
       return;
     }
@@ -124,7 +130,8 @@ export default function OilGunBoard() {
         machine,
         code: selected,
         status: undoSnapshot.status,
-        defect: undoSnapshot.defect,
+        defectSccn: undoSnapshot.defectSccn,
+        defectScd: undoSnapshot.defectScd,
       });
       setLastSavedChange(null);
       toast.success(`Đã hoàn tác vòi ${selected} về trạng thái trước khi lưu`);
@@ -211,8 +218,8 @@ export default function OilGunBoard() {
                 <span className="ogb-panel-code">{selected}</span>
                 <span className="ogb-panel-sub">Vòi dầu · Buồng đốt {machine}</span>
               </div>
-              <span className="ogb-panel-badge" style={{ background: tone({ ...(selectedGun as OilGun), status: draft.status, defect: draft.defect } as OilGun).c }}>
-                {tone({ ...(selectedGun as OilGun), status: draft.status, defect: draft.defect } as OilGun).label}
+              <span className="ogb-panel-badge" style={{ background: tone({ ...(selectedGun as OilGun), status: draft.status, defectSccn: draft.defectSccn, defectScd: draft.defectScd } as OilGun).c }}>
+                {tone({ ...(selectedGun as OilGun), status: draft.status, defectSccn: draft.defectSccn, defectScd: draft.defectScd } as OilGun).label}
               </span>
             </div>
 
@@ -232,17 +239,27 @@ export default function OilGunBoard() {
               </div>
 
               <label className="ogb-field-label" style={{ marginTop: 18 }}>
-                <Wrench size={14} /> Khiếm khuyết vòi dầu
+                <Wrench size={14} /> Khiếm khuyết SCCN <span className="ogb-field-hint">(sửa chữa cơ nhiệt)</span>
               </label>
-              <textarea className="ogb-textarea" rows={5}
-                placeholder="Mô tả khiếm khuyết của vòi (thiếu sensor, mòn đầu mồi lửa, kẹt van…). Để trống nếu vòi không có khiếm khuyết."
-                value={draft.defect}
+              <textarea className="ogb-textarea" rows={4}
+                placeholder="Khiếm khuyết cơ nhiệt: mòn đầu mồi lửa, kẹt van, rò dầu… Để trống nếu không có."
+                value={draft.defectSccn}
                 disabled={!canManageOilGuns}
-                onChange={(e) => setDraft({ ...draft, defect: e.target.value })} />
+                onChange={(e) => setDraft({ ...draft, defectSccn: e.target.value })} />
+
+              <label className="ogb-field-label" style={{ marginTop: 16 }}>
+                <Wrench size={14} /> Khiếm khuyết SCĐ <span className="ogb-field-hint">(sửa chữa điện)</span>
+              </label>
+              <textarea className="ogb-textarea" rows={4}
+                placeholder="Khiếm khuyết điện: sensor không phát hiện ngọn lửa, hỏng biến áp đánh lửa… Để trống nếu không có."
+                value={draft.defectScd}
+                disabled={!canManageOilGuns}
+                onChange={(e) => setDraft({ ...draft, defectScd: e.target.value })} />
+
               {!canManageOilGuns && (
                 <p className="ogb-note">Bạn chỉ có quyền xem dữ liệu vòi dầu.</p>
               )}
-              {draft.status === "available" && draft.defect.trim() && (
+              {draft.status === "available" && (draft.defectSccn.trim() || draft.defectScd.trim()) && (
                 <p className="ogb-note warn">
                   <AlertTriangle size={13} /> Vòi vẫn khả dụng nhưng có khiếm khuyết — sẽ hiển thị màu cam để theo dõi.
                 </p>
@@ -293,14 +310,18 @@ function Wall({ groups, byCode, onOpen, highlight, selected }: {
       {codes.map((code) => {
         const g = byCode.get(code);
         const t = tone(g);
-        const hasDefect = g?.defect?.trim();
+        const hasDefect = gunHasDefect(g);
+        const defectText = [
+          g?.defectSccn?.trim() && `SCCN: ${g.defectSccn.trim()}`,
+          g?.defectScd?.trim() && `SCĐ: ${g.defectScd.trim()}`,
+        ].filter(Boolean).join(" · ");
         const dim = highlight && !code.includes(highlight);
         return (
           <button key={code}
             className={`ogb-gun ${selected === code ? "active" : ""} ${dim ? "dim" : ""}`}
             style={{ background: t.bg, borderColor: selected === code ? C.accent : t.line }}
             onClick={() => onOpen(code)}
-            title={`${code} — ${t.label}${hasDefect ? " · " + g!.defect : ""}`}>
+            title={`${code} — ${t.label}${defectText ? " · " + defectText : ""}`}>
             <span className="ogb-gun-dot" style={{ background: t.c }} />
             <span className="ogb-gun-code" style={{ color: C.navy }}>{code}</span>
             <span className="ogb-gun-line" style={{ color: t.c }}>
@@ -376,6 +397,7 @@ const CSS = `
 .ogb-panel-badge{margin-left:auto;color:#fff;font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:20px;}
 .ogb-panel-body{padding:22px;flex:1;overflow-y:auto;}
 .ogb-field-label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:${C.navy};margin-bottom:9px;}
+.ogb-field-hint{font-weight:500;font-size:11.5px;color:#94a3b8;}
 .ogb-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .ogb-seg button{display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border-radius:11px;border:1.5px solid ${C.line};background:#fff;cursor:pointer;font-weight:600;font-size:13.5px;color:#64748b;transition:.15s;}
 .ogb-seg button.on.ok{background:${C.okBg};border-color:${C.ok};color:${C.ok};}
