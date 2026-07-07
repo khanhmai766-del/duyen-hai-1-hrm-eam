@@ -684,6 +684,7 @@ model OilGun {
   defect     String? // (legacy) khiếm khuyết cũ 1 ô — đã tách thành defectSccn/defectScd, giữ để không mất dữ liệu
   defectSccn String? // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
   defectScd  String? // Khiếm khuyết SCĐ (sửa chữa điện)
+  forceFlame Boolean @default(false) // Force tín hiệu ngọn lửa vòi dầu
   updatedBy String?  // tên người cập nhật gần nhất
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
@@ -702,6 +703,11 @@ model BgtsTurbineShutdownRecord {
   dayShiftSigner    String?
   middleShiftSigner String?
   nightShiftSigner  String?
+  // Mốc xác nhận từng ca — tạo/đồng bộ bằng raw SQL trong app/api/bgts-tuabin-ngung/route.ts;
+  // khai báo ở đây để migrate diff / db push không đề nghị xoá (giữ dữ liệu xác nhận).
+  dayShiftConfirmedAt    DateTime?
+  middleShiftConfirmedAt DateTime?
+  nightShiftConfirmedAt  DateTime?
   createdById       String?
   updatedById       String?
   createdAt         DateTime @default(now())

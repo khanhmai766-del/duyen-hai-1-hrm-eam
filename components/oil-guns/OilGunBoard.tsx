@@ -28,11 +28,11 @@ const C = {
 };
 
 type Tone = { key: "ok" | "warn" | "bad"; c: string; bg: string; line: string; label: string };
-type OilGunDraft = { status: "available" | "unavailable"; defectSccn: string; defectScd: string };
+type OilGunDraft = { status: "available" | "unavailable"; defectSccn: string; defectScd: string; forceFlame: boolean };
 type LastSavedChange = {
   machine: string;
   code: string;
-  previous: { status: "available" | "unavailable"; defectSccn: string | null; defectScd: string | null };
+  previous: { status: "available" | "unavailable"; defectSccn: string | null; defectScd: string | null; forceFlame: boolean };
 };
 function gunHasDefect(g?: Pick<OilGun, "defectSccn" | "defectScd"> | null) {
   return !!(g?.defectSccn?.trim() || g?.defectScd?.trim());
@@ -72,13 +72,14 @@ export default function OilGunBoard() {
   const draftDirty = !!draft && (
     draft.status !== (selectedGun?.status ?? "available") ||
     draft.defectSccn !== (selectedGun?.defectSccn ?? "") ||
-    draft.defectScd !== (selectedGun?.defectScd ?? "")
+    draft.defectScd !== (selectedGun?.defectScd ?? "") ||
+    draft.forceFlame !== (selectedGun?.forceFlame ?? false)
   );
 
   function openGun(code: string) {
     const g = byCode.get(code);
     setSelected(code);
-    setDraft({ status: g?.status ?? "available", defectSccn: g?.defectSccn ?? "", defectScd: g?.defectScd ?? "" });
+    setDraft({ status: g?.status ?? "available", defectSccn: g?.defectSccn ?? "", defectScd: g?.defectScd ?? "", forceFlame: g?.forceFlame ?? false });
   }
   function closePanel() { setSelected(null); setDraft(null); }
 
@@ -92,6 +93,7 @@ export default function OilGunBoard() {
       status: selectedGun?.status ?? "available",
       defectSccn: selectedGun?.defectSccn ?? null,
       defectScd: selectedGun?.defectScd ?? null,
+      forceFlame: selectedGun?.forceFlame ?? false,
     };
 
     try {
@@ -100,6 +102,7 @@ export default function OilGunBoard() {
         status: draft.status,
         defectSccn: draft.defectSccn.trim() || null,
         defectScd: draft.defectScd.trim() || null,
+        forceFlame: draft.forceFlame,
       });
       setLastSavedChange({ machine, code: selected, previous });
       toast.success(`Đã cập nhật vòi ${selected}`);
@@ -117,6 +120,7 @@ export default function OilGunBoard() {
         status: selectedGun?.status ?? "available",
         defectSccn: selectedGun?.defectSccn ?? "",
         defectScd: selectedGun?.defectScd ?? "",
+        forceFlame: selectedGun?.forceFlame ?? false,
       });
       return;
     }
@@ -132,6 +136,7 @@ export default function OilGunBoard() {
         status: undoSnapshot.status,
         defectSccn: undoSnapshot.defectSccn,
         defectScd: undoSnapshot.defectScd,
+        forceFlame: undoSnapshot.forceFlame,
       });
       setLastSavedChange(null);
       toast.success(`Đã hoàn tác vòi ${selected} về trạng thái trước khi lưu`);
@@ -255,6 +260,16 @@ export default function OilGunBoard() {
                 value={draft.defectScd}
                 disabled={!canManageOilGuns}
                 onChange={(e) => setDraft({ ...draft, defectScd: e.target.value })} />
+
+              <label className={`ogb-check ${draft.forceFlame ? "on" : ""} ${!canManageOilGuns ? "disabled" : ""}`}>
+                <input type="checkbox" checked={draft.forceFlame} disabled={!canManageOilGuns}
+                  onChange={(e) => setDraft({ ...draft, forceFlame: e.target.checked })} />
+                <span className="ogb-check-box"><Check size={13} /></span>
+                <span className="ogb-check-text">
+                  <b>Force tín hiệu ngọn lửa vòi dầu</b>
+                  <em>Đánh dấu nếu vòi này cần force tín hiệu ngọn lửa.</em>
+                </span>
+              </label>
 
               {!canManageOilGuns && (
                 <p className="ogb-note">Bạn chỉ có quyền xem dữ liệu vòi dầu.</p>
@@ -398,6 +413,18 @@ const CSS = `
 .ogb-panel-body{padding:22px;flex:1;overflow-y:auto;}
 .ogb-field-label{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:${C.navy};margin-bottom:9px;}
 .ogb-field-hint{font-weight:500;font-size:11.5px;color:#94a3b8;}
+.ogb-check{display:flex;align-items:flex-start;gap:10px;margin-top:14px;padding:11px 13px;border:1.5px solid ${C.line};border-radius:12px;cursor:pointer;transition:.15s;background:#fff;}
+.ogb-check:hover{border-color:#c7ccd6;}
+.ogb-check.on{border-color:${C.accent};background:#eff4ff;}
+.ogb-check.disabled{cursor:not-allowed;opacity:.6;}
+.ogb-check input{position:absolute;opacity:0;width:0;height:0;}
+.ogb-check-box{flex-shrink:0;width:20px;height:20px;border-radius:6px;border:1.5px solid #cbd5e1;background:#fff;display:grid;place-items:center;color:#fff;transition:.15s;margin-top:1px;}
+.ogb-check.on .ogb-check-box{background:${C.accent};border-color:${C.accent};}
+.ogb-check-box svg{opacity:0;transition:.15s;}
+.ogb-check.on .ogb-check-box svg{opacity:1;}
+.ogb-check-text{display:flex;flex-direction:column;gap:2px;font-size:13px;color:#1f2430;}
+.ogb-check-text b{font-weight:600;}
+.ogb-check-text em{font-style:normal;font-size:11.5px;color:#94a3b8;}
 .ogb-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .ogb-seg button{display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border-radius:11px;border:1.5px solid ${C.line};background:#fff;cursor:pointer;font-weight:600;font-size:13.5px;color:#64748b;transition:.15s;}
 .ogb-seg button.on.ok{background:${C.okBg};border-color:${C.ok};color:${C.ok};}

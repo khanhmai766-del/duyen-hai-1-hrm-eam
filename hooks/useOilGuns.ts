@@ -13,6 +13,7 @@ export interface OilGun {
   defect: string | null; // legacy — giữ tương thích, không dùng để nhập mới
   defectSccn: string | null; // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
   defectScd: string | null; // Khiếm khuyết SCĐ (sửa chữa điện)
+  forceFlame: boolean; // Force tín hiệu ngọn lửa vòi dầu
   updatedBy: string | null;
   updatedAt: string;
 }
@@ -53,6 +54,7 @@ export interface OilGunUpdate {
   status?: "available" | "unavailable";
   defectSccn?: string | null;
   defectScd?: string | null;
+  forceFlame?: boolean;
 }
 
 export function useUpdateOilGun() {

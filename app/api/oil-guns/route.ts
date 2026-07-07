@@ -55,6 +55,7 @@ export async function PUT(req: NextRequest) {
       body.defectSccn === null ? null : typeof body.defectSccn === "string" ? body.defectSccn.trim() || null : undefined;
     const defectScd =
       body.defectScd === null ? null : typeof body.defectScd === "string" ? body.defectScd.trim() || null : undefined;
+    const forceFlame = typeof body.forceFlame === "boolean" ? body.forceFlame : undefined;
 
     const gun = await prisma.oilGun.upsert({
       where: { machine_code: { machine, code } },
@@ -62,6 +63,7 @@ export async function PUT(req: NextRequest) {
         ...(body.status ? { status: body.status } : {}),
         ...(defectSccn !== undefined ? { defectSccn } : {}),
         ...(defectScd !== undefined ? { defectScd } : {}),
+        ...(forceFlame !== undefined ? { forceFlame } : {}),
         updatedBy: user.name ?? null,
       },
       create: {
@@ -71,6 +73,7 @@ export async function PUT(req: NextRequest) {
         status: body.status || "available",
         defectSccn: defectSccn ?? null,
         defectScd: defectScd ?? null,
+        forceFlame: forceFlame ?? false,
         updatedBy: user.name ?? null,
       },
     });
