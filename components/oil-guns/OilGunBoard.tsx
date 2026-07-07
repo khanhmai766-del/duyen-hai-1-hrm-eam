@@ -188,7 +188,7 @@ export default function OilGunBoard() {
               <span><i style={{ background: C.ok }} /> Khả dụng</span>
               <span><i style={{ background: C.warn }} /> Có khiếm khuyết</span>
               <span><i style={{ background: C.bad }} /> Không khả dụng</span>
-              <span><Flame size={12} style={{ color: "#f97316" }} /> Cần force tín hiệu lửa</span>
+              <span><span style={{ fontSize: 13 }}>🔥</span> Cần force tín hiệu lửa</span>
               <span className="hint">Đang xem lớp <b>{LAYER_LABEL[layer]}</b> · bấm một vòi để sửa cả 2 lớp</span>
             </div>
           </>
@@ -365,7 +365,7 @@ function Wall({ groups, byCode, layer, onOpen, highlight, selected }: {
             onClick={() => onOpen(code)}
             title={`${code} — ${st.label}${defectText ? " · " + defectText : ""}${d.showFire ? " · cần force tín hiệu lửa" : ""}`}>
             {d.showFire
-              ? <Flame className="ogb-gun-fire" size={12} />
+              ? <span className="ogb-gun-fire" aria-label="Cần force tín hiệu ngọn lửa">🔥</span>
               : <span className="ogb-gun-dot" style={{ background: st.c }} />}
             <span className="ogb-gun-code" style={{ color: C.navy }}>{code}</span>
             <span className="ogb-gun-line" style={{ color: st.c }}>{st.label}</span>
@@ -424,7 +424,7 @@ const CSS = `
 .ogb-gun-code{font-weight:700;font-size:15px;line-height:1.1;}
 .ogb-gun-line{font-size:9.5px;font-weight:600;white-space:normal;line-height:1.2;overflow-wrap:break-word;}
 .ogb-gun-wrench{position:absolute;top:9px;right:22px;}
-.ogb-gun-fire{position:absolute;top:8px;right:8px;color:#f97316;}
+.ogb-gun-fire{position:absolute;top:7px;right:7px;font-size:12px;line-height:1;}
 .ogb-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px dashed ${C.line};font-size:12.5px;color:#475569;}
 .ogb-legend span{display:inline-flex;align-items:center;gap:7px;}
 .ogb-legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
