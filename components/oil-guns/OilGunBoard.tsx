@@ -423,21 +423,21 @@ const CSS = `
 .ogb-loading{flex-direction:row;color:#64748b;}
 .ogb-empty code{background:#f1f5f9;padding:2px 7px;border-radius:6px;font-size:12px;}
 .spin{animation:spin 1s linear infinite;}@keyframes spin{to{transform:rotate(360deg);}}
-.ogb-board{min-width:1080px;display:flex;flex-direction:column;gap:10px;}
+.ogb-board{min-width:1160px;display:flex;flex-direction:column;gap:10px;}
 .ogb-wall-label{font-weight:600;font-size:11px;letter-spacing:0;text-transform:uppercase;color:#94a3b8;text-align:center;}
-.ogb-wall{display:grid;grid-template-columns:repeat(18,minmax(52px,1fr));gap:6px;}
+.ogb-wall{display:grid;grid-template-columns:repeat(18,minmax(58px,1fr));gap:6px;}
 .ogb-chamber{display:flex;align-items:center;justify-content:center;gap:14px;height:64px;border-radius:12px;margin:4px 0;font-weight:700;font-size:22px;letter-spacing:0;color:#fff;background:linear-gradient(100deg,${C.chamber2},${C.chamber1});box-shadow:inset 0 0 40px rgba(0,0,0,.18);position:relative;overflow:hidden;}
 .ogb-chamber::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 120%,rgba(255,255,255,.35),transparent 60%);}
 .ogb-chamber svg{opacity:.9;}
-.ogb-gun{position:relative;border:1.5px solid;border-radius:9px;padding:8px 7px;min-height:54px;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;justify-content:center;gap:2px;font-family:inherit;}
+.ogb-gun{position:relative;border:1.5px solid;border-radius:9px;padding:8px 7px;min-height:56px;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;justify-content:center;gap:2px;font-family:inherit;}
 .ogb-gun:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,40,70,.12);}
 .ogb-gun:focus-visible{outline:2px solid ${C.accent};outline-offset:2px;}
 .ogb-gun.active{box-shadow:0 0 0 3px rgba(37,99,235,.25);}
 .ogb-gun.dim{opacity:.32;filter:grayscale(.4);}
 .ogb-gun-dot{position:absolute;top:10px;right:9px;width:9px;height:9px;border-radius:50%;}
 .ogb-gun-code{font-weight:700;font-size:15px;line-height:1.1;}
-.ogb-gun-line{font-size:9.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ogb-gun-wrench{position:absolute;bottom:8px;right:8px;}
+.ogb-gun-line{font-size:9.5px;font-weight:600;white-space:normal;line-height:1.2;overflow-wrap:break-word;}
+.ogb-gun-wrench{position:absolute;top:9px;right:22px;}
 .ogb-legend{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px dashed ${C.line};font-size:12.5px;color:#475569;}
 .ogb-legend span{display:inline-flex;align-items:center;gap:7px;}
 .ogb-legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
