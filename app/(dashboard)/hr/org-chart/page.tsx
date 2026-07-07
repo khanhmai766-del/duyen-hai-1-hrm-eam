@@ -3,8 +3,9 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
+import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat, Printer } from "lucide-react";
+import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat, Printer, QrCode, Copy, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -150,6 +151,8 @@ export default function OrgChartPage() {
   const [checkInSuccessMessage, setCheckInSuccessMessage] = React.useState("");
   const [viewer, setViewer] = React.useState(false);
   const [approveOpen, setApproveOpen] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [origin, setOrigin] = React.useState("");
   const recall = useRecallCheckIn();
   const rbac = useRbacAccess();
 
@@ -172,6 +175,10 @@ export default function OrgChartPage() {
     return () => window.clearTimeout(timer);
   }, [checkInSuccessMessage]);
 
+  React.useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
   function showCheckInSuccessMessage() {
     setCheckInSuccessMessage(randomCheckInSuccessMessage(shiftType));
   }
@@ -186,6 +193,15 @@ export default function OrgChartPage() {
   function closeViewer() {
     setViewer(false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }
+  const publicOrgChartUrl = `${origin}/public/org-chart`;
+  async function copyPublicOrgChartUrl() {
+    try {
+      await navigator.clipboard.writeText(publicOrgChartUrl);
+      toast.success("Đã sao chép link công khai");
+    } catch {
+      toast.error("Không sao chép được link");
+    }
   }
   React.useEffect(() => {
     if (!viewer) return;
@@ -305,6 +321,9 @@ export default function OrgChartPage() {
         <Button size="sm" variant="outline" onClick={openViewer}>
           <Tv className="h-4 w-4" /> Viewer
         </Button>
+        <Button size="sm" variant="outline" onClick={() => setShareOpen(true)}>
+          <QrCode className="h-4 w-4" /> Link QR
+        </Button>
       </PageHeader>
 
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} date={date} shiftType={shiftType} unit={unit} onSuccess={showCheckInSuccessMessage} />
@@ -317,6 +336,34 @@ export default function OrgChartPage() {
         unit={unit}
         assignments={assignments}
       />
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link công khai sơ đồ ca</DialogTitle>
+            <DialogDescription>
+              Người ngoài không cần tài khoản có thể mở link cố định này để xem danh sách nhân sự ca hiện tại, bao gồm số điện thoại.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4">
+            <div className="rounded-lg border border-border bg-white p-3">
+              {origin ? <QRCodeSVG value={publicOrgChartUrl} size={196} includeMargin /> : <div className="h-[196px] w-[196px]" />}
+            </div>
+            <div className="w-full rounded-md border border-border bg-muted/40 px-3 py-2 text-center text-sm font-medium text-ink break-all">
+              {publicOrgChartUrl}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button variant="outline" onClick={copyPublicOrgChartUrl} disabled={!origin}>
+              <Copy className="h-4 w-4" /> Sao chép link
+            </Button>
+            <Button asChild disabled={!origin}>
+              <a href="/public/org-chart" target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4" /> Mở thử
+              </a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Recall success modal */}
       <Dialog open={recallDone} onOpenChange={setRecallDone}>
