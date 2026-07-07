@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Flame, Wrench, Check, X, Save, AlertTriangle,
-  FileSpreadsheet, Printer, Droplet, Factory, Search, RotateCcw, Loader2,
+  FileSpreadsheet, Printer, Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useOilGuns, useUpdateOilGun, type OilGun } from "@/hooks/useOilGuns";
+import { useOilGuns, useUpdateOilGun, useUpdateOilGunNote, type OilGun } from "@/hooks/useOilGuns";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 /* Bố trí vòi theo bảng vận hành: mỗi mảng con là 1 cụm vị trí liền nhau trên sơ đồ. */
@@ -54,8 +54,24 @@ export default function OilGunBoard() {
 
   const { data, isLoading } = useOilGuns(machine);
   const update = useUpdateOilGun();
+  const updateNote = useUpdateOilGunNote();
   const rbac = useRbacAccess();
   const canManageOilGuns = rbac.can("archive-oil-gun-data", ["manage", "full"]);
+
+  // Ghi chú chung của sơ đồ theo tổ máy — đồng bộ theo dữ liệu tải/khi đổi tổ máy.
+  const savedNote = data?.note ?? "";
+  const [noteDraft, setNoteDraft] = useState("");
+  useEffect(() => { setNoteDraft(savedNote); }, [savedNote, machine]);
+
+  async function saveNote() {
+    if (!canManageOilGuns) { toast.error("Không đủ quyền cập nhật ghi chú vòi dầu"); return; }
+    try {
+      await updateNote.mutateAsync({ machine, note: noteDraft });
+      toast.success(`Đã lưu ghi chú sơ đồ tổ máy ${machine}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Lưu ghi chú thất bại");
+    }
+  }
 
   const byCode = useMemo(() => {
     const m = new Map<string, OilGun>();
@@ -211,6 +227,33 @@ export default function OilGunBoard() {
           </>
         )}
       </div>
+
+      {!isLoading && summary.total > 0 && (
+        <div className="ogb-notecard">
+          <div className="ogb-notecard-head">
+            <label className="ogb-field-label"><StickyNote size={15} /> Ghi chú sơ đồ vòi dầu — Tổ máy {machine}</label>
+            {data?.noteUpdatedBy && (
+              <span className="ogb-notecard-meta">
+                Cập nhật: <b>{data.noteUpdatedBy}</b>
+                {data.noteUpdatedAt ? " · " + new Date(data.noteUpdatedAt).toLocaleString("vi-VN") : ""}
+              </span>
+            )}
+          </div>
+          <textarea className="ogb-textarea" rows={3}
+            placeholder={`Ghi chú chung cho sơ đồ vòi dầu tổ máy ${machine}…`}
+            value={noteDraft}
+            disabled={!canManageOilGuns}
+            onChange={(e) => setNoteDraft(e.target.value)} />
+          {canManageOilGuns && (
+            <div className="ogb-notecard-foot">
+              <button className="ogb-btn primary" onClick={saveNote}
+                disabled={updateNote.isPending || noteDraft === savedNote}>
+                {updateNote.isPending ? <Loader2 className="spin" size={15} /> : <Save size={15} />} Lưu ghi chú
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {selected && draft && (
         <>
@@ -424,6 +467,11 @@ const CSS = `
 .ogb-check-text{display:flex;flex-direction:column;gap:2px;font-size:13px;color:#1f2430;}
 .ogb-check-text b{font-weight:600;}
 .ogb-check-text em{font-style:normal;font-size:11.5px;color:#94a3b8;}
+.ogb-notecard{background:#fff;border:1px solid ${C.line};border-radius:18px;padding:18px 20px;margin-top:16px;box-shadow:0 8px 30px rgba(20,40,70,.05);}
+.ogb-notecard-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+.ogb-notecard-head .ogb-field-label{margin-bottom:0;}
+.ogb-notecard-meta{font-size:11.5px;color:#94a3b8;}
+.ogb-notecard-foot{display:flex;justify-content:flex-end;margin-top:12px;}
 .ogb-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .ogb-seg button{display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border-radius:11px;border:1.5px solid ${C.line};background:#fff;cursor:pointer;font-weight:600;font-size:13.5px;color:#64748b;transition:.15s;}
 .ogb-seg button.on.ok{background:${C.okBg};border-color:${C.ok};color:${C.ok};}

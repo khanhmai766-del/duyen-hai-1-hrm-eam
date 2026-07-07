@@ -43,10 +43,24 @@ export function useOilGuns(machine: string) {
     queryKey: ["oil-guns", machine],
     queryFn: async () => {
       const res = await apiGet<OilGun[]>(`/api/oil-guns?machine=${machine}`);
-      return { guns: res.data, summary: res.meta?.summary as OilGunSummary | undefined };
+      return {
+        guns: res.data,
+        summary: res.meta?.summary as OilGunSummary | undefined,
+        note: (res.meta?.note as string | undefined) ?? "",
+        noteUpdatedBy: (res.meta?.noteUpdatedBy as string | null | undefined) ?? null,
+        noteUpdatedAt: (res.meta?.noteUpdatedAt as string | null | undefined) ?? null,
+      };
     },
   });
 }
+
+type OilGunQueryData = {
+  guns: OilGun[];
+  summary?: OilGunSummary;
+  note?: string;
+  noteUpdatedBy?: string | null;
+  noteUpdatedAt?: string | null;
+};
 
 export interface OilGunUpdate {
   machine: string;
@@ -62,13 +76,21 @@ export function useUpdateOilGun() {
   return useMutation({
     mutationFn: (body: OilGunUpdate) => apiMutate<OilGun>("/api/oil-guns", "PUT", body),
     onSuccess: (updated, vars) => {
-      qc.setQueryData<{ guns: OilGun[]; summary?: OilGunSummary }>(["oil-guns", vars.machine], (current) => {
+      qc.setQueryData<OilGunQueryData>(["oil-guns", vars.machine], (current) => {
         if (!current) return current;
 
         const guns = current.guns.map((gun) => (gun.id === updated.id ? updated : gun));
-        return { guns, summary: summarizeOilGuns(guns) };
+        return { ...current, guns, summary: summarizeOilGuns(guns) };
       });
       return qc.invalidateQueries({ queryKey: ["oil-guns", vars.machine] });
     },
+  });
+}
+
+export function useUpdateOilGunNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { machine: string; note: string }) => apiMutate("/api/oil-guns/note", "PUT", body),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ["oil-guns", vars.machine] }),
   });
 }

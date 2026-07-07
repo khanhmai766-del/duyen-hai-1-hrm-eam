@@ -693,6 +693,14 @@ model OilGun {
   @@index([machine])
 }
 
+// Ghi chú chung cho sơ đồ vòi dầu theo từng tổ máy (S1/S2) — 1 dòng/tổ máy.
+model OilGunNote {
+  machine   String   @id // "S1" | "S2"
+  note      String   @default("")
+  updatedBy String?
+  updatedAt DateTime @updatedAt @default(now())
+}
+
 // BGTS Tuabin ngừng: bảng ghi thông số DCS theo ngày, dùng trong Thư mục lưu trữ
 // > Dữ liệu tách lưới > BGTS Tuabin Ngừng. API tạo/đồng bộ bảng bằng raw SQL để
 // bổ sung an toàn trên DB dev hiện có; khai báo ở đây để db push không đề nghị xoá.

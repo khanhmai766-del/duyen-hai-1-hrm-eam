@@ -24,17 +24,23 @@ export async function GET(req: NextRequest) {
     const user = await requireUser();
     await requirePermissionLevel(user, "archive-oil-gun-data", ["read", "own", "create", "approve", "manage", "full"], "Không đủ quyền xem dữ liệu vòi dầu");
     const machine = req.nextUrl.searchParams.get("machine") || "S1";
-    const guns = await prisma.oilGun.findMany({
-      where: { machine },
-      orderBy: { position: "asc" },
-    });
+    const [guns, noteRow] = await Promise.all([
+      prisma.oilGun.findMany({ where: { machine }, orderBy: { position: "asc" } }),
+      prisma.oilGunNote.findUnique({ where: { machine } }),
+    ]);
     const summary = {
       total: guns.length,
       available: guns.filter((g) => g.status === "available" && !hasDefect(g)).length,
       defective: guns.filter((g) => g.status === "available" && hasDefect(g)).length,
       unavailable: guns.filter((g) => g.status === "unavailable").length,
     };
-    return ok(guns, { machine, summary });
+    return ok(guns, {
+      machine,
+      summary,
+      note: noteRow?.note ?? "",
+      noteUpdatedBy: noteRow?.updatedBy ?? null,
+      noteUpdatedAt: noteRow?.updatedAt ?? null,
+    });
   });
 }
 
