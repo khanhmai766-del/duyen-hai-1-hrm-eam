@@ -38,11 +38,13 @@ const HC_SELF_PERIODS = [
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((p) => `Hành chính - ${p.label}`);
 const HC_RECALL_WINDOW_MS = 5 * 60 * 1000;
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
-const MANAGED_GROUP_PERIODS: Array<{ value: "FULL_DAY" | "MORNING" | "AFTERNOON"; label: string }> = [
-  { value: "FULL_DAY", label: "Cả ngày" },
-  { value: "MORNING", label: "Buổi sáng" },
-  { value: "AFTERNOON", label: "Buổi chiều" },
-];
+const MANAGED_GROUP_PERIODS = [
+  { value: "FULL_DAY", label: "Cả ngày", hours: 8 },
+  { value: "MORNING", label: "Buổi sáng", hours: 4 },
+  { value: "AFTERNOON", label: "Buổi chiều", hours: 4 },
+  { value: "MORNING_OFF", label: "Ra ca sáng", hours: 3 },
+] as const;
+type ManagedGroupPeriod = (typeof MANAGED_GROUP_PERIODS)[number]["value"];
 const HC_SELF_AUTO_APPROVE_POSITIONS = ["quan doc", "pho quan doc", "ky thuat vien", "thong ke"];
 
 function vietnamDateInput(date = new Date()) {
@@ -54,6 +56,10 @@ function vietnamDateInput(date = new Date()) {
   }).formatToParts(date);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
+}
+
+function vietnamDateInputFromValue(date: Date | string) {
+  return vietnamDateInput(typeof date === "string" ? new Date(date) : date);
 }
 
 function isSelfHcGroup(group: HcGroup) {
@@ -489,7 +495,7 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
         </div>
       )}
 
-      <GroupDialog open={editOpen} onOpenChange={setEditOpen} date={group.date.slice(0, 10)} group={group} />
+      <GroupDialog open={editOpen} onOpenChange={setEditOpen} date={vietnamDateInputFromValue(group.date)} group={group} />
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} group={group} />
     </Card>
   );
@@ -504,14 +510,14 @@ function GroupDialog({
   const isEdit = !!group;
   const [content, setContent] = React.useState("");
   const [hours, setHours] = React.useState(8);
-  const [period, setPeriod] = React.useState<"FULL_DAY" | "MORNING" | "AFTERNOON">("FULL_DAY");
+  const [period, setPeriod] = React.useState<ManagedGroupPeriod>("FULL_DAY");
 
   React.useEffect(() => {
     if (!open) return;
     setContent(group?.content ?? "");
     setHours(group?.hours ?? 8);
     const current = normalizeHcPeriod(group?.period);
-    setPeriod(current === "AFTERNOON" || current === "MORNING" ? current : "FULL_DAY");
+    setPeriod(MANAGED_GROUP_PERIODS.some((item) => item.value === current) ? current : "FULL_DAY");
   }, [open, group]);
 
   const dateLabel = date.split("-").reverse().join("-");
@@ -546,7 +552,14 @@ function GroupDialog({
             <span className="text-sm font-medium text-ink">{dateLabel}</span>
           </Row>
           <Row label="Buổi">
-            <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+            <Select
+              value={period}
+              onValueChange={(v) => {
+                const nextPeriod = v as ManagedGroupPeriod;
+                setPeriod(nextPeriod);
+                setHours(MANAGED_GROUP_PERIODS.find((item) => item.value === nextPeriod)?.hours ?? 8);
+              }}
+            >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {MANAGED_GROUP_PERIODS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}

@@ -10,6 +10,7 @@ const EDIT_TIMESHEET_PERMISSION_ID = "timesheet-edit";
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Buổi chiều", "Hành chính - Ra ca sáng"];
 const TIMESHEET_PREVIOUS_MONTH_KEEP_UNTIL_DAY = 15;
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function periodSlots(period?: string | null) {
   const normalized = normalizeHcPeriod(period);
@@ -47,6 +48,16 @@ function vietnamCalendarParts(now = new Date()) {
     month: Number(values.month) - 1,
     day: Number(values.day),
   };
+}
+
+function vietnamMonthRange(year: number, month: number) {
+  const start = new Date(Date.UTC(year, month, 1) - VIETNAM_OFFSET_MS);
+  const end = new Date(Date.UTC(year, month + 1, 1) - VIETNAM_OFFSET_MS - 1);
+  return { start, end };
+}
+
+function vietnamDayOfMonth(date: Date) {
+  return vietnamCalendarParts(date).day;
 }
 
 function retentionMonthRange(now = new Date()) {
@@ -111,15 +122,16 @@ export async function GET(req: NextRequest) {
 
     const monthParam = req.nextUrl.searchParams.get("month"); // YYYY-MM
     const now = new Date();
-    let y = now.getFullYear();
-    let mo = now.getMonth();
+    const currentVietnamMonth = vietnamCalendarParts(now);
+    let y = currentVietnamMonth.year;
+    let mo = currentVietnamMonth.month;
     if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
       const [py, pm] = monthParam.split("-").map(Number);
       y = py;
       mo = pm - 1;
     }
-    const monthStart = new Date(y, mo, 1);
-    const monthEnd = new Date(y, mo + 1, 0, 23, 59, 59, 999);
+    const { start: monthStart, end: monthEnd } = vietnamMonthRange(y, mo);
+    const daysInMonth = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
 
     if (!isMonthInRetention(y, mo)) {
       return ok({ month: mo + 1, year: y, entries: [], hcEntries: [], overrides: [], canEdit });
@@ -161,7 +173,7 @@ export async function GET(req: NextRequest) {
     const assignmentKeys = new Set(assignments.map((a) => `${a.userId}:${a.shiftId}`));
     const entries = assignments.map((a) => ({
       userId: a.userId,
-      day: a.shift.date.getDate(),
+      day: vietnamDayOfMonth(a.shift.date),
       shiftType: a.shift.shiftType as string,
       hours: hoursByUserShift.get(`${a.userId}:${a.shiftId}`) ?? 8,
       isApproved: a.isApproved,
@@ -171,7 +183,7 @@ export async function GET(req: NextRequest) {
       if (assignmentKeys.has(key) || !checkIn.shift.isAttendanceLocked) continue;
       entries.push({
         userId: checkIn.userId,
-        day: checkIn.shift.date.getDate(),
+        day: vietnamDayOfMonth(checkIn.shift.date),
         shiftType: checkIn.shift.shiftType as string,
         hours: hoursByUserShift.get(key) ?? 8,
         isApproved: true,
@@ -190,14 +202,14 @@ export async function GET(req: NextRequest) {
     const managedSlotsByUserDay = new Map<string, Set<string>>();
     for (const c of hcCheckIns) {
       if (HC_SELF_CONTENTS.includes(c.group.content)) continue;
-      const key = `${c.userId}:${c.group.date.getDate()}`;
+      const key = `${c.userId}:${vietnamDayOfMonth(c.group.date)}`;
       const slots = managedSlotsByUserDay.get(key) ?? new Set<string>();
       periodSlots(c.group.period).forEach((slot) => slots.add(slot));
       managedSlotsByUserDay.set(key, slots);
     }
     const hcEntries = hcCheckIns
       .map((c) => {
-        const day = c.group.date.getDate();
+        const day = vietnamDayOfMonth(c.group.date);
         const override = HC_SELF_CONTENTS.includes(c.group.content)
           ? adjustedSelfHcEntry(c, managedSlotsByUserDay.get(`${c.userId}:${day}`) ?? new Set())
           : { hours: c.hours, period: c.group.period };
@@ -233,7 +245,7 @@ export async function GET(req: NextRequest) {
         ORDER BY o.date ASC
       `,
       `${y}-${String(mo + 1).padStart(2, "0")}-01`,
-      `${y}-${String(mo + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`,
+      `${y}-${String(mo + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`,
       ...(scopeToSelf ? [user.id] : [])
     );
     const overrides = overrideRows.map((row) => ({

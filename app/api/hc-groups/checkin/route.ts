@@ -35,17 +35,20 @@ function dayRange(date: string | Date) {
   return localDateRange(date);
 }
 
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
+function vietnamDateUtcMidnight(date: Date | string) {
+  if (typeof date === "string") {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  }
+  const d = date instanceof Date ? date : new Date(date);
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
-function canRegisterForDate(target: Date, now = new Date()) {
+function canRegisterForDate(target: Date | string, now = new Date()) {
   // Phải đăng ký trước tối thiểu 2 ngày — mốc "hôm nay" tính theo giờ VN.
   const minAllowed = vietnamTodayUtcMidnight(now);
   minAllowed.setUTCDate(minAllowed.getUTCDate() + 2);
-  return startOfDay(target).getTime() >= minAllowed.getTime();
+  return vietnamDateUtcMidnight(target).getTime() >= minAllowed.getTime();
 }
 
 function isBeforeRegistrationCutoff(now = new Date()) {
@@ -123,7 +126,7 @@ export async function POST(req: NextRequest) {
         if (!isBeforeRegistrationCutoff()) {
           return fail("Chỉ được đăng ký đi hành chính trước 16h30");
         }
-        if (!existingRegistration && !canRegisterForDate(start)) {
+        if (!existingRegistration && !canRegisterForDate(date)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
         }
       } else if (date !== vietnamDateInput()) {

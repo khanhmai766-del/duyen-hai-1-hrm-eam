@@ -23,7 +23,7 @@ import {
   type HcRegistration,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { cn, formatDateInput, formatDate as formatVietnamDate, initials, parseDateInput } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 
 const HC_SELF_PERIODS = [
   { value: "FULL_DAY", label: "Cả ngày" },
@@ -32,22 +32,41 @@ const HC_SELF_PERIODS = [
   { value: "AFTERNOON", label: "Buổi chiều" },
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((period) => `Hành chính - ${period.label}`);
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
-function addCalendarDays(from: Date, days: number) {
-  const date = new Date(from);
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + days);
-  return date;
+function vietnamDateInput(date: Date | string = new Date()) {
+  const value = typeof date === "string" ? new Date(date) : date;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function addCalendarDays(dateInput: string, days: number) {
+  const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateInput;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 function isBeforeRegistrationCutoff(now = new Date()) {
-  const cutoff = new Date(now);
-  cutoff.setHours(16, 30, 0, 0);
-  return now.getTime() < cutoff.getTime();
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: VIETNAM_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return Number(map.hour) * 60 + Number(map.minute) < 16 * 60 + 30;
 }
 
 function formatDateLabel(date: string) {
-  return formatVietnamDate(parseDateInput(date));
+  const [year, month, day] = date.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : date;
 }
 
 function periodLabel(content: string) {
@@ -55,7 +74,7 @@ function periodLabel(content: string) {
 }
 
 function registrationDateKey(registration: HcRegistration) {
-  return formatDateInput(parseDateInput(registration.group.date));
+  return vietnamDateInput(registration.group.date);
 }
 
 export default function AdministrativeRegistrationPage() {
@@ -65,13 +84,14 @@ export default function AdministrativeRegistrationPage() {
   const canManage = rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
   const [now, setNow] = React.useState(() => new Date());
   const registrationOpen = isBeforeRegistrationCutoff(now);
-  const minRegisterDate = React.useMemo(() => formatDateInput(addCalendarDays(new Date(), 2)), []);
+  const today = React.useMemo(() => vietnamDateInput(now), [now]);
+  const minRegisterDate = React.useMemo(() => addCalendarDays(today, 2), [today]);
   const checkIn = useHcCheckIn();
   const [registerDate, setRegisterDate] = React.useState(minRegisterDate);
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
   const [note, setNote] = React.useState("");
   const { data: groupsData } = useHcGroups(registerDate);
-  const { data: registrationsData, isLoading: registrationsLoading } = useHcRegistrations(formatDateInput(new Date()));
+  const { data: registrationsData, isLoading: registrationsLoading } = useHcRegistrations(today);
   const myRegistration = React.useMemo(() => {
     const groups = groupsData?.data ?? [];
     return groups
@@ -93,6 +113,10 @@ export default function AdministrativeRegistrationPage() {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  React.useEffect(() => {
+    if (registerDate < minRegisterDate) setRegisterDate(minRegisterDate);
+  }, [minRegisterDate, registerDate]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -310,6 +334,18 @@ function RegistrationDateRow({
     }
   }
 
+  async function cancelRegistrationItem(registration: HcRegistration) {
+    try {
+      setReviewingId(registration.id);
+      await cancelRegistration.mutateAsync(registration.id);
+      toast.success(`Đã hủy đăng ký của ${registration.user.name}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
   async function cancelDateGroup() {
     try {
       for (const registration of registrations) {
@@ -361,7 +397,7 @@ function RegistrationDateRow({
             )}
             {canManage && (
               <Button className="w-full justify-center" size="sm" variant="destructive" onClick={cancelDateGroup} disabled={cancelRegistration.isPending}>
-                {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy đăng ký
+                {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy tất cả trong ngày
               </Button>
             )}
           </div>
@@ -403,6 +439,21 @@ function RegistrationDateRow({
                   </button>
                 </div>
               )}
+              {canManage && !reviewMode && (
+                <button
+                  type="button"
+                  onClick={() => cancelRegistrationItem(registration)}
+                  disabled={reviewingId === registration.id}
+                  title={`Hủy đăng ký của ${registration.user.name}`}
+                  className={cn(
+                    "absolute right-3 top-3 z-10 inline-flex h-8 items-center gap-1.5 rounded-full border border-red-200 bg-white/95 px-2.5 text-xs font-semibold text-red-600 shadow-sm transition-all hover:bg-red-500 hover:text-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-300",
+                    reviewingId === registration.id && "cursor-wait opacity-60"
+                  )}
+                >
+                  {reviewingId === registration.id && cancelRegistration.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  Hủy
+                </button>
+              )}
               <div className="flex items-start gap-3">
                 {registration.user.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -412,7 +463,7 @@ function RegistrationDateRow({
                     {initials(registration.user.name)}
                   </div>
                 )}
-                <div className={cn("min-w-0 flex-1", canManage && reviewMode && "pr-16")}>
+                <div className={cn("min-w-0 flex-1", canManage && (reviewMode ? "pr-16" : "pr-20"))}>
                   <div className="truncate font-semibold text-ink">{registration.user.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">

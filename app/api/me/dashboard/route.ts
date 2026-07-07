@@ -4,11 +4,11 @@ import { ok, requireUser, handle } from "@/lib/api";
 import { shiftWindow } from "@/lib/constants";
 import { s3ProxyUrl } from "@/lib/s3";
 import { aggregateHcHoursByPeriod, normalizeHcPeriod } from "@/lib/hc-period";
-import { vietnamTodayUtcMidnight } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Buổi chiều", "Hành chính - Ra ca sáng"];
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function periodSlots(period?: string | null) {
   const normalized = normalizeHcPeriod(period);
@@ -30,6 +30,32 @@ function adjustedSelfHcEntry(c: { hours: number; group: { period: string | null 
   return { hours: c.hours, period };
 }
 
+function vietnamCalendarParts(date: Date) {
+  const vietnamWallTime = new Date(date.getTime() + VIETNAM_OFFSET_MS);
+  return {
+    year: vietnamWallTime.getUTCFullYear(),
+    month: vietnamWallTime.getUTCMonth(),
+    day: vietnamWallTime.getUTCDate(),
+  };
+}
+
+function vietnamMonthRange(year: number, month: number) {
+  const start = new Date(Date.UTC(year, month, 1) - VIETNAM_OFFSET_MS);
+  const end = new Date(Date.UTC(year, month + 1, 1) - VIETNAM_OFFSET_MS - 1);
+  return { start, end };
+}
+
+function vietnamDayRange(date: Date) {
+  const parts = vietnamCalendarParts(date);
+  const start = new Date(Date.UTC(parts.year, parts.month, parts.day) - VIETNAM_OFFSET_MS);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+  return { start, end };
+}
+
+function vietnamDayOfMonth(date: Date) {
+  return vietnamCalendarParts(date).day;
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -37,17 +63,17 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     // Optional ?month=YYYY-MM to view a past month's attendance; defaults to current.
     const monthParam = req.nextUrl.searchParams.get("month");
-    let y = now.getFullYear();
-    let mo = now.getMonth();
+    const currentVietnamMonth = vietnamCalendarParts(now);
+    let y = currentVietnamMonth.year;
+    let mo = currentVietnamMonth.month;
     if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
       const [py, pm] = monthParam.split("-").map(Number);
       y = py;
       mo = pm - 1;
     }
-    const monthStart = new Date(y, mo, 1);
-    const monthEnd = new Date(y, mo + 1, 0, 23, 59, 59, 999);
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { start: monthStart, end: monthEnd } = vietnamMonthRange(y, mo);
+    const { start: dayStart, end: dayEnd } = vietnamDayRange(now);
+    const daysInMonth = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
 
     // Approved shift assignments for the month → activity calendar.
     const monthApproved = await prisma.shiftAssignment.findMany({
@@ -59,13 +85,13 @@ export async function GET(req: NextRequest) {
       include: { shift: { select: { date: true, shiftType: true } } },
     });
     const attendanceDays = Array.from(
-      new Set(monthApproved.map((a) => a.shift.date.getDate()))
+      new Set(monthApproved.map((a) => vietnamDayOfMonth(a.shift.date)))
     ).sort((a, b) => a - b);
     const shiftHours = monthApproved.length * 8;
     const morningShiftDays = new Set(
       monthApproved
         .filter((a) => a.shift.shiftType === "MORNING")
-        .map((a) => a.shift.date.getDate())
+        .map((a) => vietnamDayOfMonth(a.shift.date))
     );
 
     // Administrative (hành chính) attendance for the month → the second chart
@@ -81,14 +107,14 @@ export async function GET(req: NextRequest) {
     const managedSlotsByDay = new Map<number, Set<string>>();
     for (const c of monthHc) {
       if (HC_SELF_CONTENTS.includes(c.group.content)) continue;
-      const day = c.group.date.getDate();
+      const day = vietnamDayOfMonth(c.group.date);
       const slots = managedSlotsByDay.get(day) ?? new Set<string>();
       periodSlots(c.group.period).forEach((slot) => slots.add(slot));
       managedSlotsByDay.set(day, slots);
     }
     const adminMap = new Map<number, Array<{ hours: number; period: string | null }>>();
     for (const c of monthHc) {
-      const d = c.group.date.getDate();
+      const d = vietnamDayOfMonth(c.group.date);
       const override = HC_SELF_CONTENTS.includes(c.group.content)
         ? adjustedSelfHcEntry(c, managedSlotsByDay.get(d) ?? new Set())
         : { hours: c.hours, period: c.group.period };
@@ -128,17 +154,13 @@ export async function GET(req: NextRequest) {
     });
 
     // Đã CHẤM CÔNG HÀNH CHÍNH hôm nay? (Quản đốc/Phó Quản đốc/Kỹ thuật viên/Thống kê).
-    // Server chạy UTC nhưng HcGroup.date lưu theo NGÀY VIỆT NAM (midnight UTC của ngày VN),
-    // nên phải tính "hôm nay" theo giờ VN để khớp — tránh lệch ngày lúc 0–7h sáng.
-    const hcDayStart = vietnamTodayUtcMidnight(now);
-    const hcDayEnd = new Date(hcDayStart);
-    hcDayEnd.setUTCDate(hcDayEnd.getUTCDate() + 1);
-    hcDayEnd.setUTCMilliseconds(-1);
+    // Server có thể chạy UTC, còn người dùng làm việc theo ngày Việt Nam.
+    // Dùng khoảng 00:00-23:59 giờ VN để tránh lệch ngày lúc 0-7h sáng.
     const adminSelfToday = await prisma.hcCheckIn.findFirst({
       where: {
         userId: user.id,
         isRegistered: false,
-        group: { date: { gte: hcDayStart, lte: hcDayEnd }, content: { in: HC_SELF_CONTENTS } },
+        group: { date: { gte: dayStart, lte: dayEnd }, content: { in: HC_SELF_CONTENTS } },
       },
       select: { id: true },
     });
@@ -155,7 +177,7 @@ export async function GET(req: NextRequest) {
       workingDays,
       attendanceDays,
       adminDays,
-      daysInMonth: monthEnd.getDate(),
+      daysInMonth,
       // Cương vị / vị trí trực ca của ca gần nhất chưa kết thúc.
       position: dutyApproved ? duty!.positionLabel : null,
       unit: duty ? duty.shift.unit : null,
