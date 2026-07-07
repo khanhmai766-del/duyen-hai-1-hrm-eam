@@ -231,7 +231,15 @@ export default function OilGunBoard() {
       {!isLoading && summary.total > 0 && (
         <div className="ogb-notecard">
           <div className="ogb-notecard-head">
-            <label className="ogb-field-label"><StickyNote size={15} /> Ghi chú sơ đồ vòi dầu — Tổ máy {machine}</label>
+            <div className="ogb-notecard-head-left">
+              <label className="ogb-field-label"><StickyNote size={15} /> Ghi chú sơ đồ vòi dầu — Tổ máy {machine}</label>
+              {canManageOilGuns && (
+                <button className="ogb-btn primary sm" onClick={saveNote}
+                  disabled={updateNote.isPending || noteDraft === savedNote}>
+                  {updateNote.isPending ? <Loader2 className="spin" size={13} /> : <Save size={13} />} Lưu ghi chú
+                </button>
+              )}
+            </div>
             {data?.noteUpdatedBy && (
               <span className="ogb-notecard-meta">
                 Cập nhật: <b>{data.noteUpdatedBy}</b>
@@ -244,14 +252,6 @@ export default function OilGunBoard() {
             value={noteDraft}
             disabled={!canManageOilGuns}
             onChange={(e) => setNoteDraft(e.target.value)} />
-          {canManageOilGuns && (
-            <div className="ogb-notecard-foot">
-              <button className="ogb-btn primary" onClick={saveNote}
-                disabled={updateNote.isPending || noteDraft === savedNote}>
-                {updateNote.isPending ? <Loader2 className="spin" size={15} /> : <Save size={15} />} Lưu ghi chú
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -470,9 +470,10 @@ const CSS = `
 .ogb-check-text em{font-style:normal;font-size:11.5px;color:#94a3b8;}
 .ogb-notecard{background:#fff;border:1px solid ${C.line};border-radius:18px;padding:18px 20px;margin-top:16px;box-shadow:0 8px 30px rgba(20,40,70,.05);}
 .ogb-notecard-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+.ogb-notecard-head-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
 .ogb-notecard-head .ogb-field-label{margin-bottom:0;}
 .ogb-notecard-meta{font-size:11.5px;color:#94a3b8;}
-.ogb-notecard-foot{display:flex;justify-content:flex-end;margin-top:12px;}
+.ogb-btn.sm{padding:6px 11px;font-size:12px;border-radius:9px;gap:5px;}
 .ogb-seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .ogb-seg button{display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border-radius:11px;border:1.5px solid ${C.line};background:#fff;cursor:pointer;font-weight:600;font-size:13.5px;color:#64748b;transition:.15s;}
 .ogb-seg button.on.ok{background:${C.okBg};border-color:${C.ok};color:${C.ok};}
