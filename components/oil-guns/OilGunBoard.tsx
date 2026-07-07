@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Flame, Wrench, Check, X, Save, AlertTriangle,
-  FileSpreadsheet, Printer, Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
+  Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOilGuns, useUpdateOilGun, useUpdateOilGunNote, type OilGun } from "@/hooks/useOilGuns";
@@ -182,8 +182,6 @@ export default function OilGunBoard() {
               </button>
             ))}
           </div>
-          <button className="ogb-btn ghost"><FileSpreadsheet size={15} /> Excel</button>
-          <button className="ogb-btn ghost"><Printer size={15} /> PDF</button>
         </div>
       </header>
 
