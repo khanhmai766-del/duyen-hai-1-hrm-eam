@@ -6,10 +6,11 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 export interface TicketItem {
   id: string;
   materialId: string;
-  deviceSeq: string;
+  deviceSeq: string | null;
+  deviceNameManual: string | null;
   quantity: number;
   material: { id: string; code: string; name: string; unit: string; quantity: number };
-  device: { seq: string; name: string; kks: string | null };
+  device: { seq: string; name: string; kks: string | null } | null;
 }
 
 export interface MaterialTicket {
@@ -89,6 +90,7 @@ export function useCreateTicket() {
     mutationFn: (body: {
       type: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string;
       assignedPosition: string; materialCategory: string;
+      materialId?: string; proposedQuantity?: number; replacementDeviceName?: string;
     }) =>
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["material-tickets"] }),
@@ -120,7 +122,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   if (t.type === "DE_XUAT") {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && v.isShiftLeader) a.push("confirm");
-    if (t.status === "CHO_THONG_KE" && v.isStats) a.push("stats");
+    if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
+    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.isStats) a.push("stats");
     if (t.status === "CHO_NGHIEM_THU" && v.isShiftLeader) a.push("accept");
   } else {
     if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungEntry");

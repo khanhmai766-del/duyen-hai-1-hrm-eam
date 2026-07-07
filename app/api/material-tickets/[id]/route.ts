@@ -27,8 +27,8 @@ function toBbntItems(t: FullTicket): BbntItem[] {
     materialCode: it.material.code,
     materialUnit: it.material.unit,
     quantity: it.quantity,
-    deviceName: it.device.name,
-    deviceKks: it.device.kks,
+    deviceName: it.deviceNameManual || it.device?.name || "",
+    deviceKks: it.device?.kks ?? null,
   }));
 }
 
@@ -127,7 +127,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     /* =================== LUỒNG ĐỀ XUẤT =================== */
 
-    // B1 — cương vị phân giao gửi đề xuất
+    // B1 — cương vị phân giao gửi đề xuất (luồng cũ; giữ để tương thích phiếu cũ còn dang dở)
     if (action === "propose") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_DE_XUAT") return fail("Phiếu không ở bước Đề xuất");
       if ((user.position ?? "") !== t.assignedPosition)
@@ -147,7 +147,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B1' — Trưởng Ca xác nhận (server tự check tồn kho)
+    // B1' — Trưởng Ca xác nhận (luồng cũ; giữ để tương thích phiếu cũ còn dang dở)
     if (action === "confirm") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Xác nhận");
       if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được xác nhận", 403);
@@ -171,10 +171,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B1' — Từ chối (kho thiếu / lý do khác). Phiếu đóng vĩnh viễn.
+    // B1' — Từ chối khi vật tư không có/không đủ hoặc lý do khác. Phiếu đóng vĩnh viễn.
     if (action === "reject") {
-      if (t.type !== "DE_XUAT" || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Xác nhận");
-      if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được từ chối", 403);
+      if (t.type !== "DE_XUAT" || !["CHO_XAC_NHAN", "VAT_TU_KHONG_CO"].includes(t.status)) return fail("Phiếu không ở bước có thể từ chối");
+      const canReject = isShiftLeader(user.position) || user.role === "ADMIN" || t.createdById === user.id;
+      if (!canReject) return fail("Chỉ người tạo phiếu, Quản trị hoặc Trưởng Ca / Trưởng Kíp được từ chối", 403);
       const reason = String(body.reason || "").trim();
       if (!reason) return fail("Vui lòng nhập lý do từ chối");
       const up = await prisma.materialTicket.update({
@@ -188,7 +189,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B2 — Thống kê nhập số phiếu ĐXVT (CHỈ cương vị Thống kê; không còn khóa 2 ngày)
     if (action === "stats") {
-      if (t.type !== "DE_XUAT" || t.status !== "CHO_THONG_KE") return fail("Phiếu không ở bước Thống kê");
+      if (t.type !== "DE_XUAT" || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống kê");
       if (!isStats(user.position)) return fail("Chỉ cương vị Thống kê được thao tác bước này", 403);
       const num = String(body.proposalNumber || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");

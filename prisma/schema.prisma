@@ -796,15 +796,16 @@ model MaterialTicket {
 }
 
 model MaterialTicketItem {
-  id         String @id @default(cuid())
-  ticketId   String
-  materialId String
-  deviceSeq  String // thiết bị theo EquipmentNode.seq (chung key với toàn hệ)
-  quantity   Int    @default(1)
+  id               String  @id @default(cuid())
+  ticketId         String
+  materialId       String
+  deviceSeq        String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
+  deviceNameManual String?
+  quantity         Int     @default(1)
 
   ticket   MaterialTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   material Material       @relation(fields: [materialId], references: [id])
-  device   EquipmentNode  @relation(fields: [deviceSeq], references: [seq])
+  device   EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
 
   @@index([ticketId])
   @@index([deviceSeq])

@@ -22,6 +22,8 @@ const C = {
 const STATUS: Record<string, { label: string; c: string }> = {
   CHO_DE_XUAT: { label: "Chờ đề xuất", c: C.accent },
   CHO_XAC_NHAN: { label: "Chờ xác nhận", c: C.navy },
+  CHO_PHIEU__XUAT_KHO: { label: "Chờ phiếu xuất kho", c: "#0f766e" },
+  VAT_TU_KHONG_CO: { label: "Vật tư không có", c: C.bad },
   CHO_THONG_KE: { label: "Chờ thống kê", c: "#7c3aed" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
   CHO_NHAP_LIEU: { label: "Chờ nhập liệu", c: C.ung },
@@ -32,10 +34,8 @@ const STATUS: Record<string, { label: string; c: string }> = {
 };
 const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   DE_XUAT: [
-    { key: "B0", label: "Tạo phiếu + BBKT", who: "Trưởng Ca/TK" },
-    { key: "CHO_DE_XUAT", label: "Đề xuất vật tư", who: "Cương vị phân giao" },
-    { key: "CHO_XAC_NHAN", label: "Xác nhận (kho)", who: "Trưởng Ca/TK" },
-    { key: "CHO_THONG_KE", label: "Thống kê", who: "Thống kê" },
+    { key: "B0", label: "BBKT + Đề xuất vật tư", who: "Quản trị/KTV/Trưởng ca" },
+    { key: "CHO_PHIEU__XUAT_KHO", label: "Thống kê", who: "Thống kê" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + Word", who: "Trưởng Ca/TK" },
   ],
   UNG: [
@@ -46,9 +46,10 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   ],
 };
 const ORDER: Record<string, string[]> = {
-  DE_XUAT: ["B0", "CHO_DE_XUAT", "CHO_XAC_NHAN", "CHO_THONG_KE", "CHO_NGHIEM_THU", "HOAN_TAT"],
+  DE_XUAT: ["B0", "CHO_PHIEU__XUAT_KHO", "CHO_NGHIEM_THU", "HOAN_TAT"],
   UNG: ["B0", "CHO_NHAP_LIEU", "CHO_XAC_NHAN_PDF", "CHO_HOAN_THIEN", "HOAN_TAT"],
 };
+const flowStatusKey = (status: string) => status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO" : status;
 const fmt = (s?: string | null) =>
   s ? new Date(s).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
 
@@ -105,7 +106,8 @@ export default function MaterialTicketBoard({
         {!isLoading && shown.map((t) => {
           const meta = STATUS[t.status] ?? { label: t.status, c: C.soft };
           const order = ORDER[t.type];
-          const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(t.status);
+          const flowStatus = flowStatusKey(t.status);
+          const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(flowStatus);
           const done = t.status === "HOAN_TAT" ? order.length : idx;
           const mine = actionsFor(t, viewer).length > 0;
           const canEdit = !!viewer && (viewer.id === t.createdById || viewer.isAdmin);
@@ -205,6 +207,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [category, setCategory] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [proposedQuantity, setProposedQuantity] = useState(1);
+  const [replacementDeviceName, setReplacementDeviceName] = useState("");
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
@@ -243,15 +246,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
       const res = await create.mutateAsync({
         type: type!, unit, bbktNumber: bbkt.trim() || undefined,
         assignedPosition: assigned, materialCategory: category,
+        materialId: selectedMaterialId || undefined,
+        proposedQuantity,
+        replacementDeviceName: replacementDeviceName.trim() || undefined,
       });
-      try {
-        sessionStorage.setItem(
-          `material-ticket-draft:${res.id}`,
-          JSON.stringify({ materialId: selectedMaterialId, quantity: proposedQuantity })
-        );
-      } catch {
-        // Không chặn tạo phiếu nếu trình duyệt không cho lưu nháp tạm.
-      }
       toast.success(`Đã tạo phiếu ${res.code}`);
       onClose();
       onOpen(res.id);
@@ -269,8 +267,8 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         {!type ? (
           <div className="pick">
             <button className="card dx" onClick={() => setType("DE_XUAT")}>
-              <ClipboardList size={26} /><b>Đề xuất vật tư</b>
-              <span>Quy trình chuẩn: BBKT → Đề xuất → duyệt kho → thống kê → nghiệm thu</span>
+              <ClipboardList size={26} /><b>BBKT + Đề xuất vật tư</b>
+              <span>Tạo phiếu, chọn vật tư, nhập số lượng và kiểm kho ngay từ đầu</span>
             </button>
             <button className="card ung" onClick={() => setType("UNG")}>
               <Zap size={26} /><b>Ứng vật tư</b>
@@ -324,28 +322,41 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
 
             {type === "DE_XUAT" ? (
-              <div className="bbkt-grid">
-                <div className="field">
-                  <label>Số Biên Bản Kiểm Tra (BBKT) *</label>
-                  <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
+              <>
+                <div className="bbkt-grid">
+                  <div className="field">
+                    <label>Số Biên Bản Kiểm Tra (BBKT) *</label>
+                    <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
+                  </div>
+                  <div className="field qty-field">
+                    <label>Số lượng đề xuất *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={proposedQuantity}
+                      onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
+                    />
+                  </div>
                 </div>
-                <div className="field qty-field">
-                  <label>Số lượng đề xuất</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={proposedQuantity}
-                    onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
-                  />
-                </div>
-              </div>
+                <label>Tên thiết bị thay thế *</label>
+                <input
+                  value={replacementDeviceName}
+                  onChange={(e) => setReplacementDeviceName(e.target.value)}
+                  placeholder="Nhập tên thiết bị thay thế"
+                />
+              </>
             ) : (
               <p className="note ung"><Zap size={13} /> Luồng Ứng: số BBKT sẽ bổ sung sau bước xác nhận xuất file.</p>
             )}
             <div className="frm-f">
               <button className="btn ghost" onClick={() => setType(null)}>Quay lại</button>
               <button className="btn primary"
-                disabled={create.isPending || !assigned || !category || (type === "DE_XUAT" && !bbkt.trim())}
+                disabled={
+                  create.isPending ||
+                  !assigned ||
+                  !category ||
+                  (type === "DE_XUAT" && (!bbkt.trim() || !selectedMaterialId || proposedQuantity <= 0 || !replacementDeviceName.trim()))
+                }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
               </button>
@@ -435,7 +446,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   const meta = STATUS[t.status] ?? { label: t.status, c: C.soft };
   const flow = FLOW[t.type];
   const order = ORDER[t.type];
-  const idx = t.status === "TU_CHOI" ? 99 : order.indexOf(t.status);
+  const flowStatus = flowStatusKey(t.status);
+  const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
 
   return (
     <>
@@ -457,7 +469,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           {flow.map((s) => {
             const si = order.indexOf(s.key);
             const done = t.status === "HOAN_TAT" || si < idx;
-            const cur = s.key === t.status;
+            const cur = s.key === flowStatus;
             return (
               <div key={s.key} className={`step ${done ? "done" : ""} ${cur ? "cur" : ""}`}>
                 {done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
@@ -467,6 +479,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           })}
           {t.status === "TU_CHOI" && (
             <div className="step rejected"><Ban size={17} /><div><b>Phiếu bị từ chối</b><span>{t.rejectedReason}</span></div></div>
+          )}
+          {t.status === "VAT_TU_KHONG_CO" && (
+            <div className="step rejected"><AlertTriangle size={17} /><div><b>Vật tư không có/không đủ</b><span>Chỉ có thể từ chối phiếu này.</span></div></div>
           )}
         </div>
 
@@ -479,7 +494,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
                   <b>{it.material.name}</b>
                   <span>SL: {it.quantity} {it.material.unit} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
-                  <span className="soft">{it.device.seq} · {it.device.name}</span>
+                  <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Thiết bị nhập tay"}</span>
                 </div>
               );
             })}
@@ -501,7 +516,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           <label className="lb"><Clock size={13} /> Dấu vết</label>
           {[
             t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
-            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Gửi đề xuất" },
+            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, what: t.type === "UNG" ? "Nhập liệu thay thế" : "BBKT + Đề xuất vật tư" },
             t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, what: "Xác nhận — kho đủ" },
             t.statsAt && { at: t.statsAt, who: t.statsByName, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
             t.completedAt && { at: t.completedAt, who: t.completedByName, what: "Xuất Biên Bản Nghiệm Thu" },
@@ -550,6 +565,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const waitMap: Record<string, string> = {
       CHO_DE_XUAT: `Cương vị "${t.assignedPosition}"`,
       CHO_XAC_NHAN: "Trưởng Ca / Trưởng Kíp",
+      CHO_PHIEU__XUAT_KHO: "Thống kê",
+      VAT_TU_KHONG_CO: "Người tạo phiếu / Trưởng Ca / Quản trị từ chối",
       CHO_THONG_KE: "Thống kê",
       CHO_NGHIEM_THU: "Trưởng Ca / Trưởng Kíp",
       CHO_NHAP_LIEU: `Cương vị "${t.assignedPosition}"`,
@@ -578,6 +595,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
   const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
   const materialOptions = (opts?.materials ?? []).filter((m) => !wantCategory || m.category === wantCategory);
+
+  if (acts.includes("reject")) return (
+    <div className="act">
+      <label className="lb">Vật tư không có/không đủ</label>
+      <div className="warnbox"><AlertTriangle size={15} /> Tồn kho không đủ cho số lượng đề xuất. Phiếu này chỉ có thể từ chối.</div>
+      <input placeholder="Lý do từ chối" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <button className="btn danger big" disabled={!reason.trim() || act.isPending}
+        onClick={() => run({ action: "reject", reason }, "Đã từ chối phiếu")}>
+        <Ban size={15} /> Từ chối phiếu
+      </button>
+    </div>
+  );
 
   const ItemsForm = (
     <div className="frm-items">

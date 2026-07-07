@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/material-tickets  { type, unit, bbktNumber? }
-// Chỉ Trưởng Ca/TK được tạo phiếu. Luồng Đề xuất bắt buộc số BBKT ngay từ đầu.
+// Luồng Đề xuất gộp BBKT + đề xuất vật tư ngay khi tạo phiếu.
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -87,24 +87,65 @@ export async function POST(req: NextRequest) {
     const materialCategory = String(body.materialCategory || "").trim();
     if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
 
+    let materialForProposal: { id: string; name: string; quantity: number } | null = null;
+    let requestedQuantity = 0;
+    let replacementDeviceName = "";
+    let nextStatus = type === "DE_XUAT" ? "CHO_PHIEU__XUAT_KHO" : "CHO_NHAP_LIEU";
+
+    if (type === "DE_XUAT") {
+      const materialId = String(body.materialId || "").trim();
+      requestedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
+      replacementDeviceName = String(body.replacementDeviceName || "").trim();
+
+      if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
+      if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
+      if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
+
+      materialForProposal = await prisma.material.findUnique({
+        where: { id: materialId },
+        select: { id: true, name: true, quantity: true },
+      });
+      if (!materialForProposal) return fail("Không tìm thấy vật tư đề xuất", 404);
+      nextStatus = materialForProposal.quantity >= requestedQuantity ? "CHO_PHIEU__XUAT_KHO" : "VAT_TU_KHONG_CO";
+    }
+
     const code = await nextTicketCode(type);
     const ticket = await prisma.materialTicket.create({
       data: {
         code,
         type,
         unit,
-        status: type === "DE_XUAT" ? "CHO_DE_XUAT" : "CHO_NHAP_LIEU",
+        status: nextStatus,
         bbktNumber: type === "DE_XUAT" ? bbkt : null,
         assignedPosition,
         materialCategory,
         createdById: user.id,
         createdByName: user.name ?? "",
+        ...(type === "DE_XUAT" ? {
+          proposedById: user.id,
+          proposedByName: user.name ?? "",
+          proposedByPosition: user.position ?? null,
+          proposedAt: new Date(),
+          ...(nextStatus === "CHO_PHIEU__XUAT_KHO" ? {
+            confirmedById: user.id,
+            confirmedByName: "Hệ thống",
+            confirmedAt: new Date(),
+          } : {}),
+          items: {
+            create: [{
+              materialId: materialForProposal!.id,
+              quantity: requestedQuantity,
+              deviceNameManual: replacementDeviceName,
+            }],
+          },
+        } : {}),
       },
       include: ITEM_INCLUDE,
     });
 
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-      `${code} (${type === "UNG" ? "Ứng" : "Đề xuất"}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}`);
+      `${code} (${type === "UNG" ? "Ứng" : "Đề xuất"}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}` +
+      (type === "DE_XUAT" ? `, vật tư: ${materialForProposal!.name}, SL: ${requestedQuantity}, thiết bị: ${replacementDeviceName}, trạng thái: ${nextStatus}` : ""));
     return ok(ticket);
   });
 }
