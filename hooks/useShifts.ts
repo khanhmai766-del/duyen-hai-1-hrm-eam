@@ -71,6 +71,7 @@ export interface Timesheet {
   hcEntries: HcEntry[];
   overrides: TimesheetOverride[];
   canEdit: boolean;
+  canEditOwn: boolean;
 }
 
 /** Approved attendance (bảng công) for a month — `month` is "YYYY-MM". */

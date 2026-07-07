@@ -151,7 +151,13 @@ export default function ShiftRosterPage() {
   const monthStr = `${month.year}-${String(month.month + 1).padStart(2, "0")}`;
   const timesheet = useTimesheet(monthStr, { enabled: shouldLoadTimesheet });
   const updateOverride = useUpdateTimesheetOverride(monthStr);
-  const canEditTimesheet = Boolean(timesheet.data?.data?.canEdit || canEditTimesheetPermission);
+  const canEditAllTimesheet = Boolean(timesheet.data?.data?.canEdit || canEditTimesheetPermission);
+  const canEditOwnTimesheet = Boolean(
+    canEditAllTimesheet ||
+      timesheet.data?.data?.canEditOwn ||
+      rbac.can("timesheet-edit", ["own", "approve", "manage", "full"])
+  );
+  const myUserId = session?.user?.id;
   const [editCell, setEditCell] = React.useState<{
     userId: string;
     userName: string;
@@ -226,12 +232,12 @@ export default function ShiftRosterPage() {
   const positions = (Array.from(new Set(users.map((u) => u.position).filter(Boolean))) as string[]).sort(
     comparePositionPriority
   );
-  // Bảng công scope: người được quyền chỉnh xem toàn bộ, người khác xem dòng của mình.
+  // Bảng công scope: người được quyền chỉnh toàn bộ xem tất cả, người khác xem dòng của mình.
   const employeeQuery = normalizeText(employeeFilter.trim());
   const rows = users
-    .filter((u) => canEditTimesheet || u.id === session?.user?.id)
+    .filter((u) => canEditAllTimesheet || u.id === myUserId)
     .filter((u) => posFilter === "ALL" || u.position === posFilter)
-    .filter((u) => !canEditTimesheet || !employeeQuery || normalizeText(`${u.name} ${u.employeeId ?? ""}`).includes(employeeQuery))
+    .filter((u) => !canEditAllTimesheet || !employeeQuery || normalizeText(`${u.name} ${u.employeeId ?? ""}`).includes(employeeQuery))
     .sort((a, b) => {
       const byPosition = comparePositionPriority(a.position, b.position);
       if (byPosition !== 0) return byPosition;
@@ -267,7 +273,7 @@ export default function ShiftRosterPage() {
     hc?: { hours: number; content: string; note: string | null };
     override?: TimesheetOverride;
   }) {
-    if (!canEditTimesheet) return;
+    if (!canEditAllTimesheet && (!canEditOwnTimesheet || params.user.id !== myUserId)) return;
     const calculated = calculatedCellValue(params.entries, params.hc);
     const next = {
       userId: params.user.id,
@@ -416,7 +422,7 @@ export default function ShiftRosterPage() {
 
   function exportPdf() {
     if (!rows.length) return toast.error("Không có dữ liệu để xuất");
-    const scope = canEditTimesheet ? "Toàn bộ nhân sự" : "Cá nhân";
+    const scope = canEditAllTimesheet ? "Toàn bộ nhân sự" : "Cá nhân";
     const dayTh = days.map((d) => `<th>${d}</th>`).join("");
     const escHtml = (value: unknown) =>
       String(value ?? "")
@@ -542,7 +548,7 @@ export default function ShiftRosterPage() {
             Bảng công
           </button>
         </div>
-        {view === "timesheet" && canEditTimesheet && (
+        {view === "timesheet" && canEditAllTimesheet && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -576,7 +582,7 @@ export default function ShiftRosterPage() {
                 <Button variant="outline" size="icon" onClick={() => shift(1)} disabled={currentMonthKey >= maxMonthKey}><ChevronRight className="h-4 w-4" /></Button>
               </div>
               <div className="flex items-center gap-3">
-                {canEditTimesheet && (
+                {canEditAllTimesheet && (
                   <select
                     value={posFilter}
                     onChange={(e) => setPosFilter(e.target.value)}
@@ -620,7 +626,7 @@ export default function ShiftRosterPage() {
               </div>
             </div>
             <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
-              {canEditTimesheet
+              {canEditAllTimesheet
                 ? "Bảng công của toàn bộ nhân sự — "
                 : "Bảng công của bạn — "}
               tháng trước lưu đến hết ngày 15 của tháng hiện tại;{" "}
@@ -628,7 +634,11 @@ export default function ShiftRosterPage() {
               Nếu số giờ khác 8 thì mã ca có tiền tố giờ, ví dụ <span className="font-medium text-ink">4V3</span>;
               kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>; nếu HC có nội dung công việc thì rê chuột lên ô để xem.
               Mỗi nhân sự hiển thị 3 dòng: dòng 1 công trực ca/hành chính, dòng 2 dự phòng, dòng 3 công chấm thêm theo nhóm.
-              {canEditTimesheet ? " Người được phân quyền có thể bấm vào từng ô để chỉnh giá trị hiển thị." : " Dữ liệu chỉ xem, không chỉnh tay."}
+              {canEditAllTimesheet
+                ? " Người được phân quyền có thể bấm vào từng ô để chỉnh giá trị hiển thị."
+                : canEditOwnTimesheet
+                  ? " Bạn có thể bấm vào ô của mình để chỉnh giá trị hiển thị."
+                  : " Dữ liệu chỉ xem, không chỉnh tay."}
             </p>
           </Card>
 
@@ -643,7 +653,7 @@ export default function ShiftRosterPage() {
                     <th className="sticky left-[110px] z-20 w-[280px] min-w-[280px] border-r border-border bg-white px-4 py-2 text-left text-xs font-semibold uppercase text-muted-foreground">
                       <div className="flex items-center justify-between gap-3">
                         <span className="shrink-0">Nhân viên</span>
-                        {canEditTimesheet && (
+                        {canEditAllTimesheet && (
                           <div className="relative w-[148px]">
                             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                             <input
@@ -703,7 +713,7 @@ export default function ShiftRosterPage() {
                             const entries = line === "primary" ? (tsMap.get(`${u.id}:${d}`) ?? []) : [];
                             const hc = line === "primary" ? hcSelfMap.get(`${u.id}:${d}`) : line === "extra" ? hcExtraMap.get(`${u.id}:${d}`) : undefined;
                             const showOverride = !!override && line === "primary";
-                            const editableCell = canEditTimesheet && line !== "blank";
+                            const editableCell = line !== "blank" && (canEditAllTimesheet || (canEditOwnTimesheet && u.id === myUserId));
                             const open = () => openEditCell({ user: u, day: d, entries, hc, override });
                             return (
                               <td

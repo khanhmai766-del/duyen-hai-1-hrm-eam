@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser, handle } from "@/lib/api";
-import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { assignedPermissionLevel, hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +90,10 @@ async function canEditTimesheet(user: { id?: string; role?: string }) {
   return hasAssignedApprovePermission(user, EDIT_TIMESHEET_PERMISSION_ID);
 }
 
+async function canEditOwnTimesheet(user: { id?: string; role?: string }) {
+  return (await assignedPermissionLevel(user, EDIT_TIMESHEET_PERMISSION_ID)) === "own";
+}
+
 async function ensureTimesheetOverrideTable() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "TimesheetOverride" (
@@ -117,6 +121,7 @@ export async function GET(req: NextRequest) {
     const user = await requireUser();
     await ensureTimesheetOverrideTable();
     const canEdit = await canEditTimesheet(user);
+    const canEditOwn = canEdit || (await canEditOwnTimesheet(user));
     // Người có quyền duyệt/chỉnh công xem toàn bộ bảng; người khác chỉ xem dòng của mình.
     const scopeToSelf = !canEdit;
 
@@ -134,7 +139,7 @@ export async function GET(req: NextRequest) {
     const daysInMonth = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
 
     if (!isMonthInRetention(y, mo)) {
-      return ok({ month: mo + 1, year: y, entries: [], hcEntries: [], overrides: [], canEdit });
+      return ok({ month: mo + 1, year: y, entries: [], hcEntries: [], overrides: [], canEdit, canEditOwn });
     }
 
     const assignments = await prisma.shiftAssignment.findMany({
@@ -258,7 +263,7 @@ export async function GET(req: NextRequest) {
       updatedBy: row.updatedById ? { id: row.updatedById, name: row.updatedByName ?? "—" } : null,
     }));
 
-    return ok({ month: mo + 1, year: y, entries, hcEntries, overrides, canEdit });
+    return ok({ month: mo + 1, year: y, entries, hcEntries, overrides, canEdit, canEditOwn });
   });
 }
 
@@ -266,7 +271,6 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureTimesheetOverrideTable();
-    if (!(await canEditTimesheet(user))) return fail("Bạn không có quyền chỉnh bảng công", 403);
 
     const body = (await req.json()) as Record<string, unknown>;
     const userId = String(body.userId ?? "").trim();
@@ -275,6 +279,9 @@ export async function PUT(req: NextRequest) {
     const note = String(body.note ?? "").trim() || null;
 
     if (!userId) return fail("Thiếu nhân viên cần chỉnh công");
+    const canEditAll = await canEditTimesheet(user);
+    const canEditOwn = canEditAll || (await canEditOwnTimesheet(user));
+    if (!canEditAll && (!canEditOwn || userId !== user.id)) return fail("Bạn không có quyền chỉnh ô bảng công này", 403);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Ngày bảng công không hợp lệ");
     if (!isDateInRetention(date)) return fail("Bảng công tháng trước chỉ lưu đến ngày 15 của tháng hiện tại", 400);
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
