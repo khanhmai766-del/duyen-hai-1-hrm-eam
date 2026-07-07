@@ -340,16 +340,16 @@ export default function BgtsTuabinNgungPage() {
         <Table wrapperClassName="max-h-[62vh] overflow-auto">
           <TableHeader className="sticky top-0 z-20 bg-slate-50">
             <TableRow className="hover:bg-slate-50">
-              <TableHead className="sticky left-0 z-30 min-w-[72px] border-r bg-slate-50 text-center">Giờ</TableHead>
+              <TableHead className="sticky left-0 z-30 w-8 min-w-8 border-r bg-slate-50 px-0.5 text-center text-[10px]">Giờ</TableHead>
               {BGTS_TUABIN_NGUNG_FIELDS.map((field) => (
-                <TableHead key={field.key} className="min-w-[168px] border-r px-2 py-2 text-center normal-case tracking-normal" title={originalFieldName(field)}>
-                  <div className="space-y-1">
+                <TableHead key={field.key} className="w-16 min-w-16 max-w-16 border-r px-0.5 py-1 text-center normal-case tracking-normal" title={originalFieldName(field)}>
+                  <div className="space-y-0.5">
                     {field.excelHeader.filter(Boolean).map((line, index) => (
-                      <div key={`${field.key}-${index}`} className="text-[11px] font-semibold leading-tight text-slate-700">
+                      <div key={`${field.key}-${index}`} className="break-words text-[8px] font-semibold leading-[1.05] text-slate-700 [overflow-wrap:anywhere]">
                         {line}
                       </div>
                     ))}
-                    <div className="text-[10px] font-medium text-muted-foreground">{field.unit}</div>
+                    <div className="break-words text-[8px] font-medium leading-[1.05] text-muted-foreground [overflow-wrap:anywhere]">{field.unit}</div>
                   </div>
                 </TableHead>
               ))}
@@ -358,19 +358,20 @@ export default function BgtsTuabinNgungPage() {
           <TableBody>
             {rows.map((row, rowIndex) => (
               <TableRow key={row.timeHour} className={cn(rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/45")}>
-                <TableCell className="sticky left-0 z-10 border-r bg-inherit p-2 text-center font-semibold text-navy">
+                <TableCell className="sticky left-0 z-10 w-8 min-w-8 border-r bg-inherit px-0.5 py-0.5 text-center text-[11px] font-semibold text-navy">
                   {row.timeHour}
                 </TableCell>
                 {BGTS_TUABIN_NGUNG_FIELDS.map((field) => (
-                  <TableCell key={field.key} className="border-r p-1.5">
+                  <TableCell key={field.key} className="w-16 min-w-16 max-w-16 border-r p-0.5">
                     <Input
                       inputMode="decimal"
                       type="number"
                       step="any"
-                      className="h-9 min-w-[112px] border-slate-200 text-right text-sm"
+                      className="h-7 w-14 min-w-0 rounded-sm border-slate-200 px-1 text-right text-[11px]"
                       value={row[field.key] ?? ""}
                       disabled={!canSave}
                       onChange={(event) => updateCell(rowIndex, field.key, event.target.value)}
+                      title={row[field.key] === null || row[field.key] === undefined ? "" : String(row[field.key])}
                       aria-label={`${originalFieldName(field)} lúc ${row.timeHour} giờ`}
                     />
                   </TableCell>
