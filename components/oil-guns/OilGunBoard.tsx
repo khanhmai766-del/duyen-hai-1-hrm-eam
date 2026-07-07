@@ -349,9 +349,9 @@ function Stat({ label, value, c, icon }: { label: string; value: number; c: stri
   return (
     <div className="ogb-stat">
       <span className="ogb-stat-ic" style={{ color: c, background: c + "18" }}>{icon}</span>
-      <div>
-        <div className="ogb-stat-val" style={{ color: c }}>{value}</div>
-        <div className="ogb-stat-lb">{label}</div>
+      <div className="ogb-stat-body">
+        <span className="ogb-stat-val" style={{ color: c }}>{value}</span>
+        <span className="ogb-stat-lb">{label}</span>
       </div>
     </div>
   );
@@ -412,10 +412,11 @@ const CSS = `
 .ogb-btn.primary:hover{background:#1d4fd8;}
 .ogb-btn.primary:disabled{opacity:.55;cursor:not-allowed;}
 .ogb-stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
-.ogb-stat{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid ${C.line};border-radius:14px;padding:12px 16px;min-width:150px;flex:1 1 150px;}
+.ogb-stat{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid ${C.line};border-radius:14px;padding:12px 16px;min-width:185px;flex:1 1 185px;}
 .ogb-stat-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;}
+.ogb-stat-body{display:flex;align-items:baseline;gap:7px;min-width:0;flex-wrap:wrap;}
 .ogb-stat-val{font-weight:700;font-size:22px;line-height:1;}
-.ogb-stat-lb{font-size:12px;color:#6b7280;margin-top:3px;}
+.ogb-stat-lb{font-size:12px;color:#6b7280;white-space:nowrap;}
 .ogb-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid ${C.line};border-radius:14px;padding:0 14px;flex:1 1 200px;color:#94a3b8;}
 .ogb-search input{border:0;outline:0;background:transparent;font-size:13px;padding:13px 0;width:100%;color:#1f2430;}
 .ogb-board-wrap{background:#fff;border:1px solid ${C.line};border-radius:18px;padding:20px;box-shadow:0 8px 30px rgba(20,40,70,.05);overflow-x:auto;}
