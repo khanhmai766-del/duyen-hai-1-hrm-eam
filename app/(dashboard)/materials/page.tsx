@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -33,7 +33,8 @@ const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon:
   { key: "Dầu bôi trơn", icon: Droplet },
   { key: "Lõi lọc dầu", icon: Filter },
   { key: "Thiết bị C&I", icon: Cpu },
-  { key: "Vật tư tiêu hao", icon: Boxes },
+  { key: "Hóa Chất", icon: FlaskConical },
+  { key: "Bi Nghiền Than", icon: CircleDot },
 ];
 
 type MaterialEdit = Partial<Material> & {
@@ -110,7 +111,9 @@ function MaterialsPageContent() {
   const materials = (data?.data ?? []).filter(
     (m) =>
       (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
-      m.category === categoryFilter &&
+      (m.category === categoryFilter ||
+        (categoryFilter === "Hóa Chất" && (m.category === "Vật tư tiêu hao" || m.category === "Hóa chất")) ||
+        (categoryFilter === "Bi Nghiền Than" && (m.category === "Bi nghiền than" || m.category === "Bi nghiền"))) &&
       (blockFilter === "ALL" || materialBlocks(m).has(blockFilter))
   );
   const isFiltered = q.trim() !== "" || blockFilter !== "ALL";
@@ -216,7 +219,7 @@ function MaterialsPageContent() {
         {canManage && (
           <>
             <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
-            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, replacements: [] }); }}>
+            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, replacements: [] }); }}>
               <Plus className="h-4 w-4" /> Thêm vật tư
             </Button>
           </>

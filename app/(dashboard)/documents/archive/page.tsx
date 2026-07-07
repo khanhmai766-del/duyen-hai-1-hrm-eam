@@ -217,6 +217,7 @@ export default function ArchiveDocumentsPage() {
       allowStaffEdit
       showAnnualBackupExport
       customContent={activeTab === "OIL_GUN_DATA" ? <OilGunBoard /> : undefined}
+      hideToolbar={activeTab === "OIL_GUN_DATA" || activeTab === "SOOT_BLOWER_DATA"}
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
       backupFilenamePrefix={BACKUP_FILENAME_PREFIX[activeTab]}
       beforeTagFilter={

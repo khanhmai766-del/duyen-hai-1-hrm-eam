@@ -14,7 +14,7 @@ export function PageHeader({
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children && (
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-2xl border border-border/80 bg-card/90 p-1.5 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5">
           {children}
         </div>
       )}

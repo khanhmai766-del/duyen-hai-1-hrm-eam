@@ -217,6 +217,7 @@ interface DocumentCatalogPageProps {
   hideDocumentIcon?: boolean;
   customContent?: React.ReactNode;
   beforeTagFilter?: React.ReactNode;
+  hideToolbar?: boolean;
 }
 
 export function DocumentCatalogPage({
@@ -266,6 +267,7 @@ export function DocumentCatalogPage({
   hideDocumentIcon = false,
   customContent,
   beforeTagFilter,
+  hideToolbar = false,
 }: DocumentCatalogPageProps) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
@@ -738,6 +740,7 @@ export function DocumentCatalogPage({
       </PageHeader>
       {afterHeader}
 
+      {!hideToolbar && (
       <Card className="p-4">
         <div
           className={cn(
@@ -842,6 +845,7 @@ export function DocumentCatalogPage({
           )}
         </div>
       </Card>
+      )}
 
       {customContent ? (
         customContent

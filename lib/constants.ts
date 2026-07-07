@@ -264,7 +264,8 @@ export const MATERIAL_CATEGORIES = [
   "Dầu bôi trơn",
   "Lõi lọc dầu",
   "Thiết bị C&I",
-  "Vật tư tiêu hao",
+  "Hóa Chất",
+  "Bi Nghiền Than",
 ] as const;
 
 /** Ánh xạ loại vật tư của PHIẾU thay thế (materialCategory) → loại trong Danh mục
@@ -272,8 +273,8 @@ export const MATERIAL_CATEGORIES = [
 export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
   "Dầu bôi trơn": "Dầu bôi trơn",
   "Lọc dầu": "Lõi lọc dầu",
-  "Hóa chất": "Vật tư tiêu hao",
-  "Bi nghiền": "Vật tư tiêu hao",
+  "Hóa chất": "Hóa Chất",
+  "Bi nghiền": "Bi Nghiền Than",
 };
 
 /** Ai được THAO TÁC Danh mục vật tư (thêm/sửa/xoá/xuất): Quản trị (ADMIN),

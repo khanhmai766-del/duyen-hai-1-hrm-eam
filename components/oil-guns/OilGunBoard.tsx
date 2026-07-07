@@ -144,8 +144,7 @@ export default function OilGunBoard() {
         <div className="ogb-head-left">
           <div className="ogb-head-icon"><Droplet size={20} /></div>
           <div>
-            <h1>Dữ liệu vòi dầu</h1>
-            <p>Sơ đồ khả dụng vòi dầu buồng đốt · tổ máy {machine}</p>
+            <h1>Sơ Đồ Khả Dụng Vòi Dầu - Tổ Máy: {machine}</h1>
           </div>
         </div>
         <div className="ogb-head-actions">
