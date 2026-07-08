@@ -33,10 +33,12 @@ interface ReplacementCalendarProps {
   /** Ngày đang chọn ("YYYY-MM-DD") — tô sáng ô và lọc panel bên phải. */
   selectedDay: string | null;
   onSelectDay: (day: string | null) => void;
+  /** Nội dung góc phải header (vd chip lọc trạng thái); mặc định hiện chú thích màu. */
+  headerRight?: React.ReactNode;
 }
 
 /** Lịch tháng cho tab "Lịch thay thế": mỗi điểm thay thế là một chip màu tại ngày đến hạn. */
-export function ReplacementCalendar({ month, onMonthChange, points, selectedDay, onSelectDay }: ReplacementCalendarProps) {
+export function ReplacementCalendar({ month, onMonthChange, points, selectedDay, onSelectDay, headerRight }: ReplacementCalendarProps) {
   const [year, mon] = month.split("-").map(Number);
   const firstOfMonth = new Date(year, mon - 1, 1);
   const monthLabel = `Tháng ${mon} · ${year}`;
@@ -91,14 +93,16 @@ export function ReplacementCalendar({ month, onMonthChange, points, selectedDay,
           </Button>
         </div>
         <div className="flex-1 text-center text-base font-bold text-ink">{monthLabel}</div>
-        <div className="hidden items-center gap-3 md:flex">
-          {REPL_DUE_ORDER.map((k) => (
-            <span key={k} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: REPL_DUE[k].dot }} />
-              {REPL_DUE[k].label}
-            </span>
-          ))}
-        </div>
+        {headerRight ?? (
+          <div className="hidden items-center gap-3 md:flex">
+            {REPL_DUE_ORDER.map((k) => (
+              <span key={k} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: REPL_DUE[k].dot }} />
+                {REPL_DUE[k].label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto">

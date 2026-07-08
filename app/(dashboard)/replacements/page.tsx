@@ -212,36 +212,28 @@ function ReplacementsPageContent() {
         )}
       </PageHeader>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
+      {/* Tabs + bộ lọc tìm kiếm cùng hàng (bên phải) */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-border">
         <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
+        {tab === "schedule" && (
+          <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
+            <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, thiết bị..." className="sm:w-64" />
+            <Select value={system} onValueChange={setSystem}>
+              <SelectTrigger className="sm:w-48" aria-label="Lọc theo hệ thống"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả hệ thống</SelectItem>
+                {systemOptions.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {tab === "schedule" ? (
         <div className="space-y-6">
-          {/* Controls */}
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, thiết bị..." className="sm:w-64" />
-              <Select value={system} onValueChange={setSystem}>
-                <SelectTrigger className="sm:w-48" aria-label="Lọc theo hệ thống"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Tất cả hệ thống</SelectItem>
-                  {systemOptions.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Chip active={due === "ALL"} onClick={() => setDue("ALL")} label="Tất cả" count={total} />
-              {REPL_DUE_ORDER.map((k) => (
-                <Chip key={k} active={due === k} onClick={() => setDue(k)} label={REPL_DUE[k].label} count={counts[k]} dot={REPL_DUE[k].dot} />
-              ))}
-            </div>
-          </div>
-
           {isLoading ? (
             <TableSkeleton rows={8} />
           ) : (
@@ -256,6 +248,14 @@ function ReplacementsPageContent() {
                 points={points}
                 selectedDay={selectedDay}
                 onSelectDay={setSelectedDay}
+                headerRight={
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <Chip compact active={due === "ALL"} onClick={() => setDue("ALL")} label="Tất cả" count={total} />
+                    {REPL_DUE_ORDER.map((k) => (
+                      <Chip key={k} compact active={due === k} onClick={() => setDue(k)} label={REPL_DUE[k].label} count={counts[k]} dot={REPL_DUE[k].dot} />
+                    ))}
+                  </div>
+                }
               />
 
               {/* Panel danh sách theo dõi (cả tháng hoặc ngày đang chọn) */}
@@ -613,12 +613,19 @@ function UserAvatar({ user }: { user: { name: string; position: string | null; a
   );
 }
 
-function Chip({ active, onClick, label, count, dot }: { active: boolean; onClick: () => void; label: string; count: number; dot?: string }) {
+function Chip({ active, onClick, label, count, dot, compact }: { active: boolean; onClick: () => void; label: string; count: number; dot?: string; compact?: boolean }) {
   return (
-    <button onClick={onClick} className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors", active ? "border-navy bg-navy text-white" : "border-border bg-white text-ink hover:border-accent")}>
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center rounded-full border transition-colors",
+        compact ? "gap-1.5 px-2 py-0.5 text-xs" : "gap-2 px-3 py-1 text-sm",
+        active ? "border-navy bg-navy text-white" : "border-border bg-white text-ink hover:border-accent"
+      )}
+    >
       {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />}
       {label}
-      <span className={cn("rounded-full px-1.5 text-xs", active ? "bg-white/20" : "bg-muted")}>{count}</span>
+      <span className={cn("rounded-full px-1.5", compact ? "text-[10px]" : "text-xs", active ? "bg-white/20" : "bg-muted")}>{count}</span>
     </button>
   );
 }
