@@ -13,6 +13,7 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
+import { ReplacementCalendar, dayKey } from "@/components/materials/replacement-calendar";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import { Card } from "@/components/ui/card";
@@ -77,6 +78,8 @@ function ReplacementsPageContent() {
   const [debouncedQ, setDebouncedQ] = React.useState("");
   const [due, setDue] = React.useState("ALL");
   const [system, setSystem] = React.useState("ALL");
+  // Ngày đang chọn trên lịch ("YYYY-MM-DD") — lọc panel danh sách bên phải.
+  const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
     return () => clearTimeout(t);
@@ -100,7 +103,10 @@ function ReplacementsPageContent() {
   for (const p of byMonth) counts[replacementDueStatus(p.nextDueAt)]++;
   const total = byMonth.length;
   const points = due === "ALL" ? byMonth : byMonth.filter((p) => replacementDueStatus(p.nextDueAt) === due);
-  const isFiltered = debouncedQ.trim() !== "" || system !== "ALL" || due !== "ALL";
+  // Panel bên phải: cả tháng, hoặc chỉ ngày đang chọn trên lịch; sắp theo ngày đến hạn.
+  const panelPoints = (selectedDay ? points.filter((p) => dayKey(p.nextDueAt) === selectedDay) : [...points]).sort(
+    (a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime()
+  );
 
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
   const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
@@ -227,7 +233,6 @@ function ReplacementsPageContent() {
                   ))}
                 </SelectContent>
               </Select>
-              <MonthFilter value={month} onChange={setMonth} />
             </div>
             <div className="flex flex-wrap gap-2">
               <Chip active={due === "ALL"} onClick={() => setDue("ALL")} label="Tất cả" count={total} />
@@ -239,90 +244,114 @@ function ReplacementsPageContent() {
 
           {isLoading ? (
             <TableSkeleton rows={8} />
-          ) : points.length === 0 ? (
-            <EmptyState
-              icon={Repeat}
-              title={`Không có điểm thay thế đến hạn trong tháng ${ymLabel(month)}`}
-              description="Chọn tháng/năm khác ở bộ lọc để xem các điểm thay thế đến hạn ở tháng khác, hoặc bỏ bớt điều kiện lọc."
-              action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setDue("ALL"); setSystem("ALL"); } } : undefined}
-            />
           ) : (
-            <Card className="overflow-hidden">
-              <div className="border-b border-border px-4 py-2.5 text-sm text-muted-foreground">
-                Tháng <span className="font-medium text-ink">{ymLabel(month)}</span> · <span className="font-semibold text-ink">{points.length}</span> điểm thay thế{system !== "ALL" && <> · hệ thống <span className="font-medium text-ink">{system}</span></>}
-              </div>
-              <Table>
-                <TableHeader className="bg-muted/40">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>Vật tư</TableHead>
-                    <TableHead>Áp dụng cho</TableHead>
-                    <TableHead className="text-center">Hệ thống</TableHead>
-                    <TableHead className="text-center">Chu kỳ</TableHead>
-                    <TableHead className="text-center">Lần gần nhất</TableHead>
-                    <TableHead className="text-center">Đến hạn</TableHead>
-                    <TableHead className="text-center">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {points.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {p.material.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.material.imageUrl} alt={p.material.name} className="h-9 w-9 shrink-0 rounded-lg border border-border object-cover" />
-                          ) : (
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent"><Repeat className="h-4 w-4" /></span>
-                          )}
-                          <div className="min-w-0">
-                            <div className="font-medium text-ink">{p.material.name}</div>
-                            <div className="font-mono text-xs text-navy">{p.material.code}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center gap-1.5 text-sm">
-                          <Cpu className="h-3.5 w-3.5 text-navy" />
-                          {linkedDeviceOf(p) ? (
-                            <Link href={`/devices/${linkedDeviceOf(p)!.id}`} className="hover:underline">{linkedDeviceOf(p)!.code} — {linkedDeviceOf(p)!.name}</Link>
-                          ) : (
-                            <span>Chưa chọn thiết bị</span>
-                          )}
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+              {/* Lịch tháng: mỗi điểm thay thế là 1 chip màu tại ngày đến hạn */}
+              <ReplacementCalendar
+                month={month}
+                onMonthChange={(m) => {
+                  setMonth(m);
+                  setSelectedDay(null);
+                }}
+                points={points}
+                selectedDay={selectedDay}
+                onSelectDay={setSelectedDay}
+              />
+
+              {/* Panel danh sách theo dõi (cả tháng hoặc ngày đang chọn) */}
+              <Card className="flex max-h-[760px] flex-col overflow-hidden">
+                <div className="border-b border-border px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-ink">
+                    <Repeat className="h-4 w-4 text-accent" /> Danh sách theo dõi
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                    {selectedDay ? (
+                      <>
+                        <span>
+                          Ngày <span className="font-semibold text-ink">{formatDate(selectedDay)}</span> · {panelPoints.length} điểm
                         </span>
-                      </TableCell>
-                      <TableCell className="text-center text-muted-foreground">{systemOf(p) ?? "—"}</TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">{replacementIntervalLabel(p.intervalMonths, p.intervalNote)}</TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">{formatDate(p.lastReplacedAt)}</TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-sm text-ink">{formatDate(p.nextDueAt)}</span>
-                          <ReplacementBadge nextDueAt={p.nextDueAt} withText />
+                        <button type="button" className="font-medium text-accent hover:underline" onClick={() => setSelectedDay(null)}>
+                          Xem cả tháng
+                        </button>
+                      </>
+                    ) : (
+                      <span>
+                        Tháng <span className="font-semibold text-ink">{ymLabel(month)}</span> · {panelPoints.length} điểm thay thế
+                        {system !== "ALL" && <> · {system}</>}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2.5 overflow-y-auto p-3">
+                  {panelPoints.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border px-3 py-10 text-center text-sm text-muted-foreground">
+                      {selectedDay
+                        ? "Không có điểm thay thế trong ngày này."
+                        : `Không có điểm thay thế đến hạn trong tháng ${ymLabel(month)}.`}
+                    </div>
+                  ) : (
+                    panelPoints.map((p) => {
+                      const st = replacementDueStatus(p.nextDueAt);
+                      const device = linkedDeviceOf(p);
+                      return (
+                        <div
+                          key={p.id}
+                          className="rounded-xl border border-border bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-card"
+                          style={{ borderLeft: `4px solid ${REPL_DUE[st].dot}` }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-ink" title={p.material.name}>
+                                {p.material.name}
+                              </div>
+                              <div className="font-mono text-[11px] text-navy">{p.material.code}</div>
+                            </div>
+                            <ReplacementBadge nextDueAt={p.nextDueAt} withText />
+                          </div>
+                          <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              <Cpu className="h-3.5 w-3.5 shrink-0 text-navy" />
+                              {device ? (
+                                <Link href={`/devices/${device.id}`} className="truncate hover:underline" title={`${device.code} — ${device.name}`}>
+                                  {device.code} — {device.name}
+                                </Link>
+                              ) : (
+                                <span>Chưa chọn thiết bị</span>
+                              )}
+                            </div>
+                            <div>
+                              Chu kỳ {replacementIntervalLabel(p.intervalMonths, p.intervalNote)} · Lần gần nhất {formatDate(p.lastReplacedAt)}
+                            </div>
+                            <div>
+                              Đến hạn: <span className="font-semibold text-ink">{formatDate(p.nextDueAt)}</span>
+                            </div>
+                          </div>
+                          {(canManage || canDelete) && (
+                            <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
+                              {canManage && (
+                                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-accent hover:bg-accent/10" onClick={() => setRecordTarget(p)}>
+                                  <RefreshCw className="h-3.5 w-3.5" /> Ghi nhận
+                                </Button>
+                              )}
+                              {canManage && (
+                                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2" onClick={() => setEditTarget(p)}>
+                                  <Pencil className="h-3.5 w-3.5" /> Sửa
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(p)}>
+                                  <Trash2 className="h-3.5 w-3.5" /> Xoá
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          {canManage && (
-                            <Button variant="ghost" size="icon" title="Ghi nhận thay" className="text-accent hover:bg-accent/10" onClick={() => setRecordTarget(p)}>
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canManage && (
-                            <Button variant="ghost" size="icon" title="Sửa" onClick={() => setEditTarget(p)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(p)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
+                      );
+                    })
+                  )}
+                </div>
+              </Card>
+            </div>
           )}
         </div>
       ) : (
