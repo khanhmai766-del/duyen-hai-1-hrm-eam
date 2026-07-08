@@ -47,6 +47,14 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 type TabKey = "schedule" | "history";
 
+// Bộ lọc tổ máy: theo tab Danh mục vật tư mà vật tư thuộc về (Material.machine).
+const MACHINE_FILTERS = [
+  { key: "ALL", label: "Tất cả tổ máy" },
+  { key: "S1", label: "Tổ máy S1" },
+  { key: "S2", label: "Tổ máy S2" },
+  { key: "COMMON", label: "COMMON" },
+] as const;
+
 // Mốc thời gian xuất danh sách vật tư cần thay thế (tính từ hôm nay).
 const EXPORT_HORIZONS = [
   { months: 1, label: "1 tháng" },
@@ -88,7 +96,7 @@ function ReplacementsPageContent() {
   const [q, setQ] = React.useState("");
   const [debouncedQ, setDebouncedQ] = React.useState("");
   const [due, setDue] = React.useState("ALL");
-  const [system, setSystem] = React.useState("ALL");
+  const [machineFilter, setMachineFilter] = React.useState("ALL");
   // Ngày đang chọn trên lịch ("YYYY-MM-DD") — lọc panel danh sách bên phải.
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -102,14 +110,10 @@ function ReplacementsPageContent() {
   const all = data?.data ?? [];
   const linkedDeviceOf = (p: { device: ReplacementDevice | null; material: { deviceMaterials?: Array<{ device: ReplacementDevice }> } }) =>
     p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
-  const systemOf = (p: ReplacementItem) => linkedDeviceOf(p)?.system ?? null;
-  const systemOptions = React.useMemo(
-    () => Array.from(new Set(all.map((p) => systemOf(p)).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
-    [all]
-  );
-  const bySystem = system === "ALL" ? all : all.filter((p) => systemOf(p) === system);
+  // Lọc theo tổ máy của vật tư (vật tư nằm ở tab S1/S2/COMMON nào trong Danh mục).
+  const byMachine = machineFilter === "ALL" ? all : all.filter((p) => (p.material.machine ?? "COMMON") === machineFilter);
   // Lọc theo tháng/năm: chỉ các điểm có NGÀY ĐẾN HẠN trong tháng đang chọn.
-  const byMonth = bySystem.filter((p) => ym(p.nextDueAt) === month);
+  const byMonth = byMachine.filter((p) => ym(p.nextDueAt) === month);
   const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
   for (const p of byMonth) counts[replacementDueStatus(p.nextDueAt)]++;
   const total = byMonth.length;
@@ -186,7 +190,7 @@ function ReplacementsPageContent() {
   const horizonMonths = Number(horizon);
   const horizonLabel = EXPORT_HORIZONS.find((h) => h.months === horizonMonths)?.label ?? `${horizonMonths} tháng`;
   const horizonEnd = addMonths(new Date(), horizonMonths);
-  const exportRows = bySystem
+  const exportRows = byMachine
     .filter((p) => new Date(p.nextDueAt) <= horizonEnd)
     .sort((a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime())
     .map((p) => {
@@ -246,12 +250,11 @@ function ReplacementsPageContent() {
         {tab === "schedule" ? (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, thiết bị..." className="sm:w-64" />
-            <Select value={system} onValueChange={setSystem}>
-              <SelectTrigger className="sm:w-48" aria-label="Lọc theo hệ thống"><SelectValue /></SelectTrigger>
+            <Select value={machineFilter} onValueChange={setMachineFilter}>
+              <SelectTrigger className="sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả hệ thống</SelectItem>
-                {systemOptions.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                {MACHINE_FILTERS.map((m) => (
+                  <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -309,7 +312,7 @@ function ReplacementsPageContent() {
                     ) : (
                       <span>
                         Tháng <span className="font-semibold text-ink">{ymLabel(month)}</span> · {panelPoints.length} điểm thay thế
-                        {system !== "ALL" && <> · {system}</>}
+                        {machineFilter !== "ALL" && <> · {MACHINE_FILTERS.find((m) => m.key === machineFilter)?.label}</>}
                       </span>
                     )}
                   </div>

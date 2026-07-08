@@ -12,6 +12,7 @@ export type ReplacementMaterial = {
   unit: string;
   imageUrl?: string | null;
   system: string | null;
+  machine?: string | null; // tổ máy của vật tư trong Danh mục: S1 | S2 | COMMON
   deviceMaterials?: Array<{ device: ReplacementDevice }>;
 };
 

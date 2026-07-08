@@ -20,6 +20,7 @@ const INCLUDE = {
       unit: true,
       imageUrl: true,
       system: true,
+      machine: true,
       deviceMaterials: {
         select: { id: true, deviceSeq: true, materialId: true, quantity: true, usedAt: true, note: true, device: { select: EQUIPMENT_DEVICE_SELECT } },
         orderBy: { usedAt: "desc" },
