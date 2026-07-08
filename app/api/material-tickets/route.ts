@@ -16,16 +16,8 @@ const ITEM_INCLUDE = {
 
 // GET /api/material-tickets?status=&type=&unit=
 // meta.viewer cho client biết quyền hiện tại để hiển thị đúng nút.
-/** Nhóm được XEM TẤT CẢ phiếu: Quản trị, Quản lý, Trưởng ca/Kỹ thuật viên (role)
- *  + Trưởng Ca/Trưởng Kíp + Thống kê (theo cương vị, để vận hành workflow). */
-function canViewAll(user: { role: string; position?: string | null }) {
-  return (
-    ["ADMIN", "SUPERVISOR", "TECHNICIAN"].includes(user.role) ||
-    isShiftLeader(user.position) ||
-    isStats(user.position)
-  );
-}
-
+// MỌI cương vị đăng nhập đều XEM được toàn bộ phiếu (chỉ hành động mới bị
+// giới hạn theo lượt/cương vị — kiểm tra ở API action).
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -34,8 +26,6 @@ export async function GET(req: NextRequest) {
     if (sp.get("status")) where.status = sp.get("status");
     if (sp.get("type")) where.type = sp.get("type");
     if (sp.get("unit")) where.unit = sp.get("unit");
-    // Người không thuộc nhóm quản lý: CHỈ thấy phiếu giao cho đúng cương vị mình
-    if (!canViewAll(user)) where.assignedPosition = user.position ?? "__none__";
 
     const tickets = await prisma.materialTicket.findMany({
       where,

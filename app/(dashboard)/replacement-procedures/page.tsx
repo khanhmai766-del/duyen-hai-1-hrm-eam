@@ -19,7 +19,7 @@ export default function ReplacementProceduresPage() {
     <div className="space-y-6">
       <PageHeader
         title="QUY TRÌNH THAY THẾ VẬT TƯ"
-        description={`Phiếu Đề xuất & Ứng vật tư · phân quyền theo cương vị${position ? ` · Bạn: ${position}` : ""}`}
+        description={`Phiếu Đề xuất & Ứng vật tư · mọi cương vị xem được, thao tác theo phân quyền${position ? ` · Bạn: ${position}` : ""}`}
       >
         {canCreate && (
           <Button onClick={() => setCreating(true)}>
