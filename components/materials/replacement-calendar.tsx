@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,19 @@ export function ReplacementCalendar({ month, onMonthChange, points, selectedDay,
     onSelectDay(dayKey(now));
   };
 
+  // Bấm tiêu đề tháng → mở hộp chọn tháng/năm native (input type="month" ẩn).
+  const monthInputRef = React.useRef<HTMLInputElement>(null);
+  const openMonthPicker = () => {
+    const el = monthInputRef.current;
+    if (!el) return;
+    try {
+      el.showPicker();
+    } catch {
+      el.focus();
+      el.click();
+    }
+  };
+
   // Gom điểm theo ngày đến hạn để tra nhanh khi vẽ từng ô.
   const byDay = React.useMemo(() => {
     const map = new Map<string, ReplacementItem[]>();
@@ -92,7 +105,28 @@ export function ReplacementCalendar({ month, onMonthChange, points, selectedDay,
             Hôm nay
           </Button>
         </div>
-        <div className="flex-1 text-center text-base font-bold text-ink">{monthLabel}</div>
+        <div className="relative flex-1 text-center">
+          <button
+            type="button"
+            onClick={openMonthPicker}
+            title="Chọn tháng/năm"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-base font-bold text-ink transition-colors hover:bg-muted/70"
+          >
+            <CalendarDays className="h-4 w-4 text-accent" />
+            {monthLabel}
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </button>
+          {/* Input ẩn neo ngay dưới tiêu đề để hộp chọn của trình duyệt bung đúng chỗ */}
+          <input
+            ref={monthInputRef}
+            type="month"
+            value={month}
+            onChange={(e) => e.target.value && onMonthChange(e.target.value)}
+            tabIndex={-1}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-full h-px w-px -translate-x-1/2 opacity-0"
+          />
+        </div>
         {headerRight ?? (
           <div className="hidden items-center gap-3 md:flex">
             {REPL_DUE_ORDER.map((k) => (
