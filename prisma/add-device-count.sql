@@ -1,0 +1,1 @@
+ALTER TABLE "MaterialReplacement" ADD COLUMN IF NOT EXISTS "deviceCount" INTEGER NOT NULL DEFAULT 1;

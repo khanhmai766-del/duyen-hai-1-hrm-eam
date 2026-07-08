@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -11,6 +12,8 @@ type SafeOperationUnit = (typeof SAFE_OPERATION_UNITS)[number];
 const SAFE_OPERATION_CATEGORIES = ["continuous", "standby", "maintenance", "incident"] as const;
 type SafeOperationCategory = (typeof SAFE_OPERATION_CATEGORIES)[number];
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+let safeOperationConstraintReady = false;
+let safeOperationDbUsesVietnamTime: boolean | null = null;
 
 function parseUnit(value: unknown): SafeOperationUnit | null {
   const unit = String(value ?? "").trim().toUpperCase();
@@ -22,7 +25,28 @@ function parseCategory(value: unknown): SafeOperationCategory | null {
   return SAFE_OPERATION_CATEGORIES.includes(category as SafeOperationCategory) ? (category as SafeOperationCategory) : null;
 }
 
-function parseLocalDateTime(value: unknown) {
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatTimestampStorage(date: Date, useVietnamWallTime: boolean) {
+  if (useVietnamWallTime) {
+    const vietnamTime = new Date(date.getTime() + VIETNAM_OFFSET_MS);
+    return [
+      vietnamTime.getUTCFullYear(),
+      padDatePart(vietnamTime.getUTCMonth() + 1),
+      padDatePart(vietnamTime.getUTCDate()),
+    ].join("-") + ` ${padDatePart(vietnamTime.getUTCHours())}:${padDatePart(vietnamTime.getUTCMinutes())}:${padDatePart(vietnamTime.getUTCSeconds())}`;
+  }
+
+  return [
+    date.getUTCFullYear(),
+    padDatePart(date.getUTCMonth() + 1),
+    padDatePart(date.getUTCDate()),
+  ].join("-") + ` ${padDatePart(date.getUTCHours())}:${padDatePart(date.getUTCMinutes())}:${padDatePart(date.getUTCSeconds())}`;
+}
+
+function parseLocalDateTime(value: unknown, dbUsesVietnamTime: boolean) {
   const raw = String(value ?? "").trim();
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!match) return null;
@@ -56,24 +80,70 @@ function parseLocalDateTime(value: unknown) {
   ) {
     return null;
   }
-  return date;
+
+  return {
+    instant: date,
+    storage: formatTimestampStorage(date, dbUsesVietnamTime),
+  };
 }
 
 type SafeOperationEventRow = {
   id: string;
   unit: SafeOperationUnit;
   category: SafeOperationCategory;
-  startedAt: Date;
-  endedAt: Date | null;
+  startedAt: string;
+  endedAt: string | null;
   reason: string | null;
   isAdded: boolean;
-  createdAt: Date;
+  createdAt: string;
 };
 
 async function listSafeOperationEvents() {
-  return prisma.safeOperationEvent.findMany({
-    orderBy: { createdAt: "asc" },
-  }) as Promise<SafeOperationEventRow[]>;
+  const dbUsesVietnamTime = await getSafeOperationDbUsesVietnamTime();
+  const suffix = dbUsesVietnamTime ? "+07:00" : "Z";
+
+  return prisma.$queryRaw<SafeOperationEventRow[]>`
+    SELECT
+      "id",
+      "unit",
+      "category",
+      to_char("startedAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS') || ${suffix} AS "startedAt",
+      CASE
+        WHEN "endedAt" IS NULL THEN NULL
+        ELSE to_char("endedAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS') || ${suffix}
+      END AS "endedAt",
+      "reason",
+      "isAdded",
+      to_char("createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS') || ${suffix} AS "createdAt"
+    FROM "SafeOperationEvent"
+    ORDER BY "createdAt" ASC
+  `;
+}
+
+async function getSafeOperationDbUsesVietnamTime() {
+  if (safeOperationDbUsesVietnamTime !== null) return safeOperationDbUsesVietnamTime;
+  const rows = await prisma.$queryRaw<{ TimeZone: string }[]>`SHOW timezone`;
+  const timezone = String(rows[0]?.TimeZone ?? "").toLowerCase();
+  safeOperationDbUsesVietnamTime = timezone === "asia/ho_chi_minh" || timezone === "asia/saigon";
+  return safeOperationDbUsesVietnamTime;
+}
+
+async function ensureSafeOperationPeriodConstraint() {
+  if (safeOperationConstraintReady) return;
+  await prisma.$executeRaw`
+    ALTER TABLE "SafeOperationEvent"
+    DROP CONSTRAINT IF EXISTS "SafeOperationEvent_period_check"
+  `;
+  await prisma.$executeRaw`
+    ALTER TABLE "SafeOperationEvent"
+    ADD CONSTRAINT "SafeOperationEvent_period_check"
+    CHECK (
+      ("category" = 'continuous' AND "endedAt" IS NULL)
+      OR
+      ("category" <> 'continuous' AND ("endedAt" IS NULL OR "endedAt" > "startedAt"))
+    )
+  `;
+  safeOperationConstraintReady = true;
 }
 
 export async function GET() {
@@ -97,20 +167,23 @@ export async function PUT(req: NextRequest) {
     switch (action) {
       case "ADD_ENTRY": {
         const { category, start, end } = body;
+        const dbUsesVietnamTime = await getSafeOperationDbUsesVietnamTime();
         const parsedCategory = parseCategory(category);
-        const startedAt = parseLocalDateTime(start);
-        const endedAt = end ? parseLocalDateTime(end) : null;
+        const startedAt = parseLocalDateTime(start, dbUsesVietnamTime);
+        const endedAt = end ? parseLocalDateTime(end, dbUsesVietnamTime) : null;
         const reason = String(body.reason ?? "").trim();
         if (!parsedCategory) return fail("Hạng mục không hợp lệ");
         if (!startedAt) return fail("Thời gian bắt đầu không hợp lệ");
         if (parsedCategory !== "continuous") {
-          if (!endedAt) return fail("Thời gian kết thúc không hợp lệ");
-          if (endedAt <= startedAt) return fail("Thời gian kết thúc phải sau thời gian bắt đầu");
+          if (end && !endedAt) return fail("Thời gian kết thúc không hợp lệ");
+          if (endedAt && endedAt.instant <= startedAt.instant) return fail("Thời gian kết thúc phải sau thời gian bắt đầu");
         }
-        if ((parsedCategory === "maintenance" || parsedCategory === "incident") && !reason) {
+        if (endedAt && (parsedCategory === "maintenance" || parsedCategory === "incident") && !reason) {
           return fail("Vui lòng nhập lý do");
         }
         
+        await ensureSafeOperationPeriodConstraint();
+
         if (parsedCategory === "continuous") {
           await prisma.$transaction(async (tx) => {
             await tx.$executeRaw`
@@ -119,14 +192,46 @@ export async function PUT(req: NextRequest) {
             `;
             await tx.$executeRaw`
               INSERT INTO "SafeOperationEvent" ("id", "unit", "category", "startedAt", "endedAt", "reason", "isAdded", "createdAt")
-              VALUES (${randomUUID()}, ${unit}, ${parsedCategory}, ${startedAt}, NULL, NULL, false, NOW())
+              VALUES (${randomUUID()}, ${unit}, ${parsedCategory}, CAST(${startedAt.storage} AS TIMESTAMP(3)), NULL, NULL, false, NOW())
             `;
           });
         } else {
-          await prisma.$executeRaw`
-            INSERT INTO "SafeOperationEvent" ("id", "unit", "category", "startedAt", "endedAt", "reason", "isAdded", "createdAt")
-            VALUES (${randomUUID()}, ${unit}, ${parsedCategory}, ${startedAt}, ${endedAt}, ${reason || null}, false, NOW())
-          `;
+          await prisma.$transaction(async (tx) => {
+            if (endedAt) {
+              const openEntry = await tx.safeOperationEvent.findFirst({
+                where: { unit, category: parsedCategory, endedAt: null },
+                orderBy: { createdAt: "desc" },
+                select: { id: true },
+              });
+              if (openEntry) {
+                await tx.$executeRaw`
+                  UPDATE "SafeOperationEvent"
+                  SET "startedAt" = CAST(${startedAt.storage} AS TIMESTAMP(3)), "endedAt" = CAST(${endedAt.storage} AS TIMESTAMP(3)), "reason" = ${reason || null}, "isAdded" = false
+                  WHERE "id" = ${openEntry.id}
+                `;
+                return;
+              }
+            } else {
+              await tx.$executeRaw`
+                DELETE FROM "SafeOperationEvent"
+                WHERE "unit" = ${unit} AND "category" = ${parsedCategory} AND "endedAt" IS NULL
+              `;
+            }
+
+            await tx.$executeRaw`
+              INSERT INTO "SafeOperationEvent" ("id", "unit", "category", "startedAt", "endedAt", "reason", "isAdded", "createdAt")
+              VALUES (
+                ${randomUUID()},
+                ${unit},
+                ${parsedCategory},
+                CAST(${startedAt.storage} AS TIMESTAMP(3)),
+                ${endedAt ? Prisma.sql`CAST(${endedAt.storage} AS TIMESTAMP(3))` : null},
+                ${reason || null},
+                false,
+                NOW()
+              )
+            `;
+          });
         }
         await audit(user.id, "UPDATE_SAFE_OPERATION", "SafeOperationEvent", unit, `Thêm mốc thời gian ${parsedCategory}`);
         break;
@@ -139,7 +244,7 @@ export async function PUT(req: NextRequest) {
         const count = await prisma.$executeRaw`
           UPDATE "SafeOperationEvent"
           SET "isAdded" = ${Boolean(isAdded)}
-          WHERE "id" = ${entryId} AND "unit" = ${unit}
+          WHERE "id" = ${entryId} AND "unit" = ${unit} AND "endedAt" IS NOT NULL
         `;
         if (count === 0) return fail("Không tìm thấy mốc thời gian", 404);
         await audit(user.id, "UPDATE_SAFE_OPERATION", "SafeOperationEvent", entryId, `Cập nhật trạng thái cộng gộp ${isAdded}`);

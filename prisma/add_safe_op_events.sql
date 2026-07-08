@@ -37,7 +37,7 @@ DELETE FROM "SafeOperationEvent"
 WHERE "unit" NOT IN ('S1', 'S2')
    OR "category" NOT IN ('continuous', 'standby', 'maintenance', 'incident')
    OR ("category" = 'continuous' AND "endedAt" IS NOT NULL)
-   OR ("category" <> 'continuous' AND ("endedAt" IS NULL OR "endedAt" <= "startedAt"));
+   OR ("category" <> 'continuous' AND "endedAt" IS NOT NULL AND "endedAt" <= "startedAt");
 
 DO $$
 BEGIN
@@ -61,20 +61,16 @@ BEGIN
     END IF;
 END $$;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'SafeOperationEvent_period_check'
-    ) THEN
-        ALTER TABLE "SafeOperationEvent"
-            ADD CONSTRAINT "SafeOperationEvent_period_check"
-            CHECK (
-                ("category" = 'continuous' AND "endedAt" IS NULL)
-                OR
-                ("category" <> 'continuous' AND "endedAt" IS NOT NULL AND "endedAt" > "startedAt")
-            );
-    END IF;
-END $$;
+ALTER TABLE "SafeOperationEvent"
+    DROP CONSTRAINT IF EXISTS "SafeOperationEvent_period_check";
+
+ALTER TABLE "SafeOperationEvent"
+    ADD CONSTRAINT "SafeOperationEvent_period_check"
+    CHECK (
+        ("category" = 'continuous' AND "endedAt" IS NULL)
+        OR
+        ("category" <> 'continuous' AND ("endedAt" IS NULL OR "endedAt" > "startedAt"))
+    );
 
 CREATE INDEX IF NOT EXISTS "SafeOperationEvent_unit_category_idx" ON "SafeOperationEvent"("unit", "category");
 CREATE INDEX IF NOT EXISTS "SafeOperationEvent_createdAt_idx" ON "SafeOperationEvent"("createdAt");

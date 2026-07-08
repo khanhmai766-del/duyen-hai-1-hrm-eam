@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton } from "@/components/shared/skeletons";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -519,11 +520,12 @@ const SAFE_OPERATION_ROWS: { key: SafeOpRowKey; label: string; icon: React.Eleme
 ];
 
 type EditingTarget = { unit: SafeOperationUnit; rowKey: EditableSafeOpRowKey; label: string } | null;
+type ResetTarget = { unit: SafeOperationUnit; rowKey: EditableSafeOpRowKey; label: string } | null;
 
 type TimeEntry = {
   id: string;
   start: string;   // datetime-local value
-  end: string;
+  end: string | null;
   reason: string | null;
   durationMs: number;
   added: boolean;   // already added to total?
@@ -554,8 +556,20 @@ function formatDateTime(v: string) {
   return `${get("hour")}:${get("minute")} ${get("day")}/${get("month")}`;
 }
 
-function formatEntryRange(start: string, end: string) {
-  return `${formatDateTime(start)} → ${formatDateTime(end)}`;
+function formatEntryRange(start: string, end: string | null) {
+  return `${formatDateTime(start)} → ${end ? formatDateTime(end) : "Đang tính"}`;
+}
+
+function toVietnamDateTimeLocalValue(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const vietnamTime = new Date(date.getTime() + VIETNAM_OFFSET_MS);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return [
+    vietnamTime.getUTCFullYear(),
+    pad(vietnamTime.getUTCMonth() + 1),
+    pad(vietnamTime.getUTCDate()),
+  ].join("-") + `T${pad(vietnamTime.getUTCHours())}:${pad(vietnamTime.getUTCMinutes())}`;
 }
 
 function vietnamCalendarYear(date: Date) {
@@ -572,6 +586,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   const events = data?.data ?? [];
 
   const [editing, setEditing] = React.useState<EditingTarget>(null);
+  const [resetTarget, setResetTarget] = React.useState<ResetTarget>(null);
   const [draftStart, setDraftStart] = React.useState("");
   const [draftEnd, setDraftEnd] = React.useState("");
   const [draftReason, setDraftReason] = React.useState("");
@@ -596,30 +611,31 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
     const k = entryKey(event.unit as SafeOperationUnit, event.category as SafeOpRowKey);
     if (!entries[k]) entries[k] = [];
     
-    let dur = 0;
-    if (event.startedAt && event.endedAt) {
-      dur = new Date(event.endedAt).getTime() - new Date(event.startedAt).getTime();
-    }
+    const isOpenStop = !event.endedAt;
+    const dur = event.startedAt
+      ? Math.max(0, new Date(event.endedAt ?? now).getTime() - new Date(event.startedAt).getTime())
+      : 0;
     
     entries[k].push({
       id: event.id,
       start: event.startedAt,
-      end: event.endedAt || "",
+      end: event.endedAt,
       reason: event.reason,
       durationMs: dur,
       added: event.isAdded,
     });
     
-    if (event.isAdded) {
+    if (event.isAdded || isOpenStop) {
       totals[k] = (totals[k] ?? 0) + dur;
     }
   }
 
   function openTimeDialog(unit: SafeOperationUnit, rowKey: EditableSafeOpRowKey, label: string) {
     setEditing({ unit, rowKey, label });
-    setDraftStart("");
+    const openEntry = entries[entryKey(unit, rowKey)]?.find((entry) => !entry.end);
+    setDraftStart(openEntry ? toVietnamDateTimeLocalValue(openEntry.start) : "");
     setDraftEnd("");
-    setDraftReason("");
+    setDraftReason(openEntry?.reason ?? "");
   }
 
   async function handleSave() {
@@ -634,9 +650,8 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
         return;
       }
 
-      if (!draftEnd) return toast.error("Vui lòng nhập thời gian kết thúc");
-      if (new Date(draftEnd) <= new Date(draftStart)) return toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
-      if ((editing.rowKey === "maintenance" || editing.rowKey === "incident") && !draftReason.trim()) {
+      if (draftEnd && new Date(draftEnd) <= new Date(draftStart)) return toast.error("Thời gian kết thúc phải sau thời gian bắt đầu");
+      if (draftEnd && (editing.rowKey === "maintenance" || editing.rowKey === "incident") && !draftReason.trim()) {
         return toast.error("Vui lòng nhập lý do");
       }
 
@@ -645,13 +660,15 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
         action: "ADD_ENTRY",
         category: editing.rowKey,
         start: draftStart,
-        end: draftEnd,
+        end: draftEnd || undefined,
         reason: draftReason.trim() || undefined,
       });
-      toast.success(`Đã thêm mốc thời gian cho ${editing.label} - ${editing.unit}`);
-      setDraftStart("");
+      toast.success(draftEnd
+        ? `Đã hoàn tất mốc thời gian cho ${editing.label} - ${editing.unit}`
+        : `Đã lưu thời gian bắt đầu cho ${editing.label} - ${editing.unit}`);
+      if (draftEnd) setDraftStart("");
       setDraftEnd("");
-      setDraftReason("");
+      if (draftEnd) setDraftReason("");
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -681,11 +698,12 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
     }
   }
 
-  async function resetEntries() {
-    if (!editing) return;
+  async function confirmResetEntries() {
+    if (!resetTarget) return;
     try {
-      await updateSafeOperation.mutateAsync({ unit: editing.unit, action: "RESET_CATEGORY", category: editing.rowKey });
-      toast.success(`Đã reset ${editing.label} - ${editing.unit}`);
+      await updateSafeOperation.mutateAsync({ unit: resetTarget.unit, action: "RESET_CATEGORY", category: resetTarget.rowKey });
+      toast.success(`Đã reset ${resetTarget.label} - ${resetTarget.unit}`);
+      setResetTarget(null);
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -796,7 +814,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
                 <div className="text-xs font-semibold uppercase text-slate-500">Các mốc đã nhập ({dialogEntries.length})</div>
                 <button
                   type="button"
-                  onClick={resetEntries}
+                  onClick={() => setResetTarget({ unit: editing.unit, rowKey: editing.rowKey, label: editing.label })}
                   className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
                   title="Xóa tất cả và reset về 0"
                 >
@@ -820,7 +838,16 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
                       </span>
                       <span className="font-medium text-slate-500">({formatDuration(entry.durationMs)})</span>
                     </span>
-                    {!entry.added ? (
+                    {!entry.end ? (
+                      <button
+                        type="button"
+                        onClick={() => editing && removeEntry(editing.unit, editing.rowKey, entry.id)}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-red-300 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                        title="Xóa mốc này"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                    ) : !entry.added ? (
                       <span className="flex shrink-0 gap-1">
                         <button
                           type="button"
@@ -865,15 +892,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    updateSafeOperation.mutate(
-                      { unit: editing.unit, action: "RESET_CATEGORY", category: "continuous" },
-                      {
-                        onSuccess: () => toast.success(`Đã reset Vận hành liên tục - ${editing.unit}`),
-                        onError: (err) => toast.error((err as Error).message),
-                      },
-                    );
-                  }}
+                  onClick={() => setResetTarget({ unit: editing.unit, rowKey: "continuous", label: "Vận hành liên tục" })}
                   className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
                   title="Xóa thời gian bắt đầu"
                 >
@@ -885,6 +904,20 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!resetTarget}
+        onOpenChange={(open) => !open && setResetTarget(null)}
+        title="Xác nhận reset thời gian"
+        description={
+          resetTarget
+            ? `Bạn có chắc muốn reset toàn bộ mốc thời gian của "${resetTarget.label}" - ${resetTarget.unit}? Thao tác này sẽ xóa các mốc đã nhập và không thể hoàn tác.`
+            : undefined
+        }
+        confirmLabel="Reset"
+        destructive
+        loading={updateSafeOperation.isPending}
+        onConfirm={confirmResetEntries}
+      />
     </Card>
   );
 }
