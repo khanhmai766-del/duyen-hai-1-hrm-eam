@@ -701,12 +701,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
   // Bấm "+Thêm điểm" mở form nhập mốc; xác nhận tạo điểm theo dõi rồi TỰ MỞ
   // drawer "Theo dõi thay thế vật tư" để xem điểm vừa thêm.
   const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
-  const [trackUnit, setTrackUnit] = React.useState("S1");
   const [trackDate, setTrackDate] = React.useState("");
   const [trackMonths, setTrackMonths] = React.useState(12);
 
   function openTracking(p: PanelPoint) {
-    setTrackUnit("S1");
     setTrackDate(formatDateInput(new Date()));
     setTrackMonths(p.intervalMonths || 12);
     setTracking(p);
@@ -723,7 +721,6 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         system: tracking.system,
         location: tracking.location,
         managingPosition: tracking.managingPosition,
-        unit: trackUnit,
         quantity: tracking.quantity,
         deviceCount: tracking.deviceCount ?? 1,
         intervalMonths: months,
@@ -805,23 +802,6 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 <div className="font-semibold uppercase text-ink">{tracking.device?.name || tracking.system || "—"}</div>
                 {tracking.location && <div className="text-muted-foreground">Thiết bị: {tracking.location}</div>}
               </div>
-              <Field label="Tổ máy">
-                <div className="grid grid-cols-3 gap-2">
-                  {DEFECT_UNITS.map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      onClick={() => setTrackUnit(u)}
-                      className={cn(
-                        "h-10 rounded-md border text-sm font-medium transition-colors",
-                        trackUnit === u ? "border-navy bg-navy text-white" : "border-input bg-muted/40 text-ink hover:border-accent"
-                      )}
-                    >
-                      {u}
-                    </button>
-                  ))}
-                </div>
-              </Field>
               <Field label="Lần thay gần nhất">
                 <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
               </Field>

@@ -134,7 +134,6 @@ export async function POST(req: NextRequest) {
         system,
         location: String(body.location ?? "").trim() || null,
         managingPosition: String(body.managingPosition ?? "").trim() || null,
-        unit: String(body.unit ?? "").trim() || null,
         quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
         deviceCount: Math.max(1, Math.round(Number(body.deviceCount)) || 1),
         intervalMonths,
