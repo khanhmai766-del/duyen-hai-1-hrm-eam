@@ -313,6 +313,7 @@ model Material {
   location  String?
   system    String? // hệ thống thiết bị: Lò Hơi, Máy Nghiền, ESP, FGD...
   category  String? // loại vật tư: Dầu bôi trơn, Bi nghiền than, Lõi lọc dầu, Thiết bị C&I, Vật tư tiêu hao
+  machine   String   @default("COMMON") // tổ máy sở hữu danh mục: S1 | S2 | COMMON
   imageUrl  String? // ảnh minh hoạ vật tư (public URL)
   documentUrl  String? // tài liệu đính kèm (PDF hoặc link)
   documentName String? // tên file tài liệu đính kèm
@@ -327,6 +328,7 @@ model Material {
 
   @@index([system])
   @@index([quantity])
+  @@index([machine])
 }
 
 // Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí

@@ -28,6 +28,13 @@ import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, 
 import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
 
+// Tab tổ máy — key trùng giá trị Material.machine (S1 | S2 | COMMON).
+const MACHINE_TABS: { key: (typeof DEFECT_UNITS)[number]; label: string }[] = [
+  { key: "S1", label: "Tổ Máy S1" },
+  { key: "S2", label: "Tổ Máy S2" },
+  { key: "COMMON", label: "COMMON" },
+];
+
 // Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
 const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon: LucideIcon }[] = [
   { key: "Dầu bôi trơn", icon: Droplet },
@@ -62,6 +69,7 @@ function MaterialsPageContent() {
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
+  const [machineTab, setMachineTab] = React.useState<(typeof DEFECT_UNITS)[number]>("S1");
   const [categoryFilter, setCategoryFilter] = React.useState<string>(MATERIAL_CATEGORIES[0]);
   const [blockFilter, setBlockFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
@@ -110,6 +118,7 @@ function MaterialsPageContent() {
   );
   const materials = (data?.data ?? []).filter(
     (m) =>
+      (m.machine ?? "COMMON") === machineTab &&
       (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
       (m.category === categoryFilter ||
         (categoryFilter === "Hóa Chất" && (m.category === "Vật tư tiêu hao" || m.category === "Hóa chất")) ||
@@ -218,13 +227,31 @@ function MaterialsPageContent() {
       <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
         {canManage && (
           <>
-            <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename="vat-tu" />
-            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, replacements: [] }); }}>
+            <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename={`vat-tu-${machineTab.toLowerCase()}`} />
+            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machine: machineTab, replacements: [] }); }}>
               <Plus className="h-4 w-4" /> Thêm vật tư
             </Button>
           </>
         )}
       </PageHeader>
+
+      {/* Tab tổ máy — danh mục tách riêng theo Tổ Máy S1 / Tổ Máy S2 / COMMON */}
+      <div className="flex w-fit items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
+        {MACHINE_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            aria-pressed={machineTab === t.key}
+            onClick={() => setMachineTab(t.key)}
+            className={cn(
+              "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+              machineTab === t.key ? "bg-navy text-white shadow-sm" : "text-muted-foreground hover:text-ink"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {/* Tab loại vật tư — chuyển đổi qua lại như tab Thư mục lưu trữ; ô tìm kiếm cùng hàng bên phải */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
@@ -279,8 +306,8 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}". Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
-              : `Chưa có vật tư nào thuộc loại "${categoryFilter}".`
+              ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}" (${MACHINE_TABS.find((t) => t.key === machineTab)?.label}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
+              : `Chưa có vật tư nào thuộc loại "${categoryFilter}" trong ${MACHINE_TABS.find((t) => t.key === machineTab)?.label}.`
           }
           action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setBlockFilter("ALL"); } } : undefined}
         />
@@ -438,6 +465,25 @@ function MaterialsPageContent() {
                 <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
               </Field>
               <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <Field label="Tổ máy" className="col-span-2">
+                <div className="grid grid-cols-3 gap-2">
+                  {MACHINE_TABS.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setEdit({ ...edit, machine: t.key })}
+                      className={cn(
+                        "h-10 rounded-md border text-sm font-medium transition-colors",
+                        (edit.machine ?? "COMMON") === t.key
+                          ? "border-navy bg-navy text-white"
+                          : "border-input bg-muted/40 text-ink hover:border-accent"
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
               <Field label="Loại vật tư" className="col-span-2">
                 <Select value={edit.category ?? "NONE"} onValueChange={(v) => setEdit({ ...edit, category: v === "NONE" ? null : v })}>
                   <SelectTrigger aria-label="Chọn loại vật tư"><SelectValue /></SelectTrigger>

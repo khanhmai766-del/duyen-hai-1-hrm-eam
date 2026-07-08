@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { addMonths } from "@/lib/constants";
+import { addMonths, DEFECT_UNITS } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
@@ -21,6 +21,11 @@ const MATERIAL_INCLUDE = {
     orderBy: { nextDueAt: "asc" as const },
   },
 };
+
+// Tab danh mục theo tổ máy: S1 | S2 | COMMON (giá trị khác coi như không hợp lệ).
+function parseMachine(value: unknown) {
+  return typeof value === "string" && (DEFECT_UNITS as readonly string[]).includes(value) ? value : null;
+}
 
 type MaterialDocumentFields = {
   documentUrl: string | null;
@@ -184,6 +189,7 @@ export async function POST(req: NextRequest) {
         location: null,
         system: defaultSystem,
         category: body.category?.trim() || null,
+        machine: parseMachine(body.machine) ?? "COMMON",
         imageUrl,
         unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
         note: body.note || null,
@@ -220,6 +226,7 @@ export async function PUT(req: NextRequest) {
         ...(body.minStock != null ? { minStock: Number(body.minStock) } : {}),
         ...(defaultSystem !== undefined ? { system: defaultSystem } : {}),
         ...(body.category !== undefined ? { category: body.category?.trim() || null } : {}),
+        ...(body.machine !== undefined ? { machine: parseMachine(body.machine) ?? "COMMON" } : {}),
         ...(body.imageUrl !== undefined ? { imageUrl } : {}),
         ...(body.unitPrice != null ? { unitPrice: Number(body.unitPrice) } : {}),
         ...(body.note !== undefined ? { note: body.note || null } : {}),
