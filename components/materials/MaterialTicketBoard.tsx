@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import {
-  Plus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
+  Plus, Minus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -69,7 +69,6 @@ export default function MaterialTicketBoard({
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
-  const open = tickets.find((t) => t.id === openId) ?? null;
   const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
   const shown = tickets.filter((t) =>
     filter === "ALL" ? true : filter === "RUNNING" ? !["HOAN_TAT", "TU_CHOI"].includes(t.status) : t.status === filter
@@ -113,12 +112,19 @@ export default function MaterialTicketBoard({
           const canEdit = !!viewer && (viewer.id === t.createdById || viewer.isAdmin);
           const materialNames = Array.from(new Set(t.items.map((i) => i.material?.name).filter(Boolean)));
           const materialText = materialNames.length ? materialNames.join(", ") : "—";
+          const isOpen = openId === t.id;
           return (
-            <button key={t.id} className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(t.id)}>
+            <React.Fragment key={t.id}>
+            <button className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(isOpen ? null : t.id)}>
               <span className="kind-cell">
-                {t.type === "UNG"
-                  ? <span className="tag ung"><Zap size={11} /> Ứng</span>
-                  : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
+                <span className="kind-top">
+                  <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
+                    {isOpen ? <Minus size={12} /> : <Plus size={12} />}
+                  </span>
+                  {t.type === "UNG"
+                    ? <span className="tag ung"><Zap size={11} /> Ứng</span>
+                    : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
+                </span>
                 <small className="kind-sub">{t.assignedPosition}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
               </span>
               <span>{t.unit}</span>
@@ -144,6 +150,15 @@ export default function MaterialTicketBoard({
                 ) : <span className="soft">—</span>}
               </span>
             </button>
+            {/* Chi tiết bung ngay dưới dòng — cùng kiểu panel chi tiết của bảng Danh mục vật tư */}
+            {isOpen && (
+              <div className="detail-inline">
+                <div className="dwrap">
+                  <Detail t={t} viewer={viewer} onClose={() => setOpenId(null)} />
+                </div>
+              </div>
+            )}
+            </React.Fragment>
           );
         })}
         {!isLoading && shown.length === 0 && <div className="empty">Không có phiếu nào.</div>}
@@ -182,14 +197,6 @@ export default function MaterialTicketBoard({
         </>
       )}
 
-      {open && (
-        <>
-          <div className="ovl" onClick={() => setOpenId(null)} />
-          <aside className="panel">
-            <Detail t={open} viewer={viewer} onClose={() => setOpenId(null)} />
-          </aside>
-        </>
-      )}
     </div>
   );
 }
@@ -793,6 +800,11 @@ const CSS = `
 .tag.ung{background:${C.ungBg};color:${C.ung};}
 .tag.dx{background:${C.accent}14;color:${C.accent};}
 .kind-cell{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
+.kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
+.exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
+.exp.open{background:#f43f5e;}
+.detail-inline{min-width:1080px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
+.detail-inline .dwrap{border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .kind-sub{display:block;max-width:100%;color:${C.soft};font-size:10.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .material-name{display:block;min-width:0;color:${C.navy};font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dots{display:flex;justify-content:center;gap:4px;}
@@ -874,5 +886,5 @@ const CSS = `
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
-@media(max-width:640px){.panel{width:100%;}.row{min-width:980px;grid-template-columns:.95fr .52fr .78fr 1.05fr 1.2fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:980px;padding:10px 12px;}.row{min-width:980px;grid-template-columns:.95fr .52fr .78fr 1.05fr 1.2fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 `;
