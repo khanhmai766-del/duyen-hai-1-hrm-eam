@@ -20,7 +20,7 @@ const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const SHIFT_HOURS = {
   day: new Set([7, 9, 11, 13]),
   middle: new Set([15, 17, 19, 21]),
-  night: new Set([23, 1, 3, 5]),
+  night: new Set([1, 3, 5]),
 } as const;
 
 let tablesReady = false;

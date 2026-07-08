@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, CalendarDays, CheckCircle2, FileSpreadsheet, Loader2, Plus, Save } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, FileSpreadsheet, Loader2, Save } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -52,7 +52,7 @@ const SHIFT_CONFIGS = [
     label: "Ca đêm",
     signerField: "nightShiftSigner",
     confirmedAtField: "nightShiftConfirmedAt",
-    hours: [23, 1, 3, 5],
+    hours: [1, 3, 5],
   },
 ] as const;
 
@@ -174,10 +174,6 @@ export default function BgtsTuabinNgungPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : confirmShift ? "Không thể xác nhận ca" : "Không thể lưu BGTS Tuabin ngừng");
     }
-  }
-
-  async function archiveRecord() {
-    await saveRecord(undefined, "Đã lưu vào danh sách lưu trữ");
   }
 
   async function exportExcel() {
@@ -376,10 +372,6 @@ export default function BgtsTuabinNgungPage() {
             <Metric label="Trạng thái" value={query.data?.record ? "Đã có bản ghi" : "Bảng mới"} />
           </div>
           <div className="grid w-full grid-cols-2 gap-2 lg:w-[390px]">
-              <Button type="button" variant="outline" className="h-10 w-full justify-center" onClick={archiveRecord} disabled={saveMutation.isPending || query.isLoading || !canSave}>
-                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Lưu trữ
-              </Button>
               <Select value={archiveQuery.data?.items.some((item) => item.date === date) ? date : undefined} onValueChange={setDate}>
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder={archiveQuery.isLoading ? "Đang tải lưu trữ..." : "Lưu trữ"} />
