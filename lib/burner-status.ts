@@ -7,6 +7,7 @@ export type Layer = "oil" | "coal";
 export type DisplayStatus = "available" | "defect" | "unavailable";
 
 export interface BurnerRow {
+  code?: string;
   status?: string | null;
   defectSccn?: string | null;
   defectScd?: string | null;

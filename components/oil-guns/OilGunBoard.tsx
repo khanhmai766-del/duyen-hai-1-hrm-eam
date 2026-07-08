@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  Flame, Wrench, Check, X, Save,
+  Flame, Wrench, Check, X, Save, FileSpreadsheet, Printer,
   Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -150,6 +150,9 @@ export default function OilGunBoard() {
               </button>
             ))}
           </div>
+          {/* Xuất cả 2 tổ máy: Content-Disposition attachment nên trình duyệt tự tải file. */}
+          <a className="ogb-btn ghost" href="/api/voi-dot/export?format=excel"><FileSpreadsheet size={15} /> Excel</a>
+          <a className="ogb-btn ghost" href="/api/voi-dot/export?format=pdf"><Printer size={15} /> PDF</a>
         </div>
       </header>
 
@@ -390,7 +393,7 @@ const CSS = `
 .ogb-machine{display:flex;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;gap:2px;}
 .ogb-machine button{display:flex;align-items:center;gap:5px;border:0;background:transparent;cursor:pointer;font-weight:600;font-size:13px;color:#64748b;padding:7px 13px;border-radius:8px;}
 .ogb-machine button.on{background:${C.navy};color:#fff;box-shadow:0 3px 8px rgba(30,58,95,.25);}
-.ogb-btn{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid ${C.line};transition:.15s;}
+.ogb-btn{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid ${C.line};transition:.15s;text-decoration:none;}
 .ogb-btn.ghost{background:#fff;color:#475569;}
 .ogb-btn.ghost:hover{border-color:#c7ccd6;color:${C.navy};}
 .ogb-btn.primary{background:${C.accent};color:#fff;border-color:${C.accent};}
