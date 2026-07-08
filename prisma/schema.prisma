@@ -640,11 +640,23 @@ model EquipmentNode {
   defects              Defect[]
   defectHistories      DefectHistory[]
   ticketItems          MaterialTicketItem[]
+  qrCards              DeviceQrCard[]
 
   @@index([parentSeq])
   @@index([parentSeq, sort])
   @@index([code])
   @@index([depth])
+}
+
+// Thiết bị được CHỌN tạo thẻ QR ở tab "Thẻ" (chỉ thiết bị quan trọng — không sinh
+// thẻ cho toàn bộ ~6500 node lá). Xoá node thiết bị thì thẻ tự mất theo (cascade).
+model DeviceQrCard {
+  id          String   @id @default(cuid())
+  deviceSeq   String   @unique // EquipmentNode.seq của thiết bị (node lá)
+  createdById String? // id người tạo (không FK — giữ nhẹ, đã có audit log)
+  createdAt   DateTime @default(now())
+
+  device EquipmentNode @relation(fields: [deviceSeq], references: [seq], onDelete: Cascade)
 }
 
 // Phạm vi hệ thống thiết bị được gán cho từng cương vị quản lý.

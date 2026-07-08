@@ -26,6 +26,8 @@ import {
   Network,
   Wrench,
   Package,
+  Plus,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -68,6 +70,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
+import { useDeviceQrCards, useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
+import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
@@ -119,7 +123,6 @@ function DevicesPageContent() {
   const [debouncedQ, setDebouncedQ] = React.useState(urlQ);
   const [systemSeq, setSystemSeq] = React.useState(urlSystemSeq);
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -140,13 +143,13 @@ function DevicesPageContent() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const shouldLoadDevices = view === "dashboard" || view === "detail" || view === "table";
+  // Tab "Thẻ" (detail) KHÔNG tải toàn bộ ~6500 thiết bị nữa — chỉ tải danh sách thẻ đã chọn.
+  const shouldLoadDevices = view === "dashboard" || view === "table";
   const { data, isLoading } = useDevices({
     q: debouncedQ,
     systemSeq: systemSeq === "ALL" ? undefined : systemSeq,
     enabled: shouldLoadDevices,
   });
-  const del = useDeleteDevice();
   const devices = data?.data ?? [];
   const deviceMeta = data?.meta;
   const systemOptions = deviceMeta?.rootSystems ?? [];
@@ -175,17 +178,6 @@ function DevicesPageContent() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, canManageDevices]);
-
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    try {
-      await del.mutateAsync(deleteTarget.id);
-      toast.success(`Đã xoá thiết bị ${deleteTarget.code}`);
-      setDeleteTarget(null);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
 
   const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
 
@@ -234,25 +226,29 @@ function DevicesPageContent() {
             );
           })}
         </div>
-        {shouldLoadDevices && (
+        {(shouldLoadDevices || view === "detail") && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
-            <select
-              value={systemSeq}
-              onChange={(e) => setSystemSeq(e.target.value)}
-              className="h-10 shrink-0 rounded-md border border-input bg-white px-3 text-sm"
-            >
-              <option value="ALL">Tất cả hệ thống</option>
-              {systemOptions.map((node) => (
-                <option key={node.seq} value={node.seq}>{node.seq} · {node.name}</option>
-              ))}
-            </select>
+            {shouldLoadDevices && (
+              <select
+                value={systemSeq}
+                onChange={(e) => setSystemSeq(e.target.value)}
+                className="h-10 shrink-0 rounded-md border border-input bg-white px-3 text-sm"
+              >
+                <option value="ALL">Tất cả hệ thống</option>
+                {systemOptions.map((node) => (
+                  <option key={node.seq} value={node.seq}>{node.seq} · {node.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
       </div>
 
       {view === "tree" ? (
         <EquipmentTreeView />
+      ) : view === "detail" ? (
+        <QrCardsSection canManage={canManageDevices} q={debouncedQ} onQr={setQrDevice} />
       ) : view === "form" ? (
         canManageDevices ? (
           <DeviceForm
@@ -278,12 +274,6 @@ function DevicesPageContent() {
             ) : (
               <SystemTreeTableView rows={systemDisplayRows} selectedSystemName={selectedSystemNode?.name ?? "Tất cả hệ thống"} />
             )
-          ) : (view as ViewMode) === "detail" && selectedSystemNode ? (
-            equipmentTreeLoading ? (
-              <TableSkeleton />
-            ) : (
-              <SystemLeafCardView rows={systemLeafRows} selectedSystemName={selectedSystemNode.name} />
-            )
           ) : isLoading ? (
             <TableSkeleton />
           ) : devices.length === 0 ? (
@@ -293,15 +283,8 @@ function DevicesPageContent() {
               description="Không tìm thấy thiết bị phù hợp."
               action={canManageDevices ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
-          ) : (view as ViewMode) === "dashboard" ? (
-            <DashboardView devices={devices} byPosition={byPosition} />
           ) : (
-            <DetailView
-              devices={devices}
-              canDelete={canDeleteDevices}
-              onQr={setQrDevice}
-              onDelete={setDeleteTarget}
-            />
+            <DashboardView devices={devices} byPosition={byPosition} />
           )}
         </>
       )}
@@ -310,14 +293,83 @@ function DevicesPageContent() {
         <QRModal open={!!qrDevice} onOpenChange={(o) => !o && setQrDevice(null)} device={qrDevice} />
       )}
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+    </div>
+  );
+}
+
+/** Tab "Thẻ": chỉ hiển thị các thiết bị ĐÃ ĐƯỢC CHỌN tạo thẻ QR — chọn từ cây thư mục,
+ *  không sinh thẻ hàng loạt cho toàn bộ node lá như trước. */
+function QrCardsSection({ canManage, q, onQr }: { canManage: boolean; q: string; onQr: (d: DeviceListItem) => void }) {
+  const { data, isLoading } = useDeviceQrCards();
+  const add = useAddDeviceQrCard();
+  const removeCard = useRemoveDeviceQrCard();
+  const [picked, setPicked] = React.useState<{ seq: string; name: string } | null>(null);
+  const [removeTarget, setRemoveTarget] = React.useState<DeviceListItem | null>(null);
+
+  const allCards = data?.data ?? [];
+  const nq = normalizeText(q);
+  const cards = nq
+    ? allCards.filter((d) => normalizeText([d.code, d.name, d.system].filter(Boolean).join(" ")).includes(nq))
+    : allCards;
+
+  async function addCard() {
+    if (!picked?.seq) return toast.error("Chọn thiết bị từ cây thư mục trước");
+    try {
+      await add.mutateAsync(picked.seq);
+      toast.success(`Đã tạo thẻ QR: ${picked.seq} — ${picked.name}`);
+      setPicked(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {canManage && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1.5 text-sm font-semibold text-ink">Chọn thiết bị tạo thẻ QR</div>
+              <EquipmentTreePicker
+                value={picked?.seq ?? ""}
+                onChange={(node) => setPicked(node ? { seq: node.seq, name: node.name } : null)}
+                includeLeaves
+                placeholder="Chọn thiết bị (thư mục con cuối cùng) từ cây..."
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Chỉ tạo thẻ cho thiết bị quan trọng cần quét mã — không sinh thẻ hàng loạt cho toàn bộ thiết bị.
+              </p>
+            </div>
+            <Button onClick={addCard} disabled={add.isPending || !picked?.seq} className="shrink-0 sm:mt-6">
+              {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Thêm thẻ QR
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading ? (
+        <TableSkeleton />
+      ) : (
+        <DetailView devices={cards} canDelete={canManage} onQr={onQr} onDelete={setRemoveTarget} />
+      )}
+
       <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Xoá thiết bị?"
-        description={`Bạn chắc chắn muốn xoá "${deleteTarget?.name}"? Mọi lịch sử sửa chữa liên quan cũng sẽ bị xoá.`}
-        confirmLabel="Xoá"
-        loading={del.isPending}
-        onConfirm={handleDelete}
+        open={!!removeTarget}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title="Gỡ thẻ QR thiết bị?"
+        description={removeTarget ? `Gỡ thẻ QR của "${removeTarget.code} — ${removeTarget.name}" khỏi tab Thẻ. Thiết bị và dữ liệu liên quan KHÔNG bị xoá.` : undefined}
+        confirmLabel="Gỡ thẻ"
+        loading={removeCard.isPending}
+        onConfirm={async () => {
+          if (!removeTarget) return;
+          try {
+            await removeCard.mutateAsync(removeTarget.code);
+            toast.success("Đã gỡ thẻ QR — thiết bị vẫn giữ nguyên");
+            setRemoveTarget(null);
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        }}
       />
     </div>
   );
@@ -841,8 +893,8 @@ function DetailView({
     return (
       <EmptyState
         icon={Cpu}
-        title="Không có thẻ thiết bị"
-        description="Không tìm thấy thiết bị ở thư mục con cuối cùng theo điều kiện lọc hiện tại."
+        title="Chưa có thẻ QR thiết bị"
+        description="Chọn thiết bị quan trọng từ cây thư mục ở trên và bấm “Thêm thẻ QR” để tạo. Chỉ những thiết bị được chọn mới hiện thẻ ở đây."
       />
     );
   }
@@ -853,7 +905,7 @@ function DetailView({
         <div>
           <div className="text-sm font-semibold text-ink">THẺ THÔNG TIN THIẾT BỊ</div>
           <div className="text-xs text-muted-foreground">
-            Tổng hợp {devices.length} thiết bị ở thư mục con cuối cùng, liên kết trực tiếp QR, sửa chữa và vật tư.
+            {devices.length} thiết bị được chọn tạo thẻ QR, liên kết trực tiếp QR, sửa chữa và vật tư.
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
@@ -949,7 +1001,7 @@ function DetailView({
                   </Link>
                 </Button>
                 {canDelete && (
-                  <Button size="sm" variant="outline" title="Xóa thiết bị" onClick={() => onDelete(d)}>
+                  <Button size="sm" variant="outline" title="Gỡ thẻ QR (không xoá thiết bị)" onClick={() => onDelete(d)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 )}
