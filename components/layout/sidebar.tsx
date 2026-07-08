@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ChevronDown, Clock, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
@@ -18,6 +18,15 @@ function pathActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   const base = href.split("?")[0];
   return pathname === base || pathname.startsWith(base + "/");
+}
+
+// Active theo cả query: các mục con cùng path chỉ khác tham số (vd /materials?may=S1)
+// phải so tham số, nếu không cả nhóm sáng cùng lúc.
+function hrefActive(pathname: string, search: URLSearchParams, href: string) {
+  if (!pathActive(pathname, href)) return false;
+  const query = href.split("?")[1];
+  if (!query) return true;
+  return Array.from(new URLSearchParams(query)).every(([key, value]) => search.get(key) === value);
 }
 
 export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
@@ -238,6 +247,7 @@ function PowerGridMark() {
 
 function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
+  const search = useSearchParams();
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
   const childActive = hasChildren && item.children!.some((c) => pathActive(pathname, c.href));
@@ -335,7 +345,7 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
         <div className="ml-4 mt-1.5 space-y-1 border-l border-blue-100 pl-3 dark:border-slate-700">
           {item.children!.map((c) => {
             const ChildIcon = c.icon;
-            const cActive = pathActive(pathname, c.href);
+            const cActive = hrefActive(pathname, search, c.href);
             return (
               <Link
                 key={c.href}

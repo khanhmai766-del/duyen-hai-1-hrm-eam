@@ -69,7 +69,6 @@ function MaterialsPageContent() {
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
   const [q, setQ] = React.useState("");
-  const [machineTab, setMachineTab] = React.useState<(typeof DEFECT_UNITS)[number]>("S1");
   const [categoryFilter, setCategoryFilter] = React.useState<string>(MATERIAL_CATEGORIES[0]);
   const [blockFilter, setBlockFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
@@ -86,15 +85,27 @@ function MaterialsPageContent() {
   // (vd bấm cảnh báo thay thế trong chuông thông báo).
   const router = useRouter();
   const params = useSearchParams();
+
+  // Tab tổ máy đồng bộ với URL (?may=S1|S2|COMMON) — menu con "Danh mục vật tư"
+  // ở sidebar điều hướng bằng tham số này và highlight theo đúng tab đang mở.
+  const mayParam = params.get("may");
+  const machineTab: (typeof DEFECT_UNITS)[number] = (DEFECT_UNITS as readonly string[]).includes(mayParam ?? "")
+    ? (mayParam as (typeof DEFECT_UNITS)[number])
+    : "S1";
+  const setMachineTab = React.useCallback(
+    (key: (typeof DEFECT_UNITS)[number]) => router.replace(`/materials?may=${key}`, { scroll: false }),
+    [router]
+  );
+
   const trackId = params.get("track");
   React.useEffect(() => {
     if (!trackId) return;
     const m = (data?.data ?? []).find((x) => x.id === trackId);
     if (m) {
       setReplMaterial(m);
-      router.replace("/materials", { scroll: false });
+      router.replace(mayParam ? `/materials?may=${mayParam}` : "/materials", { scroll: false });
     }
-  }, [trackId, data, router]);
+  }, [trackId, data, router, mayParam]);
 
   const total = data?.data?.length ?? 0;
   // Nhãn "điểm dùng" = danh sách hệ thống/thiết bị mà vật tư này được gán (từ các điểm thay thế).

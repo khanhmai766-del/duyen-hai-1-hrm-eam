@@ -17,6 +17,8 @@ import {
   Workflow,
   BellRing,
   ClipboardList,
+  Factory,
+  Boxes,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -84,7 +86,17 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "QUẢN LÝ VẬT TƯ",
     items: [
-      { label: "Danh mục vật tư", href: "/materials", icon: Package, keywords: "material vat tu phu tung ton kho" },
+      {
+        label: "Danh mục vật tư",
+        href: "/materials",
+        icon: Package,
+        keywords: "material vat tu phu tung ton kho",
+        children: [
+          { label: "Tổ máy S1", href: "/materials?may=S1", icon: Factory, keywords: "danh muc vat tu to may s1 material ton kho" },
+          { label: "Tổ máy S2", href: "/materials?may=S2", icon: Factory, keywords: "danh muc vat tu to may s2 material ton kho" },
+          { label: "COMMON", href: "/materials?may=COMMON", icon: Boxes, keywords: "danh muc vat tu common dung chung material ton kho" },
+        ],
+      },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
       { label: "Theo dõi vật tư", href: "/replacement-procedures", icon: ClipboardList, keywords: "theo doi vat tu quy trinh thay the huong dan checklist procedure replacement" },
     ],
