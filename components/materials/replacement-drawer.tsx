@@ -24,7 +24,7 @@ export function ReplacementDrawer({
   role,
   onClose,
 }: {
-  material: { id: string; code: string; name: string; system?: string | null } | null;
+  material: { id: string; code: string; name: string; system?: string | null; machine?: string | null } | null;
   role?: string;
   onClose: () => void;
 }) {
@@ -42,6 +42,9 @@ export function ReplacementDrawer({
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
 
   if (!material) return null;
+
+  // Tag tổ máy theo tab Danh mục vật tư mà vật tư này thuộc về: S1 | S2 | COM.
+  const machineTag = (material.machine ?? "COMMON") === "COMMON" ? "COM" : (material.machine as string);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -112,6 +115,13 @@ export function ReplacementDrawer({
                   {canManage && (
                     <Button size="sm" variant="ghost" title="Xoá mốc theo dõi (không xoá dữ liệu thiết bị)" className="text-destructive hover:bg-red-50" onClick={() => setDelTarget(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   )}
+                  <span
+                    className="ml-auto shrink-0 rounded px-2 py-0.5 text-[10.5px] font-bold"
+                    title={`Tổ máy: ${machineTag === "COM" ? "COMMON" : machineTag}`}
+                    style={machineTagStyle(machineTag)}
+                  >
+                    {machineTag}
+                  </span>
                 </div>
               </div>
             ))
@@ -151,6 +161,13 @@ export function ReplacementDrawer({
       />
     </div>
   );
+}
+
+// Màu tag tổ máy (theo tab Danh mục vật tư): S1 navy, S2 tím cánh sen, COM nâu hạt dẻ.
+function machineTagStyle(tag: string): React.CSSProperties {
+  if (tag === "S2") return { background: "rgba(192,38,211,0.13)", color: "#a21caf" };
+  if (tag === "COM") return { background: "rgba(149,69,53,0.15)", color: "#8a4030" };
+  return { background: "rgba(30,58,95,0.10)", color: "#1E3A5F" };
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
