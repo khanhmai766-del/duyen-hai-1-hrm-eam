@@ -92,10 +92,7 @@ function MaterialsPageContent() {
   const machineTab: (typeof DEFECT_UNITS)[number] = (DEFECT_UNITS as readonly string[]).includes(mayParam ?? "")
     ? (mayParam as (typeof DEFECT_UNITS)[number])
     : "S1";
-  const setMachineTab = React.useCallback(
-    (key: (typeof DEFECT_UNITS)[number]) => router.replace(`/materials?may=${key}`, { scroll: false }),
-    [router]
-  );
+  const machineLabel = MACHINE_TABS.find((t) => t.key === machineTab)?.label ?? machineTab;
 
   const trackId = params.get("track");
   React.useEffect(() => {
@@ -235,7 +232,7 @@ function MaterialsPageContent() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="DANH MỤC VẬT TƯ" description="Tồn kho phụ tùng & vật tư bảo trì">
+      <PageHeader title="DANH MỤC VẬT TƯ" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && (
           <>
             <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename={`vat-tu-${machineTab.toLowerCase()}`} />
@@ -245,24 +242,6 @@ function MaterialsPageContent() {
           </>
         )}
       </PageHeader>
-
-      {/* Tab tổ máy — danh mục tách riêng theo Tổ Máy S1 / Tổ Máy S2 / COMMON */}
-      <div className="flex w-fit items-center gap-1 rounded-xl border border-border bg-muted/40 p-1">
-        {MACHINE_TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            aria-pressed={machineTab === t.key}
-            onClick={() => setMachineTab(t.key)}
-            className={cn(
-              "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
-              machineTab === t.key ? "bg-navy text-white shadow-sm" : "text-muted-foreground hover:text-ink"
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
 
       {/* Tab loại vật tư — chuyển đổi qua lại như tab Thư mục lưu trữ; ô tìm kiếm cùng hàng bên phải */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
@@ -317,8 +296,8 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}" (${MACHINE_TABS.find((t) => t.key === machineTab)?.label}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
-              : `Chưa có vật tư nào thuộc loại "${categoryFilter}" trong ${MACHINE_TABS.find((t) => t.key === machineTab)?.label}.`
+              ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}" (${machineLabel}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
+              : `Chưa có vật tư nào thuộc loại "${categoryFilter}" trong ${machineLabel}.`
           }
           action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setBlockFilter("ALL"); } } : undefined}
         />
