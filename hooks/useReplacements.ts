@@ -13,6 +13,7 @@ export type ReplacementMaterial = {
   imageUrl?: string | null;
   system: string | null;
   machine?: string | null; // tổ máy của vật tư trong Danh mục: S1 | S2 | COMMON
+  category?: string | null; // loại vật tư: Dầu bôi trơn, Lõi lọc dầu, Hóa Chất...
   deviceMaterials?: Array<{ device: ReplacementDevice }>;
 };
 

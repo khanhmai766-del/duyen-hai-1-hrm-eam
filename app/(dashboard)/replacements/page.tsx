@@ -55,6 +55,9 @@ const MACHINE_FILTERS = [
   { key: "COMMON", label: "COMMON" },
 ] as const;
 
+// Bộ lọc loại vật tư (theo tab phân loại trong Danh mục vật tư).
+const CATEGORY_FILTERS = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất"] as const;
+
 // Mốc thời gian xuất danh sách vật tư cần thay thế (tính từ hôm nay).
 const EXPORT_HORIZONS = [
   { months: 1, label: "1 tháng" },
@@ -97,6 +100,7 @@ function ReplacementsPageContent() {
   const [debouncedQ, setDebouncedQ] = React.useState("");
   const [due, setDue] = React.useState("ALL");
   const [machineFilter, setMachineFilter] = React.useState("ALL");
+  const [categoryFilter, setCategoryFilter] = React.useState("ALL");
   // Ngày đang chọn trên lịch ("YYYY-MM-DD") — lọc panel danh sách bên phải.
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -112,8 +116,14 @@ function ReplacementsPageContent() {
     p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
   // Lọc theo tổ máy của vật tư (vật tư nằm ở tab S1/S2/COMMON nào trong Danh mục).
   const byMachine = machineFilter === "ALL" ? all : all.filter((p) => (p.material.machine ?? "COMMON") === machineFilter);
+  // Lọc theo loại vật tư (khớp cả tên biến thể cũ, như tab Danh mục vật tư).
+  const matchCategory = (c: string | null | undefined) =>
+    categoryFilter === "ALL" ||
+    c === categoryFilter ||
+    (categoryFilter === "Hóa Chất" && (c === "Vật tư tiêu hao" || c === "Hóa chất"));
+  const byCategory = byMachine.filter((p) => matchCategory(p.material.category));
   // Lọc theo tháng/năm: chỉ các điểm có NGÀY ĐẾN HẠN trong tháng đang chọn.
-  const byMonth = byMachine.filter((p) => ym(p.nextDueAt) === month);
+  const byMonth = byCategory.filter((p) => ym(p.nextDueAt) === month);
   const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
   for (const p of byMonth) counts[replacementDueStatus(p.nextDueAt)]++;
   const total = byMonth.length;
@@ -190,7 +200,7 @@ function ReplacementsPageContent() {
   const horizonMonths = Number(horizon);
   const horizonLabel = EXPORT_HORIZONS.find((h) => h.months === horizonMonths)?.label ?? `${horizonMonths} tháng`;
   const horizonEnd = addMonths(new Date(), horizonMonths);
-  const exportRows = byMachine
+  const exportRows = byCategory
     .filter((p) => new Date(p.nextDueAt) <= horizonEnd)
     .sort((a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime())
     .map((p) => {
@@ -256,6 +266,15 @@ function ReplacementsPageContent() {
               <SelectContent>
                 {MACHINE_FILTERS.map((m) => (
                   <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="sm:w-44" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
+                {CATEGORY_FILTERS.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
