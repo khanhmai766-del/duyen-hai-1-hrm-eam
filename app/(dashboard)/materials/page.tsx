@@ -373,11 +373,27 @@ function MaterialsPageContent() {
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         <StockBadge quantity={m.quantity} minStock={m.minStock} />
-                        <span className="font-semibold tabular-nums text-ink">{m.quantity}</span>
+                        <InlineNumberCell
+                          value={m.quantity}
+                          canEdit={canManage}
+                          ariaLabel={`Sửa Hiện Có của ${m.code}`}
+                          onSave={async (v) => {
+                            await upsert.mutateAsync({ id: m.id, quantity: v });
+                            toast.success(`Đã cập nhật Hiện Có: ${m.code} → ${v}`);
+                          }}
+                        />
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className="font-semibold tabular-nums text-ink">{m.minStock}</span>
+                      <InlineNumberCell
+                        value={m.minStock}
+                        canEdit={canManage}
+                        ariaLabel={`Sửa Số liệu ERP của ${m.code}`}
+                        onSave={async (v) => {
+                          await upsert.mutateAsync({ id: m.id, minStock: v });
+                          toast.success(`Đã cập nhật Số liệu ERP: ${m.code} → ${v}`);
+                        }}
+                      />
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
@@ -671,6 +687,77 @@ function MaterialDocumentField({
         <div className="mt-2 text-xs text-muted-foreground">Chỉ nhận PDF khi tải file lên, tối đa 25MB.</div>
       )}
     </div>
+  );
+}
+
+/** Ô số sửa nhanh trong bảng: nhấn đúp để nhập, Enter lưu, Esc/bấm ra ngoài huỷ. */
+function InlineNumberCell({
+  value,
+  canEdit,
+  ariaLabel,
+  onSave,
+}: {
+  value: number;
+  canEdit: boolean;
+  ariaLabel: string;
+  onSave: (v: number) => Promise<void>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(String(value));
+  const [saving, setSaving] = React.useState(false);
+
+  if (!editing) {
+    return (
+      <span
+        className={cn(
+          "inline-block rounded px-1.5 py-0.5 font-semibold tabular-nums text-ink",
+          canEdit && "cursor-text transition-colors hover:bg-sky-50 hover:ring-1 hover:ring-sky-200"
+        )}
+        title={canEdit ? "Nhấn đúp để sửa nhanh" : undefined}
+        onClick={(e) => canEdit && e.stopPropagation()}
+        onDoubleClick={(e) => {
+          if (!canEdit) return;
+          e.stopPropagation();
+          setDraft(String(value));
+          setEditing(true);
+        }}
+      >
+        {value}
+      </span>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      type="number"
+      min={0}
+      aria-label={ariaLabel}
+      value={draft}
+      disabled={saving}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={async (e) => {
+        if (e.key === "Escape") return setEditing(false);
+        if (e.key !== "Enter") return;
+        const next = Math.max(0, Math.round(Number(draft)));
+        if (!Number.isFinite(next)) return void toast.error("Giá trị không hợp lệ");
+        if (next === value) return setEditing(false);
+        setSaving(true);
+        try {
+          await onSave(next);
+          setEditing(false);
+        } catch (err) {
+          toast.error((err as Error).message);
+        } finally {
+          setSaving(false);
+        }
+      }}
+      onBlur={() => !saving && setEditing(false)}
+      className="h-8 w-20 rounded-md border border-accent bg-white px-2 text-center text-sm font-semibold tabular-nums outline-none ring-2 ring-accent/25"
+    />
   );
 }
 
