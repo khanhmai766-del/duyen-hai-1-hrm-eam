@@ -165,6 +165,7 @@ export const DEFECT_UNIT_POSITIONS: Record<DefectUnit, readonly string[]> = {
     "Thiết bị đo lường điều khiển",
     "NH3- Lò hơi phụ",
     "Khí nén - Nhà dầu",
+    "FGD",
   ],
 } as const;
 
