@@ -216,7 +216,7 @@ function ReplacementsPageContent() {
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
         <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
-        {tab === "schedule" && (
+        {tab === "schedule" ? (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, thiết bị..." className="sm:w-64" />
             <Select value={system} onValueChange={setSystem}>
@@ -228,6 +228,11 @@ function ReplacementsPageContent() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        ) : (
+          <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
+            <SearchBar value={historyQ} onChange={setHistoryQ} placeholder="Tìm theo vật tư, thiết bị, ghi chú..." className="sm:w-72" />
+            <MonthFilter value={month} onChange={setMonth} />
           </div>
         )}
       </div>
@@ -356,11 +361,6 @@ function ReplacementsPageContent() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <SearchBar value={historyQ} onChange={setHistoryQ} placeholder="Tìm theo vật tư, thiết bị, ghi chú..." className="sm:w-72" />
-            <MonthFilter value={month} onChange={setMonth} />
-          </div>
-
           {history.isLoading ? (
             <TableSkeleton rows={8} />
           ) : filteredLogs.length === 0 ? (
