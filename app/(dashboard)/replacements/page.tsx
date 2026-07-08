@@ -198,13 +198,14 @@ function ReplacementsPageContent() {
       return {
         material: `${p.material.code} — ${p.material.name}`,
         target: device ? `${device.code} — ${device.name}` : p.location ?? "",
-        system: device?.system ?? p.system ?? "",
+        device: p.location ?? "",
         quantity: p.quantity * (p.deviceCount || 1),
         dvt: p.material.unit,
         interval: replacementIntervalLabel(p.intervalMonths, p.intervalNote),
         lastReplaced: formatDate(p.lastReplacedAt),
         nextDue: formatDate(p.nextDueAt),
         status: REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
+        cuongViQuanLy: p.managingPosition ?? "",
       };
     });
 
@@ -227,7 +228,7 @@ function ReplacementsPageContent() {
               rows={exportRows}
               filename={`vat-tu-can-thay-the-${horizonMonths === 12 ? "1-nam" : `${horizonMonths}-thang`}`}
               title={`VẬT TƯ CẦN THAY THẾ TRONG ${horizonLabel.toUpperCase()}`}
-              widths={{ material: 28, target: 24, system: 13, quantity: 8, dvt: 7, interval: 12, lastReplaced: 12, nextDue: 12, status: 11 }}
+              widths={{ material: 26, target: 22, device: 18, quantity: 7, dvt: 6, interval: 11, lastReplaced: 11, nextDue: 11, status: 10, cuongViQuanLy: 14 }}
             />
           </>
         )}

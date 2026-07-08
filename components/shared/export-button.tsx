@@ -55,6 +55,7 @@ const LABELS: Record<string, string> = {
   doneBy: "Người thực hiện",
   material: "Vật tư",
   target: "Áp dụng cho",
+  cuongViQuanLy: "Cương vị quản lý",
   dvt: "ĐVT",
   interval: "Chu kỳ",
   lastReplaced: "Lần thay gần nhất",
