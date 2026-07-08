@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  Flame, Wrench, Check, X, Save, FileSpreadsheet, Printer,
+  Flame, Wrench, Check, X, Save, FileSpreadsheet,
   Droplet, Factory, Search, RotateCcw, Loader2, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -152,7 +152,6 @@ export default function OilGunBoard() {
           </div>
           {/* Xuất cả 2 tổ máy: Content-Disposition attachment nên trình duyệt tự tải file. */}
           <a className="ogb-btn ghost" href="/api/voi-dot/export?format=excel"><FileSpreadsheet size={15} /> Excel</a>
-          <a className="ogb-btn ghost" href="/api/voi-dot/export?format=pdf"><Printer size={15} /> PDF</a>
         </div>
       </header>
 
