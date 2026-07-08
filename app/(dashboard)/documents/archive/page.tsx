@@ -228,7 +228,7 @@ export default function ArchiveDocumentsPage() {
       historyTableLayout={usesArchiveTimelineLayout}
       showPaginationFooter={activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA"}
       allowStaffEdit
-      showAnnualBackupExport
+      showAnnualBackupExport={activeTab !== "OIL_GUN_DATA"}
       customContent={activeTab === "OIL_GUN_DATA" ? <OilGunBoard /> : undefined}
       hideToolbar={activeTab === "OIL_GUN_DATA" || activeTab === "SOOT_BLOWER_DATA"}
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
