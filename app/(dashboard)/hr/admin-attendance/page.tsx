@@ -287,9 +287,9 @@ function HanhChinhCard({
           Chưa có ai đi hành chính hôm nay.
         </div>
       ) : (
-        <div className="flex flex-wrap gap-4 p-4">
+        <div className="grid grid-cols-2 gap-3 p-3 sm:flex sm:flex-wrap sm:gap-4 sm:p-4">
           {entries.map((m) => (
-            <div key={m.id} className="flex w-40 flex-col items-center text-center">
+            <div key={m.id} className="flex min-w-0 flex-col items-center text-center sm:w-40">
               <div className="relative h-14 w-14">
                 <div className={cn(
                   "flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white ring-2",
@@ -463,9 +463,9 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
       {group.members.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-muted-foreground">Chưa có ai điểm danh nhóm này.</div>
       ) : (
-        <div className="flex flex-wrap gap-4 p-4">
+        <div className="grid grid-cols-2 gap-3 p-3 sm:flex sm:flex-wrap sm:gap-4 sm:p-4">
           {group.members.map((m) => (
-            <div key={m.id} className="flex w-40 flex-col items-center text-center">
+            <div key={m.id} className="flex min-w-0 flex-col items-center text-center sm:w-40">
               <div className="relative h-14 w-14">
                 <div className={cn(
                   "flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white ring-2",

@@ -950,7 +950,14 @@ function SafeOperationProcessStrip() {
       {/* Chú thích các công đoạn */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t-[3px] border-blue-800/90 bg-white/95 px-2 py-1 sm:grid-cols-5">
         {stages.map((stage, index) => (
-          <div key={stage} className="flex min-w-0 items-center justify-center gap-2">
+          <div
+            key={stage}
+            className={cn(
+              "flex min-w-0 items-center justify-center gap-2",
+              // Ô cuối (tên nhà máy, chuỗi dài) chiếm trọn hàng trên mobile để không gãy chữ mồ côi.
+              index === stages.length - 1 && "col-span-2 sm:col-span-1"
+            )}
+          >
             {index > 0 && <span className="hidden h-px flex-1 border-t border-dotted border-blue-500 sm:block" />}
             <span className="text-center text-[10px] font-black uppercase leading-tight text-blue-900 sm:text-[11px] lg:text-xs">
               {stage}
@@ -1046,11 +1053,11 @@ function SafeOperationUnitRow({
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-sky-300/90 bg-white shadow-[0_14px_32px_rgba(14,116,144,0.10)] ring-1 ring-white">
-      <div className="relative flex items-center justify-between gap-3 px-4 py-3">
+      <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-3 sm:px-4">
         <div className="absolute inset-x-8 bottom-0 h-px bg-blue-800/55" />
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           {/* Trái: TỔ MÁY (trên) + S1/S2 (dưới) */}
-          <div className="flex flex-col leading-none">
+          <div className="flex shrink-0 flex-col leading-none">
             <span className="text-xs font-black uppercase tracking-wide text-blue-900 sm:text-sm">Tổ máy</span>
             <span className="mt-0.5 text-3xl font-black leading-none text-blue-900 drop-shadow-[0_2px_0_rgba(125,211,252,0.35)] sm:text-4xl">
               {unit}
@@ -1059,18 +1066,18 @@ function SafeOperationUnitRow({
           {/* Kế bên: trạng thái vận hành an toàn */}
           <div
             className={cn(
-              "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-black shadow-sm",
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-black shadow-sm sm:gap-2 sm:px-3 sm:py-1 sm:text-sm",
               isOperating ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-slate-50 text-slate-600",
             )}
           >
-            <span className={cn("flex h-6 w-6 items-center justify-center rounded-full border shadow-sm", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
+            <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border shadow-sm sm:h-6 sm:w-6", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
               {isOperating ? <ShieldCheck className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
             </span>
             {isOperating ? "Vận hành an toàn" : "Ngừng"}
           </div>
         </div>
-        {/* Phải: thời gian vận hành an toàn */}
-        <span className="whitespace-nowrap text-lg font-black leading-none tabular-nums text-emerald-700 sm:text-2xl">
+        {/* Phải: thời gian vận hành an toàn (tự xuống hàng riêng khi màn hình hẹp) */}
+        <span className="ml-auto whitespace-nowrap text-base font-black leading-none tabular-nums text-emerald-700 sm:text-2xl">
           {formatDuration(getSafeTotal(unit))}
         </span>
       </div>
@@ -1079,25 +1086,25 @@ function SafeOperationUnitRow({
         <div className="relative my-1.5 overflow-hidden rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50/60 to-white py-2 pl-4 pr-3">
           <div className="absolute inset-y-2 left-0 w-1.5 rounded-full bg-blue-500" />
           {/* Vận hành liên tục — gọn */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <div className="flex items-center gap-2">
               {canManage ? (
                 <button
                   type="button"
                   onClick={() => onIconClick(unit, "continuous", "Vận hành liên tục")}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 transition-all hover:-translate-y-0.5 hover:shadow-md"
                   title="Cài đặt Vận hành liên tục"
                 >
                   <Activity className="h-4 w-4 text-blue-700" />
                 </button>
               ) : (
-                <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50" title="Vận hành liên tục">
+                <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50" title="Vận hành liên tục">
                   <Activity className="h-4 w-4 text-blue-700" />
                 </div>
               )}
-              <span className="text-sm font-black text-blue-950">Vận hành liên tục</span>
+              <span className="whitespace-nowrap text-sm font-black text-blue-950">Vận hành liên tục</span>
             </div>
-            <span className="whitespace-nowrap font-black tabular-nums text-blue-800">{formatDuration(getContinuousTotal(unit))}</span>
+            <span className="ml-auto whitespace-nowrap text-sm font-black tabular-nums text-blue-800 sm:text-base">{formatDuration(getContinuousTotal(unit))}</span>
           </div>
         </div>
         {/* Nút thu gọn / mở rộng chi tiết thời gian ngừng */}
