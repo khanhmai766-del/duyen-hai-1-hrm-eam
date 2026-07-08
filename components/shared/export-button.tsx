@@ -53,6 +53,12 @@ const LABELS: Record<string, string> = {
   performedAt: "Ngày thực hiện",
   result: "Kết quả thực hiện",
   doneBy: "Người thực hiện",
+  material: "Vật tư",
+  target: "Áp dụng cho",
+  dvt: "ĐVT",
+  interval: "Chu kỳ",
+  lastReplaced: "Lần thay gần nhất",
+  nextDue: "Ngày đến hạn",
 };
 
 function cellText(value: unknown) {

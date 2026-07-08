@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
 import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -37,6 +38,7 @@ import {
 import {
   REPL_DUE,
   REPL_DUE_ORDER,
+  addMonths,
   replacementDueStatus,
   replacementIntervalLabel,
 } from "@/lib/constants";
@@ -44,6 +46,15 @@ import { formatDate, formatDateInput, cn, initials } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
 type TabKey = "schedule" | "history";
+
+// Mốc thời gian xuất danh sách vật tư cần thay thế (tính từ hôm nay).
+const EXPORT_HORIZONS = [
+  { months: 1, label: "1 tháng tới" },
+  { months: 2, label: "2 tháng tới" },
+  { months: 3, label: "3 tháng tới" },
+  { months: 6, label: "6 tháng tới" },
+  { months: 12, label: "1 năm tới" },
+] as const;
 
 /** "YYYY-MM" của một mốc thời gian, dùng để lọc theo tháng/năm. */
 function ym(d: Date | string): string {
@@ -168,38 +179,55 @@ function ReplacementsPageContent() {
     []
   );
 
-  /* ---- Nút Xuất dùng chung: xuất theo tab đang mở ---- */
-  const exportRows =
-    tab === "schedule"
-      ? points.map((p) => {
-          const device = linkedDeviceOf(p);
-          return {
-            material: `${p.material.code} — ${p.material.name}`,
-            target: device ? `${device.code} — ${device.name}` : "",
-            system: device?.system ?? "",
-            interval: replacementIntervalLabel(p.intervalMonths, p.intervalNote),
-            lastReplaced: formatDate(p.lastReplacedAt),
-            nextDue: formatDate(p.nextDueAt),
-            status: REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
-          };
-        })
-      : filteredLogs.map((l) => {
-          const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
-          return {
-            material: `${l.replacement?.material.code ?? ""} — ${l.replacement?.material.name ?? ""}`,
-            device: device ? `${device.code} — ${device.name}` : "",
-            system: device?.system ?? "",
-            replacedAt: formatDate(l.replacedAt),
-            quantity: l.quantity ?? "",
-            note: l.note ?? "",
-            doneBy: l.doneBy.name,
-          };
-        });
-  const exportFilename = tab === "schedule" ? "lich-thay-the-vat-tu" : "lich-su-thay-the-vat-tu";
+  /* ---- Xuất Excel/PDF: danh sách vật tư cần thay thế trong N tháng tới ----
+   * Tính từ hôm nay, gồm cả điểm ĐÃ QUÁ HẠN (vẫn đang chờ thay) và điểm đến hạn
+   * trong khoảng đã chọn. Không phụ thuộc tháng đang xem trên lịch. */
+  const [horizon, setHorizon] = React.useState("1");
+  const horizonMonths = Number(horizon);
+  const horizonLabel = EXPORT_HORIZONS.find((h) => h.months === horizonMonths)?.label ?? `${horizonMonths} tháng tới`;
+  const horizonEnd = addMonths(new Date(), horizonMonths);
+  const exportRows = bySystem
+    .filter((p) => new Date(p.nextDueAt) <= horizonEnd)
+    .sort((a, b) => new Date(a.nextDueAt).getTime() - new Date(b.nextDueAt).getTime())
+    .map((p) => {
+      const device = linkedDeviceOf(p);
+      return {
+        material: `${p.material.code} — ${p.material.name}`,
+        target: device ? `${device.code} — ${device.name}` : p.location ?? "",
+        system: device?.system ?? p.system ?? "",
+        unit: p.unit ?? "",
+        quantity: p.quantity * (p.deviceCount || 1),
+        dvt: p.material.unit,
+        interval: replacementIntervalLabel(p.intervalMonths, p.intervalNote),
+        lastReplaced: formatDate(p.lastReplacedAt),
+        nextDue: formatDate(p.nextDueAt),
+        status: REPL_DUE[replacementDueStatus(p.nextDueAt)].label,
+      };
+    });
 
   return (
     <div className="space-y-6">
       <PageHeader title="LỊCH THAY THẾ VẬT TƯ" description="Tổng hợp lịch thay thế & lịch sử ghi nhận thay thế vật tư">
+        {tab === "schedule" && (
+          <>
+            <Select value={horizon} onValueChange={setHorizon}>
+              <SelectTrigger className="h-9 w-36 rounded-xl" aria-label="Khoảng thời gian xuất danh sách">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPORT_HORIZONS.map((h) => (
+                  <SelectItem key={h.months} value={String(h.months)}>{h.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <ExportButton
+              rows={exportRows}
+              filename={`vat-tu-can-thay-the-${horizonMonths === 12 ? "1-nam" : `${horizonMonths}-thang`}`}
+              title={`VẬT TƯ CẦN THAY THẾ TRONG ${horizonLabel.toUpperCase()}`}
+              widths={{ material: 28, target: 24, system: 13, unit: 8, quantity: 8, dvt: 7, interval: 12, lastReplaced: 12, nextDue: 12, status: 11 }}
+            />
+          </>
+        )}
         {tab === "history" && (
           <AnnualBackupExport
             rows={historyBackupRows}
