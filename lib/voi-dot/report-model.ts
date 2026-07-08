@@ -14,7 +14,8 @@ export interface ReportCell {
   status: DisplayStatus;     // trạng thái HIỂN THỊ vòi dầu (màu header)
   coalStatus: DisplayStatus; // trạng thái HIỂN THỊ vòi than (màu hàng than)
   force: boolean;            // chỉ true khi khả dụng + không khiếm khuyết + tick force
-  oilText: string;           // nội dung ô "Khiếm khuyết vòi dầu"
+  oilSccnText: string;       // nội dung ô "Khiếm khuyết vòi dầu (SCCN)"
+  oilScdText: string;        // nội dung ô "Khiếm khuyết vòi dầu (SCĐ)"
   coalText: string;          // nội dung ô "Khiếm khuyết vòi than" ("" nếu không có)
 }
 
@@ -30,9 +31,12 @@ const hasText = (s?: string | null) => !!s && s.trim().length > 0;
 function toCell(row: BurnerRow): ReportCell {
   const oil = deriveOil(row);
   const coal = deriveCoal(row);
-  const oilText =
-    [row.defectSccn, row.defectScd].filter(hasText).map((s) => s!.trim()).join(" / ") ||
-    (oil.status === "unavailable" ? "Bất khả dụng." : "Khả dụng.");
+  // Tách riêng khiếm khuyết cơ nhiệt (SCCN) và điện (SCĐ) — mỗi loại một hàng.
+  // Khi cả hai đều trống, cả hai ô hiển thị trạng thái chung; khi chỉ một bên có
+  // khiếm khuyết, ô bên kia để trống.
+  const sccn = hasText(row.defectSccn) ? row.defectSccn!.trim() : "";
+  const scd = hasText(row.defectScd) ? row.defectScd!.trim() : "";
+  const oilFallback = oil.status === "unavailable" ? "Bất khả dụng." : "Khả dụng.";
   const coalText = hasText(row.coalDefectNote)
     ? row.coalDefectNote!.trim()
     : coal.status === "unavailable"
@@ -43,7 +47,8 @@ function toCell(row: BurnerRow): ReportCell {
     status: oil.status,
     coalStatus: coal.status,
     force: oil.showFire,
-    oilText,
+    oilSccnText: sccn || (scd ? "" : oilFallback),
+    oilScdText: scd || (sccn ? "" : oilFallback),
     coalText,
   };
 }
@@ -56,7 +61,15 @@ export function buildUnitReport(rows: BurnerRow[], unit: string, note: string): 
       // Thiếu dữ liệu vị trí → coi như khả dụng rỗng để không vỡ bố cục.
       return r
         ? toCell(r)
-        : { code, status: "available", coalStatus: "available", force: false, oilText: "Khả dụng.", coalText: "" };
+        : {
+            code,
+            status: "available",
+            coalStatus: "available",
+            force: false,
+            oilSccnText: "Khả dụng.",
+            oilScdText: "Khả dụng.",
+            coalText: "",
+          };
     });
   return { unit, note, back: pick(BACK), front: pick(FRONT) };
 }

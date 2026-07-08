@@ -1,5 +1,5 @@
 // Xuất Excel: mỗi tổ máy 1 sheet, bố cục phản chiếu sơ đồ vật lý
-// (tường sau → khiếm khuyết dầu → khiếm khuyết than → BUỒNG ĐỐT → … → tường trước).
+// (tường sau → KK dầu SCCN → KK dầu SCĐ → KK than → BUỒNG ĐỐT → … → tường trước).
 
 import ExcelJS from "exceljs";
 import { BACK, type UnitReport, type ReportCell } from "@/lib/voi-dot/report-model";
@@ -75,49 +75,58 @@ function writeSheet(wb: ExcelJS.Workbook, rep: UnitReport) {
     ws.getRow(r).height = 22;
   };
 
-  const defectRow = (r: number, cells: ReportCell[], key: "oil" | "coal") => {
-    label(r, key === "oil" ? "Khiếm khuyết vòi dầu" : "Khiếm khuyết vòi than");
+  const DEFECT_ROWS = {
+    oilSccn: { label: "Khiếm khuyết vòi dầu (SCCN)", height: 80 },
+    oilScd: { label: "Khiếm khuyết vòi dầu (SCĐ)", height: 80 },
+    coal: { label: "Khiếm khuyết vòi than", height: 70 },
+  } as const;
+
+  const defectRow = (r: number, cells: ReportCell[], key: keyof typeof DEFECT_ROWS) => {
+    label(r, DEFECT_ROWS[key].label);
     cells.forEach((c, i) => {
-      const val = key === "oil" ? c.oilText : c.coalText;
-      const fill = key === "oil" ? TINT[c.status] : TINT[c.coalStatus];
+      const val = key === "oilSccn" ? c.oilSccnText : key === "oilScd" ? c.oilScdText : c.coalText;
+      const fill = key === "coal" ? TINT[c.coalStatus] : TINT[c.status];
       styleCell(ws.getCell(r, first + i), { val, size: 9, ha: "left", va: "top", fill });
     });
-    ws.getRow(r).height = key === "oil" ? 120 : 70;
+    ws.getRow(r).height = DEFECT_ROWS[key].height;
   };
 
   // Nửa trên (tường sau)
   headerRow(2, rep.back);
-  defectRow(3, rep.back, "oil");
-  defectRow(4, rep.back, "coal");
+  defectRow(3, rep.back, "oilSccn");
+  defectRow(4, rep.back, "oilScd");
+  defectRow(5, rep.back, "coal");
 
   // Thanh buồng đốt
-  ws.mergeCells(5, first, 5, last);
+  const chamberR = 6;
+  ws.mergeCells(chamberR, first, chamberR, last);
   for (let c = first; c <= last; c++) {
-    const cc = ws.getCell(5, c);
+    const cc = ws.getCell(chamberR, c);
     cc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(CHAMBER) } };
     cc.border = BORDER;
   }
-  const ch = ws.getCell(5, first);
+  const ch = ws.getCell(chamberR, first);
   ch.value = `BUỒNG ĐỐT ${rep.unit}`;
   ch.font = { name: "Arial", bold: true, size: 16, color: { argb: ARGB("FFFFFF") } };
   ch.alignment = { horizontal: "center", vertical: "middle" };
-  const a5 = ws.getCell(5, 1);
-  a5.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(CHAMBER) } };
-  a5.border = BORDER;
-  ws.getRow(5).height = 40;
+  const aCh = ws.getCell(chamberR, 1);
+  aCh.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(CHAMBER) } };
+  aCh.border = BORDER;
+  ws.getRow(chamberR).height = 40;
 
   // Nửa dưới (tường trước)
-  defectRow(6, rep.front, "oil");
-  defectRow(7, rep.front, "coal");
-  headerRow(8, rep.front);
+  defectRow(7, rep.front, "oilSccn");
+  defectRow(8, rep.front, "oilScd");
+  defectRow(9, rep.front, "coal");
+  headerRow(10, rep.front);
 
   // Ô ghi chú bên phải (gộp dọc)
-  ws.mergeCells(2, noteC0, 8, noteC1);
+  ws.mergeCells(2, noteC0, 10, noteC1);
   styleCell(ws.getCell(2, noteC0), { val: rep.note, size: 10, ha: "left", va: "top", fill: "FFFFFF" });
-  for (let r = 2; r <= 8; r++) for (let c = noteC0; c <= noteC1; c++) ws.getCell(r, c).border = BORDER;
+  for (let r = 2; r <= 10; r++) for (let c = noteC0; c <= noteC1; c++) ws.getCell(r, c).border = BORDER;
 
   // Chú thích màu
-  const lr = 10;
+  const lr = 12;
   styleCell(ws.getCell(lr, 1), { val: "Chú thích:", bold: true, ha: "left", wrap: false });
   const legend: [string, string, string][] = [
     ["Khả dụng", "70AD47", "FFFFFF"],
