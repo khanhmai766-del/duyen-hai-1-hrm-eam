@@ -49,11 +49,11 @@ type TabKey = "schedule" | "history";
 
 // Mốc thời gian xuất danh sách vật tư cần thay thế (tính từ hôm nay).
 const EXPORT_HORIZONS = [
-  { months: 1, label: "1 tháng tới" },
-  { months: 2, label: "2 tháng tới" },
-  { months: 3, label: "3 tháng tới" },
-  { months: 6, label: "6 tháng tới" },
-  { months: 12, label: "1 năm tới" },
+  { months: 1, label: "1 tháng" },
+  { months: 2, label: "2 tháng" },
+  { months: 3, label: "3 tháng" },
+  { months: 6, label: "6 tháng" },
+  { months: 12, label: "1 năm" },
 ] as const;
 
 /** "YYYY-MM" của một mốc thời gian, dùng để lọc theo tháng/năm. */
@@ -184,7 +184,7 @@ function ReplacementsPageContent() {
    * trong khoảng đã chọn. Không phụ thuộc tháng đang xem trên lịch. */
   const [horizon, setHorizon] = React.useState("1");
   const horizonMonths = Number(horizon);
-  const horizonLabel = EXPORT_HORIZONS.find((h) => h.months === horizonMonths)?.label ?? `${horizonMonths} tháng tới`;
+  const horizonLabel = EXPORT_HORIZONS.find((h) => h.months === horizonMonths)?.label ?? `${horizonMonths} tháng`;
   const horizonEnd = addMonths(new Date(), horizonMonths);
   const exportRows = bySystem
     .filter((p) => new Date(p.nextDueAt) <= horizonEnd)
