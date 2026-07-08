@@ -78,7 +78,7 @@ export function ReplacementPointsEditor({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-[1fr_1fr_1fr_36px] items-end gap-2">
+          <div className="grid grid-cols-[1fr_1fr_1fr_1fr_36px] items-end gap-2">
             <div>
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ (tháng)</label>
               <Input
@@ -86,6 +86,14 @@ export function ReplacementPointsEditor({
                 min={1}
                 value={row.intervalMonths ?? 6}
                 onChange={(e) => update(i, { intervalMonths: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ O&M</label>
+              <Input
+                value={row.intervalNote ?? ""}
+                onChange={(e) => update(i, { intervalNote: e.target.value || null })}
+                placeholder="VD: 2500h"
               />
             </div>
             <div>
