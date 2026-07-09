@@ -22,11 +22,30 @@ async function getTicket(id: string) {
 }
 
 /** Sửa/Xoá phiếu: ADMIN, cương vị được cấu hình bước "manage"; khi CHƯA cấu hình → người tạo phiếu (mặc định cũ). */
+function samePosition(a?: string | null, b?: string | null) {
+  const left = (a ?? "").trim().toLocaleLowerCase("vi");
+  const right = (b ?? "").trim().toLocaleLowerCase("vi");
+  return !!left && left === right;
+}
+
+function isAssignedPosition(user: { position?: string | null }, t: { assignedPosition: string }) {
+  return samePosition(user.position, t.assignedPosition);
+}
+
+function assignedPositionError(
+  user: { role?: string | null; position?: string | null },
+  t: { assignedPosition: string }
+) {
+  if (user.role === "ADMIN" || isAssignedPosition(user, t)) return null;
+  return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn chỉ được xem, không được thao tác`, 403);
+}
+
 async function canManageTicket(
   user: { id: string; role?: string | null; position?: string | null },
-  t: { createdById: string }
+  t: { createdById: string; assignedPosition: string }
 ) {
   if (user.role === "ADMIN") return true;
+  if (!isAssignedPosition(user, t)) return false;
   const map = await getWorkflowRoleMap();
   if (map.manage.length > 0) return stepAllowedWithMap(map, "manage", user);
   return t.createdById === user.id;
@@ -78,7 +97,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const t = await getTicket(params.id);
     if (!t) return fail("Không tìm thấy phiếu", 404);
 
-    // Sửa THÔNG TIN CƠ BẢN của phiếu (Tổ máy, số BBKT, cương vị giao, loại vật tư).
+    // Sửa toàn bộ thông tin khởi tạo phiếu (Tổ máy, cương vị, loại vật tư, vật tư, SL, ghi chú, thiết bị, BBKT).
     // Quản trị / cương vị được phân quyền "Sửa/Xoá phiếu" (chưa cấu hình: người tạo).
     if (action === "editInfo") {
       if (!(await canManageTicket(user, t)))
@@ -93,10 +112,54 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const materialCategory = String(body.materialCategory || "").trim();
       if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
       const bbkt = String(body.bbktNumber || "").trim(); // BBKT giờ là tuỳ chọn (bổ sung ở bước Nghiệm thu)
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: { unit, assignedPosition, materialCategory, bbktNumber: bbkt || t.bbktNumber },
-        include: ITEM_INCLUDE,
+      const data: {
+        unit: string;
+        assignedPosition: string;
+        materialCategory: string;
+        bbktNumber: string | null;
+        proposalNote?: string | null;
+      } = { unit, assignedPosition, materialCategory, bbktNumber: bbkt || null };
+
+      if (t.type === "DE_XUAT") {
+        const proposalNote = String(body.note || "").trim();
+        const materialId = String(body.materialId || "").trim();
+        const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
+        const replacementDeviceName = String(body.replacementDeviceName || "").trim();
+        if (!proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
+        if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
+        if (!Number.isFinite(proposedQuantity) || proposedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
+        if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
+        const material = await prisma.material.findUnique({
+          where: { id: materialId },
+          select: { id: true },
+        });
+        if (!material) return fail("Không tìm thấy vật tư đề xuất", 404);
+        data.proposalNote = proposalNote;
+      }
+
+      const up = await prisma.$transaction(async (tx) => {
+        await tx.materialTicket.update({
+          where: { id: t.id },
+          data,
+        });
+        if (t.type === "DE_XUAT") {
+          const materialId = String(body.materialId || "").trim();
+          const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
+          const replacementDeviceName = String(body.replacementDeviceName || "").trim();
+          await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
+          await tx.materialTicketItem.create({
+            data: {
+              ticketId: t.id,
+              materialId,
+              quantity: proposedQuantity,
+              deviceNameManual: replacementDeviceName,
+            },
+          });
+        }
+        return tx.materialTicket.findUnique({
+          where: { id: t.id },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(user.id, "MT_EDIT_INFO", "MaterialTicket", t.id, `${t.code}: sửa thông tin phiếu`);
       return ok(up);
@@ -141,7 +204,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B1 — cương vị phân giao gửi đề xuất (luồng cũ; giữ để tương thích phiếu cũ còn dang dở)
     if (action === "propose") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_DE_XUAT") return fail("Phiếu không ở bước Đề xuất");
-      if ((user.position ?? "") !== t.assignedPosition)
+      if (!isAssignedPosition(user, t))
         return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền đề xuất`, 403);
       const err = await validateAndWriteItems();
       if (err) return fail(err);
@@ -161,6 +224,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B1' — Trưởng Ca xác nhận (luồng cũ; giữ để tương thích phiếu cũ còn dang dở)
     if (action === "confirm") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Xác nhận");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const short = t.items.filter((it) => it.quantity > it.material.quantity);
@@ -187,6 +252,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B1' — Từ chối khi vật tư không có/không đủ hoặc lý do khác. Phiếu đóng vĩnh viễn.
     if (action === "reject") {
       if (t.type !== "DE_XUAT" || !["CHO_XAC_NHAN", "VAT_TU_KHONG_CO"].includes(t.status)) return fail("Phiếu không ở bước có thể từ chối");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       const canReject = isShiftLeader(user.position) || user.role === "ADMIN" || t.createdById === user.id;
       if (!canReject) return fail("Chỉ người tạo phiếu, Quản trị hoặc Trưởng Ca / Trưởng Kíp được từ chối", 403);
       const reason = String(body.reason || "").trim();
@@ -222,6 +289,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B2' — NHẬN VẬT TƯ: khối lượng lãnh + hình thức lãnh → chuyển Sử dụng vật tư
     if (action === "receive") {
       if (t.type !== "DE_XUAT" || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Nhận vật tư");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
         return fail("Bạn không có quyền ở bước Nhận vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
@@ -248,6 +317,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // phần vượt trừ vào tồn kho, không cho âm.
     if (action === "use") {
       if (t.type !== "DE_XUAT" || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
         return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const note = String(body.completionNote || "").trim();
@@ -294,6 +365,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B3 — Trưởng Ca nghiệm thu: nhập PCT/LCT + nội dung + chỉ huy → xuất Word → HOÀN TẤT
     if (action === "accept") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user))
         return fail("Bạn không có quyền nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       // PCT/chỉ huy/nội dung đã nhập ở bước SỬ DỤNG VẬT TƯ; phiếu cũ (trước khi có
@@ -331,7 +404,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư1 — cương vị nhập liệu thay thế (đã thay gấp)
     if (action === "ungEntry") {
       if (t.type !== "UNG" || t.status !== "CHO_NHAP_LIEU") return fail("Phiếu không ở bước Nhập liệu");
-      if ((user.position ?? "") !== t.assignedPosition)
+      if (!isAssignedPosition(user, t))
         return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền nhập liệu`, 403);
       const note = String(body.completionNote || "").trim();
       if (!note) return fail("Vui lòng nhập thông tin thay thế");
@@ -353,6 +426,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư2 — Trưởng Ca xác nhận & xuất Word (BBKT in "(bổ sung sau)")
     if (action === "ungConfirmDoc") {
       if (t.type !== "UNG" || t.status !== "CHO_XAC_NHAN_PDF") return fail("Phiếu không ở bước Xác nhận xuất file");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được xác nhận", 403);
       const pct = String(body.pctNumber || "").trim();
       const chiHuy = String(body.chiHuyName || "").trim();
@@ -380,6 +455,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư3 song song — Trưởng Ca bổ sung số BBKT (tự sinh lại file Word với số thật)
     if (action === "ungBbkt") {
       if (t.type !== "UNG" || t.status !== "CHO_HOAN_THIEN") return fail("Phiếu không ở bước Hoàn thiện");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
       if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được bổ sung BBKT", 403);
       if (t.bbktNumber) return fail("Số BBKT đã được bổ sung trước đó");
       const bbkt = String(body.bbktNumber || "").trim();

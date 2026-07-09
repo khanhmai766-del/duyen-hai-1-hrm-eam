@@ -82,6 +82,12 @@ export interface TicketViewer {
 
 export type WorkflowRoleMap = { create: string[]; confirm: string[]; receive: string[]; use: string[]; accept: string[]; manage: string[] };
 
+const samePosition = (a?: string | null, b?: string | null) => {
+  const left = (a ?? "").trim().toLocaleLowerCase("vi");
+  const right = (b ?? "").trim().toLocaleLowerCase("vi");
+  return !!left && left === right;
+};
+
 /** Cấu hình phân quyền quy trình (chỉ ADMIN gọi được). */
 export function useWorkflowRoles(enabled: boolean) {
   return useQuery({
@@ -166,20 +172,21 @@ export function useDeleteTicket() {
 export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] {
   if (!v) return [];
   const a: string[] = [];
-  const isAssigned = !!v.position && v.position === t.assignedPosition;
+  const isAssigned = samePosition(v.position, t.assignedPosition);
+  const canOperateAssigned = isAssigned || v.isAdmin;
   if (t.type === "DE_XUAT") {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
-    if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
-    if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
+    if (t.status === "CHO_XAC_NHAN" && canOperateAssigned && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
+    if (t.status === "VAT_TU_KHONG_CO" && canOperateAssigned && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
     if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.isStats) a.push("stats");
-    if (t.status === "NHAN_VAT_TU" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
-    if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
-    if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
+    if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
+    if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
+    if (t.status === "CHO_NGHIEM_THU" && canOperateAssigned && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
   } else {
     if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungEntry");
-    if (t.status === "CHO_XAC_NHAN_PDF" && v.isShiftLeader) a.push("ungConfirmDoc");
+    if (t.status === "CHO_XAC_NHAN_PDF" && canOperateAssigned && v.isShiftLeader) a.push("ungConfirmDoc");
     if (t.status === "CHO_HOAN_THIEN") {
-      if (v.isShiftLeader && !t.bbktNumber) a.push("ungBbkt");
+      if (canOperateAssigned && v.isShiftLeader && !t.bbktNumber) a.push("ungBbkt");
       if (v.isStats && !t.proposalNumber) a.push("ungStats");
     }
   }

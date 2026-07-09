@@ -66,6 +66,8 @@ const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
   if (category) qs.set("category", category);
   return `/materials?${qs.toString()}`;
 };
+const compactSelectWidth = (label: string, minCh: number, maxCh: number) =>
+  `${Math.min(maxCh, Math.max(minCh, label.length + 3))}ch`;
 
 export default function MaterialTicketBoard({
   creating = false,
@@ -113,6 +115,8 @@ export default function MaterialTicketBoard({
     const matchesSearch = !searchText || searchable.includes(searchText);
     return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
   });
+  const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : materialCategoryFilter;
+  const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
 
   return (
     <div className="mtw">
@@ -130,13 +134,23 @@ export default function MaterialTicketBoard({
           </div>
         ) : <div className="turn-spacer" />}
         <label className="unit-filter category-filter">
-          <select value={materialCategoryFilter} onChange={(e) => setMaterialCategoryFilter(e.target.value)} aria-label="Lọc theo loại vật tư">
+          <select
+            value={materialCategoryFilter}
+            onChange={(e) => setMaterialCategoryFilter(e.target.value)}
+            aria-label="Lọc theo loại vật tư"
+            style={{ width: compactSelectWidth(selectedCategoryLabel, 10, 19) }}
+          >
             <option value="ALL">Tất cả loại</option>
             {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="unit-filter">
-          <select value={unitFilter} onChange={(e) => setUnitFilter(e.target.value)} aria-label="Lọc theo tổ máy">
+          <select
+            value={unitFilter}
+            onChange={(e) => setUnitFilter(e.target.value)}
+            aria-label="Lọc theo tổ máy"
+            style={{ width: compactSelectWidth(selectedUnitLabel, 7, 13) }}
+          >
             <option value="ALL">Tất cả tổ máy</option>
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
@@ -158,20 +172,23 @@ export default function MaterialTicketBoard({
           <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
-        {!isLoading && shown.map((t, index) => {
-          const meta = STATUS[t.status] ?? { label: t.status, c: C.soft };
-          const order = ORDER[t.type];
-          const flowStatus = flowStatusKey(t.status);
-          const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(flowStatus);
-          const done = t.status === "HOAN_TAT" ? order.length : idx;
-          const mine = actionsFor(t, viewer).length > 0;
-          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
-          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
-          const canEdit =
-            !!viewer &&
-            (viewer.isAdmin ||
-              viewer.steps?.manage ||
-              (!viewer.steps?.manageConfigured && viewer.id === t.createdById));
+	        {!isLoading && shown.map((t, index) => {
+	          const meta = STATUS[t.status] ?? { label: t.status, c: C.soft };
+	          const order = ORDER[t.type];
+	          const flowStatus = flowStatusKey(t.status);
+	          const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(flowStatus);
+	          const done = t.status === "HOAN_TAT" ? order.length : idx;
+	          const mine = actionsFor(t, viewer).length > 0;
+	          const isAssignedToViewer = !!viewer && positionKey(viewer.position) === positionKey(t.assignedPosition);
+	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
+	          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
+	          const canEdit =
+	            !!viewer &&
+	            (viewer.isAdmin ||
+	              (isAssignedToViewer && (
+	                viewer.steps?.manage ||
+	                (!viewer.steps?.manageConfigured && viewer.id === t.createdById)
+	              )));
           const materialNames = Array.from(new Set(t.items.map((i) => i.material?.name).filter(Boolean)));
           const materialText = materialNames.length ? materialNames.join(", ") : "—";
           const isOpen = openId === t.id;
@@ -444,7 +461,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 /* ================= phân quyền quy trình (ADMIN) ================= */
 const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = [
   { key: "create", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
-  { key: "confirm", label: "Xác nhận", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "receive", label: "Nhận vật tư (khối lượng lãnh + hình thức)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "accept", label: "Nghiệm thu + BBKT + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
@@ -523,15 +539,41 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const [bbkt, setBbkt] = useState(t.bbktNumber ?? "");
   const [assigned, setAssigned] = useState(t.assignedPosition);
   const [category, setCategory] = useState(t.materialCategory ?? "");
+  const [selectedMaterialId, setSelectedMaterialId] = useState(t.items[0]?.materialId ?? "");
+  const [proposedQuantity, setProposedQuantity] = useState(t.items[0]?.quantity ?? 1);
+  const [note, setNote] = useState(t.proposalNote ?? "");
+  const [replacementDeviceName, setReplacementDeviceName] = useState(t.items[0]?.deviceNameManual ?? t.items[0]?.device?.name ?? "");
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
+  const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
+  const assignedKey = positionKey(assigned);
   const positionOptions = useMemo(
     () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
     [opts?.positions, unit]
   );
+  const materialCards = useMemo(() => {
+    if (!materialCategoryLabel) return [];
+    return (opts?.materials ?? []).filter((m) => {
+      const matchesCategory = m.category === materialCategoryLabel;
+      const matchesPosition = !assignedKey || m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      return matchesCategory && matchesPosition;
+    });
+  }, [assignedKey, materialCategoryLabel, opts?.materials]);
+
+  React.useEffect(() => {
+    if (t.type !== "DE_XUAT") return;
+    if (!materialCards.length) {
+      if (selectedMaterialId) setSelectedMaterialId("");
+      return;
+    }
+    if (!materialCards.some((m) => m.id === selectedMaterialId)) {
+      setSelectedMaterialId(materialCards[0].id);
+    }
+  }, [materialCards, selectedMaterialId, t.type]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
+    setSelectedMaterialId("");
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
@@ -540,6 +582,10 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
       await act.mutateAsync({
         action: "editInfo", unit, bbktNumber: bbkt.trim() || undefined,
         assignedPosition: assigned, materialCategory: category,
+        materialId: selectedMaterialId || undefined,
+        proposedQuantity,
+        note: note.trim() || undefined,
+        replacementDeviceName: replacementDeviceName.trim() || undefined,
       });
       toast.success(`Đã cập nhật phiếu ${t.code}`);
       onClose();
@@ -561,7 +607,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           ))}</div>
 
           <label>Cương vị được giao thực hiện *</label>
-          <select value={assigned} onChange={(e) => setAssigned(e.target.value)}>
+          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); }}>
             <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
             {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -569,9 +615,62 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <label>Loại vật tư *</label>
           <div className="cats">
             {CATEGORIES.map((c) => (
-              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => setCategory(c)}>{c}</button>
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); }}>{c}</button>
             ))}
           </div>
+
+          {t.type === "DE_XUAT" && (
+            <>
+              <label>Tên vật tư</label>
+              <div className="material-cards">
+                {!category ? (
+                  <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
+                ) : materialCards.length ? (
+                  materialCards.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={selectedMaterialId === m.id ? "on" : ""}
+                      onClick={() => setSelectedMaterialId(m.id)}
+                      title={`${m.code} - ${m.name}`}
+                    >
+                      <span>{m.name}</span>
+                      <small>{m.code}</small>
+                    </button>
+                  ))
+                ) : (
+                  <div className="material-empty">
+                    {assigned
+                      ? "Chưa có mã vật tư đã link với cương vị này trong danh mục"
+                      : "Chưa có vật tư thuộc loại này trong danh mục"}
+                  </div>
+                )}
+              </div>
+
+              <div className="bbkt-grid">
+                <div className="field">
+                  <label>Ghi chú *</label>
+                  <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất..." />
+                </div>
+                <div className="field qty-field">
+                  <label>Số lượng đề xuất *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={proposedQuantity}
+                    onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </div>
+              </div>
+
+              <label>Tên thiết bị thay thế *</label>
+              <input
+                value={replacementDeviceName}
+                onChange={(e) => setReplacementDeviceName(e.target.value)}
+                placeholder="Nhập tên thiết bị thay thế"
+              />
+            </>
+          )}
 
           <label>Số Biên Bản Kiểm Tra (BBKT) (nếu có)</label>
           <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
@@ -579,7 +678,12 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
             <button className="btn primary"
-              disabled={act.isPending || !assigned || !category}
+              disabled={
+                act.isPending ||
+                !assigned ||
+                !category ||
+                (t.type === "DE_XUAT" && (!selectedMaterialId || proposedQuantity <= 0 || !note.trim() || !replacementDeviceName.trim()))
+              }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
             </button>
@@ -675,7 +779,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
         </div>
 
         <div className="loglist">
-          <label className="lb"><Clock size={13} /> Dấu vết</label>
+          <label className="lb"><Clock size={13} /> Hoạt động ghi nhận:</label>
           {[
             t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
             t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -994,9 +1098,9 @@ const CSS = `
 .turn-spacer{flex:1 1 auto;min-width:0;}
 .turn-badge{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:13px;color:${C.accent};}
 .turn-chip{display:inline-flex;align-items:center;gap:5px;max-width:210px;border:1px solid ${C.accent}55;background:${C.accent}0e;color:${C.navy};font-weight:700;font-size:12.5px;border-radius:9px;padding:6px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.unit-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 8px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.unit-filter select{height:30px;min-width:132px;border:0;background:#fff;padding:0 26px 0 8px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;}
-.category-filter select{min-width:168px;}
+.unit-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 5px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.unit-filter select{height:30px;min-width:0;border:0;background:#fff;padding:0 20px 0 6px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;box-sizing:content-box;}
+.category-filter select{min-width:0;}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
 .filters{display:flex;gap:5px;flex:0 0 auto;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;}
 .filters button{border:0;background:transparent;font-size:12.5px;font-weight:600;color:#64748b;padding:7px 12px;border-radius:8px;cursor:pointer;}
@@ -1137,5 +1241,5 @@ const CSS = `
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select{min-width:160px;}.category-filter select{min-width:190px;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row{grid-template-columns:1fr;gap:6px;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row{grid-template-columns:1fr;gap:6px;}}
 `;
