@@ -1,7 +1,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isStats, canCreateTicket, getPositionScopes, nextTicketCode } from "@/lib/material-workflow";
+import {
+  isShiftLeader,
+  isStats,
+  getPositionScopes,
+  nextTicketCode,
+  getWorkflowRoleMap,
+  stepAllowedWithMap,
+} from "@/lib/material-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +42,8 @@ export async function GET(req: NextRequest) {
     });
 
     const scopes = await getPositionScopes(user.position);
+    // Quyền theo từng bước (admin cấu hình trong MaterialWorkflowRole; trống = mặc định cũ).
+    const wfMap = await getWorkflowRoleMap();
     return ok(tickets, {
       viewer: {
         id: user.id,
@@ -42,9 +51,16 @@ export async function GET(req: NextRequest) {
         position: user.position ?? null,
         isShiftLeader: isShiftLeader(user.position),
         isStats: isStats(user.position),
-        canCreate: canCreateTicket(user),
+        canCreate: stepAllowedWithMap(wfMap, "create", user),
         isAdmin: user.role === "ADMIN",
         hasScope: scopes.length > 0,
+        steps: {
+          create: stepAllowedWithMap(wfMap, "create", user),
+          confirm: stepAllowedWithMap(wfMap, "confirm", user),
+          accept: stepAllowedWithMap(wfMap, "accept", user),
+          manage: stepAllowedWithMap(wfMap, "manage", user),
+          manageConfigured: wfMap.manage.length > 0,
+        },
       },
     });
   });
@@ -55,16 +71,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canCreateTicket(user)) {
-      return fail("Chỉ Quản trị, Kỹ thuật viên, Trưởng Ca / Trưởng Kíp được tạo phiếu thay thế vật tư", 403);
+    const wfMap = await getWorkflowRoleMap();
+    if (!stepAllowedWithMap(wfMap, "create", user)) {
+      return fail("Bạn không có quyền tạo phiếu thay thế vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
     }
     const body = await req.json();
     const type = body.type === "UNG" ? "UNG" : body.type === "DE_XUAT" ? "DE_XUAT" : null;
     if (!type) return fail("Loại phiếu không hợp lệ");
     const unit = String(body.unit || "").trim();
     if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
+    // BBKT không còn bắt buộc lúc tạo (bổ sung ở bước Nghiệm thu nếu có);
+    // thay bằng Ghi chú bắt buộc cho luồng Đề xuất.
     const bbkt = String(body.bbktNumber || "").trim();
-    if (type === "DE_XUAT" && !bbkt) return fail("Luồng Đề xuất bắt buộc nhập số BBKT khi tạo phiếu");
+    const proposalNote = String(body.note || "").trim();
+    if (type === "DE_XUAT" && !proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
 
     // Cương vị được giao: bắt buộc, và phải là cương vị có phân giao cây thiết bị
     const assignedPosition = String(body.assignedPosition || "").trim();
@@ -106,7 +126,8 @@ export async function POST(req: NextRequest) {
         type,
         unit,
         status: nextStatus,
-        bbktNumber: type === "DE_XUAT" ? bbkt : null,
+        bbktNumber: type === "DE_XUAT" ? bbkt || null : null,
+        proposalNote: type === "DE_XUAT" ? proposalNote : null,
         assignedPosition,
         materialCategory,
         createdById: user.id,

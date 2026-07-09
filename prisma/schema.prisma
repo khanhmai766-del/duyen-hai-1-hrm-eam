@@ -793,7 +793,8 @@ model MaterialTicket {
   assignedPosition String  // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)
   materialCategory String? // Loại vật tư: "Dầu bôi trơn" | "Lọc dầu" | "Hóa chất" | "Bi nghiền"
 
-  bbktNumber     String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở B0; Ứng: bổ sung sau PDF)
+  bbktNumber     String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
+  proposalNote   String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
   pctNumber      String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
   proposalNumber String? // số phiếu đề xuất vật tư (Thống kê nhập)
   completionNote String? // thông tin xác nhận thay thế xong
@@ -810,12 +811,15 @@ model MaterialTicket {
   proposedAt         DateTime?
   confirmedById      String?
   confirmedByName    String?
+  confirmedByPosition String? // cương vị người xác nhận (hiện trong lịch sử phiếu)
   confirmedAt        DateTime? // mốc tính quy tắc 2 ngày (luồng đề xuất)
   statsById          String?
   statsByName        String?
+  statsByPosition    String? // cương vị người nhập số phiếu ĐXVT
   statsAt            DateTime?
   completedById      String?
   completedByName    String? // Trưởng Ca/TK xuất file — in vào Hội đồng nghiệm thu
+  completedByPosition String? // cương vị người nghiệm thu
   completedAt        DateTime?
 
   createdAt DateTime @default(now())
@@ -827,6 +831,20 @@ model MaterialTicket {
   @@index([unit, status])
   @@index([type])
   @@index([assignedPosition])
+}
+
+// Phân quyền các bước của quy trình phiếu thay thế vật tư: admin gán CƯƠNG VỊ nào
+// được thao tác ở bước nào ("create" tạo phiếu/đề xuất, "confirm" xác nhận,
+// "accept" nghiệm thu, "manage" sửa/xoá phiếu). Bước chưa cấu hình → dùng mặc
+// định cũ (Trưởng Ca/KTV/…) để không gãy khi mới deploy.
+model MaterialWorkflowRole {
+  id        String   @id @default(cuid())
+  step      String // "create" | "confirm" | "accept" | "manage"
+  position  String // cương vị được phép thao tác bước này
+  createdAt DateTime @default(now())
+
+  @@unique([step, position])
+  @@index([step])
 }
 
 model MaterialTicketItem {

@@ -40,6 +40,63 @@ export function canCreateTicket(user: { role?: string | null; position?: string 
   return isShiftLeader(user.position);
 }
 
+/* ---------- Phân quyền các bước quy trình (admin cấu hình, bảng MaterialWorkflowRole) ---------- */
+
+export const WORKFLOW_STEPS = ["create", "confirm", "accept", "manage"] as const;
+export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
+
+export const WORKFLOW_STEP_LABELS: Record<WorkflowStep, string> = {
+  create: "Tạo phiếu / Đề xuất vật tư",
+  confirm: "Xác nhận",
+  accept: "Nghiệm thu + xuất BBNT",
+  manage: "Sửa / Xoá phiếu",
+};
+
+/** Đọc toàn bộ cấu hình phân quyền: step → danh sách cương vị. */
+export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[]>> {
+  const rows = await prisma.materialWorkflowRole.findMany({ select: { step: true, position: true } });
+  const map: Record<WorkflowStep, string[]> = { create: [], confirm: [], accept: [], manage: [] };
+  for (const r of rows) {
+    if ((WORKFLOW_STEPS as readonly string[]).includes(r.step)) map[r.step as WorkflowStep].push(r.position);
+  }
+  return map;
+}
+
+function positionInList(position: string | null | undefined, list: string[]) {
+  const p = norm(position);
+  if (!p) return false;
+  return list.some((item) => norm(item) === p);
+}
+
+/** Mặc định khi bước CHƯA được admin cấu hình (giữ hành vi cũ, không gãy khi mới deploy). */
+function defaultStepAllowed(step: WorkflowStep, user: { role?: string | null; position?: string | null }) {
+  if (step === "create") return canCreateTicket(user);
+  if (step === "confirm" || step === "accept") return isShiftLeader(user.position);
+  return false; // manage: mặc định chỉ người tạo phiếu (kiểm tra riêng tại API) + Admin
+}
+
+/**
+ * User có được thao tác ở bước này không?
+ * - ADMIN: luôn được.
+ * - Bước đã cấu hình: cương vị phải nằm trong danh sách.
+ * - Bước chưa cấu hình: dùng mặc định cũ.
+ */
+export function stepAllowedWithMap(
+  map: Record<WorkflowStep, string[]>,
+  step: WorkflowStep,
+  user: { role?: string | null; position?: string | null }
+) {
+  if (user.role === "ADMIN") return true;
+  const configured = map[step];
+  if (configured.length > 0) return positionInList(user.position, configured);
+  return defaultStepAllowed(step, user);
+}
+
+export async function canDoStep(step: WorkflowStep, user: { role?: string | null; position?: string | null }) {
+  const map = await getWorkflowRoleMap();
+  return stepAllowedWithMap(map, step, user);
+}
+
 /** Lấy danh sách systemSeq được phân giao cho một cương vị (PositionSystemScope) */
 export async function getPositionScopes(position?: string | null): Promise<string[]> {
   if (!position) return [];

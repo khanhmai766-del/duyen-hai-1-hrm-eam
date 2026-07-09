@@ -3,13 +3,15 @@
 import React, { useMemo, useState } from "react";
 import {
   Plus, Minus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
-  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2,
+  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
-  actionsFor, type MaterialTicket, type TicketViewer,
+  useWorkflowRoles, useSaveWorkflowRoles, actionsFor,
+  type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
+import { usePositions } from "@/hooks/useUsers";
 import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 
 /* ============ meta hiển thị ============ */
@@ -34,9 +36,9 @@ const STATUS: Record<string, { label: string; c: string }> = {
 };
 const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   DE_XUAT: [
-    { key: "B0", label: "BBKT + Đề xuất vật tư", who: "Quản trị/KTV/Trưởng ca" },
+    { key: "B0", label: "Tạo phiếu + Đề xuất vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống kê", who: "Thống kê" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + Word", who: "Trưởng Ca/TK" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBKT + Word", who: "Theo phân quyền quy trình" },
   ],
   UNG: [
     { key: "B0", label: "Tạo phiếu Ứng", who: "Trưởng Ca/TK" },
@@ -65,6 +67,7 @@ export default function MaterialTicketBoard({
   const [filter, setFilter] = useState("ALL");
   const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
+  const [rolesOpen, setRolesOpen] = useState(false);
   const del = useDeleteTicket();
 
   const tickets = data?.tickets ?? [];
@@ -95,6 +98,11 @@ export default function MaterialTicketBoard({
             <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
           ))}
         </div>
+        {viewer?.isAdmin && (
+          <button className="btn ghost" onClick={() => setRolesOpen(true)}>
+            <UserCog size={14} /> Phân quyền quy trình
+          </button>
+        )}
       </div>
 
       <div className="list">
@@ -109,7 +117,13 @@ export default function MaterialTicketBoard({
           const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(flowStatus);
           const done = t.status === "HOAN_TAT" ? order.length : idx;
           const mine = actionsFor(t, viewer).length > 0;
-          const canEdit = !!viewer && (viewer.id === t.createdById || viewer.isAdmin);
+          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
+          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
+          const canEdit =
+            !!viewer &&
+            (viewer.isAdmin ||
+              viewer.steps?.manage ||
+              (!viewer.steps?.manageConfigured && viewer.id === t.createdById));
           const materialNames = Array.from(new Set(t.items.map((i) => i.material?.name).filter(Boolean)));
           const materialText = materialNames.length ? materialNames.join(", ") : "—";
           const isOpen = openId === t.id;
@@ -166,6 +180,8 @@ export default function MaterialTicketBoard({
 
       {creating && <CreateDialog onClose={() => onCloseCreate?.()} onOpen={setOpenId} />}
 
+      {rolesOpen && <WorkflowRolesDialog onClose={() => setRolesOpen(false)} />}
+
       {editTicket && <EditDialog t={editTicket} onClose={() => setEditTicket(null)} />}
 
       {delTicket && (
@@ -209,7 +225,7 @@ const positionKey = (value?: string | null) => (value ?? "").trim().toLocaleLowe
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>(null);
   const [unit, setUnit] = useState("S1");
-  const [bbkt, setBbkt] = useState("");
+  const [note, setNote] = useState("");
   const [assigned, setAssigned] = useState("");
   const [category, setCategory] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
@@ -251,7 +267,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   async function submit() {
     try {
       const res = await create.mutateAsync({
-        type: type!, unit, bbktNumber: bbkt.trim() || undefined,
+        type: type!, unit, note: note.trim() || undefined,
         assignedPosition: assigned, materialCategory: category,
         materialId: selectedMaterialId || undefined,
         proposedQuantity,
@@ -332,8 +348,8 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               <>
                 <div className="bbkt-grid">
                   <div className="field">
-                    <label>Số Biên Bản Kiểm Tra (BBKT) *</label>
-                    <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
+                    <label>Ghi chú *</label>
+                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất…" />
                   </div>
                   <div className="field qty-field">
                     <label>Số lượng đề xuất *</label>
@@ -351,6 +367,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   onChange={(e) => setReplacementDeviceName(e.target.value)}
                   placeholder="Nhập tên thiết bị thay thế"
                 />
+                <p className="hint">Số BBKT sẽ bổ sung ở bước Nghiệm thu (nếu có).</p>
               </>
             ) : (
               <p className="note ung"><Zap size={13} /> Luồng Ứng: số BBKT sẽ bổ sung sau bước xác nhận xuất file.</p>
@@ -362,7 +379,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   create.isPending ||
                   !assigned ||
                   !category ||
-                  (type === "DE_XUAT" && (!bbkt.trim() || !selectedMaterialId || proposedQuantity <= 0 || !replacementDeviceName.trim()))
+                  (type === "DE_XUAT" && (!note.trim() || !selectedMaterialId || proposedQuantity <= 0 || !replacementDeviceName.trim()))
                 }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
@@ -370,6 +387,80 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
           </div>
         )}
+      </div>
+    </>
+  );
+}
+
+/* ================= phân quyền quy trình (ADMIN) ================= */
+const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = [
+  { key: "create", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
+  { key: "confirm", label: "Xác nhận", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", label: "Nghiệm thu + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = mặc định: người tạo phiếu (Quản trị luôn được)" },
+];
+
+function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
+  const { data, isLoading } = useWorkflowRoles(true);
+  const save = useSaveWorkflowRoles();
+  const positions = usePositions();
+  const [roles, setRoles] = useState<WorkflowRoleMap | null>(null);
+
+  React.useEffect(() => {
+    if (data?.data && !roles) setRoles(data.data);
+  }, [data, roles]);
+
+  function toggle(step: keyof WorkflowRoleMap, position: string) {
+    setRoles((r) => {
+      if (!r) return r;
+      const list = r[step];
+      return { ...r, [step]: list.includes(position) ? list.filter((p) => p !== position) : [...list, position] };
+    });
+  }
+
+  async function submit() {
+    if (!roles) return;
+    try {
+      await save.mutateAsync(roles);
+      toast.success("Đã lưu phân quyền quy trình");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Lưu thất bại");
+    }
+  }
+
+  return (
+    <>
+      <div className="ovl" onClick={onClose} />
+      <div className="dlg" style={{ width: 560, maxHeight: "86vh", overflowY: "auto" }}>
+        <div className="dlg-h"><b>Phân quyền quy trình thay thế vật tư</b>
+          <button className="x" onClick={onClose}><X size={16} /></button></div>
+        <div className="frm">
+          <p className="note"><UserCog size={13} /> Chọn CƯƠNG VỊ được thao tác ở từng bước. Bước để trống sẽ dùng nhóm mặc định. Quản trị luôn thao tác được mọi bước.</p>
+          {isLoading || !roles ? (
+            <div className="empty"><Loader2 className="spin" size={16} /> Đang tải cấu hình…</div>
+          ) : (
+            WF_STEPS.map((s) => (
+              <div key={s.key}>
+                <label>{s.label}</label>
+                <div className="wfchips">
+                  {positions.map((p) => (
+                    <button key={p} type="button" className={roles[s.key].includes(p) ? "on" : ""} onClick={() => toggle(s.key, p)}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <p className="hint">{s.hint}</p>
+              </div>
+            ))
+          )}
+          <div className="frm-f">
+            <button className="btn ghost" onClick={onClose}>Hủy</button>
+            <button className="btn primary" disabled={save.isPending || !roles} onClick={submit}>
+              {save.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu phân quyền
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );
@@ -431,13 +522,13 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
             ))}
           </div>
 
-          <label>Số Biên Bản Kiểm Tra (BBKT){t.type === "DE_XUAT" ? " *" : " (nếu có)"}</label>
+          <label>Số Biên Bản Kiểm Tra (BBKT) (nếu có)</label>
           <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
             <button className="btn primary"
-              disabled={act.isPending || !assigned || !category || (t.type === "DE_XUAT" && !bbkt.trim())}
+              disabled={act.isPending || !assigned || !category}
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
             </button>
@@ -467,6 +558,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             {t.bbktNumber ? ` · ${t.bbktNumber}` : ""}
           </span>
           <span className="p-sub">Giao: <b>{t.assignedPosition}</b>{t.materialCategory ? ` · Loại vật tư: ${t.materialCategory}` : ""}</span>
+          {t.proposalNote && <span className="p-sub">Ghi chú: {t.proposalNote}</span>}
         </div>
         <span className="p-badge" style={{ background: meta.c }}>{meta.label}</span>
       </div>
@@ -523,12 +615,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           <label className="lb"><Clock size={13} /> Dấu vết</label>
           {[
             t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
-            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, what: t.type === "UNG" ? "Nhập liệu thay thế" : "BBKT + Đề xuất vật tư" },
-            t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, what: "Xác nhận — kho đủ" },
-            t.statsAt && { at: t.statsAt, who: t.statsByName, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
-            t.completedAt && { at: t.completedAt, who: t.completedByName, what: "Xuất Biên Bản Nghiệm Thu" },
+            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
+            t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
+            t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
+            t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
           ].filter(Boolean).map((l: any, i) => (
-            <div key={i} className="logrow"><span>{fmt(l.at)}</span><b>{l.who}</b><em>{l.what}</em></div>
+            <div key={i} className="logrow"><span>{fmt(l.at)}</span><b>{l.who}{l.pos ? ` · ${l.pos}` : ""}</b><em>{l.what}</em></div>
           ))}
         </div>
       </div>
@@ -701,9 +793,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       <label className="lb">Bước 3 — Nghiệm thu &amp; xuất Biên Bản (Word)</label>
       <input placeholder="Số PCT/LCT *" value={pct} onChange={(e) => setPct(e.target.value)} />
       <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
+      <input placeholder="Số BBKT (nếu có) — VD: BBKT-120/VH1" value={num} onChange={(e) => setNum(e.target.value)} />
       <textarea rows={3} placeholder="Thông tin xác nhận thay thế vật tư xong…" value={note} onChange={(e) => setNote(e.target.value)} />
       <button className="btn primary big" disabled={!note.trim() || !pct.trim() || !chiHuy.trim() || act.isPending}
-        onClick={() => run({ action: "accept", completionNote: note, pctNumber: pct, chiHuyName: chiHuy }, "Đã nghiệm thu, file Word sẵn sàng")}>
+        onClick={() => run({ action: "accept", completionNote: note, pctNumber: pct, chiHuyName: chiHuy, bbktNumber: num.trim() || undefined }, "Đã nghiệm thu, file Word sẵn sàng")}>
         {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu &amp; xuất Word
       </button>
     </div>
@@ -836,6 +929,9 @@ const CSS = `
 .cats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cats button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:13px;cursor:pointer;color:#64748b;transition:.15s;}
 .cats button.on{border-color:${C.accent};background:${C.accent}10;color:${C.accent};}
+.wfchips{display:flex;flex-wrap:wrap;gap:6px;}
+.wfchips button{padding:6px 10px;border-radius:999px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:12px;cursor:pointer;color:#64748b;transition:.15s;}
+.wfchips button.on{border-color:${C.accent};background:${C.accent}12;color:${C.accent};}
 .material-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .material-cards button{min-height:50px;padding:9px 11px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;text-align:left;color:${C.navy};cursor:pointer;transition:.15s;overflow:hidden;}
 .material-cards button:hover{border-color:${C.accent};box-shadow:0 8px 18px rgba(37,99,235,.08);}

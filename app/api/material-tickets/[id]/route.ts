@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isStats } from "@/lib/material-workflow";
+import { isShiftLeader, isStats, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,17 @@ type FullTicket = NonNullable<Awaited<ReturnType<typeof getTicket>>>;
 
 async function getTicket(id: string) {
   return prisma.materialTicket.findUnique({ where: { id }, include: ITEM_INCLUDE });
+}
+
+/** Sửa/Xoá phiếu: ADMIN, cương vị được cấu hình bước "manage"; khi CHƯA cấu hình → người tạo phiếu (mặc định cũ). */
+async function canManageTicket(
+  user: { id: string; role?: string | null; position?: string | null },
+  t: { createdById: string }
+) {
+  if (user.role === "ADMIN") return true;
+  const map = await getWorkflowRoleMap();
+  if (map.manage.length > 0) return stepAllowedWithMap(map, "manage", user);
+  return t.createdById === user.id;
 }
 
 function toBbntItems(t: FullTicket): BbntItem[] {
@@ -42,14 +53,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   });
 }
 
-// DELETE /api/material-tickets/[id] — Xóa phiếu. Chỉ NGƯỜI TẠO hoặc QUẢN TRỊ.
+// DELETE /api/material-tickets/[id] — Xóa phiếu. Quản trị / cương vị được phân quyền "Sửa/Xoá phiếu"
+// (khi chưa cấu hình: người tạo phiếu như cũ).
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
     const t = await getTicket(params.id);
     if (!t) return fail("Không tìm thấy phiếu", 404);
-    if (t.createdById !== user.id && user.role !== "ADMIN")
-      return fail("Chỉ người tạo phiếu hoặc Quản trị được xóa phiếu", 403);
+    if (!(await canManageTicket(user, t)))
+      return fail("Bạn không có quyền xóa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
     await prisma.materialTicket.delete({ where: { id: t.id } });
     await audit(user.id, "MT_DELETE", "MaterialTicket", t.id, `${t.code}: xóa phiếu`);
     return ok({ id: t.id });
@@ -67,10 +79,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!t) return fail("Không tìm thấy phiếu", 404);
 
     // Sửa THÔNG TIN CƠ BẢN của phiếu (Tổ máy, số BBKT, cương vị giao, loại vật tư).
-    // Chỉ NGƯỜI TẠO hoặc QUẢN TRỊ; không phụ thuộc trạng thái phiếu.
+    // Quản trị / cương vị được phân quyền "Sửa/Xoá phiếu" (chưa cấu hình: người tạo).
     if (action === "editInfo") {
-      if (t.createdById !== user.id && user.role !== "ADMIN")
-        return fail("Chỉ người tạo phiếu hoặc Quản trị được sửa phiếu", 403);
+      if (!(await canManageTicket(user, t)))
+        return fail("Bạn không có quyền sửa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
       const unit = String(body.unit || "").trim();
       if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
@@ -80,8 +92,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
       const materialCategory = String(body.materialCategory || "").trim();
       if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
-      const bbkt = String(body.bbktNumber || "").trim();
-      if (t.type === "DE_XUAT" && !bbkt) return fail("Luồng Đề xuất bắt buộc có số BBKT");
+      const bbkt = String(body.bbktNumber || "").trim(); // BBKT giờ là tuỳ chọn (bổ sung ở bước Nghiệm thu)
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: { unit, assignedPosition, materialCategory, bbktNumber: bbkt || t.bbktNumber },
@@ -150,7 +161,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B1' — Trưởng Ca xác nhận (luồng cũ; giữ để tương thích phiếu cũ còn dang dở)
     if (action === "confirm") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Xác nhận");
-      if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được xác nhận", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
+        return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const short = t.items.filter((it) => it.quantity > it.material.quantity);
       if (short.length > 0) {
         return fail(
@@ -163,7 +175,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         where: { id: t.id },
         data: {
           status: "CHO_THONG_KE",
-          confirmedById: user.id, confirmedByName: user.name ?? "", confirmedAt: new Date(),
+          confirmedById: user.id, confirmedByName: user.name ?? "",
+          confirmedByPosition: user.position ?? null, confirmedAt: new Date(),
         },
         include: ITEM_INCLUDE,
       });
@@ -195,7 +208,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
-        data: { status: "CHO_NGHIEM_THU", proposalNumber: num, statsById: user.id, statsByName: user.name ?? "", statsAt: new Date() },
+        data: {
+          status: "CHO_NGHIEM_THU", proposalNumber: num,
+          statsById: user.id, statsByName: user.name ?? "",
+          statsByPosition: user.position ?? null, statsAt: new Date(),
+        },
         include: ITEM_INCLUDE,
       });
       await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: số phiếu ${num}`);
@@ -205,16 +222,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B3 — Trưởng Ca nghiệm thu: nhập PCT/LCT + nội dung + chỉ huy → xuất Word → HOÀN TẤT
     if (action === "accept") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
-      if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được nghiệm thu", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user))
+        return fail("Bạn không có quyền nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const note = String(body.completionNote || "").trim();
       const pct = String(body.pctNumber || "").trim();
       const chiHuy = String(body.chiHuyName || "").trim();
+      const bbkt = String(body.bbktNumber || "").trim(); // Số BBKT bổ sung ở bước này (nếu có)
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
 
       const { url } = await generateBbntDoc({
-        code: t.code, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note,
+        code: t.code, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
         tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
         tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
         items: toBbntItems(t),
@@ -223,7 +242,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         where: { id: t.id },
         data: {
           status: "HOAN_TAT", completionNote: note, pctNumber: pct, chiHuyName: chiHuy, docUrl: url,
-          completedById: user.id, completedByName: user.name ?? "", completedAt: new Date(),
+          ...(bbkt ? { bbktNumber: bbkt } : {}),
+          completedById: user.id, completedByName: user.name ?? "",
+          completedByPosition: user.position ?? null, completedAt: new Date(),
         },
         include: ITEM_INCLUDE,
       });

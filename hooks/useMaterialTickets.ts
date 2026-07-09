@@ -22,6 +22,7 @@ export interface MaterialTicket {
   assignedPosition: string;
   materialCategory: string | null;
   bbktNumber: string | null;
+  proposalNote: string | null;
   pctNumber: string | null;
   proposalNumber: string | null;
   completionNote: string | null;
@@ -34,13 +35,25 @@ export interface MaterialTicket {
   proposedByPosition: string | null;
   proposedAt: string | null;
   confirmedByName: string | null;
+  confirmedByPosition: string | null;
   confirmedAt: string | null;
   statsByName: string | null;
+  statsByPosition: string | null;
   statsAt: string | null;
   completedByName: string | null;
+  completedByPosition: string | null;
   completedAt: string | null;
   createdAt: string;
   items: TicketItem[];
+}
+
+/** Quyền theo từng bước quy trình (admin cấu hình; bước trống dùng mặc định cũ). */
+export interface ViewerSteps {
+  create: boolean;
+  confirm: boolean;
+  accept: boolean;
+  manage: boolean;
+  manageConfigured: boolean;
 }
 
 export interface TicketViewer {
@@ -52,6 +65,29 @@ export interface TicketViewer {
   canCreate: boolean;
   isAdmin: boolean;
   hasScope: boolean;
+  steps?: ViewerSteps;
+}
+
+export type WorkflowRoleMap = { create: string[]; confirm: string[]; accept: string[]; manage: string[] };
+
+/** Cấu hình phân quyền quy trình (chỉ ADMIN gọi được). */
+export function useWorkflowRoles(enabled: boolean) {
+  return useQuery({
+    queryKey: ["material-workflow-roles"],
+    enabled,
+    queryFn: () => apiGet<WorkflowRoleMap>("/api/material-workflow-roles"),
+  });
+}
+
+export function useSaveWorkflowRoles() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (roles: WorkflowRoleMap) => apiMutate<WorkflowRoleMap>("/api/material-workflow-roles", "PUT", { roles }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-workflow-roles"] });
+      qc.invalidateQueries({ queryKey: ["material-tickets"] });
+    },
+  });
 }
 
 export function useMaterialTickets() {
@@ -88,7 +124,7 @@ export function useCreateTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      type: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string;
+      type: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
       assignedPosition: string; materialCategory: string;
       materialId?: string; proposedQuantity?: number; replacementDeviceName?: string;
     }) =>
@@ -121,10 +157,10 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   const isAssigned = !!v.position && v.position === t.assignedPosition;
   if (t.type === "DE_XUAT") {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
-    if (t.status === "CHO_XAC_NHAN" && v.isShiftLeader) a.push("confirm");
+    if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
     if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.isStats) a.push("stats");
-    if (t.status === "CHO_NGHIEM_THU" && v.isShiftLeader) a.push("accept");
+    if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
   } else {
     if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungEntry");
     if (t.status === "CHO_XAC_NHAN_PDF" && v.isShiftLeader) a.push("ungConfirmDoc");
