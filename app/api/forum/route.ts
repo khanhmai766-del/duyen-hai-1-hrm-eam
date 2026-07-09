@@ -6,13 +6,15 @@ import { ensureForumPostLikeTable } from "@/lib/forum-likes";
 import { normalizeForumTargetPositions } from "@/lib/forum-targets";
 import { ensureForumLifecycleColumns } from "@/lib/forum-targets-server";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { publicUserRef } from "@/lib/s3";
 
 const AUTHOR_SELECT = `
   json_build_object(
     'id', u.id,
     'name', u.name,
     'position', u.position,
-    'avatarUrl', u."avatarUrl"
+    'avatarUrl', u."avatarUrl",
+    'avatarKey', u."avatar_key"
   )
 `;
 
@@ -49,7 +51,8 @@ const LATEST_REPLY_SELECT = `
         'id', ru.id,
         'name', ru.name,
         'position', ru.position,
-        'avatarUrl', ru."avatarUrl"
+        'avatarUrl', ru."avatarUrl",
+        'avatarKey', ru."avatar_key"
       )
     )
     FROM "ForumReply" r
@@ -122,7 +125,8 @@ export async function GET(req: NextRequest) {
             'id', cb.id,
             'name', cb.name,
             'position', cb.position,
-            'avatarUrl', cb."avatarUrl"
+            'avatarUrl', cb."avatarUrl",
+            'avatarKey', cb."avatar_key"
           )
         END AS "closedBy",
         ${viTime('p."createdAt"')} AS "createdAt",
@@ -139,8 +143,8 @@ export async function GET(req: NextRequest) {
       ORDER BY p."isPinned" DESC, COALESCE(p."closedAt", p."updatedAt") DESC
       LIMIT 100
     `;
-    const posts = await prisma.$queryRawUnsafe(sql, ...params);
-    return ok(posts);
+    const posts = await prisma.$queryRawUnsafe<RawForumPost[]>(sql, ...params);
+    return ok(posts.map(publicForumPost));
   });
 }
 
@@ -187,4 +191,36 @@ function normalizeList(value: unknown, max: number) {
     return value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean).slice(0, max);
   }
   return [];
+}
+
+type RawForumAuthor = {
+  id: string;
+  name: string;
+  position: string | null;
+  avatarUrl?: string | null;
+  avatarKey?: string | null;
+};
+
+type RawForumReply = {
+  author: RawForumAuthor;
+};
+
+type RawForumPost = {
+  author: RawForumAuthor;
+  closedBy: RawForumAuthor | null;
+  latestReply: RawForumReply | null;
+};
+
+function publicForumPost<T extends RawForumPost>(post: T) {
+  return {
+    ...post,
+    author: publicUserRef(post.author),
+    closedBy: post.closedBy ? publicUserRef(post.closedBy) : null,
+    latestReply: post.latestReply
+      ? {
+          ...post.latestReply,
+          author: publicUserRef(post.latestReply.author),
+        }
+      : null,
+  };
 }

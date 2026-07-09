@@ -4,20 +4,31 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   BookOpenText,
+  Bold,
+  ChevronDown,
+  ChevronRight,
   FileText,
   Heart,
   Archive,
+  Italic,
   MessageCircle,
   Link2,
+  List,
+  ListOrdered,
   MessageSquareText,
   Pencil,
   Pin,
   PinOff,
   Plus,
+  Reply,
   Search,
   Send,
   Trash2,
+  Underline,
   Workflow,
   X,
 } from "lucide-react";
@@ -41,6 +52,7 @@ import {
   useForumPosts,
   useForumReplies,
   useToggleForumLike,
+  useToggleForumReplyLike,
   useUpdateForumPost,
   useUpdateForumReply,
   type ForumAuthor,
@@ -58,6 +70,7 @@ const CATEGORIES = [
   { value: "ALL", label: "Tất cả", icon: MessageSquareText, tone: "bg-slate-100 text-slate-700" },
   { value: "DISCUSSION", label: "Trao đổi kỹ thuật", icon: MessageSquareText, tone: "bg-blue-50 text-blue-700" },
   { value: "DOCUMENT", label: "Tài liệu", icon: FileText, tone: "bg-emerald-50 text-emerald-700" },
+  { value: "OPERATION_HANDBOOK", label: "Cẩm nang vận hành", icon: BookOpenText, tone: "bg-cyan-50 text-cyan-700" },
   { value: "PROCEDURE", label: "Quy trình", icon: BookOpenText, tone: "bg-amber-50 text-amber-700" },
   { value: "DRAWING", label: "Sơ đồ / bản vẽ", icon: Workflow, tone: "bg-violet-50 text-violet-700" },
 ] as const;
@@ -70,6 +83,14 @@ const DEFAULT_FORM = {
   attachments: "",
   targetPositions: [ALL_ANNOUNCEMENT_POSITIONS] as string[],
 };
+
+const TEXT_COLORS = [
+  { label: "Đen", value: "#1f2937", className: "bg-slate-800" },
+  { label: "Đỏ", value: "#dc2626", className: "bg-red-600" },
+  { label: "Xanh dương", value: "#2563eb", className: "bg-blue-600" },
+  { label: "Xanh lá", value: "#059669", className: "bg-emerald-600" },
+  { label: "Cam", value: "#d97706", className: "bg-amber-600" },
+] as const;
 
 export default function ForumPage() {
   const { data: session } = useSession();
@@ -84,6 +105,7 @@ export default function ForumPage() {
   const [form, setForm] = React.useState(DEFAULT_FORM);
   const [replyDrafts, setReplyDrafts] = React.useState<Record<string, string>>({});
   const [replyLinks, setReplyLinks] = React.useState<Record<string, string>>({});
+  const [replyTargets, setReplyTargets] = React.useState<Record<string, ForumReply | null>>({});
   const [expandedReplies, setExpandedReplies] = React.useState<Record<string, boolean>>({});
   const [deletePostTarget, setDeletePostTarget] = React.useState<ForumPost | null>(null);
   const [deleteReplyTarget, setDeleteReplyTarget] = React.useState<ForumReply | null>(null);
@@ -105,7 +127,7 @@ export default function ForumPage() {
   const closedCount = closedPosts.data?.data?.length ?? 0;
   const positionOptions = React.useMemo(() => announcementShiftRosterPositionOptions(), []);
 
-  const postValid = form.title.trim().length > 0 && form.content.trim().length > 0;
+  const postValid = form.title.trim().length > 0 && richTextPlainText(form.content).length > 0;
   const savingPost = createPost.isPending || updatePost.isPending;
 
   React.useEffect(() => {
@@ -212,15 +234,17 @@ export default function ForumPage() {
   }
 
   async function submitReply(postId: string) {
-    if (!(replyDrafts[postId] ?? "").trim()) return;
+    if (!richTextPlainText(replyDrafts[postId] ?? "")) return;
     try {
       await createReply.mutateAsync({
         postId,
         content: replyDrafts[postId] ?? "",
         attachments: splitLines(replyLinks[postId] ?? ""),
+        parentReplyId: replyTargets[postId]?.id ?? null,
       });
       setReplyDrafts((s) => ({ ...s, [postId]: "" }));
       setReplyLinks((s) => ({ ...s, [postId]: "" }));
+      setReplyTargets((s) => ({ ...s, [postId]: null }));
       setExpandedReplies((s) => ({ ...s, [postId]: true }));
       toast.success("Đã gửi phản hồi");
     } catch (e) {
@@ -302,7 +326,7 @@ export default function ForumPage() {
             </div>
             <div className="lg:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Nội dung trao đổi *</label>
-              <Textarea value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={4} placeholder="Nhập mô tả, kinh nghiệm xử lý, câu hỏi kỹ thuật..." />
+              <RichTextEditor value={form.content} onChange={(content) => setForm((f) => ({ ...f, content }))} placeholder="Nhập mô tả, kinh nghiệm xử lý, câu hỏi kỹ thuật..." />
             </div>
             <div className="lg:col-span-2">
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Cương vị nhận thông báo</label>
@@ -376,9 +400,15 @@ export default function ForumPage() {
               post={post}
               reply={replyDrafts[post.id] ?? ""}
               replyLinks={replyLinks[post.id] ?? ""}
+              replyTarget={replyTargets[post.id] ?? null}
               repliesOpen={expandedReplies[post.id] ?? false}
               setReply={(v) => setReplyDrafts((s) => ({ ...s, [post.id]: v }))}
               setReplyLinks={(v) => setReplyLinks((s) => ({ ...s, [post.id]: v }))}
+              onReplyTo={(reply) => {
+                setExpandedReplies((s) => ({ ...s, [post.id]: true }));
+                setReplyTargets((s) => ({ ...s, [post.id]: reply }));
+              }}
+              onClearReplyTarget={() => setReplyTargets((s) => ({ ...s, [post.id]: null }))}
               onToggleReplies={() => setExpandedReplies((s) => ({ ...s, [post.id]: !(s[post.id] ?? false) }))}
               onOpenReplies={() => setExpandedReplies((s) => ({ ...s, [post.id]: true }))}
               onReply={() => submitReply(post.id)}
@@ -472,9 +502,12 @@ function ForumPostCard({
   post,
   reply,
   replyLinks,
+  replyTarget,
   repliesOpen,
   setReply,
   setReplyLinks,
+  onReplyTo,
+  onClearReplyTarget,
   onToggleReplies,
   onOpenReplies,
   onReply,
@@ -494,9 +527,12 @@ function ForumPostCard({
   post: ForumPost;
   reply: string;
   replyLinks: string;
+  replyTarget: ForumReply | null;
   repliesOpen: boolean;
   setReply: (v: string) => void;
   setReplyLinks: (v: string) => void;
+  onReplyTo: (reply: ForumReply) => void;
+  onClearReplyTarget: () => void;
   onToggleReplies: () => void;
   onOpenReplies: () => void;
   onReply: () => void;
@@ -517,11 +553,14 @@ function ForumPostCard({
   const Icon = category.icon;
   const updateReply = useUpdateForumReply();
   const toggleLike = useToggleForumLike();
+  const toggleReplyLike = useToggleForumReplyLike();
   const repliesQuery = useForumReplies(post.id, repliesOpen);
   const [editingReplyId, setEditingReplyId] = React.useState<string | null>(null);
   const [editDraft, setEditDraft] = React.useState("");
   const [editLinks, setEditLinks] = React.useState("");
+  const [collapsedReplyThreads, setCollapsedReplyThreads] = React.useState<Record<string, boolean>>({});
   const replies = repliesQuery.data?.data ?? [];
+  const replyTree = React.useMemo(() => buildReplyTree(replies), [replies]);
   const likeCount = post.likeCount ?? 0;
   const replyCount = post.replyCount ?? 0;
   const isClosed = !!post.closedAt;
@@ -532,7 +571,7 @@ function ForumPostCard({
     setEditLinks(r.attachments.join("\n"));
   }
   async function saveEditReply(id: string) {
-    if (!editDraft.trim()) return;
+    if (!richTextPlainText(editDraft)) return;
     try {
       await updateReply.mutateAsync({ id, content: editDraft, attachments: splitLines(editLinks) });
       setEditingReplyId(null);
@@ -540,6 +579,105 @@ function ForumPostCard({
     } catch (e) {
       toast.error((e as Error).message);
     }
+  }
+
+  function toggleReplyThread(replyId: string) {
+    setCollapsedReplyThreads((state) => ({ ...state, [replyId]: !(state[replyId] ?? false) }));
+  }
+
+  function renderReplyCard(r: ForumReply, depth = 0): React.ReactNode {
+    const childReplies = replyTree.childrenByParent.get(r.id) ?? [];
+    const childCount = countNestedReplies(r.id, replyTree.childrenByParent);
+    const childrenCollapsed = collapsedReplyThreads[r.id] ?? false;
+
+    return (
+      <div key={r.id} className={cn(depth > 0 && "ml-4 border-l-2 border-blue-100 pl-3 sm:ml-8 sm:pl-4")}>
+        <div className={cn("rounded-xl border border-border bg-white p-3", depth > 0 && "bg-blue-50/20")}>
+          <div className="flex items-start justify-between gap-3">
+            <AuthorInline author={r.author} date={r.createdAt} />
+            {canManageReply(r.author.id) && editingReplyId !== r.id && (
+              <div className="flex items-center">
+                <Button variant="ghost" size="icon" title="Sửa phản hồi" className="text-muted-foreground hover:text-accent" onClick={() => startEditReply(r)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" title="Gỡ phản hồi" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => onDeleteReply(r)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+          {editingReplyId === r.id ? (
+            <div className="mt-2 grid gap-2">
+              <RichTextEditor value={editDraft} onChange={setEditDraft} compact placeholder="Cập nhật nội dung phản hồi..." />
+              <Input value={editLinks} onChange={(e) => setEditLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditingReplyId(null)}>Hủy</Button>
+                <Button size="sm" onClick={() => saveEditReply(r.id)} disabled={updateReply.isPending || !richTextPlainText(editDraft)}>Lưu</Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {depth === 0 && r.parentReply && (
+                <ReplyContextBox
+                  className="mt-3"
+                  label={`Đang trả lời ${r.parentReply.author.name}`}
+                  content={r.parentReply.content}
+                />
+              )}
+              <RichTextContent value={r.content} className="mt-2 text-sm leading-6 text-ink" />
+              {r.attachments.length > 0 && <AttachmentList links={r.attachments} compact />}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => toggleReplyLike.mutate(r.id)}
+                  disabled={toggleReplyLike.isPending}
+                  className={cn(
+                    "h-8 rounded-full px-3 text-xs font-bold transition-all duration-200",
+                    r.likedByMe
+                      ? "bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700"
+                      : "text-slate-600 hover:bg-rose-50 hover:text-rose-600"
+                  )}
+                >
+                  <Heart className={cn("h-3.5 w-3.5", r.likedByMe && "fill-current")} />
+                  Thích{r.likeCount ? ` (${r.likeCount})` : ""}
+                </Button>
+                {canWrite && !isClosed && !isClosedBox && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onReplyTo(r)}
+                    className="h-8 rounded-full px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                  >
+                    <Reply className="h-3.5 w-3.5" />
+                    Trả lời
+                  </Button>
+                )}
+                {childCount > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleReplyThread(r.id)}
+                    className="h-8 rounded-full px-3 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                  >
+                    {childrenCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {childrenCollapsed ? `Hiện ${childCount} trả lời` : "Thu gọn trả lời"}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        {childReplies.length > 0 && !childrenCollapsed && (
+          <div className="mt-2 space-y-2">
+            {childReplies.map((child) => renderReplyCard(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -577,7 +715,13 @@ function ForumPostCard({
                 </Button>
               )}
               {canManagePost && !isClosed && (
-                <Button variant="ghost" size="icon" title="Đóng chủ đề" className="text-muted-foreground hover:text-slate-700" onClick={onClosePost}>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  title="Đóng chủ đề"
+                  className="rounded-full border-amber-300 bg-amber-50 text-amber-700 shadow-sm shadow-amber-100 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-800"
+                  onClick={onClosePost}
+                >
                   <Archive className="h-4 w-4" />
                 </Button>
               )}
@@ -590,7 +734,7 @@ function ForumPostCard({
           </div>
         </div>
         <h2 className="text-lg font-black text-ink">{post.title}</h2>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{post.content}</p>
+        <RichTextContent value={post.content} className="mt-2 text-sm leading-6 text-muted-foreground" />
         {post.attachments.length > 0 && <AttachmentList links={post.attachments} />}
         {isClosed && post.closeSummary && (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
@@ -672,44 +816,20 @@ function ForumPostCard({
             Chưa có phản hồi nào cho chủ đề này.
           </div>
         )}
-        {!repliesQuery.isLoading && replies.map((r) => (
-          <div key={r.id} className="rounded-xl border border-border bg-white p-3">
-            <div className="flex items-start justify-between gap-3">
-              <AuthorInline author={r.author} date={r.createdAt} />
-              {canManageReply(r.author.id) && editingReplyId !== r.id && (
-                <div className="flex items-center">
-                  <Button variant="ghost" size="icon" title="Sửa phản hồi" className="text-muted-foreground hover:text-accent" onClick={() => startEditReply(r)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="Gỡ phản hồi" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => onDeleteReply(r)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-            {editingReplyId === r.id ? (
-              <div className="mt-2 grid gap-2">
-                <Textarea value={editDraft} onChange={(e) => setEditDraft(e.target.value)} rows={2} />
-                <Input value={editLinks} onChange={(e) => setEditLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setEditingReplyId(null)}>Hủy</Button>
-                  <Button size="sm" onClick={() => saveEditReply(r.id)} disabled={updateReply.isPending || !editDraft.trim()}>Lưu</Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{r.content}</p>
-                {r.attachments.length > 0 && <AttachmentList links={r.attachments} compact />}
-              </>
-            )}
-          </div>
-        ))}
+        {!repliesQuery.isLoading && replyTree.roots.map((r) => renderReplyCard(r))}
         {canWrite && !isClosed && !isClosedBox && (
           <div className="grid gap-2 rounded-xl border border-dashed border-border bg-white p-3">
-            <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
+            {replyTarget && (
+              <ReplyContextBox
+                label={`Bạn đang trả lời ${replyTarget.author.name}`}
+                content={replyTarget.content}
+                onClear={onClearReplyTarget}
+              />
+            )}
+            <RichTextEditor value={reply} onChange={setReply} compact placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
             <Input value={replyLinks} onChange={(e) => setReplyLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
             <div className="flex justify-end">
-              <Button size="sm" onClick={onReply} disabled={replying || !reply.trim()}>
+              <Button size="sm" onClick={onReply} disabled={replying || !richTextPlainText(reply)}>
                 <Send className="h-4 w-4" /> Gửi phản hồi
               </Button>
             </div>
@@ -725,6 +845,193 @@ function ForumPostCard({
         </div>
       )}
     </Card>
+  );
+}
+
+function RichTextEditor({
+  value,
+  onChange,
+  placeholder,
+  compact = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  compact?: boolean;
+}) {
+  const editorRef = React.useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = React.useState(false);
+  const empty = richTextPlainText(value).length === 0;
+
+  React.useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || document.activeElement === editor) return;
+    editor.innerHTML = editorHtmlFromValue(value);
+  }, [value]);
+
+  function sync() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    onChange(sanitizeForumHtml(editor.innerHTML));
+  }
+
+  function apply(command: string, commandValue?: string) {
+    editorRef.current?.focus();
+    document.execCommand(command, false, commandValue);
+    sync();
+  }
+
+  function pastePlainText(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+    sync();
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-white focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15">
+      <div className="flex flex-wrap items-center gap-1 border-b border-border bg-slate-50 px-2 py-1.5">
+        <RichTextButton label="In đậm" onClick={() => apply("bold")}><Bold className="h-4 w-4" /></RichTextButton>
+        <RichTextButton label="In nghiêng" onClick={() => apply("italic")}><Italic className="h-4 w-4" /></RichTextButton>
+        <RichTextButton label="Gạch chân" onClick={() => apply("underline")}><Underline className="h-4 w-4" /></RichTextButton>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <RichTextButton label="Danh sách chấm" onClick={() => apply("insertUnorderedList")}><List className="h-4 w-4" /></RichTextButton>
+        <RichTextButton label="Danh sách số" onClick={() => apply("insertOrderedList")}><ListOrdered className="h-4 w-4" /></RichTextButton>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <RichTextButton label="Căn trái" onClick={() => apply("justifyLeft")}><AlignLeft className="h-4 w-4" /></RichTextButton>
+        <RichTextButton label="Căn giữa" onClick={() => apply("justifyCenter")}><AlignCenter className="h-4 w-4" /></RichTextButton>
+        <RichTextButton label="Căn phải" onClick={() => apply("justifyRight")}><AlignRight className="h-4 w-4" /></RichTextButton>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <div className="flex items-center gap-1 rounded-md bg-white px-1 py-0.5 ring-1 ring-border">
+          {TEXT_COLORS.map((color) => (
+            <button
+              key={color.value}
+              type="button"
+              title={`Màu chữ: ${color.label}`}
+              className={cn("h-5 w-5 rounded-full ring-1 ring-black/10 transition hover:scale-110", color.className)}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => apply("foreColor", color.value)}
+            />
+          ))}
+        </div>
+        <RichTextButton label="Xóa định dạng" onClick={() => apply("removeFormat")}>
+          <span className="text-xs font-black">Tx</span>
+        </RichTextButton>
+      </div>
+      <div className="relative">
+        {empty && !focused && (
+          <div className={cn("pointer-events-none absolute left-3 right-3 top-2.5 text-sm text-muted-foreground", compact ? "top-2" : "top-3")}>
+            {placeholder}
+          </div>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          className={cn(
+            "min-h-[148px] px-3 py-2.5 text-sm leading-6 text-ink outline-none",
+            compact && "min-h-[92px] py-2",
+            richTextClassName
+          )}
+          onBlur={() => {
+            setFocused(false);
+            sync();
+          }}
+          onFocus={() => setFocused(true)}
+          onInput={sync}
+          onPaste={pastePlainText}
+        />
+      </div>
+    </div>
+  );
+}
+
+function buildReplyTree(replies: ForumReply[]) {
+  const ids = new Set(replies.map((reply) => reply.id));
+  const childrenByParent = new Map<string, ForumReply[]>();
+  const roots: ForumReply[] = [];
+
+  replies.forEach((reply) => {
+    const parentId = reply.parentReplyId ?? null;
+    if (parentId && ids.has(parentId)) {
+      const children = childrenByParent.get(parentId) ?? [];
+      children.push(reply);
+      childrenByParent.set(parentId, children);
+      return;
+    }
+    roots.push(reply);
+  });
+
+  return { roots, childrenByParent };
+}
+
+function countNestedReplies(parentId: string, childrenByParent: Map<string, ForumReply[]>): number {
+  const children = childrenByParent.get(parentId) ?? [];
+  return children.reduce((total, child) => total + 1 + countNestedReplies(child.id, childrenByParent), 0);
+}
+
+function RichTextButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-slate-700 transition hover:bg-white hover:text-accent hover:shadow-sm hover:ring-1 hover:ring-border"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RichTextContent({ value, className }: { value: string; className?: string }) {
+  if (!looksLikeHtml(value)) {
+    return <p className={cn("whitespace-pre-wrap", className)}>{value}</p>;
+  }
+  return (
+    <div
+      className={cn(richTextClassName, className)}
+      dangerouslySetInnerHTML={{ __html: sanitizeForumHtml(value) }}
+      suppressHydrationWarning
+    />
+  );
+}
+
+function ReplyContextBox({
+  label,
+  content,
+  className,
+  onClear,
+}: {
+  label: string;
+  content: string;
+  className?: string;
+  onClear?: () => void;
+}) {
+  return (
+    <div className={cn("rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 text-sm", className)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-blue-700">
+            <Reply className="h-3.5 w-3.5" />
+            {label}
+          </div>
+          <div className="mt-1 max-h-10 overflow-hidden text-xs leading-5 text-blue-950">
+            {shortRichTextText(content)}
+          </div>
+        </div>
+        {onClear && (
+          <button
+            type="button"
+            title="Bỏ chọn phản hồi"
+            className="rounded-full p-1 text-blue-700 transition hover:bg-white hover:text-blue-900"
+            onClick={onClear}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -804,4 +1111,93 @@ function shortLink(link: string) {
   } catch {
     return link;
   }
+}
+
+const richTextClassName =
+  "[&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_u]:underline [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:ml-5 [&_ul]:list-disc [&_ol]:ml-5 [&_ol]:list-decimal [&_li]:mb-1";
+
+function looksLikeHtml(value: string) {
+  return /<\/?(p|div|br|ul|ol|li|span|strong|b|em|i|u|font)\b/i.test(value);
+}
+
+function editorHtmlFromValue(value: string) {
+  if (!value) return "";
+  return looksLikeHtml(value) ? sanitizeForumHtml(value) : textToHtml(value);
+}
+
+function textToHtml(value: string) {
+  return value
+    .split(/\n/)
+    .map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`)
+    .join("");
+}
+
+function richTextPlainText(value: string) {
+  if (!value) return "";
+  if (typeof document !== "undefined" && looksLikeHtml(value)) {
+    const el = document.createElement("div");
+    el.innerHTML = sanitizeForumHtml(value);
+    return (el.textContent ?? "").trim();
+  }
+  return value.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").trim();
+}
+
+function shortRichTextText(value: string, max = 160) {
+  const text = richTextPlainText(value).replace(/\s+/g, " ");
+  return text.length > max ? `${text.slice(0, max - 1)}...` : text;
+}
+
+function sanitizeForumHtml(value: string) {
+  if (!value) return "";
+  if (typeof document === "undefined") return looksLikeHtml(value) ? "" : escapeHtml(value);
+
+  const template = document.createElement("template");
+  template.innerHTML = value;
+
+  function cleanNode(node: Node): Node {
+    if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent ?? "");
+    if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode("");
+
+    const element = node as HTMLElement;
+    const tagName = element.tagName.toLowerCase();
+    const outputTag = tagName === "font" ? "span" : tagName;
+    const allowedTags = new Set(["p", "div", "br", "ul", "ol", "li", "span", "strong", "b", "em", "i", "u"]);
+
+    if (!allowedTags.has(outputTag)) {
+      const fragment = document.createDocumentFragment();
+      element.childNodes.forEach((child) => fragment.appendChild(cleanNode(child)));
+      return fragment;
+    }
+
+    const clean = document.createElement(outputTag);
+    const styles: string[] = [];
+    const color = tagName === "font" ? element.getAttribute("color") : element.style.color;
+    const textAlign = element.style.textAlign;
+
+    if (color && isSafeCssColor(color)) styles.push(`color: ${color}`);
+    if (["left", "center", "right", "justify"].includes(textAlign)) styles.push(`text-align: ${textAlign}`);
+    if (styles.length) clean.setAttribute("style", styles.join("; "));
+
+    element.childNodes.forEach((child) => clean.appendChild(cleanNode(child)));
+    return clean;
+  }
+
+  const fragment = document.createDocumentFragment();
+  template.content.childNodes.forEach((child) => fragment.appendChild(cleanNode(child)));
+  const container = document.createElement("div");
+  container.appendChild(fragment);
+  return container.innerHTML;
+}
+
+function isSafeCssColor(value: string) {
+  return /^#[0-9a-f]{3,8}$/i.test(value) || /^rgb(a)?\([\d\s,.%]+\)$/i.test(value);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

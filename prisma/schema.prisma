@@ -51,6 +51,7 @@ model User {
   forumPosts              ForumPost[]              @relation("ForumPostAuthor")
   forumReplies            ForumReply[]             @relation("ForumReplyAuthor")
   forumPostLikes          ForumPostLike[]           @relation("ForumPostLikeUser")
+  forumReplyLikes         ForumReplyLike[]          @relation("ForumReplyLikeUser")
 
   @@index([position])
   @@index([role])
@@ -135,13 +136,19 @@ model ForumPost {
 model ForumReply {
   id          String   @id @default(cuid())
   postId      String
+  parentReplyId String?
   content     String
   attachments String[]
   authorId    String
   createdAt   DateTime @default(now())
 
-  post   ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author User      @relation("ForumReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  post          ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentReply   ForumReply? @relation("ForumReplyThread", fields: [parentReplyId], references: [id], onDelete: SetNull)
+  childReplies  ForumReply[] @relation("ForumReplyThread")
+  author        User      @relation("ForumReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  likes         ForumReplyLike[]
+
+  @@index([parentReplyId])
 }
 
 model ForumPostLike {
@@ -154,6 +161,19 @@ model ForumPostLike {
   user User      @relation("ForumPostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
+  @@index([userId])
+}
+
+model ForumReplyLike {
+  id        String   @id @default(cuid())
+  replyId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  reply ForumReply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  user  User       @relation("ForumReplyLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([replyId, userId])
   @@index([userId])
 }
 

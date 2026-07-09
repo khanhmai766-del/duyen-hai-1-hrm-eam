@@ -13,10 +13,19 @@ export interface ForumAuthor {
 export interface ForumReply {
   id: string;
   postId: string;
+  parentReplyId?: string | null;
   content: string;
   attachments: string[];
   createdAt: string;
   author: ForumAuthor;
+  likeCount?: number;
+  likedByMe?: boolean;
+  parentReply?: {
+    id: string;
+    content: string;
+    createdAt: string;
+    author: ForumAuthor;
+  } | null;
 }
 
 export interface ForumPost {
@@ -88,8 +97,8 @@ export function useCreateForumPost() {
 export function useCreateForumReply() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ postId, content, attachments }: { postId: string; content: string; attachments?: string[] }) =>
-      apiMutate<{ id: string }>(`/api/forum/${postId}/replies`, "POST", { content, attachments }),
+    mutationFn: ({ postId, content, attachments, parentReplyId }: { postId: string; content: string; attachments?: string[]; parentReplyId?: string | null }) =>
+      apiMutate<{ id: string }>(`/api/forum/${postId}/replies`, "POST", { content, attachments, parentReplyId }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["forum-posts"] });
       qc.invalidateQueries({ queryKey: ["forum-replies", variables.postId] });
@@ -132,6 +141,14 @@ export function useToggleForumLike() {
   return useMutation({
     mutationFn: (postId: string) => apiMutate<{ liked: boolean }>(`/api/forum/${postId}/likes`, "POST"),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+  });
+}
+
+export function useToggleForumReplyLike() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (replyId: string) => apiMutate<{ liked: boolean }>(`/api/forum/replies/${replyId}/likes`, "POST"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-replies"] }),
   });
 }
 

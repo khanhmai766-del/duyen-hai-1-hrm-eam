@@ -16,3 +16,11 @@ export async function ensureForumLifecycleColumns() {
     ADD COLUMN IF NOT EXISTS "closedById" TEXT
   `);
 }
+
+export async function ensureForumReplyThreadColumn() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "ForumReply"
+    ADD COLUMN IF NOT EXISTS "parentReplyId" TEXT
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ForumReply_parentReplyId_idx" ON "ForumReply" ("parentReplyId")`);
+}
