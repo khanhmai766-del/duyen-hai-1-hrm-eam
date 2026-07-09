@@ -98,6 +98,8 @@ export default function MaterialTicketBoard({
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
+  const ticketOrder = useMemo(() => new Map(tickets.map((t, index) => [t.id, index + 1])), [tickets]);
+  const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
   const searchText = normalizeText(searchQ);
   const shown = tickets.filter((t) => {
     const matchesStatus = filter === "ALL" ? true : filter === "RUNNING" ? !["HOAN_TAT", "TU_CHOI"].includes(t.status) : t.status === filter;
@@ -117,7 +119,16 @@ export default function MaterialTicketBoard({
       <style>{CSS}</style>
 
       <div className="top-tools">
-        <div className="turn-spacer" />
+        {myTurn.length > 0 ? (
+          <div className="turn">
+            <span className="turn-badge">Đến lượt bạn ({myTurn.length})</span>
+            {myTurn.map((t) => (
+              <button key={t.id} className="turn-chip" onClick={() => setOpenId(t.id)}>
+                {t.type === "UNG" ? <Zap size={13} /> : <ClipboardList size={13} />} Số thứ tự {ticketOrder.get(t.id) ?? "—"} <ChevronRight size={13} />
+              </button>
+            ))}
+          </div>
+        ) : <div className="turn-spacer" />}
         <label className="unit-filter category-filter">
           <select value={materialCategoryFilter} onChange={(e) => setMaterialCategoryFilter(e.target.value)} aria-label="Lọc theo loại vật tư">
             <option value="ALL">Tất cả loại</option>
@@ -144,10 +155,10 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Mã phiếu</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
+          <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
-        {!isLoading && shown.map((t) => {
+        {!isLoading && shown.map((t, index) => {
           const meta = STATUS[t.status] ?? { label: t.status, c: C.soft };
           const order = ORDER[t.type];
           const flowStatus = flowStatusKey(t.status);
@@ -171,7 +182,7 @@ export default function MaterialTicketBoard({
                 <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
                   {isOpen ? <Minus size={12} /> : <Plus size={12} />}
                 </span>
-                <span className="code">{t.code}</span>
+                <span className="code">{index + 1}</span>
               </span>
               <span className="kind-cell">
                 {t.type === "UNG"
@@ -848,16 +859,16 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     return (
       <div className="act">
         <label className="lb">Nhận vật tư — khối lượng lãnh &amp; hình thức lãnh</label>
-        <label>Khối lượng vật tư lãnh{unit ? ` (${unit})` : ""} *</label>
-        <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
-        <label>Hình thức lãnh *</label>
-        <div className="cats">
-          {["Phiếu giao hàng", "Nhập hóa chất vận hành"].map((m) => (
-            <button key={m} type="button" className={method === m ? "on" : ""} onClick={() => setMethod(m)}>{m}</button>
-          ))}
+        <div className="act-field-row">
+          <label>Khối lượng vật tư lãnh{unit ? ` (${unit})` : ""} *</label>
+          <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
         </div>
-        <button className="btn primary big" disabled={qty <= 0 || !method || act.isPending}
-          onClick={() => run({ action: "receive", receivedQuantity: qty, receivedMethod: method }, "Đã xác nhận nhận vật tư")}>
+        <div className="act-field-row">
+          <label>Hình thức lãnh *</label>
+          <input placeholder="Nhập hình thức lãnh" value={method} onChange={(e) => setMethod(e.target.value)} />
+        </div>
+        <button className="btn primary big" disabled={qty <= 0 || !method.trim() || act.isPending}
+          onClick={() => run({ action: "receive", receivedQuantity: qty, receivedMethod: method.trim() }, "Đã xác nhận nhận vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
       </div>
@@ -975,7 +986,10 @@ const CSS = `
 .head h1{font-family:Poppins,Inter,sans-serif;font-size:21px;font-weight:700;color:${C.navy};margin:0;}
 .head p{margin:2px 0 0;font-size:12.5px;color:${C.muted};}
 .top-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.turn{display:flex;align-items:center;gap:8px;flex:1 1 520px;max-width:680px;min-width:280px;min-height:38px;flex-wrap:wrap;background:#fff;border:1.5px solid ${C.accent}44;border-radius:13px;padding:8px 12px;}
 .turn-spacer{flex:1 1 auto;min-width:0;}
+.turn-badge{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:13px;color:${C.accent};}
+.turn-chip{display:inline-flex;align-items:center;gap:5px;max-width:210px;border:1px solid ${C.accent}55;background:${C.accent}0e;color:${C.navy};font-weight:700;font-size:12.5px;border-radius:9px;padding:6px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .unit-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 8px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
 .unit-filter select{height:30px;min-width:132px;border:0;background:#fff;padding:0 26px 0 8px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;}
 .category-filter select{min-width:168px;}
@@ -993,13 +1007,13 @@ const CSS = `
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
 .row{display:grid;grid-template-columns:.95fr .85fr .95fr 1.25fr 1fr .6fr 1fr .76fr 74px;gap:8px;align-items:center;min-width:1160px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
-.code-cell{display:inline-flex;align-items:center;gap:7px;min-width:0;}
+.code-cell{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
 .op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
-.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
+.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
@@ -1099,6 +1113,8 @@ const CSS = `
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .act{border:1.5px dashed ${C.accent}66;background:${C.accent}07;border-radius:14px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:9px;}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
+.act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
+.act-field-row label:not(.lb){margin-bottom:0;}
 .wait{display:flex;align-items:center;gap:7px;background:#f1f5f9;color:#64748b;border-radius:11px;padding:11px 13px;font-size:12.5px;margin-bottom:16px;flex-wrap:wrap;}
 .warnbox{display:flex;gap:8px;align-items:flex-start;background:${C.badBg};color:${C.bad};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .lockbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:${C.warnBg};color:${C.warn};border-radius:10px;padding:10px 12px;font-size:12.5px;}
@@ -1114,5 +1130,5 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select{min-width:160px;}.category-filter select{min-width:190px;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select{min-width:160px;}.category-filter select{min-width:190px;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row{grid-template-columns:1fr;gap:6px;}}
 `;
