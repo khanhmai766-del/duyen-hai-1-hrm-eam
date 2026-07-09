@@ -274,7 +274,7 @@ function HanhChinhCard({
               size="sm"
               onClick={doApproveAll}
               disabled={approve.isPending || pendingGroups.length === 0}
-              className="bg-amber-400 text-amber-950 hover:bg-amber-500"
+              className="bg-amber-400 text-white hover:bg-amber-500 hover:text-white [&_svg]:text-white"
             >
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
               Duyệt chấm công
