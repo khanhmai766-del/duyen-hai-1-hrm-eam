@@ -1128,13 +1128,14 @@ const CSS = `
 .frm-item{display:grid;grid-template-columns:1.2fr 1.4fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
-.p-top{display:grid;grid-template-columns:minmax(190px,.72fr) minmax(300px,1.16fr) minmax(360px,1.12fr);gap:4px 18px;align-items:start;}
+.p-top{display:grid;grid-template-columns:minmax(170px,.66fr) minmax(270px,1fr) minmax(460px,1.42fr);gap:4px 18px;align-items:start;}
 .p-top .top-items{border-left:1px dashed ${C.line};padding:4px 0 4px 16px;margin-bottom:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
 @media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}}
-.logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
+.logrow{display:flex;align-items:baseline;gap:9px;font-size:12px;padding:5px 0;color:#475569;white-space:nowrap;}
 .logrow span{color:${C.soft};white-space:nowrap;}
-.logrow em{font-style:normal;color:${C.muted};}
+.logrow b{white-space:nowrap;}
+.logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select{min-width:160px;}.category-filter select{min-width:190px;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row{grid-template-columns:1fr;gap:6px;}}
 `;

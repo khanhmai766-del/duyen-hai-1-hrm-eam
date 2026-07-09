@@ -118,7 +118,8 @@ export async function POST(req: NextRequest) {
         select: { id: true, name: true, quantity: true },
       });
       if (!materialForProposal) return fail("Không tìm thấy vật tư đề xuất", 404);
-      nextStatus = materialForProposal.quantity >= requestedQuantity ? "CHO_PHIEU__XUAT_KHO" : "VAT_TU_KHONG_CO";
+      // Bỏ kiểm kho tự động: tạo phiếu xong đi thẳng bước Thống kê nhập số ĐXVT.
+      nextStatus = "CHO_PHIEU__XUAT_KHO";
     }
 
     const { ticket, code } = await prisma.$transaction(async (tx) => {
@@ -140,11 +141,6 @@ export async function POST(req: NextRequest) {
             proposedByName: user.name ?? "",
             proposedByPosition: user.position ?? null,
             proposedAt: new Date(),
-            ...(nextStatus === "CHO_PHIEU__XUAT_KHO" ? {
-              confirmedById: user.id,
-              confirmedByName: "Hệ thống",
-              confirmedAt: new Date(),
-            } : {}),
             items: {
               create: [{
                 materialId: materialForProposal!.id,
