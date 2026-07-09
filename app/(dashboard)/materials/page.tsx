@@ -276,8 +276,8 @@ function MaterialsPageContent() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-        {canManage && selected.size > 0 && (
+      {canManage && selected.size > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
           <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-red-50 px-3 py-2">
             <span className="text-sm font-medium text-ink">Đã chọn {selected.size} vật tư</span>
             <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}>Bỏ chọn</Button>
@@ -285,8 +285,8 @@ function MaterialsPageContent() {
               <Trash2 className="h-4 w-4" /> Xoá đã chọn
             </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {isLoading ? (
         <TableSkeleton />

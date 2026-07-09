@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { Plus } from "lucide-react";
+import { Plus, UserCog } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import MaterialTicketBoard from "@/components/materials/MaterialTicketBoard";
@@ -13,21 +13,34 @@ export default function ReplacementProceduresPage() {
   const position = session?.user?.position;
   const { data } = useMaterialTickets();
   const canCreate = data?.viewer?.canCreate ?? false;
+  const canManageWorkflow = data?.viewer?.isAdmin ?? false;
   const [creating, setCreating] = useState(false);
+  const [rolesOpen, setRolesOpen] = useState(false);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="QUY TRÌNH THAY THẾ VẬT TƯ"
-        description={`Phiếu Đề xuất & Ứng vật tư · mọi cương vị xem được, thao tác theo phân quyền${position ? ` · Bạn: ${position}` : ""}`}
+        description={`Phiếu đề xuất & Ứng vật tư${position ? ` · Bạn: ${position}` : ""}`}
       >
+        {canManageWorkflow && (
+          <Button variant="outline" onClick={() => setRolesOpen(true)}>
+            <UserCog className="h-4 w-4" /> Phân quyền quy trình
+          </Button>
+        )}
         {canCreate && (
           <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" /> Tạo phiếu thay thế vật tư
+            <Plus className="h-4 w-4" /> Tạo đề xuất
           </Button>
         )}
       </PageHeader>
-      <MaterialTicketBoard creating={creating} onCloseCreate={() => setCreating(false)} />
+      <MaterialTicketBoard
+        creating={creating}
+        onCloseCreate={() => setCreating(false)}
+        rolesOpen={rolesOpen}
+        onOpenRoles={() => setRolesOpen(true)}
+        onCloseRoles={() => setRolesOpen(false)}
+      />
     </div>
   );
 }

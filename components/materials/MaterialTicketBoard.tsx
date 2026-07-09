@@ -58,9 +58,15 @@ const fmt = (s?: string | null) =>
 export default function MaterialTicketBoard({
   creating = false,
   onCloseCreate,
+  rolesOpen: controlledRolesOpen,
+  onOpenRoles,
+  onCloseRoles,
 }: {
   creating?: boolean;
   onCloseCreate?: () => void;
+  rolesOpen?: boolean;
+  onOpenRoles?: () => void;
+  onCloseRoles?: () => void;
 } = {}) {
   const { data, isLoading } = useMaterialTickets();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -69,6 +75,10 @@ export default function MaterialTicketBoard({
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
   const del = useDeleteTicket();
+  const isRolesControlled = controlledRolesOpen !== undefined;
+  const isRolesOpen = isRolesControlled ? controlledRolesOpen : rolesOpen;
+  const openRoles = onOpenRoles ?? (() => setRolesOpen(true));
+  const closeRoles = onCloseRoles ?? (() => setRolesOpen(false));
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
@@ -81,25 +91,24 @@ export default function MaterialTicketBoard({
     <div className="mtw">
       <style>{CSS}</style>
 
-      {myTurn.length > 0 && (
-        <div className="turn">
-          <span className="turn-badge">Đến lượt bạn ({myTurn.length})</span>
-          {myTurn.map((t) => (
-            <button key={t.id} className="turn-chip" onClick={() => setOpenId(t.id)}>
-              {t.type === "UNG" ? <Zap size={13} /> : <ClipboardList size={13} />} {t.code} <ChevronRight size={13} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="bar">
+      <div className="top-tools">
+        {myTurn.length > 0 ? (
+          <div className="turn">
+            <span className="turn-badge">Đến lượt bạn ({myTurn.length})</span>
+            {myTurn.map((t) => (
+              <button key={t.id} className="turn-chip" onClick={() => setOpenId(t.id)}>
+                {t.type === "UNG" ? <Zap size={13} /> : <ClipboardList size={13} />} {t.code} <ChevronRight size={13} />
+              </button>
+            ))}
+          </div>
+        ) : <div className="turn-spacer" />}
         <div className="filters">
           {[["ALL", "Tất cả"], ["RUNNING", "Đang chạy"], ["HOAN_TAT", "Hoàn tất"], ["TU_CHOI", "Từ chối"]].map(([k, l]) => (
             <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
           ))}
         </div>
-        {viewer?.isAdmin && (
-          <button className="btn ghost" onClick={() => setRolesOpen(true)}>
+        {viewer?.isAdmin && !isRolesControlled && (
+          <button className="btn ghost" onClick={openRoles}>
             <UserCog size={14} /> Phân quyền quy trình
           </button>
         )}
@@ -181,7 +190,7 @@ export default function MaterialTicketBoard({
 
       {creating && <CreateDialog onClose={() => onCloseCreate?.()} onOpen={setOpenId} />}
 
-      {rolesOpen && <WorkflowRolesDialog onClose={() => setRolesOpen(false)} />}
+      {isRolesOpen && <WorkflowRolesDialog onClose={closeRoles} />}
 
       {editTicket && <EditDialog t={editTicket} onClose={() => setEditTicket(null)} />}
 
@@ -853,11 +862,13 @@ const CSS = `
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}
 .head h1{font-family:Poppins,Inter,sans-serif;font-size:21px;font-weight:700;color:${C.navy};margin:0;}
 .head p{margin:2px 0 0;font-size:12.5px;color:${C.muted};}
-.turn{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1.5px solid ${C.accent}44;border-radius:13px;padding:10px 13px;margin-bottom:12px;}
+.top-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.turn{display:flex;align-items:center;gap:8px;flex:0 1 auto;max-width:min(58%,720px);min-width:0;flex-wrap:wrap;background:#fff;border:1.5px solid ${C.accent}44;border-radius:13px;padding:10px 13px;}
+.turn-spacer{flex:1 1 auto;min-width:0;}
 .turn-badge{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:13px;color:${C.accent};}
-.turn-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid ${C.accent}55;background:${C.accent}0e;color:${C.navy};font-weight:600;font-size:12.5px;border-radius:9px;padding:6px 10px;cursor:pointer;}
+.turn-chip{display:inline-flex;align-items:center;gap:5px;max-width:210px;border:1px solid ${C.accent}55;background:${C.accent}0e;color:${C.navy};font-weight:600;font-size:12.5px;border-radius:9px;padding:6px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-.filters{display:flex;gap:5px;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;}
+.filters{display:flex;gap:5px;flex:0 0 auto;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;}
 .filters button{border:0;background:transparent;font-size:12.5px;font-weight:600;color:#64748b;padding:7px 12px;border-radius:8px;cursor:pointer;}
 .filters button.on{background:${C.navy};color:#fff;}
 .btn{display:inline-flex;align-items:center;gap:6px;font-family:Poppins,Inter,sans-serif;font-weight:600;font-size:13px;border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid ${C.line};background:#fff;color:#475569;transition:.15s;}
@@ -982,4 +993,5 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;}.turn-spacer{display:none;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}}
 `;
