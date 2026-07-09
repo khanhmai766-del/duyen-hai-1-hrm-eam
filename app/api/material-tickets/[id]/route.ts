@@ -209,7 +209,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: "CHO_NGHIEM_THU", proposalNumber: num,
+          status: "NHAN_VAT_TU", proposalNumber: num,
           statsById: user.id, statsByName: user.name ?? "",
           statsByPosition: user.position ?? null, statsAt: new Date(),
         },
@@ -219,14 +219,89 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
+    // B2' — NHẬN VẬT TƯ: khối lượng lãnh + hình thức lãnh → chuyển Sử dụng vật tư
+    if (action === "receive") {
+      if (t.type !== "DE_XUAT" || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Nhận vật tư");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
+        return fail("Bạn không có quyền ở bước Nhận vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
+      if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
+      const RECEIVE_METHODS = ["Phiếu giao hàng", "Nhập hóa chất vận hành"];
+      const receivedMethod = String(body.receivedMethod || "").trim();
+      if (!RECEIVE_METHODS.includes(receivedMethod)) return fail("Vui lòng chọn hình thức lãnh");
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: "SU_DUNG_VAT_TU",
+          receivedQuantity, receivedMethod,
+          receivedById: user.id, receivedByName: user.name ?? "",
+          receivedByPosition: user.position ?? null, receivedAt: new Date(),
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_RECEIVE", "MaterialTicket", t.id, `${t.code}: lãnh ${receivedQuantity} (${receivedMethod})`);
+      return ok(up);
+    }
+
+    // B2'' — SỬ DỤNG VẬT TƯ: PCT/LCT + chỉ huy + nội dung + khối lượng dùng.
+    // Còn lại = lãnh − dùng: dư (>0) cộng dồn vào tồn kho cùng mã vật tư;
+    // đúng bằng (=0) tồn kho giữ nguyên (dùng hết phần lãnh); dùng vượt (<0)
+    // phần vượt trừ vào tồn kho, không cho âm.
+    if (action === "use") {
+      if (t.type !== "DE_XUAT" || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
+        return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const note = String(body.completionNote || "").trim();
+      const pct = String(body.pctNumber || "").trim();
+      const chiHuy = String(body.chiHuyName || "").trim();
+      const usedQuantity = Math.trunc(Number(body.usedQuantity));
+      if (!pct) return fail("Vui lòng nhập số PCT/LCT");
+      if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
+      if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
+      if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
+
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const received = t.receivedQuantity ?? 0;
+      const remaining = received - usedQuantity;
+      const mat = await prisma.material.findUnique({
+        where: { id: item.materialId },
+        select: { id: true, code: true, name: true, quantity: true },
+      });
+      if (!mat) return fail("Không tìm thấy vật tư trong Danh mục", 404);
+      const newQty = remaining >= 0 ? mat.quantity + remaining : Math.max(0, mat.quantity + remaining);
+      if (newQty !== mat.quantity) {
+        await prisma.material.update({ where: { id: mat.id }, data: { quantity: newQty } });
+      }
+
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: "CHO_NGHIEM_THU",
+          completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+          usedQuantity, remainingQuantity: remaining,
+          usedById: user.id, usedByName: user.name ?? "",
+          usedByPosition: user.position ?? null, usedAt: new Date(),
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(
+        user.id, "MT_USE", "MaterialTicket", t.id,
+        `${t.code}: lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
+      );
+      return ok(up);
+    }
+
     // B3 — Trưởng Ca nghiệm thu: nhập PCT/LCT + nội dung + chỉ huy → xuất Word → HOÀN TẤT
     if (action === "accept") {
       if (t.type !== "DE_XUAT" || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user))
         return fail("Bạn không có quyền nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const note = String(body.completionNote || "").trim();
-      const pct = String(body.pctNumber || "").trim();
-      const chiHuy = String(body.chiHuyName || "").trim();
+      // PCT/chỉ huy/nội dung đã nhập ở bước SỬ DỤNG VẬT TƯ; phiếu cũ (trước khi có
+      // bước này) vẫn nhận từ form nghiệm thu để tương thích.
+      const note = String(body.completionNote || "").trim() || t.completionNote || "";
+      const pct = String(body.pctNumber || "").trim() || t.pctNumber || "";
+      const chiHuy = String(body.chiHuyName || "").trim() || t.chiHuyName || "";
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBKT bổ sung ở bước này (nếu có)
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");

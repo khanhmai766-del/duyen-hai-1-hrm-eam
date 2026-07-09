@@ -837,6 +837,20 @@ model MaterialTicket {
   statsByName        String?
   statsByPosition    String? // cương vị người nhập số phiếu ĐXVT
   statsAt            DateTime?
+  // Bước NHẬN VẬT TƯ (NHAN_VAT_TU)
+  receivedQuantity   Int? // khối lượng vật tư lãnh
+  receivedMethod     String? // hình thức lãnh: "Phiếu giao hàng" | "Nhập hóa chất vận hành"
+  receivedById       String?
+  receivedByName     String?
+  receivedByPosition String?
+  receivedAt         DateTime?
+  // Bước SỬ DỤNG VẬT TƯ (SU_DUNG_VAT_TU)
+  usedQuantity       Int? // khối lượng vật tư sử dụng
+  remainingQuantity  Int? // còn lại = lãnh − dùng (âm = dùng vượt phần lãnh, trừ vào tồn kho)
+  usedById           String?
+  usedByName         String?
+  usedByPosition     String?
+  usedAt             DateTime?
   completedById      String?
   completedByName    String? // Trưởng Ca/TK xuất file — in vào Hội đồng nghiệm thu
   completedByPosition String? // cương vị người nghiệm thu

@@ -40,6 +40,16 @@ export interface MaterialTicket {
   statsByName: string | null;
   statsByPosition: string | null;
   statsAt: string | null;
+  receivedQuantity: number | null;
+  receivedMethod: string | null;
+  receivedByName: string | null;
+  receivedByPosition: string | null;
+  receivedAt: string | null;
+  usedQuantity: number | null;
+  remainingQuantity: number | null;
+  usedByName: string | null;
+  usedByPosition: string | null;
+  usedAt: string | null;
   completedByName: string | null;
   completedByPosition: string | null;
   completedAt: string | null;
@@ -51,6 +61,8 @@ export interface MaterialTicket {
 export interface ViewerSteps {
   create: boolean;
   confirm: boolean;
+  receive: boolean;
+  use: boolean;
   accept: boolean;
   manage: boolean;
   manageConfigured: boolean;
@@ -68,7 +80,7 @@ export interface TicketViewer {
   steps?: ViewerSteps;
 }
 
-export type WorkflowRoleMap = { create: string[]; confirm: string[]; accept: string[]; manage: string[] };
+export type WorkflowRoleMap = { create: string[]; confirm: string[]; receive: string[]; use: string[]; accept: string[]; manage: string[] };
 
 /** Cấu hình phân quyền quy trình (chỉ ADMIN gọi được). */
 export function useWorkflowRoles(enabled: boolean) {
@@ -160,6 +172,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
     if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.isStats) a.push("stats");
+    if (t.status === "NHAN_VAT_TU" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
+    if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
   } else {
     if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungEntry");

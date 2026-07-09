@@ -57,6 +57,8 @@ export async function GET(req: NextRequest) {
         steps: {
           create: stepAllowedWithMap(wfMap, "create", user),
           confirm: stepAllowedWithMap(wfMap, "confirm", user),
+          receive: stepAllowedWithMap(wfMap, "receive", user),
+          use: stepAllowedWithMap(wfMap, "use", user),
           accept: stepAllowedWithMap(wfMap, "accept", user),
           manage: stepAllowedWithMap(wfMap, "manage", user),
           manageConfigured: wfMap.manage.length > 0,

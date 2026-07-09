@@ -27,6 +27,8 @@ const STATUS: Record<string, { label: string; c: string }> = {
   CHO_PHIEU__XUAT_KHO: { label: "Chờ phiếu xuất kho", c: "#0f766e" },
   VAT_TU_KHONG_CO: { label: "Vật tư không có", c: C.bad },
   CHO_THONG_KE: { label: "Chờ thống kê", c: "#7c3aed" },
+  NHAN_VAT_TU: { label: "Nhận vật tư", c: "#0891b2" },
+  SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
   CHO_NHAP_LIEU: { label: "Chờ nhập liệu", c: C.ung },
   CHO_XAC_NHAN_PDF: { label: "Chờ xác nhận xuất file", c: C.ung },
@@ -38,6 +40,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   DE_XUAT: [
     { key: "B0", label: "Tạo phiếu + Đề xuất vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống kê", who: "Thống kê" },
+    { key: "NHAN_VAT_TU", label: "Nhận vật tư", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Sử dụng vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBKT + Word", who: "Theo phân quyền quy trình" },
   ],
   UNG: [
@@ -48,7 +52,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   ],
 };
 const ORDER: Record<string, string[]> = {
-  DE_XUAT: ["B0", "CHO_PHIEU__XUAT_KHO", "CHO_NGHIEM_THU", "HOAN_TAT"],
+  DE_XUAT: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "HOAN_TAT"],
   UNG: ["B0", "CHO_NHAP_LIEU", "CHO_XAC_NHAN_PDF", "CHO_HOAN_THIEN", "HOAN_TAT"],
 };
 const flowStatusKey = (status: string) => status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO" : status;
@@ -406,7 +410,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = [
   { key: "create", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
   { key: "confirm", label: "Xác nhận", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "accept", label: "Nghiệm thu + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "receive", label: "Nhận vật tư (khối lượng lãnh + hình thức)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", label: "Nghiệm thu + BBKT + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = mặc định: người tạo phiếu (Quản trị luôn được)" },
 ];
 
@@ -607,6 +613,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
             t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
             t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
+            t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Nhận vật tư: lãnh ${t.receivedQuantity ?? ""} (${t.receivedMethod ?? ""})` },
+            t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
             t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
           ].filter(Boolean).map((l: any, i) => (
             <div key={i} className="logrow"><span>{fmt(l.at)}</span><b>{l.who}{l.pos ? ` · ${l.pos}` : ""}</b><em>{l.what}</em></div>
@@ -637,6 +645,15 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           </a>
         )}
         {t.proposalNumber && <div className="meta-line">Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}</div>}
+        {t.receivedQuantity != null && (
+          <div className="meta-line">Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Hình thức: {t.receivedMethod}</div>
+        )}
+        {t.usedQuantity != null && (
+          <div className="meta-line">
+            Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
+            {(t.remainingQuantity ?? 0) === 0 ? " — sử dụng hết vật tư lãnh" : (t.remainingQuantity ?? 0) > 0 ? " — phần dư đã cộng vào tồn kho" : " — phần dùng vượt đã trừ tồn kho"}
+          </div>
+        )}
         {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
 
         <ActionArea t={t} viewer={viewer} />
@@ -657,6 +674,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [pct, setPct] = useState("");
   const [chiHuy, setChiHuy] = useState("");
   const [reason, setReason] = useState("");
+  const [qty, setQty] = useState(1); // khối lượng lãnh / sử dụng
+  const [method, setMethod] = useState(""); // hình thức lãnh
 
   React.useEffect(() => {
     if (!needItems) return;
@@ -684,7 +703,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       CHO_PHIEU__XUAT_KHO: "Thống kê",
       VAT_TU_KHONG_CO: "Người tạo phiếu / Trưởng Ca / Quản trị từ chối",
       CHO_THONG_KE: "Thống kê",
-      CHO_NGHIEM_THU: "Trưởng Ca / Trưởng Kíp",
+      NHAN_VAT_TU: "Người được phân quyền Nhận vật tư",
+      SU_DUNG_VAT_TU: "Người được phân quyền Sử dụng vật tư",
+      CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
       CHO_NHAP_LIEU: `Cương vị "${t.assignedPosition}"`,
       CHO_XAC_NHAN_PDF: "Trưởng Ca / Trưởng Kíp",
     };
@@ -805,19 +826,77 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     );
   }
 
-  if (acts.includes("accept")) return (
-    <div className="act">
-      <label className="lb">Bước 3 — Nghiệm thu &amp; xuất Biên Bản (Word)</label>
-      <input placeholder="Số PCT/LCT *" value={pct} onChange={(e) => setPct(e.target.value)} />
-      <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
-      <input placeholder="Số BBKT (nếu có) — VD: BBKT-120/VH1" value={num} onChange={(e) => setNum(e.target.value)} />
-      <textarea rows={3} placeholder="Thông tin xác nhận thay thế vật tư xong…" value={note} onChange={(e) => setNote(e.target.value)} />
-      <button className="btn primary big" disabled={!note.trim() || !pct.trim() || !chiHuy.trim() || act.isPending}
-        onClick={() => run({ action: "accept", completionNote: note, pctNumber: pct, chiHuyName: chiHuy, bbktNumber: num.trim() || undefined }, "Đã nghiệm thu, file Word sẵn sàng")}>
-        {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu &amp; xuất Word
-      </button>
-    </div>
-  );
+  if (acts.includes("receive")) {
+    const unit = t.items[0]?.material.unit ?? "";
+    return (
+      <div className="act">
+        <label className="lb">Nhận vật tư — khối lượng lãnh &amp; hình thức lãnh</label>
+        <label>Khối lượng vật tư lãnh{unit ? ` (${unit})` : ""} *</label>
+        <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        <label>Hình thức lãnh *</label>
+        <div className="cats">
+          {["Phiếu giao hàng", "Nhập hóa chất vận hành"].map((m) => (
+            <button key={m} type="button" className={method === m ? "on" : ""} onClick={() => setMethod(m)}>{m}</button>
+          ))}
+        </div>
+        <button className="btn primary big" disabled={qty <= 0 || !method || act.isPending}
+          onClick={() => run({ action: "receive", receivedQuantity: qty, receivedMethod: method }, "Đã xác nhận nhận vật tư")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
+        </button>
+      </div>
+    );
+  }
+
+  if (acts.includes("use")) {
+    const unit = t.items[0]?.material.unit ?? "";
+    const received = t.receivedQuantity ?? 0;
+    const remaining = received - qty;
+    return (
+      <div className="act">
+        <label className="lb">Sử dụng vật tư — kết quả thay thế</label>
+        <input placeholder="Số PCT/LCT *" value={pct} onChange={(e) => setPct(e.target.value)} />
+        <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
+        <textarea rows={3} placeholder="Nội dung xác nhận thay thế xong…" value={note} onChange={(e) => setNote(e.target.value)} />
+        <label>Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *</label>
+        <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        <p className="hint">
+          Đã lãnh: {received} {unit} · Còn lại sau sử dụng: <b>{remaining} {unit}</b> —{" "}
+          {remaining > 0
+            ? "phần dư sẽ cộng dồn vào tồn kho cùng mã vật tư."
+            : remaining === 0
+              ? "sử dụng hết vật tư lãnh, tồn kho giữ nguyên."
+              : "phần dùng vượt sẽ trừ vào tồn kho (không âm dưới 0)."}
+        </p>
+        <button className="btn primary big" disabled={!pct.trim() || !chiHuy.trim() || !note.trim() || qty <= 0 || act.isPending}
+          onClick={() => run({ action: "use", pctNumber: pct, chiHuyName: chiHuy, completionNote: note, usedQuantity: qty }, "Đã xác nhận sử dụng vật tư")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
+        </button>
+      </div>
+    );
+  }
+
+  if (acts.includes("accept")) {
+    // Phiếu theo luồng mới đã có PCT/chỉ huy/nội dung từ bước Sử dụng vật tư;
+    // phiếu cũ (trước khi thêm bước) vẫn nhập tại đây để tương thích.
+    const legacy = !t.pctNumber || !t.chiHuyName || !t.completionNote;
+    return (
+      <div className="act">
+        <label className="lb">Nghiệm thu — BBKT (nếu có) &amp; xuất Biên Bản (Word)</label>
+        {legacy && (
+          <>
+            <input placeholder="Số PCT/LCT *" value={pct} onChange={(e) => setPct(e.target.value)} />
+            <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
+            <textarea rows={3} placeholder="Thông tin xác nhận thay thế vật tư xong…" value={note} onChange={(e) => setNote(e.target.value)} />
+          </>
+        )}
+        <input placeholder="Số BBKT (nếu có) — VD: BBKT-120/VH1" value={num} onChange={(e) => setNum(e.target.value)} />
+        <button className="btn primary big" disabled={act.isPending || (legacy && (!note.trim() || !pct.trim() || !chiHuy.trim()))}
+          onClick={() => run({ action: "accept", completionNote: note.trim() || undefined, pctNumber: pct.trim() || undefined, chiHuyName: chiHuy.trim() || undefined, bbktNumber: num.trim() || undefined }, "Đã nghiệm thu, file Word sẵn sàng")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu &amp; xuất Word
+        </button>
+      </div>
+    );
+  }
 
   if (acts.includes("ungEntry")) return (
     <div className="act">
@@ -996,6 +1075,7 @@ const CSS = `
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .act{border:1.5px dashed ${C.accent}66;background:${C.accent}07;border-radius:14px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:9px;}
+.act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
 .wait{display:flex;align-items:center;gap:7px;background:#f1f5f9;color:#64748b;border-radius:11px;padding:11px 13px;font-size:12.5px;margin-bottom:16px;flex-wrap:wrap;}
 .warnbox{display:flex;gap:8px;align-items:flex-start;background:${C.badBg};color:${C.bad};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .lockbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:${C.warnBg};color:${C.warn};border-radius:10px;padding:10px 12px;font-size:12.5px;}
