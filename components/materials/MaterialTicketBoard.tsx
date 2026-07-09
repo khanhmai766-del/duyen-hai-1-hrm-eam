@@ -107,7 +107,7 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
+          <span>Mã phiếu</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
         {!isLoading && shown.map((t) => {
@@ -130,15 +130,16 @@ export default function MaterialTicketBoard({
           return (
             <React.Fragment key={t.id}>
             <button className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(isOpen ? null : t.id)}>
-              <span className="kind-cell">
-                <span className="kind-top">
-                  <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
-                    {isOpen ? <Minus size={12} /> : <Plus size={12} />}
-                  </span>
-                  {t.type === "UNG"
-                    ? <span className="tag ung"><Zap size={11} /> Ứng</span>
-                    : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
+              <span className="code-cell">
+                <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
+                  {isOpen ? <Minus size={12} /> : <Plus size={12} />}
                 </span>
+                <span className="code">{t.code}</span>
+              </span>
+              <span className="kind-cell">
+                {t.type === "UNG"
+                  ? <span className="tag ung"><Zap size={11} /> Ứng</span>
+                  : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
                 <small className="kind-sub">{t.unit}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
               </span>
               <span>{t.assignedPosition}</span>
@@ -868,7 +869,9 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
-.row{display:grid;grid-template-columns:.95fr .95fr 1.3fr 1.05fr .6fr 1fr .76fr 74px;gap:8px;align-items:center;min-width:1080px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:.95fr .85fr .95fr 1.25fr 1fr .6fr 1fr .76fr 74px;gap:8px;align-items:center;min-width:1160px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.code-cell{display:inline-flex;align-items:center;gap:7px;min-width:0;}
+.code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
@@ -887,7 +890,7 @@ const CSS = `
 .kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
 .exp.open{background:#f43f5e;}
-.detail-inline{min-width:1080px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
+.detail-inline{min-width:1160px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .dclose{position:absolute;top:10px;right:10px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
 .dclose:hover{background:#eef2f7;color:#0f172a;}
@@ -978,5 +981,5 @@ const CSS = `
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:980px;padding:10px 12px;}.row{min-width:980px;grid-template-columns:.95fr .9fr 1.2fr 1fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 `;
