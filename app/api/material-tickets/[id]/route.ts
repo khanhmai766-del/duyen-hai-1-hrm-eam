@@ -226,9 +226,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail("Bạn không có quyền ở bước Nhận vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
-      const RECEIVE_METHODS = ["Phiếu giao hàng", "Nhập hóa chất vận hành"];
       const receivedMethod = String(body.receivedMethod || "").trim();
-      if (!RECEIVE_METHODS.includes(receivedMethod)) return fail("Vui lòng chọn hình thức lãnh");
+      if (!receivedMethod) return fail("Vui lòng nhập hình thức lãnh");
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {

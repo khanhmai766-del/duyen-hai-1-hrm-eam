@@ -629,7 +629,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           {t.items.length > 0 && (
             <>
             <label className="lb"><Package size={13} /> Vật tư trong phiếu</label>
-            {t.items.map((it) => {
+            {t.items.map((it, itemIndex) => {
               const short = it.quantity > it.material.quantity;
               return (
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
@@ -641,6 +641,11 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   </div>
                   <span>SL: {it.quantity} {it.material.unit} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                   <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Thiết bị nhập tay"}</span>
+                  {itemIndex === 0 && t.proposalNumber && (
+                    <span className="material-proposal-line">
+                      Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -654,7 +659,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                 <Download size={14} /> Biên Bản Nghiệm Thu (Word)
               </a>
             )}
-            {t.proposalNumber && <div className="meta-line">Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}</div>}
             {t.receivedQuantity != null && (
               <div className="meta-line">Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Hình thức: {t.receivedMethod}</div>
             )}
@@ -860,7 +864,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       <div className="act">
         <label className="lb">Nhận vật tư — khối lượng lãnh &amp; hình thức lãnh</label>
         <div className="act-field-row">
-          <label>Khối lượng vật tư lãnh{unit ? ` (${unit})` : ""} *</label>
+          <label>Khối lượng vật tư lãnh</label>
           <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
         </div>
         <div className="act-field-row">
@@ -1107,6 +1111,8 @@ const CSS = `
 .material-line b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .material-code-link{flex:0 0 auto;border-radius:7px;background:${C.accent}10;padding:3px 8px;font-family:Poppins,Inter,sans-serif;font-size:11px;font-weight:800;color:${C.accent};text-decoration:none;}
 .material-code-link:hover{background:${C.accent};color:#fff;}
+.material-proposal-line{align-self:flex-end;margin-top:2px;max-width:100%;font-size:12px;font-weight:600;color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-proposal-line b{font-size:12px;color:${C.navy};}
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
