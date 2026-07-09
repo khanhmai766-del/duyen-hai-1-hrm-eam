@@ -584,6 +584,22 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
         </div>
 
+        {t.items.length > 0 && (
+          <div className="items top-items">
+            <label className="lb"><Package size={13} /> Vật tư trong phiếu</label>
+            {t.items.map((it) => {
+              const short = it.quantity > it.material.quantity;
+              return (
+                <div key={it.id} className={`item ${short ? "short" : ""}`}>
+                  <b>{it.material.name}</b>
+                  <span>SL: {it.quantity} {it.material.unit} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
+                  <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Thiết bị nhập tay"}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="loglist">
           <label className="lb"><Clock size={13} /> Dấu vết</label>
           {[
@@ -599,7 +615,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
         </div>
 
         {t.items.length > 0 && (
-          <div className="items">
+          <div className="items old-items">
             <label className="lb"><Package size={13} /> Vật tư trong phiếu</label>
             {t.items.map((it) => {
               const short = it.quantity > it.material.quantity;
@@ -972,6 +988,7 @@ const CSS = `
 .step.rejected b{color:${C.bad};}
 .lb{display:flex;align-items:center;gap:6px;font-family:Poppins,Inter,sans-serif;font-weight:600;font-size:12.5px;color:${C.navy};margin-bottom:8px;}
 .items{margin-bottom:14px;}
+.old-items{display:none;}
 .item{border:1px solid ${C.line};border-radius:11px;padding:10px 12px;margin-bottom:7px;display:flex;flex-direction:column;gap:2px;font-size:12.5px;}
 .item b{font-size:13px;color:${C.navy};}
 .item.short{border-color:${C.bad};background:${C.badBg};}
@@ -986,9 +1003,10 @@ const CSS = `
 .frm-item{display:grid;grid-template-columns:1.2fr 1.4fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
-.p-top{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:4px 18px;align-items:start;}
+.p-top{display:grid;grid-template-columns:minmax(250px,.95fr) minmax(260px,1.05fr) minmax(320px,1fr);gap:4px 18px;align-items:start;}
+.p-top .top-items{border-left:1px dashed ${C.line};padding:4px 0 4px 16px;margin-bottom:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
-@media(max-width:900px){.p-top{grid-template-columns:1fr;}.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}}
+@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}}
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}

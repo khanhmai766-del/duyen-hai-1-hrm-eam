@@ -119,39 +119,42 @@ export async function POST(req: NextRequest) {
       nextStatus = materialForProposal.quantity >= requestedQuantity ? "CHO_PHIEU__XUAT_KHO" : "VAT_TU_KHONG_CO";
     }
 
-    const code = await nextTicketCode(type);
-    const ticket = await prisma.materialTicket.create({
-      data: {
-        code,
-        type,
-        unit,
-        status: nextStatus,
-        bbktNumber: type === "DE_XUAT" ? bbkt || null : null,
-        proposalNote: type === "DE_XUAT" ? proposalNote : null,
-        assignedPosition,
-        materialCategory,
-        createdById: user.id,
-        createdByName: user.name ?? "",
-        ...(type === "DE_XUAT" ? {
-          proposedById: user.id,
-          proposedByName: user.name ?? "",
-          proposedByPosition: user.position ?? null,
-          proposedAt: new Date(),
-          ...(nextStatus === "CHO_PHIEU__XUAT_KHO" ? {
-            confirmedById: user.id,
-            confirmedByName: "Hệ thống",
-            confirmedAt: new Date(),
+    const { ticket, code } = await prisma.$transaction(async (tx) => {
+      const code = await nextTicketCode(type, tx);
+      const ticket = await tx.materialTicket.create({
+        data: {
+          code,
+          type,
+          unit,
+          status: nextStatus,
+          bbktNumber: type === "DE_XUAT" ? bbkt || null : null,
+          proposalNote: type === "DE_XUAT" ? proposalNote : null,
+          assignedPosition,
+          materialCategory,
+          createdById: user.id,
+          createdByName: user.name ?? "",
+          ...(type === "DE_XUAT" ? {
+            proposedById: user.id,
+            proposedByName: user.name ?? "",
+            proposedByPosition: user.position ?? null,
+            proposedAt: new Date(),
+            ...(nextStatus === "CHO_PHIEU__XUAT_KHO" ? {
+              confirmedById: user.id,
+              confirmedByName: "Hệ thống",
+              confirmedAt: new Date(),
+            } : {}),
+            items: {
+              create: [{
+                materialId: materialForProposal!.id,
+                quantity: requestedQuantity,
+                deviceNameManual: replacementDeviceName,
+              }],
+            },
           } : {}),
-          items: {
-            create: [{
-              materialId: materialForProposal!.id,
-              quantity: requestedQuantity,
-              deviceNameManual: replacementDeviceName,
-            }],
-          },
-        } : {}),
-      },
-      include: ITEM_INCLUDE,
+        },
+        include: ITEM_INCLUDE,
+      });
+      return { ticket, code };
     });
 
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,

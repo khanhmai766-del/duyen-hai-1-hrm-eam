@@ -112,12 +112,40 @@ export function seqInScope(deviceSeq: string, scopes: string[]) {
   return scopes.some((s) => deviceSeq === s || deviceSeq.startsWith(s + "."));
 }
 
-/** Sinh số phiếu: VT-<năm>-<số thứ tự 4 chữ số>[U nếu Ứng] */
-export async function nextTicketCode(type: "DE_XUAT" | "UNG") {
+/** Sinh số phiếu riêng theo từng luồng: VT-<năm>-0001 và UNG-<năm>-0001. */
+type TicketCodeDb = {
+  $executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<unknown>;
+  materialTicket: {
+    findMany: (args: {
+      where: {
+        type: "DE_XUAT" | "UNG";
+        createdAt: { gte: Date; lt: Date };
+      };
+      select: { code: true };
+    }) => Promise<{ code: string }[]>;
+  };
+};
+
+function materialTicketPrefix(type: "DE_XUAT" | "UNG") {
+  return type === "UNG" ? "UNG" : "VT";
+}
+
+export async function nextTicketCode(type: "DE_XUAT" | "UNG", db: TicketCodeDb = prisma) {
   const year = new Date().getFullYear();
-  const count = await prisma.materialTicket.count({
-    where: { code: { startsWith: `VT-${year}-` } },
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 0, 1);
+
+  await db.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `material-ticket:${type}:${year}`);
+
+  const tickets = await db.materialTicket.findMany({
+    where: { type, createdAt: { gte: start, lt: end } },
+    select: { code: true },
   });
-  const num = String(count + 1).padStart(4, "0");
-  return `VT-${year}-${num}${type === "UNG" ? "U" : ""}`;
+  const maxNumber = tickets.reduce((max, ticket) => {
+    const match = ticket.code.match(/-(\d+)(?:U)?$/);
+    const value = match ? Number(match[1]) : 0;
+    return Number.isFinite(value) && value > max ? value : max;
+  }, 0);
+  const num = String(maxNumber + 1).padStart(4, "0");
+  return `${materialTicketPrefix(type)}-${year}-${num}`;
 }
