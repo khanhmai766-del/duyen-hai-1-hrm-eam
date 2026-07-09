@@ -1128,7 +1128,7 @@ const CSS = `
 .frm-item{display:grid;grid-template-columns:1.2fr 1.4fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
-.p-top{display:grid;grid-template-columns:minmax(250px,.95fr) minmax(260px,1.05fr) minmax(320px,1fr);gap:4px 18px;align-items:start;}
+.p-top{display:grid;grid-template-columns:minmax(190px,.72fr) minmax(300px,1.16fr) minmax(360px,1.12fr);gap:4px 18px;align-items:start;}
 .p-top .top-items{border-left:1px dashed ${C.line};padding:4px 0 4px 16px;margin-bottom:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
 @media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}}
