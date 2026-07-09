@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  Plus, Minus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
+  Plus, Minus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight, Search,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -12,7 +13,8 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { isPositionAllowedForDefectUnit, MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { normalizeText } from "@/lib/nav";
 
 /* ============ meta hiển thị ============ */
 const C = {
@@ -58,6 +60,12 @@ const ORDER: Record<string, string[]> = {
 const flowStatusKey = (status: string) => status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO" : status;
 const fmt = (s?: string | null) =>
   s ? new Date(s).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
+const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
+  const qs = new URLSearchParams({ may: ticket.unit, search: code });
+  const category = ticket.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[ticket.materialCategory] ?? ticket.materialCategory : "";
+  if (category) qs.set("category", category);
+  return `/materials?${qs.toString()}`;
+};
 
 export default function MaterialTicketBoard({
   creating = false,
@@ -74,7 +82,9 @@ export default function MaterialTicketBoard({
 } = {}) {
   const { data, isLoading } = useMaterialTickets();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [searchQ, setSearchQ] = useState("");
   const [filter, setFilter] = useState("ALL");
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("ALL");
   const [unitFilter, setUnitFilter] = useState("ALL");
   const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
@@ -88,10 +98,18 @@ export default function MaterialTicketBoard({
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
   const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
+  const searchText = normalizeText(searchQ);
   const shown = tickets.filter((t) => {
     const matchesStatus = filter === "ALL" ? true : filter === "RUNNING" ? !["HOAN_TAT", "TU_CHOI"].includes(t.status) : t.status === filter;
+    const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
+    const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
     const matchesUnit = unitFilter === "ALL" || t.unit === unitFilter;
-    return matchesStatus && matchesUnit;
+    const searchable = normalizeText([
+      t.proposalNumber,
+      ...t.items.flatMap((it) => [it.material.name, it.material.code]),
+    ].filter(Boolean).join(" "));
+    const matchesSearch = !searchText || searchable.includes(searchText);
+    return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
   });
 
   return (
@@ -99,6 +117,15 @@ export default function MaterialTicketBoard({
       <style>{CSS}</style>
 
       <div className="top-tools">
+        <label className="ticket-search">
+          <Search size={15} />
+          <input
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            placeholder="Tìm phiếu đề xuất, tên vật tư..."
+            aria-label="Tìm phiếu đề xuất hoặc tên vật tư"
+          />
+        </label>
         {myTurn.length > 0 ? (
           <div className="turn">
             <span className="turn-badge">Đến lượt bạn ({myTurn.length})</span>
@@ -109,6 +136,13 @@ export default function MaterialTicketBoard({
             ))}
           </div>
         ) : <div className="turn-spacer" />}
+        <label className="unit-filter category-filter">
+          <span>Loại vật tư</span>
+          <select value={materialCategoryFilter} onChange={(e) => setMaterialCategoryFilter(e.target.value)} aria-label="Lọc theo loại vật tư">
+            <option value="ALL">Tất cả loại</option>
+            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
         <label className="unit-filter">
           <span>Tổ máy</span>
           <select value={unitFilter} onChange={(e) => setUnitFilter(e.target.value)} aria-label="Lọc theo tổ máy">
@@ -117,7 +151,7 @@ export default function MaterialTicketBoard({
           </select>
         </label>
         <div className="filters">
-          {[["ALL", "Tất cả"], ["RUNNING", "Đang chạy"], ["HOAN_TAT", "Hoàn tất"], ["TU_CHOI", "Từ chối"]].map(([k, l]) => (
+          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["TU_CHOI", "Từ chối"]].map(([k, l]) => (
             <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
           ))}
         </div>
@@ -607,7 +641,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               const short = it.quantity > it.material.quantity;
               return (
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
-                  <b>{it.material.name}</b>
+                  <div className="material-line">
+                    <b>{it.material.name}</b>
+                    <Link className="material-code-link" href={materialCatalogHref(t, it.material.code)}>
+                      {it.material.code}
+                    </Link>
+                  </div>
                   <span>SL: {it.quantity} {it.material.unit} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                   <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Thiết bị nhập tay"}</span>
                 </div>
@@ -639,7 +678,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               const short = it.quantity > it.material.quantity;
               return (
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
-                  <b>{it.material.name}</b>
+                  <div className="material-line">
+                    <b>{it.material.name}</b>
+                    <Link className="material-code-link" href={materialCatalogHref(t, it.material.code)}>
+                      {it.material.code}
+                    </Link>
+                  </div>
                   <span>SL: {it.quantity} {it.material.unit} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                   <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Thiết bị nhập tay"}</span>
                 </div>
@@ -968,6 +1012,9 @@ const CSS = `
 .head h1{font-family:Poppins,Inter,sans-serif;font-size:21px;font-weight:700;color:${C.navy};margin:0;}
 .head p{margin:2px 0 0;font-size:12.5px;color:${C.muted};}
 .top-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.ticket-search{display:inline-flex;align-items:center;gap:8px;flex:0 0 260px;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:0 12px;color:${C.soft};box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.ticket-search input{min-width:0;width:100%;border:0;background:transparent;color:${C.navy};font-size:12.5px;font-weight:600;outline:0;}
+.ticket-search input::placeholder{color:#94a3b8;font-weight:500;}
 .turn{display:flex;align-items:center;gap:8px;flex:0 1 auto;max-width:min(58%,720px);min-width:0;flex-wrap:wrap;background:#fff;border:1.5px solid ${C.accent}44;border-radius:13px;padding:10px 13px;}
 .turn-spacer{flex:1 1 auto;min-width:0;}
 .turn-badge{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:13px;color:${C.accent};}
@@ -975,6 +1022,7 @@ const CSS = `
 .unit-filter{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 8px 3px 11px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
 .unit-filter span{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:${C.soft};white-space:nowrap;}
 .unit-filter select{height:30px;min-width:132px;border:0;border-left:1px solid ${C.line};background:#fff;padding:0 26px 0 10px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;}
+.category-filter select{min-width:168px;}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
 .filters{display:flex;gap:5px;flex:0 0 auto;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;}
 .filters button{border:0;background:transparent;font-size:12.5px;font-weight:600;color:#64748b;padding:7px 12px;border-radius:8px;cursor:pointer;}
@@ -1083,6 +1131,10 @@ const CSS = `
 .old-items{display:none;}
 .item{border:1px solid ${C.line};border-radius:11px;padding:10px 12px;margin-bottom:7px;display:flex;flex-direction:column;gap:2px;font-size:12.5px;}
 .item b{font-size:13px;color:${C.navy};}
+.material-line{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
+.material-line b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.material-code-link{flex:0 0 auto;border-radius:7px;background:${C.accent}10;padding:3px 8px;font-family:Poppins,Inter,sans-serif;font-size:11px;font-weight:800;color:${C.accent};text-decoration:none;}
+.material-code-link:hover{background:${C.accent};color:#fff;}
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
@@ -1104,5 +1156,5 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select{min-width:160px;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.ticket-search{flex:0 0 auto;width:100%;}.turn{max-width:100%;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select{min-width:160px;}.category-filter select{min-width:190px;}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}}
 `;

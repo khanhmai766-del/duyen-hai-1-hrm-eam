@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, UserCog } from "lucide-react";
+import { FileText, Plus, UserCog } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import MaterialTicketBoard from "@/components/materials/MaterialTicketBoard";
 import { useMaterialTickets } from "@/hooks/useMaterialTickets";
+
+const PROCEDURE_FLOW_PDF_URL = "/api/files/s3?key=public%2Fmaterial-procedures%2Fluu-do-thuc-hien-vat-tu-vh1.pdf";
 
 export default function ReplacementProceduresPage() {
   const { data: session } = useSession();
@@ -28,6 +30,11 @@ export default function ReplacementProceduresPage() {
             <UserCog className="h-4 w-4" /> Phân quyền quy trình
           </Button>
         )}
+        <Button variant="outline" asChild>
+          <a href={PROCEDURE_FLOW_PDF_URL} target="_blank" rel="noreferrer">
+            <FileText className="h-4 w-4" /> Lưu đồ thực hiện
+          </a>
+        </Button>
         {canCreate && (
           <Button onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" /> Tạo đề xuất

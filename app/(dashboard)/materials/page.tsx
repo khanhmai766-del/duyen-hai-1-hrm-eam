@@ -68,8 +68,15 @@ function MaterialsPageContent() {
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
-  const [q, setQ] = React.useState("");
-  const [categoryFilter, setCategoryFilter] = React.useState<string>(MATERIAL_CATEGORIES[0]);
+  const router = useRouter();
+  const params = useSearchParams();
+  const searchParam = params.get("search") ?? "";
+  const categoryParam = params.get("category");
+  const initialCategory = (MATERIAL_CATEGORIES as readonly string[]).includes(categoryParam ?? "")
+    ? categoryParam!
+    : MATERIAL_CATEGORIES[0];
+  const [q, setQ] = React.useState(searchParam);
+  const [categoryFilter, setCategoryFilter] = React.useState<string>(initialCategory);
   const [blockFilter, setBlockFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -83,9 +90,6 @@ function MaterialsPageContent() {
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
   // (vd bấm cảnh báo thay thế trong chuông thông báo).
-  const router = useRouter();
-  const params = useSearchParams();
-
   // Tab tổ máy đồng bộ với URL (?may=S1|S2|COMMON) — menu con "Danh mục vật tư"
   // ở sidebar điều hướng bằng tham số này và highlight theo đúng tab đang mở.
   const mayParam = params.get("may");
@@ -93,6 +97,16 @@ function MaterialsPageContent() {
     ? (mayParam as (typeof DEFECT_UNITS)[number])
     : "S1";
   const machineLabel = MACHINE_TABS.find((t) => t.key === machineTab)?.label ?? machineTab;
+
+  React.useEffect(() => {
+    if (searchParam) setQ(searchParam);
+  }, [searchParam]);
+
+  React.useEffect(() => {
+    if ((MATERIAL_CATEGORIES as readonly string[]).includes(categoryParam ?? "")) {
+      setCategoryFilter(categoryParam!);
+    }
+  }, [categoryParam]);
 
   const trackId = params.get("track");
   React.useEffect(() => {
