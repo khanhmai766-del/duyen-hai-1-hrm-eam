@@ -552,6 +552,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
       <button className="dclose" onClick={onClose} title="Thu gọn"><X size={15} /></button>
 
       <div className="p-body">
+        {/* Hàng trên: tiến trình (trái) + Dấu vết (phải) */}
+        <div className="p-top">
         <div className="steps">
           {flow.map((s) => {
             const si = order.indexOf(s.key);
@@ -570,6 +572,20 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           {t.status === "VAT_TU_KHONG_CO" && (
             <div className="step rejected"><AlertTriangle size={17} /><div><b>Vật tư không có/không đủ</b><span>Chỉ có thể từ chối phiếu này.</span></div></div>
           )}
+        </div>
+
+        <div className="loglist">
+          <label className="lb"><Clock size={13} /> Dấu vết</label>
+          {[
+            t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
+            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
+            t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
+            t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
+            t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
+          ].filter(Boolean).map((l: any, i) => (
+            <div key={i} className="logrow"><span>{fmt(l.at)}</span><b>{l.who}{l.pos ? ` · ${l.pos}` : ""}</b><em>{l.what}</em></div>
+          ))}
+        </div>
         </div>
 
         {t.items.length > 0 && (
@@ -598,19 +614,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
         {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
 
         <ActionArea t={t} viewer={viewer} />
-
-        <div className="loglist">
-          <label className="lb"><Clock size={13} /> Dấu vết</label>
-          {[
-            t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
-            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
-            t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
-            t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
-            t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
-          ].filter(Boolean).map((l: any, i) => (
-            <div key={i} className="logrow"><span>{fmt(l.at)}</span><b>{l.who}{l.pos ? ` · ${l.pos}` : ""}</b><em>{l.what}</em></div>
-          ))}
-        </div>
       </div>
     </>
   );
@@ -969,6 +972,9 @@ const CSS = `
 .frm-item{display:grid;grid-template-columns:1.2fr 1.4fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
+.p-top{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:4px 18px;align-items:start;}
+.p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
+@media(max-width:900px){.p-top{grid-template-columns:1fr;}.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}}
 .logrow{display:flex;gap:9px;font-size:12px;padding:5px 0;color:#475569;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};}
