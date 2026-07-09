@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import MaterialTicketBoard from "@/components/materials/MaterialTicketBoard";
 import { useMaterialTickets } from "@/hooks/useMaterialTickets";
 
-const PROCEDURE_FLOW_PDF_URL = "/api/files/s3?key=public%2Fmaterial-procedures%2Fluu-do-thuc-hien-vat-tu-vh1.pdf";
+const PROCEDURE_FLOW_PDF_URL = "/api/material-procedure-flow";
 
 export default function ReplacementProceduresPage() {
   const { data: session } = useSession();
