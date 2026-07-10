@@ -678,6 +678,7 @@ function TableView({
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [positionFilter, setPositionFilter] = React.useState("ALL");
+  const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
   const positionOptions = React.useMemo(
     () =>
       Array.from(new Set(devices.map((device) => device.managingPosition).filter(Boolean) as string[])).sort((a, b) =>
@@ -790,7 +791,7 @@ function TableView({
                       <QrCode className="h-4 w-4" />
                     </Button>
                     {canDelete && (
-                      <Button variant="ghost" size="icon" title="Xoá" onClick={() => onDelete(d)}>
+                      <Button variant="ghost" size="icon" title="Xoá" onClick={() => setDeleteTarget(d)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     )}
@@ -834,6 +835,19 @@ function TableView({
           <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
         </div>
       </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Xoá thiết bị?"
+        description={deleteTarget ? `Bạn chắc chắn muốn xoá "${deleteTarget.code} — ${deleteTarget.name}" và toàn bộ lịch sử liên quan?` : undefined}
+        confirmLabel="Xoá"
+        loading={false}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          onDelete(deleteTarget);
+          setDeleteTarget(null);
+        }}
+      />
     </Card>
   );
 }

@@ -8,6 +8,7 @@ import {
   Plus, Trash2, ArrowLeft, Check, Loader2, UserCheck, UserMinus, ClipboardCheck, ChevronDown, Pencil, Clock3, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -213,6 +214,8 @@ function HanhChinhCard({
   const approved = entries.filter((entry) => entry.isApproved).length;
   const pendingGroups = groups.filter((group) => group.members.some((member) => !member.isApproved));
   const myEntry = entries.find((entry) => entry.userId === myId && !entry.isRegistered);
+  const [rejectTarget, setRejectTarget] = React.useState<(typeof entries)[number] | null>(null);
+  const [recallTarget, setRecallTarget] = React.useState<(typeof entries)[number] | null>(null);
 
   async function doRecall(groupId: string) {
     try {
@@ -335,7 +338,7 @@ function HanhChinhCard({
                   <Button
                     size="icon"
                     variant="destructive"
-                    onClick={() => doReject(m.id)}
+                    onClick={() => setRejectTarget(m)}
                     disabled={reject.isPending}
                     className="h-6 w-6 rounded-full [&_svg]:size-3"
                     title="Không duyệt"
@@ -351,7 +354,7 @@ function HanhChinhCard({
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => doRecall(m.groupId)}
+                      onClick={() => setRecallTarget(m)}
                       disabled={recall.isPending}
                       className="h-7 px-2 text-[11px]"
                     >
@@ -365,6 +368,32 @@ function HanhChinhCard({
           ))}
         </div>
       )}
+      <ConfirmDialog
+        open={!!rejectTarget}
+        onOpenChange={(open) => !open && setRejectTarget(null)}
+        title="Xác nhận không duyệt"
+        description={rejectTarget ? `Bạn chắc chắn muốn không duyệt chấm công hành chính của ${rejectTarget.user.name}?` : undefined}
+        confirmLabel="Không duyệt"
+        loading={reject.isPending}
+        onConfirm={async () => {
+          if (!rejectTarget) return;
+          await doReject(rejectTarget.id);
+          setRejectTarget(null);
+        }}
+      />
+      <ConfirmDialog
+        open={!!recallTarget}
+        onOpenChange={(open) => !open && setRecallTarget(null)}
+        title="Xác nhận thu hồi điểm danh"
+        description={recallTarget ? `Bạn chắc chắn muốn thu hồi điểm danh hành chính của ${recallTarget.user.name}?` : undefined}
+        confirmLabel="Thu hồi"
+        loading={recall.isPending}
+        onConfirm={async () => {
+          if (!recallTarget) return;
+          await doRecall(recallTarget.groupId);
+          setRecallTarget(null);
+        }}
+      />
     </Card>
   );
 }
@@ -377,6 +406,8 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
   const del = useDeleteHcGroup();
   const [editOpen, setEditOpen] = React.useState(false);
   const [checkInOpen, setCheckInOpen] = React.useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+  const [recallConfirmOpen, setRecallConfirmOpen] = React.useState(false);
 
   const approved = group.members.filter((m) => m.isApproved).length;
   const mine = group.members.find((m) => m.userId === myId);
@@ -433,7 +464,7 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
           )}
           {mine ? (
             canRecallMine && (
-              <Button size="sm" variant="destructive" onClick={doRecall} disabled={recall.isPending}>
+              <Button size="sm" variant="destructive" onClick={() => setRecallConfirmOpen(true)} disabled={recall.isPending}>
                 {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
                 Thu hồi điểm danh
               </Button>
@@ -450,7 +481,7 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Chỉnh sửa</DropdownMenuItem>
-                <DropdownMenuItem onClick={doDelete} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem onClick={() => setDeleteConfirmOpen(true)} className="text-destructive focus:text-destructive">
                   <Trash2 className="h-4 w-4" /> Xoá nhóm
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -497,6 +528,30 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
 
       <GroupDialog open={editOpen} onOpenChange={setEditOpen} date={vietnamDateInputFromValue(group.date)} group={group} />
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} group={group} />
+      <ConfirmDialog
+        open={recallConfirmOpen}
+        onOpenChange={setRecallConfirmOpen}
+        title="Xác nhận thu hồi điểm danh"
+        description="Bạn chắc chắn muốn thu hồi điểm danh của mình khỏi nhóm hành chính này?"
+        confirmLabel="Thu hồi"
+        loading={recall.isPending}
+        onConfirm={async () => {
+          await doRecall();
+          setRecallConfirmOpen(false);
+        }}
+      />
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Xác nhận xoá nhóm"
+        description={`Bạn chắc chắn muốn xoá nhóm "${group.content}"? Các điểm danh trong nhóm cũng sẽ bị xoá.`}
+        confirmLabel="Xoá nhóm"
+        loading={del.isPending}
+        onConfirm={async () => {
+          await doDelete();
+          setDeleteConfirmOpen(false);
+        }}
+      />
     </Card>
   );
 }

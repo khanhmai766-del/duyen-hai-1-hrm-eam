@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { ArrowLeft, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,11 @@ const HC_SELF_PERIODS = [
 ] as const;
 const HC_SELF_CONTENTS = HC_SELF_PERIODS.map((period) => `Hành chính - ${period.label}`);
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+type CancelTarget =
+  | { type: "reject"; registration: HcRegistration }
+  | { type: "cancel"; registration: HcRegistration }
+  | { type: "date"; date: string; registrations: HcRegistration[] };
 
 function vietnamDateInput(date: Date | string = new Date()) {
   const value = typeof date === "string" ? new Date(date) : date;
@@ -145,8 +151,9 @@ export default function AdministrativeRegistrationPage() {
             <CardTitle className="flex items-center gap-2">
               <CalendarPlus className="h-5 w-5 text-accent" /> Thông tin đăng ký
             </CardTitle>
-            <div className="max-w-3xl rounded-md bg-amber-50 px-3 py-1.5 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
-              Đăng ký phải gửi trước 16h30. Sau khi gửi không thể tự hủy. Người có quyền duyệt có thể duyệt hoặc hủy đăng ký.
+            <div className="max-w-3xl space-y-1 rounded-md bg-amber-50 px-3 py-1.5 text-xs leading-5 text-amber-900 ring-1 ring-amber-100">
+              <p>Đăng ký phải gửi trước 16h30. Sau khi gửi không thể tự hủy. Người có quyền duyệt có thể duyệt hoặc hủy đăng ký.</p>
+              <p>Đọc kỹ và thực hiện đúng theo ô nội dung công việc.</p>
             </div>
           </div>
           <div className="flex shrink-0 justify-end gap-2">
@@ -192,7 +199,7 @@ export default function AdministrativeRegistrationPage() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={3}
-                  placeholder="Nếu chưa được phân công thì để trống"
+                  placeholder="Chỉ điền nội dung khi đã được phân công, và ghi rõ tên Người phân công công việc. Nếu chưa được phân công thì để trống"
                   disabled={!!myRegistration}
                 />
               </div>
@@ -300,6 +307,7 @@ function RegistrationDateRow({
   const [editing, setEditing] = React.useState(false);
   const [reviewMode, setReviewMode] = React.useState(false);
   const [reviewingId, setReviewingId] = React.useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = React.useState<CancelTarget | null>(null);
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const approvedCount = registrations.filter((registration) => registration.isApproved).length;
   const pendingRegistrations = registrations.filter((registration) => !registration.isApproved);
@@ -357,6 +365,45 @@ function RegistrationDateRow({
     }
   }
 
+  async function confirmCancel() {
+    if (!cancelTarget) return;
+    if (cancelTarget.type === "reject") {
+      await rejectRegistration(cancelTarget.registration);
+      setCancelTarget(null);
+      return;
+    }
+    if (cancelTarget.type === "cancel") {
+      await cancelRegistrationItem(cancelTarget.registration);
+      setCancelTarget(null);
+      return;
+    }
+    await cancelDateGroup();
+    setCancelTarget(null);
+  }
+
+  const cancelDialogText = React.useMemo(() => {
+    if (!cancelTarget) return null;
+    if (cancelTarget.type === "reject") {
+      return {
+        title: "Xác nhận không duyệt đăng ký",
+        description: `Bạn chắc chắn muốn không duyệt đăng ký đi hành chính của ${cancelTarget.registration.user.name}?`,
+        confirmLabel: "Không duyệt",
+      };
+    }
+    if (cancelTarget.type === "cancel") {
+      return {
+        title: "Xác nhận hủy đăng ký",
+        description: `Bạn chắc chắn muốn hủy đăng ký đi hành chính của ${cancelTarget.registration.user.name}?`,
+        confirmLabel: "Hủy đăng ký",
+      };
+    }
+    return {
+      title: "Xác nhận hủy tất cả trong ngày",
+      description: `Bạn chắc chắn muốn hủy ${cancelTarget.registrations.length} đăng ký đi hành chính ngày ${formatDateLabel(cancelTarget.date)}?`,
+      confirmLabel: "Hủy tất cả",
+    };
+  }, [cancelTarget]);
+
   async function saveNotes() {
     try {
       for (const registration of editableRegistrations) {
@@ -396,7 +443,13 @@ function RegistrationDateRow({
               </Button>
             )}
             {canManage && (
-              <Button className="w-full justify-center" size="sm" variant="destructive" onClick={cancelDateGroup} disabled={cancelRegistration.isPending}>
+              <Button
+                className="w-full justify-center"
+                size="sm"
+                variant="destructive"
+                onClick={() => setCancelTarget({ type: "date", date, registrations })}
+                disabled={cancelRegistration.isPending}
+              >
                 {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy tất cả trong ngày
               </Button>
             )}
@@ -427,7 +480,7 @@ function RegistrationDateRow({
                   </button>
                   <button
                     type="button"
-                    onClick={() => rejectRegistration(registration)}
+                    onClick={() => setCancelTarget({ type: "reject", registration })}
                     disabled={reviewingId === registration.id}
                     title="Không duyệt đăng ký"
                     className={cn(
@@ -442,7 +495,7 @@ function RegistrationDateRow({
               {canManage && !reviewMode && (
                 <button
                   type="button"
-                  onClick={() => cancelRegistrationItem(registration)}
+                  onClick={() => setCancelTarget({ type: "cancel", registration })}
                   disabled={reviewingId === registration.id}
                   title={`Hủy đăng ký của ${registration.user.name}`}
                   className={cn(
@@ -507,6 +560,15 @@ function RegistrationDateRow({
         ) : null}
       </div>
 
+      <ConfirmDialog
+        open={!!cancelTarget}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title={cancelDialogText?.title ?? "Xác nhận hủy"}
+        description={cancelDialogText?.description}
+        confirmLabel={cancelDialogText?.confirmLabel ?? "Xác nhận"}
+        loading={cancelRegistration.isPending}
+        onConfirm={confirmCancel}
+      />
     </div>
   );
 }
