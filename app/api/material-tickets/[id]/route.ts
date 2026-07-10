@@ -51,12 +51,12 @@ async function canManageTicket(
   return t.createdById === user.id;
 }
 
-function toBbntItems(t: FullTicket): BbntItem[] {
+function toBbntItems(t: FullTicket, quantityOverrides?: Map<string, number>): BbntItem[] {
   return t.items.map((it) => ({
     materialName: it.material.name,
-    materialCode: it.material.code,
+    materialCode: it.erpCode || it.material.code,
     materialUnit: it.material.unit,
-    quantity: it.quantity,
+    quantity: quantityOverrides?.get(it.id) ?? (t.type === "UNG" ? it.replacementQuantity ?? it.quantity : it.quantity),
     deviceName: it.deviceNameManual || it.device?.name || "",
     deviceKks: it.device?.kks ?? null,
   }));
@@ -107,8 +107,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
       const assignedPosition = String(body.assignedPosition || "").trim();
       if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao");
+      const totalScopeCount = await prisma.positionSystemScope.count();
       const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
-      if (scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+      if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
       const materialCategory = String(body.materialCategory || "").trim();
       if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
       const bbkt = String(body.bbktNumber || "").trim(); // BBKT giờ là tuỳ chọn (bổ sung ở bước Nghiệm thu)
@@ -123,17 +124,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type === "DE_XUAT") {
         const proposalNote = String(body.note || "").trim();
         const materialId = String(body.materialId || "").trim();
+        const erpCode = String(body.erpCode || "").trim();
         const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
         const replacementDeviceName = String(body.replacementDeviceName || "").trim();
         if (!proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
         if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
+        if (!erpCode) return fail("Vui lòng chọn mã vật tư");
         if (!Number.isFinite(proposedQuantity) || proposedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
         if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
         const material = await prisma.material.findUnique({
           where: { id: materialId },
-          select: { id: true },
+          select: { id: true, code: true, erpCodes: true, machine: true },
         });
         if (!material) return fail("Không tìm thấy vật tư đề xuất", 404);
+        if (material.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
+        const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
+        if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         data.proposalNote = proposalNote;
       }
 
@@ -144,6 +150,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         });
         if (t.type === "DE_XUAT") {
           const materialId = String(body.materialId || "").trim();
+          const erpCode = String(body.erpCode || "").trim();
           const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
           const replacementDeviceName = String(body.replacementDeviceName || "").trim();
           await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
@@ -151,6 +158,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             data: {
               ticketId: t.id,
               materialId,
+              erpCode,
               quantity: proposedQuantity,
               deviceNameManual: replacementDeviceName,
             },
@@ -167,36 +175,64 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (["HOAN_TAT", "TU_CHOI"].includes(t.status)) return fail("Phiếu đã khóa, không thể thao tác");
 
-    /* ---------- helper ghi items (dùng cho propose & ungEntry) ---------- */
-    async function validateAndWriteItems(): Promise<string | null> {
-      const items: Array<{ materialId: string; deviceSeq: string; quantity: number }> =
+    /* ---------- helper kiểm tra items (dùng cho propose & ungEntry) ---------- */
+    async function validateItems() {
+      const items: Array<{ materialId: string; erpCode?: string; deviceSeq: string; quantity: number }> =
         Array.isArray(body.items) ? body.items : [];
       if (items.length === 0) return "Phiếu phải có ít nhất 1 vật tư";
 
       for (const it of items) {
-        if (!it.materialId || !it.deviceSeq || !(it.quantity >= 1)) return "Dòng vật tư thiếu thông tin";
+        if (!it.materialId || !it.erpCode || !it.deviceSeq || !(it.quantity >= 1)) return "Dòng vật tư thiếu thông tin";
+      }
+      const materials = await prisma.material.findMany({
+        where: { id: { in: [...new Set(items.map((i) => i.materialId))] } },
+        select: { id: true, code: true, erpCodes: true, machine: true },
+      });
+      const materialCodeMap = new Map(materials.map((material) => [material.id, material.erpCodes.length ? material.erpCodes : [material.code]]));
+      const materialMachineMap = new Map(materials.map((material) => [material.id, material.machine]));
+      for (const it of items) {
+        if (materialMachineMap.get(it.materialId) !== t!.unit) return "Vật tư không thuộc tổ máy của phiếu";
+        if (!materialCodeMap.get(it.materialId)?.includes(it.erpCode || "")) return "Mã vật tư không thuộc tên vật tư đã chọn";
       }
       // Mỗi cặp (vật tư, thiết bị) phải là điểm đã KHAI BÁO trong Danh mục vật tư
       // (dropdown thiết bị lấy từ chính danh sách này).
       const matIds = [...new Set(items.map((i) => i.materialId))];
       const decls = await prisma.materialReplacement.findMany({
         where: { materialId: { in: matIds }, isActive: false, deviceSeq: { not: null } },
-        select: { materialId: true, deviceSeq: true },
+        select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
       });
       const declSet = new Set(decls.map((d) => `${d.materialId}::${d.deviceSeq}`));
+      const manualDeclMap = new Map(
+        decls.map((d) => [`${d.materialId}::manual:${d.id}`, d.location || d.device?.name || d.system || "Thiết bị nhập tay"])
+      );
       for (const it of items) {
-        if (!declSet.has(`${it.materialId}::${it.deviceSeq}`)) {
+        const key = `${it.materialId}::${it.deviceSeq}`;
+        if (!declSet.has(key) && !manualDeclMap.has(key)) {
           return "Vật tư và thiết bị đã chọn không khớp danh mục vật tư";
         }
       }
-
-      await prisma.materialTicketItem.deleteMany({ where: { ticketId: t!.id } });
-      await prisma.materialTicketItem.createMany({
-        data: items.map((i) => ({
-          ticketId: t!.id, materialId: i.materialId, deviceSeq: i.deviceSeq, quantity: i.quantity,
-        })),
+      const deviceSeqs = [...new Set(items.map((i) => i.deviceSeq).filter((seq) => !seq.startsWith("manual:")))];
+      const devices = await prisma.equipmentNode.findMany({
+        where: { seq: { in: deviceSeqs } },
+        select: { seq: true },
       });
-      return null;
+      const deviceSet = new Set(devices.map((device) => device.seq));
+      for (const it of items) {
+        if (it.deviceSeq.startsWith("manual:")) continue;
+        if (!deviceSet.has(it.deviceSeq)) return "Thiết bị đã chọn không còn tồn tại trong cây thiết bị";
+      }
+
+      return items.map((i) => {
+        const manualName = manualDeclMap.get(`${i.materialId}::${i.deviceSeq}`);
+        return {
+          ticketId: t!.id,
+          materialId: i.materialId,
+          erpCode: i.erpCode || null,
+          deviceSeq: manualName ? null : i.deviceSeq,
+          deviceNameManual: manualName ?? null,
+          quantity: Math.trunc(Number(i.quantity)),
+        };
+      });
     }
 
     /* =================== LUỒNG ĐỀ XUẤT =================== */
@@ -206,16 +242,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type !== "DE_XUAT" || t.status !== "CHO_DE_XUAT") return fail("Phiếu không ở bước Đề xuất");
       if (!isAssignedPosition(user, t))
         return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền đề xuất`, 403);
-      const err = await validateAndWriteItems();
-      if (err) return fail(err);
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_XAC_NHAN",
-          proposedById: user.id, proposedByName: user.name ?? "",
-          proposedByPosition: user.position ?? null, proposedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const itemData = await validateItems();
+      if (typeof itemData === "string") return fail(itemData);
+      const up = await prisma.$transaction(async (tx) => {
+        await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
+        await tx.materialTicketItem.createMany({ data: itemData });
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_XAC_NHAN",
+            proposedById: user.id, proposedByName: user.name ?? "",
+            proposedByPosition: user.position ?? null, proposedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(user.id, "MT_PROPOSE", "MaterialTicket", t.id, `${t.code}: gửi đề xuất`);
       return ok(up);
@@ -297,24 +337,46 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
       const receivedMethod = String(body.receivedMethod || "").trim();
       if (!receivedMethod) return fail("Vui lòng nhập hình thức lãnh");
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "SU_DUNG_VAT_TU",
-          receivedQuantity, receivedMethod,
-          receivedById: user.id, receivedByName: user.name ?? "",
-          receivedByPosition: user.position ?? null, receivedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const erpCode = item.erpCode || item.material.code;
+      const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`
+        SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1
+      `;
+      if (erpRows.length === 0) return fail(`Không tìm thấy mã vật tư ERP "${erpCode}"`, 404);
+      const before = item.material.quantity;
+      const erpBefore = Number(erpRows[0]?.erpStock ?? 0);
+      const erpAfter = Math.max(0, erpBefore - receivedQuantity);
+      const up = await prisma.$transaction(async (tx) => {
+        await tx.material.update({
+          where: { id: item.materialId },
+          data: { quantity: { increment: receivedQuantity } },
+        });
+        await tx.$executeRaw`
+          UPDATE "ErpMaterial"
+          SET "erpStock" = ${erpAfter}, "updatedAt" = NOW()
+          WHERE "code" = ${erpCode}
+        `;
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "SU_DUNG_VAT_TU",
+            receivedQuantity, receivedMethod,
+            receivedById: user.id, receivedByName: user.name ?? "",
+            receivedByPosition: user.position ?? null, receivedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
-      await audit(user.id, "MT_RECEIVE", "MaterialTicket", t.id, `${t.code}: lãnh ${receivedQuantity} (${receivedMethod})`);
+      await audit(
+        user.id, "MT_RECEIVE", "MaterialTicket", t.id,
+        `${t.code}: lãnh ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + receivedQuantity}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}`
+      );
       return ok(up);
     }
 
     // B2'' — SỬ DỤNG VẬT TƯ: PCT/LCT + chỉ huy + nội dung + khối lượng dùng.
-    // Còn lại = lãnh − dùng: dư (>0) cộng dồn vào tồn kho cùng mã vật tư;
-    // đúng bằng (=0) tồn kho giữ nguyên (dùng hết phần lãnh); dùng vượt (<0)
-    // phần vượt trừ vào tồn kho, không cho âm.
+    // Tồn kho đã cộng khối lượng lãnh ở bước Nhận vật tư; bước này trừ khối lượng dùng.
     if (action === "use") {
       if (t.type !== "DE_XUAT" || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
       const assignedError = assignedPositionError(user, t);
@@ -339,21 +401,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         select: { id: true, code: true, name: true, quantity: true },
       });
       if (!mat) return fail("Không tìm thấy vật tư trong Danh mục", 404);
-      const newQty = remaining >= 0 ? mat.quantity + remaining : Math.max(0, mat.quantity + remaining);
-      if (newQty !== mat.quantity) {
-        await prisma.material.update({ where: { id: mat.id }, data: { quantity: newQty } });
-      }
+      const newQty = Math.max(0, mat.quantity - usedQuantity);
 
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_NGHIEM_THU",
-          completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
-          usedQuantity, remainingQuantity: remaining,
-          usedById: user.id, usedByName: user.name ?? "",
-          usedByPosition: user.position ?? null, usedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const up = await prisma.$transaction(async (tx) => {
+        if (newQty !== mat.quantity) {
+          await tx.material.update({ where: { id: mat.id }, data: { quantity: newQty } });
+        }
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_NGHIEM_THU",
+            completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+            usedQuantity, remainingQuantity: remaining,
+            usedById: user.id, usedByName: user.name ?? "",
+            usedByPosition: user.position ?? null, usedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(
         user.id, "MT_USE", "MaterialTicket", t.id,
@@ -401,29 +465,211 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     /* =================== LUỒNG ỨNG (xử lý gấp) =================== */
 
-    // Ư1 — cương vị nhập liệu thay thế (đã thay gấp)
+    // Ư1 — cương vị nhập số lượng vật tư ứng; số lượng này được cộng vào tồn kho.
+    if (action === "ungAdvance") {
+      if (t.type !== "UNG" || t.status !== "CHO_NHAP_LIEU") return fail("Phiếu không ở bước Nhập số lượng ứng");
+      if (!isAssignedPosition(user, t))
+        return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền nhập liệu`, 403);
+
+      const submitted: Array<{ materialId: string; erpCode?: string; quantity: number }> = Array.isArray(body.items)
+        ? body.items
+        : [];
+      if (submitted.length === 0) return fail("Phiếu phải có ít nhất 1 vật tư");
+      const materials = await prisma.material.findMany({
+        where: { id: { in: [...new Set(submitted.map((item) => item.materialId))] } },
+        select: { id: true, code: true, erpCodes: true, machine: true },
+      });
+      const materialMap = new Map(materials.map((material) => [material.id, material]));
+      const itemData: Array<{
+        ticketId: string;
+        materialId: string;
+        erpCode: string;
+        quantity: number;
+        replacementQuantity: null;
+        deviceSeq: null;
+        deviceNameManual: null;
+      }> = [];
+      const itemKeys = new Set<string>();
+      for (const item of submitted) {
+        const quantity = Math.trunc(Number(item.quantity));
+        const erpCode = String(item.erpCode || "").trim();
+        const material = materialMap.get(item.materialId);
+        if (!material || !erpCode || !Number.isFinite(quantity) || quantity <= 0) {
+          return fail("Dòng vật tư ứng thiếu thông tin");
+        }
+        if (material.machine !== t.unit) return fail("Vật tư không thuộc tổ máy của phiếu");
+        const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
+        if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+        const key = `${item.materialId}::${erpCode}`;
+        if (itemKeys.has(key)) return fail("Mỗi mã vật tư chỉ nhập một lần trong phần số lượng ứng");
+        itemKeys.add(key);
+        itemData.push({
+          ticketId: t.id,
+          materialId: item.materialId,
+          erpCode,
+          quantity,
+          replacementQuantity: null,
+          deviceSeq: null,
+          deviceNameManual: null,
+        });
+      }
+      const quantityByMaterial = new Map<string, number>();
+      for (const item of itemData) {
+        quantityByMaterial.set(
+          item.materialId,
+          (quantityByMaterial.get(item.materialId) ?? 0) + item.quantity
+        );
+      }
+      const stocksBefore = await prisma.material.findMany({
+        where: { id: { in: [...quantityByMaterial.keys()] } },
+        select: { id: true, code: true, quantity: true },
+      });
+      const up = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.materialTicket.updateMany({
+          where: { id: t.id, status: "CHO_NHAP_LIEU" },
+          data: { status: "CHO_NHAP_LIEU_THAY_THE" },
+        });
+        if (claimed.count === 0) return null;
+        await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
+        await tx.materialTicketItem.createMany({ data: itemData });
+        for (const [materialId, quantity] of quantityByMaterial) {
+          await tx.material.update({
+            where: { id: materialId },
+            data: { quantity: { increment: quantity } },
+          });
+        }
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: { status: "CHO_NHAP_LIEU_THAY_THE" },
+          include: ITEM_INCLUDE,
+        });
+      });
+      if (!up) return fail("Số lượng ứng đã được xác nhận trước đó, tồn kho không bị cộng lại");
+      const stockDetail = stocksBefore.map((material) => {
+        const added = quantityByMaterial.get(material.id) ?? 0;
+        return `${material.code}: ${material.quantity} → ${material.quantity + added}`;
+      }).join("; ");
+      await audit(
+        user.id,
+        "MT_UNG_ADVANCE",
+        "MaterialTicket",
+        t.id,
+        `${t.code}: xác nhận số lượng ứng — cộng tồn kho ${stockDetail}`
+      );
+      return ok(up);
+    }
+
+    // Ư2 — cương vị nhập liệu thay thế; số lượng thay thế được trừ khỏi tồn kho.
     if (action === "ungEntry") {
-      if (t.type !== "UNG" || t.status !== "CHO_NHAP_LIEU") return fail("Phiếu không ở bước Nhập liệu");
+      if (t.type !== "UNG" || t.status !== "CHO_NHAP_LIEU_THAY_THE") return fail("Phiếu không ở bước Nhập liệu thay thế");
       if (!isAssignedPosition(user, t))
         return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền nhập liệu`, 403);
       const note = String(body.completionNote || "").trim();
       if (!note) return fail("Vui lòng nhập thông tin thay thế");
-      const err = await validateAndWriteItems();
-      if (err) return fail(err);
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_XAC_NHAN_PDF", completionNote: note,
-          proposedById: user.id, proposedByName: user.name ?? "",
-          proposedByPosition: user.position ?? null, proposedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+
+      const submitted: Array<{ itemId: string; deviceSeq: string; quantity: number }> = Array.isArray(body.replacementItems)
+        ? body.replacementItems
+        : [];
+      const replacementRows: Array<{ itemId: string; deviceSeq: string; quantity: number }> = [];
+      const rowKeys = new Set<string>();
+      for (const item of submitted) {
+        const quantity = Math.trunc(Number(item.quantity));
+        const deviceSeq = String(item.deviceSeq || "").trim();
+        if (!item.itemId || !deviceSeq || !Number.isFinite(quantity) || quantity <= 0) {
+          return fail("Dòng nhập liệu thay thế thiếu thông tin");
+        }
+        const rowKey = `${item.itemId}::${deviceSeq}`;
+        if (rowKeys.has(rowKey)) return fail("Mỗi thiết bị chỉ được chọn một lần cho cùng vật tư");
+        rowKeys.add(rowKey);
+        replacementRows.push({ itemId: item.itemId, deviceSeq, quantity });
+      }
+      const sourceItemMap = new Map(t.items.map((item) => [item.id, item]));
+      if (t.items.length === 0 || t.items.some((item) => !replacementRows.some((row) => row.itemId === item.id))) {
+        return fail("Vui lòng nhập đầy đủ thiết bị và số lượng thay thế cho từng vật tư");
+      }
+      if (replacementRows.some((row) => !sourceItemMap.has(row.itemId))) {
+        return fail("Danh sách vật tư thay thế không hợp lệ");
+      }
+
+      const decls = await prisma.materialReplacement.findMany({
+        where: { materialId: { in: [...new Set(t.items.map((item) => item.materialId))] }, isActive: false, deviceSeq: { not: null } },
+        select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
       });
-      await audit(user.id, "MT_UNG_ENTRY", "MaterialTicket", t.id, `${t.code}: nhập liệu thay thế`);
+      const declSet = new Set(decls.filter((decl) => decl.device).map((decl) => `${decl.materialId}::${decl.deviceSeq}`));
+      const manualDeclMap = new Map(
+        decls.map((decl) => [`${decl.materialId}::manual:${decl.id}`, decl.location || decl.device?.name || decl.system || "Thiết bị nhập tay"])
+      );
+      for (const row of replacementRows) {
+        const item = sourceItemMap.get(row.itemId)!;
+        const key = `${item.materialId}::${row.deviceSeq}`;
+        if (!declSet.has(key) && !manualDeclMap.has(key)) {
+          return fail("Vật tư và thiết bị đã chọn không khớp danh mục vật tư");
+        }
+      }
+
+      const replacementByMaterial = new Map<string, number>();
+      const stocksBefore = new Map<string, { code: string; name: string; quantity: number }>();
+      for (const row of replacementRows) {
+        const item = sourceItemMap.get(row.itemId)!;
+        replacementByMaterial.set(item.materialId, (replacementByMaterial.get(item.materialId) ?? 0) + row.quantity);
+        stocksBefore.set(item.materialId, { code: item.material.code, name: item.material.name, quantity: item.material.quantity });
+      }
+      const insufficient = [...replacementByMaterial].filter(
+        ([materialId, quantity]) => (stocksBefore.get(materialId)?.quantity ?? 0) < quantity
+      );
+      if (insufficient.length > 0) {
+        return fail("Tồn kho không đủ: " + insufficient.map(([materialId, quantity]) => {
+          const stock = stocksBefore.get(materialId);
+          return `${stock?.name ?? "Vật tư"} (thay ${quantity}, tồn ${stock?.quantity ?? 0})`;
+        }).join("; "));
+      }
+
+      const up = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.materialTicket.updateMany({
+          where: { id: t.id, status: "CHO_NHAP_LIEU_THAY_THE" },
+          data: { status: "CHO_XAC_NHAN_PDF" },
+        });
+        if (claimed.count === 0) return null;
+        const replacementItemData = replacementRows.map((row) => {
+          const sourceItem = sourceItemMap.get(row.itemId)!;
+          const sourceRows = replacementRows.filter((candidate) => candidate.itemId === row.itemId);
+          const sourceRowIndex = sourceRows.findIndex((candidate) => candidate === row);
+          const manualName = manualDeclMap.get(`${sourceItem.materialId}::${row.deviceSeq}`);
+          return {
+            ticketId: t.id,
+            materialId: sourceItem.materialId,
+            erpCode: sourceItem.erpCode,
+            quantity: sourceRowIndex === 0 ? sourceItem.quantity : 0,
+            replacementQuantity: row.quantity,
+            deviceSeq: manualName ? null : row.deviceSeq,
+            deviceNameManual: manualName ?? null,
+          };
+        });
+        await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
+        await tx.materialTicketItem.createMany({ data: replacementItemData });
+        for (const [materialId, quantity] of replacementByMaterial) {
+          await tx.material.update({ where: { id: materialId }, data: { quantity: { decrement: quantity } } });
+        }
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_XAC_NHAN_PDF", completionNote: note,
+            proposedById: user.id, proposedByName: user.name ?? "",
+            proposedByPosition: user.position ?? null, proposedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
+      });
+      if (!up) return fail("Thông tin thay thế đã được xác nhận trước đó, tồn kho không bị trừ lại");
+      const stockDetail = [...replacementByMaterial].map(([materialId, quantity]) => {
+        const stock = stocksBefore.get(materialId)!;
+        return `${stock.code}: ${stock.quantity} → ${stock.quantity - quantity}`;
+      }).join("; ");
+      await audit(user.id, "MT_UNG_ENTRY", "MaterialTicket", t.id, `${t.code}: nhập liệu thay thế — trừ tồn kho ${stockDetail}`);
       return ok(up);
     }
 
-    // Ư2 — Trưởng Ca xác nhận & xuất Word (BBKT in "(bổ sung sau)")
+    // Ư3 — Trưởng Ca xác nhận & xuất Word (không nhập lại số lượng thay thế).
     if (action === "ungConfirmDoc") {
       if (t.type !== "UNG" || t.status !== "CHO_XAC_NHAN_PDF") return fail("Phiếu không ở bước Xác nhận xuất file");
       const assignedError = assignedPositionError(user, t);
@@ -440,15 +686,24 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
         items: toBbntItems(t),
       });
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_HOAN_THIEN", pctNumber: pct, chiHuyName: chiHuy, docUrl: url,
-          completedById: user.id, completedByName: user.name ?? "", completedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const up = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.materialTicket.updateMany({
+          where: { id: t.id, status: "CHO_XAC_NHAN_PDF" },
+          data: { status: "CHO_HOAN_THIEN" },
+        });
+        if (claimed.count === 0) return null;
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_HOAN_THIEN", pctNumber: pct, chiHuyName: chiHuy, docUrl: url,
+            completedById: user.id, completedByName: user.name ?? "",
+            completedByPosition: user.position ?? null, completedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
-      await audit(user.id, "MT_UNG_DOC", "MaterialTicket", t.id, `${t.code}: xuất BBNT (chờ BBKT + thống kê)`);
+      if (!up) return fail("Phiếu đã được xác nhận trước đó");
+      await audit(user.id, "MT_UNG_DOC", "MaterialTicket", t.id, `${t.code}: xác nhận, xuất BBNT (chờ BBKT + thống kê)`);
       return ok(up);
     }
 

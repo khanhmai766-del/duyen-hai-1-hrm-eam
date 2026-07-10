@@ -9,6 +9,7 @@ import {
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
+import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
     });
 
     const scopes = await getPositionScopes(user.position);
+    const totalScopeCount = await prisma.positionSystemScope.count();
     // Quyền theo từng bước (admin cấu hình trong MaterialWorkflowRole; trống = mặc định cũ).
     const wfMap = await getWorkflowRoleMap();
     return ok(tickets, {
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
         isStats: isStats(user.position),
         canCreate: stepAllowedWithMap(wfMap, "create", user),
         isAdmin: user.role === "ADMIN",
-        hasScope: scopes.length > 0,
+        hasScope: totalScopeCount === 0 || scopes.length > 0,
         steps: {
           create: stepAllowedWithMap(wfMap, "create", user),
           confirm: stepAllowedWithMap(wfMap, "confirm", user),
@@ -91,33 +93,43 @@ export async function POST(req: NextRequest) {
     // Cương vị được giao: bắt buộc, và phải là cương vị có phân giao cây thiết bị
     const assignedPosition = String(body.assignedPosition || "").trim();
     if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao thực hiện");
+    const totalScopeCount = await prisma.positionSystemScope.count();
     const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
-    if (scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+    if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
 
     // Loại vật tư
     const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
     const materialCategory = String(body.materialCategory || "").trim();
     if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
 
-    let materialForProposal: { id: string; name: string; quantity: number } | null = null;
+    let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
     let requestedQuantity = 0;
     let replacementDeviceName = "";
+    let erpCode = "";
     let nextStatus = type === "DE_XUAT" ? "CHO_PHIEU__XUAT_KHO" : "CHO_NHAP_LIEU";
+    const materialId = String(body.materialId || "").trim();
+    if (!materialId) return fail(type === "UNG" ? "Vui lòng chọn tên vật tư ứng" : "Vui lòng chọn tên vật tư đề xuất");
+
+    selectedMaterial = await prisma.material.findUnique({
+      where: { id: materialId },
+      select: { id: true, code: true, erpCodes: true, name: true, quantity: true, category: true, machine: true },
+    });
+    if (!selectedMaterial) return fail("Không tìm thấy vật tư", 404);
+    const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
+    if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
+    if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
 
     if (type === "DE_XUAT") {
-      const materialId = String(body.materialId || "").trim();
+      erpCode = String(body.erpCode || "").trim();
       requestedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
       replacementDeviceName = String(body.replacementDeviceName || "").trim();
 
-      if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
+      if (!erpCode) return fail("Vui lòng chọn mã vật tư");
       if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
       if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
 
-      materialForProposal = await prisma.material.findUnique({
-        where: { id: materialId },
-        select: { id: true, name: true, quantity: true },
-      });
-      if (!materialForProposal) return fail("Không tìm thấy vật tư đề xuất", 404);
+      const allowedCodes = selectedMaterial.erpCodes.length ? selectedMaterial.erpCodes : [selectedMaterial.code];
+      if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
       // Bỏ kiểm kho tự động: tạo phiếu xong đi thẳng bước Thống kê nhập số ĐXVT.
       nextStatus = "CHO_PHIEU__XUAT_KHO";
     }
@@ -136,18 +148,19 @@ export async function POST(req: NextRequest) {
           materialCategory,
           createdById: user.id,
           createdByName: user.name ?? "",
+          items: {
+            create: [{
+              materialId: selectedMaterial!.id,
+              erpCode: type === "DE_XUAT" ? erpCode : null,
+              quantity: type === "DE_XUAT" ? requestedQuantity : 0,
+              deviceNameManual: type === "DE_XUAT" ? replacementDeviceName : null,
+            }],
+          },
           ...(type === "DE_XUAT" ? {
             proposedById: user.id,
             proposedByName: user.name ?? "",
             proposedByPosition: user.position ?? null,
             proposedAt: new Date(),
-            items: {
-              create: [{
-                materialId: materialForProposal!.id,
-                quantity: requestedQuantity,
-                deviceNameManual: replacementDeviceName,
-              }],
-            },
           } : {}),
         },
         include: ITEM_INCLUDE,
@@ -157,7 +170,9 @@ export async function POST(req: NextRequest) {
 
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
       `${code} (${type === "UNG" ? "Ứng" : "Đề xuất"}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}` +
-      (type === "DE_XUAT" ? `, vật tư: ${materialForProposal!.name}, SL: ${requestedQuantity}, thiết bị: ${replacementDeviceName}, trạng thái: ${nextStatus}` : ""));
+      (type === "DE_XUAT"
+        ? `, vật tư: ${selectedMaterial!.name}, SL: ${requestedQuantity}, thiết bị: ${replacementDeviceName}, trạng thái: ${nextStatus}`
+        : `, vật tư: ${selectedMaterial!.name}`));
     return ok(ticket);
   });
 }

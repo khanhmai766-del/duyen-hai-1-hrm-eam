@@ -6,9 +6,11 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 export interface TicketItem {
   id: string;
   materialId: string;
+  erpCode: string | null;
   deviceSeq: string | null;
   deviceNameManual: string | null;
   quantity: number;
+  replacementQuantity: number | null;
   material: { id: string; code: string; name: string; unit: string; quantity: number };
   device: { seq: string; name: string; kks: string | null } | null;
 }
@@ -111,7 +113,7 @@ export function useSaveWorkflowRoles() {
 export function useMaterialTickets() {
   return useQuery({
     queryKey: ["material-tickets"],
-    staleTime: 60_000, // 60s không refetch lại, giảm request lên server
+    staleTime: 0,
     queryFn: async () => {
       const res = await apiGet<MaterialTicket[]>("/api/material-tickets");
       return { tickets: res.data, viewer: (res.meta?.viewer ?? null) as TicketViewer | null };
@@ -128,6 +130,8 @@ export function useTicketOptions(enabled: boolean) {
         devices: { seq: string; name: string; depth: number }[];
         materials: {
           id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
+          machine: string;
+          erpCodes: { code: string; erpStock: number }[];
           managingPositions: string[];
           devices: { seq: string; label: string }[];
         }[];
@@ -144,10 +148,15 @@ export function useCreateTicket() {
     mutationFn: (body: {
       type: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
       assignedPosition: string; materialCategory: string;
-      materialId?: string; proposedQuantity?: number; replacementDeviceName?: string;
+      materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string;
     }) =>
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["material-tickets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-tickets"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["erp-materials"] });
+    },
   });
 }
 
@@ -156,7 +165,12 @@ export function useTicketAction(id: string | null) {
   return useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       apiMutate<MaterialTicket>(`/api/material-tickets/${id}`, "PUT", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["material-tickets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["material-tickets"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["erp-materials"] });
+    },
   });
 }
 
@@ -183,7 +197,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && canOperateAssigned && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
   } else {
-    if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungEntry");
+    if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungAdvance");
+    if (t.status === "CHO_NHAP_LIEU_THAY_THE" && isAssigned && v.hasScope) a.push("ungEntry");
     if (t.status === "CHO_XAC_NHAN_PDF" && canOperateAssigned && v.isShiftLeader) a.push("ungConfirmDoc");
     if (t.status === "CHO_HOAN_THIEN") {
       if (canOperateAssigned && v.isShiftLeader && !t.bbktNumber) a.push("ungBbkt");

@@ -325,7 +325,8 @@ enum Priority {
 
 model Material {
   id        String   @id @default(cuid())
-  code      String   @unique
+  code      String
+  erpCodes  String[] @default([])
   name      String
   unit      String
   quantity  Int      @default(0)
@@ -346,9 +347,26 @@ model Material {
   replacements    MaterialReplacement[]
   ticketItems     MaterialTicketItem[]
 
+  @@unique([code, machine])
   @@index([system])
   @@index([quantity])
   @@index([machine])
+}
+
+model ErpMaterial {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  unit      String
+  erpStock  Int      @default(0)
+  category  String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([category])
+  @@index([erpStock])
 }
 
 // Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí
@@ -886,9 +904,11 @@ model MaterialTicketItem {
   id               String  @id @default(cuid())
   ticketId         String
   materialId       String
+  erpCode          String?
   deviceSeq        String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
   deviceNameManual String?
   quantity         Int     @default(1)
+  replacementQuantity Int? // số lượng thay thế do cương vị phân giao nhập ở luồng Ứng
 
   ticket   MaterialTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   material Material       @relation(fields: [materialId], references: [id])

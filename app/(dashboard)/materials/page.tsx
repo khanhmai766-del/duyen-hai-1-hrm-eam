@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, Boxes, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -21,10 +21,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
+import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog } from "@/lib/constants";
+import { normalizeText } from "@/lib/nav";
 import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
 
@@ -46,9 +48,11 @@ const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon:
 
 type MaterialEdit = Partial<Material> & {
   id?: string;
+  erpCodes?: string[];
   documentUrl?: string | null;
   documentName?: string | null;
   replacements?: MaterialReplacementInput[];
+  machines?: string[];
 };
 
 export default function MaterialsPage() {
@@ -65,6 +69,7 @@ function MaterialsPageContent() {
   // Xem bảng: mọi cương vị. Thao tác (Thêm/Sửa/Xoá/Xuất): Quản đốc/Phó Quản đốc/Kỹ thuật viên/Quản trị.
   const canManage = canManageMaterialCatalog({ role, position: session?.user?.position });
   const { data, isLoading } = useMaterials();
+  const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
@@ -87,16 +92,82 @@ function MaterialsPageContent() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = React.useState(false);
   const [replMaterial, setReplMaterial] = React.useState<Material | null>(null);
+  const [erpSearch, setErpSearch] = React.useState("");
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
   // (vd bấm cảnh báo thay thế trong chuông thông báo).
-  // Tab tổ máy đồng bộ với URL (?may=S1|S2|COMMON) — menu con "Danh mục vật tư"
+  // Tab tổ máy đồng bộ với URL (?may=S1|S2|COMMON) — menu con "Danh mục vật tư PXVH1"
   // ở sidebar điều hướng bằng tham số này và highlight theo đúng tab đang mở.
   const mayParam = params.get("may");
   const machineTab: (typeof DEFECT_UNITS)[number] = (DEFECT_UNITS as readonly string[]).includes(mayParam ?? "")
     ? (mayParam as (typeof DEFECT_UNITS)[number])
     : "S1";
   const machineLabel = MACHINE_TABS.find((t) => t.key === machineTab)?.label ?? machineTab;
+  const erpMaterials = (erpMaterialsQuery.data?.data ?? []) as Array<{
+    id: string;
+    code: string;
+    name: string;
+    unit: string;
+    erpStock: number;
+    category?: string | null;
+  }>;
+
+  function erpByCode(code?: string | null) {
+    return erpMaterials.find((item) => item.code === code) ?? null;
+  }
+
+  function materialErpCodes(material: Pick<MaterialEdit, "code" | "erpCodes">) {
+    return Array.from(new Set([...(material.erpCodes ?? []), material.code].map((code) => String(code ?? "").trim()).filter(Boolean)));
+  }
+
+  function erpListByCodes(codes: string[]) {
+    return codes.map((code) => erpByCode(code)).filter((item): item is NonNullable<ReturnType<typeof erpByCode>> => Boolean(item));
+  }
+
+  function erpStockByCodes(codes: string[]) {
+    return erpListByCodes(codes).reduce((sum, item) => sum + (Number(item.erpStock) || 0), 0);
+  }
+
+  function categoryMatches(value?: string | null, target = categoryFilter) {
+    return (
+      value === target ||
+      (target === "Hóa Chất" && (value === "Vật tư tiêu hao" || value === "Hóa chất")) ||
+      (target === "Bi Nghiền Than" && (value === "Bi nghiền than" || value === "Bi nghiền"))
+    );
+  }
+
+  function toggleErpMaterial(code: string, checked: boolean) {
+    setEdit((prev) => ({
+      ...(prev ?? {}),
+      code: checked
+        ? materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).concat(code)[0]
+        : materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).filter((item) => item !== code)[0],
+      erpCodes: checked
+        ? Array.from(new Set([...materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }), code]))
+        : materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).filter((item) => item !== code),
+      minStock: erpStockByCodes(
+        checked
+          ? Array.from(new Set([...materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }), code]))
+          : materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).filter((item) => item !== code)
+      ),
+      category: prev?.category || categoryFilter,
+    }));
+  }
+
+  function changeEditCategory(category: string | null) {
+    setEdit((prev) => {
+      if (!prev) return prev;
+      const nextCategory = category || categoryFilter;
+      const nextCodes = materialErpCodes(prev).filter((code) => categoryMatches(erpByCode(code)?.category, nextCategory));
+      return {
+        ...prev,
+        category,
+        code: nextCodes[0],
+        erpCodes: nextCodes,
+        minStock: erpStockByCodes(nextCodes),
+      };
+    });
+  }
 
   React.useEffect(() => {
     if (searchParam) setQ(searchParam);
@@ -141,7 +212,7 @@ function MaterialsPageContent() {
   const materials = (data?.data ?? []).filter(
     (m) =>
       (m.machine ?? "COMMON") === machineTab &&
-      (!q || `${m.code} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
+      (!q || `${materialErpCodes(m).join(" ")} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
       (m.category === categoryFilter ||
         (categoryFilter === "Hóa Chất" && (m.category === "Vật tư tiêu hao" || m.category === "Hóa chất")) ||
         (categoryFilter === "Bi Nghiền Than" && (m.category === "Bi nghiền than" || m.category === "Bi nghiền"))) &&
@@ -153,6 +224,18 @@ function MaterialsPageContent() {
   // Dùng chuỗi id ổn định làm dependency để effect chỉ chạy khi tập hiển thị đổi,
   // tránh chạy lại sau mỗi lần render (materials là mảng lọc mới mỗi render).
   const visibleKey = materials.map((m) => m.id).join(",");
+  const erpCategoryFilter = edit?.category || categoryFilter;
+  const erpOptions = erpMaterials.filter((item) => categoryMatches(item.category, erpCategoryFilter));
+  const erpSearchText = normalizeText(erpSearch);
+  const filteredErpOptions = erpOptions.filter((item) => {
+    if (!erpSearchText) return true;
+    return normalizeText(`${item.code} ${item.name} ${item.unit}`).includes(erpSearchText);
+  });
+  const selectedErpCodes = edit ? materialErpCodes(edit) : [];
+  const selectedErpStock = erpStockByCodes(selectedErpCodes);
+  React.useEffect(() => {
+    if (!edit) setErpSearch("");
+  }, [edit]);
   React.useEffect(() => {
     const visible = new Set(visibleKey ? visibleKey.split(",") : []);
     setSelected((prev) => {
@@ -203,8 +286,43 @@ function MaterialsPageContent() {
 
   async function save() {
     if (!edit) return;
+    const erpCodes = materialErpCodes(edit);
+    const linkedErps = erpListByCodes(erpCodes);
+    if (!linkedErps.length) {
+      toast.error("Vui lòng chọn ít nhất một mã vật tư từ Danh mục vật tư ERP");
+      return;
+    }
+    if (linkedErps.some((erp) => !categoryMatches(erp.category, edit.category || categoryFilter))) {
+      toast.error("Mã vật tư ERP không thuộc loại vật tư đang chọn");
+      return;
+    }
+    if (!String(edit.name ?? "").trim()) {
+      toast.error("Vui lòng nhập tên vật tư");
+      return;
+    }
+    if (!String(edit.unit ?? "").trim()) {
+      toast.error("Vui lòng nhập ĐVT");
+      return;
+    }
+    if (isNew && !(edit.machines ?? []).length) {
+      toast.error("Vui lòng chọn ít nhất một tổ máy");
+      return;
+    }
     try {
-      await upsert.mutateAsync(edit);
+      await upsert.mutateAsync(
+        {
+          ...edit,
+          code: erpCodes[0],
+          erpCodes,
+          name: String(edit.name ?? "").trim(),
+          unit: String(edit.unit ?? "").trim(),
+          minStock: erpStockByCodes(erpCodes),
+          category: edit.category || categoryFilter,
+          ...(isNew
+            ? { machines: edit.machines ?? [machineTab], machine: (edit.machines ?? [machineTab])[0] ?? machineTab }
+            : {}),
+        }
+      );
       toast.success(isNew ? "Đã thêm vật tư" : "Đã cập nhật vật tư");
       setEdit(null);
     } catch (e) {
@@ -246,11 +364,14 @@ function MaterialsPageContent() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="DANH MỤC VẬT TƯ" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
+      <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && (
           <>
-            <ExportButton rows={materials.map((m) => ({ code: m.code, name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 }))} filename={`vat-tu-${machineTab.toLowerCase()}`} />
-            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machine: machineTab, replacements: [] }); }}>
+            <ExportButton rows={materials.map((m) => {
+              const codes = materialErpCodes(m);
+              return { code: codes.join(", "), name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: codes.length ? erpStockByCodes(codes) : m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 };
+            })} filename={`vat-tu-${machineTab.toLowerCase()}`} />
+            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
               <Plus className="h-4 w-4" /> Thêm vật tư
             </Button>
           </>
@@ -330,7 +451,6 @@ function MaterialsPageContent() {
                     />
                   </TableHead>
                 )}
-                <TableHead className="text-center">Mã vật tư</TableHead>
                 <TableHead className="text-center">Tên vật tư</TableHead>
                 <TableHead className="text-center">ĐVT</TableHead>
                 <TableHead className="text-center">Hiện có</TableHead>
@@ -342,6 +462,8 @@ function MaterialsPageContent() {
               {pagedMaterials.map((m) => {
                 const checked = selected.has(m.id);
                 const expanded = expandedId === m.id;
+                const linkedCodes = materialErpCodes(m);
+                const linkedErpStock = linkedCodes.length ? erpStockByCodes(linkedCodes) : m.minStock;
                 return (
                   <React.Fragment key={m.id}>
                   <TableRow data-state={checked ? "selected" : undefined} className={cn("cursor-pointer hover:bg-muted/30", checked && "bg-accent/5")} onClick={() => setExpandedId(expanded ? null : m.id)}>
@@ -354,8 +476,8 @@ function MaterialsPageContent() {
                         />
                       </TableCell>
                     )}
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setExpandedId(expanded ? null : m.id); }}
@@ -364,11 +486,6 @@ function MaterialsPageContent() {
                         >
                           {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                         </button>
-                        <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium text-navy">{m.code}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
                         {m.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={m.imageUrl} alt={m.name} className="h-9 w-9 shrink-0 rounded-lg border border-border object-cover" />
@@ -399,15 +516,7 @@ function MaterialsPageContent() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <InlineNumberCell
-                        value={m.minStock}
-                        canEdit={canManage}
-                        ariaLabel={`Sửa Số liệu ERP của ${m.code}`}
-                        onSave={async (v) => {
-                          await upsert.mutateAsync({ id: m.id, minStock: v });
-                          toast.success(`Đã cập nhật Số liệu ERP: ${m.code} → ${v}`);
-                        }}
-                      />
+                      <span className="font-semibold tabular-nums text-ink">{linkedErpStock}</span>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
@@ -429,7 +538,7 @@ function MaterialsPageContent() {
                   </TableRow>
                   {expanded && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={canManage ? 7 : 6} className="px-6 py-4">
+                      <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
                         <MaterialExpandedDetails m={m} blockFilter={blockFilter} onOpenTracking={() => setReplMaterial(m)} />
                       </TableCell>
                     </TableRow>
@@ -475,37 +584,103 @@ function MaterialsPageContent() {
           <DialogHeader><DialogTitle>{isNew ? "Thêm vật tư" : `Cập nhật: ${edit?.name}`}</DialogTitle></DialogHeader>
           {edit && (
             <div className="grid grid-cols-2 gap-3">
-              {isNew && (
-                <>
-                  <Field label="Mã *"><Input value={edit.code ?? ""} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></Field>
-                  <Field label="ĐVT *"><Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="Cái / Lít / Bộ…" /></Field>
-                </>
-              )}
+              <Field label="Mã vật tư ERP *" className="col-span-2">
+                <Input
+                  value={erpSearch}
+                  onChange={(e) => setErpSearch(e.target.value)}
+                  placeholder="Tìm mã, tên vật tư, ĐVT ERP..."
+                  className="mb-2"
+                />
+                <div className="max-h-56 overflow-y-auto rounded-md border border-input bg-white">
+                  {filteredErpOptions.map((erp) => {
+                    const checked = selectedErpCodes.includes(erp.code);
+                    return (
+                      <label key={erp.id} className="flex cursor-pointer items-start gap-3 border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-muted/40">
+                        <Checkbox
+                          aria-label={`Chọn mã ${erp.code}`}
+                          checked={checked}
+                          onCheckedChange={(v) => toggleErpMaterial(erp.code, v === true)}
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-mono text-xs font-semibold text-navy">{erp.code}</span>
+                          <span className="block truncate text-sm text-ink">{erp.name}</span>
+                          <span className="block text-xs text-muted-foreground">ĐVT ERP: {erp.unit} · Số liệu ERP: {erp.erpStock}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {!erpMaterialsQuery.isLoading && erpOptions.length === 0 && (
+                  <p className="mt-1.5 text-xs text-red-600">Chưa có vật tư ERP thuộc loại "{erpCategoryFilter}". Vui lòng nhập ERP đúng loại trước.</p>
+                )}
+                {!erpMaterialsQuery.isLoading && erpOptions.length > 0 && filteredErpOptions.length === 0 && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">Không có mã ERP nào khớp từ khoá trong loại "{erpCategoryFilter}".</p>
+                )}
+                {selectedErpCodes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {selectedErpCodes.map((code) => (
+                      <span key={code} className="rounded-md bg-accent/10 px-2 py-1 font-mono text-xs font-semibold text-accent">{code}</span>
+                    ))}
+                  </div>
+                )}
+              </Field>
+              <Field label="ĐVT *">
+                <Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="Cái / Lít / Bộ..." />
+              </Field>
+              <Field label="Số liệu ERP">
+                <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-semibold tabular-nums text-ink">
+                  {selectedErpCodes.length ? selectedErpStock : edit.minStock || 0}
+                </div>
+              </Field>
               <Field label="Ảnh vật tư" className="col-span-2">
                 <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
               </Field>
               <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
               <Field label="Tổ máy" className="col-span-2">
                 <div className="grid grid-cols-3 gap-2">
-                  {MACHINE_TABS.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setEdit({ ...edit, machine: t.key })}
-                      className={cn(
-                        "h-10 rounded-md border text-sm font-medium transition-colors",
-                        (edit.machine ?? "COMMON") === t.key
-                          ? "border-navy bg-navy text-white"
-                          : "border-input bg-muted/40 text-ink hover:border-accent"
-                      )}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+                  {MACHINE_TABS.map((t) => {
+                    if (isNew) {
+                      const selected = (edit.machines ?? []).includes(t.key);
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => {
+                            const cur = edit.machines ?? [];
+                            const next = selected ? cur.filter((k) => k !== t.key) : [...cur, t.key];
+                            setEdit({ ...edit, machines: next });
+                          }}
+                          className={cn(
+                            "h-10 rounded-md border text-sm font-medium transition-colors",
+                            selected
+                              ? "border-navy bg-navy text-white"
+                              : "border-input bg-muted/40 text-ink hover:border-accent"
+                          )}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setEdit({ ...edit, machine: t.key })}
+                        className={cn(
+                          "h-10 rounded-md border text-sm font-medium transition-colors",
+                          (edit.machine ?? "COMMON") === t.key
+                            ? "border-navy bg-navy text-white"
+                            : "border-input bg-muted/40 text-ink hover:border-accent"
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </Field>
               <Field label="Loại vật tư" className="col-span-2">
-                <Select value={edit.category ?? "NONE"} onValueChange={(v) => setEdit({ ...edit, category: v === "NONE" ? null : v })}>
+                <Select value={edit.category ?? "NONE"} onValueChange={(v) => changeEditCategory(v === "NONE" ? null : v)}>
                   <SelectTrigger aria-label="Chọn loại vật tư"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="NONE">— Chưa phân loại —</SelectItem>
@@ -516,7 +691,6 @@ function MaterialsPageContent() {
                 </Select>
               </Field>
               <Field label="Hiện Có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
-              <Field label="Số liệu ERP"><Input type="number" min={0} value={edit.minStock ?? 0} onChange={(e) => setEdit({ ...edit, minStock: Number(e.target.value) })} /></Field>
               <Field label="Tài liệu đính kèm" className="col-span-2">
                 <MaterialDocumentField
                   url={edit.documentUrl ?? ""}

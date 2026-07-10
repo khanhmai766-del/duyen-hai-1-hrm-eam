@@ -30,6 +30,7 @@ function parseMachine(value: unknown) {
 type MaterialDocumentFields = {
   documentUrl: string | null;
   documentName: string | null;
+  erpCodes?: string[];
 };
 
 async function normalizeMaterialDocument(body: { documentUrl?: unknown; documentName?: unknown }): Promise<MaterialDocumentFields> {
@@ -45,10 +46,10 @@ async function normalizeMaterialDocument(body: { documentUrl?: unknown; document
 
 async function materialDocumentMap() {
   try {
-    const rows = await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null }>>`
-      SELECT "id", "documentUrl", "documentName" FROM "Material"
+    const rows = await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
+      SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material"
     `;
-    return new Map(rows.map((row) => [row.id, { documentUrl: row.documentUrl, documentName: row.documentName }]));
+    return new Map(rows.map((row) => [row.id, { documentUrl: row.documentUrl, documentName: row.documentName, erpCodes: row.erpCodes ?? [] }]));
   } catch {
     return new Map<string, MaterialDocumentFields>();
   }
@@ -79,6 +80,7 @@ function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?
   const shortfall = Math.max(0, totalNeed - (Number(material.quantity) || 0));
   return {
     ...material,
+    erpCodes: document?.erpCodes ?? (material as any).erpCodes ?? [String((material as any).code ?? "")].filter(Boolean),
     documentUrl: document?.documentUrl ?? null,
     documentName: document?.documentName ?? null,
     deviceMaterials: material.deviceMaterials?.map((dm) => ({
@@ -137,6 +139,48 @@ function parseReplacements(body: { replacements?: unknown }, userId: string, def
     .map((r: ReplacementInput) => buildReplacementCreate(r, userId, defaultSystem));
 }
 
+function parseErpCodes(body: { code?: unknown; erpCodes?: unknown }) {
+  const values = Array.isArray(body.erpCodes) ? body.erpCodes : [body.code];
+  return Array.from(
+    new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))
+  );
+}
+
+async function materialWithAnyErpCode(erpCodes: string[], excludeId?: string, machine?: string) {
+  if (!erpCodes.length) return null;
+  // Khi có machine, chỉ kiểm tra trùng trong cùng tổ máy (dùng cho PUT).
+  // Khi không có machine, kiểm tra toàn bộ (dùng cho POST kiểm tra global).
+  const rows = excludeId
+    ? machine
+      ? await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "Material"
+          WHERE "id" <> ${excludeId}
+            AND "machine" = ${machine}
+            AND ("code" = ANY(${erpCodes}::text[]) OR "erpCodes" && ${erpCodes}::text[])
+          LIMIT 1
+        `
+      : await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "Material"
+          WHERE "id" <> ${excludeId}
+            AND ("code" = ANY(${erpCodes}::text[]) OR "erpCodes" && ${erpCodes}::text[])
+          LIMIT 1
+        `
+    : await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "Material"
+        WHERE "code" = ANY(${erpCodes}::text[]) OR "erpCodes" && ${erpCodes}::text[]
+        LIMIT 1
+      `;
+  return rows[0] ?? null;
+}
+
+async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
+  await prisma.$executeRaw`
+    UPDATE "Material"
+    SET "erpCodes" = ${erpCodes}::text[]
+    WHERE "id" = ${materialId}
+  `;
+}
+
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
@@ -172,34 +216,57 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được thêm vật tư", 403);
     const body = await req.json();
-    if (!body.code || !body.name || !body.unit) return fail("Thiếu thông tin bắt buộc");
-    const exists = await prisma.material.findUnique({ where: { code: body.code } });
-    if (exists) return fail("Mã vật tư đã tồn tại");
+    const erpCodes = parseErpCodes(body);
+    const primaryCode = erpCodes[0];
+    if (!primaryCode || !body.name || !body.unit) return fail("Thiếu thông tin bắt buộc");
+    const exists = await materialWithAnyErpCode(erpCodes);
+    if (exists) return fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
     const defaultSystem = body.system?.trim() || null;
     const replacements = parseReplacements(body, user.id, defaultSystem);
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" });
     const document = await normalizeMaterialDocument(body);
-    const m = await prisma.material.create({
-      data: {
-        code: body.code,
-        name: body.name,
-        unit: body.unit,
-        quantity: Number(body.quantity) || 0,
-        minStock: Number(body.minStock) || 0,
-        location: null,
-        system: defaultSystem,
-        category: body.category?.trim() || null,
-        machine: parseMachine(body.machine) ?? "COMMON",
-        imageUrl,
-        unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
-        note: body.note || null,
-        ...(replacements.length ? { replacements: { create: replacements } } : {}),
-      },
-      include: MATERIAL_INCLUDE,
-    });
-    await updateMaterialDocument(m.id, document);
-    await audit(user.id, "CREATE_MATERIAL", "Material", m.id, m.code);
-    return ok(mapMaterial(m, document));
+    const syncAll = body.syncAll === true;
+    const requestedMachines: string[] = Array.isArray(body.machines)
+      ? body.machines.filter((m: unknown) => typeof m === "string" && (DEFECT_UNITS as readonly string[]).includes(m as string))
+      : [];
+    const machines = requestedMachines.length
+      ? requestedMachines
+      : syncAll
+        ? ["S1", "S2", "COMMON"]
+        : [parseMachine(body.machine) ?? "COMMON"];
+    const sharedData = {
+      code: primaryCode,
+      name: body.name,
+      unit: body.unit,
+      quantity: Number(body.quantity) || 0,
+      minStock: Number(body.minStock) || 0,
+      location: null,
+      system: defaultSystem,
+      category: body.category?.trim() || null,
+      imageUrl,
+      unitPrice: body.unitPrice != null ? Number(body.unitPrice) : null,
+      note: body.note || null,
+    };
+    // Tổ máy chính (nhận điểm dùng/thay thế): lấy theo tab đang chọn hoặc fallback "COMMON".
+    const primaryMachine = parseMachine(body.machine) ?? "COMMON";
+    let firstMaterial: any = null;
+    for (const machine of machines) {
+      // Chỉ tổ máy chính nhận điểm dùng/thay thế (vì gắn thiết bị cụ thể của tổ máy đó).
+      const isMachineWithReplacements = machine === primaryMachine;
+      const m = await prisma.material.create({
+        data: {
+          ...sharedData,
+          machine,
+          ...(isMachineWithReplacements && replacements.length ? { replacements: { create: replacements } } : {}),
+        },
+        include: MATERIAL_INCLUDE,
+      });
+      await updateMaterialErpCodes(m.id, erpCodes);
+      await updateMaterialDocument(m.id, document);
+      await audit(user.id, "CREATE_MATERIAL", "Material", m.id, `${m.code} (${machine})`);
+      if (!firstMaterial) firstMaterial = m;
+    }
+    return ok(mapMaterial(firstMaterial, { ...document, erpCodes }));
   });
 }
 
@@ -209,6 +276,16 @@ export async function PUT(req: NextRequest) {
     if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được cập nhật vật tư", 403);
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
+    const erpCodes = body.erpCodes !== undefined || body.code !== undefined ? parseErpCodes(body) : undefined;
+    const primaryCode = erpCodes?.[0];
+    if (erpCodes && !primaryCode) return fail("Vui lòng chọn ít nhất một mã vật tư ERP");
+    // Lấy tổ máy hiện tại của bản ghi để scope duplicate check đúng tổ máy.
+    const currentMaterial = await prisma.material.findUnique({ where: { id: body.id }, select: { machine: true, code: true } });
+    if (!currentMaterial) return fail("Không tìm thấy vật tư", 404);
+    if (erpCodes?.length) {
+      const exists = await materialWithAnyErpCode(erpCodes, body.id, currentMaterial.machine);
+      if (exists) return fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
+    }
     const defaultSystem = body.system !== undefined ? body.system?.trim() || null : undefined;
     const imageUrl =
       body.imageUrl !== undefined
@@ -220,6 +297,7 @@ export async function PUT(req: NextRequest) {
     await prisma.material.update({
       where: { id: body.id },
       data: {
+        ...(primaryCode ? { code: primaryCode } : {}),
         ...(body.name != null ? { name: body.name } : {}),
         ...(body.unit != null ? { unit: body.unit } : {}),
         ...(body.quantity != null ? { quantity: Number(body.quantity) } : {}),
@@ -232,6 +310,9 @@ export async function PUT(req: NextRequest) {
         ...(body.note !== undefined ? { note: body.note || null } : {}),
       },
     });
+    if (erpCodes) {
+      await updateMaterialErpCodes(body.id, erpCodes);
+    }
     if (document !== undefined) {
       await updateMaterialDocument(body.id, document);
     }
@@ -243,6 +324,16 @@ export async function PUT(req: NextRequest) {
       await prisma.materialReplacement.deleteMany({ where: { materialId: body.id, isActive: false } });
       for (const data of replacements) {
         await prisma.materialReplacement.create({ data: { ...data, materialId: body.id } });
+      }
+    }
+    // Đồng bộ quantity sang các bản ghi sibling (cùng code, khác machine).
+    if (body.quantity != null) {
+      const updated = await prisma.material.findUnique({ where: { id: body.id }, select: { code: true, machine: true } });
+      if (updated) {
+        await prisma.material.updateMany({
+          where: { code: updated.code, machine: { not: updated.machine } },
+          data: { quantity: Number(body.quantity) },
+        });
       }
     }
     const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });

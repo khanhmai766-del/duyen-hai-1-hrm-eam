@@ -1,5 +1,7 @@
 import crypto from "crypto";
 import path from "path";
+import { mkdir, readFile, writeFile } from "fs/promises";
+import { Readable } from "stream";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from "sharp";
@@ -21,6 +23,42 @@ type MaybeUploadParams = {
 };
 
 const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const LOCAL_OBJECT_ROOT = path.join(process.cwd(), ".local-storage");
+
+function hasS3Config() {
+  return Boolean(
+    process.env.S3_ENDPOINT &&
+    process.env.S3_ACCESS_KEY &&
+    process.env.S3_SECRET_KEY &&
+    process.env.S3_BUCKET
+  );
+}
+
+function localObjectPath(key: string) {
+  const normalized = key.replace(/\\/g, "/");
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").includes("..")) {
+    throw new Error("Key tệp không hợp lệ");
+  }
+  const target = path.resolve(LOCAL_OBJECT_ROOT, normalized);
+  if (!target.startsWith(`${path.resolve(LOCAL_OBJECT_ROOT)}${path.sep}`)) {
+    throw new Error("Key tệp không hợp lệ");
+  }
+  return target;
+}
+
+function contentTypeFromKey(key: string) {
+  const ext = path.extname(key).toLowerCase();
+  const map: Record<string, string> = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".json": "application/json",
+  };
+  return map[ext] || "application/octet-stream";
+}
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -265,6 +303,12 @@ export async function uploadS3Object(params: {
   contentType?: string;
   originalName?: string;
 }) {
+  if (!hasS3Config()) {
+    const target = localObjectPath(params.key);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, params.body);
+    return params.key;
+  }
   await s3Client().send(
     new PutObjectCommand({
       Bucket: bucket(),
@@ -282,6 +326,15 @@ export async function signedS3Url(key: string, expiresIn = 300) {
 }
 
 export async function getS3Object(key: string) {
+  if (!hasS3Config()) {
+    const buffer = await readFile(localObjectPath(key));
+    return {
+      Body: {
+        transformToWebStream: () => Readable.toWeb(Readable.from(buffer)) as ReadableStream,
+      },
+      ContentType: contentTypeFromKey(key),
+    };
+  }
   return s3Client().send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
 }
 

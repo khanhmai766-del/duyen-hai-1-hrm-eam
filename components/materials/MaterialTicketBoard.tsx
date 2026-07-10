@@ -32,7 +32,8 @@ const STATUS: Record<string, { label: string; c: string }> = {
   NHAN_VAT_TU: { label: "Nhận vật tư", c: "#0891b2" },
   SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
-  CHO_NHAP_LIEU: { label: "Chờ nhập liệu", c: C.ung },
+  CHO_NHAP_LIEU: { label: "Chờ nhập số lượng ứng", c: C.ung },
+  CHO_NHAP_LIEU_THAY_THE: { label: "Chờ nhập liệu thay thế", c: C.ung },
   CHO_XAC_NHAN_PDF: { label: "Chờ xác nhận xuất file", c: C.ung },
   CHO_HOAN_THIEN: { label: "Chờ hoàn thiện hồ sơ", c: C.ung },
   HOAN_TAT: { label: "Hoàn tất", c: C.ok },
@@ -48,14 +49,15 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   ],
   UNG: [
     { key: "B0", label: "Tạo phiếu Ứng", who: "Trưởng Ca/TK" },
-    { key: "CHO_NHAP_LIEU", label: "Nhập liệu thay thế", who: "Cương vị phân giao" },
+    { key: "CHO_NHAP_LIEU", label: "Nhập số lượng vật tư ứng", who: "Cương vị phân giao" },
+    { key: "CHO_NHAP_LIEU_THAY_THE", label: "Nhập liệu thay thế", who: "Cương vị phân giao" },
     { key: "CHO_XAC_NHAN_PDF", label: "Xác nhận + xuất Word", who: "Trưởng Ca/TK" },
     { key: "CHO_HOAN_THIEN", label: "BBKT + Thống kê (song song)", who: "TC/TK + Thống kê" },
   ],
 };
 const ORDER: Record<string, string[]> = {
   DE_XUAT: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "HOAN_TAT"],
-  UNG: ["B0", "CHO_NHAP_LIEU", "CHO_XAC_NHAN_PDF", "CHO_HOAN_THIEN", "HOAN_TAT"],
+  UNG: ["B0", "CHO_NHAP_LIEU", "CHO_NHAP_LIEU_THAY_THE", "CHO_XAC_NHAN_PDF", "CHO_HOAN_THIEN", "HOAN_TAT"],
 };
 const flowStatusKey = (status: string) => status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO" : status;
 const fmt = (s?: string | null) =>
@@ -120,7 +122,7 @@ export default function MaterialTicketBoard({
 
   return (
     <div className="mtw">
-      <style>{CSS}</style>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
 
       <div className="top-tools">
         {myTurn.length > 0 ? (
@@ -214,7 +216,7 @@ export default function MaterialTicketBoard({
                   ? <span className="code">{t.proposalNumber}</span>
                   : <span className="nophieu">Chưa có phiếu đề xuất</span>}
               </span>
-              <span>{t.items.length ? t.items.map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "—"}</span>
+              <span>{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
               <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>{meta.label}</span>
               <span className="dots">{order.slice(0, order.length - 1).map((s, i) => (
                 <i key={s} className={i < done ? "d on" : i === done && t.status !== "HOAN_TAT" ? "d cur" : "d"} />
@@ -295,6 +297,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [assigned, setAssigned] = useState("");
   const [category, setCategory] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
+  const [selectedErpCode, setSelectedErpCode] = useState("");
   const [proposedQuantity, setProposedQuantity] = useState(1);
   const [replacementDeviceName, setReplacementDeviceName] = useState("");
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
@@ -309,24 +312,47 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     if (!materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
       const matchesCategory = m.category === materialCategoryLabel;
-      const matchesPosition = !assignedKey || m.managingPositions.some((p) => positionKey(p) === assignedKey);
-      return matchesCategory && matchesPosition;
+      const matchesUnit = m.machine === unit;
+      const matchesPosition = !assignedKey || m.managingPositions.length === 0 || m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      return matchesCategory && matchesUnit && matchesPosition;
     });
-  }, [assignedKey, materialCategoryLabel, opts?.materials]);
+  }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
+  const isProposalType = type === "DE_XUAT";
+  const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  const selectedErpOptions = useMemo(
+    () => selectedMaterial?.erpCodes?.length
+      ? selectedMaterial.erpCodes
+      : selectedMaterial
+        ? [{ code: selectedMaterial.code, erpStock: 0 }]
+        : [],
+    [selectedMaterial]
+  );
 
   React.useEffect(() => {
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
+      if (selectedErpCode) setSelectedErpCode("");
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
     }
-  }, [materialCards, selectedMaterialId]);
+  }, [materialCards, selectedMaterialId, selectedErpCode]);
+
+  React.useEffect(() => {
+    if (!selectedErpOptions.length) {
+      if (selectedErpCode) setSelectedErpCode("");
+      return;
+    }
+    if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
+      setSelectedErpCode(selectedErpOptions[0].code);
+    }
+  }, [selectedErpCode, selectedErpOptions]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
     setSelectedMaterialId("");
+    setSelectedErpCode("");
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
@@ -336,8 +362,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         type: type!, unit, note: note.trim() || undefined,
         assignedPosition: assigned, materialCategory: category,
         materialId: selectedMaterialId || undefined,
-        proposedQuantity,
-        replacementDeviceName: replacementDeviceName.trim() || undefined,
+        erpCode: isProposalType ? selectedErpCode || undefined : undefined,
+        proposedQuantity: isProposalType ? proposedQuantity : undefined,
+        replacementDeviceName: isProposalType ? replacementDeviceName.trim() || undefined : undefined,
       });
       toast.success(`Đã tạo phiếu ${res.code}`);
       onClose();
@@ -350,7 +377,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   return (
     <>
       <div className="ovl" onClick={onClose} />
-      <div className="dlg">
+      <div className="dlg dlg-scroll">
         <div className="dlg-h"><b>Tạo phiếu thay thế vật tư</b>
           <button className="x" onClick={onClose}><X size={16} /></button></div>
         {!type ? (
@@ -365,14 +392,14 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </button>
           </div>
         ) : (
-          <div className="frm">
+          <div className="frm frm-scroll">
             <label>Tổ máy</label>
             <div className="seg2">{UNITS.map((u) => (
               <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
             ))}</div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); }}>
+            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -380,35 +407,51 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); }}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); }}>{c}</button>
               ))}
             </div>
 
-            <label>Tên vật tư</label>
-            <div className="material-cards">
-              {!category ? (
-                <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
-              ) : materialCards.length ? (
-                materialCards.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={selectedMaterialId === m.id ? "on" : ""}
-                    onClick={() => setSelectedMaterialId(m.id)}
-                    title={`${m.code} - ${m.name}`}
-                  >
-                    <span>{m.name}</span>
-                    <small>{m.code}</small>
-                  </button>
-                ))
-              ) : (
-                <div className="material-empty">
-                  {assigned
-                    ? "Chưa có mã vật tư đã link với cương vị này trong danh mục"
-                    : "Chưa có vật tư thuộc loại này trong danh mục"}
+            {type && (
+              <>
+                <label>Tên vật tư</label>
+                <div className="material-cards">
+                  {!category ? (
+                    <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
+                  ) : materialCards.length ? (
+                    materialCards.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={selectedMaterialId === m.id ? "on" : ""}
+                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); }}
+                        title={`${m.code} - ${m.name}`}
+                      >
+                        <span>{m.name}</span>
+                        <small>Tồn kho: {m.quantity} {m.unit}</small>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="material-empty">
+                      {assigned
+                        ? "Chưa có mã vật tư đã link với cương vị này trong danh mục"
+                        : "Chưa có vật tư thuộc loại này trong danh mục"}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {isProposalType && (
+                  <>
+                    <label>Mã vật tư *</label>
+                    <select value={selectedErpCode} disabled={!selectedMaterialId} onChange={(e) => setSelectedErpCode(e.target.value)}>
+                      <option value="">{selectedMaterialId ? "— Chọn mã vật tư —" : "— Chọn tên vật tư trước —"}</option>
+                      {selectedErpOptions.map((item) => (
+                        <option key={item.code} value={item.code}>{item.code} · Số liệu ERP: {item.erpStock}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </>
+            )}
 
             {type === "DE_XUAT" ? (
               <>
@@ -445,7 +488,8 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   create.isPending ||
                   !assigned ||
                   !category ||
-                  (type === "DE_XUAT" && (!note.trim() || !selectedMaterialId || proposedQuantity <= 0 || !replacementDeviceName.trim()))
+                  !selectedMaterialId ||
+                  (isProposalType && (!note.trim() || !selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !replacementDeviceName.trim()))
                 }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
@@ -540,6 +584,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const [assigned, setAssigned] = useState(t.assignedPosition);
   const [category, setCategory] = useState(t.materialCategory ?? "");
   const [selectedMaterialId, setSelectedMaterialId] = useState(t.items[0]?.materialId ?? "");
+  const [selectedErpCode, setSelectedErpCode] = useState(t.items[0]?.erpCode ?? "");
   const [proposedQuantity, setProposedQuantity] = useState(t.items[0]?.quantity ?? 1);
   const [note, setNote] = useState(t.proposalNote ?? "");
   const [replacementDeviceName, setReplacementDeviceName] = useState(t.items[0]?.deviceNameManual ?? t.items[0]?.device?.name ?? "");
@@ -555,25 +600,48 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     if (!materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
       const matchesCategory = m.category === materialCategoryLabel;
-      const matchesPosition = !assignedKey || m.managingPositions.some((p) => positionKey(p) === assignedKey);
-      return matchesCategory && matchesPosition;
+      const matchesUnit = m.machine === unit;
+      const matchesPosition = !assignedKey || m.managingPositions.length === 0 || m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      return matchesCategory && matchesUnit && matchesPosition;
     });
-  }, [assignedKey, materialCategoryLabel, opts?.materials]);
+  }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
+  const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  const selectedErpOptions = useMemo(
+    () => selectedMaterial?.erpCodes?.length
+      ? selectedMaterial.erpCodes
+      : selectedMaterial
+        ? [{ code: selectedMaterial.code, erpStock: 0 }]
+        : [],
+    [selectedMaterial]
+  );
 
   React.useEffect(() => {
     if (t.type !== "DE_XUAT") return;
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
+      if (selectedErpCode) setSelectedErpCode("");
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
     }
-  }, [materialCards, selectedMaterialId, t.type]);
+  }, [materialCards, selectedMaterialId, selectedErpCode, t.type]);
+
+  React.useEffect(() => {
+    if (t.type !== "DE_XUAT") return;
+    if (!selectedErpOptions.length) {
+      if (selectedErpCode) setSelectedErpCode("");
+      return;
+    }
+    if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
+      setSelectedErpCode(selectedErpOptions[0].code);
+    }
+  }, [selectedErpCode, selectedErpOptions, t.type]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
     setSelectedMaterialId("");
+    setSelectedErpCode("");
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
@@ -583,6 +651,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
         action: "editInfo", unit, bbktNumber: bbkt.trim() || undefined,
         assignedPosition: assigned, materialCategory: category,
         materialId: selectedMaterialId || undefined,
+        erpCode: selectedErpCode || undefined,
         proposedQuantity,
         note: note.trim() || undefined,
         replacementDeviceName: replacementDeviceName.trim() || undefined,
@@ -597,17 +666,17 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   return (
     <>
       <div className="ovl" onClick={onClose} />
-      <div className="dlg">
+      <div className="dlg dlg-scroll">
         <div className="dlg-h"><b>Sửa phiếu {t.code}</b>
           <button className="x" onClick={onClose}><X size={16} /></button></div>
-        <div className="frm">
+        <div className="frm frm-scroll">
           <label>Tổ máy</label>
           <div className="seg2">{UNITS.map((u) => (
             <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
           ))}</div>
 
           <label>Cương vị được giao thực hiện *</label>
-          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); }}>
+          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); }}>
             <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
             {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -615,7 +684,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <label>Loại vật tư *</label>
           <div className="cats">
             {CATEGORIES.map((c) => (
-              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); }}>{c}</button>
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); }}>{c}</button>
             ))}
           </div>
 
@@ -631,11 +700,11 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                       key={m.id}
                       type="button"
                       className={selectedMaterialId === m.id ? "on" : ""}
-                      onClick={() => setSelectedMaterialId(m.id)}
+                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); }}
                       title={`${m.code} - ${m.name}`}
                     >
                       <span>{m.name}</span>
-                      <small>{m.code}</small>
+                      <small>Tồn kho: {m.quantity} {m.unit}</small>
                     </button>
                   ))
                 ) : (
@@ -645,7 +714,15 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                       : "Chưa có vật tư thuộc loại này trong danh mục"}
                   </div>
                 )}
-              </div>
+                </div>
+
+              <label>Mã vật tư *</label>
+              <select value={selectedErpCode} disabled={!selectedMaterialId} onChange={(e) => setSelectedErpCode(e.target.value)}>
+                <option value="">{selectedMaterialId ? "— Chọn mã vật tư —" : "— Chọn tên vật tư trước —"}</option>
+                {selectedErpOptions.map((item) => (
+                  <option key={item.code} value={item.code}>{item.code} · Số liệu ERP: {item.erpStock}</option>
+                ))}
+              </select>
 
               <div className="bbkt-grid">
                 <div className="field">
@@ -682,7 +759,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 act.isPending ||
                 !assigned ||
                 !category ||
-                (t.type === "DE_XUAT" && (!selectedMaterialId || proposedQuantity <= 0 || !note.trim() || !replacementDeviceName.trim()))
+                (t.type === "DE_XUAT" && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || !replacementDeviceName.trim()))
               }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
@@ -696,14 +773,25 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
 
 /* ================= chi tiết ================= */
 function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; onClose: () => void }) {
+  const [showActivity, setShowActivity] = useState(false);
   const flow = FLOW[t.type];
   const order = ORDER[t.type];
   const flowStatus = flowStatusKey(t.status);
   const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
+  const activityLogs = [
+    t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
+    t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
+    t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
+    t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
+    t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Nhận vật tư: lãnh ${t.receivedQuantity ?? ""} (${t.receivedMethod ?? ""})` },
+    t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
+    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === "UNG" ? "Xác nhận, xuất Biên Bản Nghiệm Thu" : "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
+  ].filter(Boolean) as Array<{ at: string; who: string | null; pos?: string | null; what: string }>;
 
   return (
     <>
       {/* Thông tin phiếu (mã, loại, giao, trạng thái...) đã hiện ở dòng bảng — chi tiết chỉ còn tiến trình + nội dung */}
+      <button className="activity-toggle" onClick={() => setShowActivity(true)} title="Xem hoạt động ghi nhận"><Clock size={14} /> Hoạt động</button>
       <button className="dclose" onClick={onClose} title="Thu gọn"><X size={15} /></button>
 
       <div className="p-body">
@@ -734,17 +822,27 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             <>
             <label className="lb"><Package size={13} /> Vật tư trong phiếu</label>
             {t.items.map((it, itemIndex) => {
-              const short = it.quantity > it.material.quantity;
+              const short = t.type === "DE_XUAT" && it.quantity > it.material.quantity;
               return (
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
                   <div className="material-line">
                     <b>{it.material.name}</b>
-                    <Link className="material-code-link" href={materialCatalogHref(t, it.material.code)}>
-                      {it.material.code}
-                    </Link>
+                    {it.erpCode && (
+                      <Link className="material-code-link" href={materialCatalogHref(t, it.erpCode)}>
+                        {it.erpCode}
+                      </Link>
+                    )}
                   </div>
-                  <span>SL: {it.quantity} {it.material.unit} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
-                  <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Thiết bị nhập tay"}</span>
+                  {t.type === "UNG" ? (
+                    <span>
+                      {it.quantity > 0 && <>Ứng: {it.quantity} {it.material.unit} · </>}
+                      {it.replacementQuantity != null && <>Thay thế: {it.replacementQuantity} {it.material.unit} · </>}
+                      Tồn kho: {it.material.quantity}
+                    </span>
+                  ) : (
+                    <span>{it.quantity > 0 ? `SL: ${it.quantity} ${it.material.unit}` : "SL: Chưa nhập"} · Tồn kho: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
+                  )}
+                  <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Chưa nhập thiết bị"}</span>
                   {itemIndex === 0 && t.proposalNumber && (
                     <span className="material-proposal-line">
                       Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}
@@ -764,12 +862,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               </a>
             )}
             {t.receivedQuantity != null && (
-              <div className="meta-line">Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Hình thức: {t.receivedMethod}</div>
+              <div className="meta-line">Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Hình thức: {t.receivedMethod} — đã cộng vào tồn kho</div>
             )}
             {t.usedQuantity != null && (
               <div className="meta-line">
                 Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
-                {(t.remainingQuantity ?? 0) === 0 ? " — sử dụng hết vật tư lãnh" : (t.remainingQuantity ?? 0) > 0 ? " — phần dư đã cộng vào tồn kho" : " — phần dùng vượt đã trừ tồn kho"}
+                {" — số đã sử dụng đã trừ khỏi tồn kho"}
               </div>
             )}
             {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
@@ -778,22 +876,25 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           </div>
         </div>
 
-        <div className="loglist">
-          <label className="lb"><Clock size={13} /> Hoạt động ghi nhận:</label>
-          {[
-            t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
-            t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
-            t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
-            t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
-            t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Nhận vật tư: lãnh ${t.receivedQuantity ?? ""} (${t.receivedMethod ?? ""})` },
-            t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
-            t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
-          ].filter(Boolean).map((l: any, i) => (
-            <div key={i} className="logrow"><span>{fmt(l.at)}</span><b>{l.who}{l.pos ? ` · ${l.pos}` : ""}</b><em>{l.what}</em></div>
-          ))}
-        </div>
         </div>
       </div>
+
+      {showActivity && <button className="activity-backdrop" aria-label="Đóng hoạt động ghi nhận" onClick={() => setShowActivity(false)} />}
+      <aside className={`activity-drawer ${showActivity ? "open" : ""}`} aria-hidden={!showActivity}>
+        <div className="activity-head">
+          <b><Clock size={15} /> Hoạt động ghi nhận</b>
+          <button className="x" onClick={() => setShowActivity(false)} title="Đóng"><X size={14} /></button>
+        </div>
+        <div className="activity-list">
+          {activityLogs.map((log, index) => (
+            <div className="activity-row" key={`${log.at}-${index}`}>
+              <time>{fmt(log.at)}</time>
+              <b>{log.who}{log.pos ? ` · ${log.pos}` : ""}</b>
+              <span>{log.what}</span>
+            </div>
+          ))}
+        </div>
+      </aside>
     </>
   );
 }
@@ -802,9 +903,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
-  const needItems = acts.includes("propose") || acts.includes("ungEntry");
+  const needItems = acts.includes("propose") || acts.includes("ungAdvance") || acts.includes("ungEntry");
   const { data: opts } = useTicketOptions(needItems);
-  const [items, setItems] = useState([{ materialId: "", deviceSeq: "", quantity: 1 }]);
+  const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
   const [num, setNum] = useState("");
   const [pct, setPct] = useState("");
@@ -812,15 +913,46 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [reason, setReason] = useState("");
   const [qty, setQty] = useState(1); // khối lượng lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
+  const [replacementRows, setReplacementRows] = useState<Array<{ key: string; itemId: string; deviceSeq: string; quantity: number }>>(() =>
+    t.items.map((item, index) => ({
+      key: `${item.id}-${index}`,
+      itemId: item.id,
+      deviceSeq: item.deviceSeq ?? "",
+      quantity: Math.max(1, item.replacementQuantity ?? 1),
+    }))
+  );
+  const replacementSourceKey = t.items.map((item) => item.id).join("|");
+
+  React.useEffect(() => {
+    if (t.status !== "CHO_NHAP_LIEU_THAY_THE") return;
+    setReplacementRows(t.items.map((item, index) => ({
+      key: `${item.id}-${index}`,
+      itemId: item.id,
+      deviceSeq: item.deviceSeq ?? "",
+      quantity: Math.max(1, item.replacementQuantity ?? 1),
+    })));
+  }, [t.status, replacementSourceKey]);
 
   React.useEffect(() => {
     if (!needItems) return;
     try {
       const raw = sessionStorage.getItem(`material-ticket-draft:${t.id}`);
-      if (!raw) return;
-      const draft = JSON.parse(raw) as { materialId?: string; quantity?: number };
+      if (!raw) {
+        const firstItem = t.items[0];
+        if (firstItem?.materialId) {
+          setItems([{
+            materialId: firstItem.materialId,
+            erpCode: firstItem.erpCode ?? "",
+            deviceSeq: firstItem.deviceSeq ?? "",
+            quantity: Math.max(1, Number(firstItem.quantity) || 1),
+          }]);
+        }
+        return;
+      }
+      const draft = JSON.parse(raw) as { materialId?: string; erpCode?: string; quantity?: number };
       setItems([{
         materialId: draft.materialId ?? "",
+        erpCode: draft.erpCode ?? "",
         deviceSeq: "",
         quantity: Math.max(1, Number(draft.quantity) || 1),
       }]);
@@ -828,7 +960,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     } catch {
       // Bỏ qua nháp tạm nếu dữ liệu sessionStorage không hợp lệ.
     }
-  }, [needItems, t.id]);
+  }, [needItems, t.id, t.items]);
 
   if (["HOAN_TAT", "TU_CHOI"].includes(t.status)) return null;
 
@@ -843,6 +975,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       SU_DUNG_VAT_TU: "Người được phân quyền Sử dụng vật tư",
       CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
       CHO_NHAP_LIEU: `Cương vị "${t.assignedPosition}"`,
+      CHO_NHAP_LIEU_THAY_THE: `Cương vị "${t.assignedPosition}"`,
       CHO_XAC_NHAN_PDF: "Trưởng Ca / Trưởng Kíp",
     };
     const waiting = t.status === "CHO_HOAN_THIEN"
@@ -862,12 +995,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   const edit = (i: number, k: string, v: unknown) =>
     setItems((a) => a.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-  const itemsValid = items.every((i) => i.materialId && i.deviceSeq && i.quantity >= 1);
+  const itemsValid = items.every((i) => i.materialId && i.erpCode && i.deviceSeq && i.quantity >= 1);
+  const advanceItemsValid = items.every((i) => i.materialId && i.erpCode && i.quantity >= 1);
 
   // Lọc vật tư theo LOẠI của phiếu: loại phiếu (Dầu bôi trơn/Lọc dầu/Hóa chất/Bi nghiền)
   // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
   const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
-  const materialOptions = (opts?.materials ?? []).filter((m) => !wantCategory || m.category === wantCategory);
+  const materialOptions = (opts?.materials ?? []).filter((m) => (!wantCategory || m.category === wantCategory) && m.machine === t.unit);
 
   if (acts.includes("reject")) return (
     <div className="act">
@@ -885,21 +1019,34 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     <div className="frm-items">
       {items.map((it, i) => {
         const rowMat = materialOptions.find((m) => m.id === it.materialId);
+        const erpOptions = rowMat?.erpCodes?.length ? rowMat.erpCodes : rowMat ? [{ code: rowMat.code, erpStock: 0 }] : [];
         const deviceOptions = rowMat?.devices ?? [];
         return (
         <div key={i} className="frm-item">
+          <select value={it.materialId}
+            onChange={(e) => {
+              const materialId = e.target.value;
+              const material = materialOptions.find((m) => m.id === materialId);
+              const firstCode = material?.erpCodes?.[0]?.code ?? material?.code ?? "";
+              setItems((a) => a.map((x, j) => (j === i ? { ...x, materialId, erpCode: firstCode, deviceSeq: "" } : x)));
+            }}>
+            <option value="">{wantCategory ? `— Vật tư (${wantCategory}) —` : "— Vật tư —"}</option>
+            {materialOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.name} (tồn: {m.quantity} {m.unit})</option>
+            ))}
+          </select>
+          <select value={it.erpCode} disabled={!it.materialId}
+            onChange={(e) => edit(i, "erpCode", e.target.value)}>
+            <option value="">{it.materialId ? "— Mã vật tư —" : "— Chọn vật tư trước —"}</option>
+            {erpOptions.map((code) => (
+              <option key={code.code} value={code.code}>{code.code} · ERP: {code.erpStock}</option>
+            ))}
+          </select>
           <select value={it.deviceSeq} disabled={!it.materialId}
             onChange={(e) => edit(i, "deviceSeq", e.target.value)}>
             <option value="">{it.materialId ? "— Thiết bị —" : "— Chọn vật tư trước —"}</option>
             {deviceOptions.map((d) => (
               <option key={d.seq} value={d.seq}>{d.label}</option>
-            ))}
-          </select>
-          <select value={it.materialId}
-            onChange={(e) => setItems((a) => a.map((x, j) => (j === i ? { ...x, materialId: e.target.value, deviceSeq: "" } : x)))}>
-            <option value="">{wantCategory ? `— Vật tư (${wantCategory}) —` : "— Vật tư —"}</option>
-            {materialOptions.map((m) => (
-              <option key={m.id} value={m.id}>{m.name} (tồn: {m.quantity} {m.unit})</option>
             ))}
           </select>
           <input type="number" min={1} value={it.quantity}
@@ -908,7 +1055,50 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         </div>
       );
       })}
-      <button className="btn tiny" onClick={() => setItems((a) => [...a, { materialId: "", deviceSeq: "", quantity: 1 }])}>
+      <button className="btn tiny" onClick={() => setItems((a) => [...a, { materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }])}>
+        <Plus size={13} /> Thêm vật tư
+      </button>
+    </div>
+  );
+
+  const AdvanceItemsForm = (
+    <div className="frm-items">
+      {items.map((it, i) => {
+        const rowMat = materialOptions.find((m) => m.id === it.materialId);
+        const erpOptions = rowMat?.erpCodes?.length ? rowMat.erpCodes : rowMat ? [{ code: rowMat.code, erpStock: 0 }] : [];
+        return (
+          <div key={i} className="advance-item-row">
+            <select value={it.materialId}
+              onChange={(e) => {
+                const materialId = e.target.value;
+                const material = materialOptions.find((m) => m.id === materialId);
+                const firstCode = material?.erpCodes?.[0]?.code ?? material?.code ?? "";
+                setItems((current) => current.map((item, index) => index === i
+                  ? { ...item, materialId, erpCode: firstCode, deviceSeq: "" }
+                  : item));
+              }}>
+              <option value="">{wantCategory ? `— Vật tư (${wantCategory}) —` : "— Vật tư —"}</option>
+              {materialOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.name} (tồn: {m.quantity} {m.unit})</option>
+              ))}
+            </select>
+            <select value={it.erpCode} disabled={!it.materialId}
+              onChange={(e) => edit(i, "erpCode", e.target.value)}>
+              <option value="">{it.materialId ? "— Mã vật tư —" : "— Chọn vật tư trước —"}</option>
+              {erpOptions.map((code) => (
+                <option key={code.code} value={code.code}>{code.code} · ERP: {code.erpStock}</option>
+              ))}
+            </select>
+            <label className="inline-qty-label">
+              Số lượng ứng
+              <input type="number" min={1} value={it.quantity}
+                onChange={(e) => edit(i, "quantity", Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+            </label>
+            {items.length > 1 && <button className="mini" onClick={() => setItems((current) => current.filter((_, index) => index !== i))}><X size={13} /></button>}
+          </div>
+        );
+      })}
+      <button className="btn tiny" onClick={() => setItems((current) => [...current, { materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }])}>
         <Plus size={13} /> Thêm vật tư
       </button>
     </div>
@@ -996,12 +1186,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <label>Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *</label>
         <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
         <p className="hint">
-          Đã lãnh: {received} {unit} · Còn lại sau sử dụng: <b>{remaining} {unit}</b> —{" "}
-          {remaining > 0
-            ? "phần dư sẽ cộng dồn vào tồn kho cùng mã vật tư."
-            : remaining === 0
-              ? "sử dụng hết vật tư lãnh, tồn kho giữ nguyên."
-              : "phần dùng vượt sẽ trừ vào tồn kho (không âm dưới 0)."}
+          Đã lãnh: {received} {unit} đã cộng vào tồn kho · Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi tồn kho. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
         </p>
         <button className="btn primary big" disabled={!pct.trim() || !chiHuy.trim() || !note.trim() || qty <= 0 || act.isPending}
           onClick={() => run({ action: "use", pctNumber: pct, chiHuyName: chiHuy, completionNote: note, usedQuantity: qty }, "Đã xác nhận sử dụng vật tư")}>
@@ -1034,28 +1219,114 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     );
   }
 
-  if (acts.includes("ungEntry")) return (
+  if (acts.includes("ungAdvance")) return (
     <div className="act">
-      <label className="lb">Ứng — Nhập liệu thay thế (đã/đang thay gấp)</label>
-      {ItemsForm}
-      <textarea rows={2} placeholder="Thông tin thay thế (thời điểm, tình trạng sau thay…)" value={note} onChange={(e) => setNote(e.target.value)} />
-      <button className="btn primary big" disabled={!itemsValid || !note.trim() || act.isPending}
-        onClick={() => run({ action: "ungEntry", items, completionNote: note }, "Đã gửi thông tin thay thế")}>
-        <ChevronRight size={15} /> Gửi thông tin thay thế
+      <label className="lb">Ứng — Nhập số lượng vật tư ứng</label>
+      {AdvanceItemsForm}
+      <button className="btn primary big" disabled={!advanceItemsValid || act.isPending}
+        onClick={() => run({ action: "ungAdvance", items }, "Đã cộng số lượng ứng vào tồn kho") }>
+        {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận số lượng ứng
       </button>
+      <p className="hint">Sau khi xác nhận, số lượng ứng được cộng vào tồn kho và phiếu chuyển sang phần nhập liệu thay thế.</p>
     </div>
   );
+
+  if (acts.includes("ungEntry")) {
+    const replacementValid = t.items.length > 0 && replacementRows.length >= t.items.length &&
+      replacementRows.every((row) => row.deviceSeq && row.quantity > 0) &&
+      t.items.every((item) => replacementRows.some((row) => row.itemId === item.id));
+    return (
+    <div className="act">
+      <label className="lb">Ứng — Nhập liệu thay thế (đã/đang thay gấp)</label>
+      <div className="replacement-entry-list">
+        {t.items.map((item) => {
+          const material = materialOptions.find((option) => option.id === item.materialId);
+          const rows = replacementRows.filter((row) => row.itemId === item.id);
+          return (
+            <section className="replacement-group" key={item.id}>
+              <div className="replacement-group-head">
+                <div className="replacement-material">
+                <b>{item.material.name}</b>
+                <span>{item.erpCode} · Đã ứng: {item.quantity} {item.material.unit} · Tồn kho: {item.material.quantity} {item.material.unit}</span>
+                </div>
+                <button className="btn tiny" type="button" onClick={() => setReplacementRows((current) => [
+                  ...current,
+                  { key: `${item.id}-${Date.now()}-${current.length}`, itemId: item.id, deviceSeq: "", quantity: 1 },
+                ])}>
+                  <Plus size={13} /> Thêm thiết bị
+                </button>
+              </div>
+              {rows.map((row, rowIndex) => {
+                const selectedDevices = new Set(rows.filter((other) => other.key !== row.key).map((other) => other.deviceSeq));
+                return (
+                  <div className="replacement-entry-row" key={row.key}>
+                    <span className="device-row-number">{rowIndex + 1}</span>
+                    <label>
+                      Thiết bị thay thế
+                      <select value={row.deviceSeq}
+                        onChange={(e) => setReplacementRows((current) => current.map((currentRow) =>
+                          currentRow.key === row.key ? { ...currentRow, deviceSeq: e.target.value } : currentRow
+                        ))}>
+                        <option value="">— Chọn thiết bị —</option>
+                        {(material?.devices ?? []).map((device) => (
+                          <option key={device.seq} value={device.seq} disabled={selectedDevices.has(device.seq)}>{device.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Số lượng thay thế
+                      <input type="number" min={1} value={row.quantity}
+                        onChange={(e) => setReplacementRows((current) => current.map((currentRow) =>
+                          currentRow.key === row.key
+                            ? { ...currentRow, quantity: Math.max(1, Math.trunc(Number(e.target.value)) || 1) }
+                            : currentRow
+                        ))} />
+                    </label>
+                    <button className="mini" type="button" disabled={rows.length === 1}
+                      onClick={() => setReplacementRows((current) => current.filter((currentRow) => currentRow.key !== row.key))}
+                      title="Xóa dòng thiết bị">
+                      <X size={13} />
+                    </button>
+                  </div>
+                );
+              })}
+            </section>
+          );
+        })}
+      </div>
+      <textarea rows={2} placeholder="Thông tin thay thế (thời điểm, tình trạng sau thay…)" value={note} onChange={(e) => setNote(e.target.value)} />
+      <button className="btn primary big" disabled={!replacementValid || !note.trim() || act.isPending}
+        onClick={() => run({
+          action: "ungEntry",
+          replacementItems: replacementRows.map((row) => ({ itemId: row.itemId, deviceSeq: row.deviceSeq, quantity: row.quantity })),
+          completionNote: note,
+        }, "Đã nhập liệu thay thế và trừ số lượng khỏi tồn kho")}>
+        <ChevronRight size={15} /> Gửi thông tin thay thế
+      </button>
+      <p className="hint">Số lượng thay thế được trừ khỏi tồn kho và sẽ được dùng trên Biên bản nghiệm thu.</p>
+    </div>
+    );
+  }
 
   if (acts.includes("ungConfirmDoc")) return (
     <div className="act">
       <label className="lb">Ứng — Xác nhận &amp; xuất Biên Bản (Word)</label>
+      <div className="confirm-summary">
+        {t.items.map((item) => (
+          <span key={item.id}><b>{item.material.name}</b>: {item.replacementQuantity ?? item.quantity} {item.material.unit}</span>
+        ))}
+      </div>
       <input placeholder="Số PCT/LCT *" value={pct} onChange={(e) => setPct(e.target.value)} />
       <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
-      <button className="btn primary big" disabled={!pct.trim() || !chiHuy.trim() || act.isPending}
-        onClick={() => run({ action: "ungConfirmDoc", pctNumber: pct, chiHuyName: chiHuy }, "Đã xuất Word — chờ BBKT + Thống kê")}>
+      <button className="btn primary big" disabled={!pct.trim() || !chiHuy.trim() || t.items.length === 0 || act.isPending}
+        onClick={() => run({
+          action: "ungConfirmDoc",
+          pctNumber: pct,
+          chiHuyName: chiHuy,
+        }, "Đã xác nhận và xuất Word")}>
         {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Word
       </button>
-      <p className="hint">File Word in &quot;(bổ sung sau)&quot; tại chỗ số BBKT — khi bổ sung, hệ thống tự sinh lại file với số thật.</p>
+      <p className="hint">Biên bản sử dụng số lượng thay thế đã được cương vị phân giao nhập ở bước trước.</p>
     </div>
   );
 
@@ -1139,6 +1410,19 @@ const CSS = `
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .dclose{position:absolute;top:10px;right:10px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
 .dclose:hover{background:#eef2f7;color:#0f172a;}
+.activity-toggle{position:absolute;top:10px;right:48px;z-index:2;display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid ${C.line};border-radius:8px;background:#f8fafc;color:${C.navy};padding:0 10px;font-size:11.5px;font-weight:700;cursor:pointer;}
+.activity-toggle:hover{border-color:${C.accent};color:${C.accent};}
+.activity-backdrop{position:absolute;inset:0;z-index:4;border:0;background:rgba(15,23,42,.18);cursor:pointer;}
+.activity-drawer{position:absolute;z-index:5;top:0;right:0;bottom:0;width:min(380px,42%);background:#fff;box-shadow:-12px 0 32px rgba(15,23,42,.16);transform:translateX(105%);transition:transform .2s ease;display:flex;flex-direction:column;pointer-events:none;}
+.activity-drawer.open{transform:translateX(0);pointer-events:auto;}
+.activity-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-bottom:1px solid ${C.line};}
+.activity-head>b{display:flex;align-items:center;gap:7px;color:${C.navy};font-size:13px;}
+.activity-list{padding:8px 14px 14px;overflow-y:auto;}
+.activity-row{position:relative;display:flex;flex-direction:column;gap:2px;padding:10px 4px 10px 16px;border-bottom:1px solid #edf0f4;}
+.activity-row:before{content:"";position:absolute;left:2px;top:15px;width:6px;height:6px;border-radius:50%;background:${C.accent};}
+.activity-row time{font-size:10.5px;color:${C.soft};}
+.activity-row b{font-size:12px;color:${C.navy};overflow-wrap:anywhere;}
+.activity-row span{font-size:11.5px;color:${C.muted};line-height:1.35;}
 .kind-sub{display:block;max-width:100%;color:${C.soft};font-size:10.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .material-name{display:block;min-width:0;color:${C.navy};font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dots{display:flex;justify-content:center;gap:4px;}
@@ -1150,6 +1434,7 @@ const CSS = `
 .spin{animation:mtwspin 1s linear infinite;}@keyframes mtwspin{to{transform:rotate(360deg);}}
 .ovl{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:40;}
 .dlg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;background:#fff;border-radius:18px;z-index:41;overflow:hidden;box-shadow:0 24px 70px rgba(15,23,42,.3);}
+.dlg-scroll{max-height:min(92vh,920px);display:flex;flex-direction:column;}
 .dlg-h{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid ${C.line};font-family:Poppins,Inter,sans-serif;color:${C.navy};}
 .x{border:0;background:#f1f5f9;border-radius:8px;width:28px;height:28px;display:grid;place-items:center;cursor:pointer;color:#64748b;}
 .x.w{position:absolute;top:14px;right:14px;background:rgba(255,255,255,.18);color:#fff;}
@@ -1162,6 +1447,7 @@ const CSS = `
 .card.ung:hover{border-color:${C.ung};box-shadow:0 8px 22px ${C.ung}22;}
 .card.ung svg{color:${C.ung};}
 .frm{padding:18px;display:flex;flex-direction:column;gap:9px;}
+.frm-scroll{min-height:0;overflow-y:auto;padding-bottom:14px;}
 .frm label{font-size:12.5px;font-weight:600;color:${C.navy};}
 .field{display:flex;flex-direction:column;gap:7px;min-width:0;}
 .bbkt-grid{display:grid;grid-template-columns:minmax(0,1fr) 142px;gap:10px;align-items:end;}
@@ -1187,6 +1473,7 @@ const CSS = `
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
 .note.ung{background:${C.ungBg};color:${C.ung};}
 .frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
+.frm-scroll .frm-f{position:sticky;bottom:-14px;z-index:2;margin:8px -18px -14px;padding:12px 18px;background:linear-gradient(180deg,rgba(255,255,255,.92),#fff 34%);border-top:1px solid ${C.line};}
 .panel{position:fixed;top:0;right:0;height:100%;width:460px;max-width:96vw;background:#fff;z-index:41;display:flex;flex-direction:column;box-shadow:-14px 0 44px rgba(15,23,42,.25);}
 .p-h{position:relative;padding:20px;color:#fff;display:flex;flex-direction:column;gap:8px;}
 .p-code{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:24px;}
@@ -1225,21 +1512,39 @@ const CSS = `
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
+.advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}
+.inline-qty-label{margin:0!important;}
+.inline-qty-label input{margin-top:5px;text-align:center;font-weight:700;}
+.replacement-entry-list{display:flex;flex-direction:column;gap:7px;}
+.replacement-group{border:1px solid ${C.line};background:#fff;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;}
+.replacement-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px dashed ${C.line};padding-bottom:8px;}
+.replacement-entry-row{display:grid;grid-template-columns:24px minmax(220px,1fr) 150px 30px;align-items:end;gap:8px;}
+.replacement-entry-row label{margin:0!important;}
+.replacement-entry-row label input,.replacement-entry-row label select{margin-top:5px;}
+.replacement-entry-row label input{text-align:center;font-weight:700;}
+.replacement-entry-row .mini{height:39px;}
+.replacement-entry-row .mini:disabled{opacity:.35;cursor:not-allowed;}
+.device-row-number{align-self:center;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#eef2f7;color:${C.navy};font-size:11px;font-weight:800;}
+.replacement-material{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.replacement-material b{font-size:13px;color:${C.navy};overflow-wrap:anywhere;}
+.replacement-material span{font-size:11.5px;color:${C.muted};overflow-wrap:anywhere;}
+.confirm-summary{display:flex;flex-direction:column;gap:5px;border:1px solid ${C.line};background:#fff;border-radius:10px;padding:10px 12px;font-size:12.5px;color:${C.muted};}
+.confirm-summary b{color:${C.navy};}
 .wait{display:flex;align-items:center;gap:7px;background:#f1f5f9;color:#64748b;border-radius:11px;padding:11px 13px;font-size:12.5px;margin-bottom:16px;flex-wrap:wrap;}
 .warnbox{display:flex;gap:8px;align-items:flex-start;background:${C.badBg};color:${C.bad};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .lockbox{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:${C.warnBg};color:${C.warn};border-radius:10px;padding:10px 12px;font-size:12.5px;}
 .frm-items{display:flex;flex-direction:column;gap:7px;}
-.frm-item{display:grid;grid-template-columns:1.2fr 1.4fr 64px auto;gap:6px;}
+.frm-item{display:grid;grid-template-columns:1.25fr 1.1fr 1.2fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
-.p-top{display:grid;grid-template-columns:minmax(170px,.66fr) minmax(270px,1fr) minmax(460px,1.42fr);gap:4px 18px;align-items:start;}
+.p-top{display:grid;grid-template-columns:minmax(180px,.55fr) minmax(560px,2fr);gap:4px 20px;align-items:start;padding-top:28px;}
 .p-top .top-items{border-left:1px dashed ${C.line};padding:4px 0 4px 16px;margin-bottom:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
-@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}}
+@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}.activity-drawer{width:min(420px,70%);}}
 .logrow{display:flex;align-items:baseline;gap:9px;font-size:12px;padding:5px 0;color:#475569;white-space:nowrap;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row{grid-template-columns:1fr;gap:6px;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

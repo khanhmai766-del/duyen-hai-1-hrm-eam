@@ -17,6 +17,7 @@ const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"]
 function pathActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   const base = href.split("?")[0];
+  if (href.includes("?")) return pathname === base;
   return pathname === base || pathname.startsWith(base + "/");
 }
 

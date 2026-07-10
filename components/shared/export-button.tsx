@@ -57,6 +57,8 @@ const LABELS: Record<string, string> = {
   target: "Áp dụng cho",
   cuongViQuanLy: "Cương vị quản lý",
   dvt: "ĐVT",
+  loaiVatTu: "Loại vật tư",
+  soLieuERP: "Số liệu ERP",
   interval: "Chu kỳ",
   lastReplaced: "Lần thay gần nhất",
   nextDue: "Ngày đến hạn",

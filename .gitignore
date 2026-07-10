@@ -12,6 +12,7 @@ tsconfig.tsbuildinfo
 prisma/dev.db
 .pgdata
 public/uploads
+.local-storage
 
 # Dữ liệu export người dùng/nhân sự không đưa vào Git
 users_export*.json

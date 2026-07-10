@@ -62,6 +62,8 @@ export type MaterialInput = Partial<Material> & {
   documentUrl?: string | null;
   documentName?: string | null;
   replacements?: MaterialReplacementInput[];
+  syncAll?: boolean;
+  machines?: string[];
 };
 
 export function useUpsertMaterial() {

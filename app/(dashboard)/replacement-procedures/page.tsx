@@ -12,8 +12,8 @@ const PROCEDURE_FLOW_PDF_URL = "/api/material-procedure-flow";
 
 export default function ReplacementProceduresPage() {
   const { data: session } = useSession();
-  const position = session?.user?.position;
   const { data } = useMaterialTickets();
+  const position = data?.viewer?.position ?? session?.user?.currentPosition ?? session?.user?.position;
   const canCreate = data?.viewer?.canCreate ?? false;
   const canManageWorkflow = data?.viewer?.isAdmin ?? false;
   const [creating, setCreating] = useState(false);
