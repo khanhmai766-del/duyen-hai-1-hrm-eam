@@ -89,7 +89,7 @@ export function useTimesheet(month: string, options: { enabled?: boolean } = {})
 export function useUpdateTimesheetOverride(month: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { userId: string; date: string; line: "shift1" | "shift2" | "hc"; value: string; note?: string }) =>
+    mutationFn: (body: { userId: string; date: string; line: "shift1" | "shift2" | "hc"; value: string | null; note?: string }) =>
       apiMutate("/api/shifts/timesheet", "PUT", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["timesheet", month] }),
   });

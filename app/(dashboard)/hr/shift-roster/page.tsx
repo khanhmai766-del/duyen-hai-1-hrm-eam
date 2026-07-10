@@ -283,7 +283,7 @@ export default function ShiftRosterPage() {
       override: params.override,
     };
     setEditCell(next);
-    setEditValue(next.value || calculated);
+    setEditValue(params.override ? next.value : calculated);
     setEditNote(params.override?.note ?? "");
   }
 
@@ -293,17 +293,18 @@ export default function ShiftRosterPage() {
     return [];
   }
 
-  async function saveOverride(value = editValue) {
+  async function saveOverride(value: string | null = editValue) {
     if (!editCell) return;
+    const trimmedValue = value === null ? null : value.trim();
     try {
       await updateOverride.mutateAsync({
         userId: editCell.userId,
         date: editCell.date,
         line: editCell.line,
-        value: value.trim(),
-        note: value.trim() ? editNote.trim() : undefined,
+        value: trimmedValue,
+        note: trimmedValue ? editNote.trim() : undefined,
       });
-      toast.success(value.trim() ? "Đã cập nhật ô bảng công" : "Đã xoá giá trị chỉnh tay");
+      toast.success(trimmedValue === null ? "Đã khôi phục công mặc định" : trimmedValue ? "Đã cập nhật ô bảng công" : "Đã để trống ô bảng công");
       setEditCell(null);
       setEditNote("");
     } catch (error) {
@@ -486,12 +487,14 @@ export default function ShiftRosterPage() {
               hiển thị ca đã điểm danh trên sơ đồ tổ chức ca; ca <span className="font-medium text-red-600">chưa duyệt được tô đỏ</span>.
               Nếu số giờ khác 8 thì mã ca có tiền tố giờ, ví dụ <span className="font-medium text-ink">4V3</span>;
               kèm <span className="font-medium text-ink">số giờ chấm công hành chính (HC) đã duyệt</span>; nếu HC có nội dung công việc thì rê chuột lên ô để xem.
-              Mỗi nhân sự hiển thị 3 dòng: dòng 1 và dòng 2 ưu tiên công trực ca; dòng 3 là công hành chính đã duyệt.
-              {canEditAllTimesheet
-                ? " Người được phân quyền có thể bấm vào từng ô để chỉnh giá trị hiển thị."
-                : canEditOwnTimesheet
-                  ? " Bạn có thể bấm vào ô của mình để chỉnh giá trị hiển thị."
-                  : " Dữ liệu chỉ xem, không chỉnh tay."}
+              <span className="mt-2 inline-block rounded-md bg-amber-50 px-2 py-1 font-semibold text-amber-900 ring-1 ring-amber-200">
+                Mỗi nhân sự hiển thị 3 dòng: dòng 1 và dòng 2 ưu tiên công trực ca; dòng 3 là công hành chính đã duyệt.
+                {canEditAllTimesheet
+                  ? " Người được phân quyền có thể bấm vào từng ô để chỉnh giá trị hiển thị."
+                  : canEditOwnTimesheet
+                    ? " Bạn có thể bấm vào ô của mình để chỉnh giá trị hiển thị."
+                    : " Dữ liệu chỉ xem, không chỉnh tay."}
+              </span>
             </p>
           </Card>
 
@@ -583,15 +586,22 @@ export default function ShiftRosterPage() {
                               >
                                 <div className="mx-auto flex min-h-8 min-w-10 items-center justify-center gap-0.5">
                                   {showOverride ? (
-                                    <span
-                                      className="flex min-h-7 min-w-8 items-center justify-center rounded border border-sky-300 bg-slate-800 px-1 text-[11px] font-bold text-white shadow-sm"
-                                      title={[
-                                        `${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`,
-                                        override.note?.trim() ? override.note.trim() : "",
-                                      ].filter(Boolean).join("\n")}
-                                    >
-                                      {override.value}
-                                    </span>
+                                    override.value ? (
+                                      <span
+                                        className="flex min-h-7 min-w-8 items-center justify-center rounded border border-sky-300 bg-slate-800 px-1 text-[11px] font-bold text-white shadow-sm"
+                                        title={[
+                                          `${u.name} · Ngày ${d}: giá trị chỉnh tay${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`,
+                                          override.note?.trim() ? override.note.trim() : "",
+                                        ].filter(Boolean).join("\n")}
+                                      >
+                                        {override.value}
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="mx-auto flex h-8 w-8 items-center justify-center text-[11px] text-slate-200"
+                                        title={`${u.name} · Ngày ${d}: ô đã được để trống thủ công${override.updatedBy ? ` bởi ${override.updatedBy.name}` : ""}`}
+                                      />
+                                    )
                                   ) : !override && (entries.length || hc != null) ? (
                                     <>
                                       {entries.map((entry) => {
@@ -718,7 +728,7 @@ export default function ShiftRosterPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => saveOverride("")}
+              onClick={() => saveOverride(null)}
               disabled={updateOverride.isPending || !editCell?.override}
             >
               <RotateCcw className="h-4 w-4" /> Khôi phục mặc định

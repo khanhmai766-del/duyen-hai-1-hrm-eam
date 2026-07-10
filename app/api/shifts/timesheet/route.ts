@@ -293,6 +293,7 @@ export async function PUT(req: NextRequest) {
     const userId = String(body.userId ?? "").trim();
     const date = String(body.date ?? "").trim();
     const line = String(body.line ?? "shift1").trim();
+    const shouldDeleteOverride = body.value === null;
     const value = String(body.value ?? "").trim();
     const note = String(body.note ?? "").trim() || null;
 
@@ -306,7 +307,7 @@ export async function PUT(req: NextRequest) {
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
     if (!target) return fail("Không tìm thấy nhân viên", 404);
 
-    if (!value) {
+    if (shouldDeleteOverride) {
       await prisma.$executeRawUnsafe(
         `DELETE FROM "TimesheetOverride" WHERE "userId" = $1 AND date = $2 AND line = $3`,
         userId,
