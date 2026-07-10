@@ -3,13 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, X } from "lucide-react";
+import { Archive, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,6 +25,8 @@ import {
   type HcRegistration,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { hcRetentionDescription, hcRetentionStartInput } from "@/lib/hc-retention";
+import { normalizeText } from "@/lib/nav";
 import { cn, initials } from "@/lib/utils";
 
 const HC_SELF_PERIODS = [
@@ -83,6 +86,26 @@ function registrationDateKey(registration: HcRegistration) {
   return vietnamDateInput(registration.group.date);
 }
 
+function groupedRegistrations(registrations: HcRegistration[]) {
+  const map = new Map<string, HcRegistration[]>();
+  for (const registration of registrations) {
+    const key = registrationDateKey(registration);
+    const items = map.get(key) ?? [];
+    items.push(registration);
+    map.set(key, items);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, items]) => ({
+      date,
+      registrations: items.sort((a, b) => {
+        const periodOrder = periodLabel(a.group.content).localeCompare(periodLabel(b.group.content), "vi");
+        if (periodOrder !== 0) return periodOrder;
+        return a.user.name.localeCompare(b.user.name, "vi");
+      }),
+    }));
+}
+
 export default function AdministrativeRegistrationPage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
@@ -92,12 +115,15 @@ export default function AdministrativeRegistrationPage() {
   const registrationOpen = isBeforeRegistrationCutoff(now);
   const today = React.useMemo(() => vietnamDateInput(now), [now]);
   const minRegisterDate = React.useMemo(() => addCalendarDays(today, 2), [today]);
+  const historyFrom = React.useMemo(() => hcRetentionStartInput(now), [now]);
+  const historyTo = React.useMemo(() => addCalendarDays(today, -1), [today]);
   const checkIn = useHcCheckIn();
   const [registerDate, setRegisterDate] = React.useState(minRegisterDate);
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
   const [note, setNote] = React.useState("");
   const { data: groupsData } = useHcGroups(registerDate);
   const { data: registrationsData, isLoading: registrationsLoading } = useHcRegistrations(today);
+  const { data: historyData, isLoading: historyLoading } = useHcRegistrations(historyFrom, historyTo);
   const myRegistration = React.useMemo(() => {
     const groups = groupsData?.data ?? [];
     return groups
@@ -227,12 +253,20 @@ export default function AdministrativeRegistrationPage() {
         </CardContent>
       </Card>
 
-      <RegistrationList
-        registrations={registrationsData?.data ?? []}
-        isLoading={registrationsLoading}
-        canManage={canManage}
-        myId={myId}
-      />
+      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)] 2xl:items-start">
+        <RegistrationList
+          registrations={registrationsData?.data ?? []}
+          isLoading={registrationsLoading}
+          canManage={canManage}
+          myId={myId}
+        />
+        <RegistrationHistoryList
+          registrations={historyData?.data ?? []}
+          isLoading={historyLoading}
+          from={historyFrom}
+          to={historyTo}
+        />
+      </div>
     </div>
   );
 }
@@ -248,25 +282,7 @@ function RegistrationList({
   canManage: boolean;
   myId?: string;
 }) {
-  const groups = React.useMemo(() => {
-    const map = new Map<string, HcRegistration[]>();
-    for (const registration of registrations) {
-      const key = registrationDateKey(registration);
-      const items = map.get(key) ?? [];
-      items.push(registration);
-      map.set(key, items);
-    }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, items]) => ({
-        date,
-        registrations: items.sort((a, b) => {
-          const periodOrder = periodLabel(a.group.content).localeCompare(periodLabel(b.group.content), "vi");
-          if (periodOrder !== 0) return periodOrder;
-          return a.user.name.localeCompare(b.user.name, "vi");
-        }),
-      }));
-  }, [registrations]);
+  const groups = React.useMemo(() => groupedRegistrations(registrations), [registrations]);
 
   return (
     <Card className="overflow-hidden">
@@ -287,6 +303,136 @@ function RegistrationList({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function RegistrationHistoryList({
+  registrations,
+  isLoading,
+  from,
+  to,
+}: {
+  registrations: HcRegistration[];
+  isLoading: boolean;
+  from: string;
+  to: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const filteredRegistrations = React.useMemo(() => {
+    const q = normalizeText(search);
+    if (!q) return registrations;
+    return registrations.filter((registration) => normalizeText(registration.note ?? "").includes(q));
+  }, [registrations, search]);
+  const groups = React.useMemo(() => groupedRegistrations(filteredRegistrations).reverse(), [filteredRegistrations]);
+  const hasValidRange = from <= to;
+
+  return (
+    <>
+      <Card className="overflow-hidden border-dashed bg-slate-50/70">
+        <CardContent className="p-4">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex w-full items-start gap-3 rounded-md text-left transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-accent/30"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-navy text-white shadow-sm">
+              <Archive className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1 space-y-1 py-0.5">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-ink">Kho lưu trữ đăng ký</span>
+                <Badge variant="secondary">{registrations.length} bản ghi</Badge>
+              </span>
+              <span className="block text-xs leading-5 text-muted-foreground">
+                {hasValidRange ? `Từ ${formatDateLabel(from)} đến ${formatDateLabel(to)}. ` : ""}
+                {hcRetentionDescription()}
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
+                <CalendarClock className="h-3.5 w-3.5" /> Bấm để xem lịch sử
+              </span>
+            </span>
+          </button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="h-5 w-5 text-accent" /> Kho lưu trữ đăng ký đi hành chính
+            </DialogTitle>
+            <DialogDescription>
+              {hasValidRange ? `Từ ${formatDateLabel(from)} đến ${formatDateLabel(to)}. ` : ""}
+              {hcRetentionDescription()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative sm:w-96">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm theo nội dung công việc..."
+                className="pl-9"
+              />
+            </div>
+            <div className="text-xs font-medium text-muted-foreground">
+              Hiển thị {filteredRegistrations.length}/{registrations.length} bản ghi
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="rounded-md border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Đang tải lịch sử đăng ký...</div>
+          ) : !hasValidRange || registrations.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Chưa có lịch sử đăng ký trong kỳ lưu trữ.</div>
+          ) : filteredRegistrations.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">Không tìm thấy nội dung công việc phù hợp.</div>
+          ) : (
+            <div className="max-h-[58vh] divide-y divide-border overflow-y-auto rounded-md border border-border">
+              {groups.map((group) => (
+                <div key={group.date} className="space-y-3 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-ink">{formatDateLabel(group.date)}</div>
+                      <div className="text-xs text-muted-foreground">{group.registrations.length} nhân sự đăng ký</div>
+                    </div>
+                    <Badge variant={group.registrations.every((registration) => registration.isApproved) ? "accent" : "secondary"} className="gap-1.5">
+                      {group.registrations.every((registration) => registration.isApproved) ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                      {group.registrations.every((registration) => registration.isApproved) ? "Đã duyệt" : "Có chờ duyệt"}
+                    </Badge>
+                  </div>
+                  <div className="grid gap-2 lg:grid-cols-2">
+                    {group.registrations.map((registration) => (
+                      <div key={registration.id} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-ink">{registration.user.name}</div>
+                            <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                              {periodLabel(registration.group.content)}
+                            </span>
+                            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", registration.isApproved ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                              {registration.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className={cn("mt-2 rounded-md px-2.5 py-1.5 text-xs leading-5", registration.note ? "bg-amber-50 text-amber-950" : "bg-muted text-muted-foreground")}>
+                          {registration.note || "Chưa có nội dung công việc."}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

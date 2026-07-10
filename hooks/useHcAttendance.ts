@@ -36,10 +36,12 @@ export function useHcGroups(date: string) {
   });
 }
 
-export function useHcRegistrations(from: string) {
+export function useHcRegistrations(from: string, to?: string) {
+  const qs = new URLSearchParams({ from });
+  if (to) qs.set("to", to);
   return useQuery({
-    queryKey: ["hc-registrations", from],
-    queryFn: () => apiGet<HcRegistration[]>(`/api/hc-registrations?from=${from}`),
+    queryKey: ["hc-registrations", from, to ?? ""],
+    queryFn: () => apiGet<HcRegistration[]>(`/api/hc-registrations?${qs.toString()}`),
   });
 }
 

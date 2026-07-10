@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { userWithSignedMedia } from "@/lib/s3";
 import { normalizeHcPeriod } from "@/lib/hc-period";
+import { hcRetentionStartInput } from "@/lib/hc-retention";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { dateRange, parseDateInput } from "@/lib/utils";
 
@@ -25,13 +26,10 @@ function clampHours(h: unknown): number {
   return Math.min(8, Math.max(1, n));
 }
 
-// Retention: HC attendance is kept for the trailing 1 month. Anything older is
-// purged from the database (members are removed via the HcCheckIn cascade).
+// Retention: HC attendance keeps the previous month through day 15 of the
+// current month. Older groups are purged with their members via cascade.
 function retentionCutoff(): Date {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return parseDateInput(hcRetentionStartInput());
 }
 async function purgeExpiredHc(): Promise<void> {
   await prisma.hcGroup.deleteMany({ where: { date: { lt: retentionCutoff() } } });
