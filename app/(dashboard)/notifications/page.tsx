@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -35,7 +36,7 @@ import { formatDate, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { effectiveUserPosition } from "@/lib/current-position";
-import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
+import { isAnnouncementReadExemptPosition, mustConfirmAnnouncementRead } from "@/lib/announcement-read";
 import {
   announcementPositionLabel,
   announcementShiftRosterPositionOptions,
@@ -133,13 +134,14 @@ function isArchivedInvalidAnnouncement(a: Announcement) {
 }
 
 export default function NotificationsPage() {
+  const searchParams = useSearchParams();
+  const linkedAnnouncementId = searchParams.get("announcementId");
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const role = session?.user?.role;
   const rbac = useRbacAccess();
   const canManageAnnouncements = rbac.can("announcement-manage", ["manage", "full"]);
   const { position: currentPosition } = useCurrentPosition();
-  const exemptFromReadConfirm = isAnnouncementReadExemptPosition(currentPosition);
   // Cấp quản lý xem được ai đã/chưa đọc mệnh lệnh.
   const isManager = rbac.can("announcement-manage", ["manage", "full"]);
 
@@ -224,7 +226,7 @@ export default function NotificationsPage() {
       (!nq || normalizeText([a.title, a.body, announcementTargetLabel(a.classification), a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
   );
   function mustReadByCurrentUser(a: Announcement) {
-    return !exemptFromReadConfirm && isAnnouncementTargetForPosition(a.classification, currentPosition);
+    return mustConfirmAnnouncementRead(a.classification, currentPosition);
   }
   function isUnreadByCurrentUser(a: Announcement) {
     return Boolean(myId) && mustReadByCurrentUser(a) && !a.reads.some((r) => r.userId === myId);
@@ -244,6 +246,32 @@ export default function NotificationsPage() {
   React.useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
+  React.useEffect(() => {
+    if (!linkedAnnouncementId || !announcements.length) return;
+    const target = announcements.find((item) => item.id === linkedAnnouncementId);
+    if (!target) return;
+    setYearFilter("ALL");
+    setPositionFilter("ALL");
+    setSearch("");
+    setShowInvalidArchive(isArchivedInvalidAnnouncement(target));
+  }, [announcements, linkedAnnouncementId]);
+  React.useEffect(() => {
+    if (!linkedAnnouncementId) return;
+    const targetIndex = sortedFiltered.findIndex((item) => item.id === linkedAnnouncementId);
+    if (targetIndex < 0) return;
+    const targetPage = Math.floor(targetIndex / ORDERS_PER_PAGE) + 1;
+    if (page !== targetPage) {
+      setPage(targetPage);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`announcement-${linkedAnnouncementId}`);
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [linkedAnnouncementId, page, sortedFiltered]);
   const isOrder = form.category === "ORDER";
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
 
@@ -382,7 +410,7 @@ export default function NotificationsPage() {
     const trackedReads = a.reads.filter((r) => targetUserIds.has(r.userId));
     const readUserIds = new Set(trackedReads.map((r) => r.userId));
     const readByMe = myId ? readUserIds.has(myId) : false;
-    const mustReadByMe = !exemptFromReadConfirm && isAnnouncementTargetForPosition(a.classification, currentPosition);
+    const mustReadByMe = mustConfirmAnnouncementRead(a.classification, currentPosition);
     const readCount = trackedReads.length;
     const total = targetUsers.length;
     const allRead = total > 0 && readCount >= total;
@@ -391,8 +419,11 @@ export default function NotificationsPage() {
     const archivedInvalid = isArchivedInvalidAnnouncement(a);
     return (
       <Card
+        id={`announcement-${a.id}`}
+        tabIndex={-1}
         className={cn(
-          "group overflow-hidden transition-colors",
+          "group overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+          linkedAnnouncementId === a.id && "ring-2 ring-accent ring-offset-2",
           isInvalid
             ? "border-red-300 bg-red-50/90 ring-1 ring-red-200"
             : a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",

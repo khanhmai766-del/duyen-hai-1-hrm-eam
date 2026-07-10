@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlignCenter,
@@ -62,7 +63,7 @@ import {
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
 import { ALL_ANNOUNCEMENT_POSITIONS } from "@/lib/announcement-targets";
-import { forumTargetPositionsLabel } from "@/lib/forum-targets";
+import { forumTargetPositionLabels, forumTargetPositionsLabel } from "@/lib/forum-targets";
 import { announcementPositionLabel, announcementShiftRosterPositionOptions } from "@/lib/positions";
 import { cn, formatDateTime, initials } from "@/lib/utils";
 
@@ -93,6 +94,9 @@ const TEXT_COLORS = [
 ] as const;
 
 export default function ForumPage() {
+  const searchParams = useSearchParams();
+  const linkedPostId = searchParams.get("postId");
+  const linkedReplyId = searchParams.get("replyId");
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canWriteForum = rbac.can("forum-write", ["create", "manage", "full"]);
@@ -139,6 +143,28 @@ export default function ForumPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [composeOpen, editingPost]);
 
+  React.useEffect(() => {
+    if (!linkedPostId) return;
+    const openTarget = posts.data?.data?.find((post) => post.id === linkedPostId);
+    const closedTarget = closedPosts.data?.data?.find((post) => post.id === linkedPostId);
+    if (!openTarget && !closedTarget) return;
+    setCategory("ALL");
+    setQ("");
+    setShowClosedBox(Boolean(closedTarget));
+    if (linkedReplyId) setExpandedReplies((state) => ({ ...state, [linkedPostId]: true }));
+  }, [closedPosts.data, linkedPostId, linkedReplyId, posts.data]);
+
+  React.useEffect(() => {
+    if (!linkedPostId || !rows.some((post) => post.id === linkedPostId)) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`forum-post-${linkedPostId}`);
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [linkedPostId, rows]);
+
   function openCreate() {
     setShowClosedBox(false);
     setEditingPost(null);
@@ -154,7 +180,7 @@ export default function ForumPage() {
       category: post.category,
       tags: post.tags.join(", "),
       attachments: post.attachments.join("\n"),
-      targetPositions: post.targetPositions ?? [],
+      targetPositions: forumTargetPositionLabels(post.targetPositions),
     });
     setComposeOpen(true);
   }
@@ -424,6 +450,8 @@ export default function ForumPage() {
               pinning={updatePost.isPending}
               onDeletePost={() => setDeletePostTarget(post)}
               onDeleteReply={(reply) => setDeleteReplyTarget(reply)}
+              highlighted={post.id === linkedPostId}
+              targetReplyId={post.id === linkedPostId ? linkedReplyId : null}
             />
           ))}
         </div>
@@ -523,6 +551,8 @@ function ForumPostCard({
   pinning,
   onDeletePost,
   onDeleteReply,
+  highlighted,
+  targetReplyId,
 }: {
   post: ForumPost;
   reply: string;
@@ -548,6 +578,8 @@ function ForumPostCard({
   pinning: boolean;
   onDeletePost: () => void;
   onDeleteReply: (reply: ForumReply) => void;
+  highlighted: boolean;
+  targetReplyId: string | null;
 }) {
   const category = CATEGORIES.find((c) => c.value === post.category) ?? CATEGORIES[1];
   const Icon = category.icon;
@@ -564,6 +596,17 @@ function ForumPostCard({
   const likeCount = post.likeCount ?? 0;
   const replyCount = post.replyCount ?? 0;
   const isClosed = !!post.closedAt;
+
+  React.useEffect(() => {
+    if (!targetReplyId || repliesQuery.isLoading) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(`forum-reply-${targetReplyId}`);
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [repliesQuery.isLoading, replies, targetReplyId]);
 
   function startEditReply(r: ForumReply) {
     setEditingReplyId(r.id);
@@ -591,7 +634,16 @@ function ForumPostCard({
     const childrenCollapsed = collapsedReplyThreads[r.id] ?? false;
 
     return (
-      <div key={r.id} className={cn(depth > 0 && "ml-4 border-l-2 border-blue-100 pl-3 sm:ml-8 sm:pl-4")}>
+      <div
+        key={r.id}
+        id={`forum-reply-${r.id}`}
+        tabIndex={-1}
+        className={cn(
+          "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+          depth > 0 && "ml-4 border-l-2 border-blue-100 pl-3 sm:ml-8 sm:pl-4",
+          targetReplyId === r.id && "ring-2 ring-blue-500 ring-offset-2"
+        )}
+      >
         <div className={cn("rounded-xl border border-border bg-white p-3", depth > 0 && "bg-blue-50/20")}>
           <div className="flex items-start justify-between gap-3">
             <AuthorInline author={r.author} date={r.createdAt} />
@@ -681,7 +733,15 @@ function ForumPostCard({
   }
 
   return (
-    <Card className={cn("overflow-hidden", post.isPinned && "ring-1 ring-amber-300")}>
+    <Card
+      id={`forum-post-${post.id}`}
+      tabIndex={-1}
+      className={cn(
+        "overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        post.isPinned && "ring-1 ring-amber-300",
+        highlighted && "ring-2 ring-accent ring-offset-2"
+      )}
+    >
       <div className="border-b border-border bg-white p-4">
         <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2">

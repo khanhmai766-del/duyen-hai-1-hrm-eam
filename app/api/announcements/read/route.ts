@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle } from "@/lib/api";
-import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
-import { isAnnouncementTargetForPosition } from "@/lib/announcement-targets";
+import { mustConfirmAnnouncementRead } from "@/lib/announcement-read";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +11,12 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     const { announcementId } = (await req.json()) as { announcementId?: string };
     if (!announcementId) return fail("Thiếu id thông báo");
-    if (isAnnouncementReadExemptPosition(user.position)) return ok({ announcementId, userId: user.id, exempt: true });
     const announcement = await prisma.announcement.findUnique({
       where: { id: announcementId },
       select: { classification: true },
     });
     if (!announcement) return fail("Không tìm thấy mệnh lệnh", 404);
-    if (!isAnnouncementTargetForPosition(announcement.classification, user.position)) {
+    if (!mustConfirmAnnouncementRead(announcement.classification, user.position)) {
       return ok({ announcementId, userId: user.id, exempt: true });
     }
 

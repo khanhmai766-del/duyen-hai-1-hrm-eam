@@ -6,8 +6,8 @@ import { useSession } from "next-auth/react";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useForumPosts } from "@/hooks/useForum";
-import { isAnnouncementReadExemptPosition } from "@/lib/announcement-read";
-import { announcementTargetLabel, isAnnouncementTargetForPosition } from "@/lib/announcement-targets";
+import { mustConfirmAnnouncementRead } from "@/lib/announcement-read";
+import { announcementTargetLabel } from "@/lib/announcement-targets";
 import { forumPostTargetsPosition, forumTargetPositionsLabel } from "@/lib/forum-targets";
 
 const FORUM_NOTICE_READ_KEY = "pp:forum-notices-read";
@@ -48,7 +48,6 @@ export function useNotifications() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const { position: myPosition } = useCurrentPosition();
-  const exemptFromReadConfirm = isAnnouncementReadExemptPosition(myPosition);
   const announcements = useAnnouncements();
   const forumPosts = useForumPosts({ category: "ALL" });
   const [ackedForumIds, setAckedForumIds] = React.useState<Set<string>>(() => new Set());
@@ -66,9 +65,9 @@ export function useNotifications() {
 
   const loading = announcements.isLoading || forumPosts.isLoading;
 
-  const announcementNotices: Notice[] = exemptFromReadConfirm ? [] : (announcements.data?.data ?? [])
+  const announcementNotices: Notice[] = (announcements.data?.data ?? [])
     .filter((a) => !a.invalidatedAt)
-    .filter((a) => isAnnouncementTargetForPosition(a.classification, myPosition))
+    .filter((a) => mustConfirmAnnouncementRead(a.classification, myPosition))
     .filter((a) => !myId || !a.reads.some((r) => r.userId === myId))
     .slice()
     .sort((x, y) => {
@@ -87,7 +86,7 @@ export function useNotifications() {
           announcementTargetLabel(a.classification),
           invalidated ? "Không còn hiệu lực" : a.orderedBy ? `Theo lệnh: ${a.orderedBy}` : a.body,
         ].filter(Boolean).join(" · ").slice(0, 80),
-        href: "/notifications",
+        href: `/notifications?announcementId=${encodeURIComponent(a.id)}`,
         date: a.invalidatedAt ?? a.createdAt,
       };
     });
@@ -105,7 +104,7 @@ export function useNotifications() {
       tone: "blue",
       title: `Forum kỹ thuật: ${post.title}`,
       desc: forumTargetPositionsLabel(post.targetPositions).slice(0, 80),
-      href: "/forum",
+      href: `/forum?postId=${encodeURIComponent(post.id)}`,
       date: post.createdAt,
     }));
 
@@ -127,7 +126,7 @@ export function useNotifications() {
       tone: "blue",
       title: `Bình luận mới: ${post.title}`,
       desc: `${post.latestReply!.author.name}: ${post.latestReply!.content}`.slice(0, 80),
-      href: "/forum",
+      href: `/forum?postId=${encodeURIComponent(post.id)}&replyId=${encodeURIComponent(post.latestReply!.id)}`,
       date: post.latestReply!.createdAt,
     }));
 

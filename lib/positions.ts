@@ -44,6 +44,36 @@ export const OPERATION_POSITION_TITLES = [
   "XLNT",
 ] as const;
 
+/**
+ * Mã ổn định dùng cho nghiệp vụ mệnh lệnh. Tên tiếng Việt chỉ là nhãn hiển thị
+ * và có thể thay đổi/viết theo nhiều biến thể mà không làm sai đối tượng nhận.
+ */
+export const ANNOUNCEMENT_POSITION_CODES = {
+  ESP: "ESP",
+  FGD: "FGD",
+  "Khí Nén - Nhà Dầu": "AIR_COMPRESSOR_OIL_HOUSE",
+  "Lò phó": "BOILER_DEPUTY",
+  "Lò Trưởng": "BOILER_LEAD",
+  "Máy nghiền": "COAL_MILL",
+  "Máy phó": "TURBINE_DEPUTY",
+  "Máy trưởng": "TURBINE_LEAD",
+  "NH3 - Lò hơi phụ": "AUX_BOILER_NH3",
+  "Thải xỉ": "ASH_HANDLING",
+  "Thiết bị đo lường điều khiển": "INSTRUMENT_CONTROL",
+  "TK Lò máy": "BOILER_TURBINE_SHIFT_LEAD",
+  "Trạm bơm nước thô": "RAW_WATER_PUMP",
+  "Trạm bơm tuần hoàn": "CIRCULATING_WATER_PUMP",
+  "Trợ thủ": "TURBINE_ASSISTANT",
+  "Trực chính Điện": "ELECTRICAL_MAIN_OPERATOR",
+  "Trực phụ điện": "ELECTRICAL_ASSISTANT_OPERATOR",
+  "Trưởng ca": "SHIFT_SUPERVISOR",
+  "Trưởng kíp điện": "ELECTRICAL_SHIFT_LEAD",
+  "XLN hỗn hợp": "MIXED_WATER_TREATMENT",
+  XLNT: "WASTEWATER_TREATMENT",
+} as const satisfies Record<(typeof OPERATION_POSITION_TITLES)[number], string>;
+
+export type AnnouncementPositionCode = (typeof ANNOUNCEMENT_POSITION_CODES)[keyof typeof ANNOUNCEMENT_POSITION_CODES];
+
 const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[] }> = [
   {
     canonical: "Thiết bị đo lường điều khiển",
@@ -127,6 +157,20 @@ export function announcementPositionLabel(position?: string | null) {
   return group?.canonical ?? clean;
 }
 
+export function announcementPositionCode(position?: string | null): AnnouncementPositionCode | null {
+  const label = announcementPositionLabel(position);
+  const entry = Object.entries(ANNOUNCEMENT_POSITION_CODES).find(
+    ([canonical]) => normalizeText(canonical) === normalizeText(label)
+  );
+  return (entry?.[1] as AnnouncementPositionCode | undefined) ?? null;
+}
+
+export function announcementPositionLabelFromCode(code?: string | null) {
+  if (!code) return null;
+  const entry = Object.entries(ANNOUNCEMENT_POSITION_CODES).find(([, value]) => value === code);
+  return entry?.[0] ?? null;
+}
+
 export function announcementPositionOptions(userPositions: Array<string | null | undefined> = []) {
   return uniqueVietnamesePositions(standardPositionOptions(userPositions).map(announcementPositionLabel))
     .sort((a, b) => a.localeCompare(b, "vi"));
@@ -137,9 +181,7 @@ export function announcementShiftRosterPositionOptions() {
 }
 
 export function isAnnouncementShiftRosterPosition(position?: string | null) {
-  const current = normalizeText(announcementPositionLabel(position));
-  if (!current) return false;
-  return announcementShiftRosterPositionOptions().some((item) => normalizeText(item) === current);
+  return announcementPositionCode(position) !== null;
 }
 
 export function selectableManagingPositionOptions(userPositions: Array<string | null | undefined> = []) {

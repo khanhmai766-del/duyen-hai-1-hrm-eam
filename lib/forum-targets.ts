@@ -1,5 +1,9 @@
-import { normalizeText } from "@/lib/nav";
-import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
+import {
+  announcementPositionCode,
+  announcementPositionLabel,
+  announcementPositionLabelFromCode,
+  uniqueVietnamesePositions,
+} from "@/lib/positions";
 import { ALL_ANNOUNCEMENT_POSITIONS } from "@/lib/announcement-targets";
 
 export function normalizeForumTargetPositions(value: unknown, max = 12) {
@@ -13,25 +17,40 @@ export function normalizeForumTargetPositions(value: unknown, max = 12) {
     return [ALL_ANNOUNCEMENT_POSITIONS];
   }
 
-  return uniqueVietnamesePositions(
+  return Array.from(new Set(
     raw
-      .map((item) => announcementPositionLabel(String(item)))
-      .map((item) => item.trim())
-      .filter(Boolean)
-  ).slice(0, max);
+      .map((item) => String(item).trim())
+      .map((item) => announcementPositionLabelFromCode(item) ?? item)
+      .map(announcementPositionCode)
+      .filter((code): code is NonNullable<typeof code> => Boolean(code))
+  )).slice(0, max);
 }
 
 export function forumPostTargetsPosition(targetPositions: string[] | null | undefined, position?: string | null) {
   const targets = targetPositions ?? [];
   if (!targets.length || !position?.trim()) return false;
   if (targets.includes(ALL_ANNOUNCEMENT_POSITIONS)) return true;
-  const current = normalizeText(announcementPositionLabel(position));
-  return targets.some((target) => normalizeText(announcementPositionLabel(target)) === current);
+  const currentCode = announcementPositionCode(position);
+  if (!currentCode) return false;
+  return targets.some((target) => {
+    const label = announcementPositionLabelFromCode(target) ?? target;
+    return announcementPositionCode(label) === currentCode;
+  });
+}
+
+export function forumTargetPositionLabels(targetPositions: string[] | null | undefined) {
+  const targets = targetPositions ?? [];
+  if (targets.includes(ALL_ANNOUNCEMENT_POSITIONS)) return [ALL_ANNOUNCEMENT_POSITIONS];
+  return uniqueVietnamesePositions(
+    targets
+      .map((target) => announcementPositionLabelFromCode(target) ?? announcementPositionLabel(target))
+      .filter(Boolean)
+  );
 }
 
 export function forumTargetPositionsLabel(targetPositions: string[] | null | undefined) {
   const targets = targetPositions ?? [];
   if (targets.includes(ALL_ANNOUNCEMENT_POSITIONS)) return "Tất cả cương vị";
   if (targets.length === 0) return "Chưa chọn cương vị";
-  return uniqueVietnamesePositions(targets.map(announcementPositionLabel)).join(", ");
+  return forumTargetPositionLabels(targets).join(", ");
 }
