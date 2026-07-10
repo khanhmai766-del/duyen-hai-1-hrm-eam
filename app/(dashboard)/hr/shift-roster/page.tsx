@@ -43,6 +43,12 @@ type TimesheetLine = "shift1" | "shift2" | "hc";
 type HcCell = { hours: number; content: string; note: string | null };
 const TIMESHEET_LINES: TimesheetLine[] = ["shift1", "shift2", "hc"];
 
+function timesheetLineLabel(line: TimesheetLine) {
+  if (line === "shift1") return "Dòng 1 - Công ca";
+  if (line === "shift2") return "Dòng 2 - Công ca bổ sung";
+  return "Dòng 3 - Hành chính";
+}
+
 function cellMeta(code: Code) {
   if (code === "OFF") return { short: "N", color: "#F1F5F9", text: "#64748B", label: "Nghỉ" };
   const m = SHIFT_TYPE[code];
@@ -154,6 +160,7 @@ export default function ShiftRosterPage() {
     userName: string;
     date: string;
     day: number;
+    line: TimesheetLine;
     value: string;
     calculated: string;
     override?: TimesheetOverride;
@@ -181,11 +188,11 @@ export default function ShiftRosterPage() {
     });
     return m;
   }, [timesheet.data]);
-  // Map "userId:day" → manual timesheet override set by an authorized user.
+  // Map "userId:day:line" → manual timesheet override set by an authorized user.
   const overrideMap = React.useMemo(() => {
     const m = new Map<string, TimesheetOverride>();
     (timesheet.data?.data?.overrides ?? []).forEach((override) => {
-      m.set(`${override.userId}:${override.day}`, override);
+      m.set(`${override.userId}:${override.day}:${override.line}`, override);
     });
     return m;
   }, [timesheet.data]);
@@ -258,6 +265,7 @@ export default function ShiftRosterPage() {
   function openEditCell(params: {
     user: { id: string; name: string };
     day: number;
+    line: TimesheetLine;
     entries: TimesheetEntry[];
     hc?: { hours: number; content: string; note: string | null };
     override?: TimesheetOverride;
@@ -269,6 +277,7 @@ export default function ShiftRosterPage() {
       userName: params.user.name,
       date: monthCellDate(month.year, month.month, params.day),
       day: params.day,
+      line: params.line,
       value: params.override?.value ?? "",
       calculated,
       override: params.override,
@@ -290,6 +299,7 @@ export default function ShiftRosterPage() {
       await updateOverride.mutateAsync({
         userId: editCell.userId,
         date: editCell.date,
+        line: editCell.line,
         value: value.trim(),
         note: value.trim() ? editNote.trim() : undefined,
       });
@@ -312,8 +322,8 @@ export default function ShiftRosterPage() {
   }
 
   function timesheetLineCellText(userId: string, day: number, line: TimesheetLine, includePending = true) {
-    const override = overrideMap.get(`${userId}:${day}`);
-    if (override) return line === "shift1" ? override.value : "";
+    const override = overrideMap.get(`${userId}:${day}:${line}`);
+    if (override) return override.value;
     const entries = tsMap.get(`${userId}:${day}`) ?? [];
     if (line === "hc") {
       const hc = hcMap.get(`${userId}:${day}`);
@@ -325,7 +335,7 @@ export default function ShiftRosterPage() {
   }
 
   function timesheetCommentText(user: { id: string; name: string; employeeId: string }, day: number, line: TimesheetLine = "shift1") {
-    const override = line === "shift1" ? overrideMap.get(`${user.id}:${day}`) : undefined;
+    const override = overrideMap.get(`${user.id}:${day}:${line}`);
     const hc = line === "hc" ? hcMap.get(`${user.id}:${day}`) : undefined;
     const notes = [override?.note?.trim(), hcWorkNote(hc ?? {})].filter(Boolean);
     if (!notes.length) return "";
@@ -465,17 +475,6 @@ export default function ShiftRosterPage() {
                   <span className="inline-flex items-center gap-1 text-muted-foreground">
                     <span className="font-semibold text-ink">4V3</span> = 4 giờ ca đêm
                   </span>
-                  <span className="mx-1 hidden h-4 w-px bg-border md:inline-block" />
-                  <span className="font-medium text-muted-foreground">HC (giờ):</span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-3.5 w-3.5 rounded" style={{ background: "#DC2626" }} />Sự cố
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-3.5 w-3.5 rounded" style={{ background: "#2563EB" }} />PCCC
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-3.5 w-3.5 rounded" style={{ background: "#6B7280" }} />Khác
-                  </span>
                 </div>
               </div>
             </div>
@@ -563,13 +562,13 @@ export default function ShiftRosterPage() {
                             </>
                           )}
                           {days.map((d) => {
-                            const override = overrideMap.get(`${u.id}:${d}`);
+                            const override = overrideMap.get(`${u.id}:${d}:${line}`);
                             const allEntries = tsMap.get(`${u.id}:${d}`) ?? [];
                             const entries = shiftEntriesForLine(allEntries, line);
                             const hc = line === "hc" ? hcMap.get(`${u.id}:${d}`) : undefined;
-                            const showOverride = !!override && line === "shift1";
+                            const showOverride = !!override;
                             const editableCell = canEditAllTimesheet || (canEditOwnTimesheet && u.id === myUserId);
-                            const open = () => openEditCell({ user: u, day: d, entries, hc, override });
+                            const open = () => openEditCell({ user: u, day: d, line, entries, hc, override });
                             return (
                               <td
                                 key={`${line}-${d}`}
@@ -683,7 +682,9 @@ export default function ShiftRosterPage() {
             <div className="space-y-4">
               <div className="rounded-md border border-border bg-slate-50 px-3 py-2 text-sm">
                 <div className="font-semibold text-ink">{editCell.userName}</div>
-                <div className="text-xs text-muted-foreground">Ngày {String(editCell.day).padStart(2, "0")}/{String(month.month + 1).padStart(2, "0")}/{month.year}</div>
+                <div className="text-xs text-muted-foreground">
+                  {timesheetLineLabel(editCell.line)} · Ngày {String(editCell.day).padStart(2, "0")}/{String(month.month + 1).padStart(2, "0")}/{month.year}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Giá trị hiển thị</Label>

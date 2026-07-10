@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const EDIT_TIMESHEET_PERMISSION_ID = "timesheet-edit";
 const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Buổi chiều", "Hành chính - Ra ca sáng"];
+const TIMESHEET_LINES = ["shift1", "shift2", "hc"] as const;
 const TIMESHEET_PREVIOUS_MONTH_KEEP_UNTIL_DAY = 15;
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -99,13 +100,27 @@ async function ensureTimesheetOverrideTable() {
     CREATE TABLE IF NOT EXISTS "TimesheetOverride" (
       "userId" TEXT NOT NULL,
       date TEXT NOT NULL,
+      line TEXT NOT NULL DEFAULT 'shift1',
       value TEXT NOT NULL,
       note TEXT,
       "updatedById" TEXT,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY ("userId", date)
+      PRIMARY KEY ("userId", date, line)
     )
   `);
+  const primaryKeyColumns = await prisma.$queryRawUnsafe<{ columnName: string }[]>(`
+    SELECT a.attname AS "columnName"
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+    WHERE t.relname = 'TimesheetOverride' AND c.contype = 'p'
+    ORDER BY array_position(c.conkey, a.attnum)
+  `);
+  if (!primaryKeyColumns.some((column) => column.columnName === "line")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "TimesheetOverride" ADD COLUMN IF NOT EXISTS line TEXT NOT NULL DEFAULT 'shift1'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "TimesheetOverride" DROP CONSTRAINT IF EXISTS "TimesheetOverride_pkey"`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "TimesheetOverride" ADD PRIMARY KEY ("userId", date, line)`);
+  }
   const range = retentionMonthRange();
   const minDate = `${range.min.year}-${String(range.min.month + 1).padStart(2, "0")}-01`;
   await prisma.$executeRawUnsafe(`DELETE FROM "TimesheetOverride" WHERE date < $1`, minDate);
@@ -234,6 +249,7 @@ export async function GET(req: NextRequest) {
       {
         userId: string;
         date: string;
+        line: string;
         value: string;
         note: string | null;
         updatedAt: Date;
@@ -242,7 +258,7 @@ export async function GET(req: NextRequest) {
       }[]
     >(
       `
-        SELECT o."userId", o.date, o.value, o.note, o."updatedAt", o."updatedById", u.name AS "updatedByName"
+        SELECT o."userId", o.date, o.line, o.value, o.note, o."updatedAt", o."updatedById", u.name AS "updatedByName"
         FROM "TimesheetOverride" o
         LEFT JOIN "User" u ON u.id = o."updatedById"
         WHERE o.date >= $1 AND o.date <= $2
@@ -257,6 +273,7 @@ export async function GET(req: NextRequest) {
       userId: row.userId,
       date: row.date,
       day: Number(row.date.slice(8, 10)),
+      line: TIMESHEET_LINES.includes(row.line as (typeof TIMESHEET_LINES)[number]) ? row.line : "shift1",
       value: row.value,
       note: row.note,
       updatedAt: row.updatedAt.toISOString(),
@@ -275,6 +292,7 @@ export async function PUT(req: NextRequest) {
     const body = (await req.json()) as Record<string, unknown>;
     const userId = String(body.userId ?? "").trim();
     const date = String(body.date ?? "").trim();
+    const line = String(body.line ?? "shift1").trim();
     const value = String(body.value ?? "").trim();
     const note = String(body.note ?? "").trim() || null;
 
@@ -283,37 +301,40 @@ export async function PUT(req: NextRequest) {
     const canEditOwn = canEditAll || (await canEditOwnTimesheet(user));
     if (!canEditAll && (!canEditOwn || userId !== user.id)) return fail("Bạn không có quyền chỉnh ô bảng công này", 403);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail("Ngày bảng công không hợp lệ");
+    if (!TIMESHEET_LINES.includes(line as (typeof TIMESHEET_LINES)[number])) return fail("Dòng bảng công không hợp lệ");
     if (!isDateInRetention(date)) return fail("Bảng công tháng trước chỉ lưu đến ngày 15 của tháng hiện tại", 400);
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true } });
     if (!target) return fail("Không tìm thấy nhân viên", 404);
 
     if (!value) {
       await prisma.$executeRawUnsafe(
-        `DELETE FROM "TimesheetOverride" WHERE "userId" = $1 AND date = $2`,
+        `DELETE FROM "TimesheetOverride" WHERE "userId" = $1 AND date = $2 AND line = $3`,
         userId,
-        date
+        date,
+        line
       );
-      await audit(user.id, "DELETE_TIMESHEET_OVERRIDE", "TimesheetOverride", `${userId}:${date}`, target.name);
-      return ok({ userId, date, value: "" });
+      await audit(user.id, "DELETE_TIMESHEET_OVERRIDE", "TimesheetOverride", `${userId}:${date}:${line}`, target.name);
+      return ok({ userId, date, line, value: "" });
     }
 
     if (value.length > 40) return fail("Giá trị ô bảng công tối đa 40 ký tự");
     if (note && note.length > 500) return fail("Nội dung ô bảng công tối đa 500 ký tự");
     await prisma.$executeRawUnsafe(
       `
-        INSERT INTO "TimesheetOverride" ("userId", date, value, note, "updatedById", "updatedAt")
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-        ON CONFLICT ("userId", date)
+        INSERT INTO "TimesheetOverride" ("userId", date, line, value, note, "updatedById", "updatedAt")
+        VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+        ON CONFLICT ("userId", date, line)
         DO UPDATE SET value = EXCLUDED.value, note = EXCLUDED.note, "updatedById" = EXCLUDED."updatedById", "updatedAt" = CURRENT_TIMESTAMP
       `,
       userId,
       date,
+      line,
       value,
       note,
       user.id
     );
-    await audit(user.id, "UPDATE_TIMESHEET_OVERRIDE", "TimesheetOverride", `${userId}:${date}`, `${target.name}: ${value}`);
-    return ok({ userId, date, value, note });
+    await audit(user.id, "UPDATE_TIMESHEET_OVERRIDE", "TimesheetOverride", `${userId}:${date}:${line}`, `${target.name}: ${value}`);
+    return ok({ userId, date, line, value, note });
   });
 }
 

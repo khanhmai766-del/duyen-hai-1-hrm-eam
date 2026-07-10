@@ -693,18 +693,19 @@ model PositionSystemScope {
   @@index([systemSeq])
 }
 
-// Ghi đè công trực ca theo ngày (do người có quyền duyệt/chỉnh công đặt). Khóa chính
-// kép (userId, date). CRUD chạy bằng raw SQL trong app/api/shifts/timesheet/route.ts;
+// Ghi đè công trực ca theo từng dòng trong ngày (do người có quyền duyệt/chỉnh công đặt).
+// Khóa chính gồm (userId, date, line). CRUD chạy bằng raw SQL trong app/api/shifts/timesheet/route.ts;
 // khai báo ở đây để db push tạo bảng và không đề nghị xoá.
 model TimesheetOverride {
   userId      String
   date        String // YYYY-MM-DD
+  line        String @default("shift1") // shift1 | shift2 | hc
   value       String
   note        String?
   updatedById String?
   updatedAt   DateTime @default(now())
 
-  @@id([userId, date])
+  @@id([userId, date, line])
 }
 // Dữ liệu vòi dầu buồng đốt: 36 vòi/tổ máy (S1, S2), trạng thái khả dụng + khiếm khuyết.
 model OilGun {
