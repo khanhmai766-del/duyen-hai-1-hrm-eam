@@ -319,7 +319,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = type === "DE_XUAT";
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
-  const quantityExceedsStock = isProposalType && !!selectedMaterial && proposedQuantity > selectedMaterial.quantity;
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -358,10 +357,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }
 
   async function submit() {
-    if (quantityExceedsStock && selectedMaterial) {
-      toast.error(`Số lượng đã nhập vượt tồn kho. ${selectedMaterial.name} hiện còn ${selectedMaterial.quantity} ${selectedMaterial.unit}; vui lòng nhập lại số lượng.`);
-      return;
-    }
     try {
       const res = await create.mutateAsync({
         type: type!, unit, note: note.trim() || undefined,
@@ -470,13 +465,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                     <input
                       type="number"
                       min={1}
-                      max={selectedMaterial?.quantity}
                       value={proposedQuantity}
                       onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
                     />
-                    {quantityExceedsStock && selectedMaterial && (
-                      <small className="text-red-600">Số lượng vượt tồn kho ({selectedMaterial.quantity} {selectedMaterial.unit}). Vui lòng nhập lại.</small>
-                    )}
                   </div>
                 </div>
                 <label>Tên thiết bị thay thế *</label>
@@ -498,7 +489,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   !assigned ||
                   !category ||
                   !selectedMaterialId ||
-                  (isProposalType && (!note.trim() || !selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || quantityExceedsStock || !replacementDeviceName.trim()))
+                  (isProposalType && (!note.trim() || !selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !replacementDeviceName.trim()))
                 }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
@@ -615,7 +606,6 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     });
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
-  const quantityExceedsStock = t.type === "DE_XUAT" && !!selectedMaterial && proposedQuantity > selectedMaterial.quantity;
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -656,10 +646,6 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   }
 
   async function submit() {
-    if (quantityExceedsStock && selectedMaterial) {
-      toast.error(`Số lượng đã nhập vượt tồn kho. ${selectedMaterial.name} hiện còn ${selectedMaterial.quantity} ${selectedMaterial.unit}; vui lòng nhập lại số lượng.`);
-      return;
-    }
     try {
       await act.mutateAsync({
         action: "editInfo", unit, bbktNumber: bbkt.trim() || undefined,
@@ -748,13 +734,9 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                   <input
                     type="number"
                     min={1}
-                    max={selectedMaterial?.quantity}
                     value={proposedQuantity}
                     onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
                   />
-                  {quantityExceedsStock && selectedMaterial && (
-                    <small className="text-red-600">Số lượng vượt tồn kho ({selectedMaterial.quantity} {selectedMaterial.unit}). Vui lòng nhập lại.</small>
-                  )}
                 </div>
               </div>
 
@@ -777,7 +759,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 act.isPending ||
                 !assigned ||
                 !category ||
-                (t.type === "DE_XUAT" && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || quantityExceedsStock || !note.trim() || !replacementDeviceName.trim()))
+                (t.type === "DE_XUAT" && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || !replacementDeviceName.trim()))
               }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
@@ -1020,10 +1002,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
   const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
   const materialOptions = (opts?.materials ?? []).filter((m) => (!wantCategory || m.category === wantCategory) && m.machine === t.unit);
-  const proposedStockErrors = materialOptions.flatMap((material) => {
-    const requested = items.filter((item) => item.materialId === material.id).reduce((sum, item) => sum + item.quantity, 0);
-    return requested > material.quantity ? [{ material, requested }] : [];
-  });
   const replacementStockErrors = t.items.flatMap((item) => {
     const used = replacementRows.filter((row) => row.itemId === item.id).reduce((sum, row) => sum + row.quantity, 0);
     return used > item.material.quantity ? [{ material: item.material, requested: used }] : [];
@@ -1134,10 +1112,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     <div className="act">
       <label className="lb">Bước 1 — Đề xuất vật tư thay thế</label>
       {ItemsForm}
-      {proposedStockErrors.length > 0 && (
-        <div className="warnbox"><AlertTriangle size={15} /> Số lượng đã nhập vượt tồn kho. {proposedStockErrors.map(({ material, requested }) => `${material.name}: nhập ${requested}, tồn ${material.quantity}`).join("; ")}. Vui lòng nhập lại.</div>
-      )}
-      <button className="btn primary big" disabled={!itemsValid || proposedStockErrors.length > 0 || act.isPending}
+      <button className="btn primary big" disabled={!itemsValid || act.isPending}
         onClick={() => run({ action: "propose", items }, "Đã gửi đề xuất")}>
         <ChevronRight size={15} /> Gửi đề xuất
       </button>
@@ -1204,8 +1179,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   if (acts.includes("use")) {
     const unit = t.items[0]?.material.unit ?? "";
+    const stock = t.items[0]?.material.quantity ?? 0;
     const received = t.receivedQuantity ?? 0;
     const remaining = received - qty;
+    const quantityExceedsStock = qty > stock;
     return (
       <div className="act">
         <label className="lb">Sử dụng vật tư — kết quả thay thế</label>
@@ -1213,11 +1190,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
         <textarea rows={3} placeholder="Nội dung xác nhận thay thế xong…" value={note} onChange={(e) => setNote(e.target.value)} />
         <label>Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *</label>
-        <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        {quantityExceedsStock && (
+          <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt tồn kho. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
+        )}
         <p className="hint">
           Đã lãnh: {received} {unit} đã cộng vào tồn kho · Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi tồn kho. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
         </p>
-        <button className="btn primary big" disabled={!pct.trim() || !chiHuy.trim() || !note.trim() || qty <= 0 || act.isPending}
+        <button className="btn primary big" disabled={!pct.trim() || !chiHuy.trim() || !note.trim() || qty <= 0 || quantityExceedsStock || act.isPending}
           onClick={() => run({ action: "use", pctNumber: pct, chiHuyName: chiHuy, completionNote: note, usedQuantity: qty }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
