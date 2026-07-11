@@ -24,6 +24,7 @@ export interface OilStockGroup {
   name: string;
   baseUnit: string;
   minStock: number | null;
+  onHandQty: number; // "Hiện có" — số đếm thực tế tại kho, nhập tay
   totalQty: number;
   belowMin: boolean;
   materialCount: number;
@@ -107,6 +108,38 @@ export function useOilGroupingConfirm() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
+    },
+  });
+}
+
+// Cập nhật TỪNG PHẦN — chỉ field có mặt mới được ghi (server giữ nguyên phần còn lại).
+export interface OilGroupUpdateInput {
+  id: string;
+  code?: string;
+  name?: string;
+  baseUnit?: string;
+  minStock?: number | null;
+  onHandQty?: number;
+}
+
+/** Sửa thông tin nhóm vật tư (mã, tên, ĐVT chuẩn, ngưỡng tối thiểu, hiện có). */
+export function useUpdateOilGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: OilGroupUpdateInput) => apiMutate("/api/vat-tu/oil-grouping/groups", "PUT", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["oil-stock"] }),
+  });
+}
+
+/** Xoá nhóm — các mã trong nhóm trở về "Chờ phân nhóm". */
+export function useDeleteOilGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiMutate<{ deleted: string; ungrouped: number }>(`/api/vat-tu/oil-grouping/groups?id=${id}`, "DELETE"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
     },
   });
 }

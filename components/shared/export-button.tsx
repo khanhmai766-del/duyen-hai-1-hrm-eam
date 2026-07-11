@@ -61,6 +61,7 @@ const LABELS: Record<string, string> = {
   soLieuERP: "Số liệu ERP",
   maNhom: "Mã nhóm",
   tenNhom: "Tên nhóm",
+  hienCo: "Hiện có",
   tongTonERP: "Tổng tồn ERP",
   nguongToiThieu: "Ngưỡng tối thiểu",
   soMa: "Số mã",

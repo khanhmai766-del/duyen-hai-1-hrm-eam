@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
         name: t.name,
         baseUnit: t.baseUnit,
         minStock: t.minStock,
+        onHandQty: t.onHandQty, // "Hiện có" — số đếm thực tế nhập tay
         totalQty,
         belowMin: t.minStock != null && totalQty < t.minStock,
         materialCount: materials.length,

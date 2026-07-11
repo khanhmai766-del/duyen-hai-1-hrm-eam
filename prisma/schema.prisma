@@ -966,12 +966,13 @@ enum MappingStatus {
 }
 
 model OilType {
-  id       String @id @default(cuid())
-  code     String @unique // "T32", "VG46", "15W40", "LOC-TB"...
-  name     String // "Dầu tuabin T32", "Lõi lọc dầu tuabin"...
-  baseUnit String // đơn vị chuẩn để cộng tồn: "Lít", "Cái", "Kg", "Viên"
-  minStock Float? // ngưỡng cảnh báo đề xuất nhập (theo baseUnit)
-  note     String?
+  id        String @id @default(cuid())
+  code      String @unique // "T32", "VG46", "15W40", "LOC-TB"...
+  name      String // "Dầu tuabin T32", "Lõi lọc dầu tuabin"...
+  baseUnit  String // đơn vị chuẩn để cộng tồn: "Lít", "Cái", "Kg", "Viên"
+  minStock  Float? // ngưỡng cảnh báo đề xuất nhập (theo baseUnit)
+  onHandQty Float  @default(0) // "Hiện có" — số đếm thực tế tại kho, nhập tay trên UI
+  note      String?
   // Loại vật tư của nhóm — khớp Material.category / ErpMaterial.category:
   // "Dầu bôi trơn" | "Lõi lọc dầu" | "Hóa Chất" | "Bi Nghiền Than"
   category String @default("Dầu bôi trơn")

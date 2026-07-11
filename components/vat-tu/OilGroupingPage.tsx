@@ -8,15 +8,24 @@
 // =====================================================================
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Droplet, Filter, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
+import { Droplet, Filter, FlaskConical, CircleDot, Loader2, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErpQuickActions } from "@/components/materials/erp-quick-actions";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { canManageMaterialCatalog } from "@/lib/constants";
 import {
   useOilStock,
   useOilSuggestions,
   useOilGroupingSync,
   useOilGroupingConfirm,
+  useUpdateOilGroup,
+  useDeleteOilGroup,
   type GroupingCategory,
   type OilStockGroup,
   type OilPendingItem,
@@ -60,6 +69,7 @@ export default function OilGroupingPage() {
           exportRows={groups.map((g) => ({
             maNhom: g.code,
             tenNhom: g.name,
+            hienCo: g.onHandQty,
             tongTonERP: g.totalQty,
             dvt: g.baseUnit,
             nguongToiThieu: g.minStock ?? "",
@@ -134,7 +144,15 @@ function StockBoard({
   loading: boolean;
   onReload: () => void;
 }) {
+  const { data: session } = useSession();
+  const canManage = canManageMaterialCatalog({ role: session?.user?.role, position: session?.user?.position });
+  const updateGroup = useUpdateOilGroup();
+  const deleteGroup = useDeleteOilGroup();
+
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [edit, setEdit] = useState<{ id: string; code: string; name: string; baseUnit: string; minStock: string } | null>(null);
+  const [deleting, setDeleting] = useState<OilStockGroup | null>(null);
+
   const toggle = (id: string) =>
     setOpen((p) => {
       const n = new Set(p);
@@ -142,6 +160,47 @@ function StockBoard({
       else n.add(id);
       return n;
     });
+
+  const startEdit = (g: OilStockGroup) =>
+    setEdit({ id: g.id, code: g.code, name: g.name, baseUnit: g.baseUnit, minStock: g.minStock != null ? String(g.minStock) : "" });
+
+  const saveEdit = async () => {
+    if (!edit) return;
+    if (!edit.code.trim() || !edit.name.trim() || !edit.baseUnit.trim()) {
+      toast.error("Vui lòng nhập đủ mã, tên và ĐVT chuẩn của nhóm");
+      return;
+    }
+    try {
+      await updateGroup.mutateAsync({
+        id: edit.id,
+        code: edit.code.trim(),
+        name: edit.name.trim(),
+        baseUnit: edit.baseUnit.trim(),
+        minStock: edit.minStock.trim() === "" ? null : Number(edit.minStock),
+      });
+      toast.success("Đã cập nhật nhóm vật tư");
+      setEdit(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    try {
+      const res = await deleteGroup.mutateAsync(deleting.id);
+      toast.success(`Đã xoá nhóm ${deleting.code}${res.ungrouped ? ` — ${res.ungrouped} mã trở về chờ phân nhóm` : ""}`);
+      setDeleting(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  // Lưu ô "Hiện có" sửa inline — chỉ gửi onHandQty, không đụng field khác
+  const saveOnHand = async (g: OilStockGroup, value: number) => {
+    await updateGroup.mutateAsync({ id: g.id, onHandQty: value });
+    toast.success(`Đã cập nhật Hiện có: ${g.code} → ${fmt(value)} ${g.baseUnit}`);
+  };
 
   if (loading) return <div className="py-12 text-center text-slate-400">Đang tải…</div>;
   if (groups.length === 0)
@@ -159,15 +218,26 @@ function StockBoard({
             <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
               <th className="text-left px-4 py-3 w-10"></th>
               <th className="text-left px-2 py-3">Nhóm vật tư</th>
+              <th className="text-right px-4 py-3">Hiện có</th>
               <th className="text-right px-4 py-3">Tổng tồn ERP</th>
               <th className="text-right px-4 py-3">Ngưỡng tối thiểu</th>
               <th className="text-center px-4 py-3">Số mã</th>
               <th className="text-center px-4 py-3">Trạng thái</th>
+              {canManage && <th className="text-center px-4 py-3">Thao tác</th>}
             </tr>
           </thead>
           <tbody>
             {groups.map((g) => (
-              <GroupRows key={g.id} g={g} open={open.has(g.id)} toggle={toggle} />
+              <GroupRows
+                key={g.id}
+                g={g}
+                open={open.has(g.id)}
+                toggle={toggle}
+                canManage={canManage}
+                onEdit={() => startEdit(g)}
+                onDelete={() => setDeleting(g)}
+                onSaveOnHand={(v) => saveOnHand(g, v)}
+              />
             ))}
           </tbody>
         </table>
@@ -180,6 +250,59 @@ function StockBoard({
           ⟳ Làm mới
         </button>
       </div>
+
+      {/* Dialog sửa nhóm */}
+      <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Sửa nhóm vật tư</DialogTitle></DialogHeader>
+          {edit && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <Label className="mb-1.5 block">Mã nhóm *</Label>
+                <Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <Label className="mb-1.5 block">ĐVT chuẩn *</Label>
+                <Input value={edit.baseUnit} onChange={(e) => setEdit({ ...edit, baseUnit: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <Label className="mb-1.5 block">Tên nhóm *</Label>
+                <Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <Label className="mb-1.5 block">Ngưỡng tối thiểu (theo ĐVT chuẩn — để trống nếu không cảnh báo)</Label>
+                <Input type="number" min={0} value={edit.minStock} onChange={(e) => setEdit({ ...edit, minStock: e.target.value })} />
+              </div>
+              <p className="col-span-2 text-xs text-muted-foreground">
+                Lưu ý: đổi ĐVT chuẩn sẽ không tự quy đổi lại hệ số của các mã đã gom.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEdit(null)}>Huỷ</Button>
+            <Button onClick={saveEdit} disabled={updateGroup.isPending}>
+              {updateGroup.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lưu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Xác nhận xoá nhóm */}
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title={deleting ? `Xoá nhóm ${deleting.code} · ${deleting.name}?` : "Xoá nhóm"}
+        description={
+          deleting
+            ? deleting.materialCount > 0
+              ? `${deleting.materialCount} mã vật tư trong nhóm sẽ trở về tab "Chờ phân nhóm" (không mất dữ liệu ERP). Hành động này không thể hoàn tác.`
+              : "Nhóm chưa có mã nào. Hành động này không thể hoàn tác."
+            : undefined
+        }
+        confirmLabel="Xoá nhóm"
+        loading={deleteGroup.isPending}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -188,10 +311,18 @@ function GroupRows({
   g,
   open,
   toggle,
+  canManage,
+  onEdit,
+  onDelete,
+  onSaveOnHand,
 }: {
   g: OilStockGroup;
   open: boolean;
   toggle: (id: string) => void;
+  canManage: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSaveOnHand: (value: number) => Promise<void>;
 }) {
   return (
     <>
@@ -200,6 +331,9 @@ function GroupRows({
         <td className="px-2 py-3">
           <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5 mr-2 text-slate-600">{g.code}</span>
           <span className="font-semibold text-slate-800">{g.name}</span>
+        </td>
+        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+          <InlineQtyCell value={g.onHandQty} unit={g.baseUnit} canEdit={canManage} onSave={onSaveOnHand} />
         </td>
         <td className="px-4 py-3 text-right font-bold text-slate-800">
           {fmt(g.totalQty)} <span className="font-normal text-slate-400">{g.baseUnit}</span>
@@ -219,6 +353,24 @@ function GroupRows({
             </span>
           )}
         </td>
+        {canManage && (
+          <td className="px-4 py-3">
+            <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" title="Sửa nhóm" onClick={onEdit}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Xoá nhóm"
+                className="text-muted-foreground hover:bg-red-50 hover:text-destructive"
+                onClick={onDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </td>
+        )}
       </tr>
       {open &&
         g.materials.map((m) => (
@@ -233,6 +385,7 @@ function GroupRows({
                 </span>
               )}
             </td>
+            <td></td>
             <td className="px-4 py-2 text-right text-slate-600 text-xs">
               {fmt(m.qtyInBase)} {g.baseUnit}
               {m.conversionFactor !== 1 && (
@@ -242,10 +395,77 @@ function GroupRows({
                 </span>
               )}
             </td>
-            <td colSpan={3}></td>
+            <td colSpan={canManage ? 4 : 3}></td>
           </tr>
         ))}
     </>
+  );
+}
+
+/** Ô "Hiện có": kích đúp để sửa, Enter lưu, Esc huỷ. Cho phép số lẻ (Lít/Kg). */
+function InlineQtyCell({
+  value,
+  unit,
+  canEdit,
+  onSave,
+}: {
+  value: number;
+  unit: string;
+  canEdit: boolean;
+  onSave: (v: number) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const [saving, setSaving] = useState(false);
+
+  if (!editing) {
+    return (
+      <span
+        className={`inline-block rounded px-1.5 py-0.5 font-bold tabular-nums text-slate-800 ${
+          canEdit ? "cursor-text transition-colors hover:bg-sky-50 hover:ring-1 hover:ring-sky-200" : ""
+        }`}
+        title={canEdit ? "Nhấn đúp để sửa" : undefined}
+        onDoubleClick={() => {
+          if (!canEdit) return;
+          setDraft(String(value));
+          setEditing(true);
+        }}
+      >
+        {fmt(value)} <span className="font-normal text-slate-400">{unit}</span>
+      </span>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      type="number"
+      min={0}
+      step="any"
+      aria-label="Sửa số lượng hiện có"
+      value={draft}
+      disabled={saving}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={async (e) => {
+        if (e.key === "Escape") return setEditing(false);
+        if (e.key !== "Enter") return;
+        const next = Number(draft);
+        if (!Number.isFinite(next) || next < 0) return void toast.error("Giá trị không hợp lệ");
+        if (next === value) return setEditing(false);
+        setSaving(true);
+        try {
+          await onSave(next);
+          setEditing(false);
+        } catch (err) {
+          toast.error((err as Error).message);
+        } finally {
+          setSaving(false);
+        }
+      }}
+      onBlur={() => !saving && setEditing(false)}
+      className="h-8 w-24 rounded-md border border-blue-400 bg-white px-2 text-right text-sm font-semibold tabular-nums outline-none ring-2 ring-blue-200"
+    />
   );
 }
 
