@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { canManageMaterialCatalog, MATERIAL_CATEGORIES } from "@/lib/constants";
+import { runOilGroupingSync } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,10 @@ export async function POST(req: NextRequest) {
         created += 1;
       }
     }
+
+    // Quét gợi ý gom nhóm dầu cho các mã mới/chưa duyệt — chỉ đụng UNMAPPED/
+    // SUGGESTED nên mapping đã duyệt không bị reset; lỗi không chặn import.
+    await runOilGroupingSync().catch(() => null);
 
     await audit(user.id, "IMPORT_ERP_MATERIAL", "ErpMaterial", undefined, `Tạo mới ${created}, cập nhật ${updated}, bỏ qua ${skipped}`);
     return ok({ created, updated, skipped, errors });

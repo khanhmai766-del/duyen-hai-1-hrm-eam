@@ -364,9 +364,26 @@ model ErpMaterial {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // --- gom nhóm theo loại dầu (module tồn kho theo loại dầu) ---
+  // Import Excel ERP chỉ update name/unit/category/erpStock nên mapping đã
+  // duyệt không bị reset sau mỗi lần nhập (cơ chế "học dần").
+  oilTypeId        String?
+  oilType          OilType?      @relation(fields: [oilTypeId], references: [id])
+  mappingStatus    MappingStatus @default(UNMAPPED)
+  conversionFactor Float         @default(1) // 1 unit gốc = ? baseUnit (vd 1 phuy = 209 Lít)
+
+  // gợi ý đang chờ duyệt (null sau khi CONFIRMED/IGNORED)
+  suggestedOilTypeId String?
+  suggestedScore     Float?
+  suggestedReason    String?
+
+  mappingLogs OilTypeMappingLog[]
+
   @@index([code])
   @@index([category])
   @@index([erpStock])
+  @@index([mappingStatus])
+  @@index([oilTypeId])
 }
 
 // Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí
@@ -933,4 +950,54 @@ model SafeOperationEvent {
 
   @@index([unit, category])
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------
+// GOM NHÓM VẬT TƯ DẦU — Phương án 3 (Hybrid: tự động gợi ý + người duyệt)
+// Gom các mã vật tư ERP cùng loại dầu → tổng tồn kho theo loại + cảnh báo
+// dưới ngưỡng. Mapping đã duyệt lưu vĩnh viễn (cơ chế "học dần").
+// ---------------------------------------------------------------------
+
+enum MappingStatus {
+  UNMAPPED // mã mới, chưa chạy matching hoặc không tìm được gợi ý
+  SUGGESTED // đã có gợi ý, chờ người duyệt
+  CONFIRMED // đã gom nhóm (mapping vĩnh viễn)
+  IGNORED // không phải dầu / không cần gom (không hỏi lại)
+}
+
+model OilType {
+  id       String @id @default(cuid())
+  code     String @unique // "T32", "VG46", "15W40"...
+  name     String // "Dầu tuabin T32"
+  baseUnit String // đơn vị chuẩn để cộng tồn: "Lít"
+  minStock Float? // ngưỡng cảnh báo đề xuất nhập (theo baseUnit)
+  note     String?
+
+  materials ErpMaterial[]
+  logs      OilTypeMappingLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("oil_types")
+}
+
+// Audit trail: ai gom mã nào vào nhóm nào, lúc nào, vì sao.
+// Phục vụ truy vết theo CS-ATTT-KTAT-21 / ISO 27001.
+model OilTypeMappingLog {
+  id         String      @id @default(cuid())
+  materialId String
+  material   ErpMaterial @relation(fields: [materialId], references: [id])
+  oilTypeId  String?
+  oilType    OilType?    @relation(fields: [oilTypeId], references: [id])
+
+  action String // SUGGESTED | CONFIRMED | CHANGED | REMOVED | IGNORED
+  score  Float?
+  reason String?
+  userId String? // id user NextAuth thực hiện thao tác (null = hệ thống)
+
+  createdAt DateTime @default(now())
+
+  @@index([materialId])
+  @@map("oil_type_mapping_logs")
 }
