@@ -75,13 +75,14 @@ export function parseErpCode(erpCode: string): ParsedErpCode {
 
 /* ---------------- Trích token cấp dầu ---------------- */
 
-// T32, VG46, ISO VG 68, 15W40, L-TSA 32, NLGI 2...
+// T32, VG46, ISO VG 68, 15W40, L-TSA 32, NLGI 2, 60MM (bi nghiền/lõi lọc)...
 const VISCOSITY_PATTERNS: RegExp[] = [
   /\b(\d{1,2}W-?\d{2})\b/, // 15W40, 5W-30
   /\bISO\s*VG\s*(\d{2,4})\b/, // ISO VG 68
   /\bVG\s*-?(\d{2,4})\b/, // VG46
   /\bL-?TSA\s*-?(\d{2,3})\b/, // L-TSA 32
   /\bNLGI\s*-?(\d)\b/, // NLGI 2 (mỡ)
+  /\b(\d{2,4})\s*MM\b/, // 60MM — kích cỡ bi nghiền, lõi lọc
   /\bT\s*-?(\d{2,3})\b/, // T32, T46
   /\b(\d{2,3})\b/, // số trần cuối cùng: 68, 100
 ];

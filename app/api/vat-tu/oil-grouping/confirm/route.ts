@@ -5,13 +5,14 @@
 // Body:
 // { materialIds: string[],
 //   action: "CONFIRM" | "IGNORE",
-//   oilTypeId?: string,                               // gom vào nhóm có sẵn
-//   newOilType?: { code, name, baseUnit, minStock? }, // hoặc tạo nhóm mới
-//   conversionFactor?: number }                       // quy đổi ĐVT nếu khác baseUnit
+//   oilTypeId?: string,                                         // gom vào nhóm có sẵn
+//   newOilType?: { code, name, baseUnit, minStock?, category }, // hoặc tạo nhóm mới
+//   conversionFactor?: number }                                 // quy đổi ĐVT nếu khác baseUnit
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { canManageMaterialCatalog } from "@/lib/constants";
+import { isGroupableCategory } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,9 @@ export async function POST(req: NextRequest) {
         if (!newOilType?.code || !newOilType?.name || !newOilType?.baseUnit) {
           throw fail("Thiếu thông tin nhóm mới (mã, tên, ĐVT chuẩn)");
         }
+        if (!isGroupableCategory(newOilType.category)) {
+          throw fail("Loại vật tư của nhóm mới không hợp lệ");
+        }
         const code = String(newOilType.code).trim().toUpperCase();
         const existed = await tx.oilType.findUnique({ where: { code } });
         if (existed) throw fail(`Mã nhóm "${code}" đã tồn tại — chọn nhóm có sẵn hoặc dùng mã khác`);
@@ -75,19 +79,26 @@ export async function POST(req: NextRequest) {
             name: String(newOilType.name).trim(),
             baseUnit: String(newOilType.baseUnit).trim(),
             minStock: newOilType.minStock != null ? Number(newOilType.minStock) : null,
+            category: newOilType.category,
           },
         });
         targetId = created.id;
       }
 
-      // 2. Kiểm tra ĐVT: mã khác baseUnit bắt buộc phải có conversionFactor != 1
+      // 2. Kiểm tra loại + ĐVT
       const target = await tx.oilType.findUnique({ where: { id: targetId } });
-      if (!target) throw fail("Không tìm thấy loại dầu đích", 404);
+      if (!target) throw fail("Không tìm thấy nhóm vật tư đích", 404);
       const mats = await tx.erpMaterial.findMany({
         where: { id: { in: materialIds } },
-        select: { id: true, unit: true },
+        select: { id: true, unit: true, category: true },
       });
       if (mats.length !== materialIds.length) throw fail("Có mã vật tư không tồn tại");
+
+      // Mã phải cùng loại vật tư với nhóm đích (mã chưa phân loại tính là Dầu bôi trơn)
+      const wrongCategory = mats.filter((m) => (m.category ?? "Dầu bôi trơn") !== target.category);
+      if (wrongCategory.length > 0) {
+        throw fail(`${wrongCategory.length} mã không thuộc loại "${target.category}" — không thể gom vào nhóm này`);
+      }
       const unitMismatch = mats.filter(
         (m) => m.unit.trim().toLowerCase() !== target.baseUnit.trim().toLowerCase()
       );

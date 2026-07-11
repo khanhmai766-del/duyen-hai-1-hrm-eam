@@ -100,7 +100,7 @@ export const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { label: "Danh mục vật tư ERP", href: "/materials/erp", icon: Database, keywords: "danh muc vat tu erp so lieu erp material" },
-      { label: "Tồn kho theo loại dầu", href: "/vat-tu/loai-dau", icon: Droplet, keywords: "ton kho loai dau oil type gom nhom vat tu erp de xuat nhap nguong canh bao" },
+      { label: "Tồn kho theo nhóm vật tư", href: "/vat-tu/loai-dau", icon: Droplet, keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat bi nghien than gom nhom erp de xuat nhap nguong canh bao" },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
       { label: "Theo dõi vật tư", href: "/replacement-procedures", icon: ClipboardList, keywords: "theo doi vat tu quy trinh thay the huong dan checklist procedure replacement" },
     ],

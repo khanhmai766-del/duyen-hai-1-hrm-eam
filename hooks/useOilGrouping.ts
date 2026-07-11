@@ -3,6 +3,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
+// Các loại vật tư được gom nhóm — khớp GROUPABLE_CATEGORIES phía server.
+export const GROUPING_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất", "Bi Nghiền Than"] as const;
+export type GroupingCategory = (typeof GROUPING_CATEGORIES)[number];
+
 export interface OilMaterialRow {
   id: string;
   erpCode: string;
@@ -27,8 +31,10 @@ export interface OilStockGroup {
 }
 
 export interface OilStockData {
+  category: GroupingCategory;
   groups: OilStockGroup[];
   pendingCount: number;
+  pendingByCategory: Record<GroupingCategory, number>;
   warningCount: number;
 }
 
@@ -52,6 +58,7 @@ export interface OilTypeOption {
 }
 
 export interface OilSuggestionsData {
+  category: GroupingCategory;
   items: OilPendingItem[];
   oilTypes: OilTypeOption[];
 }
@@ -60,30 +67,31 @@ export interface OilConfirmInput {
   materialIds: string[];
   action: "CONFIRM" | "IGNORE";
   oilTypeId?: string;
-  newOilType?: { code: string; name: string; baseUnit: string; minStock?: number };
+  newOilType?: { code: string; name: string; baseUnit: string; minStock?: number; category: GroupingCategory };
   conversionFactor?: number;
 }
 
-export function useOilStock() {
+export function useOilStock(category: GroupingCategory) {
   return useQuery({
-    queryKey: ["oil-stock"],
-    queryFn: () => apiGet<OilStockData>("/api/vat-tu/oil-grouping/stock"),
+    queryKey: ["oil-stock", category],
+    queryFn: () => apiGet<OilStockData>(`/api/vat-tu/oil-grouping/stock?category=${encodeURIComponent(category)}`),
   });
 }
 
-export function useOilSuggestions(enabled = true) {
+export function useOilSuggestions(category: GroupingCategory, enabled = true) {
   return useQuery({
-    queryKey: ["oil-suggestions"],
-    queryFn: () => apiGet<OilSuggestionsData>("/api/vat-tu/oil-grouping/suggestions"),
+    queryKey: ["oil-suggestions", category],
+    queryFn: () => apiGet<OilSuggestionsData>(`/api/vat-tu/oil-grouping/suggestions?category=${encodeURIComponent(category)}`),
     enabled,
   });
 }
 
-/** Quét lại gợi ý gom nhóm cho các mã chưa duyệt. */
+/** Quét lại gợi ý gom nhóm cho các mã chưa duyệt của một loại vật tư. */
 export function useOilGroupingSync() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => apiMutate<{ scanned: number; suggested: number; unmapped: number }>("/api/vat-tu/oil-grouping/sync", "POST"),
+    mutationFn: (category: GroupingCategory) =>
+      apiMutate<{ scanned: number; suggested: number; unmapped: number }>("/api/vat-tu/oil-grouping/sync", "POST", { category }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });

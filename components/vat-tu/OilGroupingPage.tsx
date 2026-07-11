@@ -1,17 +1,21 @@
 "use client";
 // =====================================================================
-// TRANG "TỒN KHO THEO LOẠI DẦU" + TAB "CHỜ PHÂN NHÓM"
-// Gom các mã vật tư ERP cùng loại dầu, tổng hợp tồn kho phục vụ
-// đề xuất nhập thay thế. Dữ liệu qua hooks/useOilGrouping (TanStack Query).
+// TRANG "TỒN KHO VẬT TƯ THEO NHÓM" + TAB "CHỜ PHÂN NHÓM"
+// Gom các mã vật tư ERP cùng nhóm (theo 4 loại: Dầu bôi trơn, Lõi lọc dầu,
+// Hóa Chất, Bi Nghiền Than), tổng hợp tồn kho phục vụ đề xuất nhập thay thế.
+// Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Droplet, Filter, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import {
   useOilStock,
   useOilSuggestions,
   useOilGroupingSync,
   useOilGroupingConfirm,
+  GROUPING_CATEGORIES,
+  type GroupingCategory,
   type OilStockGroup,
   type OilPendingItem,
   type OilConfirmInput,
@@ -19,30 +23,72 @@ import {
 
 const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
 
+// Icon + gợi ý mặc định khi tạo nhóm mới cho từng loại vật tư.
+const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: string; codeHint: string; nameHint: string }> = {
+  "Dầu bôi trơn": { icon: Droplet, defaultUnit: "Lít", codeHint: "T32", nameHint: "Dầu tuabin T32" },
+  "Lõi lọc dầu": { icon: Filter, defaultUnit: "Cái", codeHint: "LOC-TB", nameHint: "Lõi lọc dầu tuabin" },
+  "Hóa Chất": { icon: FlaskConical, defaultUnit: "Kg", codeHint: "NAOH", nameHint: "Xút NaOH 32%" },
+  "Bi Nghiền Than": { icon: CircleDot, defaultUnit: "Viên", codeHint: "BI60", nameHint: "Bi nghiền than 60mm" },
+};
+
 /* ==================== TRANG CHÍNH ==================== */
 export default function OilGroupingPage() {
+  const [category, setCategory] = useState<GroupingCategory>("Dầu bôi trơn");
   const [tab, setTab] = useState<"stock" | "pending">("stock");
-  const { data, isLoading, refetch } = useOilStock();
+  const { data, isLoading, refetch } = useOilStock(category);
   const groups = data?.data.groups ?? [];
   const pendingCount = data?.data.pendingCount ?? 0;
+  const pendingByCategory = data?.data.pendingByCategory;
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Tồn kho dầu theo loại"
-        description="Gom các mã vật tư ERP cùng loại dầu, tổng hợp tồn kho phục vụ đề xuất nhập thay thế"
+        title="Tồn kho vật tư theo nhóm"
+        description="Gom các mã vật tư ERP cùng nhóm, tổng hợp tồn kho phục vụ đề xuất nhập thay thế"
       />
 
-      {/* Tabs */}
+      {/* Tabs loại vật tư */}
+      <div className="flex flex-wrap gap-2">
+        {GROUPING_CATEGORIES.map((c) => {
+          const Icon = CATEGORY_META[c].icon;
+          const badge = pendingByCategory?.[c] ?? 0;
+          const active = c === category;
+          return (
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${
+                active
+                  ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {c}
+              {badge > 0 && (
+                <span
+                  className={`inline-flex min-w-5 h-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${
+                    active ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tabs tồn kho / chờ phân nhóm */}
       <div className="flex gap-1 border-b border-slate-200">
-        <TabButton active={tab === "stock"} onClick={() => setTab("stock")} label="Tồn kho theo loại dầu" />
+        <TabButton active={tab === "stock"} onClick={() => setTab("stock")} label="Tồn kho theo nhóm" />
         <TabButton active={tab === "pending"} onClick={() => setTab("pending")} label="Chờ phân nhóm" badge={pendingCount} />
       </div>
 
       {tab === "stock" ? (
         <StockBoard groups={groups} loading={isLoading} onReload={() => refetch()} />
       ) : (
-        <PendingTab />
+        <PendingTab key={category} category={category} />
       )}
     </div>
   );
@@ -99,7 +145,7 @@ function StockBoard({
   if (groups.length === 0)
     return (
       <div className="py-12 text-center text-slate-400">
-        Chưa có loại dầu nào — duyệt các mã ở tab &quot;Chờ phân nhóm&quot; để bắt đầu.
+        Chưa có nhóm nào cho loại vật tư này — duyệt các mã ở tab &quot;Chờ phân nhóm&quot; để bắt đầu.
       </div>
     );
 
@@ -110,7 +156,7 @@ function StockBoard({
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
               <th className="text-left px-4 py-3 w-10"></th>
-              <th className="text-left px-2 py-3">Loại dầu</th>
+              <th className="text-left px-2 py-3">Nhóm vật tư</th>
               <th className="text-right px-4 py-3">Tổng tồn ERP</th>
               <th className="text-right px-4 py-3">Ngưỡng tối thiểu</th>
               <th className="text-center px-4 py-3">Số mã</th>
@@ -126,7 +172,7 @@ function StockBoard({
       </div>
       <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
         <span className="text-xs text-slate-500">
-          {groups.length} loại dầu • {groups.reduce((s, g) => s + g.materialCount, 0)} mã ERP đã gom
+          {groups.length} nhóm • {groups.reduce((s, g) => s + g.materialCount, 0)} mã ERP đã gom
         </span>
         <button onClick={onReload} className="text-xs font-semibold text-blue-600 hover:text-blue-800">
           ⟳ Làm mới
@@ -202,8 +248,9 @@ function GroupRows({
 }
 
 /* ==================== TAB 2: CHỜ PHÂN NHÓM ==================== */
-function PendingTab() {
-  const { data, isLoading } = useOilSuggestions();
+function PendingTab({ category }: { category: GroupingCategory }) {
+  const meta = CATEGORY_META[category];
+  const { data, isLoading } = useOilSuggestions(category);
   const sync = useOilGroupingSync();
   const confirm = useOilGroupingConfirm();
   const items = data?.data.items ?? [];
@@ -214,7 +261,7 @@ function PendingTab() {
   const [targetType, setTargetType] = useState<string>("");
   const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
-  const [newUnit, setNewUnit] = useState("Lít");
+  const [newUnit, setNewUnit] = useState(meta.defaultUnit);
   const [newMin, setNewMin] = useState("");
   const [factor, setFactor] = useState("1");
 
@@ -232,7 +279,7 @@ function PendingTab() {
 
   const runScan = async () => {
     try {
-      const r = await sync.mutateAsync();
+      const r = await sync.mutateAsync(category);
       toast.success(`Đã quét ${r.scanned} mã: ${r.suggested} có gợi ý, ${r.unmapped} chưa nhận diện`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -270,6 +317,7 @@ function PendingTab() {
         name: newName,
         baseUnit: newUnit,
         minStock: newMin ? Number(newMin) : undefined,
+        category,
       };
     } else {
       base.oilTypeId = targetType;
@@ -279,7 +327,7 @@ function PendingTab() {
 
   const ignoreSelected = () => {
     if (checked.size === 0) return;
-    submit({ materialIds: [...checked], action: "IGNORE" }, `Đã bỏ qua ${checked.size} mã (không phải dầu)`);
+    submit({ materialIds: [...checked], action: "IGNORE" }, `Đã bỏ qua ${checked.size} mã (không cần gom nhóm)`);
   };
 
   if (isLoading) return <div className="py-12 text-center text-slate-400">Đang tải…</div>;
@@ -301,7 +349,7 @@ function PendingTab() {
 
       {items.length === 0 ? (
         <div className="py-12 text-center text-slate-400 border border-dashed border-slate-300 rounded-xl">
-          ✓ Tất cả mã vật tư dầu đã được gom nhóm.
+          ✓ Tất cả mã vật tư loại &quot;{category}&quot; đã được gom nhóm.
         </div>
       ) : (
         <>
@@ -390,13 +438,13 @@ function PendingTab() {
                   onChange={(e) => setTargetType(e.target.value)}
                   className="block mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-56"
                 >
-                  <option value="">— Chọn loại dầu —</option>
+                  <option value="">— Chọn nhóm —</option>
                   {oilTypes.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.code} · {t.name} ({t.baseUnit})
                     </option>
                   ))}
-                  <option value="__new__">＋ Tạo loại dầu mới…</option>
+                  <option value="__new__">＋ Tạo nhóm mới…</option>
                 </select>
               </label>
 
@@ -407,16 +455,16 @@ function PendingTab() {
                     <input
                       value={newCode}
                       onChange={(e) => setNewCode(e.target.value)}
-                      placeholder="T32"
+                      placeholder={meta.codeHint}
                       className="block mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm w-24"
                     />
                   </label>
                   <label className="text-xs text-slate-500">
-                    Tên loại dầu
+                    Tên nhóm
                     <input
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Dầu tuabin T32"
+                      placeholder={meta.nameHint}
                       className="block mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm w-56"
                     />
                   </label>
@@ -462,7 +510,7 @@ function PendingTab() {
                 disabled={busy || checked.size === 0}
                 className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 border border-slate-300 hover:bg-slate-50 disabled:opacity-40"
               >
-                Không phải dầu — bỏ qua
+                Không cần gom — bỏ qua
               </button>
             </div>
           </div>

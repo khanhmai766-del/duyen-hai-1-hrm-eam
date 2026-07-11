@@ -1,19 +1,25 @@
-// GET /api/vat-tu/oil-grouping/stock
-// Tổng tồn kho ERP theo LOẠI DẦU (đã quy đổi về baseUnit) + chi tiết
-// từng mã con, cờ cảnh báo dưới ngưỡng minStock.
+// GET /api/vat-tu/oil-grouping/stock?category=<loại vật tư>
+// Tổng tồn kho ERP theo NHÓM vật tư của một loại (Dầu bôi trơn / Lõi lọc dầu /
+// Hóa Chất / Bi Nghiền Than), đã quy đổi về baseUnit + chi tiết từng mã con,
+// cờ cảnh báo dưới ngưỡng minStock.
+import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { parseErpCode } from "@/lib/oil-matching";
-import { OIL_SCAN_FILTER } from "@/lib/oil-grouping-sync";
+import { isGroupableCategory, pendingCountByCategory, type GroupableCategory } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return handle(async () => {
     await requireUser();
 
-    const [types, pendingCount] = await Promise.all([
+    const raw = req.nextUrl.searchParams.get("category");
+    const category: GroupableCategory = isGroupableCategory(raw) ? raw : "Dầu bôi trơn";
+
+    const [types, pendingByCategory] = await Promise.all([
       prisma.oilType.findMany({
+        where: { category },
         orderBy: { code: "asc" },
         include: {
           materials: {
@@ -30,9 +36,7 @@ export async function GET() {
           },
         },
       }),
-      prisma.erpMaterial.count({
-        where: { mappingStatus: { in: ["SUGGESTED", "UNMAPPED"] }, ...OIL_SCAN_FILTER },
-      }),
+      pendingCountByCategory(),
     ]);
 
     const groups = types.map((t) => {
@@ -59,8 +63,10 @@ export async function GET() {
     });
 
     return ok({
+      category,
       groups,
-      pendingCount, // badge trên tab "Chờ phân nhóm"
+      pendingCount: pendingByCategory[category], // badge tab "Chờ phân nhóm" của loại đang xem
+      pendingByCategory, // badge trên các tab loại vật tư
       warningCount: groups.filter((g) => g.belowMin).length,
     });
   });
