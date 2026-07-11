@@ -30,12 +30,20 @@ export function useErpMaterials() {
   });
 }
 
+// Thay đổi vật tư ERP ảnh hưởng cả màn "Tồn kho vật tư theo nhóm"
+// (tồn theo nhóm + danh sách chờ phân nhóm) → làm mới luôn các query đó.
+function invalidateErpRelated(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["erp-materials"] });
+  qc.invalidateQueries({ queryKey: ["oil-stock"] });
+  qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+}
+
 export function useUpsertErpMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ErpMaterialInput) =>
       apiMutate<ErpMaterial>("/api/materials/erp", body.id ? "PUT" : "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp-materials"] }),
+    onSuccess: () => invalidateErpRelated(qc),
   });
 }
 
@@ -43,7 +51,7 @@ export function useDeleteErpMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/materials/erp?id=${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp-materials"] }),
+    onSuccess: () => invalidateErpRelated(qc),
   });
 }
 
@@ -51,7 +59,7 @@ export function useDeleteErpMaterials() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) => apiMutate<{ ids: string[]; count: number }>("/api/materials/erp", "DELETE", { ids }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp-materials"] }),
+    onSuccess: () => invalidateErpRelated(qc),
   });
 }
 
@@ -60,6 +68,6 @@ export function useImportErpMaterials() {
   return useMutation({
     mutationFn: (rows: ErpMaterialImportRow[]) =>
       apiMutate<ErpMaterialImportResult>("/api/materials/erp/import", "POST", { rows }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["erp-materials"] }),
+    onSuccess: () => invalidateErpRelated(qc),
   });
 }

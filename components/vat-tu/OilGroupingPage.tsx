@@ -3,18 +3,20 @@
 // TRANG "TỒN KHO VẬT TƯ THEO NHÓM" + TAB "CHỜ PHÂN NHÓM"
 // Gom các mã vật tư ERP cùng nhóm (theo 4 loại: Dầu bôi trơn, Lõi lọc dầu,
 // Hóa Chất, Bi Nghiền Than), tổng hợp tồn kho phục vụ đề xuất nhập thay thế.
+// Loại vật tư chọn qua menu con trên sidebar (?loai=...), không có tab trong trang.
 // Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Droplet, Filter, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import { ErpQuickActions } from "@/components/materials/erp-quick-actions";
 import {
   useOilStock,
   useOilSuggestions,
   useOilGroupingSync,
   useOilGroupingConfirm,
-  GROUPING_CATEGORIES,
   type GroupingCategory,
   type OilStockGroup,
   type OilPendingItem,
@@ -31,58 +33,53 @@ const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: s
   "Bi Nghiền Than": { icon: CircleDot, defaultUnit: "Viên", codeHint: "BI60", nameHint: "Bi nghiền than 60mm" },
 };
 
+// Slug trên URL (?loai=...) ↔ loại vật tư — khớp href menu con trong lib/nav.ts.
+const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
+  "dau-boi-tron": "Dầu bôi trơn",
+  "loi-loc-dau": "Lõi lọc dầu",
+  "hoa-chat": "Hóa Chất",
+  "bi-nghien-than": "Bi Nghiền Than",
+};
+
 /* ==================== TRANG CHÍNH ==================== */
 export default function OilGroupingPage() {
-  const [category, setCategory] = useState<GroupingCategory>("Dầu bôi trơn");
+  const params = useSearchParams();
+  const category: GroupingCategory = CATEGORY_BY_SLUG[params.get("loai") ?? ""] ?? "Dầu bôi trơn";
   const [tab, setTab] = useState<"stock" | "pending">("stock");
   const { data, isLoading, refetch } = useOilStock(category);
   const groups = data?.data.groups ?? [];
   const pendingCount = data?.data.pendingCount ?? 0;
-  const pendingByCategory = data?.data.pendingByCategory;
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Tồn kho vật tư theo nhóm"
         description="Gom các mã vật tư ERP cùng nhóm, tổng hợp tồn kho phục vụ đề xuất nhập thay thế"
-      />
+      >
+        <ErpQuickActions
+          exportRows={groups.map((g) => ({
+            maNhom: g.code,
+            tenNhom: g.name,
+            tongTonERP: g.totalQty,
+            dvt: g.baseUnit,
+            nguongToiThieu: g.minStock ?? "",
+            soMa: g.materialCount,
+            trangThai: g.belowMin ? "Dưới ngưỡng" : "Đủ tồn",
+          }))}
+          exportFilename="ton-kho-vat-tu-theo-nhom"
+          exportTitle={`Tồn kho theo nhóm — ${category}`}
+          defaultCategory={category}
+        />
+      </PageHeader>
 
-      {/* Tabs loại vật tư */}
-      <div className="flex flex-wrap gap-2">
-        {GROUPING_CATEGORIES.map((c) => {
-          const Icon = CATEGORY_META[c].icon;
-          const badge = pendingByCategory?.[c] ?? 0;
-          const active = c === category;
-          return (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${
-                active
-                  ? "border-blue-600 bg-blue-600 text-white shadow-sm"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {c}
-              {badge > 0 && (
-                <span
-                  className={`inline-flex min-w-5 h-5 items-center justify-center rounded-full px-1.5 text-xs font-bold ${
-                    active ? "bg-white/25 text-white" : "bg-amber-100 text-amber-700"
-                  }`}
-                >
-                  {badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tabs tồn kho / chờ phân nhóm */}
-      <div className="flex gap-1 border-b border-slate-200">
+      {/* Tabs tồn kho / chờ phân nhóm — loại vật tư chọn từ menu con sidebar */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200">
         <TabButton active={tab === "stock"} onClick={() => setTab("stock")} label="Tồn kho theo nhóm" />
         <TabButton active={tab === "pending"} onClick={() => setTab("pending")} label="Chờ phân nhóm" badge={pendingCount} />
+        <span className="ml-auto mb-1.5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+          <CategoryIcon category={category} className="h-4 w-4" />
+          {category}
+        </span>
       </div>
 
       {tab === "stock" ? (
@@ -92,6 +89,11 @@ export default function OilGroupingPage() {
       )}
     </div>
   );
+}
+
+function CategoryIcon({ category, className }: { category: GroupingCategory; className?: string }) {
+  const Icon = CATEGORY_META[category].icon;
+  return <Icon className={className} />;
 }
 
 function TabButton({

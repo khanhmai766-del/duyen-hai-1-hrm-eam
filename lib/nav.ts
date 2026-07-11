@@ -21,6 +21,9 @@ import {
   Factory,
   Boxes,
   Droplet,
+  Filter,
+  FlaskConical,
+  CircleDot,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -89,7 +92,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "QUẢN LÝ VẬT TƯ",
     items: [
       {
-        label: "Danh mục vật tư PXVH1",
+        label: "Vật tư Vận Hành 1",
         href: "/materials",
         icon: Package,
         keywords: "material vat tu pxvh1 phu tung ton kho",
@@ -99,8 +102,19 @@ export const NAV_SECTIONS: NavSection[] = [
           { label: "COMMON", href: "/materials?may=COMMON", icon: Boxes, keywords: "danh muc vat tu pxvh1 common dung chung material ton kho" },
         ],
       },
-      { label: "Danh mục vật tư ERP", href: "/materials/erp", icon: Database, keywords: "danh muc vat tu erp so lieu erp material" },
-      { label: "Tồn kho theo nhóm vật tư", href: "/vat-tu/loai-dau", icon: Droplet, keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat bi nghien than gom nhom erp de xuat nhap nguong canh bao" },
+      { label: "Vật Tư ERP", href: "/materials/erp", icon: Database, keywords: "danh muc vat tu erp so lieu erp material" },
+      {
+        label: "Tồn kho theo nhóm vật tư",
+        href: "/vat-tu/loai-dau",
+        icon: Droplet,
+        keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat bi nghien than gom nhom erp de xuat nhap nguong canh bao",
+        children: [
+          { label: "Dầu bôi trơn", href: "/vat-tu/loai-dau?loai=dau-boi-tron", icon: Droplet, keywords: "ton kho nhom dau boi tron oil" },
+          { label: "Lõi lọc dầu", href: "/vat-tu/loai-dau?loai=loi-loc-dau", icon: Filter, keywords: "ton kho nhom loi loc dau filter" },
+          { label: "Hóa Chất", href: "/vat-tu/loai-dau?loai=hoa-chat", icon: FlaskConical, keywords: "ton kho nhom hoa chat chemical" },
+          { label: "Bi Nghiền Than", href: "/vat-tu/loai-dau?loai=bi-nghien-than", icon: CircleDot, keywords: "ton kho nhom bi nghien than" },
+        ],
+      },
       { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
       { label: "Theo dõi vật tư", href: "/replacement-procedures", icon: ClipboardList, keywords: "theo doi vat tu quy trinh thay the huong dan checklist procedure replacement" },
     ],
