@@ -15,7 +15,10 @@ export default function ReplacementProceduresPage() {
   const { data } = useMaterialTickets();
   const position = data?.viewer?.position ?? session?.user?.currentPosition ?? session?.user?.position;
   const canCreate = data?.viewer?.canCreate ?? false;
-  const canManageWorkflow = data?.viewer?.isAdmin ?? false;
+  // Hiển thị quyền quản trị ngay từ session, không phụ thuộc việc API danh sách
+  // phiếu đã tải xong. Metadata từ API vẫn là nguồn bổ sung khi session đang
+  // được làm mới; API /material-workflow-roles tiếp tục chặn role khác ADMIN.
+  const canManageWorkflow = session?.user?.role === "ADMIN" || data?.viewer?.isAdmin === true;
   const [creating, setCreating] = useState(false);
   const [rolesOpen, setRolesOpen] = useState(false);
   const [ticketSearch, setTicketSearch] = useState("");
