@@ -1,20 +1,21 @@
-// Helpers dùng chung cho nhập/xuất danh mục vật tư ERP — dùng ở trang
-// "Danh mục vật tư ERP" và cụm nút nhanh trên trang "Tồn kho vật tư theo nhóm".
 import * as XLSX from "xlsx";
-import { MATERIAL_CATEGORIES } from "@/lib/constants";
+import { GROUPING_CATEGORIES, type GroupedErpMaterialInput, type GroupingCategory } from "@/hooks/useOilGrouping";
 import { normalizeText } from "@/lib/nav";
-import type { ErpMaterialImportRow } from "@/hooks/useErpMaterials";
 
 export const ERP_EXPORT_HEADERS = ["Mã", "Tên", "ĐVT", "Loại vật tư", "Số liệu ERP"];
 
-export function canonicalMaterialCategory(value?: string | null) {
+export function canonicalGroupedCategory(value?: string | null): GroupingCategory {
   const normalized = normalizeText(value || "");
   if (normalized === "hoa chat" || normalized === "vat tu tieu hao") return "Hóa Chất";
   if (normalized === "bi nghien than" || normalized === "bi nghien") return "Bi Nghiền Than";
-  return MATERIAL_CATEGORIES.find((category) => normalizeText(category) === normalized) ?? MATERIAL_CATEGORIES[0];
+  if (normalized === "thiet bi c&i" || normalized === "thiet bi ci" || normalized === "c&i") return "Thiết bị C&I";
+  return GROUPING_CATEGORIES.find((category) => normalizeText(category) === normalized) ?? GROUPING_CATEGORIES[0];
 }
 
-export function parseErpImportRows(rows: Array<Array<string | number | null>>): ErpMaterialImportRow[] {
+export function parseErpImportRows(
+  rows: Array<Array<string | number | null>>,
+  defaultCategory: GroupingCategory = GROUPING_CATEGORIES[0]
+): GroupedErpMaterialInput[] {
   const normalizedRows = rows.map((row) => row.map((cell) => normalizeText(String(cell ?? ""))));
   const headerIndex = normalizedRows.findIndex((row) => {
     const joined = row.join(" ");
@@ -23,8 +24,7 @@ export function parseErpImportRows(rows: Array<Array<string | number | null>>): 
   if (headerIndex < 0) return [];
 
   const header = normalizedRows[headerIndex];
-  const findColumn = (candidates: string[]) =>
-    header.findIndex((label) => candidates.includes(label));
+  const findColumn = (candidates: string[]) => header.findIndex((label) => candidates.includes(label));
 
   const codeIndex = findColumn(["ma", "ma vat tu", "code"]);
   const nameIndex = findColumn(["ten", "ten vat tu", "name"]);
@@ -39,21 +39,20 @@ export function parseErpImportRows(rows: Array<Array<string | number | null>>): 
       const code = String(row[codeIndex] ?? "").trim();
       const name = String(row[nameIndex] ?? "").trim();
       const unit = String(row[unitIndex] ?? "").trim();
-      const category = canonicalMaterialCategory(categoryIndex >= 0 ? String(row[categoryIndex] ?? "").trim() : "");
+      const category = categoryIndex >= 0 ? canonicalGroupedCategory(String(row[categoryIndex] ?? "").trim()) : defaultCategory;
       const erpStock = stockIndex >= 0 ? Math.max(0, Math.round(Number(row[stockIndex]) || 0)) : 0;
       return { code, name, unit, category, erpStock };
     })
     .filter((row) => row.code || row.name || row.unit);
 }
 
-/** Tạo và tải file Excel mẫu để nhập danh mục vật tư ERP. */
-export function downloadErpImportTemplate(sampleCategory: string = MATERIAL_CATEGORIES[0]) {
+export function downloadErpImportTemplate(sampleCategory: GroupingCategory = GROUPING_CATEGORIES[0]) {
   const aoa = [
     ["DANH MỤC VẬT TƯ ERP"],
     [`Ngày xuất: ${new Intl.DateTimeFormat("vi-VN").format(new Date())}`, "Số bản ghi: 1"],
     [],
     ERP_EXPORT_HEADERS,
-    ["ERP-001", "Dầu bôi trơn mẫu", "Lít", sampleCategory, 0],
+    ["ERP-001", "Vật tư mẫu", "Cái", sampleCategory, 0],
   ];
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
   sheet["!cols"] = [{ wch: 18 }, { wch: 34 }, { wch: 12 }, { wch: 18 }, { wch: 14 }];
@@ -64,11 +63,13 @@ export function downloadErpImportTemplate(sampleCategory: string = MATERIAL_CATE
   XLSX.writeFile(workbook, "mau-nhap-danh-muc-vat-tu-erp.xlsx", { compression: true });
 }
 
-/** Đọc file Excel/CSV import ERP → danh sách dòng đã chuẩn hóa. */
-export async function readErpImportFile(file: File): Promise<ErpMaterialImportRow[]> {
+export async function readErpImportFile(
+  file: File,
+  defaultCategory: GroupingCategory = GROUPING_CATEGORIES[0]
+): Promise<GroupedErpMaterialInput[]> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Array<string | number | null>>(sheet, { header: 1, defval: "" });
-  return parseErpImportRows(rows);
+  return parseErpImportRows(rows, defaultCategory);
 }

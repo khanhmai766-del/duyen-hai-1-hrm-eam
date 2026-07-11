@@ -155,7 +155,7 @@ export function useCreateTicket() {
       qc.invalidateQueries({ queryKey: ["material-tickets"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["erp-materials"] });
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
     },
   });
 }
@@ -169,7 +169,7 @@ export function useTicketAction(id: string | null) {
       qc.invalidateQueries({ queryKey: ["material-tickets"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["erp-materials"] });
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
     },
   });
 }

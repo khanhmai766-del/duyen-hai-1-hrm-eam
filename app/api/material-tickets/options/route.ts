@@ -44,7 +44,10 @@ export async function GET() {
     const erpCodes = Array.from(new Set(materialsRaw.flatMap((m) => (m.erpCodes?.length ? m.erpCodes : [m.code]).filter(Boolean))));
     const erpRows = erpCodes.length
       ? await prisma.$queryRaw<Array<{ code: string; erpStock: number }>>`
-          SELECT "code", "erpStock" FROM "ErpMaterial" WHERE "code" = ANY(${erpCodes}::text[])
+          SELECT "code", "erpStock"
+          FROM "ErpMaterial"
+          WHERE "code" = ANY(${erpCodes}::text[])
+            AND "mappingStatus" = 'CONFIRMED'
         `
       : [];
     const erpStockByCode = new Map(erpRows.map((row) => [row.code, row.erpStock]));

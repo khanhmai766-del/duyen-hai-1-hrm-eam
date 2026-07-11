@@ -6,13 +6,13 @@
 // Loại vật tư chọn qua menu con trên sidebar (?loai=...), không có tab trong trang.
 // Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Droplet, Filter, FlaskConical, CircleDot, Loader2, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { ErpQuickActions } from "@/components/materials/erp-quick-actions";
+import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,13 +24,18 @@ import {
   useOilSuggestions,
   useOilGroupingSync,
   useOilGroupingConfirm,
+  useCreateGroupedErpMaterial,
+  useImportGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
+  GROUPING_CATEGORIES,
   type GroupingCategory,
   type OilStockGroup,
   type OilPendingItem,
   type OilConfirmInput,
+  type GroupedErpMaterialInput,
 } from "@/hooks/useOilGrouping";
+import { downloadErpImportTemplate, readErpImportFile } from "@/lib/erp-import";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
 
@@ -38,6 +43,7 @@ const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 1 
 const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: string; codeHint: string; nameHint: string }> = {
   "Dầu bôi trơn": { icon: Droplet, defaultUnit: "Lít", codeHint: "T32", nameHint: "Dầu tuabin T32" },
   "Lõi lọc dầu": { icon: Filter, defaultUnit: "Cái", codeHint: "LOC-TB", nameHint: "Lõi lọc dầu tuabin" },
+  "Thiết bị C&I": { icon: Cpu, defaultUnit: "Cái", codeHint: "C&I", nameHint: "Thiết bị C&I" },
   "Hóa Chất": { icon: FlaskConical, defaultUnit: "Kg", codeHint: "NAOH", nameHint: "Xút NaOH 32%" },
   "Bi Nghiền Than": { icon: CircleDot, defaultUnit: "Viên", codeHint: "BI60", nameHint: "Bi nghiền than 60mm" },
 };
@@ -46,6 +52,7 @@ const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: s
 const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
   "dau-boi-tron": "Dầu bôi trơn",
   "loi-loc-dau": "Lõi lọc dầu",
+  "thiet-bi-ci": "Thiết bị C&I",
   "hoa-chat": "Hóa Chất",
   "bi-nghien-than": "Bi Nghiền Than",
 };
@@ -53,6 +60,8 @@ const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
 /* ==================== TRANG CHÍNH ==================== */
 export default function OilGroupingPage() {
   const params = useSearchParams();
+  const { data: session } = useSession();
+  const canManage = canManageMaterialCatalog({ role: session?.user?.role, position: session?.user?.position });
   const category: GroupingCategory = CATEGORY_BY_SLUG[params.get("loai") ?? ""] ?? "Dầu bôi trơn";
   const [tab, setTab] = useState<"stock" | "pending">("stock");
   const { data, isLoading, refetch } = useOilStock(category);
@@ -65,21 +74,7 @@ export default function OilGroupingPage() {
         title="Tồn kho vật tư theo nhóm"
         description="Gom các mã vật tư ERP cùng nhóm, tổng hợp tồn kho phục vụ đề xuất nhập thay thế"
       >
-        <ErpQuickActions
-          exportRows={groups.map((g) => ({
-            maNhom: g.code,
-            tenNhom: g.name,
-            hienCo: g.onHandQty,
-            tongTonERP: g.totalQty,
-            dvt: g.baseUnit,
-            nguongToiThieu: g.minStock ?? "",
-            soMa: g.materialCount,
-            trangThai: g.belowMin ? "Dưới ngưỡng" : "Đủ tồn",
-          }))}
-          exportFilename="ton-kho-vat-tu-theo-nhom"
-          exportTitle={`Tồn kho theo nhóm — ${category}`}
-          defaultCategory={category}
-        />
+        {canManage && <GroupedErpActions groups={groups} category={category} />}
       </PageHeader>
 
       {/* Tabs tồn kho / chờ phân nhóm — loại vật tư chọn từ menu con sidebar */}
@@ -104,6 +99,149 @@ export default function OilGroupingPage() {
 function CategoryIcon({ category, className }: { category: GroupingCategory; className?: string }) {
   const Icon = CATEGORY_META[category].icon;
   return <Icon className={className} />;
+}
+
+function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; category: GroupingCategory }) {
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const importErp = useImportGroupedErpMaterials();
+  const createErp = useCreateGroupedErpMaterial();
+  const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
+  const [formError, setFormError] = useState("");
+
+  const exportRows = groups.map((g) => ({
+    maNhom: g.code,
+    tenNhom: g.name,
+    hienCo: g.onHandQty,
+    tongTonERP: g.totalQty,
+    dvt: g.baseUnit,
+    nguongToiThieu: g.minStock ?? "",
+    soMa: g.materialCount,
+    trangThai: g.belowMin ? "Dưới ngưỡng" : "Đủ tồn",
+  }));
+
+  async function importExcel(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+      toast.error("Chỉ chấp nhận file Excel .xlsx, .xls hoặc .csv");
+      return;
+    }
+
+    try {
+      const parsed = await readErpImportFile(file, category);
+      if (!parsed.length) {
+        toast.error("File import chưa có dòng hợp lệ. Cần đủ cột Mã, Tên, ĐVT, Loại vật tư, Số liệu ERP.");
+        return;
+      }
+      const result = await importErp.mutateAsync(parsed);
+      const detail = result.skipped ? `, bỏ qua ${result.skipped}` : "";
+      toast.success(`Đã nhập ${parsed.length - result.skipped} dòng ERP: tạo mới ${result.created}, cập nhật ${result.updated}${detail}`);
+      if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
+    } catch (error) {
+      toast.error((error as Error).message || "Không nhập được file Excel");
+    }
+  }
+
+  async function saveNew() {
+    if (!form) return;
+    setFormError("");
+    const code = form.code.trim();
+    const name = form.name.trim();
+    const unit = form.unit.trim();
+    if (!code) return setFormError("Vui lòng nhập Mã vật tư.");
+    if (!name) return setFormError("Vui lòng nhập Tên vật tư.");
+    if (!unit) return setFormError("Vui lòng nhập ĐVT.");
+
+    try {
+      await createErp.mutateAsync({
+        ...form,
+        code,
+        name,
+        unit,
+        erpStock: Math.max(0, Math.round(Number(form.erpStock) || 0)),
+      });
+      toast.success("Đã thêm vật tư ERP");
+      setForm(null);
+    } catch (error) {
+      const message = (error as Error).message;
+      setFormError(message);
+      toast.error(message);
+    }
+  }
+
+  return (
+    <>
+      <ExportButton rows={exportRows} filename="ton-kho-vat-tu-theo-nhom" title={`Tồn kho theo nhóm — ${category}`} />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          downloadErpImportTemplate(category);
+          toast.success("Đã tạo file mẫu import");
+        }}
+      >
+        <Download className="h-4 w-4" /> File mẫu
+      </Button>
+      <Button type="button" variant="outline" size="sm" onClick={() => importInputRef.current?.click()} disabled={importErp.isPending}>
+        {importErp.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Nhập Excel
+      </Button>
+      <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importExcel} />
+      <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
+        <Plus className="h-4 w-4" /> Thêm vật tư ERP
+      </Button>
+
+      <Dialog open={!!form} onOpenChange={(open) => { if (!open) { setForm(null); setFormError(""); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Thêm vật tư ERP</DialogTitle></DialogHeader>
+          {form && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <Label className="mb-1.5 block">Mã vật tư *</Label>
+                <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <Label className="mb-1.5 block">ĐVT *</Label>
+                <Input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="Cái / Lít / Bộ..." />
+              </div>
+              <div className="col-span-2">
+                <Label className="mb-1.5 block">Tên vật tư *</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="col-span-2">
+                <Label className="mb-1.5 block">Loại vật tư</Label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value as GroupingCategory })}
+                  className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm font-medium text-slate-800"
+                >
+                  {GROUPING_CATEGORIES.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <Label className="mb-1.5 block">Số liệu ERP</Label>
+                <Input type="number" min={0} value={form.erpStock ?? 0} onChange={(e) => setForm({ ...form, erpStock: Number(e.target.value) })} />
+              </div>
+              {formError && (
+                <div className="col-span-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                  {formError}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setForm(null); setFormError(""); }}>Huỷ</Button>
+            <Button onClick={saveNew} disabled={createErp.isPending}>
+              {createErp.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lưu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 function TabButton({

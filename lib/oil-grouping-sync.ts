@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { suggestOilType, proposeNewGroups, type MaterialLike, type OilTypeLike, type NewGroupProposal } from "@/lib/oil-matching";
 
 // Các loại vật tư được gom nhóm (khớp Material.category / ErpMaterial.category).
-export const GROUPABLE_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất", "Bi Nghiền Than"] as const;
+export const GROUPABLE_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Bi Nghiền Than"] as const;
 export type GroupableCategory = (typeof GROUPABLE_CATEGORIES)[number];
 
 export function isGroupableCategory(value: unknown): value is GroupableCategory {
@@ -119,7 +119,7 @@ export async function pendingCountByCategory(): Promise<Record<GroupableCategory
   for (const row of rows) {
     if (row.category === null) out["Dầu bôi trơn"] += row._count._all; // dữ liệu cũ chưa phân loại
     else if (isGroupableCategory(row.category)) out[row.category] += row._count._all;
-    // loại khác (Thiết bị C&I...) không gom nhóm — bỏ qua
+    // loại khác không gom nhóm — bỏ qua
   }
   return out;
 }

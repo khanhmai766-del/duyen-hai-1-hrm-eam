@@ -1,73 +1,71 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ErpMaterial } from "@prisma/client";
-import { apiGet, apiMutate } from "@/lib/fetcher";
+import { useQueries } from "@tanstack/react-query";
+import { apiGet } from "@/lib/fetcher";
 
-export type ErpMaterialInput = Partial<ErpMaterial> & {
-  id?: string;
+const GROUPED_STOCK_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Bi Nghiền Than"] as const;
+
+type GroupedStockCategory = (typeof GROUPED_STOCK_CATEGORIES)[number];
+
+type GroupedStockMaterial = {
+  id: string;
+  erpCode: string;
+  name: string;
+  unit: string;
+  erpQty: number;
 };
 
-export type ErpMaterialImportRow = {
+type GroupedStockResponse = {
+  category: GroupedStockCategory;
+  groups: Array<{
+    materials: GroupedStockMaterial[];
+  }>;
+};
+
+export type ErpMaterialFromGroupedStock = {
+  id: string;
   code: string;
   name: string;
   unit: string;
-  category?: string | null;
-  erpStock?: number;
-};
-
-export type ErpMaterialImportResult = {
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: string[];
+  erpStock: number;
+  category: GroupedStockCategory;
 };
 
 export function useErpMaterials() {
-  return useQuery({
-    queryKey: ["erp-materials"],
-    queryFn: () => apiGet<ErpMaterial[]>("/api/materials/erp"),
+  const queries = useQueries({
+    queries: GROUPED_STOCK_CATEGORIES.map((category) => ({
+      queryKey: ["oil-stock", category],
+      queryFn: () => apiGet<GroupedStockResponse>(`/api/vat-tu/oil-grouping/stock?category=${encodeURIComponent(category)}`),
+    })),
   });
-}
 
-// Thay đổi vật tư ERP ảnh hưởng cả màn "Tồn kho vật tư theo nhóm"
-// (tồn theo nhóm + danh sách chờ phân nhóm) → làm mới luôn các query đó.
-function invalidateErpRelated(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ["erp-materials"] });
-  qc.invalidateQueries({ queryKey: ["oil-stock"] });
-  qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
-}
+  const byCode = new Map<string, ErpMaterialFromGroupedStock>();
+  for (const query of queries) {
+    const stock = query.data?.data;
+    if (!stock) continue;
+    for (const group of stock.groups) {
+      for (const material of group.materials) {
+        if (byCode.has(material.erpCode)) continue;
+        byCode.set(material.erpCode, {
+          id: material.id,
+          code: material.erpCode,
+          name: material.name,
+          unit: material.unit,
+          erpStock: material.erpQty,
+          category: stock.category,
+        });
+      }
+    }
+  }
 
-export function useUpsertErpMaterial() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ErpMaterialInput) =>
-      apiMutate<ErpMaterial>("/api/materials/erp", body.id ? "PUT" : "POST", body),
-    onSuccess: () => invalidateErpRelated(qc),
-  });
-}
+  const materials = Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code, "vi"));
+  const firstError = queries.find((query) => query.error)?.error;
 
-export function useDeleteErpMaterial() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => apiMutate(`/api/materials/erp?id=${id}`, "DELETE"),
-    onSuccess: () => invalidateErpRelated(qc),
-  });
-}
-
-export function useDeleteErpMaterials() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (ids: string[]) => apiMutate<{ ids: string[]; count: number }>("/api/materials/erp", "DELETE", { ids }),
-    onSuccess: () => invalidateErpRelated(qc),
-  });
-}
-
-export function useImportErpMaterials() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (rows: ErpMaterialImportRow[]) =>
-      apiMutate<ErpMaterialImportResult>("/api/materials/erp/import", "POST", { rows }),
-    onSuccess: () => invalidateErpRelated(qc),
-  });
+  return {
+    data: { data: materials, meta: { total: materials.length } },
+    isLoading: queries.some((query) => query.isLoading),
+    isFetching: queries.some((query) => query.isFetching),
+    isError: queries.some((query) => query.isError),
+    error: firstError,
+  };
 }

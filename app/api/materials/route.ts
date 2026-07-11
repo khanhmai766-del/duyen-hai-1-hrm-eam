@@ -33,6 +33,18 @@ type MaterialDocumentFields = {
   erpCodes?: string[];
 };
 
+let materialDocumentColumnsReady = false;
+
+async function ensureMaterialDocumentColumns() {
+  if (materialDocumentColumnsReady) return;
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "Material"
+    ADD COLUMN IF NOT EXISTS "documentUrl" TEXT,
+    ADD COLUMN IF NOT EXISTS "documentName" TEXT
+  `);
+  materialDocumentColumnsReady = true;
+}
+
 async function normalizeMaterialDocument(body: { documentUrl?: unknown; documentName?: unknown }): Promise<MaterialDocumentFields> {
   // Tầng 3: dán data URL cũng được đẩy lên MinIO; DB chỉ giữ URL ngắn.
   const documentUrl = await maybeUploadDataUrl({
@@ -46,6 +58,7 @@ async function normalizeMaterialDocument(body: { documentUrl?: unknown; document
 
 async function materialDocumentMap() {
   try {
+    await ensureMaterialDocumentColumns();
     const rows = await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
       SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material"
     `;
@@ -56,6 +69,8 @@ async function materialDocumentMap() {
 }
 
 async function updateMaterialDocument(materialId: string, fields: MaterialDocumentFields) {
+  if (!fields.documentUrl && !fields.documentName) return;
+  await ensureMaterialDocumentColumns();
   await prisma.$executeRaw`
     UPDATE "Material"
     SET "documentUrl" = ${fields.documentUrl}, "documentName" = ${fields.documentName}

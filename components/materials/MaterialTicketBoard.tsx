@@ -856,11 +856,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 
           <div className="step-workspace">
             {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
-            {t.docUrl && (
-              <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer">
-                <Download size={14} /> Biên Bản Nghiệm Thu (Word)
-              </a>
-            )}
             {t.receivedQuantity != null && (
               <div className="meta-line">Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Hình thức: {t.receivedMethod} — đã cộng vào tồn kho</div>
             )}
@@ -893,6 +888,11 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               <span>{log.what}</span>
             </div>
           ))}
+          {t.docUrl && (
+            <a className="pdf log-export" href={t.docUrl} target="_blank" rel="noreferrer">
+              <Download size={14} /> Biên Bản Nghiệm Thu (Word)
+            </a>
+          )}
         </div>
       </aside>
     </>
@@ -1508,7 +1508,7 @@ const CSS = `
 .items{margin-bottom:14px;}
 .step-workspace{margin-top:12px;}
 .step-workspace .act,.step-workspace .wait{margin-bottom:0;}
-.step-workspace .done-note,.step-workspace .pdf{margin-bottom:8px;}
+.step-workspace .done-note{margin-bottom:8px;}
 .item{border:1px solid ${C.line};border-radius:11px;padding:10px 12px;margin-bottom:7px;display:flex;flex-direction:column;gap:2px;font-size:12.5px;}
 .item b{font-size:13px;color:${C.navy};}
 .material-line{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
@@ -1520,6 +1520,7 @@ const CSS = `
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
+.log-export{margin:18px 0 0;max-width:max-content;}
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .act{border:1.5px dashed ${C.accent}66;background:${C.accent}07;border-radius:14px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:9px;}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}

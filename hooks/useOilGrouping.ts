@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
 // Các loại vật tư được gom nhóm — khớp GROUPABLE_CATEGORIES phía server.
-export const GROUPING_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất", "Bi Nghiền Than"] as const;
+export const GROUPING_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Bi Nghiền Than"] as const;
 export type GroupingCategory = (typeof GROUPING_CATEGORIES)[number];
 
 export interface OilMaterialRow {
@@ -72,6 +72,21 @@ export interface OilConfirmInput {
   conversionFactor?: number;
 }
 
+export type GroupedErpMaterialInput = {
+  code: string;
+  name: string;
+  unit: string;
+  category: GroupingCategory;
+  erpStock?: number;
+};
+
+export type GroupedErpImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+};
+
 export function useOilStock(category: GroupingCategory) {
   return useQuery({
     queryKey: ["oil-stock", category],
@@ -108,6 +123,33 @@ export function useOilGroupingConfirm() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
+    },
+  });
+}
+
+export function useCreateGroupedErpMaterial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: GroupedErpMaterialInput) => apiMutate("/api/vat-tu/oil-grouping/materials", "POST", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+    },
+  });
+}
+
+export function useImportGroupedErpMaterials() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: GroupedErpMaterialInput[]) =>
+      apiMutate<GroupedErpImportResult>("/api/vat-tu/oil-grouping/import", "POST", { rows }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }
