@@ -253,7 +253,7 @@ export default function AdministrativeRegistrationPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)] 2xl:items-start">
+      <div className="grid min-w-0 gap-6 min-[1800px]:grid-cols-[minmax(760px,1fr)_360px] min-[1800px]:items-start">
         <RegistrationList
           registrations={registrationsData?.data ?? []}
           isLoading={registrationsLoading}
@@ -285,7 +285,7 @@ function RegistrationList({
   const groups = React.useMemo(() => groupedRegistrations(registrations), [registrations]);
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader className="border-b border-border">
         <CardTitle>Danh sách đăng ký ({registrations.length})</CardTitle>
       </CardHeader>
@@ -604,7 +604,7 @@ function RegistrationDateRow({
       </div>
 
       <div className="min-w-0 space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3 min-[1800px]:grid-cols-4">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
           {registrations.map((registration) => (
             <div key={registration.id} className="relative min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
               {canManage && reviewMode && (

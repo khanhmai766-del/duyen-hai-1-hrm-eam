@@ -319,6 +319,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = type === "DE_XUAT";
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  const quantityExceedsStock = isProposalType && !!selectedMaterial && proposedQuantity > selectedMaterial.quantity;
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -357,6 +358,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }
 
   async function submit() {
+    if (quantityExceedsStock && selectedMaterial) {
+      toast.error(`Số lượng đã nhập vượt tồn kho. ${selectedMaterial.name} hiện còn ${selectedMaterial.quantity} ${selectedMaterial.unit}; vui lòng nhập lại số lượng.`);
+      return;
+    }
     try {
       const res = await create.mutateAsync({
         type: type!, unit, note: note.trim() || undefined,
@@ -465,9 +470,13 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                     <input
                       type="number"
                       min={1}
+                      max={selectedMaterial?.quantity}
                       value={proposedQuantity}
                       onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
                     />
+                    {quantityExceedsStock && selectedMaterial && (
+                      <small className="text-red-600">Số lượng vượt tồn kho ({selectedMaterial.quantity} {selectedMaterial.unit}). Vui lòng nhập lại.</small>
+                    )}
                   </div>
                 </div>
                 <label>Tên thiết bị thay thế *</label>
@@ -489,7 +498,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   !assigned ||
                   !category ||
                   !selectedMaterialId ||
-                  (isProposalType && (!note.trim() || !selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !replacementDeviceName.trim()))
+                  (isProposalType && (!note.trim() || !selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || quantityExceedsStock || !replacementDeviceName.trim()))
                 }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
@@ -606,6 +615,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     });
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  const quantityExceedsStock = t.type === "DE_XUAT" && !!selectedMaterial && proposedQuantity > selectedMaterial.quantity;
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -646,6 +656,10 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   }
 
   async function submit() {
+    if (quantityExceedsStock && selectedMaterial) {
+      toast.error(`Số lượng đã nhập vượt tồn kho. ${selectedMaterial.name} hiện còn ${selectedMaterial.quantity} ${selectedMaterial.unit}; vui lòng nhập lại số lượng.`);
+      return;
+    }
     try {
       await act.mutateAsync({
         action: "editInfo", unit, bbktNumber: bbkt.trim() || undefined,
@@ -734,9 +748,13 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                   <input
                     type="number"
                     min={1}
+                    max={selectedMaterial?.quantity}
                     value={proposedQuantity}
                     onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
                   />
+                  {quantityExceedsStock && selectedMaterial && (
+                    <small className="text-red-600">Số lượng vượt tồn kho ({selectedMaterial.quantity} {selectedMaterial.unit}). Vui lòng nhập lại.</small>
+                  )}
                 </div>
               </div>
 
@@ -759,7 +777,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 act.isPending ||
                 !assigned ||
                 !category ||
-                (t.type === "DE_XUAT" && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || !replacementDeviceName.trim()))
+                (t.type === "DE_XUAT" && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || quantityExceedsStock || !note.trim() || !replacementDeviceName.trim()))
               }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
@@ -1002,6 +1020,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
   const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
   const materialOptions = (opts?.materials ?? []).filter((m) => (!wantCategory || m.category === wantCategory) && m.machine === t.unit);
+  const proposedStockErrors = materialOptions.flatMap((material) => {
+    const requested = items.filter((item) => item.materialId === material.id).reduce((sum, item) => sum + item.quantity, 0);
+    return requested > material.quantity ? [{ material, requested }] : [];
+  });
+  const replacementStockErrors = t.items.flatMap((item) => {
+    const used = replacementRows.filter((row) => row.itemId === item.id).reduce((sum, row) => sum + row.quantity, 0);
+    return used > item.material.quantity ? [{ material: item.material, requested: used }] : [];
+  });
 
   if (acts.includes("reject")) return (
     <div className="act">
@@ -1108,7 +1134,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     <div className="act">
       <label className="lb">Bước 1 — Đề xuất vật tư thay thế</label>
       {ItemsForm}
-      <button className="btn primary big" disabled={!itemsValid || act.isPending}
+      {proposedStockErrors.length > 0 && (
+        <div className="warnbox"><AlertTriangle size={15} /> Số lượng đã nhập vượt tồn kho. {proposedStockErrors.map(({ material, requested }) => `${material.name}: nhập ${requested}, tồn ${material.quantity}`).join("; ")}. Vui lòng nhập lại.</div>
+      )}
+      <button className="btn primary big" disabled={!itemsValid || proposedStockErrors.length > 0 || act.isPending}
         onClick={() => run({ action: "propose", items }, "Đã gửi đề xuất")}>
         <ChevronRight size={15} /> Gửi đề xuất
       </button>
@@ -1234,7 +1263,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("ungEntry")) {
     const replacementValid = t.items.length > 0 && replacementRows.length >= t.items.length &&
       replacementRows.every((row) => row.deviceSeq && row.quantity > 0) &&
-      t.items.every((item) => replacementRows.some((row) => row.itemId === item.id));
+      t.items.every((item) => replacementRows.some((row) => row.itemId === item.id)) &&
+      replacementStockErrors.length === 0;
     return (
     <div className="act">
       <label className="lb">Ứng — Nhập liệu thay thế (đã/đang thay gấp)</label>
@@ -1294,6 +1324,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           );
         })}
       </div>
+      {replacementStockErrors.length > 0 && (
+        <div className="warnbox"><AlertTriangle size={15} /> Số lượng đã nhập vượt tồn kho. {replacementStockErrors.map(({ material, requested }) => `${material.name}: nhập ${requested}, tồn ${material.quantity}`).join("; ")}. Vui lòng nhập lại.</div>
+      )}
       <textarea rows={2} placeholder="Thông tin thay thế (thời điểm, tình trạng sau thay…)" value={note} onChange={(e) => setNote(e.target.value)} />
       <button className="btn primary big" disabled={!replacementValid || !note.trim() || act.isPending}
         onClick={() => run({

@@ -126,6 +126,9 @@ export async function POST(req: NextRequest) {
 
       if (!erpCode) return fail("Vui lòng chọn mã vật tư");
       if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
+      if (requestedQuantity > selectedMaterial.quantity) {
+        return fail(`Số lượng đã nhập vượt tồn kho. ${selectedMaterial.name} hiện còn ${selectedMaterial.quantity}; vui lòng nhập lại số lượng.`);
+      }
       if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
 
       const allowedCodes = selectedMaterial.erpCodes.length ? selectedMaterial.erpCodes : [selectedMaterial.code];

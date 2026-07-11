@@ -134,10 +134,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
         const material = await prisma.material.findUnique({
           where: { id: materialId },
-          select: { id: true, code: true, erpCodes: true, machine: true },
+          select: { id: true, code: true, erpCodes: true, machine: true, name: true, quantity: true },
         });
         if (!material) return fail("Không tìm thấy vật tư đề xuất", 404);
         if (material.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
+        if (proposedQuantity > material.quantity) {
+          return fail(`Số lượng đã nhập vượt tồn kho. ${material.name} hiện còn ${material.quantity}; vui lòng nhập lại số lượng.`);
+        }
         const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
         if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         data.proposalNote = proposalNote;
@@ -186,13 +189,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const materials = await prisma.material.findMany({
         where: { id: { in: [...new Set(items.map((i) => i.materialId))] } },
-        select: { id: true, code: true, erpCodes: true, machine: true },
+        select: { id: true, code: true, erpCodes: true, machine: true, name: true, quantity: true },
       });
       const materialCodeMap = new Map(materials.map((material) => [material.id, material.erpCodes.length ? material.erpCodes : [material.code]]));
       const materialMachineMap = new Map(materials.map((material) => [material.id, material.machine]));
       for (const it of items) {
         if (materialMachineMap.get(it.materialId) !== t!.unit) return "Vật tư không thuộc tổ máy của phiếu";
         if (!materialCodeMap.get(it.materialId)?.includes(it.erpCode || "")) return "Mã vật tư không thuộc tên vật tư đã chọn";
+      }
+      const requestedByMaterial = new Map<string, number>();
+      for (const item of items) {
+        requestedByMaterial.set(item.materialId, (requestedByMaterial.get(item.materialId) ?? 0) + Math.trunc(Number(item.quantity)));
+      }
+      const insufficient = materials.filter((material) => (requestedByMaterial.get(material.id) ?? 0) > material.quantity);
+      if (insufficient.length > 0) {
+        return "Số lượng đã nhập vượt tồn kho. " + insufficient.map((material) =>
+          `${material.name} hiện còn ${material.quantity}`
+        ).join("; ") + "; vui lòng nhập lại số lượng.";
       }
       // Mỗi cặp (vật tư, thiết bị) phải là điểm đã KHAI BÁO trong Danh mục vật tư
       // (dropdown thiết bị lấy từ chính danh sách này).
