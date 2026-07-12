@@ -91,15 +91,10 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "QUẢN LÝ VẬT TƯ",
     items: [
       {
-        label: "Vật tư Vận Hành 1",
+        label: "Danh mục vật tư VH1",
         href: "/materials",
         icon: Package,
         keywords: "material vat tu pxvh1 phu tung ton kho",
-        children: [
-          { label: "Tổ máy S1", href: "/materials?may=S1", icon: Factory, keywords: "danh muc vat tu pxvh1 to may s1 material ton kho" },
-          { label: "Tổ máy S2", href: "/materials?may=S2", icon: Factory, keywords: "danh muc vat tu pxvh1 to may s2 material ton kho" },
-          { label: "COMMON", href: "/materials?may=COMMON", icon: Boxes, keywords: "danh muc vat tu pxvh1 common dung chung material ton kho" },
-        ],
       },
       {
         label: "Vật tư theo ERP",

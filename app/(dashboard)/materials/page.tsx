@@ -261,6 +261,7 @@ function MaterialsPageContent() {
   const someChecked = selected.size > 0 && !allChecked;
   const activeCategoryTab = MATERIAL_CATEGORY_TABS.find((tab) => tab.key === categoryFilter) ?? MATERIAL_CATEGORY_TABS[0];
   const ActiveCategoryIcon = activeCategoryTab.icon;
+  const activeMachineTab = MACHINE_TABS.find((tab) => tab.key === machineTab) ?? MACHINE_TABS[0];
 
   function toggleOne(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -272,6 +273,13 @@ function MaterialsPageContent() {
   }
   function toggleAll(checked: boolean) {
     setSelected(checked ? new Set(materials.map((m) => m.id)) : new Set());
+  }
+
+  function changeMachineTab(nextMachine: string) {
+    const next = new URLSearchParams(params.toString());
+    next.set("may", nextMachine);
+    next.delete("track");
+    router.replace(`/materials?${next.toString()}`, { scroll: false });
   }
 
   async function confirmBulkDelete() {
@@ -388,11 +396,11 @@ function MaterialsPageContent() {
             <Button
               type="button"
               variant="outline"
-              className="h-10 min-w-[172px] justify-between gap-3 rounded-xl border-blue-100 bg-white px-4 text-sm font-semibold text-ink shadow-sm hover:bg-blue-50 hover:text-navy"
+              className="h-10 w-auto justify-between gap-2 rounded-xl border-blue-100 bg-white px-4 text-sm font-semibold text-ink shadow-sm hover:bg-blue-50 hover:text-navy"
             >
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <ActiveCategoryIcon className="h-4 w-4 shrink-0 text-navy" />
-                <span className="truncate">{activeCategoryTab.key}</span>
+                <span>{activeCategoryTab.key}</span>
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
             </Button>
@@ -418,8 +426,18 @@ function MaterialsPageContent() {
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="ml-auto flex items-center gap-2 pb-2">
+          <Select value={machineTab} onValueChange={changeMachineTab}>
+            <SelectTrigger className="w-[132px]" aria-label="Lọc theo tổ máy">
+              <SelectValue>{activeMachineTab.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {MACHINE_TABS.map((tab) => (
+                <SelectItem key={tab.key} value={tab.key}>{tab.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={blockFilter} onValueChange={setBlockFilter}>
-            <SelectTrigger className="w-44" aria-label="Lọc theo khối quản lý">
+            <SelectTrigger className="w-[150px]" aria-label="Lọc theo khối quản lý">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
