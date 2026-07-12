@@ -394,6 +394,7 @@ function MaterialsPageContent() {
   }
 
   function openTrackingDialog(material: MaterialWithDevices) {
+    setExpandedId(material.id);
     setTrackingMaterial(material);
     setTrackingRows([{ deviceSeq: null, system: null, intervalMonths: 6, quantity: 1, deviceCount: 1 }]);
   }
@@ -423,7 +424,6 @@ function MaterialsPageContent() {
       toast.success(`Đã thêm ${rows.length} thiết bị theo dõi`);
       setTrackingMaterial(null);
       setTrackingRows([]);
-      setReplMaterial(trackingMaterial);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -650,6 +650,19 @@ function MaterialsPageContent() {
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
                         <MaterialExpandedDetails m={m} blockFilter={blockFilter} onOpenTracking={() => setReplMaterial(m)} />
+                        {trackingMaterial?.id === m.id && (
+                          <InlineTrackingEditor
+                            material={m}
+                            rows={trackingRows}
+                            saving={createTrackingPoint.isPending}
+                            onRowsChange={setTrackingRows}
+                            onCancel={() => {
+                              setTrackingMaterial(null);
+                              setTrackingRows([]);
+                            }}
+                            onSave={confirmAddTrackingPoints}
+                          />
+                        )}
                       </TableCell>
                     </TableRow>
                   )}
@@ -854,52 +867,6 @@ function MaterialsPageContent() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!trackingMaterial}
-        onOpenChange={(open) => {
-          if (!open) {
-            setTrackingMaterial(null);
-            setTrackingRows([]);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Thêm thiết bị theo dõi</DialogTitle>
-          </DialogHeader>
-          {trackingMaterial && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
-                <div className="text-sm font-semibold text-ink">{trackingMaterial.name}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Khai báo thiết bị/hệ thống cần theo dõi thay thế cho vật tư này. Có thể thêm nhiều dòng trong một lần lưu.
-                </div>
-              </div>
-              <ReplacementPointsEditor
-                value={trackingRows}
-                unit={trackingMaterial.unit}
-                onChange={setTrackingRows}
-              />
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setTrackingMaterial(null);
-                setTrackingRows([]);
-              }}
-            >
-              Huỷ
-            </Button>
-            <Button onClick={confirmAddTrackingPoints} disabled={createTrackingPoint.isPending}>
-              {createTrackingPoint.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Lưu thiết bị theo dõi
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -927,6 +894,45 @@ function MaterialsPageContent() {
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return <div className={className}><Label className="mb-1.5 block">{label}</Label>{children}</div>;
+}
+
+function InlineTrackingEditor({
+  material,
+  rows,
+  saving,
+  onRowsChange,
+  onCancel,
+  onSave,
+}: {
+  material: MaterialWithDevices;
+  rows: MaterialReplacementInput[];
+  saving: boolean;
+  onRowsChange: (rows: MaterialReplacementInput[]) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ink">Thêm thiết bị theo dõi</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            Khai báo hệ thống/thiết bị cần theo dõi thay thế cho {material.name}.
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+            Huỷ
+          </Button>
+          <Button type="button" size="sm" onClick={onSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Lưu thiết bị theo dõi
+          </Button>
+        </div>
+      </div>
+      <ReplacementPointsEditor value={rows} unit={material.unit} onChange={onRowsChange} />
+    </div>
+  );
 }
 
 /** Ô tải ảnh vật tư: chọn tệp → upload → xem trước, có thể gỡ ảnh. */

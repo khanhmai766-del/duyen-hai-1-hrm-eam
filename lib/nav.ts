@@ -91,7 +91,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "QUẢN LÝ VẬT TƯ",
     items: [
       {
-        label: "Danh mục vật tư VH1",
+        label: "Danh mục Vận Hành 1",
         href: "/materials",
         icon: Package,
         keywords: "material vat tu pxvh1 phu tung ton kho",
