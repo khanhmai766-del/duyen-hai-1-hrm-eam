@@ -76,6 +76,7 @@ function MaterialsPageContent() {
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
+  const createTrackingPoint = useCreateReplacement();
   const router = useRouter();
   const params = useSearchParams();
   const searchParam = params.get("search") ?? "";
@@ -95,6 +96,8 @@ function MaterialsPageContent() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = React.useState(false);
   const [replMaterial, setReplMaterial] = React.useState<Material | null>(null);
+  const [trackingMaterial, setTrackingMaterial] = React.useState<MaterialWithDevices | null>(null);
+  const [trackingRows, setTrackingRows] = React.useState<MaterialReplacementInput[]>([]);
   const [erpSearch, setErpSearch] = React.useState("");
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
@@ -390,6 +393,42 @@ function MaterialsPageContent() {
     }
   }
 
+  function openTrackingDialog(material: MaterialWithDevices) {
+    setTrackingMaterial(material);
+    setTrackingRows([{ deviceSeq: null, system: null, intervalMonths: 6, quantity: 1, deviceCount: 1 }]);
+  }
+
+  async function confirmAddTrackingPoints() {
+    if (!trackingMaterial) return;
+    const rows = trackingRows.filter((row) => String(row.deviceSeq || row.system || "").trim());
+    if (!rows.length) {
+      toast.error("Vui lòng chọn ít nhất một hệ thống/thiết bị theo dõi");
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await createTrackingPoint.mutateAsync({
+          materialId: trackingMaterial.id,
+          deviceSeq: row.deviceSeq ?? null,
+          system: row.system ?? null,
+          location: row.location ?? null,
+          managingPosition: row.managingPosition ?? null,
+          quantity: Math.max(0, Number(row.quantity) || 0),
+          deviceCount: Math.max(1, Number(row.deviceCount) || 1),
+          intervalMonths: Math.max(1, Number(row.intervalMonths) || 6),
+          intervalNote: row.intervalNote ?? null,
+          lastReplacedAt: row.lastReplacedAt || formatDateInput(new Date()),
+        });
+      }
+      toast.success(`Đã thêm ${rows.length} thiết bị theo dõi`);
+      setTrackingMaterial(null);
+      setTrackingRows([]);
+      setReplMaterial(trackingMaterial);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
@@ -577,11 +616,20 @@ function MaterialsPageContent() {
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
-                          <Repeat className="h-4 w-4" />
-                        </Button>
                         {canManage && (
                           <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Thêm thiết bị theo dõi"
+                              className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                              onClick={() => openTrackingDialog(m)}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
+                              <Repeat className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" title="Sửa" onClick={() => { setIsNew(false); setEdit(materialForEdit(m)); }}>
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -589,6 +637,11 @@ function MaterialsPageContent() {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </>
+                        )}
+                        {!canManage && (
+                          <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
+                            <Repeat className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -641,6 +694,49 @@ function MaterialsPageContent() {
           <DialogHeader><DialogTitle>{isNew ? "Thêm vật tư" : `Cập nhật: ${edit?.name}`}</DialogTitle></DialogHeader>
           {edit && (
             <div className="grid grid-cols-2 gap-3">
+              <Field label="Tổ máy" className="col-span-2">
+                <div className="grid grid-cols-3 gap-2">
+                  {MACHINE_TABS.map((t) => {
+                    if (isNew) {
+                      const selected = (edit.machines ?? []).includes(t.key);
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => {
+                            const cur = edit.machines ?? [];
+                            const next = selected ? cur.filter((k) => k !== t.key) : [...cur, t.key];
+                            setEdit({ ...edit, machines: next });
+                          }}
+                          className={cn(
+                            "h-10 rounded-md border text-sm font-medium transition-colors",
+                            selected
+                              ? "border-navy bg-navy text-white"
+                              : "border-input bg-muted/40 text-ink hover:border-accent"
+                          )}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setEdit({ ...edit, machine: t.key })}
+                        className={cn(
+                          "h-10 rounded-md border text-sm font-medium transition-colors",
+                          (edit.machine ?? "COMMON") === t.key
+                            ? "border-navy bg-navy text-white"
+                            : "border-input bg-muted/40 text-ink hover:border-accent"
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
               <Field label="Mã vật tư ERP *" className="col-span-2">
                 <Input
                   value={erpSearch}
@@ -749,66 +845,57 @@ function MaterialsPageContent() {
                   />
                 </Field>
               </div>
-              <Field label="Tổ máy" className="col-span-2">
-                <div className="grid grid-cols-3 gap-2">
-                  {MACHINE_TABS.map((t) => {
-                    if (isNew) {
-                      const selected = (edit.machines ?? []).includes(t.key);
-                      return (
-                        <button
-                          key={t.key}
-                          type="button"
-                          onClick={() => {
-                            const cur = edit.machines ?? [];
-                            const next = selected ? cur.filter((k) => k !== t.key) : [...cur, t.key];
-                            setEdit({ ...edit, machines: next });
-                          }}
-                          className={cn(
-                            "h-10 rounded-md border text-sm font-medium transition-colors",
-                            selected
-                              ? "border-navy bg-navy text-white"
-                              : "border-input bg-muted/40 text-ink hover:border-accent"
-                          )}
-                        >
-                          {t.label}
-                        </button>
-                      );
-                    }
-                    return (
-                      <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => setEdit({ ...edit, machine: t.key })}
-                        className={cn(
-                          "h-10 rounded-md border text-sm font-medium transition-colors",
-                          (edit.machine ?? "COMMON") === t.key
-                            ? "border-navy bg-navy text-white"
-                            : "border-input bg-muted/40 text-ink hover:border-accent"
-                        )}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-              <div className="col-span-2 mt-1">
-                <Label className="text-sm font-semibold text-ink">Điểm dùng / thay thế</Label>
-                <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
-                  Một mã vật tư có thể dùng cho nhiều hệ thống/thiết bị với chu kỳ và số lượng cần thay khác nhau.
-                  Tổng số lượng các điểm = nhu cầu 1 chu kỳ để so với tồn kho.
-                </p>
-                <ReplacementPointsEditor
-                  value={edit.replacements ?? []}
-                  unit={edit.unit ?? undefined}
-                  onChange={(rows) => setEdit({ ...edit, replacements: rows })}
-                />
-              </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEdit(null)}>Huỷ</Button>
             <Button onClick={save} disabled={upsert.isPending}>Lưu</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!trackingMaterial}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTrackingMaterial(null);
+            setTrackingRows([]);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Thêm thiết bị theo dõi</DialogTitle>
+          </DialogHeader>
+          {trackingMaterial && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+                <div className="text-sm font-semibold text-ink">{trackingMaterial.name}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Khai báo thiết bị/hệ thống cần theo dõi thay thế cho vật tư này. Có thể thêm nhiều dòng trong một lần lưu.
+                </div>
+              </div>
+              <ReplacementPointsEditor
+                value={trackingRows}
+                unit={trackingMaterial.unit}
+                onChange={setTrackingRows}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTrackingMaterial(null);
+                setTrackingRows([]);
+              }}
+            >
+              Huỷ
+            </Button>
+            <Button onClick={confirmAddTrackingPoints} disabled={createTrackingPoint.isPending}>
+              {createTrackingPoint.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Lưu thiết bị theo dõi
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1109,7 +1196,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
       <div className="space-y-3">
         {m.documentUrl && <MaterialDocumentLink url={m.documentUrl} name={m.documentName} />}
         <div className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-3 text-sm text-muted-foreground">
-          Chưa gán hệ thống/thiết bị cho vật tư này. Bấm <b>Sửa</b> để thêm điểm dùng / thay thế.
+          Chưa gán hệ thống/thiết bị cho vật tư này. Bấm dấu <b>+</b> ở cột Thao tác để thêm thiết bị theo dõi.
         </div>
       </div>
     );
