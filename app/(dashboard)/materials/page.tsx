@@ -399,6 +399,12 @@ function MaterialsPageContent() {
     setTrackingRows([{ deviceSeq: null, system: null, intervalMonths: 6, quantity: 1, deviceCount: 1 }]);
   }
 
+  function toggleTrackingDetails(materialId: string) {
+    setTrackingMaterial(null);
+    setTrackingRows([]);
+    setExpandedId((current) => (current === materialId ? null : materialId));
+  }
+
   async function confirmAddTrackingPoints() {
     if (!trackingMaterial) return;
     const rows = trackingRows.filter((row) => String(row.deviceSeq || row.system || "").trim());
@@ -627,7 +633,7 @@ function MaterialsPageContent() {
                             >
                               <Plus className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
+                            <Button variant="ghost" size="icon" title="Hiển thị thiết bị theo dõi" className="text-accent hover:bg-accent/10" onClick={() => toggleTrackingDetails(m.id)}>
                               <Repeat className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" title="Sửa" onClick={() => { setIsNew(false); setEdit(materialForEdit(m)); }}>
@@ -639,7 +645,7 @@ function MaterialsPageContent() {
                           </>
                         )}
                         {!canManage && (
-                          <Button variant="ghost" size="icon" title="Theo dõi thay thế" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
+                          <Button variant="ghost" size="icon" title="Hiển thị thiết bị theo dõi" className="text-accent hover:bg-accent/10" onClick={() => toggleTrackingDetails(m.id)}>
                             <Repeat className="h-4 w-4" />
                           </Button>
                         )}
@@ -1147,14 +1153,10 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
   return null;
 }
 
-/** Panel bung: liệt kê các DÒNG KHAI BÁO thiết bị (isActive=false). Nút "Thêm điểm"
- *  tạo MỘT BẢN GHI THEO DÕI riêng (isActive=true) nên bấm được nhiều lần — dòng
- *  khai báo và nút giữ nguyên; điểm theo dõi quản lý trong drawer Theo dõi thay thế. */
+/** Panel bung: liệt kê các thiết bị theo dõi đã lưu cho vật tư. */
 function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m: MaterialWithDevices; blockFilter?: string; onOpenTracking?: () => void }) {
-  // Chỉ hiện dòng khai báo (isActive=false); nếu đang lọc theo khối cụ thể thì
-  // chỉ hiện các điểm có cương vị quản lý thuộc đúng khối đó.
   const points = (m.replacements ?? []).filter(
-    (r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter)
+    (r) => blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter
   );
   const createPoint = useCreateReplacement();
 
