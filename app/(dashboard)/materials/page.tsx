@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -97,6 +97,10 @@ function MaterialsPageContent() {
   const [replMaterial, setReplMaterial] = React.useState<Material | null>(null);
   const [trackingMaterial, setTrackingMaterial] = React.useState<MaterialWithDevices | null>(null);
   const [trackingRows, setTrackingRows] = React.useState<MaterialReplacementInput[]>([]);
+  const [editingDetails, setEditingDetails] = React.useState<MaterialWithDevices | null>(null);
+  const [detailRows, setDetailRows] = React.useState<MaterialReplacementInput[]>([]);
+  const [deletingDetails, setDeletingDetails] = React.useState<MaterialWithDevices | null>(null);
+  const [selectedDetailIds, setSelectedDetailIds] = React.useState<Set<string>>(new Set());
   const [erpSearch, setErpSearch] = React.useState("");
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
@@ -360,25 +364,72 @@ function MaterialsPageContent() {
     }
   }
 
+  function replacementRowsForEdit(m: MaterialWithDevices): MaterialReplacementInput[] {
+    return (m.replacements ?? [])
+      .filter((r) => !r.isActive)
+      .map((r) => ({
+        deviceSeq: r.deviceSeq,
+        system: r.system,
+        location: r.location,
+        deviceCount: r.deviceCount ?? 1,
+        managingPosition: r.managingPosition,
+        quantity: r.quantity,
+        intervalMonths: r.intervalMonths,
+        intervalNote: r.intervalNote,
+        lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
+      }));
+  }
+
   function materialForEdit(m: MaterialWithDevices): MaterialEdit {
-    return {
-      ...m,
-      // Form Sửa chỉ nạp DÒNG KHAI BÁO (isActive=false); điểm theo dõi (isActive=true)
-      // là bản ghi riêng, quản lý trong drawer — không đưa vào form để tránh bị ghi đè.
-      replacements: (m.replacements ?? [])
-        .filter((r) => !r.isActive)
-        .map((r) => ({
-          deviceSeq: r.deviceSeq,
-          system: r.system,
-          location: r.location,
-          deviceCount: r.deviceCount ?? 1,
-          managingPosition: r.managingPosition,
-          quantity: r.quantity,
-          intervalMonths: r.intervalMonths,
-          intervalNote: r.intervalNote,
-          lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
-        })),
-    };
+    const { replacements: _replacements, ...material } = m;
+    return material;
+  }
+
+  function openEditDetails(material: MaterialWithDevices) {
+    setEditingDetails(material);
+    setDetailRows(replacementRowsForEdit(material));
+  }
+
+  function openDeleteDetails(material: MaterialWithDevices) {
+    setDeletingDetails(material);
+    setSelectedDetailIds(new Set());
+  }
+
+  async function saveDetails() {
+    if (!editingDetails) return;
+    try {
+      await upsert.mutateAsync({ id: editingDetails.id, replacements: detailRows });
+      toast.success("Đã cập nhật chi tiết điểm thay thế");
+      setEditingDetails(null);
+      setDetailRows([]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không thể cập nhật chi tiết điểm thay thế");
+    }
+  }
+
+  async function confirmDeleteDetails() {
+    if (!deletingDetails || selectedDetailIds.size === 0) return;
+    try {
+      const remainingRows = (deletingDetails.replacements ?? [])
+        .filter((row) => !row.isActive && !selectedDetailIds.has(row.id))
+        .map((row) => ({
+          deviceSeq: row.deviceSeq,
+          system: row.system,
+          location: row.location,
+          deviceCount: row.deviceCount ?? 1,
+          managingPosition: row.managingPosition,
+          quantity: row.quantity,
+          intervalMonths: row.intervalMonths,
+          intervalNote: row.intervalNote,
+          lastReplacedAt: typeof row.lastReplacedAt === "string" ? row.lastReplacedAt : null,
+        }));
+      await upsert.mutateAsync({ id: deletingDetails.id, replacements: remainingRows });
+      toast.success(`Đã xóa ${selectedDetailIds.size} dòng chi tiết điểm thay thế`);
+      setDeletingDetails(null);
+      setSelectedDetailIds(new Set());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không thể xóa chi tiết điểm thay thế");
+    }
   }
 
   async function confirmDelete() {
@@ -396,12 +447,6 @@ function MaterialsPageContent() {
     setExpandedId(material.id);
     setTrackingMaterial(material);
     setTrackingRows([{ deviceSeq: null, system: null, intervalMonths: 6, quantity: 1, deviceCount: 1 }]);
-  }
-
-  function toggleTrackingDetails(materialId: string) {
-    setTrackingMaterial(null);
-    setTrackingRows([]);
-    setExpandedId((current) => (current === materialId ? null : materialId));
   }
 
   async function confirmAddTrackingPoints() {
@@ -646,19 +691,59 @@ function MaterialsPageContent() {
                             >
                               <Plus className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" title="Hiển thị thiết bị theo dõi" className="text-accent hover:bg-accent/10" onClick={() => toggleTrackingDetails(m.id)}>
+                            <Button variant="ghost" size="icon" title="Mở theo dõi thay thế vật tư" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
                               <Repeat className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" title="Sửa" onClick={() => { setIsNew(false); setEdit(materialForEdit(m)); }}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDeleting(m)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" title="Chọn nội dung cần chỉnh sửa" aria-label="Chọn nội dung cần chỉnh sửa">
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-60">
+                                <DropdownMenuItem onSelect={() => openEditDetails(m)}>
+                                  <Repeat className="text-accent" />
+                                  <span>Chi tiết điểm thay thế</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => { setIsNew(false); setEdit(materialForEdit(m)); }}>
+                                  <Package className="text-navy" />
+                                  <span>Thông tin vật tư</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Chọn nội dung cần xóa"
+                                  aria-label="Chọn nội dung cần xóa"
+                                  className="text-muted-foreground hover:bg-red-50 hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-60">
+                                <DropdownMenuItem
+                                  disabled={!replacementRowsForEdit(m).length}
+                                  className="text-destructive focus:text-destructive"
+                                  onSelect={() => openDeleteDetails(m)}
+                                >
+                                  <Repeat />
+                                  <span>Xóa chi tiết điểm thay thế</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(m)}>
+                                  <Trash2 />
+                                  <span>Xóa vật tư</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </>
                         )}
                         {!canManage && (
-                          <Button variant="ghost" size="icon" title="Hiển thị thiết bị theo dõi" className="text-accent hover:bg-accent/10" onClick={() => toggleTrackingDetails(m.id)}>
+                          <Button variant="ghost" size="icon" title="Mở theo dõi thay thế vật tư" className="text-accent hover:bg-accent/10" onClick={() => setReplMaterial(m)}>
                             <Repeat className="h-4 w-4" />
                           </Button>
                         )}
@@ -720,6 +805,39 @@ function MaterialsPageContent() {
           </div>
         </Card>
       )}
+
+      <Dialog
+        open={!!editingDetails}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingDetails(null);
+            setDetailRows([]);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa chi tiết điểm thay thế</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {editingDetails?.name} · Các điểm đang theo dõi trong lịch thay thế không bị thay đổi.
+            </p>
+          </DialogHeader>
+          {editingDetails && (
+            <ReplacementPointsEditor
+              value={detailRows}
+              unit={editingDetails.unit}
+              onChange={setDetailRows}
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditingDetails(null); setDetailRows([]); }}>Hủy</Button>
+            <Button onClick={saveDetails} disabled={upsert.isPending}>
+              {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Lưu chi tiết
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -895,6 +1013,73 @@ function MaterialsPageContent() {
         loading={del.isPending}
         onConfirm={confirmDelete}
       />
+
+      <Dialog
+        open={!!deletingDetails}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingDetails(null);
+            setSelectedDetailIds(new Set());
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Xóa chi tiết điểm thay thế</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Chọn một hoặc nhiều dòng cần xóa của {deletingDetails?.name}. Các điểm đã thêm vào lịch theo dõi vẫn được giữ nguyên.
+            </p>
+          </DialogHeader>
+          {deletingDetails && (() => {
+            const rows = (deletingDetails.replacements ?? []).filter((row) => !row.isActive);
+            const allSelected = rows.length > 0 && rows.every((row) => selectedDetailIds.has(row.id));
+            return (
+              <div className="overflow-hidden rounded-lg border border-border">
+                <label className="flex cursor-pointer items-center gap-3 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-ink">
+                  <Checkbox
+                    checked={allSelected ? true : selectedDetailIds.size > 0 ? "indeterminate" : false}
+                    onCheckedChange={(checked) => setSelectedDetailIds(checked === true ? new Set(rows.map((row) => row.id)) : new Set())}
+                    aria-label="Chọn tất cả chi tiết điểm thay thế"
+                  />
+                  Chọn tất cả ({rows.length})
+                </label>
+                <div className="max-h-72 divide-y divide-border overflow-y-auto">
+                  {rows.map((row) => {
+                    const checked = selectedDetailIds.has(row.id);
+                    return (
+                      <label key={row.id} className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => setSelectedDetailIds((current) => {
+                            const next = new Set(current);
+                            if (value === true) next.add(row.id);
+                            else next.delete(row.id);
+                            return next;
+                          })}
+                          aria-label={`Chọn ${row.device?.name || row.system || row.location || "điểm thay thế"}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold uppercase text-ink">{row.device?.name || row.system || "Chưa chọn hệ thống"}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {[row.location, row.managingPosition, `${row.intervalMonths} tháng`].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeletingDetails(null); setSelectedDetailIds(new Set()); }}>Hủy</Button>
+            <Button variant="destructive" onClick={confirmDeleteDetails} disabled={upsert.isPending || selectedDetailIds.size === 0}>
+              {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Xóa {selectedDetailIds.size || ""} dòng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={bulkOpen}
