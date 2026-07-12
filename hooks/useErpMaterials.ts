@@ -18,6 +18,13 @@ type GroupedStockMaterial = {
 type GroupedStockResponse = {
   category: GroupedStockCategory;
   groups: Array<{
+    id: string;
+    code: string;
+    name: string;
+    baseUnit: string;
+    onHandQty: number;
+    totalQty: number;
+    materialCount: number;
     materials: GroupedStockMaterial[];
   }>;
 };
@@ -31,6 +38,19 @@ export type ErpMaterialFromGroupedStock = {
   category: GroupedStockCategory;
 };
 
+export type ErpMaterialGroupFromGroupedStock = {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  onHandQty: number;
+  totalErpStock: number;
+  materialCount: number;
+  category: GroupedStockCategory;
+  erpCodes: string[];
+  materials: ErpMaterialFromGroupedStock[];
+};
+
 export function useErpMaterials() {
   const queries = useQueries({
     queries: GROUPED_STOCK_CATEGORIES.map((category) => ({
@@ -40,29 +60,46 @@ export function useErpMaterials() {
   });
 
   const byCode = new Map<string, ErpMaterialFromGroupedStock>();
+  const groups: ErpMaterialGroupFromGroupedStock[] = [];
   for (const query of queries) {
     const stock = query.data?.data;
     if (!stock) continue;
     for (const group of stock.groups) {
+      const groupMaterials: ErpMaterialFromGroupedStock[] = [];
       for (const material of group.materials) {
-        if (byCode.has(material.erpCode)) continue;
-        byCode.set(material.erpCode, {
+        const row = {
           id: material.id,
           code: material.erpCode,
           name: material.name,
           unit: material.unit,
           erpStock: material.erpQty,
           category: stock.category,
-        });
+        };
+        groupMaterials.push(row);
+        if (!byCode.has(material.erpCode)) byCode.set(material.erpCode, row);
       }
+      groups.push({
+        id: group.id,
+        code: group.code,
+        name: group.name,
+        unit: group.baseUnit,
+        onHandQty: group.onHandQty,
+        totalErpStock: group.totalQty,
+        materialCount: group.materialCount,
+        category: stock.category,
+        erpCodes: groupMaterials.map((material) => material.code),
+        materials: groupMaterials,
+      });
     }
   }
 
   const materials = Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code, "vi"));
+  const sortedGroups = groups.sort((a, b) => a.name.localeCompare(b.name, "vi"));
   const firstError = queries.find((query) => query.error)?.error;
 
   return {
     data: { data: materials, meta: { total: materials.length } },
+    groups: sortedGroups,
     isLoading: queries.some((query) => query.isLoading),
     isFetching: queries.some((query) => query.isFetching),
     isError: queries.some((query) => query.isError),

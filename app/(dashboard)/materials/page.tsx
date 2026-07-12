@@ -47,6 +47,8 @@ const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon:
   { key: "Bi Nghiền Than", icon: CircleDot },
 ];
 
+const fmtNumber = (value: number) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
+
 type MaterialEdit = Partial<Material> & {
   id?: string;
   erpCodes?: string[];
@@ -112,6 +114,7 @@ function MaterialsPageContent() {
     erpStock: number;
     category?: string | null;
   }>;
+  const erpGroups = erpMaterialsQuery.groups ?? [];
 
   function erpByCode(code?: string | null) {
     return erpMaterials.find((item) => item.code === code) ?? null;
@@ -137,22 +140,32 @@ function MaterialsPageContent() {
     );
   }
 
-  function toggleErpMaterial(code: string, checked: boolean) {
-    setEdit((prev) => ({
-      ...(prev ?? {}),
-      code: checked
-        ? materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).concat(code)[0]
-        : materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).filter((item) => item !== code)[0],
-      erpCodes: checked
-        ? Array.from(new Set([...materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }), code]))
-        : materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).filter((item) => item !== code),
-      minStock: erpStockByCodes(
-        checked
-          ? Array.from(new Set([...materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }), code]))
-          : materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes }).filter((item) => item !== code)
-      ),
-      category: prev?.category || categoryFilter,
-    }));
+  function erpStockByGroupedCodes(codes: string[]) {
+    const codeSet = new Set(codes);
+    const groups = erpGroups.filter((group) => group.erpCodes.some((code) => codeSet.has(code)));
+    if (!groups.length) return erpStockByCodes(codes);
+    return groups.reduce((sum, group) => sum + (Number(group.totalErpStock) || 0), 0);
+  }
+
+  function toggleErpGroup(group: (typeof erpGroups)[number], checked: boolean) {
+    setEdit((prev) => {
+      const currentCodes = materialErpCodes({ code: prev?.code, erpCodes: prev?.erpCodes });
+      const groupCodeSet = new Set(group.erpCodes);
+      const nextCodes = checked
+        ? Array.from(new Set([...currentCodes, ...group.erpCodes]))
+        : currentCodes.filter((code) => !groupCodeSet.has(code));
+      const isFirstSelection = checked && currentCodes.length === 0;
+      return {
+        ...(prev ?? {}),
+        code: nextCodes[0],
+        erpCodes: nextCodes,
+        minStock: erpStockByGroupedCodes(nextCodes),
+        category: prev?.category || group.category || categoryFilter,
+        name: isFirstSelection ? group.name : prev?.name,
+        unit: isFirstSelection ? group.unit : prev?.unit,
+        quantity: isFirstSelection ? group.onHandQty : prev?.quantity,
+      };
+    });
   }
 
   function changeEditCategory(category: string | null) {
@@ -226,14 +239,18 @@ function MaterialsPageContent() {
   // tránh chạy lại sau mỗi lần render (materials là mảng lọc mới mỗi render).
   const visibleKey = materials.map((m) => m.id).join(",");
   const erpCategoryFilter = edit?.category || categoryFilter;
-  const erpOptions = erpMaterials.filter((item) => categoryMatches(item.category, erpCategoryFilter));
+  const erpGroupOptions = erpGroups.filter((group) => categoryMatches(group.category, erpCategoryFilter));
   const erpSearchText = normalizeText(erpSearch);
-  const filteredErpOptions = erpOptions.filter((item) => {
+  const filteredErpGroups = erpGroupOptions.filter((group) => {
     if (!erpSearchText) return true;
-    return normalizeText(`${item.code} ${item.name} ${item.unit}`).includes(erpSearchText);
+    return normalizeText(
+      `${group.code} ${group.name} ${group.unit} ${group.onHandQty} ${group.totalErpStock} ${group.erpCodes.join(" ")} ${group.materials.map((item) => item.name).join(" ")}`
+    ).includes(erpSearchText);
   });
   const selectedErpCodes = edit ? materialErpCodes(edit) : [];
-  const selectedErpStock = erpStockByCodes(selectedErpCodes);
+  const selectedErpCodeSet = React.useMemo(() => new Set(selectedErpCodes), [selectedErpCodes.join("|")]);
+  const selectedErpGroups = erpGroups.filter((group) => group.erpCodes.some((code) => selectedErpCodeSet.has(code)));
+  const selectedErpStock = erpStockByGroupedCodes(selectedErpCodes);
   React.useEffect(() => {
     if (!edit) setErpSearch("");
   }, [edit]);
@@ -327,7 +344,7 @@ function MaterialsPageContent() {
           erpCodes,
           name: String(edit.name ?? "").trim(),
           unit: String(edit.unit ?? "").trim(),
-          minStock: erpStockByCodes(erpCodes),
+          minStock: erpStockByGroupedCodes(erpCodes),
           category: edit.category || categoryFilter,
           ...(isNew
             ? { machines: edit.machines ?? [machineTab], machine: (edit.machines ?? [machineTab])[0] ?? machineTab }
@@ -628,38 +645,65 @@ function MaterialsPageContent() {
                 <Input
                   value={erpSearch}
                   onChange={(e) => setErpSearch(e.target.value)}
-                  placeholder="Tìm mã, tên vật tư, ĐVT ERP..."
+                  placeholder="Tìm nhóm vật tư, mã ERP con, ĐVT..."
                   className="mb-2"
                 />
-                <div className="max-h-56 overflow-y-auto rounded-md border border-input bg-white">
-                  {filteredErpOptions.map((erp) => {
-                    const checked = selectedErpCodes.includes(erp.code);
+                <div className="overflow-hidden rounded-md border border-input bg-white">
+                  <div className="grid grid-cols-[minmax(0,1.7fr)_112px_132px] gap-3 border-b border-border bg-muted/50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    <span>Nhóm vật tư</span>
+                    <span className="text-right">Hiện có</span>
+                    <span className="text-right">Tổng tồn ERP</span>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                  {filteredErpGroups.map((group) => {
+                    const checked = group.erpCodes.some((code) => selectedErpCodeSet.has(code));
                     return (
-                      <label key={erp.id} className="flex cursor-pointer items-start gap-3 border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-muted/40">
-                        <Checkbox
-                          aria-label={`Chọn mã ${erp.code}`}
-                          checked={checked}
-                          onCheckedChange={(v) => toggleErpMaterial(erp.code, v === true)}
-                        />
-                        <span className="min-w-0">
-                          <span className="block font-mono text-xs font-semibold text-navy">{erp.code}</span>
-                          <span className="block truncate text-sm text-ink">{erp.name}</span>
-                          <span className="block text-xs text-muted-foreground">ĐVT ERP: {erp.unit} · Số liệu ERP: {erp.erpStock}</span>
+                      <label
+                        key={group.id}
+                        className={cn(
+                          "grid cursor-pointer grid-cols-[minmax(0,1.7fr)_112px_132px] gap-3 border-b border-border px-3 py-2.5 last:border-b-0 hover:bg-muted/40",
+                          checked && "bg-blue-50/70"
+                        )}
+                      >
+                        <span className="flex min-w-0 items-start gap-3">
+                          <Checkbox
+                            aria-label={`Chọn nhóm ${group.name}`}
+                            checked={checked}
+                            onCheckedChange={(v) => toggleErpGroup(group, v === true)}
+                          />
+                          <span className="min-w-0">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-bold text-navy">{group.code}</span>
+                              <span className="truncate text-sm font-semibold text-ink">{group.name}</span>
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                              {group.materialCount} mã ERP · ĐVT chuẩn: {group.unit}
+                            </span>
+                          </span>
+                        </span>
+                        <span className="self-center text-right text-sm font-semibold tabular-nums text-ink">
+                          {fmtNumber(group.onHandQty)} <span className="font-normal text-muted-foreground">{group.unit}</span>
+                        </span>
+                        <span className="self-center text-right text-sm font-semibold tabular-nums text-ink">
+                          {fmtNumber(group.totalErpStock)} <span className="font-normal text-muted-foreground">{group.unit}</span>
                         </span>
                       </label>
                     );
                   })}
+                  </div>
                 </div>
-                {!erpMaterialsQuery.isLoading && erpOptions.length === 0 && (
-                  <p className="mt-1.5 text-xs text-red-600">Chưa có vật tư ERP thuộc loại "{erpCategoryFilter}". Vui lòng nhập ERP đúng loại trước.</p>
+                {!erpMaterialsQuery.isLoading && erpGroupOptions.length === 0 && (
+                  <p className="mt-1.5 text-xs text-red-600">Chưa có nhóm vật tư ERP thuộc loại "{erpCategoryFilter}". Vui lòng gom nhóm ERP trước.</p>
                 )}
-                {!erpMaterialsQuery.isLoading && erpOptions.length > 0 && filteredErpOptions.length === 0 && (
-                  <p className="mt-1.5 text-xs text-muted-foreground">Không có mã ERP nào khớp từ khoá trong loại "{erpCategoryFilter}".</p>
+                {!erpMaterialsQuery.isLoading && erpGroupOptions.length > 0 && filteredErpGroups.length === 0 && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">Không có nhóm vật tư nào khớp từ khoá trong loại "{erpCategoryFilter}".</p>
                 )}
-                {selectedErpCodes.length > 0 && (
+                {selectedErpGroups.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedErpCodes.map((code) => (
-                      <span key={code} className="rounded-md bg-accent/10 px-2 py-1 font-mono text-xs font-semibold text-accent">{code}</span>
+                    {selectedErpGroups.map((group) => (
+                      <span key={group.id} className="rounded-md bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">
+                        {group.name} · {fmtNumber(group.totalErpStock)} {group.unit}
+                      </span>
                     ))}
                   </div>
                 )}
