@@ -76,7 +76,6 @@ function MaterialsPageContent() {
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
   const delMany = useDeleteMaterials();
-  const createTrackingPoint = useCreateReplacement();
   const router = useRouter();
   const params = useSearchParams();
   const searchParam = params.get("search") ?? "";
@@ -407,26 +406,40 @@ function MaterialsPageContent() {
 
   async function confirmAddTrackingPoints() {
     if (!trackingMaterial) return;
-    const rows = trackingRows.filter((row) => String(row.deviceSeq || row.system || "").trim());
+    const rows = trackingRows.filter((row) => String(row.deviceSeq || row.system || row.location || "").trim());
     if (!rows.length) {
       toast.error("Vui lòng chọn ít nhất một hệ thống/thiết bị theo dõi");
       return;
     }
     try {
-      for (const row of rows) {
-        await createTrackingPoint.mutateAsync({
-          materialId: trackingMaterial.id,
-          deviceSeq: row.deviceSeq ?? null,
-          system: row.system ?? null,
-          location: row.location ?? null,
-          managingPosition: row.managingPosition ?? null,
-          quantity: Math.max(0, Number(row.quantity) || 0),
-          deviceCount: Math.max(1, Number(row.deviceCount) || 1),
-          intervalMonths: Math.max(1, Number(row.intervalMonths) || 6),
-          intervalNote: row.intervalNote ?? null,
-          lastReplacedAt: row.lastReplacedAt || formatDateInput(new Date()),
-        });
-      }
+      const currentRows = (trackingMaterial.replacements ?? [])
+        .filter((row) => !row.isActive)
+        .map((row) => ({
+          deviceSeq: row.deviceSeq,
+          system: row.system,
+          location: row.location,
+          deviceCount: row.deviceCount ?? 1,
+          managingPosition: row.managingPosition,
+          quantity: row.quantity,
+          intervalMonths: row.intervalMonths,
+          intervalNote: row.intervalNote,
+          lastReplacedAt: typeof row.lastReplacedAt === "string" ? row.lastReplacedAt : null,
+        }));
+      const addedRows = rows.map((row) => ({
+        deviceSeq: row.deviceSeq ?? null,
+        system: row.system ?? null,
+        location: row.location ?? null,
+        managingPosition: row.managingPosition ?? null,
+        quantity: Math.max(0, Number(row.quantity) || 0),
+        deviceCount: Math.max(1, Number(row.deviceCount) || 1),
+        intervalMonths: Math.max(1, Number(row.intervalMonths) || 6),
+        intervalNote: row.intervalNote ?? null,
+        lastReplacedAt: row.lastReplacedAt ?? null,
+      }));
+      await upsert.mutateAsync({
+        id: trackingMaterial.id,
+        replacements: [...currentRows, ...addedRows],
+      });
       toast.success(`Đã thêm ${rows.length} thiết bị theo dõi`);
       setTrackingMaterial(null);
       setTrackingRows([]);
@@ -660,7 +673,7 @@ function MaterialsPageContent() {
                           <InlineTrackingEditor
                             material={m}
                             rows={trackingRows}
-                            saving={createTrackingPoint.isPending}
+                            saving={upsert.isPending}
                             onRowsChange={setTrackingRows}
                             onCancel={() => {
                               setTrackingMaterial(null);
@@ -1153,17 +1166,15 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
   return null;
 }
 
-/** Panel bung: liệt kê các thiết bị theo dõi đã lưu cho vật tư. */
+/** Panel bung: liệt kê các thiết bị theo dõi đã khai báo cho vật tư. */
 function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m: MaterialWithDevices; blockFilter?: string; onOpenTracking?: () => void }) {
   const points = (m.replacements ?? []).filter(
-    (r) => blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter
+    (r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter)
   );
   const createPoint = useCreateReplacement();
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
 
-  // Bấm "+Thêm điểm" mở form nhập mốc; xác nhận tạo điểm theo dõi rồi TỰ MỞ
-  // drawer "Theo dõi thay thế vật tư" để xem điểm vừa thêm.
   const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
   const [trackDate, setTrackDate] = React.useState("");
   const [trackMonths, setTrackMonths] = React.useState(12);
@@ -1173,6 +1184,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
     setTrackMonths(p.intervalMonths || 12);
     setTracking(p);
   }
+
   async function confirmTracking() {
     if (!tracking) return;
     try {
@@ -1193,9 +1205,9 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
       });
       toast.success("Đã thêm điểm theo dõi");
       setTracking(null);
-      onOpenTracking?.(); // mở drawer Theo dõi thay thế
+      onOpenTracking?.();
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(e instanceof Error ? e.message : "Không thể thêm điểm theo dõi");
     }
   }
 
@@ -1244,7 +1256,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                     type="button"
                     disabled={createPoint.isPending}
                     onClick={() => openTracking(p)}
-                    title="Thêm điểm theo dõi thời gian thay thế cho thiết bị này (tạo được nhiều lần)"
+                    title="Thêm điểm theo dõi thời gian thay thế cho thiết bị này"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
                   >
                     <Plus className="h-3.5 w-3.5" /> Thêm điểm
@@ -1256,8 +1268,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         </table>
       </div>
 
-      {/* Form nhập mốc; xác nhận sẽ tạo điểm theo dõi và tự mở drawer Theo dõi thay thế */}
-      <Dialog open={!!tracking} onOpenChange={(o) => !o && setTracking(null)}>
+      <Dialog open={!!tracking} onOpenChange={(open) => !open && setTracking(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Thêm điểm theo dõi</DialogTitle>
@@ -1275,7 +1286,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 <Input type="number" min={1} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
               </Field>
               <p className="text-xs text-muted-foreground">
-                Mỗi lần bấm tạo một điểm theo dõi mới trong Lịch thay thế vật tư — dòng khai báo này giữ nguyên và có thể thêm điểm tiếp.
+                Điểm theo dõi chỉ được tạo từ thao tác này và sẽ xuất hiện trong tab Theo dõi thay thế vật tư.
               </p>
             </div>
           )}
