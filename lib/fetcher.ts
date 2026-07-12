@@ -9,7 +9,7 @@ export async function apiGet<T>(url: string): Promise<{ data: T; meta: any }> {
 
 export async function apiMutate<T>(
   url: string,
-  method: "POST" | "PUT" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<T> {
   const res = await fetch(url, {

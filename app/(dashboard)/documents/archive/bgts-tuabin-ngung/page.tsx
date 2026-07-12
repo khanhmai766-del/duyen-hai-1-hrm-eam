@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, CalendarDays, CheckCircle2, FileSpreadsheet, Loader2, Save } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, FileSpreadsheet, Loader2, RotateCcw, Save } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import {
   type BgtsTuabinNgungRow,
   useBgtsTuabinNgung,
   useBgtsTuabinNgungArchive,
+  useResetBgtsTuabinNgungSignature,
   useSaveBgtsTuabinNgung,
 } from "@/hooks/useBgtsTuabinNgung";
 import {
@@ -104,12 +106,16 @@ export default function BgtsTuabinNgungPage() {
   const [middleShiftSigner, setMiddleShiftSigner] = React.useState("");
   const [nightShiftSigner, setNightShiftSigner] = React.useState("");
   const [confirmingShift, setConfirmingShift] = React.useState<ShiftConfig | null>(null);
+  const [resettingShift, setResettingShift] = React.useState<ShiftConfig | null>(null);
 
+  const { data: session } = useSession();
   const query = useBgtsTuabinNgung(unit, date);
   const archiveQuery = useBgtsTuabinNgungArchive(unit);
   const saveMutation = useSaveBgtsTuabinNgung();
+  const resetMutation = useResetBgtsTuabinNgungSignature();
   const rbac = useRbacAccess();
   const canSave = rbac.can("archive-grid-separation", ["create", "manage", "full"]);
+  const isAdmin = session?.user?.role === "ADMIN";
 
   React.useEffect(() => {
     if (!query.data) return;
@@ -173,6 +179,17 @@ export default function BgtsTuabinNgungPage() {
       if (confirmShift) setConfirmingShift(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : confirmShift ? "Không thể xác nhận ca" : "Không thể lưu BGTS Tuabin ngừng");
+    }
+  }
+
+  async function resetSignature() {
+    if (!resettingShift || !isAdmin) return;
+    try {
+      await resetMutation.mutateAsync({ unit, date, resetShift: resettingShift.key });
+      toast.success(`Đã reset ký tên ${resettingShift.label.toLowerCase()}; người dùng có thể nhập lại thông số`);
+      setResettingShift(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể reset ký tên xác nhận");
     }
   }
 
@@ -467,6 +484,8 @@ export default function BgtsTuabinNgungPage() {
               confirmedAt={confirmedAtByShift.day}
               disabled={!canSave || saveMutation.isPending || query.isLoading}
               onConfirm={() => setConfirmingShift(SHIFT_CONFIGS[0])}
+              canReset={isAdmin}
+              onReset={() => setResettingShift(SHIFT_CONFIGS[0])}
             />
           </div>
           <div className="space-y-2">
@@ -478,6 +497,8 @@ export default function BgtsTuabinNgungPage() {
               confirmedAt={confirmedAtByShift.middle}
               disabled={!canSave || saveMutation.isPending || query.isLoading}
               onConfirm={() => setConfirmingShift(SHIFT_CONFIGS[1])}
+              canReset={isAdmin}
+              onReset={() => setResettingShift(SHIFT_CONFIGS[1])}
             />
           </div>
           <div className="space-y-2">
@@ -489,6 +510,8 @@ export default function BgtsTuabinNgungPage() {
               confirmedAt={confirmedAtByShift.night}
               disabled={!canSave || saveMutation.isPending || query.isLoading}
               onConfirm={() => setConfirmingShift(SHIFT_CONFIGS[2])}
+              canReset={isAdmin}
+              onReset={() => setResettingShift(SHIFT_CONFIGS[2])}
             />
           </div>
         </div>
@@ -527,6 +550,27 @@ export default function BgtsTuabinNgungPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!resettingShift} onOpenChange={(open) => !open && setResettingShift(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset ký tên {resettingShift?.label.toLowerCase()}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>Thao tác dành cho quản trị viên sẽ xóa tên người ký và trạng thái xác nhận của ca này.</p>
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+              Các thông số hiện tại vẫn được giữ nguyên, nhưng toàn bộ ô thuộc khung giờ {resettingShift?.hours.join(", ")} sẽ được mở khóa để người dùng chỉnh sửa và ký lại.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setResettingShift(null)} disabled={resetMutation.isPending}>Hủy</Button>
+            <Button type="button" variant="destructive" onClick={resetSignature} disabled={!resettingShift || resetMutation.isPending}>
+              {resetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              Xác nhận reset
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -537,20 +581,32 @@ function ShiftConfirm({
   confirmedAt,
   disabled,
   onConfirm,
+  canReset,
+  onReset,
 }: {
   label: string;
   hours: string;
   confirmedAt?: string | null;
   disabled: boolean;
   onConfirm: () => void;
+  canReset: boolean;
+  onReset: () => void;
 }) {
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
       <div className="mb-2 text-[11px] text-muted-foreground">Khung giờ: {hours}</div>
       {confirmedAt ? (
-        <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Đã xác nhận: {formatConfirmTime(confirmedAt)}
+        <div className="flex min-h-8 items-center justify-between gap-2">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Đã xác nhận: {formatConfirmTime(confirmedAt)}
+          </div>
+          {canReset ? (
+            <Button type="button" size="sm" variant="ghost" className="h-8 shrink-0 px-2 text-amber-700 hover:bg-amber-100 hover:text-amber-900" disabled={disabled} onClick={onReset}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </Button>
+          ) : null}
         </div>
       ) : (
         <Button type="button" size="sm" variant="outline" className="h-8 w-full" disabled={disabled} onClick={onConfirm}>

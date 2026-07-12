@@ -15,7 +15,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "admin:reset": "tsx scripts/reset-admin-password.ts",
-    "migrate:files-to-s3": "tsx scripts/migrate-files-to-s3.ts"
+    "migrate:files-to-s3": "tsx scripts/migrate-files-to-s3.ts",
+    "audit:s3:compact": "tsx scripts/compact-audit-s3.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

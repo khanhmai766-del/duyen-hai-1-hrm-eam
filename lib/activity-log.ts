@@ -80,22 +80,37 @@ function auditS3Prefix() {
   return (process.env.AUDIT_LOG_S3_PREFIX || "audit-logs").replace(/^\/+|\/+$/g, "");
 }
 
+function vietnamDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+}
+
 function datePath(date: Date) {
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const { year, month, day } = vietnamDateParts(date);
   return `${year}/${month}/${day}`;
 }
 
 async function writeAuditObjectToS3(kind: "activity" | "system", id: string, createdAt: Date, payload: unknown) {
   if (!auditS3Enabled()) return;
   try {
-    const key = `${auditS3Prefix()}/${kind}/${datePath(createdAt)}/${id}.json`;
+    const time = vietnamDateParts(createdAt);
+    // Mỗi part là bất biến để các request đồng thời không đọc/ghi đè cùng một file S3.
+    // Script audit:s3:compact sẽ hợp nhất các part thành một file NDJSON theo ngày.
+    const key = `${auditS3Prefix()}/daily/${datePath(createdAt)}/parts/${time.hour}-${time.minute}-${time.second}-${id}-${kind}.ndjson`;
     await uploadS3Object({
       key,
-      body: Buffer.from(JSON.stringify(payload, null, 2), "utf8"),
-      contentType: "application/json",
-      originalName: `${id}.json`,
+      body: Buffer.from(`${JSON.stringify(payload)}\n`, "utf8"),
+      contentType: "application/x-ndjson; charset=utf-8",
+      originalName: `${id}-${kind}.ndjson`,
     });
   } catch (error) {
     console.warn("Không thể lưu audit log lên S3", error);

@@ -2,7 +2,7 @@ import crypto from "crypto";
 import path from "path";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { Readable } from "stream";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import sharp from "sharp";
 
@@ -304,6 +304,9 @@ export async function uploadS3Object(params: {
   originalName?: string;
 }) {
   if (!hasS3Config()) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Thiếu cấu hình S3; production không được phép lưu tệp audit xuống ổ đĩa local");
+    }
     const target = localObjectPath(params.key);
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, params.body);
@@ -319,6 +322,35 @@ export async function uploadS3Object(params: {
     })
   );
   return params.key;
+}
+
+export async function listS3ObjectKeys(prefix: string) {
+  if (!hasS3Config()) throw new Error("Thiếu cấu hình S3 để liệt kê tệp");
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const response = await s3Client().send(new ListObjectsV2Command({
+      Bucket: bucket(),
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }));
+    keys.push(...(response.Contents ?? []).flatMap((item) => item.Key ? [item.Key] : []));
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return keys;
+}
+
+export async function getS3ObjectBuffer(key: string) {
+  const object = await getS3Object(key);
+  if (!object.Body) throw new Error(`Tệp S3 không có nội dung: ${key}`);
+  const reader = object.Body.transformToWebStream().getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
 }
 
 export async function signedS3Url(key: string, expiresIn = 300) {

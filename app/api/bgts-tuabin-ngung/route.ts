@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, fail, handle, ok, requireRole, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   BGTS_TUABIN_NGUNG_FIELD_KEYS,
@@ -371,6 +371,54 @@ export async function POST(req: NextRequest) {
 
     const saved = await loadRecord(unit, date);
     await audit(user.id, "UPSERT_BGTS_TUABIN_NGUNG", "BgtsTurbineShutdownRecord", saved.record?.id, `${unit} - ${date}`);
+    return ok(saved);
+  });
+}
+
+export async function PATCH(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    requireRole(user, ["ADMIN"]);
+    await ensureTables();
+
+    const body = (await req.json()) as Record<string, unknown>;
+    const unit = normalizeUnit(body.unit);
+    const date = normalizeDate(body.date);
+    const resetShift = normalizeConfirmShift(body.resetShift);
+    if (!unit) return fail("Tổ máy không hợp lệ");
+    if (!date) return fail("Ngày ghi thông số không hợp lệ");
+    if (!resetShift) return fail("Ca cần reset không hợp lệ");
+
+    const existing = (await loadRecord(unit, date)).record;
+    if (!existing) return fail("Không tìm thấy bảng BGTS Tuabin ngừng", 404);
+
+    const shiftColumns = {
+      day: { signer: "dayShiftSigner", confirmedAt: "dayShiftConfirmedAt", label: "ca sáng" },
+      middle: { signer: "middleShiftSigner", confirmedAt: "middleShiftConfirmedAt", label: "ca chiều" },
+      night: { signer: "nightShiftSigner", confirmedAt: "nightShiftConfirmedAt", label: "ca đêm" },
+    } as const;
+    const selected = shiftColumns[resetShift];
+    if (!existing[selected.confirmedAt]) return fail(`${selected.label[0].toUpperCase()}${selected.label.slice(1)} chưa được xác nhận`);
+
+    await prisma.$executeRawUnsafe(
+      `UPDATE "BgtsTurbineShutdownRecord"
+       SET "${selected.signer}" = NULL,
+           "${selected.confirmedAt}" = NULL,
+           "updatedById" = $1,
+           "updatedAt" = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      user.id,
+      existing.id
+    );
+
+    const saved = await loadRecord(unit, date);
+    await audit(
+      user.id,
+      "RESET_BGTS_TUABIN_NGUNG_SIGNATURE",
+      "BgtsTurbineShutdownRecord",
+      existing.id,
+      `${unit} - ${date}: reset ký tên ${selected.label}`
+    );
     return ok(saved);
   });
 }

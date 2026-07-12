@@ -111,3 +111,15 @@ export function useSaveBgtsTuabinNgung() {
     },
   });
 }
+
+export function useResetBgtsTuabinNgungSignature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { unit: string; date: string; resetShift: "day" | "middle" | "night" }) =>
+      apiMutate<BgtsTuabinNgungData>("/api/bgts-tuabin-ngung", "PATCH", body),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["bgts-tuabin-ngung", variables.unit, variables.date] });
+      qc.invalidateQueries({ queryKey: ["bgts-tuabin-ngung-archive", variables.unit] });
+    },
+  });
+}
