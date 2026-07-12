@@ -26,6 +26,7 @@ import {
   useOilGroupingConfirm,
   useCreateGroupedErpMaterial,
   useImportGroupedErpMaterials,
+  useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
   GROUPING_CATEGORIES,
@@ -613,10 +614,12 @@ function PendingTab({ category }: { category: GroupingCategory }) {
   const { data, isLoading } = useOilSuggestions(category);
   const sync = useOilGroupingSync();
   const confirm = useOilGroupingConfirm();
+  const deletePending = useDeletePendingGroupedErpMaterials();
   const items = data?.data.items ?? [];
   const oilTypes = data?.data.oilTypes ?? [];
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<string[] | null>(null);
   // form gom nhóm
   const [targetType, setTargetType] = useState<string>("");
   const [newCode, setNewCode] = useState("");
@@ -625,7 +628,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
   const [newMin, setNewMin] = useState("");
   const [factor, setFactor] = useState("1");
 
-  const busy = sync.isPending || confirm.isPending;
+  const busy = sync.isPending || confirm.isPending || deletePending.isPending;
 
   const typeById = useMemo(() => new Map(oilTypes.map((t) => [t.id, t])), [oilTypes]);
 
@@ -690,12 +693,25 @@ function PendingTab({ category }: { category: GroupingCategory }) {
     submit({ materialIds: [...checked], action: "IGNORE" }, `Đã bỏ qua ${checked.size} mã (không cần gom nhóm)`);
   };
 
+  const confirmDeleteSelected = async () => {
+    const ids = deletingIds ?? [];
+    if (!ids.length) return;
+    try {
+      const result = await deletePending.mutateAsync(ids);
+      setChecked((prev) => new Set([...prev].filter((id) => !result.ids.includes(id))));
+      setDeletingIds(null);
+      toast.success(`Đã xoá ${result.count} mã vật tư nhập sai`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
+
   if (isLoading) return <div className="py-12 text-center text-slate-400">Đang tải…</div>;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <button
+      <div>
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <button
           onClick={runScan}
           disabled={busy}
           className="px-3.5 py-2 rounded-lg text-sm font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -705,6 +721,16 @@ function PendingTab({ category }: { category: GroupingCategory }) {
         <span className="text-sm text-slate-500">
           {items.length} mã chờ phân nhóm • Đã chọn {checked.size}
         </span>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="ml-auto"
+          disabled={busy || checked.size === 0}
+          onClick={() => setDeletingIds([...checked])}
+        >
+          <Trash2 className="h-4 w-4" /> Xoá đã chọn
+        </Button>
       </div>
 
       {items.length === 0 ? (
@@ -876,6 +902,15 @@ function PendingTab({ category }: { category: GroupingCategory }) {
           </div>
         </>
       )}
+      <ConfirmDialog
+        open={!!deletingIds}
+        onOpenChange={(open) => !open && setDeletingIds(null)}
+        title={`Xoá ${deletingIds?.length ?? 0} mã vật tư đang chờ phân nhóm?`}
+        description="Các dòng nhập liệu sai sẽ bị xoá khỏi danh sách chờ phân nhóm. Hành động này không thể hoàn tác."
+        confirmLabel="Xoá"
+        loading={deletePending.isPending}
+        onConfirm={confirmDeleteSelected}
+      />
     </div>
   );
 }

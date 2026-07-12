@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -258,6 +259,8 @@ function MaterialsPageContent() {
 
   const allChecked = materials.length > 0 && materials.every((m) => selected.has(m.id));
   const someChecked = selected.size > 0 && !allChecked;
+  const activeCategoryTab = MATERIAL_CATEGORY_TABS.find((tab) => tab.key === categoryFilter) ?? MATERIAL_CATEGORY_TABS[0];
+  const ActiveCategoryIcon = activeCategoryTab.icon;
 
   function toggleOne(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -378,23 +381,42 @@ function MaterialsPageContent() {
         )}
       </PageHeader>
 
-      {/* Tab loại vật tư — chuyển đổi qua lại như tab Thư mục lưu trữ; ô tìm kiếm cùng hàng bên phải */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-border">
-        {MATERIAL_CATEGORY_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            aria-pressed={categoryFilter === tab.key}
-            onClick={() => setCategoryFilter(tab.key)}
-            className={cn(
-              "-mb-px inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
-              categoryFilter === tab.key ? "border-navy text-navy" : "border-transparent text-muted-foreground hover:text-ink"
-            )}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.key}
-          </button>
-        ))}
+      {/* Lọc loại vật tư dạng dropdown; ô tìm kiếm cùng hàng bên phải */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 min-w-[172px] justify-between gap-3 rounded-xl border-blue-100 bg-white px-4 text-sm font-semibold text-ink shadow-sm hover:bg-blue-50 hover:text-navy"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <ActiveCategoryIcon className="h-4 w-4 shrink-0 text-navy" />
+                <span className="truncate">{activeCategoryTab.key}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {MATERIAL_CATEGORY_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const active = categoryFilter === tab.key;
+              return (
+                <DropdownMenuItem
+                  key={tab.key}
+                  className={cn("justify-between gap-3", active && "bg-blue-50 text-navy")}
+                  onClick={() => setCategoryFilter(tab.key)}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{tab.key}</span>
+                  </span>
+                  {active && <Check className="h-4 w-4 shrink-0" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="ml-auto flex items-center gap-2 pb-2">
           <Select value={blockFilter} onValueChange={setBlockFilter}>
             <SelectTrigger className="w-44" aria-label="Lọc theo khối quản lý">

@@ -154,6 +154,19 @@ export function useImportGroupedErpMaterials() {
   });
 }
 
+export function useDeletePendingGroupedErpMaterials() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => apiMutate<{ ids: string[]; count: number }>("/api/vat-tu/oil-grouping/materials", "DELETE", { ids }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+    },
+  });
+}
+
 // Cập nhật TỪNG PHẦN — chỉ field có mặt mới được ghi (server giữ nguyên phần còn lại).
 export interface OilGroupUpdateInput {
   id: string;
