@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Factory,
   Boxes,
+  Database,
   Droplet,
   Filter,
   FlaskConical,
@@ -99,7 +100,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         label: "Vật tư theo ERP",
         href: "/vat-tu/loai-dau",
-        icon: Droplet,
+        icon: Database,
         keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat bi nghien than gom nhom erp de xuat nhap nguong canh bao",
         children: [
           { label: "Dầu bôi trơn", href: "/vat-tu/loai-dau?loai=dau-boi-tron", icon: Droplet, keywords: "ton kho nhom dau boi tron oil" },
