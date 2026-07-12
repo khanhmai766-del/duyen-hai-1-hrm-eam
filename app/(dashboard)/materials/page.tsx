@@ -708,18 +708,47 @@ function MaterialsPageContent() {
                   </div>
                 )}
               </Field>
-              <Field label="ĐVT *">
-                <Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="Cái / Lít / Bộ..." />
-              </Field>
-              <Field label="Số liệu ERP">
-                <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-semibold tabular-nums text-ink">
-                  {selectedErpCodes.length ? selectedErpStock : edit.minStock || 0}
-                </div>
-              </Field>
-              <Field label="Ảnh vật tư" className="col-span-2">
-                <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
-              </Field>
-              <Field label="Tên vật tư *" className="col-span-2"><Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <div className="col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.65fr)]">
+                <Field label="Tên vật tư *">
+                  <Input value={edit.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+                </Field>
+                <Field label="Loại vật tư">
+                  <Select value={edit.category ?? "NONE"} onValueChange={(v) => changeEditCategory(v === "NONE" ? null : v)}>
+                    <SelectTrigger aria-label="Chọn loại vật tư"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">— Chưa phân loại —</SelectItem>
+                      {MATERIAL_CATEGORIES.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <div className="col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="ĐVT *">
+                  <Input value={edit.unit ?? ""} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} placeholder="Cái / Lít / Bộ..." />
+                </Field>
+                <Field label="Số liệu ERP">
+                  <div className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-semibold tabular-nums text-ink">
+                    {selectedErpCodes.length ? selectedErpStock : edit.minStock || 0}
+                  </div>
+                </Field>
+                <Field label="Hiện Có">
+                  <Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} />
+                </Field>
+              </div>
+              <div className="col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <Field label="Ảnh vật tư">
+                  <MaterialImageField value={edit.imageUrl ?? null} onChange={(url) => setEdit({ ...edit, imageUrl: url })} />
+                </Field>
+                <Field label="Tài liệu đính kèm">
+                  <MaterialDocumentField
+                    url={edit.documentUrl ?? ""}
+                    name={edit.documentName ?? ""}
+                    onChange={(documentUrl, documentName) => setEdit({ ...edit, documentUrl, documentName })}
+                  />
+                </Field>
+              </div>
               <Field label="Tổ máy" className="col-span-2">
                 <div className="grid grid-cols-3 gap-2">
                   {MACHINE_TABS.map((t) => {
@@ -762,25 +791,6 @@ function MaterialsPageContent() {
                     );
                   })}
                 </div>
-              </Field>
-              <Field label="Loại vật tư" className="col-span-2">
-                <Select value={edit.category ?? "NONE"} onValueChange={(v) => changeEditCategory(v === "NONE" ? null : v)}>
-                  <SelectTrigger aria-label="Chọn loại vật tư"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">— Chưa phân loại —</SelectItem>
-                    {MATERIAL_CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Hiện Có"><Input type="number" min={0} value={edit.quantity ?? 0} onChange={(e) => setEdit({ ...edit, quantity: Number(e.target.value) })} /></Field>
-              <Field label="Tài liệu đính kèm" className="col-span-2">
-                <MaterialDocumentField
-                  url={edit.documentUrl ?? ""}
-                  name={edit.documentName ?? ""}
-                  onChange={(documentUrl, documentName) => setEdit({ ...edit, documentUrl, documentName })}
-                />
               </Field>
               <div className="col-span-2 mt-1">
                 <Label className="text-sm font-semibold text-ink">Điểm dùng / thay thế</Label>
@@ -928,7 +938,7 @@ function MaterialDocumentField({
 
   return (
     <div className="rounded-lg border border-border bg-slate-50/60 p-3">
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="relative flex-1">
           <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -939,7 +949,7 @@ function MaterialDocumentField({
           />
         </div>
         <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-        <Button type="button" variant="outline" className="shrink-0 bg-white" disabled={uploading} onClick={() => inputRef.current?.click()}>
+        <Button type="button" variant="outline" className="w-full shrink-0 bg-white xl:w-auto" disabled={uploading} onClick={() => inputRef.current?.click()}>
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           Tải PDF
         </Button>
