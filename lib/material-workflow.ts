@@ -42,22 +42,33 @@ export function canCreateTicket(user: { role?: string | null; position?: string 
 
 /* ---------- Phân quyền các bước quy trình (admin cấu hình, bảng MaterialWorkflowRole) ---------- */
 
-export const WORKFLOW_STEPS = ["create", "confirm", "receive", "use", "accept", "manage"] as const;
+export const WORKFLOW_STEPS = [
+  "create", "confirm", "stats", "receive", "use", "accept",
+  "ungAdvance", "ungEntry", "ungConfirm", "ungBbkt", "manage",
+] as const;
 export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
 
 export const WORKFLOW_STEP_LABELS: Record<WorkflowStep, string> = {
   create: "Tạo phiếu / Đề xuất vật tư",
   confirm: "Xác nhận",
+  stats: "Nhập số phiếu ĐXVT",
   receive: "Nhận vật tư",
   use: "Sử dụng vật tư",
   accept: "Nghiệm thu + xuất BBNT",
+  ungAdvance: "Ứng - Nhập số lượng vật tư ứng",
+  ungEntry: "Ứng - Nhập liệu thay thế",
+  ungConfirm: "Ứng - Xác nhận + xuất BBNT",
+  ungBbkt: "Ứng - Bổ sung số BBKT",
   manage: "Sửa / Xoá phiếu",
 };
 
 /** Đọc toàn bộ cấu hình phân quyền: step → danh sách cương vị. */
 export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[]>> {
   const rows = await prisma.materialWorkflowRole.findMany({ select: { step: true, position: true } });
-  const map: Record<WorkflowStep, string[]> = { create: [], confirm: [], receive: [], use: [], accept: [], manage: [] };
+  const map: Record<WorkflowStep, string[]> = {
+    create: [], confirm: [], stats: [], receive: [], use: [], accept: [],
+    ungAdvance: [], ungEntry: [], ungConfirm: [], ungBbkt: [], manage: [],
+  };
   for (const r of rows) {
     if ((WORKFLOW_STEPS as readonly string[]).includes(r.step)) map[r.step as WorkflowStep].push(r.position);
   }
@@ -73,7 +84,10 @@ function positionInList(position: string | null | undefined, list: string[]) {
 /** Mặc định khi bước CHƯA được admin cấu hình (giữ hành vi cũ, không gãy khi mới deploy). */
 function defaultStepAllowed(step: WorkflowStep, user: { role?: string | null; position?: string | null }) {
   if (step === "create") return canCreateTicket(user);
+  if (step === "stats") return isStats(user.position);
   if (step === "confirm" || step === "receive" || step === "use" || step === "accept") return isShiftLeader(user.position);
+  if (step === "ungAdvance" || step === "ungEntry") return true; // vẫn bắt buộc đúng cương vị phân giao tại API
+  if (step === "ungConfirm" || step === "ungBbkt") return isShiftLeader(user.position);
   return false; // manage: mặc định chỉ người tạo phiếu (kiểm tra riêng tại API) + Admin
 }
 

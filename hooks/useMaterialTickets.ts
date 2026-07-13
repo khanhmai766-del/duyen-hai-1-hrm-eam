@@ -66,6 +66,11 @@ export interface ViewerSteps {
   receive: boolean;
   use: boolean;
   accept: boolean;
+  stats: boolean;
+  ungAdvance: boolean;
+  ungEntry: boolean;
+  ungConfirm: boolean;
+  ungBbkt: boolean;
   manage: boolean;
   manageConfigured: boolean;
 }
@@ -82,7 +87,10 @@ export interface TicketViewer {
   steps?: ViewerSteps;
 }
 
-export type WorkflowRoleMap = { create: string[]; confirm: string[]; receive: string[]; use: string[]; accept: string[]; manage: string[] };
+export type WorkflowRoleMap = {
+  create: string[]; confirm: string[]; stats: string[]; receive: string[]; use: string[]; accept: string[];
+  ungAdvance: string[]; ungEntry: string[]; ungConfirm: string[]; ungBbkt: string[]; manage: string[];
+};
 
 const samePosition = (a?: string | null, b?: string | null) => {
   const left = (a ?? "").trim().toLocaleLowerCase("vi");
@@ -192,17 +200,17 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && canOperateAssigned && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     if (t.status === "VAT_TU_KHONG_CO" && canOperateAssigned && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
-    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.isStats) a.push("stats");
+    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.steps?.stats) a.push("stats");
     if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
     if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && canOperateAssigned && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
   } else {
-    if (t.status === "CHO_NHAP_LIEU" && isAssigned && v.hasScope) a.push("ungAdvance");
-    if (t.status === "CHO_NHAP_LIEU_THAY_THE" && isAssigned && v.hasScope) a.push("ungEntry");
-    if (t.status === "CHO_XAC_NHAN_PDF" && canOperateAssigned && v.isShiftLeader) a.push("ungConfirmDoc");
+    if (t.status === "CHO_NHAP_LIEU" && canOperateAssigned && (v.isAdmin || v.hasScope) && v.steps?.ungAdvance) a.push("ungAdvance");
+    if (t.status === "CHO_NHAP_LIEU_THAY_THE" && canOperateAssigned && (v.isAdmin || v.hasScope) && v.steps?.ungEntry) a.push("ungEntry");
+    if (t.status === "CHO_XAC_NHAN_PDF" && canOperateAssigned && v.steps?.ungConfirm) a.push("ungConfirmDoc");
     if (t.status === "CHO_HOAN_THIEN") {
-      if (canOperateAssigned && v.isShiftLeader && !t.bbktNumber) a.push("ungBbkt");
-      if (v.isStats && !t.proposalNumber) a.push("ungStats");
+      if (canOperateAssigned && v.steps?.ungBbkt && !t.bbktNumber) a.push("ungBbkt");
+      if (v.steps?.stats && !t.proposalNumber) a.push("ungStats");
     }
   }
   return a;

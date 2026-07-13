@@ -909,7 +909,7 @@ model MaterialTicket {
 // định cũ (Trưởng Ca/KTV/…) để không gãy khi mới deploy.
 model MaterialWorkflowRole {
   id        String   @id @default(cuid())
-  step      String // "create" | "confirm" | "accept" | "manage"
+  step      String // mã bước trong WORKFLOW_STEPS (lib/material-workflow.ts)
   position  String // cương vị được phép thao tác bước này
   createdAt DateTime @default(now())
 

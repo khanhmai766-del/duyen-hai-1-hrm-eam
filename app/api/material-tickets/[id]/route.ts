@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isStats, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
+import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 
 export const dynamic = "force-dynamic";
@@ -310,7 +310,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B2 — Thống kê nhập số phiếu ĐXVT (CHỈ cương vị Thống kê; không còn khóa 2 ngày)
     if (action === "stats") {
       if (t.type !== "DE_XUAT" || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống kê");
-      if (!isStats(user.position)) return fail("Chỉ cương vị Thống kê được thao tác bước này", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
+        return fail("Bạn không có quyền nhập số phiếu ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const num = String(body.proposalNumber || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
       const up = await prisma.materialTicket.update({
@@ -471,8 +472,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư1 — cương vị nhập số lượng vật tư ứng; số lượng này được cộng vào tồn kho.
     if (action === "ungAdvance") {
       if (t.type !== "UNG" || t.status !== "CHO_NHAP_LIEU") return fail("Phiếu không ở bước Nhập số lượng ứng");
-      if (!isAssignedPosition(user, t))
-        return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền nhập liệu`, 403);
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "ungAdvance", user))
+        return fail("Bạn không có quyền nhập số lượng vật tư ứng (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
 
       const submitted: Array<{ materialId: string; erpCode?: string; quantity: number }> = Array.isArray(body.items)
         ? body.items
@@ -565,8 +568,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư2 — cương vị nhập liệu thay thế; số lượng thay thế được trừ khỏi tồn kho.
     if (action === "ungEntry") {
       if (t.type !== "UNG" || t.status !== "CHO_NHAP_LIEU_THAY_THE") return fail("Phiếu không ở bước Nhập liệu thay thế");
-      if (!isAssignedPosition(user, t))
-        return fail(`Phiếu này được giao cho cương vị "${t.assignedPosition}" — bạn không có quyền nhập liệu`, 403);
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "ungEntry", user))
+        return fail("Bạn không có quyền nhập liệu thay thế (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const note = String(body.completionNote || "").trim();
       if (!note) return fail("Vui lòng nhập thông tin thay thế");
 
@@ -677,7 +682,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type !== "UNG" || t.status !== "CHO_XAC_NHAN_PDF") return fail("Phiếu không ở bước Xác nhận xuất file");
       const assignedError = assignedPositionError(user, t);
       if (assignedError) return assignedError;
-      if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được xác nhận", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "ungConfirm", user))
+        return fail("Bạn không có quyền xác nhận xuất file (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const pct = String(body.pctNumber || "").trim();
       const chiHuy = String(body.chiHuyName || "").trim();
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
@@ -715,7 +721,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type !== "UNG" || t.status !== "CHO_HOAN_THIEN") return fail("Phiếu không ở bước Hoàn thiện");
       const assignedError = assignedPositionError(user, t);
       if (assignedError) return assignedError;
-      if (!isShiftLeader(user.position)) return fail("Chỉ Trưởng Ca / Trưởng Kíp được bổ sung BBKT", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "ungBbkt", user))
+        return fail("Bạn không có quyền bổ sung BBKT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       if (t.bbktNumber) return fail("Số BBKT đã được bổ sung trước đó");
       const bbkt = String(body.bbktNumber || "").trim();
       if (!bbkt) return fail("Vui lòng nhập số BBKT");
@@ -740,7 +747,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư3 song song — Thống kê nhập số phiếu ĐXVT (KHÔNG khóa 2 ngày)
     if (action === "ungStats") {
       if (t.type !== "UNG" || t.status !== "CHO_HOAN_THIEN") return fail("Phiếu không ở bước Hoàn thiện");
-      if (!isStats(user.position)) return fail("Chỉ cương vị Thống kê được thao tác bước này", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
+        return fail("Bạn không có quyền nhập số phiếu ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       if (t.proposalNumber) return fail("Số phiếu ĐXVT đã được nhập trước đó");
       const num = String(body.proposalNumber || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");

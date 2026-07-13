@@ -505,9 +505,15 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 /* ================= phân quyền quy trình (ADMIN) ================= */
 const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = [
   { key: "create", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
+  { key: "confirm", label: "Xác nhận phiếu đề xuất", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "stats", label: "Nhập số phiếu ĐXVT", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "receive", label: "Nhận vật tư (khối lượng lãnh + hình thức)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "accept", label: "Nghiệm thu + BBKT + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "ungAdvance", label: "Ứng — Nhập số lượng vật tư ứng", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = mọi người thuộc cương vị đó" },
+  { key: "ungEntry", label: "Ứng — Nhập liệu thay thế", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = mọi người thuộc cương vị đó" },
+  { key: "ungConfirm", label: "Ứng — Xác nhận + xuất Word", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = Trưởng Ca/Trưởng Kíp" },
+  { key: "ungBbkt", label: "Ứng — Bổ sung số BBKT", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = Trưởng Ca/Trưởng Kíp" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = mặc định: người tạo phiếu (Quản trị luôn được)" },
 ];
 
@@ -968,18 +974,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const waitMap: Record<string, string> = {
       CHO_DE_XUAT: `Cương vị "${t.assignedPosition}"`,
       CHO_XAC_NHAN: "Trưởng Ca / Trưởng Kíp",
-      CHO_PHIEU__XUAT_KHO: "Thống kê",
+      CHO_PHIEU__XUAT_KHO: "Người được phân quyền Nhập số phiếu ĐXVT",
       VAT_TU_KHONG_CO: "Người tạo phiếu / Trưởng Ca / Quản trị từ chối",
-      CHO_THONG_KE: "Thống kê",
+      CHO_THONG_KE: "Người được phân quyền Nhập số phiếu ĐXVT",
       NHAN_VAT_TU: "Người được phân quyền Nhận vật tư",
       SU_DUNG_VAT_TU: "Người được phân quyền Sử dụng vật tư",
       CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
-      CHO_NHAP_LIEU: `Cương vị "${t.assignedPosition}"`,
-      CHO_NHAP_LIEU_THAY_THE: `Cương vị "${t.assignedPosition}"`,
-      CHO_XAC_NHAN_PDF: "Trưởng Ca / Trưởng Kíp",
+      CHO_NHAP_LIEU: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
+      CHO_NHAP_LIEU_THAY_THE: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
+      CHO_XAC_NHAN_PDF: "Người được phân quyền xác nhận luồng Ứng",
     };
     const waiting = t.status === "CHO_HOAN_THIEN"
-      ? [!t.bbktNumber && "Trưởng Ca (bổ sung BBKT)", !t.proposalNumber && "Thống kê (số phiếu ĐXVT)"].filter(Boolean).join(" + ")
+      ? [!t.bbktNumber && "Người được phân quyền bổ sung BBKT", !t.proposalNumber && "Người được phân quyền nhập số phiếu ĐXVT"].filter(Boolean).join(" + ")
       : waitMap[t.status];
     return <div className="wait"><Clock size={14} /> Đang chờ: <b>{waiting}</b> — bạn không có thao tác ở bước này.</div>;
   }
