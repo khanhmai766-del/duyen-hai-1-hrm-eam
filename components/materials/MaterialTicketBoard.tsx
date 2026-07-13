@@ -70,6 +70,14 @@ const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
 };
 const compactSelectWidth = (label: string, minCh: number, maxCh: number) =>
   `${Math.min(maxCh, Math.max(minCh, label.length + 3))}ch`;
+const FINISHED_STATUSES = ["HOAN_TAT", "TU_CHOI"];
+/* Số ngày phiếu đứng ở bước hiện tại = hôm nay - mốc thao tác gần nhất trên phiếu */
+const waitDaysOf = (t: MaterialTicket) => {
+  const stamps = [t.createdAt, t.proposedAt, t.confirmedAt, t.statsAt, t.receivedAt, t.usedAt, t.completedAt]
+    .filter(Boolean)
+    .map((s) => new Date(s as string).getTime());
+  return Math.max(0, Math.floor((Date.now() - Math.max(...stamps)) / 86_400_000));
+};
 
 export default function MaterialTicketBoard({
   creating = false,
@@ -104,19 +112,50 @@ export default function MaterialTicketBoard({
   const viewer = data?.viewer ?? null;
   const ticketOrder = useMemo(() => new Map(tickets.map((t, index) => [t.id, index + 1])), [tickets]);
   const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
+  const myTurnIds = useMemo(() => new Set(myTurn.map((t) => t.id)), [myTurn]);
+  const waitDays = useMemo(() => new Map(tickets.map((t) => [t.id, waitDaysOf(t)])), [tickets]);
+
+  // Lần tải đầu: có việc chờ mình → mặc định tab "Đến lượt bạn", không thì "Tất cả".
+  const defaultFilterApplied = React.useRef(false);
+  React.useEffect(() => {
+    if (defaultFilterApplied.current || !data) return;
+    defaultFilterApplied.current = true;
+    if (myTurn.length > 0) setFilter("MINE");
+  }, [data, myTurn.length]);
+
   const searchText = normalizeText(searchQ);
-  const shown = tickets.filter((t) => {
-    const matchesStatus = filter === "ALL" ? true : filter === "RUNNING" ? !["HOAN_TAT", "TU_CHOI"].includes(t.status) : t.status === filter;
-    const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
-    const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
-    const matchesUnit = unitFilter === "ALL" || t.unit === unitFilter;
-    const searchable = normalizeText([
-      t.proposalNumber,
-      ...t.items.flatMap((it) => [it.material.name, it.material.code]),
-    ].filter(Boolean).join(" "));
-    const matchesSearch = !searchText || searchable.includes(searchText);
-    return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
-  });
+  const shown = useMemo(() => {
+    const wait = (t: MaterialTicket) => waitDays.get(t.id) ?? 0;
+    const list = tickets.filter((t) => {
+      const matchesStatus =
+        filter === "ALL" ? true
+        : filter === "MINE" ? myTurnIds.has(t.id)
+        : filter === "RUNNING" ? !FINISHED_STATUSES.includes(t.status)
+        : t.status === filter;
+      const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
+      const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
+      const matchesUnit = unitFilter === "ALL" || t.unit === unitFilter;
+      const searchable = normalizeText([
+        t.proposalNumber,
+        ...t.items.flatMap((it) => [it.material.name, it.material.code]),
+      ].filter(Boolean).join(" "));
+      const matchesSearch = !searchText || searchable.includes(searchText);
+      return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
+    });
+    // Tab "Đến lượt bạn": phiếu nghẽn lâu nhất lên đầu.
+    if (filter === "MINE") return list.sort((a, b) => wait(b) - wait(a));
+    // Tất cả / Đang thực hiện: ghim phiếu đến lượt mình lên đầu (cũng theo chờ lâu nhất).
+    if (filter === "ALL" || filter === "RUNNING") {
+      return list.sort((a, b) => {
+        const ma = myTurnIds.has(a.id) ? 1 : 0;
+        const mb = myTurnIds.has(b.id) ? 1 : 0;
+        if (ma !== mb) return mb - ma;
+        if (ma) return wait(b) - wait(a);
+        return (ticketOrder.get(a.id) ?? 0) - (ticketOrder.get(b.id) ?? 0);
+      });
+    }
+    return list;
+  }, [tickets, filter, myTurnIds, waitDays, ticketOrder, materialCategoryFilter, unitFilter, searchText]);
   const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : materialCategoryFilter;
   const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
 
@@ -125,16 +164,16 @@ export default function MaterialTicketBoard({
       <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
 
       <div className="top-tools">
-        {myTurn.length > 0 ? (
-          <div className="turn">
-            <span className="turn-badge">Đến lượt bạn ({myTurn.length})</span>
-            {myTurn.map((t) => (
-              <button key={t.id} className="turn-chip" onClick={() => setOpenId(t.id)}>
-                {t.type === "UNG" ? <Zap size={13} /> : <ClipboardList size={13} />} Số thứ tự {ticketOrder.get(t.id) ?? "—"} <ChevronRight size={13} />
-              </button>
-            ))}
-          </div>
-        ) : <div className="turn-spacer" />}
+        <div className="filters">
+          <button className={`mine-tab ${filter === "MINE" ? "on" : ""}`} onClick={() => setFilter("MINE")}>
+            <Zap size={13} /> Đến lượt bạn
+            <span className="mine-count">{myTurn.length}</span>
+          </button>
+          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["TU_CHOI", "Từ chối"]].map(([k, l]) => (
+            <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
+          ))}
+        </div>
+        <div className="turn-spacer" />
         <label className="unit-filter category-filter">
           <select
             value={materialCategoryFilter}
@@ -157,11 +196,6 @@ export default function MaterialTicketBoard({
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
         </label>
-        <div className="filters">
-          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["TU_CHOI", "Từ chối"]].map(([k, l]) => (
-            <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
-          ))}
-        </div>
         {viewer?.isAdmin && !isRolesControlled && (
           <button className="btn ghost" onClick={openRoles}>
             <UserCog size={14} /> Phân quyền quy trình
@@ -171,10 +205,10 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Thao tác</span>
+          <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Chờ</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
-	        {!isLoading && shown.map((t, index) => {
+	        {!isLoading && shown.map((t) => {
 	          const meta = STATUS[t.status] ?? { label: t.status, c: C.soft };
 	          const order = ORDER[t.type];
 	          const flowStatus = flowStatusKey(t.status);
@@ -201,7 +235,7 @@ export default function MaterialTicketBoard({
                 <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
                   {isOpen ? <Minus size={12} /> : <Plus size={12} />}
                 </span>
-                <span className="code">{index + 1}</span>
+                <span className="code">{ticketOrder.get(t.id) ?? "—"}</span>
               </span>
               <span className="kind-cell">
                 {t.type === "UNG"
@@ -217,10 +251,24 @@ export default function MaterialTicketBoard({
                   : <span className="nophieu">Chưa có phiếu đề xuất</span>}
               </span>
               <span>{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
-              <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>{meta.label}</span>
+              <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>
+                {mine && <i className="pd" />}{meta.label}
+              </span>
               <span className="dots">{order.slice(0, order.length - 1).map((s, i) => (
                 <i key={s} className={i < done ? "d on" : i === done && t.status !== "HOAN_TAT" ? "d cur" : "d"} />
               ))}</span>
+              <span className="wait-cell">
+                {FINISHED_STATUSES.includes(t.status)
+                  ? <span className="soft">—</span>
+                  : (() => {
+                      const w = waitDays.get(t.id) ?? 0;
+                      return (
+                        <b className={`wait ${w >= 5 ? "hot" : w >= 2 ? "warm" : ""}`}>
+                          {w === 0 ? "hôm nay" : `${w} ngày`}
+                        </b>
+                      );
+                    })()}
+              </span>
               <span className="ops">
                 {canEdit ? (
                   <>
@@ -243,7 +291,9 @@ export default function MaterialTicketBoard({
             </React.Fragment>
           );
         })}
-        {!isLoading && shown.length === 0 && <div className="empty">Không có phiếu nào.</div>}
+        {!isLoading && shown.length === 0 && (
+          <div className="empty">{filter === "MINE" ? "☕ Không có phiếu nào chờ bạn xử lý." : "Không có phiếu nào."}</div>
+        )}
       </div>
 
       {creating && <CreateDialog onClose={() => onCloseCreate?.()} onOpen={setOpenId} />}
@@ -1450,10 +1500,7 @@ const CSS = `
 .head h1{font-family:Poppins,Inter,sans-serif;font-size:21px;font-weight:700;color:${C.navy};margin:0;}
 .head p{margin:2px 0 0;font-size:12.5px;color:${C.muted};}
 .top-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
-.turn{display:flex;align-items:center;gap:8px;flex:1 1 520px;max-width:680px;min-width:280px;min-height:38px;flex-wrap:wrap;background:#fff;border:1.5px solid ${C.accent}44;border-radius:13px;padding:8px 12px;}
 .turn-spacer{flex:1 1 auto;min-width:0;}
-.turn-badge{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:13px;color:${C.accent};}
-.turn-chip{display:inline-flex;align-items:center;gap:5px;max-width:210px;border:1px solid ${C.accent}55;background:${C.accent}0e;color:${C.navy};font-weight:700;font-size:12.5px;border-radius:9px;padding:6px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .unit-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 5px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
 .unit-filter select{height:30px;min-width:0;border:0;background:#fff;padding:0 20px 0 6px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;box-sizing:content-box;}
 .category-filter select{min-width:0;}
@@ -1461,6 +1508,10 @@ const CSS = `
 .filters{display:flex;gap:5px;flex:0 0 auto;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;}
 .filters button{border:0;background:transparent;font-size:12.5px;font-weight:600;color:#64748b;padding:7px 12px;border-radius:8px;cursor:pointer;}
 .filters button.on{background:${C.navy};color:#fff;}
+.filters button.mine-tab{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:${C.warn};}
+.filters button.mine-tab.on{background:#f59e0b;color:#fff;}
+.mine-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;font-size:10.5px;font-weight:800;background:${C.warnBg};color:${C.warn};}
+.mine-tab.on .mine-count{background:rgba(255,255,255,.28);color:#fff;}
 .btn{display:inline-flex;align-items:center;gap:6px;font-family:Poppins,Inter,sans-serif;font-weight:600;font-size:13px;border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid ${C.line};background:#fff;color:#475569;transition:.15s;}
 .btn.primary{background:${C.accent};border-color:${C.accent};color:#fff;}
 .btn.primary:disabled{opacity:.5;cursor:not-allowed;}
@@ -1470,16 +1521,24 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
-.row{display:grid;grid-template-columns:.95fr .85fr .95fr 1.25fr 1fr .6fr 1fr .76fr 74px;gap:8px;align-items:center;min-width:1160px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:.95fr .85fr .95fr 1.25fr 1fr .6fr 1fr .76fr 64px 74px;gap:8px;align-items:center;min-width:1230px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
 .code-cell{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
 .op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
-.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
+.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8),.row>span:nth-child(9){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
-.row.mine{background:${C.accent}08;box-shadow:inset 3px 0 0 ${C.accent};}
+.row.mine{background:#fffbeb;box-shadow:inset 3px 0 0 #f59e0b;}
+.row.mine:hover{background:#fef3c7;}
+.row.mine .d.cur{background:#f59e0b;box-shadow:0 0 0 3px #f59e0b30;animation:mtwpulse 1.3s ease-in-out infinite;}
+.pd{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;margin-right:5px;vertical-align:middle;animation:mtwpulse 1.3s ease-in-out infinite;}
+@keyframes mtwpulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+.wait-cell{white-space:nowrap;}
+.wait{font-size:12px;font-weight:700;color:${C.soft};}
+.wait.warm{color:${C.warn};}
+.wait.hot{color:${C.bad};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
 .code{font-family:Poppins,Inter,sans-serif;font-weight:600;color:${C.navy};}
 .nophieu{display:inline-block;background:${C.warnBg};color:${C.warn};font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;}
@@ -1491,7 +1550,7 @@ const CSS = `
 .kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
 .exp.open{background:#f43f5e;}
-.detail-inline{min-width:1160px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
+.detail-inline{min-width:1230px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .dclose{position:absolute;top:10px;right:10px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
 .dclose:hover{background:#eef2f7;color:#0f172a;}
@@ -1631,6 +1690,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1060px;padding:10px 12px;}.row{min-width:1060px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1120px;padding:10px 12px;}.row{min-width:1120px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 58px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
