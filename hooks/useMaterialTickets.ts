@@ -57,6 +57,15 @@ export interface MaterialTicket {
   completedAt: string | null;
   createdAt: string;
   items: TicketItem[];
+  activityLogs?: TicketActivityLog[];
+}
+
+export interface TicketActivityLog {
+  id: string;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+  user: { name: string; position: string | null };
 }
 
 /** Quyền theo từng bước quy trình (admin cấu hình; bước trống dùng mặc định cũ). */

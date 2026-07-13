@@ -780,6 +780,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
 /* ================= chi tiết ================= */
 function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; onClose: () => void }) {
   const [showActivity, setShowActivity] = useState(false);
+  const [reviewStep, setReviewStep] = useState<string | null>(null);
   const flow = FLOW[t.type];
   const order = ORDER[t.type];
   const flowStatus = flowStatusKey(t.status);
@@ -792,6 +793,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Nhận vật tư: lãnh ${t.receivedQuantity ?? ""} (${t.receivedMethod ?? ""})` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === "UNG" ? "Xác nhận, xuất Biên Bản Nghiệm Thu" : "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
+    ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
+      at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
+    })),
   ].filter(Boolean) as Array<{ at: string; who: string | null; pos?: string | null; what: string }>;
 
   return (
@@ -808,11 +812,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             const si = order.indexOf(s.key);
             const done = t.status === "HOAN_TAT" || si < idx;
             const cur = s.key === flowStatus;
+            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
             return (
-              <div key={s.key} className={`step ${done ? "done" : ""} ${cur ? "cur" : ""}`}>
+              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done ? "done" : ""} ${cur ? "cur" : ""}`}>
                 {done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
-                <div><b>{s.label}</b><span>{s.who}</span></div>
-              </div>
+                <div><b>{s.label}</b><span>{s.who}{reviewable ? " · Xem lại" : ""}</span></div>
+              </button>
             );
           })}
           {t.status === "TU_CHOI" && (
@@ -901,8 +906,65 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
         </div>
       </aside>
+      {reviewStep && <StepReviewDialog t={t} viewer={viewer} stepKey={reviewStep} onClose={() => setReviewStep(null)} />}
     </>
   );
+}
+
+function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; stepKey: string; onClose: () => void }) {
+  const act = useTicketAction(t.id);
+  const permission: keyof NonNullable<TicketViewer["steps"]> | null = t.type === "UNG"
+    ? ({ CHO_NHAP_LIEU: "ungAdvance", CHO_NHAP_LIEU_THAY_THE: "ungEntry", CHO_XAC_NHAN_PDF: "ungConfirm", CHO_HOAN_THIEN: "ungBbkt" } as const)[stepKey as "CHO_NHAP_LIEU" | "CHO_NHAP_LIEU_THAY_THE" | "CHO_XAC_NHAN_PDF" | "CHO_HOAN_THIEN"] ?? null
+    : ({ CHO_PHIEU__XUAT_KHO: "stats", NHAN_VAT_TU: "receive", SU_DUNG_VAT_TU: "use", CHO_NGHIEM_THU: "accept" } as const)[stepKey as "CHO_PHIEU__XUAT_KHO" | "NHAN_VAT_TU" | "SU_DUNG_VAT_TU" | "CHO_NGHIEM_THU"] ?? null;
+  const canEdit = !!permission && !!viewer?.steps?.[permission];
+  const editStep = permission === "ungAdvance" || permission === "ungEntry" ? permission : permission;
+  const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
+  const [receivedQuantity, setReceivedQuantity] = useState(t.receivedQuantity ?? 1);
+  const [receivedMethod, setReceivedMethod] = useState(t.receivedMethod ?? "");
+  const [usedQuantity, setUsedQuantity] = useState(t.usedQuantity ?? 1);
+  const [pctNumber, setPctNumber] = useState(t.pctNumber ?? "");
+  const [chiHuyName, setChiHuyName] = useState(t.chiHuyName ?? "");
+  const [completionNote, setCompletionNote] = useState(t.completionNote ?? "");
+  const [bbktNumber, setBbktNumber] = useState(t.bbktNumber ?? "");
+  const [quantities, setQuantities] = useState(() => permission === "ungAdvance"
+    ? [...new Set(t.items.map((item) => item.materialId))].map((materialId) => ({
+        itemId: t.items.find((item) => item.materialId === materialId)!.id,
+        materialId,
+        quantity: t.items.filter((item) => item.materialId === materialId).reduce((sum, item) => sum + item.quantity, 0),
+      }))
+    : t.items.map((item) => ({ itemId: item.id, materialId: item.materialId, quantity: item.replacementQuantity ?? 1 })));
+
+  const label = FLOW[t.type].find((step) => step.key === stepKey)?.label ?? "Chi tiết bước";
+  async function save() {
+    if (!editStep) return;
+    const payload: Record<string, unknown> = { action: "editStep", step: editStep };
+    if (editStep === "stats") payload.proposalNumber = proposalNumber;
+    if (editStep === "receive") Object.assign(payload, { receivedQuantity, receivedMethod });
+    if (editStep === "use") Object.assign(payload, { usedQuantity, pctNumber, chiHuyName, completionNote });
+    if (editStep === "accept" || editStep === "ungConfirm") Object.assign(payload, { pctNumber, chiHuyName, completionNote });
+    if (editStep === "ungBbkt") payload.bbktNumber = bbktNumber;
+    if (editStep === "ungAdvance" || editStep === "ungEntry") payload.quantities = quantities;
+    try { await act.mutateAsync(payload); toast.success("Đã chỉnh sửa bước và cập nhật hoạt động"); onClose(); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Không thể chỉnh sửa bước"); }
+  }
+
+  return <>
+    <div className="ovl" onClick={onClose} />
+    <div className="dlg step-review-dialog">
+      <div className="dlg-h"><b>{label}</b><button className="x" onClick={onClose}><X size={16} /></button></div>
+      <div className="frm">
+        {!permission && <p className="note">Bước này được xem lại trong thông tin tổng quan của phiếu.</p>}
+        {editStep === "stats" && <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>}
+        {editStep === "receive" && <><label>Khối lượng lãnh<input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} /></label><label>Hình thức lãnh<input value={receivedMethod} disabled={!canEdit} onChange={(e) => setReceivedMethod(e.target.value)} /></label></>}
+        {(editStep === "ungAdvance" || editStep === "ungEntry") && quantities.map((row) => <label key={row.itemId}>{t.items.find((item) => item.id === row.itemId)?.material.name} — {editStep === "ungEntry" ? "Số lượng thay thế" : "Số lượng ứng"}<input type="number" min={1} value={row.quantity} disabled={!canEdit} onChange={(e) => setQuantities((current) => current.map((item) => item.itemId === row.itemId ? { ...item, quantity: Number(e.target.value) } : item))} /></label>)}
+        {(editStep === "use") && <label>Số lượng sử dụng<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>}
+        {(editStep === "use" || editStep === "accept" || editStep === "ungConfirm") && <><label>Số PCT/LCT<input value={pctNumber} disabled={!canEdit} onChange={(e) => setPctNumber(e.target.value)} /></label><label>Chỉ huy trực tiếp<input value={chiHuyName} disabled={!canEdit} onChange={(e) => setChiHuyName(e.target.value)} /></label><label>Nội dung<textarea rows={3} value={completionNote} disabled={!canEdit} onChange={(e) => setCompletionNote(e.target.value)} /></label></>}
+        {editStep === "ungBbkt" && <label>Số BBKT<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} /></label>}
+        {permission && !canEdit && <p className="hint">Bạn có thể xem lại nhưng chưa được phân quyền chỉnh sửa bước này.</p>}
+        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
+      </div>
+    </div>
+  </>;
 }
 
 /* ================= hành động theo lượt ================= */
@@ -1378,6 +1440,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 const CSS = `
 .mtw{font-family:Inter,system-ui,sans-serif;background:${C.cream};color:#1f2430;padding:20px;border-radius:20px;min-height:640px;position:relative;}
 .mtw *{box-sizing:border-box;font-family:inherit;}
+.step-review{width:100%;text-align:left;border:0;background:transparent;cursor:pointer;}
+.step-review:disabled{cursor:default;}
+.step-review:not(:disabled):hover{background:#f8fafc;border-radius:10px;}
+.step-review-dialog{width:min(560px,calc(100vw - 32px));max-height:86vh;overflow-y:auto;}
 .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
 .head-l{display:flex;gap:13px;align-items:center;}
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}

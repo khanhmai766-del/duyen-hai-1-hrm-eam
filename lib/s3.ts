@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import path from "path";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import { Readable } from "stream";
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -264,6 +264,16 @@ export function keyFromPublicUrl(url: string | null | undefined) {
 export async function deleteFromS3(url: string | null | undefined) {
   const key = keyFromPublicUrl(url);
   if (!key) return;
+  await s3Client().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
+}
+
+export async function deleteS3ObjectByKey(key: string) {
+  if (!hasS3Config()) {
+    await unlink(localObjectPath(key)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    return;
+  }
   await s3Client().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
 }
 

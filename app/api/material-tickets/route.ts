@@ -41,12 +41,26 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 200,
     });
+    const activityRows = tickets.length ? await prisma.auditLog.findMany({
+      where: { entity: "MaterialTicket", entityId: { in: tickets.map((ticket) => ticket.id) } },
+      include: { user: { select: { name: true, position: true } } },
+      orderBy: { createdAt: "asc" },
+    }) : [];
+    const activityByTicket = new Map<string, typeof activityRows>();
+    for (const row of activityRows) {
+      if (!row.entityId) continue;
+      activityByTicket.set(row.entityId, [...(activityByTicket.get(row.entityId) ?? []), row]);
+    }
+    const ticketsWithActivity = tickets.map((ticket) => ({
+      ...ticket,
+      activityLogs: activityByTicket.get(ticket.id) ?? [],
+    }));
 
     const scopes = await getPositionScopes(user.position);
     const totalScopeCount = await prisma.positionSystemScope.count();
     // Quyền theo từng bước (admin cấu hình trong MaterialWorkflowRole; trống = mặc định cũ).
     const wfMap = await getWorkflowRoleMap();
-    return ok(tickets, {
+    return ok(ticketsWithActivity, {
       viewer: {
         id: user.id,
         name: user.name,

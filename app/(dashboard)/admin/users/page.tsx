@@ -85,6 +85,7 @@ type SystemAuditLogRow = {
   userAgent: string | null;
   createdAt: string;
 };
+type AuditMeta = { page: number; pageSize: number; total: number; totalPages: number };
 
 const CATEGORY_BADGE: Record<ActivityCategory, string> = {
   SYSTEM: "border-orange-200 bg-orange-100 text-orange-800",
@@ -122,11 +123,6 @@ export default function AdminUsersPage() {
   const del = useDeleteUser();
   const permanentDelete = usePermanentDeleteUser();
   const audit = useQuery({ queryKey: ["audit"], queryFn: () => apiGet<ActivityLogRow[]>("/api/audit"), enabled: canViewActivityLog });
-  const systemAudit = useQuery({
-    queryKey: ["system-audit"],
-    queryFn: () => apiGet<SystemAuditLogRow[]>("/api/system-audit"),
-    enabled: canViewActivityLog,
-  });
   const rbacQuery = useQuery({
     queryKey: ["rbac-config"],
     queryFn: () => apiGet<RbacConfig>("/api/rbac"),
@@ -154,8 +150,26 @@ export default function AdminUsersPage() {
   const [resetTarget, setResetTarget] = React.useState<SafeUser | null>(null);
   const [resetPasswordForm, setResetPasswordForm] = React.useState({ newPassword: "", confirmPassword: "" });
   const [auditTab, setAuditTab] = React.useState<"activity" | "system">("activity");
+  const [auditSearch, setAuditSearch] = React.useState("");
+  const [auditAction, setAuditAction] = React.useState("");
+  const [auditFrom, setAuditFrom] = React.useState("");
+  const [auditTo, setAuditTo] = React.useState("");
+  const [auditPage, setAuditPage] = React.useState(1);
   const [activityDetail, setActivityDetail] = React.useState<ActivityLogRow | null>(null);
   const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
+  const systemAuditParams = React.useMemo(() => {
+    const params = new URLSearchParams({ page: String(auditPage), pageSize: "25" });
+    if (auditSearch.trim()) params.set("q", auditSearch.trim());
+    if (auditAction.trim()) params.set("action", auditAction.trim());
+    if (auditFrom) params.set("from", `${auditFrom}T00:00:00+07:00`);
+    if (auditTo) params.set("to", `${auditTo}T23:59:59.999+07:00`);
+    return params.toString();
+  }, [auditAction, auditFrom, auditPage, auditSearch, auditTo]);
+  const systemAudit = useQuery({
+    queryKey: ["system-audit", systemAuditParams],
+    queryFn: () => apiGet<SystemAuditLogRow[]>(`/api/system-audit?${systemAuditParams}`),
+    enabled: canViewActivityLog,
+  });
   const usersQuery = useAdminUsers({
     page,
     pageSize,
@@ -185,10 +199,15 @@ export default function AdminUsersPage() {
   const pagedUsers = users;
   const auditRows = (audit.data?.data ?? []).slice(0, 50);
   const systemAuditRows = (systemAudit.data?.data ?? []).slice(0, 100);
+  const systemAuditMeta = systemAudit.data?.meta as AuditMeta | null;
 
   React.useEffect(() => {
     setPage(1);
   }, [search, positionFilter, pageSize]);
+
+  React.useEffect(() => {
+    setAuditPage(1);
+  }, [auditSearch, auditAction, auditFrom, auditTo]);
 
   React.useEffect(() => {
     setPage((current) => Math.min(Math.max(1, current), totalPages));
@@ -500,6 +519,20 @@ export default function AdminUsersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {auditTab === "system" && (
+            <div className="grid gap-3 border-b border-border bg-slate-50/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_170px_170px_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} className="bg-white pl-9" placeholder="Người thao tác, đối tượng, mã hoặc IP" aria-label="Tìm kiếm audit hệ thống" />
+              </div>
+              <Input value={auditAction} onChange={(event) => setAuditAction(event.target.value)} className="bg-white font-mono text-xs" placeholder="Hành động, ví dụ UPDATE_USER" aria-label="Lọc theo hành động" />
+              <Input type="date" value={auditFrom} onChange={(event) => setAuditFrom(event.target.value)} className="bg-white" aria-label="Từ ngày" />
+              <Input type="date" value={auditTo} min={auditFrom || undefined} onChange={(event) => setAuditTo(event.target.value)} className="bg-white" aria-label="Đến ngày" />
+              <Button type="button" variant="outline" disabled={!auditSearch && !auditAction && !auditFrom && !auditTo} onClick={() => { setAuditSearch(""); setAuditAction(""); setAuditFrom(""); setAuditTo(""); }}>
+                <X className="mr-2 h-4 w-4" /> Xóa lọc
+              </Button>
+            </div>
+          )}
           {auditTab === "activity" ? (
             <Table wrapperClassName="max-h-[460px]">
               <TableHeader>
@@ -558,6 +591,16 @@ export default function AdminUsersPage() {
                 )}
               </TableBody>
             </Table>
+          )}
+          {auditTab === "system" && (
+            <div className="flex flex-col gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <span>{systemAuditMeta?.total ?? 0} bản ghi phù hợp</span>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={auditPage <= 1 || systemAudit.isFetching} onClick={() => setAuditPage((value) => Math.max(1, value - 1))}><ChevronLeft className="mr-1 h-4 w-4" /> Trước</Button>
+                <span className="rounded-md bg-muted px-3 py-1 font-semibold text-ink">{auditPage}/{systemAuditMeta?.totalPages ?? 1}</span>
+                <Button type="button" variant="outline" size="sm" disabled={auditPage >= (systemAuditMeta?.totalPages ?? 1) || systemAudit.isFetching} onClick={() => setAuditPage((value) => value + 1)}>Sau <ChevronRight className="ml-1 h-4 w-4" /></Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

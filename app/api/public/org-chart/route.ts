@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
               select: {
                 id: true,
                 name: true,
+                avatarUrl: true,
                 phone: true,
                 position: true,
                 secondaryPosition: true,
