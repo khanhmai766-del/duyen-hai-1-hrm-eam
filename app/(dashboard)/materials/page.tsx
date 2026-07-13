@@ -25,6 +25,7 @@ import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials,
 import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
+import { MaterialDeviceImportDialog } from "@/components/materials/material-device-import-dialog";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -71,7 +72,7 @@ function MaterialsPageContent() {
   const role = session?.user?.role;
   // Xem bảng: mọi cương vị. Thao tác (Thêm/Sửa/Xoá/Xuất): Quản đốc/Phó Quản đốc/Kỹ thuật viên/Quản trị.
   const canManage = canManageMaterialCatalog({ role, position: session?.user?.position });
-  const { data, isLoading } = useMaterials();
+  const { data, isLoading, refetch: refetchMaterials } = useMaterials();
   const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
@@ -102,6 +103,7 @@ function MaterialsPageContent() {
   const [deletingDetails, setDeletingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [selectedDetailIds, setSelectedDetailIds] = React.useState<Set<string>>(new Set());
   const [erpSearch, setErpSearch] = React.useState("");
+  const [importLinksOpen, setImportLinksOpen] = React.useState(false);
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
   // (vd bấm cảnh báo thay thế trong chuông thông báo).
@@ -211,12 +213,14 @@ function MaterialsPageContent() {
 
   const total = data?.data?.length ?? 0;
   // Nhãn "điểm dùng" = danh sách hệ thống/thiết bị mà vật tư này được gán (từ các điểm thay thế).
-  const deviceLabel = React.useCallback((m: MaterialWithDevices) => {
-    const names = Array.from(
+  const materialPointLabels = React.useCallback((m: MaterialWithDevices) =>
+    Array.from(
       new Set((m.replacements ?? []).map((r) => r.device?.name || r.location || r.system || "").filter(Boolean))
-    );
-    return names.join(", ");
-  }, []);
+    ), []);
+  const deviceLabel = React.useCallback(
+    (m: MaterialWithDevices) => materialPointLabels(m).join(", "),
+    [materialPointLabels]
+  );
   // Khối quản lý của vật tư = các khối suy ra từ cương vị quản lý của các DÒNG KHAI BÁO
   // (isActive=false) — khớp đúng với danh sách điểm hiện trong panel chi tiết.
   const materialBlocks = React.useCallback(
@@ -498,16 +502,42 @@ function MaterialsPageContent() {
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && (
           <>
-            <ExportButton rows={materials.map((m) => {
+            <ExportButton rows={materials.flatMap((m) => {
               const codes = materialErpCodes(m);
-              return { code: codes.join(", "), name: m.name, unit: m.unit, hienCo: m.quantity, soLieuERP: codes.length ? erpStockByCodes(codes) : m.minStock, diemDung: deviceLabel(m), tongNhuCau: m.totalNeed ?? 0, deXuatThem: m.shortfall ?? 0 };
+              const points = materialPointLabels(m);
+              const exportCodes = codes.length ? codes : [""];
+              const exportPoints = points.length ? points : [""];
+
+              return exportCodes.flatMap((code) =>
+                exportPoints.map((point) => ({
+                  code,
+                  name: m.name,
+                  dvt: m.unit,
+                  hienCo: m.quantity,
+                  soLieuERP: code ? (erpByCode(code)?.erpStock ?? 0) : m.minStock,
+                  diemDung: point,
+                  tongNhuCau: m.totalNeed ?? 0,
+                  deXuatThem: m.shortfall ?? 0,
+                }))
+              );
             })} filename={`vat-tu-${machineTab.toLowerCase()}`} />
+            <Button variant="outline" onClick={() => setImportLinksOpen(true)}>
+              <Upload className="h-4 w-4" /> Nhập link thiết bị
+            </Button>
             <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
               <Plus className="h-4 w-4" /> Thêm vật tư
             </Button>
           </>
         )}
       </PageHeader>
+
+      <MaterialDeviceImportDialog
+        open={importLinksOpen}
+        onOpenChange={setImportLinksOpen}
+        machine={machineTab}
+        materials={(data?.data ?? []).filter((material) => categoryMatches(material.category))}
+        onImported={() => { void refetchMaterials(); }}
+      />
 
       {/* Lọc loại vật tư dạng dropdown; ô tìm kiếm cùng hàng bên phải */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
