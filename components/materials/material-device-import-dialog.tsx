@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { apiMutate } from "@/lib/fetcher";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentTree } from "@/hooks/useEquipment";
+import { usePositions } from "@/hooks/useUsers";
+import { isSelectableManagingPosition } from "@/lib/constants";
 import type { ErpMaterialGroupFromGroupedStock } from "@/hooks/useErpMaterials";
 
 type ParsedRow = {
@@ -89,6 +91,7 @@ export function MaterialDeviceImportDialog({
   onImported: () => void;
 }) {
   const tree = useEquipmentTree();
+  const positions = usePositions().filter(isSelectableManagingPosition);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [rows, setRows] = React.useState<ParsedRow[]>([]);
   const [fileName, setFileName] = React.useState("");
@@ -104,6 +107,18 @@ export function MaterialDeviceImportDialog({
     const nodes = tree.data?.data ?? [];
     if (!nodes.length) return toast.error("Chưa tải được cây thiết bị");
     const parentSeqs = new Set(nodes.map((node) => node.parentSeq).filter(Boolean));
+    const nodeBySeq = new Map(nodes.map((node) => [node.seq, node]));
+    function equipmentPath(seq: string) {
+      const names: string[] = [];
+      const visited = new Set<string>();
+      let current = nodeBySeq.get(seq);
+      while (current && !visited.has(current.seq)) {
+        visited.add(current.seq);
+        names.unshift(current.name);
+        current = current.parentSeq ? nodeBySeq.get(current.parentSeq) : undefined;
+      }
+      return names.join(" > ");
+    }
     const linkRows = [{
         "Tổ máy": machine,
         "Số thứ tự": "",
@@ -116,27 +131,44 @@ export function MaterialDeviceImportDialog({
         "Số lượng cần thay": 1,
         "SL thiết bị": 1,
       }];
-    const treeRows = nodes
-      .filter((node) => !parentSeqs.has(node.seq))
-      .map((node) => ({ "Số thứ tự": node.seq, "Tên thiết bị": node.name }));
+    const treeRows = [...nodes]
+      .sort((a, b) => a.seq.localeCompare(b.seq, undefined, { numeric: true }))
+      .map((node) => {
+        const isLeaf = !parentSeqs.has(node.seq);
+        const parent = node.parentSeq ? nodeBySeq.get(node.parentSeq) : undefined;
+        return {
+          "Số thứ tự": node.seq,
+          "Tên thiết bị / thư mục": node.name,
+          "Loại": isLeaf ? "Thiết bị đầu cuối" : "Thư mục / hệ thống",
+          "Thuộc thiết bị / thư mục": parent?.name ?? "—",
+          "Đường dẫn đầy đủ": equipmentPath(node.seq),
+          "Dùng để import": isLeaf ? "Có" : "Không",
+        };
+      });
     const materialRows = erpGroups.map((group) => ({
         "Tên vật tư": group.name,
         "ĐVT": group.unit,
         "Loại vật tư": group.category,
         "Số mã ERP trong nhóm": group.materialCount,
       }));
+    const positionRows = positions.map((position) => ({ "Cương vị quản lý": position }));
     const workbook = XLSX.utils.book_new();
     const links = XLSX.utils.json_to_sheet(linkRows);
     links["!cols"] = [{ wch: 12 }, { wch: 18 }, { wch: 42 }, { wch: 34 }, { wch: 38 }, { wch: 24 }, { wch: 18 }, { wch: 24 }, { wch: 22 }, { wch: 14 }];
     const treeSheet = XLSX.utils.json_to_sheet(treeRows);
-    treeSheet["!cols"] = [{ wch: 18 }, { wch: 46 }];
+    treeSheet["!cols"] = [{ wch: 18 }, { wch: 42 }, { wch: 22 }, { wch: 42 }, { wch: 90 }, { wch: 18 }];
     const catalog = XLSX.utils.json_to_sheet(materialRows);
     catalog["!cols"] = [{ wch: 42 }, { wch: 12 }, { wch: 22 }, { wch: 22 }];
+    const positionSheet = positionRows.length
+      ? XLSX.utils.json_to_sheet(positionRows)
+      : XLSX.utils.aoa_to_sheet([["Cương vị quản lý"]]);
+    positionSheet["!cols"] = [{ wch: 36 }];
     XLSX.utils.book_append_sheet(workbook, links, "Liên kết vật tư - thiết bị");
     XLSX.utils.book_append_sheet(workbook, treeSheet, "Cây thiết bị tham chiếu");
     XLSX.utils.book_append_sheet(workbook, catalog, "Danh mục vật tư");
+    XLSX.utils.book_append_sheet(workbook, positionSheet, "Cương vị");
     XLSX.writeFile(workbook, `mau-link-vat-tu-thiet-bi-${machine.toLowerCase()}.xlsx`, { compression: true });
-    toast.success("Đã tạo file mẫu từ cây thiết bị và danh mục nhóm vật tư ERP");
+    toast.success("Đã tạo file mẫu kèm cây thiết bị, vật tư ERP và cương vị");
   }
 
   async function chooseFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -183,7 +215,7 @@ export function MaterialDeviceImportDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm text-slate-700">
-            Tải file mẫu, điền <b>Tổ máy</b>, <b>Số thứ tự</b>, <b>Tên thiết bị</b> và chọn <b>Tên vật tư</b> từ sheet tham chiếu. S2 có thể dùng lại Số thứ tự của cây S1.
+            Tải file mẫu, điền <b>Tổ máy</b>, <b>Số thứ tự</b>, <b>Tên thiết bị</b>, chọn <b>Tên vật tư</b> và <b>Cương vị quản lý</b> từ các sheet tham chiếu. Trong sheet cây thiết bị, chỉ dùng dòng có cột <b>Dùng để import = Có</b>. S2 có thể dùng lại Số thứ tự của cây S1.
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={downloadTemplate} disabled={tree.isLoading}>Tải file import mẫu</Button>
