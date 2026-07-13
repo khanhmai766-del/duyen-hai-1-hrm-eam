@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowDown,
@@ -46,6 +47,8 @@ type SortDir = "asc" | "desc";
 const PAGE_SIZES = [10, 25, 50, 100];
 
 export function DefectHistoryTab({ role }: { role?: string }) {
+  const searchParams = useSearchParams();
+  const deviceFromUrl = searchParams.get("device")?.trim() ?? "";
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
   const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
@@ -56,7 +59,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     () => new Map((devicesData?.data ?? []).map((d) => [d.code, d.name])),
     [devicesData]
   );
-  const [filters, setFilters] = React.useState<DefectHistoryFilters>({});
+  const [filters, setFilters] = React.useState<DefectHistoryFilters>(() => deviceFromUrl ? { device: deviceFromUrl } : {});
   const { data, isLoading } = useDefectHistory(filters);
   const del = useDeleteDefectHistory();
   const rows = data?.data ?? [];

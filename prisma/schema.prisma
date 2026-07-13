@@ -277,6 +277,7 @@ model ShiftHandover {
 model RepairLog {
   id           String       @id @default(cuid())
   deviceSeq    String
+  machine      String       @default("COMMON") // S1 | S2 | COMMON; cây thiết bị dùng chung theo deviceSeq
   title        String
   description  String
   symptom      String?
@@ -300,6 +301,7 @@ model RepairLog {
   approvedBy User?  @relation("ApprovedBy", fields: [approvedById], references: [id])
 
   @@index([deviceSeq])
+  @@index([deviceSeq, machine])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
   @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "repairlog_deviceseq_prefix")
   @@index([deviceSeq, startedAt])

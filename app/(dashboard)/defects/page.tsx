@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
@@ -28,6 +30,9 @@ import { normalizeText } from "@/lib/nav";
 const PAGE_SIZES = [10, 25, 50, 100];
 
 export default function DefectsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
@@ -54,6 +59,7 @@ export default function DefectsPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const defects = allDefects.filter(
     (d) =>
+      (!deviceSeqFilter || d.deviceSeq === deviceSeqFilter || (!d.deviceSeq && d.device === deviceSeqFilter)) &&
       (unitFilter === "ALL" || d.unit === unitFilter) &&
       (requestFilter === "ALL" || d.requestType === requestFilter) &&
       (positionFilter === "ALL" || d.system === positionFilter)
@@ -88,8 +94,9 @@ export default function DefectsPage() {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
 
-  const isFiltered = unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
+    router.replace("/defects", { scroll: false });
     setUnitFilter("ALL");
     setRequestFilter("ALL");
     setPositionFilter("ALL");
@@ -118,7 +125,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -145,6 +152,26 @@ export default function DefectsPage() {
           </Button>
         )}
       </PageHeader>
+
+      {deviceSeqFilter && (
+        <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Đang lọc theo thiết bị</p>
+            <p className="truncate font-semibold text-ink">
+              {deviceNameByCode.get(deviceSeqFilter) ?? "Thiết bị"}
+              <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">{deviceSeqFilter}</span>
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm" className="bg-white">
+              <Link href={`/devices/${encodeURIComponent(deviceSeqFilter)}`}>Về lý lịch thiết bị</Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => router.replace("/defects", { scroll: false })}>
+              Bỏ lọc thiết bị
+            </Button>
+          </div>
+        </div>
+      )}
 
       {!isLoading && allDefects.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">

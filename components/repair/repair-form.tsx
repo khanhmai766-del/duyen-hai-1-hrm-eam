@@ -14,7 +14,7 @@ import { useEquipmentTree } from "@/hooks/useEquipment";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
-import { isSelectableManagingPosition, PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
+import { DEFECT_UNITS, isSelectableManagingPosition, PRIORITY, PRIORITY_ORDER, REPAIR_STATUS, REPAIR_STATUS_ORDER } from "@/lib/constants";
 import { createPositionAccessResolver } from "@/lib/position-system-scopes";
 import { formatDateTimeInput } from "@/lib/utils";
 import type { RepairLogWithRelations } from "@/types";
@@ -47,6 +47,7 @@ export function RepairForm({
   });
 
   const [form, setForm] = React.useState({
+    machine: repair?.machine ?? "COMMON",
     deviceId: repair?.deviceId ?? defaultDeviceId ?? "",
     title: repair?.title ?? "",
     symptom: repair?.symptom ?? "",
@@ -112,6 +113,15 @@ export function RepairForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      <div>
+        <Label className="mb-1.5 block">Tổ máy *</Label>
+        <Select value={form.machine} onValueChange={(value) => set("machine", value)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {DEFECT_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit === "COMMON" ? "COMMON" : `Tổ máy ${unit}`}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
       <div>
         <Label className="mb-1.5 block">Cương vị quản lý</Label>
         <Select

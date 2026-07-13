@@ -196,6 +196,16 @@ export function EquipmentTreePicker({
   }, [filteredRoots, visible, folderSeqs, editVisibleSeqs, childrenOf, expanded, searchExpanded, q, includeLeaves]);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const handleTreeWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const element = scrollRef.current;
+    if (!element || element.scrollHeight <= element.clientHeight) return;
+    // Popover được portal ra ngoài Dialog nên lớp khóa cuộn của Dialog có thể
+    // chặn thao tác wheel. Cuộn trực tiếp vùng cây để không làm Dialog phía sau
+    // di chuyển và vẫn phát sự kiện scroll cho virtualizer.
+    event.preventDefault();
+    event.stopPropagation();
+    element.scrollTop += event.deltaY;
+  }, []);
   const rowVirtualizer = useVirtualizer({
     count: flatRows.length,
     getScrollElement: () => scrollRef.current,
@@ -260,7 +270,11 @@ export function EquipmentTreePicker({
             — Không chọn —
           </button>
         </div>
-        <div ref={scrollRef} className="max-h-[300px] overflow-y-auto px-1.5 pb-1.5">
+        <div
+          ref={scrollRef}
+          onWheel={handleTreeWheel}
+          className="max-h-[300px] touch-pan-y overscroll-contain overflow-y-auto px-1.5 pb-1.5"
+        >
           {isLoading ? (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />

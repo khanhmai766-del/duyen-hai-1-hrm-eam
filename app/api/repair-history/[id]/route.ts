@@ -6,10 +6,13 @@ import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
 import { hasPermissionLevel } from "@/lib/rbac-guard";
+import { DEFECT_UNITS } from "@/lib/constants";
+import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureRepairMachineColumn();
     const log = await prisma.repairLog.findUnique({
       where: { id: params.id },
       include: {
@@ -27,6 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureRepairMachineColumn();
     const existing = await prisma.repairLog.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu sửa chữa", 404);
 
@@ -48,6 +52,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ? { approvedById: user.id, status: body.status || existing.status }
         : {
             title: body.title ?? existing.title,
+            machine: body.machine && (DEFECT_UNITS as readonly string[]).includes(String(body.machine).toUpperCase())
+              ? String(body.machine).toUpperCase()
+              : existing.machine,
             description: body.description ?? existing.description,
             symptom: body.symptom ?? existing.symptom,
             cause: body.cause ?? existing.cause,
@@ -70,6 +77,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureRepairMachineColumn();
     const existing = await prisma.repairLog.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu sửa chữa", 404);
     await assertSeqEditable(user, existing.deviceSeq);

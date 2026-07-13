@@ -11,6 +11,8 @@ import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { ensureRepairMachineColumn } from "@/lib/repair-machine";
+import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 
 export const dynamic = "force-dynamic";
 
@@ -46,13 +48,14 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
 }
 
 async function findEquipmentRecord(seq: string) {
+  await Promise.all([ensureRepairMachineColumn(), ensureDeviceQrCardTable()]);
   const nodes = await getNormalizedEquipmentNodes(prisma);
   const index = buildEquipmentTreeIndex(nodes);
   const node = index.bySeq.get(seq);
   if (!node) return null;
   const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
   const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-  const [repairLogs, materials] = await Promise.all([
+  const [repairLogs, materials, materialDeclarations, replacementUsage, qrCard, currentDefects, defectHistory] = await Promise.all([
     prisma.repairLog.findMany({
       where: { deviceSeq: node.seq },
       orderBy: { startedAt: "desc" },
@@ -66,11 +69,70 @@ async function findEquipmentRecord(seq: string) {
       orderBy: { usedAt: "desc" },
       include: { material: true },
     }),
+    prisma.materialReplacement.findMany({
+      where: { deviceSeq: node.seq, isActive: false },
+      orderBy: { createdAt: "desc" },
+      include: {
+        material: { select: { id: true, name: true, unit: true, machine: true, category: true } },
+      },
+    }),
+    prisma.materialReplacementLog.findMany({
+      where: { replacement: { deviceSeq: node.seq } },
+      orderBy: { replacedAt: "desc" },
+      include: {
+        replacement: {
+          select: {
+            location: true,
+            system: true,
+            material: { select: { id: true, name: true, unit: true, machine: true, category: true } },
+          },
+        },
+      },
+    }),
+    prisma.deviceQrCard.findUnique({ where: { deviceSeq: node.seq }, select: { id: true, createdAt: true } }),
+    prisma.defect.findMany({
+      where: { deviceSeq: node.seq, status: { not: "DA_XU_LY" } },
+      orderBy: [{ severity: "asc" }, { detectedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        unit: true,
+        severity: true,
+        content: true,
+        status: true,
+        requestType: true,
+        requestNumber: true,
+        detectedAt: true,
+        note: true,
+      },
+      take: 50,
+    }),
+    prisma.defectHistory.findMany({
+      where: { deviceSeq: node.seq },
+      orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        unit: true,
+        content: true,
+        result: true,
+        requestType: true,
+        requestNumber: true,
+        workOrderNumber: true,
+        performedAt: true,
+        createdBy: { select: { id: true, name: true } },
+      },
+      take: 20,
+    }),
   ]);
   return {
     ...toDeviceRecord(node, parent),
     repairLogs,
     materials,
+    materialDeclarations,
+    materialUsage: replacementUsage,
+    hasQrCard: Boolean(qrCard),
+    qrCardCreatedAt: qrCard?.createdAt ?? null,
+    currentDefects,
+    defectHistory,
     _count: { repairLogs: repairLogs.length },
   };
 }

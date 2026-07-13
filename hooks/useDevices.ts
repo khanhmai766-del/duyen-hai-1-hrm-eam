@@ -33,6 +33,8 @@ export interface DeviceListMeta {
 }
 
 export interface DeviceWithRelations extends DeviceRecord {
+  hasQrCard: boolean;
+  qrCardCreatedAt?: string | Date | null;
   repairLogs: Array<{
     id?: string;
     status?: string | null;
@@ -44,6 +46,49 @@ export interface DeviceWithRelations extends DeviceRecord {
     id?: string;
     material?: { name?: string | null; supplier?: string | null };
     [key: string]: unknown;
+  }>;
+  materialDeclarations: Array<{
+    id: string;
+    location?: string | null;
+    system?: string | null;
+    quantity: number;
+    deviceCount: number;
+    intervalMonths: number;
+    intervalNote?: string | null;
+    material: { id: string; name: string; unit: string; machine: string; category?: string | null };
+  }>;
+  materialUsage: Array<{
+    id: string;
+    replacedAt: string | Date;
+    quantity?: number | null;
+    note?: string | null;
+    replacement: {
+      location?: string | null;
+      system?: string | null;
+      material: { id: string; name: string; unit: string; machine: string; category?: string | null };
+    };
+  }>;
+  currentDefects: Array<{
+    id: string;
+    unit: string;
+    severity?: string | null;
+    content?: string | null;
+    status: string;
+    requestType?: string | null;
+    requestNumber?: string | null;
+    detectedAt?: string | Date | null;
+    note?: string | null;
+  }>;
+  defectHistory: Array<{
+    id: string;
+    unit: string;
+    content?: string | null;
+    result?: string | null;
+    requestType?: string | null;
+    requestNumber?: string | null;
+    workOrderNumber?: string | null;
+    performedAt: string | Date;
+    createdBy?: { id: string; name: string } | null;
   }>;
 }
 

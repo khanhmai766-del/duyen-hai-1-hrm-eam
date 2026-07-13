@@ -9,6 +9,7 @@ export interface RepairFilters {
   status?: string;
   priority?: string;
   technicianId?: string;
+  machine?: string;
   from?: string;
   to?: string;
 }

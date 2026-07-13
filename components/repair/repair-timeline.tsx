@@ -11,6 +11,7 @@ interface TimelineEntry {
   downtime?: number | null;
   createdBy?: { name: string } | null;
   action?: string;
+  machine?: string | null;
 }
 
 export function RepairTimeline({ entries }: { entries: TimelineEntry[] }) {
@@ -31,6 +32,7 @@ export function RepairTimeline({ entries }: { entries: TimelineEntry[] }) {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <h4 className="font-medium leading-tight text-ink">{e.title}</h4>
                 <div className="flex shrink-0 gap-1.5">
+                  {e.machine && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-navy">{e.machine}</span>}
                   <PriorityBadge priority={e.priority} />
                   <RepairStatusBadge status={e.status} />
                 </div>

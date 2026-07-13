@@ -9,6 +9,8 @@ import {
 } from "@/lib/equipment-tree";
 import { filterEquipmentNodesForUser } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
+import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,7 @@ function toCardRecord(
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
+    await Promise.all([ensureDeviceQrCardTable(), ensureRepairMachineColumn()]);
     const cards = await prisma.deviceQrCard.findMany({ select: { deviceSeq: true } });
     if (!cards.length) return ok([], { total: 0 });
 
@@ -84,6 +87,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureDeviceQrCardTable();
     await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền tạo thẻ QR thiết bị");
     const body = await req.json();
     const deviceSeq = String(body.deviceSeq ?? "").trim();
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureDeviceQrCardTable();
     await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền gỡ thẻ QR thiết bị");
     const seq = req.nextUrl.searchParams.get("seq")?.trim();
     if (!seq) return fail("Thiếu seq thiết bị");

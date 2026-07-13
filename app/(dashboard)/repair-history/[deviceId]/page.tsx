@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Wrench } from "lucide-react";
@@ -17,11 +18,12 @@ export default function DeviceRepairHistoryPage() {
   const { deviceId } = useParams<{ deviceId: string }>();
   const { data, isLoading } = useDevice(deviceId);
   const device = data?.data;
+  const [machine, setMachine] = React.useState("ALL");
 
   if (isLoading) return <CardSkeleton />;
   if (!device) return <p className="text-muted-foreground">Không tìm thấy thiết bị.</p>;
 
-  const logs = device.repairLogs;
+  const logs = device.repairLogs.filter((log) => machine === "ALL" || log.machine === machine);
   const totalDowntime = logs.reduce((a, l) => a + (l.downtime ?? 0), 0);
   const open = logs.filter((l) => l.status === "OPEN" || l.status === "IN_PROGRESS").length;
   const closed = logs.filter((l) => l.status === "CLOSED" || l.status === "RESOLVED").length;
@@ -35,6 +37,14 @@ export default function DeviceRepairHistoryPage() {
       <PageHeader title={`Lịch sử: ${device.name}`} description={`${device.code}${device.system ? ` · ${device.system}` : ""}`}>
         <Button asChild variant="outline"><Link href={`/devices/${device.id}`}>Lý lịch thiết bị</Link></Button>
       </PageHeader>
+
+      <div className="flex flex-wrap gap-2">
+        {["ALL", "S1", "S2", "COMMON"].map((unit) => (
+          <Button key={unit} size="sm" variant={machine === unit ? "default" : "outline"} onClick={() => setMachine(unit)}>
+            {unit === "ALL" ? "Tất cả tổ máy" : unit}
+          </Button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Tổng số phiếu" value={logs.length} icon={Wrench} tint="navy" />

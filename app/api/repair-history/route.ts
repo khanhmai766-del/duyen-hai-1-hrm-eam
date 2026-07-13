@@ -8,6 +8,8 @@ import { EQUIPMENT_DEVICE_SELECT, withDeviceAlias } from "@/lib/equipment-device
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { maybeUploadDataUrlList } from "@/lib/s3";
 import { dateRange } from "@/lib/utils";
+import { DEFECT_UNITS } from "@/lib/constants";
+import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 
 // Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
 const HISTORY_TAKE = 300;
@@ -15,11 +17,13 @@ const HISTORY_TAKE = 300;
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureRepairMachineColumn();
     const sp = req.nextUrl.searchParams;
     const deviceId = sp.get("deviceId");
     const status = sp.get("status");
     const priority = sp.get("priority");
     const technicianId = sp.get("technicianId");
+    const machine = sp.get("machine");
     const from = sp.get("from");
     const to = sp.get("to");
 
@@ -35,6 +39,7 @@ export async function GET(req: NextRequest) {
     if (status && status !== "ALL") where.status = status as any;
     if (priority && priority !== "ALL") where.priority = priority as any;
     if (technicianId && technicianId !== "ALL") where.createdById = technicianId;
+    if (machine && machine !== "ALL" && (DEFECT_UNITS as readonly string[]).includes(machine)) where.machine = machine;
     if (from || to) {
       where.startedAt = {};
       if (from) where.startedAt.gte = dateRange(from).start;
@@ -58,15 +63,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureRepairMachineColumn();
     await requirePermissionLevel(user, "repair-create", ["create", "manage", "full"], "Không đủ quyền tạo phiếu sửa chữa");
     const body = await req.json();
     if (!body.deviceId || !body.title || !body.action) {
       return fail("Thiếu thông tin bắt buộc (thiết bị, tiêu đề, hành động)");
     }
     await assertSeqEditable(user, String(body.deviceId));
+    const machine = String(body.machine ?? "COMMON").trim().toUpperCase();
+    if (!(DEFECT_UNITS as readonly string[]).includes(machine)) return fail("Tổ máy phải là S1, S2 hoặc COMMON");
     const log = await prisma.repairLog.create({
       data: {
         deviceSeq: body.deviceId,
+        machine,
         title: body.title,
         description: body.description || "",
         symptom: body.symptom || null,

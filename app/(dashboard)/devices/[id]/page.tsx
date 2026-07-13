@@ -6,11 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { ArrowLeft, Cpu, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RepairTimeline } from "@/components/repair/repair-timeline";
 import { DeviceForm } from "@/components/devices/device-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
@@ -18,7 +17,9 @@ import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { formatDate } from "@/lib/utils";
+import { DEFECT_SEVERITY, DEFECT_STATUS } from "@/lib/constants";
 
 export default function DeviceDetailPage() {
   return (
@@ -36,11 +37,27 @@ function DeviceDetailPageContent() {
   const del = useDeleteDevice();
   const access = useSystemAccess();
   const rbac = useRbacAccess();
+  const addQrCard = useAddDeviceQrCard();
+  const removeQrCard = useRemoveDeviceQrCard();
   const [editOpen, setEditOpen] = React.useState(false);
   const [delOpen, setDelOpen] = React.useState(false);
+  const [qrOpen, setQrOpen] = React.useState(false);
+  const [qrDeleteOpen, setQrDeleteOpen] = React.useState(false);
+  const [showAllDeclarations, setShowAllDeclarations] = React.useState(false);
+  const [showAllUsage, setShowAllUsage] = React.useState(false);
 
   const device = data?.data;
   const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
+  const canManageQr = Boolean(device && rbac.can("device-manage", ["create", "manage", "full"]) && access.canEditDevice(device));
+
+  async function createQrCard() {
+    try {
+      await addQrCard.mutateAsync(device!.code);
+      toast.success("Đã khởi tạo mã QR thiết bị");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không khởi tạo được mã QR");
+    }
+  }
 
   function downloadQr() {
     const svg = document.getElementById("device-qr");
@@ -70,6 +87,9 @@ function DeviceDetailPageContent() {
           <p className="mt-1 font-mono text-sm text-navy">{device.code}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setQrOpen(true)}>
+            <QrCode className="h-4 w-4" /> Mã QR
+          </Button>
           {rbac.can("device-manage", ["manage", "full"]) && access.canEditDevice(device) && (
             <Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Sửa</Button>
           )}
@@ -82,7 +102,7 @@ function DeviceDetailPageContent() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left: info + images + QR */}
+        {/* Left: info + images */}
         <div className="space-y-6 lg:col-span-4">
           <Card>
             <CardHeader><CardTitle>Thông tin thiết bị</CardTitle></CardHeader>
@@ -117,60 +137,215 @@ function DeviceDetailPageContent() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader><CardTitle>Mã QR</CardTitle></CardHeader>
-            <CardContent className="flex flex-col items-center gap-3">
-              <div className="rounded-xl border border-border p-3">
-                <QRCodeSVG id="device-qr" value={url} size={150} level="M" />
-              </div>
-              <div className="flex w-full gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={downloadQr}>
-                  <Download className="h-4 w-4" /> Tải QR
-                </Button>
-                <Button asChild variant="outline" size="sm" className="flex-1">
-                  <Link href={`/devices/${id}/qr`}>Trang in</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Middle: repair timeline */}
-        <div className="lg:col-span-5">
-          <Card className="h-full">
+        {/* Middle: completed defect history */}
+        <div className="lg:col-span-8">
+          <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Lịch sử sửa chữa</CardTitle>
               <Button asChild variant="link" size="sm">
-                <Link href={`/repair-history/${id}`}>Xem đầy đủ</Link>
+                <Link href={`/repair-history?device=${encodeURIComponent(device.code)}`}>Xem đầy đủ</Link>
               </Button>
             </CardHeader>
             <CardContent>
-              <RepairTimeline entries={device.repairLogs as any} />
+              {device.defectHistory?.length ? (
+                <ol className="relative space-y-5 border-l-2 border-border pl-6">
+                  {device.defectHistory.slice(0, 3).map((item) => (
+                    <li key={item.id} className="relative">
+                      <span className="absolute -left-[31px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
+                      <div className="rounded-lg border border-border bg-white p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <p className="font-medium leading-tight text-ink">{item.content || "Chưa ghi nội dung thực hiện"}</p>
+                          <MachineBadge machine={item.unit} />
+                        </div>
+                        {item.result && <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-ink">Kết quả:</span> {item.result}</p>}
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                          <span>Ngày thực hiện: {formatDate(item.performedAt)}</span>
+                          {item.workOrderNumber && <span>PCT: {item.workOrderNumber}</span>}
+                          {item.requestNumber && <span>Yêu cầu: {item.requestNumber}</span>}
+                          {item.createdBy?.name && <span>Người cập nhật: {item.createdBy.name}</span>}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">Chưa có khiếm khuyết đã hoàn thành</p>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Right: materials */}
-        <div className="space-y-6 lg:col-span-3">
+        {/* Materials: a separate row keeps long names and usage details readable. */}
+        <div className="grid gap-6 md:grid-cols-2 lg:col-span-12">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Vật tư sử dụng</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {device.materials.length ? (
-                device.materials.map((m: any) => (
-                  <div key={m.id} className="rounded-lg border border-border p-3 text-sm">
-                    <div className="font-medium text-ink">{m.material.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Định kỳ thay thế: {m.material.supplier || "—"}
+            <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Vật tư được khai báo</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 xl:grid-cols-2">
+              {device.materialDeclarations?.length ? (
+                device.materialDeclarations.slice(0, showAllDeclarations ? undefined : 3).map((item) => (
+                  <div key={item.id} className="rounded-lg border border-border p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-ink">{item.material.name}</div>
+                      <MachineBadge machine={item.material.machine} />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.location || item.system || "Chưa ghi rõ vị trí"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Cần thay: {item.quantity * item.deviceCount} {item.material.unit} · Chu kỳ {item.intervalNote || `${item.intervalMonths} tháng`}
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">Chưa có vật tư.</p>
+                <p className="col-span-full text-sm text-muted-foreground">Chưa khai báo vật tư cho thiết bị.</p>
+              )}
+              {device.materialDeclarations?.length > 3 && (
+                <Button variant="ghost" size="sm" className="col-span-full justify-center text-accent" onClick={() => setShowAllDeclarations((value) => !value)}>
+                  {showAllDeclarations ? "Thu gọn" : `Xem thêm ${device.materialDeclarations.length - 3} vật tư`}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Vật tư đã sử dụng</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 xl:grid-cols-2">
+              {device.materialUsage?.length ? (
+                device.materialUsage.slice(0, showAllUsage ? undefined : 3).map((item) => (
+                  <div key={item.id} className="rounded-lg border border-border p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-ink">{item.replacement.material.name}</div>
+                      <MachineBadge machine={item.replacement.material.machine} />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {item.replacement.location || item.replacement.system || "Chưa ghi rõ vị trí"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {formatDate(item.replacedAt)}{item.quantity ? ` · ${item.quantity} ${item.replacement.material.unit}` : ""}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="col-span-full text-sm text-muted-foreground">Chưa ghi nhận lần thay vật tư nào.</p>
+              )}
+              {device.materialUsage?.length > 3 && (
+                <Button variant="ghost" size="sm" className="col-span-full justify-center text-accent" onClick={() => setShowAllUsage((value) => !value)}>
+                  {showAllUsage ? "Thu gọn" : `Xem thêm ${device.materialUsage.length - 3} lần sử dụng`}
+                </Button>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" /> Khiếm khuyết hiện tại
+            {device.currentDefects?.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">{device.currentDefects.length}</span>}
+          </CardTitle>
+          <Button asChild variant="link" size="sm">
+            <Link href={`/defects?deviceSeq=${encodeURIComponent(device.code)}`}>Xem danh sách</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {device.currentDefects?.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {device.currentDefects.slice(0, 6).map((defect) => {
+                const status = DEFECT_STATUS[defect.status as keyof typeof DEFECT_STATUS];
+                return (
+                  <div key={defect.id} className="rounded-xl border border-border bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <MachineBadge machine={defect.unit} />
+                      {defect.severity && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Mức {defect.severity} · {DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY]}</span>}
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: `${status?.dot ?? "#64748b"}18`, color: status?.dot ?? "#64748b" }}>{status?.label ?? defect.status}</span>
+                    </div>
+                    <p className="mt-2 line-clamp-3 text-sm font-medium text-ink">{defect.content || "Chưa nhập nội dung khiếm khuyết"}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {defect.detectedAt && <span>Phát hiện: {formatDate(defect.detectedAt)}</span>}
+                      {defect.requestType && <span>Yêu cầu: {defect.requestType}</span>}
+                      {defect.requestNumber && <span>Số: {defect.requestNumber}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              {device.currentDefects.length > 6 && (
+                <div className="col-span-full rounded-lg border border-dashed border-amber-200 bg-amber-50/60 px-4 py-3 text-center text-sm text-amber-800">
+                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={`/defects?deviceSeq=${encodeURIComponent(device.code)}`} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-5 text-center text-sm text-emerald-800">Thiết bị không có khiếm khuyết đang tồn đọng.</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="max-w-sm overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><QrCode className="h-5 w-5 text-accent" /> Mã QR thiết bị</DialogTitle>
+          </DialogHeader>
+          {device.hasQrCard ? (
+            <div className="flex flex-col items-center gap-4 pt-2">
+              <div className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+                <QRCodeSVG id="device-qr" value={url} size={190} level="M" />
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-ink">{device.name}</div>
+                <div className="mt-0.5 font-mono text-xs text-muted-foreground">{device.code}</div>
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2">
+                <Button variant="outline" onClick={downloadQr}>
+                  <Download className="h-4 w-4" /> Tải QR
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href={`/devices/${id}/qr`}>Trang in</Link>
+                </Button>
+              </div>
+              {canManageQr && (
+                <Button variant="ghost" className="w-full text-destructive hover:bg-red-50 hover:text-destructive" onClick={() => setQrDeleteOpen(true)}>
+                  <Trash2 className="h-4 w-4" /> Xóa mã QR
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-5 py-8 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-accent shadow-sm"><QrCode className="h-7 w-7" /></span>
+              <div>
+                <div className="font-semibold text-ink">Thiết bị chưa có mã QR</div>
+                <p className="mt-1 text-sm text-muted-foreground">Chỉ khởi tạo cho thiết bị cần dán thẻ hoặc tra cứu bằng mã quét.</p>
+              </div>
+              {canManageQr ? (
+                <Button onClick={createQrCard} disabled={addQrCard.isPending}>
+                  {addQrCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Khởi tạo mã QR
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground">Bạn không có quyền khởi tạo mã QR cho thiết bị này.</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={qrDeleteOpen}
+        onOpenChange={setQrDeleteOpen}
+        title="Xóa mã QR thiết bị?"
+        description="Mã QR sẽ bị gỡ khỏi danh sách thẻ. Thiết bị, lý lịch, vật tư và lịch sử sửa chữa vẫn được giữ nguyên."
+        confirmLabel="Xóa mã QR"
+        loading={removeQrCard.isPending}
+        onConfirm={async () => {
+          try {
+            await removeQrCard.mutateAsync(device.code);
+            toast.success("Đã xóa mã QR thiết bị");
+            setQrDeleteOpen(false);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Không xóa được mã QR");
+          }
+        }}
+      />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl">
@@ -209,4 +384,13 @@ function Row({ label, value, icon: Icon }: { label: string; value: string; icon?
       </span>
     </div>
   );
+}
+
+function MachineBadge({ machine }: { machine: string }) {
+  const tone = machine === "S1"
+    ? "bg-blue-100 text-blue-800"
+    : machine === "S2"
+      ? "bg-fuchsia-100 text-fuchsia-800"
+      : "bg-amber-100 text-amber-800";
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{machine}</span>;
 }
