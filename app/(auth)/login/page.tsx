@@ -30,7 +30,7 @@ function LoginInner() {
   const [loading, setLoading] = React.useState(false);
   const [biometricLoading, setBiometricLoading] = React.useState(false);
   const [biometricSupported, setBiometricSupported] = React.useState(false);
-  const [stats, setStats] = React.useState<{ devices: number; users: number } | null>(null);
+  const [stats, setStats] = React.useState<{ devices: number; users: number; materials: number } | null>(null);
   const [loginError, setLoginError] = React.useState("");
   const passwordRef = React.useRef<HTMLInputElement>(null);
 
@@ -213,34 +213,29 @@ function LoginInner() {
             </div>
           </div>
         </div>
-        <div className="relative z-10 space-y-4">
-          <h1 className="text-4xl font-bold uppercase leading-tight [text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
-            HỆ THỐNG QUẢN LÝ NHÂN SỰ & THIẾT BỊ
+        <div className="relative z-10">
+          <div className="mb-2 text-lg font-semibold tracking-[0.3em] text-slate-200 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
+            HỆ THỐNG QUẢN LÝ VẬN HÀNH
+          </div>
+          <h1 className="text-4xl font-bold uppercase leading-tight tracking-wide [text-shadow:0_2px_12px_rgba(0,0,0,0.55)]">
+            NHÂN SỰ · VẬT TƯ · THIẾT BỊ
           </h1>
-          <p className="max-w-md text-white/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
-            <span className="text-lg font-semibold uppercase tracking-wide text-white">
-              Phân xưởng Vận hành 1
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <span className="rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium text-slate-100 backdrop-blur-sm">
+              {stats ? stats.users.toLocaleString("vi-VN") : "—"} nhân sự
             </span>
-            <br />
-            An Toàn - Hiệu Quả - Kinh Tế - Bảo Vệ Môi Trường
-          </p>
-        </div>
-        <div className="relative z-10 grid grid-cols-4 gap-5 text-sm text-white/70">
-          <div>
-            <div className="text-2xl font-bold text-white">{stats ? stats.devices.toLocaleString("vi-VN") : "—"}</div>
-            Thiết bị quản lý
+            <span className="rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium text-slate-100 backdrop-blur-sm">
+              {stats ? stats.materials.toLocaleString("vi-VN") : "—"} mã vật tư ERP
+            </span>
+            <span className="rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium text-slate-100 backdrop-blur-sm">
+              {stats ? stats.devices.toLocaleString("vi-VN") : "—"} thiết bị
+            </span>
           </div>
-          <div>
-            <div className="text-2xl font-bold text-white">24/7</div>
-            Giám sát ca kíp
+          <div className="mt-5 text-base font-bold uppercase tracking-wide text-slate-100 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
+            Phân xưởng Vận hành 1
           </div>
-          <div>
-            <div className="text-2xl font-bold text-white">5</div>
-            Ca/ Kíp vận hành
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-white">{stats ? stats.users.toLocaleString("vi-VN") : "—"}</div>
-            Nhân sự
+          <div className="mt-1 text-sm text-slate-300 [text-shadow:0_1px_10px_rgba(0,0,0,0.6)]">
+            An Toàn – Hiệu Quả – Kinh Tế – Bảo Vệ Môi Trường
           </div>
         </div>
       </div>
