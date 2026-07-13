@@ -334,6 +334,29 @@ export const REPL_DUE = {
 export type ReplDueKey = keyof typeof REPL_DUE;
 export const REPL_DUE_ORDER: ReplDueKey[] = ["OVERDUE", "DUE_SOON", "OK"];
 
+export const MATERIAL_MACHINE_TONES = {
+  S1: {
+    chip: "bg-emerald-600 text-white hover:bg-emerald-700",
+    accent: "#059669",
+    wash: "rgba(5,150,105,0.07)",
+  },
+  S2: {
+    chip: "bg-fuchsia-600 text-white hover:bg-fuchsia-700",
+    accent: "#c026d3",
+    wash: "rgba(192,38,211,0.07)",
+  },
+  COMMON: {
+    chip: "bg-[#d6b48a] text-[#3f2a1d] hover:bg-[#c9a274]",
+    accent: "#d6b48a",
+    wash: "rgba(214,180,138,0.14)",
+  },
+} as const;
+
+export function materialMachineTone(machine?: string | null) {
+  if (machine === "S1" || machine === "S2") return MATERIAL_MACHINE_TONES[machine];
+  return MATERIAL_MACHINE_TONES.COMMON;
+}
+
 export function replacementDueStatus(nextDueAt: Date | string, now: Date = new Date()): ReplDueKey {
   const d = daysUntilDue(nextDueAt, now);
   if (d < 0) return "OVERDUE";

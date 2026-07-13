@@ -5,7 +5,7 @@ import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from "lucide-rea
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { REPL_DUE, REPL_DUE_ORDER } from "@/lib/constants";
+import { materialMachineTone, REPL_DUE, REPL_DUE_ORDER } from "@/lib/constants";
 import type { ReplacementItem } from "@/hooks/useReplacements";
 
 /** "YYYY-MM-DD" theo giờ địa phương — khoá so khớp ô ngày trên lịch. */
@@ -16,13 +16,6 @@ export function dayKey(d: Date | string): string {
 
 const WEEKDAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const MAX_CHIPS_PER_DAY = 3;
-
-// Chip sự kiện phân biệt theo tổ máy; trạng thái đến hạn vẫn hiển thị ở bộ lọc và panel chi tiết.
-const MACHINE_CHIP_STYLE: Record<string, string> = {
-  S1: "bg-emerald-600 text-white hover:bg-emerald-700",
-  S2: "bg-fuchsia-600 text-white hover:bg-fuchsia-700",
-  COMMON: "bg-[#d6b48a] text-[#3f2a1d] hover:bg-[#c9a274]",
-};
 
 interface ReplacementCalendarProps {
   /** Tháng đang xem, dạng "YYYY-MM". */
@@ -188,7 +181,7 @@ export function ReplacementCalendar({ month, onMonthChange, points, selectedDay,
                       title={`${p.material.code} — ${p.material.name}`}
                       className={cn(
                         "block w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium shadow-sm",
-                        MACHINE_CHIP_STYLE[p.material.machine ?? "COMMON"] ?? MACHINE_CHIP_STYLE.COMMON
+                        materialMachineTone(p.material.machine).chip
                       )}
                     >
                       {p.material.name}

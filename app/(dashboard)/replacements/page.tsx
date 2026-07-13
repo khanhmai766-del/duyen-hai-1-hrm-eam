@@ -39,6 +39,7 @@ import {
   REPL_DUE,
   REPL_DUE_ORDER,
   addMonths,
+  materialMachineTone,
   replacementDueStatus,
   replacementIntervalLabel,
 } from "@/lib/constants";
@@ -346,13 +347,16 @@ function ReplacementsPageContent() {
                     </div>
                   ) : (
                     panelPoints.map((p) => {
-                      const st = replacementDueStatus(p.nextDueAt);
                       const device = linkedDeviceOf(p);
+                      const machineTone = materialMachineTone(p.material.machine);
                       return (
                         <div
                           key={p.id}
                           className="rounded-xl border border-border bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-card"
-                          style={{ borderLeft: `4px solid ${REPL_DUE[st].dot}` }}
+                          style={{
+                            borderLeft: `4px solid ${machineTone.accent}`,
+                            backgroundImage: `linear-gradient(90deg, ${machineTone.wash} 0, transparent 72px)`,
+                          }}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">

@@ -259,15 +259,17 @@ function ContactCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
-        {CONTROL_ROOM_CONTACTS.map((c, i) => (
+        {CONTROL_ROOM_CONTACTS.map((c) => (
           <a
-            key={i}
+            key={c.phone}
             href={`tel:${c.phone}`}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5"
+            className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5"
           >
-            <span className="text-sm font-medium text-ink">{c.label}</span>
-            <span className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold text-accent">
-              <Phone className="h-3.5 w-3.5" /> {c.phone}
+            <span title={c.label} className="whitespace-nowrap text-[10.5px] font-semibold leading-none text-ink sm:text-[11px] xl:text-[11.5px]">
+              {c.label}
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10.5px] font-semibold leading-none text-accent sm:text-[11px] xl:text-[11.5px]">
+              <Phone className="h-3.5 w-3.5 shrink-0" /> {c.phone}
             </span>
           </a>
         ))}
@@ -1225,7 +1227,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
       </CardHeader>
       <CardContent>
         <p className="mb-2 text-xs text-muted-foreground">
-          Lịch diễn tập sự cố, diễn tập PCCC (do Trưởng ca cập nhật) — lưu dữ liệu 1 tháng gần nhất.
+          Lịch diễn tập sự cố, diễn tập PCCC ( Trưởng Ca cập nhập)
         </p>
         {isLoading ? (
           <div className="h-24" />

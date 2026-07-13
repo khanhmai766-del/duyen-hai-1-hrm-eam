@@ -33,6 +33,7 @@ export const SUPPORT_LINKS: { name: string; href: string; group: SupportLinkGrou
 export const CONTROL_ROOM_CONTACTS: { label: string; phone: string }[] = [
   { label: "Phòng ĐKTT Duyên Hải 1", phone: "02943923238" },
   { label: "Phòng ĐKTT Duyên Hải 1", phone: "02943923239" },
-  { label: "Phòng ĐKTT Duyên Hải 3, 3MR", phone: "02943923271" },
-  { label: "Phòng ĐKTT Duyên Hải 3, 3MR", phone: "02946280123" },
+  { label: "Ô. Trương Trần Hoàng Huân (QĐ VH1)", phone: "0937398777" },
+  { label: "Ô. Nguyễn Văn Cường (PQĐ VH1)", phone: "0982863121" },
+  { label: "Ô. Nguyễn Ngọc Yên (PQĐ VH1)", phone: "0937120691" },
 ];
