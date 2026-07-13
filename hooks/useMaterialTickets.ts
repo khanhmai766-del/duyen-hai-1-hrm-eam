@@ -207,9 +207,9 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   } else {
     if (t.status === "CHO_NHAP_LIEU" && canOperateAssigned && (v.isAdmin || v.hasScope) && v.steps?.ungAdvance) a.push("ungAdvance");
     if (t.status === "CHO_NHAP_LIEU_THAY_THE" && canOperateAssigned && (v.isAdmin || v.hasScope) && v.steps?.ungEntry) a.push("ungEntry");
-    if (t.status === "CHO_XAC_NHAN_PDF" && canOperateAssigned && v.steps?.ungConfirm) a.push("ungConfirmDoc");
+    if (t.status === "CHO_XAC_NHAN_PDF" && v.steps?.ungConfirm) a.push("ungConfirmDoc");
     if (t.status === "CHO_HOAN_THIEN") {
-      if (canOperateAssigned && v.steps?.ungBbkt && !t.bbktNumber) a.push("ungBbkt");
+      if (v.steps?.ungBbkt && !t.bbktNumber) a.push("ungBbkt");
       if (v.steps?.stats && !t.proposalNumber) a.push("ungStats");
     }
   }

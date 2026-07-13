@@ -512,8 +512,8 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = 
   { key: "accept", label: "Nghiệm thu + BBKT + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "ungAdvance", label: "Ứng — Nhập số lượng vật tư ứng", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = mọi người thuộc cương vị đó" },
   { key: "ungEntry", label: "Ứng — Nhập liệu thay thế", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = mọi người thuộc cương vị đó" },
-  { key: "ungConfirm", label: "Ứng — Xác nhận + xuất Word", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = Trưởng Ca/Trưởng Kíp" },
-  { key: "ungBbkt", label: "Ứng — Bổ sung số BBKT", hint: "Chỉ áp dụng trong cương vị được phân giao; trống = Trưởng Ca/Trưởng Kíp" },
+  { key: "ungConfirm", label: "Ứng — Xác nhận + xuất Word", hint: "Theo cương vị được chọn; trống = Trưởng Ca/Trưởng Kíp" },
+  { key: "ungBbkt", label: "Ứng — Bổ sung số BBKT", hint: "Theo cương vị được chọn; trống = Trưởng Ca/Trưởng Kíp" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = mặc định: người tạo phiếu (Quản trị luôn được)" },
 ];
 

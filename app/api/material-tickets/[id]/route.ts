@@ -680,8 +680,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư3 — Trưởng Ca xác nhận & xuất Word (không nhập lại số lượng thay thế).
     if (action === "ungConfirmDoc") {
       if (t.type !== "UNG" || t.status !== "CHO_XAC_NHAN_PDF") return fail("Phiếu không ở bước Xác nhận xuất file");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "ungConfirm", user))
         return fail("Bạn không có quyền xác nhận xuất file (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const pct = String(body.pctNumber || "").trim();
@@ -719,8 +717,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ư3 song song — Trưởng Ca bổ sung số BBKT (tự sinh lại file Word với số thật)
     if (action === "ungBbkt") {
       if (t.type !== "UNG" || t.status !== "CHO_HOAN_THIEN") return fail("Phiếu không ở bước Hoàn thiện");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "ungBbkt", user))
         return fail("Bạn không có quyền bổ sung BBKT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       if (t.bbktNumber) return fail("Số BBKT đã được bổ sung trước đó");
