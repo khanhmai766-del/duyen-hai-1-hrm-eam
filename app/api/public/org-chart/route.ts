@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
                 id: true,
                 name: true,
                 avatarUrl: true,
+                avatarKey: true,
                 phone: true,
                 position: true,
                 secondaryPosition: true,
@@ -75,7 +76,16 @@ export async function GET(req: NextRequest) {
       const bySeat = (order.get(a.positionLabel) ?? 999) - (order.get(b.positionLabel) ?? 999);
       if (bySeat !== 0) return bySeat;
       return a.user.name.localeCompare(b.user.name, "vi");
-    });
+    }).map((assignment) => ({
+      ...assignment,
+      user: {
+        ...assignment.user,
+        avatarUrl: assignment.user.avatarKey
+          ? `/api/public/avatar?key=${encodeURIComponent(assignment.user.avatarKey)}`
+          : assignment.user.avatarUrl,
+        avatarKey: undefined,
+      },
+    }));
 
     return ok({
       date,
