@@ -143,11 +143,19 @@ function SeatBox({ title, occupants, tone, bar = false }: { title: string; occup
 }
 
 function Person({ item }: { item: PublicAssignment }) {
+  const [imageFailed, setImageFailed] = React.useState(false);
+  const showImage = Boolean(item.user.avatarUrl) && !imageFailed;
+
   return <div className="flex min-w-0 items-center gap-3 rounded-lg bg-white/75 px-3 py-2 text-left shadow-sm ring-1 ring-slate-900/5 sm:flex-col sm:bg-transparent sm:px-1 sm:py-0 sm:text-center sm:shadow-none sm:ring-0">
     <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-visible rounded-full bg-gradient-to-br from-slate-800 to-emerald-600 text-[11px] font-bold text-white shadow-md ring-2 ring-white">
-      {item.user.avatarUrl ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.user.avatarUrl} alt={`Ảnh đại diện của ${item.user.name}`} className="h-full w-full rounded-full object-cover" />
+        <img
+          src={item.user.avatarUrl!}
+          alt=""
+          className="h-full w-full rounded-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
       ) : initials(item.user.name)}
       <span className={cn("absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white shadow ring-2 ring-white", item.isApproved ? "bg-emerald-500" : "bg-amber-500")} title={item.isApproved ? "Đã được duyệt" : "Chưa được duyệt"}>{item.isApproved ? <Check className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}</span>
     </div>

@@ -5,7 +5,9 @@ import { getS3Object } from "@/lib/s3";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PUBLIC_AVATAR_KEY = /^avatars\/[a-zA-Z0-9._-]+\.(?:jpg|jpeg|png|webp)$/i;
+// Đồng bộ với safeEmployeeCode(): mã nhân viên có thể chứa ký tự Unicode/Vietnamese.
+// Vẫn khóa cứng prefix và phần mở rộng để endpoint không đọc được tệp ngoài avatar.
+const PUBLIC_AVATAR_KEY = /^avatars\/[\p{L}\p{M}\p{N}._-]+\.(?:jpg|jpeg|png|webp)$/iu;
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
