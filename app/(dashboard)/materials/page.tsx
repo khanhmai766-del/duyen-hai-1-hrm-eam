@@ -535,7 +535,8 @@ function MaterialsPageContent() {
         open={importLinksOpen}
         onOpenChange={setImportLinksOpen}
         machine={machineTab}
-        materials={(data?.data ?? []).filter((material) => categoryMatches(material.category))}
+        category={categoryFilter}
+        erpGroups={erpGroups.filter((group) => categoryMatches(group.category))}
         onImported={() => { void refetchMaterials(); }}
       />
 

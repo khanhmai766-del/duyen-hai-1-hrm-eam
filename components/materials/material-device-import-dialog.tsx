@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { apiMutate } from "@/lib/fetcher";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentTree } from "@/hooks/useEquipment";
-import type { MaterialWithDevices } from "@/hooks/useMaterials";
+import type { ErpMaterialGroupFromGroupedStock } from "@/hooks/useErpMaterials";
 
 type ParsedRow = {
   rowNumber: number;
@@ -28,7 +28,8 @@ type ParsedRow = {
 type ImportResult = {
   validCount: number;
   errors: Array<{ rowNumber: number; message: string }>;
-  preview: Array<{ rowNumber: number; machine: string; materialName: string; deviceSeq: string; deviceName: string; manualDeviceName: string | null; quantity: number; intervalMonths: number }>;
+  preview: Array<{ rowNumber: number; machine: string; materialName: string; materialStatus: string; deviceSeq: string; deviceName: string; manualDeviceName: string | null; quantity: number; intervalMonths: number }>;
+  materialsCreated: number;
   created: number;
   updated: number;
 };
@@ -76,13 +77,15 @@ export function MaterialDeviceImportDialog({
   open,
   onOpenChange,
   machine,
-  materials,
+  category,
+  erpGroups,
   onImported,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   machine: string;
-  materials: MaterialWithDevices[];
+  category: string;
+  erpGroups: ErpMaterialGroupFromGroupedStock[];
   onImported: () => void;
 }) {
   const tree = useEquipmentTree();
@@ -116,11 +119,11 @@ export function MaterialDeviceImportDialog({
     const treeRows = nodes
       .filter((node) => !parentSeqs.has(node.seq))
       .map((node) => ({ "Số thứ tự": node.seq, "Tên thiết bị": node.name }));
-    const materialRows = materials.map((material) => ({
-        "Tổ máy": material.machine,
-        "Tên vật tư": material.name,
-        "ĐVT": material.unit,
-        "Loại vật tư": material.category ?? "",
+    const materialRows = erpGroups.map((group) => ({
+        "Tên vật tư": group.name,
+        "ĐVT": group.unit,
+        "Loại vật tư": group.category,
+        "Số mã ERP trong nhóm": group.materialCount,
       }));
     const workbook = XLSX.utils.book_new();
     const links = XLSX.utils.json_to_sheet(linkRows);
@@ -128,12 +131,12 @@ export function MaterialDeviceImportDialog({
     const treeSheet = XLSX.utils.json_to_sheet(treeRows);
     treeSheet["!cols"] = [{ wch: 18 }, { wch: 46 }];
     const catalog = XLSX.utils.json_to_sheet(materialRows);
-    catalog["!cols"] = [{ wch: 28 }, { wch: 38 }, { wch: 12 }, { wch: 12 }, { wch: 22 }];
+    catalog["!cols"] = [{ wch: 42 }, { wch: 12 }, { wch: 22 }, { wch: 22 }];
     XLSX.utils.book_append_sheet(workbook, links, "Liên kết vật tư - thiết bị");
     XLSX.utils.book_append_sheet(workbook, treeSheet, "Cây thiết bị tham chiếu");
     XLSX.utils.book_append_sheet(workbook, catalog, "Danh mục vật tư");
     XLSX.writeFile(workbook, `mau-link-vat-tu-thiet-bi-${machine.toLowerCase()}.xlsx`, { compression: true });
-    toast.success("Đã tạo file mẫu từ cây thiết bị và danh mục vật tư hiện tại");
+    toast.success("Đã tạo file mẫu từ cây thiết bị và danh mục nhóm vật tư ERP");
   }
 
   async function chooseFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -145,7 +148,7 @@ export function MaterialDeviceImportDialog({
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const parsed = parseRows(workbook.Sheets[workbook.SheetNames[0]]);
       if (!parsed.length) throw new Error("File chưa có dòng nào được điền Tên vật tư");
-      const checked = await apiMutate<ImportResult>("/api/materials/import-device-links", "POST", { machine, rows: parsed, dryRun: true });
+      const checked = await apiMutate<ImportResult>("/api/materials/import-device-links", "POST", { machine, category, rows: parsed, dryRun: true });
       setRows(parsed);
       setFileName(file.name);
       setResult(checked);
@@ -161,8 +164,8 @@ export function MaterialDeviceImportDialog({
     if (!rows.length || result?.errors.length) return;
     try {
       setImporting(true);
-      const imported = await apiMutate<ImportResult>("/api/materials/import-device-links", "POST", { machine, rows });
-      toast.success(`Đã link vật tư: ${imported.created} tạo mới · ${imported.updated} cập nhật`);
+      const imported = await apiMutate<ImportResult>("/api/materials/import-device-links", "POST", { machine, category, rows });
+      toast.success(`Đã tạo ${imported.materialsCreated} vật tư PXVH1 · ${imported.created} link mới · ${imported.updated} cập nhật`);
       onImported();
       onOpenChange(false);
     } catch (error) {
@@ -205,7 +208,7 @@ export function MaterialDeviceImportDialog({
                 <div className="max-h-64 overflow-auto">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-white text-muted-foreground"><tr><th className="px-3 py-2 text-left">Dòng</th><th className="px-3 py-2 text-left">Tổ máy</th><th className="px-3 py-2 text-left">Vật tư</th><th className="px-3 py-2 text-left">Số thứ tự</th><th className="px-3 py-2 text-left">Thiết bị cây</th><th className="px-3 py-2 text-left">Thiết bị nhập tay</th><th className="px-3 py-2 text-right">SL</th><th className="px-3 py-2 text-right">Chu kỳ</th></tr></thead>
-                    <tbody>{result.preview.map((row) => <tr key={row.rowNumber} className="border-t"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-semibold">{row.machine}</td><td className="px-3 py-2 font-medium">{row.materialName}</td><td className="px-3 py-2 font-mono">{row.deviceSeq}</td><td className="px-3 py-2">{row.deviceName}</td><td className="px-3 py-2 font-medium">{row.manualDeviceName || "—"}</td><td className="px-3 py-2 text-right">{row.quantity}</td><td className="px-3 py-2 text-right">{row.intervalMonths} tháng</td></tr>)}</tbody>
+                    <tbody>{result.preview.map((row) => <tr key={row.rowNumber} className="border-t"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-semibold">{row.machine}</td><td className="px-3 py-2"><div className="font-medium">{row.materialName}</div><div className="text-[10px] text-muted-foreground">{row.materialStatus}</div></td><td className="px-3 py-2 font-mono">{row.deviceSeq}</td><td className="px-3 py-2">{row.deviceName}</td><td className="px-3 py-2 font-medium">{row.manualDeviceName || "—"}</td><td className="px-3 py-2 text-right">{row.quantity}</td><td className="px-3 py-2 text-right">{row.intervalMonths} tháng</td></tr>)}</tbody>
                   </table>
                 </div>
               )}
