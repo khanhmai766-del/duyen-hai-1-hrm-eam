@@ -263,9 +263,9 @@ function ContactCard() {
           <a
             key={c.phone}
             href={`tel:${c.phone}`}
-            className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5"
+            className="grid min-h-11 grid-cols-1 items-start gap-1.5 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center 2xl:gap-2"
           >
-            <span title={c.label} className="whitespace-nowrap text-[10.5px] font-semibold leading-none text-ink sm:text-[11px] xl:text-[11.5px]">
+            <span title={c.label} className="min-w-0 break-words text-[10.5px] font-semibold leading-snug text-ink sm:text-[11px] xl:text-[11.5px]">
               {c.label}
             </span>
             <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10.5px] font-semibold leading-none text-accent sm:text-[11px] xl:text-[11.5px]">

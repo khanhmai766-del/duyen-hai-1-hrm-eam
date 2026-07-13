@@ -6,6 +6,22 @@ import { hasAssignedPermission } from "@/lib/rbac-permissions";
 export const dynamic = "force-dynamic";
 
 const VIEW_SYSTEM_AUDIT_PERMISSION = "system_audit_log:view";
+const SYSTEM_AUDIT_RETENTION_YEARS = 2;
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let lastCleanupAt = 0;
+
+async function purgeExpiredSystemAuditLogs() {
+  if (Date.now() - lastCleanupAt < CLEANUP_INTERVAL_MS) return;
+  const cutoff = new Date();
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - SYSTEM_AUDIT_RETENTION_YEARS);
+  try {
+    await prisma.systemAuditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    lastCleanupAt = Date.now();
+  } catch (error) {
+    // Việc dọn dữ liệu không được làm gián đoạn chức năng tra cứu.
+    console.warn("Không thể dọn Audit hệ thống quá hạn", error);
+  }
+}
 
 export async function GET(req: Request) {
   return handle(async () => {
@@ -13,6 +29,7 @@ export async function GET(req: Request) {
     if (!(await hasAssignedPermission(user, VIEW_SYSTEM_AUDIT_PERMISSION))) {
       return fail("Không đủ quyền xem Audit hệ thống", 403);
     }
+    await purgeExpiredSystemAuditLogs();
 
     const params = new URL(req.url).searchParams;
     const page = Math.max(1, Number(params.get("page")) || 1);

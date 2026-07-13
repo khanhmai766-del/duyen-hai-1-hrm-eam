@@ -64,6 +64,19 @@ function jsonOrNull(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonN
   return value as Prisma.InputJsonValue;
 }
 
+const REDACTED_MEDIA_VALUE = "[Dữ liệu hình ảnh đã được lược bỏ khỏi audit]";
+const MEDIA_AUDIT_FIELDS = new Set(["avatarurl", "signatureurl"]);
+
+/** Không đưa ảnh/chữ ký base64 vào PostgreSQL hoặc bản sao audit trên S3. */
+export function sanitizeAuditData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeAuditData);
+  if (!value || typeof value !== "object" || value instanceof Date) return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+    key,
+    MEDIA_AUDIT_FIELDS.has(key.toLowerCase()) && item ? REDACTED_MEDIA_VALUE : sanitizeAuditData(item),
+  ]));
+}
+
 function diffFields(beforeData: unknown, afterData: unknown) {
   if (!beforeData || !afterData || typeof beforeData !== "object" || typeof afterData !== "object") return [];
   const before = beforeData as Record<string, unknown>;
@@ -163,6 +176,9 @@ export async function writeActivityLog(params: {
     params.actorName ??
     (await prisma.user.findUnique({ where: { id: params.actorUserId }, select: { name: true } }).then((user) => user?.name).catch(() => null)) ??
     "Không xác định";
+  const changedFields = params.changedFields ?? diffFields(params.beforeData, params.afterData);
+  const beforeData = sanitizeAuditData(params.beforeData);
+  const afterData = sanitizeAuditData(params.afterData);
 
   const systemAuditLog = await prisma.systemAuditLog.create({
     data: {
@@ -171,9 +187,9 @@ export async function writeActivityLog(params: {
       action: params.action,
       targetType: params.targetType,
       targetId: params.targetId ?? null,
-      beforeData: jsonOrNull(params.beforeData),
-      afterData: jsonOrNull(params.afterData),
-      changedFields: params.changedFields ?? diffFields(params.beforeData, params.afterData),
+      beforeData: jsonOrNull(beforeData),
+      afterData: jsonOrNull(afterData),
+      changedFields,
       ipAddress: params.ipAddress ?? null,
       userAgent: params.userAgent ?? null,
     },
@@ -186,8 +202,8 @@ export async function writeActivityLog(params: {
     action: params.action,
     targetType: params.targetType,
     targetId: params.targetId ?? null,
-    beforeData: params.beforeData ?? null,
-    afterData: params.afterData ?? null,
+    beforeData: beforeData ?? null,
+    afterData: afterData ?? null,
     changedFields: systemAuditLog.changedFields,
     ipAddress: params.ipAddress ?? null,
     userAgent: params.userAgent ?? null,
