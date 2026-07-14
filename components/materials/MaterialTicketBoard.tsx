@@ -47,7 +47,7 @@ const STATUS: Record<string, { label: string; c: string }> = {
 const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   CHUA_CHON: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
-    { key: "CHO_XAC_NHAN", label: "Chọn Đề xuất / Ứng", who: "Trưởng ca/Trưởng kíp" },
+    { key: "CHO_XAC_NHAN", label: "Xác nhận yêu cầu", who: "Trưởng ca/Trưởng kíp" },
   ],
   DE_XUAT: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
@@ -1490,29 +1490,31 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedReceiveErp = receiveCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <label className="lb">Xác nhận vật tư lãnh</label>
+        <div className="act-title-row receive-title-row no-title">
+          <div className="seg2 receive-source-toggle" aria-label="Nguồn lãnh vật tư">
+            <button type="button" className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho ERP</button>
+            <button type="button" className={receiptSource === "OUTSIDE" ? "on" : ""} onClick={() => setReceiptSource("OUTSIDE")}>Lãnh ngoài kho</button>
+          </div>
+        </div>
         {isAdvance && <>
           <label>Mã vật tư *</label>
           <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}><option value="">— Chọn mã vật tư ERP —</option>{receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}</select>
           {selectedReceiveErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedReceiveErp.name}<br/><b>Số lượng ERP:</b> {selectedReceiveErp.erpStock} {unit}</div>}
         </>}
-        <label>Nguồn lãnh vật tư *</label>
-        <div className="seg2"><button type="button" className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho ERP</button><button type="button" className={receiptSource === "OUTSIDE" ? "on" : ""} onClick={() => setReceiptSource("OUTSIDE")}>Lãnh ngoài kho</button></div>
         <p className="hint">{receiptSource === "ERP" ? "Số lượng lãnh sẽ được trừ khỏi số lượng ERP." : "Số lượng lãnh ngoài kho không làm thay đổi số lượng ERP."}</p>
-        <div className="act-field-row">
-          <label>Khối lượng vật tư lãnh</label>
-          <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        <div className={`receive-field-grid ${isAdvance ? "two-cols" : ""}`}>
+          <label className="field">Khối lượng vật tư lãnh
+            <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+          </label>
+          <label className="field">Số phiếu giao hàng *
+            <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
+          </label>
+          {!isAdvance && (
+            <label className="field">Số phiếu yêu cầu sửa chữa *
+              <input placeholder="Nhập số phiếu yêu cầu sửa chữa" value={num} onChange={(e) => setNum(e.target.value)} />
+            </label>
+          )}
         </div>
-        <div className="act-field-row">
-          <label>Số phiếu giao hàng *</label>
-          <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
-        </div>
-        {!isAdvance && (
-          <div className="act-field-row">
-            <label>Số phiếu yêu cầu sửa chữa *</label>
-            <input placeholder="Nhập số phiếu yêu cầu sửa chữa" value={num} onChange={(e) => setNum(e.target.value)} />
-          </div>
-        )}
         {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBKT</b>, <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn.</span></div>}
         <button className="btn primary big" disabled={qty <= 0 || (isAdvance && !erpCode) || !method.trim() || (!isAdvance && !num.trim()) || act.isPending}
           onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource, ...(isAdvance ? { erpCode } : { repairRequestNumber: num.trim() }) }, isAdvance ? "Đã xác nhận vật tư lãnh và xuất các biên bản" : "Đã xác nhận vật tư lãnh")}>
@@ -1863,12 +1865,21 @@ const CSS = `
 .seg3 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
 .seg3 button:disabled{cursor:not-allowed;border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;opacity:.72;}
 .act-title-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:2px;}
+.act-title-row.no-title{justify-content:flex-end;}
 .act-title-row .lb{margin-bottom:0;min-width:0;}
 .flow-toggle{display:inline-flex;grid-template-columns:none;align-items:center;gap:3px;width:auto;max-width:100%;padding:4px;border:1px solid ${C.accent};border-radius:12px;background:${C.accent};box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 8px 18px ${C.accent}26;}
 .flow-toggle button{min-width:92px;height:32px;padding:0 14px;border:0;border-radius:9px;background:transparent;color:#dbeafe;font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;transition:background .16s ease,color .16s ease,opacity .16s ease;}
 .flow-toggle button:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff;}
 .flow-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
 .flow-toggle button:disabled{background:transparent;color:#93a4bb;opacity:.52;cursor:not-allowed;}
+.receive-source-toggle{display:inline-flex;grid-template-columns:none;align-items:center;gap:3px;width:auto;max-width:100%;padding:4px;border:1px solid ${C.accent};border-radius:12px;background:${C.accent};box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 8px 18px ${C.accent}26;}
+.receive-source-toggle button{min-width:148px;height:34px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:#dbeafe;font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;transition:background .16s ease,color .16s ease;}
+.receive-source-toggle button:hover{background:rgba(255,255,255,.1);color:#fff;}
+.receive-source-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
+.receive-field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;}
+.receive-field-grid.two-cols{grid-template-columns:repeat(2,minmax(0,1fr));}
+.receive-field-grid .field{min-width:0;margin:0!important;}
+.receive-field-grid .field input{margin-top:6px;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row .field{min-width:0;margin:0;}
@@ -1954,6 +1965,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .95fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.flow-toggle{width:100%;}.flow-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .95fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
