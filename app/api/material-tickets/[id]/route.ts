@@ -539,7 +539,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: số phiếu ${num}`);
+      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Nhập số phiếu ĐXVT: ${num}`);
       return ok(up);
     }
 

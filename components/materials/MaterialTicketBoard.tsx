@@ -875,7 +875,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
     t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
     t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.vhvMaterialCode ? ` · Mã ${t.vhvMaterialCode}` : " · Không có mã vật tư"}` },
-    t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
+    t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ĐXVT: ${t.proposalNumber ?? ""}` },
     t.proposalIssuedAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Giao phiếu ĐXVT${t.proposalReceiverName ? ` cho ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${t.receiptSource === "OUTSIDE" ? "Lãnh ngoài kho" : "Lãnh kho ERP"} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
@@ -1429,7 +1429,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={num} onChange={(e) => setNum(e.target.value)} />
         <button className="btn primary big" disabled={!num.trim() || act.isPending}
           onClick={() => run({ action: "stats", proposalNumber: num }, "Đã nhập số phiếu")}>
-          <Check size={15} /> Xác nhận → chuyển Nghiệm thu
+          <Check size={15} /> Xác nhận → chuyển lãnh vật tư
         </button>
       </div>
     );
@@ -1462,10 +1462,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   }
 
   if (acts.includes("issueProposal")) return (
-    <div className="act">
-      <label className="lb">Thống kê — xác nhận giao phiếu ĐXVT</label>
-      <p className="hint">Số phiếu ĐXVT: <b>{t.proposalNumber}</b></p>
-      <label>Tên VHV nhận phiếu ĐXVT *
+    <div className="act issue-proposal-act">
+      <label className="issue-proposal-field">Tên VHV nhận phiếu ĐXVT *
         <input
           value={proposalReceiverName}
           onChange={(e) => setProposalReceiverName(e.target.value)}
@@ -1918,6 +1916,9 @@ const CSS = `
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .act{border:1.5px dashed ${C.accent}66;background:${C.accent}07;border-radius:14px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:9px;}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
+.issue-proposal-act{padding:16px 14px;gap:12px;}
+.issue-proposal-field{margin-bottom:0!important;}
+.issue-proposal-field input{margin-top:6px;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}
