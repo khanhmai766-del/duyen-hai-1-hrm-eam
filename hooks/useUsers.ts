@@ -4,6 +4,7 @@ import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { SafeUser } from "@/types";
+import { uniqueVietnamesePositions } from "@/lib/positions";
 
 /**
  * Danh sách người dùng bản "nhẹ" (không kèm chữ ký base64; avatar qua proxy S3).
@@ -87,14 +88,15 @@ export function useMeProfile(options: { enabled?: boolean } = {}) {
 export function usePositions(options: { enabled?: boolean } = {}): string[] {
   const { data } = useUsers(options);
   return React.useMemo(() => {
-    const set = new Set<string>();
+    const values: Array<string | null | undefined> = [];
     for (const u of data?.data ?? []) {
       for (const value of [u.position, u.secondaryPosition]) {
-        const p = (value ?? "").trim();
-        if (p) set.add(p);
+        values.push(value);
       }
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "vi"));
+    // Bỏ trùng không phân biệt hoa/thường và dấu tiếng Việt, nhưng giữ nguyên
+    // nhãn đã lưu đầu tiên để không thay đổi dữ liệu/phân quyền hiện hữu.
+    return uniqueVietnamesePositions(values).sort((a, b) => a.localeCompare(b, "vi"));
   }, [data]);
 }
 

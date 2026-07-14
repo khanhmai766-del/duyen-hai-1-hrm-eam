@@ -75,6 +75,7 @@ import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker"
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
+import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
 import { formatDate, cn } from "@/lib/utils";
 import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
 
@@ -680,14 +681,11 @@ function TableView({
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceListItem | null>(null);
   const positionOptions = React.useMemo(
-    () =>
-      Array.from(new Set(devices.map((device) => device.managingPosition).filter(Boolean) as string[])).sort((a, b) =>
-        a.localeCompare(b, "vi")
-      ),
+    () => uniqueVietnamesePositions(devices.map((device) => announcementPositionLabel(device.managingPosition))).sort((a, b) => a.localeCompare(b, "vi")),
     [devices]
   );
   const filteredDevices = React.useMemo(
-    () => (positionFilter === "ALL" ? devices : devices.filter((device) => device.managingPosition === positionFilter)),
+    () => (positionFilter === "ALL" ? devices : devices.filter((device) => normalizeText(announcementPositionLabel(device.managingPosition)) === normalizeText(positionFilter))),
     [devices, positionFilter]
   );
   const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));

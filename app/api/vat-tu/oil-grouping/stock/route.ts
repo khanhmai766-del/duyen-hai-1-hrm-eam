@@ -39,6 +39,16 @@ export async function GET(req: NextRequest) {
       pendingCountByCategory(),
     ]);
 
+    // "Hiện có" là tồn kho vận hành thực tế (Material.quantity), được dẫn xuất
+    // theo các mã ERP đã gom. Không dùng số nhập tay OilType.onHandQty.
+    const allErpCodes = [...new Set(types.flatMap((type) => type.materials.map((material) => material.code)))];
+    const catalogRows = allErpCodes.length
+      ? await prisma.$queryRaw<Array<{ id: string; code: string; erpCodes: string[]; quantity: number }>>`
+          SELECT "id", "code", "erpCodes", "quantity" FROM "Material"
+          WHERE "code" = ANY(${allErpCodes}::text[]) OR "erpCodes" && ${allErpCodes}::text[]
+        `
+      : [];
+
     const groups = types.map((t) => {
       // Giữ shape erpCode/erpQty cho client (bảng ErpMaterial dùng code/erpStock)
       const materials = t.materials.map(({ code, erpStock, ...m }) => ({
@@ -55,7 +65,18 @@ export async function GET(req: NextRequest) {
         name: t.name,
         baseUnit: t.baseUnit,
         minStock: t.minStock,
-        onHandQty: t.onHandQty, // "Hiện có" — số đếm thực tế nhập tay
+        // S1/S2/COMMON là ba nơi khai báo cùng một kho dùng chung, không phải
+        // ba lượng tồn độc lập. Các dòng liên kết cùng nhóm phải có quantity
+        // đồng bộ; chỉ lấy một giá trị (không cộng thành 3 lần).
+        onHandQty: Math.max(
+          0,
+          ...catalogRows
+            .filter((row) => {
+              const codes = new Set(t.materials.map((material) => material.code));
+              return codes.has(row.code) || (row.erpCodes ?? []).some((code) => codes.has(code));
+            })
+            .map((row) => Number(row.quantity || 0))
+        ),
         totalQty,
         belowMin: t.minStock != null && totalQty < t.minStock,
         materialCount: materials.length,

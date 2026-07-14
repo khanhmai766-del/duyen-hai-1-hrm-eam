@@ -27,6 +27,8 @@ export interface BbntData {
   code: string;             // số phiếu VT-2026-xxxx (dùng đặt tên file)
   soBBKT?: string | null;   // Ứng: có thể chưa có -> in "(bổ sung sau)"
   soPCT?: string | null;
+  thoiGianBatDau?: Date | string | null;
+  thoiGianKetThuc?: Date | string | null;
   noiDung: string;          // thông tin thay thế xong
   tenChiHuy: string;        // chỉ huy trực tiếp (SCCN)
   tenTruongCa: string;      // tên thật tài khoản Trưởng Ca/TK xác nhận xuất
@@ -51,12 +53,17 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
 
   const today = new Date();
   const ngayXuat = today.toLocaleDateString("vi-VN"); // dd/mm/yyyy
+  const formatDateTime = (value?: Date | string | null) => value
+    ? new Date(value).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })
+    : "";
 
   doc.render({
     tieuDe: (d.noiDung || "").toUpperCase(),
     noiDung: d.noiDung || "",
     soBBKT: d.soBBKT || "(bổ sung sau)",
     soPCT: d.soPCT || "",
+    thoiGianBatDau: formatDateTime(d.thoiGianBatDau),
+    thoiGianKetThuc: formatDateTime(d.thoiGianKetThuc),
     ngayXuat,
     tenThietBi: joinUniq(d.items.map((i) => i.deviceName)),
     maKKS: joinUniq(d.items.map((i) => i.deviceKks)),

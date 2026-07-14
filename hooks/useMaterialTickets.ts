@@ -7,18 +7,19 @@ export interface TicketItem {
   id: string;
   materialId: string;
   erpCode: string | null;
+  erpName: string | null;
   deviceSeq: string | null;
   deviceNameManual: string | null;
   quantity: number;
   replacementQuantity: number | null;
-  material: { id: string; code: string; name: string; unit: string; quantity: number };
+  material: { id: string; code: string; erpCodes?: string[]; name: string; unit: string; quantity: number };
   device: { seq: string; name: string; kks: string | null } | null;
 }
 
 export interface MaterialTicket {
   id: string;
   code: string;
-  type: "DE_XUAT" | "UNG";
+  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO";
   unit: string;
   status: string;
   assignedPosition: string;
@@ -27,9 +28,21 @@ export interface MaterialTicket {
   proposalNote: string | null;
   pctNumber: string | null;
   proposalNumber: string | null;
+  proposalIssuedAt: string | null;
+  deliveryNoteNumber: string | null;
+  repairRequestNumber: string | null;
   completionNote: string | null;
   chiHuyName: string | null;
   docUrl: string | null;
+  bbktDocUrl: string | null;
+  recoveryRequired: boolean | null;
+  recoveryQuantity: number | null;
+  recoveryReturnedAt: string | null;
+  recoveryDocUrl: string | null;
+  workStartedAt: string | null;
+  workEndedAt: string | null;
+  settledAt: string | null;
+  settledByName: string | null;
   rejectedReason: string | null;
   createdById: string;
   createdByName: string;
@@ -42,8 +55,14 @@ export interface MaterialTicket {
   statsByName: string | null;
   statsByPosition: string | null;
   statsAt: string | null;
+  vhvReceivedQuantity: number | null;
+  vhvMaterialCode: string | null;
+  vhvReceivedByName: string | null;
+  vhvReceivedByPosition: string | null;
+  vhvReceivedAt: string | null;
   receivedQuantity: number | null;
   receivedMethod: string | null;
+  receiptSource: "ERP" | "OUTSIDE" | "EXISTING" | null;
   receivedByName: string | null;
   receivedByPosition: string | null;
   receivedAt: string | null;
@@ -148,7 +167,7 @@ export function useTicketOptions(enabled: boolean) {
         materials: {
           id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
           machine: string;
-          erpCodes: { code: string; erpStock: number }[];
+          erpCodes: { code: string; name: string; erpStock: number }[];
           managingPositions: string[];
           devices: { seq: string; label: string }[];
         }[];
@@ -163,9 +182,9 @@ export function useCreateTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      type: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
+      type?: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
       assignedPosition: string; materialCategory: string;
-      materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string;
+      materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string; replacementDeviceSeq?: string;
     }) =>
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
     onSuccess: () => {
@@ -205,22 +224,24 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   const a: string[] = [];
   const isAssigned = samePosition(v.position, t.assignedPosition);
   const canOperateAssigned = isAssigned || v.isAdmin;
-  if (t.type === "DE_XUAT") {
+  if (t.type === "CHUA_CHON") {
+    if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
+  } else if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && canOperateAssigned && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     if (t.status === "VAT_TU_KHONG_CO" && canOperateAssigned && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
     if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.steps?.stats) a.push("stats");
+    if (t.status === "CHO_XAC_NHAN_PHAT" && v.steps?.stats) a.push("issueProposal");
+    if (t.status === "VHV_LANH_VAT_TU" && canOperateAssigned) a.push("vhvReceive");
+    if (t.status === "NHAN_TU_HIEN_CO" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
     if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
+    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && canOperateAssigned && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
+    if (t.status === "CHO_QUYET_TOAN" && v.steps?.stats) a.push("settle");
   } else {
-    if (t.status === "CHO_NHAP_LIEU" && canOperateAssigned && (v.isAdmin || v.hasScope) && v.steps?.ungAdvance) a.push("ungAdvance");
-    if (t.status === "CHO_NHAP_LIEU_THAY_THE" && canOperateAssigned && (v.isAdmin || v.hasScope) && v.steps?.ungEntry) a.push("ungEntry");
-    if (t.status === "CHO_XAC_NHAN_PDF" && v.steps?.ungConfirm) a.push("ungConfirmDoc");
-    if (t.status === "CHO_HOAN_THIEN") {
-      if (v.steps?.ungBbkt && !t.bbktNumber) a.push("ungBbkt");
-      if (v.steps?.stats && !t.proposalNumber) a.push("ungStats");
-    }
+    if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
+    if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
   }
   return a;
 }

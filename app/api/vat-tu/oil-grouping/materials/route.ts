@@ -15,6 +15,25 @@ function cleanStock(value: unknown) {
   return Number.isFinite(next) && next > 0 ? next : 0;
 }
 
+export async function PUT(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    if (!canManageMaterialCatalog(user)) {
+      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được sửa số liệu ERP", 403);
+    }
+    const body = await req.json();
+    const id = cleanString(body.id);
+    const erpStock = Math.round(Number(body.erpStock));
+    if (!id) return fail("Thiếu id vật tư ERP");
+    if (!Number.isFinite(erpStock) || erpStock < 0) return fail("Số liệu ERP không hợp lệ");
+    const current = await prisma.erpMaterial.findUnique({ where: { id }, select: { id: true, code: true, erpStock: true } });
+    if (!current) return fail("Không tìm thấy vật tư ERP", 404);
+    const material = await prisma.erpMaterial.update({ where: { id }, data: { erpStock } });
+    await audit(user.id, "UPDATE_ERP_STOCK", "ErpMaterial", id, `${current.code}: ${current.erpStock} → ${erpStock}`);
+    return ok(material);
+  });
+}
+
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();

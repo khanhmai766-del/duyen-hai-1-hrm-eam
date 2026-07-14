@@ -1,0 +1,28 @@
+ALTER TABLE "MaterialTicket"
+  ADD COLUMN IF NOT EXISTS "proposalIssuedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "deliveryNoteNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairRequestNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "recoveryRequired" BOOLEAN,
+  ADD COLUMN IF NOT EXISTS "recoveryQuantity" INTEGER,
+  ADD COLUMN IF NOT EXISTS "recoveryReturnedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "recoveryDocUrl" TEXT,
+  ADD COLUMN IF NOT EXISTS "workStartedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "workEndedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "settledAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "settledByName" TEXT;
+
+ALTER TABLE "MaterialTicket"
+  ADD COLUMN IF NOT EXISTS "bbktDocUrl" TEXT;
+
+ALTER TABLE "MaterialTicket"
+  ADD COLUMN IF NOT EXISTS "receiptSource" TEXT;
+
+ALTER TABLE "MaterialTicket"
+  ADD COLUMN IF NOT EXISTS "vhvReceivedQuantity" INTEGER,
+  ADD COLUMN IF NOT EXISTS "vhvMaterialCode" TEXT,
+  ADD COLUMN IF NOT EXISTS "vhvReceivedByName" TEXT,
+  ADD COLUMN IF NOT EXISTS "vhvReceivedByPosition" TEXT,
+  ADD COLUMN IF NOT EXISTS "vhvReceivedAt" TIMESTAMP(3);
+
+ALTER TABLE "MaterialTicketItem"
+  ADD COLUMN IF NOT EXISTS "erpName" TEXT;

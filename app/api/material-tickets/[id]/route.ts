@@ -3,13 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
+import { generateBlankDocx } from "@/lib/blank-doc";
 
 export const dynamic = "force-dynamic";
 
 const ITEM_INCLUDE = {
   items: {
     include: {
-      material: { select: { id: true, code: true, name: true, unit: true, quantity: true } },
+      material: { select: { id: true, code: true, erpCodes: true, name: true, unit: true, quantity: true } },
       device: { select: { seq: true, name: true, kks: true } },
     },
   },
@@ -53,7 +54,7 @@ async function canManageTicket(
 
 function toBbntItems(t: FullTicket, quantityOverrides?: Map<string, number>): BbntItem[] {
   return t.items.map((it) => ({
-    materialName: it.material.name,
+    materialName: it.erpName || it.material.name,
     materialCode: it.erpCode || it.material.code,
     materialUnit: it.material.unit,
     quantity: quantityOverrides?.get(it.id) ?? (t.type === "UNG" ? it.replacementQuantity ?? it.quantity : it.quantity),
@@ -121,7 +122,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         proposalNote?: string | null;
       } = { unit, assignedPosition, materialCategory, bbktNumber: bbkt || null };
 
-      if (t.type === "DE_XUAT") {
+      if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
         const proposalNote = String(body.note || "").trim();
         const materialId = String(body.materialId || "").trim();
         const erpCode = String(body.erpCode || "").trim();
@@ -148,7 +149,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           where: { id: t.id },
           data,
         });
-        if (t.type === "DE_XUAT") {
+        if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
           const materialId = String(body.materialId || "").trim();
           const erpCode = String(body.erpCode || "").trim();
           const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
@@ -178,7 +179,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "editStep") {
       const step = String(body.step || "");
       const permissionByStep = {
-        stats: "stats", receive: "receive", use: "use", accept: "accept",
+        confirm: "confirm", stats: "stats", receive: "receive", use: "use", accept: "accept",
         ungAdvance: "ungAdvance", ungEntry: "ungEntry", ungConfirm: "ungConfirm", ungBbkt: "ungBbkt",
       } as const;
       const permission = permissionByStep[step as keyof typeof permissionByStep];
@@ -194,43 +195,71 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       let after = "";
       let up: FullTicket | null = null;
 
-      if (step === "stats") {
+      if (step === "confirm") {
+        if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
+        const value = String(body.bbktNumber || "").trim();
+        before = `Số BBKT: ${t.bbktNumber ?? "—"}`; after = `Số BBKT: ${value || "—"}`;
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: { bbktNumber: value || null },
+          include: ITEM_INCLUDE,
+        });
+      } else if (step === "stats") {
         if (!t.statsAt) return fail("Bước nhập số phiếu chưa hoàn thành");
         const value = String(body.proposalNumber || "").trim();
         if (!value) return fail("Vui lòng nhập số phiếu ĐXVT");
         before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"}`; after = `Số phiếu ĐXVT: ${value}`;
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value }, include: ITEM_INCLUDE });
       } else if (step === "receive") {
-        if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước nhận vật tư chưa hoàn thành");
+        if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
         const value = Math.trunc(Number(body.receivedQuantity));
-        const method = String(body.receivedMethod || "").trim();
-        if (value <= 0 || !method) return fail("Khối lượng và hình thức lãnh không hợp lệ");
+        const method = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
+        const receiptSource = body.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
+        if (value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.receivedQuantity;
         const erpCode = item.erpCode || item.material.code;
         const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1`;
         if (!erpRows.length) return fail(`Không tìm thấy mã vật tư ERP "${erpCode}"`, 404);
-        if (item.material.quantity + delta < 0 || erpRows[0].erpStock - delta < 0) return fail("Không thể điều chỉnh vì tồn kho sẽ âm");
-        before = `Nhận ${t.receivedQuantity}, hình thức ${t.receivedMethod ?? "—"}`; after = `Nhận ${value}, hình thức ${method}`;
+        const oldSource = t.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
+        const erpDelta = (oldSource === "ERP" ? t.receivedQuantity : 0) - (receiptSource === "ERP" ? value : 0);
+        if (item.material.quantity + delta < 0 || erpRows[0].erpStock + erpDelta < 0) return fail("Không thể điều chỉnh vì số lượng hiện có hoặc ERP sẽ âm");
+        before = `Nhận ${t.receivedQuantity}, phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}`; after = `Nhận ${value}, phiếu giao hàng ${method}`;
         up = await prisma.$transaction(async (tx) => {
           if (delta) await tx.material.update({ where: { id: item.materialId }, data: { quantity: { increment: delta } } });
-          if (delta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" - ${delta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
-          return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method, remainingQuantity: value - (t.usedQuantity ?? 0) }, include: ITEM_INCLUDE });
+          if (erpDelta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" + ${erpDelta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
+          return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0) }, include: ITEM_INCLUDE });
         });
       } else if (step === "use") {
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
-        const note = String(body.completionNote || "").trim();
-        const pct = String(body.pctNumber || "").trim();
-        const chiHuy = String(body.chiHuyName || "").trim();
-        if (value <= 0 || !note || !pct || !chiHuy) return fail("Thông tin sử dụng vật tư chưa đầy đủ");
+        const recoveryRequired = body.recoveryRequired === true;
+        const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
+        const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
+        if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
+        if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.usedQuantity;
-        if (item.material.quantity - delta < 0) return fail("Không đủ tồn kho để tăng số lượng sử dụng");
-        before = `Dùng ${t.usedQuantity}; ${t.pctNumber ?? "—"}; ${t.completionNote ?? "—"}`; after = `Dùng ${value}; ${pct}; ${note}`;
+        if (item.material.quantity - delta < 0) return fail("Không đủ số lượng hiện có để tăng số lượng sử dụng");
+        const recoveryDocument = recoveryRequired && !t.recoveryDocUrl
+          ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+          : null;
+        before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
+        after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
           if (delta) await tx.material.update({ where: { id: item.materialId }, data: { quantity: { decrement: delta } } });
-          return tx.materialTicket.update({ where: { id: t.id }, data: { usedQuantity: value, remainingQuantity: (t.receivedQuantity ?? 0) - value, completionNote: note, pctNumber: pct, chiHuyName: chiHuy }, include: ITEM_INCLUDE });
+          return tx.materialTicket.update({
+            where: { id: t.id },
+            data: {
+              usedQuantity: value,
+              remainingQuantity: (t.receivedQuantity ?? 0) - value,
+              recoveryRequired,
+              recoveryQuantity,
+              recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
+              recoveryDocUrl: recoveryRequired ? (t.recoveryDocUrl ?? recoveryDocument?.url ?? null) : null,
+            },
+            include: ITEM_INCLUDE,
+          });
         });
       } else if (step === "ungAdvance") {
         const rows = Array.isArray(body.quantities) ? body.quantities as Array<{ materialId: string; quantity: number }> : [];
@@ -243,7 +272,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           return { materialId, items, material: items[0].material, old: items.reduce((sum, item) => sum + item.quantity, 0), value: rowMap.get(materialId)! };
         });
         for (const { material, old, value } of deltas) {
-          if (material.quantity + value - old < 0) return fail(`Không đủ tồn kho để điều chỉnh ${material.name}`);
+          if (material.quantity + value - old < 0) return fail(`Không đủ số lượng hiện có để điều chỉnh ${material.name}`);
         }
         before = deltas.map(({ material, old }) => `${material.name}: ${old}`).join("; ");
         after = deltas.map(({ material, value }) => `${material.name}: ${value}`).join("; ");
@@ -259,7 +288,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const rowMap = new Map(rows.map((row) => [row.itemId, Math.trunc(Number(row.quantity))]));
         if (t.items.some((item) => (rowMap.get(item.id) ?? 0) <= 0)) return fail("Vui lòng nhập đủ số lượng thay thế");
         const deltas = t.items.map((item) => ({ item, old: item.replacementQuantity ?? 0, value: rowMap.get(item.id)! }));
-        if (deltas.some(({ item, old, value }) => item.material.quantity + old - value < 0)) return fail("Không đủ tồn kho để tăng số lượng thay thế");
+        if (deltas.some(({ item, old, value }) => item.material.quantity + old - value < 0)) return fail("Không đủ số lượng hiện có để tăng số lượng thay thế");
         before = deltas.map(({ item, old }) => `${item.material.name}: ${old}`).join("; "); after = deltas.map(({ item, value }) => `${item.material.name}: ${value}`).join("; ");
         up = await prisma.$transaction(async (tx) => {
           for (const { item, old, value } of deltas) {
@@ -275,7 +304,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
         const { url } = await generateBbntDoc({ code: t.code, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, items: toBbntItems(t) });
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, docUrl: url }, include: ITEM_INCLUDE });
+        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, ...(step === "accept" ? { bbktDocUrl: url } : { docUrl: url }) }, include: ITEM_INCLUDE });
       } else if (step === "ungBbkt") {
         if (!t.bbktNumber) return fail("Bước bổ sung BBKT chưa hoàn thành");
         const value = String(body.bbktNumber || "").trim(); if (!value) return fail("Vui lòng nhập số BBKT");
@@ -362,7 +391,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
         await tx.materialTicketItem.createMany({ data: itemData });
-        return tx.materialTicket.update({
+        await tx.materialTicket.update({
           where: { id: t.id },
           data: {
             status: "CHO_XAC_NHAN",
@@ -378,35 +407,118 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B1' — Trưởng Ca xác nhận (luồng cũ; giữ để tương thích phiếu cũ còn dang dở)
     if (action === "confirm") {
-      if (t.type !== "DE_XUAT" || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Xác nhận");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
+      if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const workflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const erpCode = String(body.erpCode || item.erpCode || "").trim();
+      const quantity = Math.trunc(Number(body.proposedQuantity || item.quantity));
+      const bbktNumber = String(body.bbktNumber || "").trim();
+      if (workflowType !== "UNG" && !erpCode) return fail("Vui lòng chọn mã vật tư");
+      if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
+      const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+      if (workflowType !== "UNG" && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+      const erpMaterial = workflowType !== "UNG" ? await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } }) : null;
+      if (workflowType !== "UNG" && !erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
       const short = t.items.filter((it) => it.quantity > it.material.quantity);
       if (short.length > 0) {
         return fail(
-          "Tồn kho không đủ: " +
+          "Số lượng hiện có không đủ: " +
           short.map((s) => `${s.material.name} (cần ${s.quantity}, tồn ${s.material.quantity})`).join("; ") +
           " — chỉ có thể Từ chối phiếu."
         );
       }
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_THONG_KE",
-          confirmedById: user.id, confirmedByName: user.name ?? "",
-          confirmedByPosition: user.position ?? null, confirmedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const up = await prisma.$transaction(async (tx) => {
+        // Lưu mã/tên ERP và chuyển trạng thái trong cùng transaction: nếu một
+        // phần lỗi thì toàn bộ rollback, không để phiếu đứng sai bước.
+        await tx.materialTicketItem.update({
+          where: { id: item.id },
+          data: { erpCode: workflowType !== "UNG" ? erpCode : null, erpName: workflowType !== "UNG" ? erpMaterial?.name : null, quantity },
+        });
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            type: workflowType,
+            status: workflowType === "UNG" ? "VHV_LANH_VAT_TU" : workflowType === "SU_DUNG_HIEN_CO" ? "NHAN_TU_HIEN_CO" : "CHO_THONG_KE",
+            bbktNumber: bbktNumber || null,
+            confirmedById: user.id, confirmedByName: user.name ?? "",
+            confirmedByPosition: user.position ?? null, confirmedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id, `${t.code}: xác nhận — kho đủ`);
       return ok(up);
     }
 
+    if (action === "receiveExisting") {
+      if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "NHAN_TU_HIEN_CO") return fail("Phiếu không ở bước Nhận vật tư từ Hiện có");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
+      const quantity = Math.trunc(Number(body.quantity));
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng nhận phải lớn hơn 0");
+      if (quantity > item.material.quantity) return fail(`Số lượng nhận vượt quá Hiện có (${item.material.quantity} ${item.material.unit})`);
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: "SU_DUNG_VAT_TU",
+          receivedQuantity: quantity,
+          receiptSource: "EXISTING",
+          receivedById: user.id,
+          receivedByName: user.name ?? "",
+          receivedByPosition: user.position ?? null,
+          receivedAt: new Date(),
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_RECEIVE_EXISTING", "MaterialTicket", t.id, `${t.code}: nhận ${quantity} từ Hiện có, chưa trừ tồn`);
+      return ok(up);
+    }
+
+    // Luồng Ứng — VHV ghi nhận số lượng thực tế đã lãnh; mã vật tư nhập tay và không bắt buộc.
+    // Số đã lãnh được cộng vào Hiện có để bước Sử dụng có thể trừ sau đó; ERP không thay đổi.
+    if (action === "vhvReceive") {
+      if (t.type !== "UNG" || t.status !== "VHV_LANH_VAT_TU") return fail("Phiếu không ở bước VHV lãnh vật tư");
+      const assignedError = assignedPositionError(user, t);
+      if (assignedError) return assignedError;
+      const quantity = Math.trunc(Number(body.quantity));
+      if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
+      const materialCode = String(body.materialCode || "").trim();
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+      const up = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.materialTicket.updateMany({
+          where: { id: t.id, status: "VHV_LANH_VAT_TU", vhvReceivedAt: null },
+          data: {
+            status: "SU_DUNG_VAT_TU",
+            vhvReceivedQuantity: quantity,
+            vhvMaterialCode: materialCode || null,
+            vhvReceivedByName: user.name ?? "",
+            vhvReceivedByPosition: user.position ?? null,
+            vhvReceivedAt: new Date(),
+          },
+        });
+        if (claimed.count === 0) return null;
+        await tx.$executeRaw`
+          UPDATE "Material"
+          SET "quantity" = "quantity" + ${quantity}
+          WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
+        `;
+        return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
+      });
+      if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
+      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${t.code}: VHV lãnh ${quantity}${materialCode ? `, mã ${materialCode}` : ", không có mã"}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
+      return ok(up);
+    }
+
     // B1' — Từ chối khi vật tư không có/không đủ hoặc lý do khác. Phiếu đóng vĩnh viễn.
     if (action === "reject") {
-      if (t.type !== "DE_XUAT" || !["CHO_XAC_NHAN", "VAT_TU_KHONG_CO"].includes(t.status)) return fail("Phiếu không ở bước có thể từ chối");
+      if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_XAC_NHAN", "VAT_TU_KHONG_CO"].includes(t.status)) return fail("Phiếu không ở bước có thể từ chối");
       const assignedError = assignedPositionError(user, t);
       if (assignedError) return assignedError;
       const canReject = isShiftLeader(user.position) || user.role === "ADMIN" || t.createdById === user.id;
@@ -424,7 +536,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B2 — Thống kê nhập số phiếu ĐXVT (CHỈ cương vị Thống kê; không còn khóa 2 ngày)
     if (action === "stats") {
-      if (t.type !== "DE_XUAT" || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống kê");
+      if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống kê");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
         return fail("Bạn không có quyền nhập số phiếu ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const num = String(body.proposalNumber || "").trim();
@@ -432,7 +544,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: "NHAN_VAT_TU", proposalNumber: num,
+          status: "CHO_XAC_NHAN_PHAT", proposalNumber: num,
           statsById: user.id, statsByName: user.name ?? "",
           statsByPosition: user.position ?? null, statsAt: new Date(),
         },
@@ -442,95 +554,165 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
+    if (action === "issueProposal") {
+      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_XAC_NHAN_PHAT") return fail("Phiếu không ở bước xác nhận đã trả phiếu");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user)) return fail("Bạn không có quyền xác nhận đã trả phiếu", 403);
+      const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU", proposalIssuedAt: new Date() }, include: ITEM_INCLUDE });
+      await audit(user.id, "MT_ISSUE_PROPOSAL", "MaterialTicket", t.id, `${t.code}: đã trả phiếu đề xuất vật tư`);
+      return ok(up);
+    }
+
     // B2' — NHẬN VẬT TƯ: khối lượng lãnh + hình thức lãnh → chuyển Sử dụng vật tư
     if (action === "receive") {
-      if (t.type !== "DE_XUAT" || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Nhận vật tư");
+      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
       const assignedError = assignedPositionError(user, t);
       if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
-        return fail("Bạn không có quyền ở bước Nhận vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+        return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
-      const receivedMethod = String(body.receivedMethod || "").trim();
-      if (!receivedMethod) return fail("Vui lòng nhập hình thức lãnh");
+      const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
+      const receiptSource = body.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
+      if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
-      const erpCode = item.erpCode || item.material.code;
+      const erpCode = String(body.erpCode || item.erpCode || "").trim();
+      if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
+      const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+      if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+      const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
+      if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
       const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`
         SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1
       `;
       if (erpRows.length === 0) return fail(`Không tìm thấy mã vật tư ERP "${erpCode}"`, 404);
       const before = item.material.quantity;
       const erpBefore = Number(erpRows[0]?.erpStock ?? 0);
-      const erpAfter = Math.max(0, erpBefore - receivedQuantity);
+      const erpAfter = receiptSource === "ERP" ? Math.max(0, erpBefore - receivedQuantity) : erpBefore;
+      // Luồng Ứng đã cộng số VHV lãnh ở bước trước. Bước xác nhận chính thức
+      // chỉ bù chênh lệch để không cộng trùng; luồng Đề xuất vẫn cộng toàn bộ.
+      const materialIncrement = t.type === "UNG"
+        ? receivedQuantity - (t.vhvReceivedQuantity ?? 0)
+        : receivedQuantity;
+      if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
+      const documents = t.type === "UNG" ? {
+        bbkt: await generateBbntDoc({
+          code: t.code,
+          soBBKT: t.bbktNumber,
+          soPCT: t.pctNumber,
+          noiDung: t.completionNote ?? "",
+          thoiGianBatDau: t.workStartedAt,
+          thoiGianKetThuc: t.workEndedAt,
+          tenChiHuy: t.chiHuyName ?? "",
+          tenTruongCa: t.completedByName ?? "",
+          tenVHV: t.proposedByName,
+          chucVuVHV: t.proposedByPosition,
+          items: toBbntItems(t).map((row, index) => index === 0
+            ? { ...row, materialCode: erpCode, materialName: erpMaterial.name, quantity: receivedQuantity }
+            : row),
+        }),
+        bbnt: await generateBlankDocx(t.code, "BBNT-DO"),
+        recovery: t.recoveryRequired
+          ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+          : null,
+      } : null;
       const up = await prisma.$transaction(async (tx) => {
-        await tx.material.update({
-          where: { id: item.materialId },
-          data: { quantity: { increment: receivedQuantity } },
-        });
+        const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+        const sharedQuantity = before + materialIncrement;
         await tx.$executeRaw`
-          UPDATE "ErpMaterial"
-          SET "erpStock" = ${erpAfter}, "updatedAt" = NOW()
-          WHERE "code" = ${erpCode}
+          UPDATE "Material"
+          SET "quantity" = ${sharedQuantity}
+          WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
         `;
-        return tx.materialTicket.update({
+        if (receiptSource === "ERP") await tx.$executeRaw`
+          UPDATE "ErpMaterial" SET "erpStock" = ${erpAfter}, "updatedAt" = NOW() WHERE "code" = ${erpCode}
+        `;
+        await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: "SU_DUNG_VAT_TU",
-            receivedQuantity, receivedMethod,
+            status: t.type === "UNG" ? "CHO_THONG_KE" : "CHO_PHIEU_YCSC",
+            receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
+            remainingQuantity: receivedQuantity - (t.usedQuantity ?? 0),
+            ...(documents ? {
+              docUrl: documents.bbnt.url,
+              bbktDocUrl: documents.bbkt.url,
+              recoveryDocUrl: documents.recovery?.url ?? null,
+            } : {}),
             receivedById: user.id, receivedByName: user.name ?? "",
             receivedByPosition: user.position ?? null, receivedAt: new Date(),
           },
           include: ITEM_INCLUDE,
         });
+        await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
+        return tx.materialTicket.findUnique({ where: { id: t!.id }, include: ITEM_INCLUDE });
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${t.code}: lãnh ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + receivedQuantity}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}`
+        `${t.code}: ${receiptSource === "ERP" ? "lãnh kho ERP" : "lãnh ngoài kho"} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
       );
+      return ok(up);
+    }
+
+    if (action === "repairRequest") {
+      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_PHIEU_YCSC") return fail("Phiếu không ở bước nhập phiếu yêu cầu sửa chữa");
+      const assignedError = assignedPositionError(user, t); if (assignedError) return assignedError;
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền nhập phiếu yêu cầu sửa chữa", 403);
+      const value = String(body.repairRequestNumber || "").trim();
+      if (!value) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
+      const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "SU_DUNG_VAT_TU", repairRequestNumber: value }, include: ITEM_INCLUDE });
+      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${t.code}: phiếu yêu cầu sửa chữa ${value}`);
       return ok(up);
     }
 
     // B2'' — SỬ DỤNG VẬT TƯ: PCT/LCT + chỉ huy + nội dung + khối lượng dùng.
     // Tồn kho đã cộng khối lượng lãnh ở bước Nhận vật tư; bước này trừ khối lượng dùng.
     if (action === "use") {
-      if (t.type !== "DE_XUAT" || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
       const assignedError = assignedPositionError(user, t);
       if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
         return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const note = String(body.completionNote || "").trim();
-      const pct = String(body.pctNumber || "").trim();
-      const chiHuy = String(body.chiHuyName || "").trim();
+      const recoveryRequired = body.recoveryRequired === true;
+      const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
+      const recoveryReturned = body.recoveryReturned === true;
       const usedQuantity = Math.trunc(Number(body.usedQuantity));
-      if (!pct) return fail("Vui lòng nhập số PCT/LCT");
-      if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
-      if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
+      if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
       if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
-      const received = t.receivedQuantity ?? 0;
+      const received = t.receivedQuantity ?? (t.type === "UNG" ? t.vhvReceivedQuantity ?? item.quantity : 0);
       const remaining = received - usedQuantity;
+      if (t.type === "SU_DUNG_HIEN_CO" && usedQuantity > received) return fail(`Số lượng sử dụng vượt số lượng đã nhận từ Hiện có (${received})`);
       const mat = await prisma.material.findUnique({
         where: { id: item.materialId },
-        select: { id: true, code: true, name: true, quantity: true },
+        select: { id: true, code: true, erpCodes: true, name: true, quantity: true },
       });
       if (!mat) return fail("Không tìm thấy vật tư trong Danh mục", 404);
       if (usedQuantity > mat.quantity) {
-        return fail(`Số lượng vật tư sử dụng đã nhập vượt tồn kho. ${mat.name} hiện còn ${mat.quantity}; vui lòng nhập lại số lượng.`);
+        return fail(`Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. ${mat.name} hiện còn ${mat.quantity}; vui lòng nhập lại số lượng.`);
       }
       const newQty = mat.quantity - usedQuantity;
+      const recoveryDocument = recoveryRequired && t.type !== "UNG"
+        ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+        : null;
 
       const up = await prisma.$transaction(async (tx) => {
         if (newQty !== mat.quantity) {
-          await tx.material.update({ where: { id: mat.id }, data: { quantity: newQty } });
+          const sharedCodes = mat.erpCodes.length ? mat.erpCodes : [mat.code];
+          await tx.$executeRaw`
+            UPDATE "Material"
+            SET "quantity" = ${newQty}
+            WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
+          `;
         }
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
             status: "CHO_NGHIEM_THU",
-            completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+            recoveryRequired, recoveryQuantity,
+            recoveryReturnedAt: recoveryRequired && recoveryReturned ? new Date() : null,
+            recoveryDocUrl: recoveryDocument?.url ?? null,
             usedQuantity, remainingQuantity: remaining,
             usedById: user.id, usedByName: user.name ?? "",
             usedByPosition: user.position ?? null, usedAt: new Date(),
@@ -547,38 +729,56 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B3 — Trưởng Ca nghiệm thu: nhập PCT/LCT + nội dung + chỉ huy → xuất Word → HOÀN TẤT
     if (action === "accept") {
-      if (t.type !== "DE_XUAT" || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
       const assignedError = assignedPositionError(user, t);
       if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user))
         return fail("Bạn không có quyền nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       // PCT/chỉ huy/nội dung đã nhập ở bước SỬ DỤNG VẬT TƯ; phiếu cũ (trước khi có
       // bước này) vẫn nhận từ form nghiệm thu để tương thích.
-      const note = String(body.completionNote || "").trim() || t.completionNote || "";
-      const pct = String(body.pctNumber || "").trim() || t.pctNumber || "";
-      const chiHuy = String(body.chiHuyName || "").trim() || t.chiHuyName || "";
+      const note = String(body.completionNote || "").trim();
+      const pct = String(body.pctNumber || "").trim();
+      const chiHuy = String(body.chiHuyName || "").trim();
+      const workStartedAt = new Date(String(body.workStartedAt || ""));
+      const workEndedAt = new Date(String(body.workEndedAt || ""));
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBKT bổ sung ở bước này (nếu có)
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
+      if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
+      if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
 
-      const { url } = await generateBbntDoc({
-        code: t.code, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
-        tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
-        tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
-        items: toBbntItems(t),
-      });
+      const documents = t.type !== "UNG" ? {
+        bbkt: await generateBbntDoc({
+          code: t.code, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
+          thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
+          tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
+          tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
+          items: toBbntItems(t),
+        }),
+        bbnt: await generateBlankDocx(t.code, "BBNT-DO"),
+      } : null;
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: "HOAN_TAT", completionNote: note, pctNumber: pct, chiHuyName: chiHuy, docUrl: url,
+          status: t.type === "UNG" ? "NHAN_VAT_TU" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+          ...(documents ? { docUrl: documents.bbnt.url, bbktDocUrl: documents.bbkt.url } : {}),
+          workStartedAt, workEndedAt,
           ...(bbkt ? { bbktNumber: bbkt } : {}),
           completedById: user.id, completedByName: user.name ?? "",
           completedByPosition: user.position ?? null, completedAt: new Date(),
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${t.code}: nghiệm thu, xuất BBNT`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${t.code}: đã nghiệm thu, chờ xác nhận vật tư lãnh để xuất biên bản` : `${t.code}: nghiệm thu, xuất biên bản`);
+      return ok(up);
+    }
+
+    if (action === "settle") {
+      if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
+      const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "HOAN_TAT", settledAt: new Date(), settledByName: user.name ?? "" }, include: ITEM_INCLUDE });
+      await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${t.code}: đã quyết toán vật tư`);
       return ok(up);
     }
 
@@ -665,7 +865,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       });
-      if (!up) return fail("Số lượng ứng đã được xác nhận trước đó, tồn kho không bị cộng lại");
+      if (!up) return fail("Số lượng ứng đã được xác nhận trước đó, số lượng hiện có không bị cộng lại");
       const stockDetail = stocksBefore.map((material) => {
         const added = quantityByMaterial.get(material.id) ?? 0;
         return `${material.code}: ${material.quantity} → ${material.quantity + added}`;
@@ -741,7 +941,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ([materialId, quantity]) => (stocksBefore.get(materialId)?.quantity ?? 0) < quantity
       );
       if (insufficient.length > 0) {
-        return fail("Tồn kho không đủ: " + insufficient.map(([materialId, quantity]) => {
+        return fail("Số lượng hiện có không đủ: " + insufficient.map(([materialId, quantity]) => {
           const stock = stocksBefore.get(materialId);
           return `${stock?.name ?? "Vật tư"} (thay ${quantity}, tồn ${stock?.quantity ?? 0})`;
         }).join("; "));
@@ -783,7 +983,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       });
-      if (!up) return fail("Thông tin thay thế đã được xác nhận trước đó, tồn kho không bị trừ lại");
+      if (!up) return fail("Thông tin thay thế đã được xác nhận trước đó, số lượng hiện có không bị trừ lại");
       const stockDetail = [...replacementByMaterial].map(([materialId, quantity]) => {
         const stock = stocksBefore.get(materialId)!;
         return `${stock.code}: ${stock.quantity} → ${stock.quantity - quantity}`;

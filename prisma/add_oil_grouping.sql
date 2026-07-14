@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS "oil_types" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "oil_types_code_key" ON "oil_types"("code");
 
+-- Các cột được bổ sung sau phiên bản đầu của module gom nhóm.
+ALTER TABLE "oil_types"
+  ADD COLUMN IF NOT EXISTS "onHandQty" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'Dầu bôi trơn';
+CREATE INDEX IF NOT EXISTS "oil_types_category_idx" ON "oil_types"("category");
+
 -- Cột mapping trên bảng vật tư ERP có sẵn. Import Excel chỉ update
 -- name/unit/category/erpStock nên các cột này không bị reset sau mỗi lần nhập.
 ALTER TABLE "ErpMaterial"

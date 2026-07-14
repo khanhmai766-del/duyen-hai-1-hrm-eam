@@ -25,6 +25,7 @@ import {
   useOilGroupingSync,
   useOilGroupingConfirm,
   useCreateGroupedErpMaterial,
+  useUpdateGroupedErpStock,
   useImportGroupedErpMaterials,
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
@@ -335,12 +336,6 @@ function StockBoard({
     }
   };
 
-  // Lưu ô "Hiện có" sửa inline — chỉ gửi onHandQty, không đụng field khác
-  const saveOnHand = async (g: OilStockGroup, value: number) => {
-    await updateGroup.mutateAsync({ id: g.id, onHandQty: value });
-    toast.success(`Đã cập nhật Hiện có: ${g.code} → ${fmt(value)} ${g.baseUnit}`);
-  };
-
   if (loading) return <div className="py-12 text-center text-slate-400">Đang tải…</div>;
   if (groups.length === 0)
     return (
@@ -375,7 +370,6 @@ function StockBoard({
                 canManage={canManage}
                 onEdit={() => startEdit(g)}
                 onDelete={() => setDeleting(g)}
-                onSaveOnHand={(v) => saveOnHand(g, v)}
               />
             ))}
           </tbody>
@@ -453,7 +447,6 @@ function GroupRows({
   canManage,
   onEdit,
   onDelete,
-  onSaveOnHand,
 }: {
   g: OilStockGroup;
   open: boolean;
@@ -461,8 +454,8 @@ function GroupRows({
   canManage: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onSaveOnHand: (value: number) => Promise<void>;
 }) {
+  const updateErpStock = useUpdateGroupedErpStock();
   return (
     <>
       <tr className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => toggle(g.id)}>
@@ -471,8 +464,10 @@ function GroupRows({
           <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5 mr-2 text-slate-600">{g.code}</span>
           <span className="font-semibold text-slate-800">{g.name}</span>
         </td>
-        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-          <InlineQtyCell value={g.onHandQty} unit={g.baseUnit} canEdit={canManage} onSave={onSaveOnHand} />
+        <td className="px-4 py-3 text-right" onClick={(event) => event.stopPropagation()}>
+          <span className="font-bold tabular-nums text-slate-800" title="Tự động lấy từ tồn kho Danh mục vận hành 1">
+            {fmt(g.onHandQty)} <span className="font-normal text-slate-400">{g.baseUnit}</span>
+          </span>
         </td>
         <td className="px-4 py-3 text-right font-bold text-slate-800">
           {fmt(g.totalQty)} <span className="font-normal text-slate-400">{g.baseUnit}</span>
@@ -526,13 +521,17 @@ function GroupRows({
             </td>
             <td></td>
             <td className="px-4 py-2 text-right text-slate-600 text-xs">
-              {fmt(m.qtyInBase)} {g.baseUnit}
-              {m.conversionFactor !== 1 && (
-                <span className="text-slate-400">
-                  {" "}
-                  ({fmt(m.erpQty)} {m.unit} × {m.conversionFactor})
-                </span>
-              )}
+              <InlineQtyCell
+                value={m.erpQty}
+                unit={m.unit}
+                canEdit={canManage}
+                ariaLabel={`Sửa số liệu ERP ${m.erpCode}`}
+                onSave={async (value) => {
+                  await updateErpStock.mutateAsync({ id: m.id, erpStock: value });
+                  toast.success(`Đã cập nhật số liệu ERP: ${m.erpCode} → ${fmt(value)} ${m.unit}`);
+                }}
+              />
+              {m.conversionFactor !== 1 && <span className="ml-2 text-slate-400">= {fmt(m.qtyInBase)} {g.baseUnit}</span>}
             </td>
             <td colSpan={canManage ? 4 : 3}></td>
           </tr>
@@ -541,17 +540,19 @@ function GroupRows({
   );
 }
 
-/** Ô "Hiện có": kích đúp để sửa, Enter lưu, Esc huỷ. Cho phép số lẻ (Lít/Kg). */
+/** Ô số liệu ERP: kích đúp để sửa, Enter lưu, Esc huỷ. */
 function InlineQtyCell({
   value,
   unit,
   canEdit,
   onSave,
+  ariaLabel = "Sửa số liệu ERP",
 }: {
   value: number;
   unit: string;
   canEdit: boolean;
   onSave: (v: number) => Promise<void>;
+  ariaLabel?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
@@ -580,8 +581,8 @@ function InlineQtyCell({
       autoFocus
       type="number"
       min={0}
-      step="any"
-      aria-label="Sửa số lượng hiện có"
+      step={1}
+      aria-label={ariaLabel}
       value={draft}
       disabled={saving}
       onFocus={(e) => e.target.select()}
@@ -590,7 +591,7 @@ function InlineQtyCell({
         if (e.key === "Escape") return setEditing(false);
         if (e.key !== "Enter") return;
         const next = Number(draft);
-        if (!Number.isFinite(next) || next < 0) return void toast.error("Giá trị không hợp lệ");
+        if (!Number.isInteger(next) || next < 0) return void toast.error("Số liệu ERP phải là số nguyên không âm");
         if (next === value) return setEditing(false);
         setSaving(true);
         try {

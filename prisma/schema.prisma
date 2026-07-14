@@ -848,51 +848,70 @@ model MaterialTicket {
   unit   String // Tổ máy: S1 | S2 | COMMON
   status String // máy trạng thái theo type
 
-  assignedPosition String  // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)
+  assignedPosition String // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)
   materialCategory String? // Loại vật tư: "Dầu bôi trơn" | "Lọc dầu" | "Hóa chất" | "Bi nghiền"
 
   bbktNumber     String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
   proposalNote   String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
   pctNumber      String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
   proposalNumber String? // số phiếu đề xuất vật tư (Thống kê nhập)
+  proposalIssuedAt DateTime? // Thống kê xác nhận đã trả phiếu (giữ tên cột cũ để tương thích dữ liệu)
+  deliveryNoteNumber String? // số phiếu giao hàng
+  repairRequestNumber String? // số phiếu yêu cầu sửa chữa
   completionNote String? // thông tin xác nhận thay thế xong
   chiHuyName     String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
   docUrl         String? // file Word BBNT trên MinIO
+  bbktDocUrl     String? // file Word BBKT, tách riêng khỏi BBNT DO
+  recoveryRequired Boolean? // có vật tư thu hồi hay không
+  recoveryQuantity Int?
+  recoveryReturnedAt DateTime?
+  recoveryDocUrl String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
+  workStartedAt DateTime? // thời gian ghi vào BBNT DO
+  workEndedAt DateTime?
+  settledAt DateTime? // Thống kê xác nhận đã quyết toán
+  settledByName String?
   rejectedReason String?
 
   // dấu vết từng bước: id + tên hiển thị (đóng băng tại thời điểm thao tác)
-  createdById        String
-  createdByName      String
-  proposedById       String?
-  proposedByName     String?
-  proposedByPosition String?
-  proposedAt         DateTime?
-  confirmedById      String?
-  confirmedByName    String?
+  createdById         String
+  createdByName       String
+  proposedById        String?
+  proposedByName      String?
+  proposedByPosition  String?
+  proposedAt          DateTime?
+  confirmedById       String?
+  confirmedByName     String?
   confirmedByPosition String? // cương vị người xác nhận (hiện trong lịch sử phiếu)
-  confirmedAt        DateTime? // mốc tính quy tắc 2 ngày (luồng đề xuất)
-  statsById          String?
-  statsByName        String?
-  statsByPosition    String? // cương vị người nhập số phiếu ĐXVT
-  statsAt            DateTime?
+  confirmedAt         DateTime? // mốc tính quy tắc 2 ngày (luồng đề xuất)
+  statsById           String?
+  statsByName         String?
+  statsByPosition     String? // cương vị người nhập số phiếu ĐXVT
+  statsAt             DateTime?
+  // Bước VHV LÃNH VẬT TƯ của luồng Ứng (không tác động ERP)
+  vhvReceivedQuantity Int?
+  vhvMaterialCode     String?
+  vhvReceivedByName   String?
+  vhvReceivedByPosition String?
+  vhvReceivedAt       DateTime?
   // Bước NHẬN VẬT TƯ (NHAN_VAT_TU)
-  receivedQuantity   Int? // khối lượng vật tư lãnh
-  receivedMethod     String? // hình thức lãnh nhập tự do
-  receivedById       String?
-  receivedByName     String?
-  receivedByPosition String?
-  receivedAt         DateTime?
+  receivedQuantity    Int? // khối lượng vật tư lãnh
+  receivedMethod      String? // hình thức lãnh nhập tự do
+  receiptSource       String? // ERP | OUTSIDE — nguồn lãnh vật tư
+  receivedById        String?
+  receivedByName      String?
+  receivedByPosition  String?
+  receivedAt          DateTime?
   // Bước SỬ DỤNG VẬT TƯ (SU_DUNG_VAT_TU)
-  usedQuantity       Int? // khối lượng vật tư sử dụng
-  remainingQuantity  Int? // còn lại = lãnh − dùng (âm = dùng vượt phần lãnh, trừ vào tồn kho)
-  usedById           String?
-  usedByName         String?
-  usedByPosition     String?
-  usedAt             DateTime?
-  completedById      String?
-  completedByName    String? // Trưởng Ca/TK xuất file — in vào Hội đồng nghiệm thu
+  usedQuantity        Int? // khối lượng vật tư sử dụng
+  remainingQuantity   Int? // còn lại = lãnh − dùng (âm = dùng vượt phần lãnh, trừ vào tồn kho)
+  usedById            String?
+  usedByName          String?
+  usedByPosition      String?
+  usedAt              DateTime?
+  completedById       String?
+  completedByName     String? // Trưởng Ca/TK xuất file — in vào Hội đồng nghiệm thu
   completedByPosition String? // cương vị người nghiệm thu
-  completedAt        DateTime?
+  completedAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -920,13 +939,14 @@ model MaterialWorkflowRole {
 }
 
 model MaterialTicketItem {
-  id               String  @id @default(cuid())
-  ticketId         String
-  materialId       String
-  erpCode          String?
-  deviceSeq        String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
-  deviceNameManual String?
-  quantity         Int     @default(1)
+  id                  String  @id @default(cuid())
+  ticketId            String
+  materialId          String
+  erpCode             String?
+  erpName             String? // tên vật tư ERP đóng băng khi chọn mã, dùng cho biên bản
+  deviceSeq           String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
+  deviceNameManual    String?
+  quantity            Int     @default(1)
   replacementQuantity Int? // số lượng thay thế do cương vị phân giao nhập ở luồng Ứng
 
   ticket   MaterialTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
@@ -941,14 +961,14 @@ model MaterialTicketItem {
 // Các CHECK constraint và partial unique index cho "continuous" được áp bằng
 // prisma/add_safe_op_events.sql vì Prisma chưa biểu diễn được partial index.
 model SafeOperationEvent {
-  id         String    @id @default(cuid())
-  unit       String    // "S1" hoặc "S2"
-  category   String    // "continuous", "standby", "maintenance", "incident"
-  startedAt  DateTime
-  endedAt    DateTime?
-  reason     String?
-  isAdded    Boolean   @default(false)
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(cuid())
+  unit      String // "S1" hoặc "S2"
+  category  String // "continuous", "standby", "maintenance", "incident"
+  startedAt DateTime
+  endedAt   DateTime?
+  reason    String?
+  isAdded   Boolean   @default(false)
+  createdAt DateTime  @default(now())
 
   @@index([unit, category])
   @@index([createdAt])

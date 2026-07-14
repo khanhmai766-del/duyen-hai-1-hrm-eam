@@ -134,7 +134,6 @@ type TicketCodeDb = {
   materialTicket: {
     findMany: (args: {
       where: {
-        type: "DE_XUAT" | "UNG";
         createdAt: { gte: Date; lt: Date };
       };
       select: { code: true };
@@ -154,10 +153,14 @@ export async function nextTicketCode(type: "DE_XUAT" | "UNG", db: TicketCodeDb =
   await db.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `material-ticket:${type}:${year}`);
 
   const tickets = await db.materialTicket.findMany({
-    where: { type, createdAt: { gte: start, lt: end } },
+    // Phiếu mới được tạo với type CHUA_CHON rồi mới chọn Đề xuất/Ứng ở
+    // bước Trưởng ca. Vì vậy phải dò theo tiền tố mã thực tế, không lọc type.
+    where: { createdAt: { gte: start, lt: end } },
     select: { code: true },
   });
+  const prefix = `${materialTicketPrefix(type)}-${year}-`;
   const maxNumber = tickets.reduce((max, ticket) => {
+    if (!ticket.code.startsWith(prefix)) return max;
     const match = ticket.code.match(/-(\d+)(?:U)?$/);
     const value = match ? Number(match[1]) : 0;
     return Number.isFinite(value) && value > max ? value : max;

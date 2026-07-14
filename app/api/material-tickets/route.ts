@@ -99,15 +99,13 @@ export async function POST(req: NextRequest) {
       return fail("Bạn không có quyền tạo phiếu thay thế vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
     }
     const body = await req.json();
-    const type = body.type === "UNG" ? "UNG" : body.type === "DE_XUAT" ? "DE_XUAT" : null;
-    if (!type) return fail("Loại phiếu không hợp lệ");
+    const type = "CHUA_CHON";
     const unit = String(body.unit || "").trim();
     if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
     // BBKT không còn bắt buộc lúc tạo (bổ sung ở bước Nghiệm thu nếu có);
     // thay bằng Ghi chú bắt buộc cho luồng Đề xuất.
-    const bbkt = String(body.bbktNumber || "").trim();
     const proposalNote = String(body.note || "").trim();
-    if (type === "DE_XUAT" && !proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
+    if (!proposalNote) return fail("Vui lòng nhập ghi chú lý do");
 
     // Cương vị được giao: bắt buộc, và phải là cương vị có phân giao cây thiết bị
     const assignedPosition = String(body.assignedPosition || "").trim();
@@ -122,12 +120,13 @@ export async function POST(req: NextRequest) {
     if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
 
     let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
-    let requestedQuantity = 0;
-    let replacementDeviceName = "";
-    let erpCode = "";
-    let nextStatus = type === "DE_XUAT" ? "CHO_PHIEU__XUAT_KHO" : "CHO_NHAP_LIEU";
+    const nextStatus = "CHO_XAC_NHAN";
     const materialId = String(body.materialId || "").trim();
-    if (!materialId) return fail(type === "UNG" ? "Vui lòng chọn tên vật tư ứng" : "Vui lòng chọn tên vật tư đề xuất");
+    if (!materialId) return fail("Vui lòng chọn tên vật tư");
+    const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
+    if (!Number.isFinite(proposedQuantity) || proposedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
+    const replacementDeviceSeq = String(body.replacementDeviceSeq || "").trim();
+    if (!replacementDeviceSeq) return fail("Vui lòng chọn thiết bị thay thế");
 
     selectedMaterial = await prisma.material.findUnique({
       where: { id: materialId },
@@ -137,32 +136,24 @@ export async function POST(req: NextRequest) {
     const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
     if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
-
-    if (type === "DE_XUAT") {
-      erpCode = String(body.erpCode || "").trim();
-      requestedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
-      replacementDeviceName = String(body.replacementDeviceName || "").trim();
-
-      if (!erpCode) return fail("Vui lòng chọn mã vật tư");
-      if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
-      if (!replacementDeviceName) return fail("Vui lòng nhập tên thiết bị thay thế");
-
-      const allowedCodes = selectedMaterial.erpCodes.length ? selectedMaterial.erpCodes : [selectedMaterial.code];
-      if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
-      // Bỏ kiểm kho tự động: tạo phiếu xong đi thẳng bước Thống kê nhập số ĐXVT.
-      nextStatus = "CHO_PHIEU__XUAT_KHO";
+    const replacementPoint = await prisma.materialReplacement.findFirst({
+      where: { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq, isActive: false },
+      select: { deviceSeq: true, device: { select: { name: true } } },
+    });
+    if (!replacementPoint?.deviceSeq || !replacementPoint.device) {
+      return fail("Thiết bị chưa được khai báo trong Chi tiết điểm thay thế của vật tư");
     }
 
     const { ticket, code } = await prisma.$transaction(async (tx) => {
-      const code = await nextTicketCode(type, tx);
+      const code = await nextTicketCode("DE_XUAT", tx);
       const ticket = await tx.materialTicket.create({
         data: {
           code,
           type,
           unit,
           status: nextStatus,
-          bbktNumber: type === "DE_XUAT" ? bbkt || null : null,
-          proposalNote: type === "DE_XUAT" ? proposalNote : null,
+          bbktNumber: null,
+          proposalNote,
           assignedPosition,
           materialCategory,
           createdById: user.id,
@@ -170,17 +161,12 @@ export async function POST(req: NextRequest) {
           items: {
             create: [{
               materialId: selectedMaterial!.id,
-              erpCode: type === "DE_XUAT" ? erpCode : null,
-              quantity: type === "DE_XUAT" ? requestedQuantity : 0,
-              deviceNameManual: type === "DE_XUAT" ? replacementDeviceName : null,
+              erpCode: null,
+              quantity: proposedQuantity,
+              deviceSeq: replacementPoint.deviceSeq,
+              deviceNameManual: null,
             }],
           },
-          ...(type === "DE_XUAT" ? {
-            proposedById: user.id,
-            proposedByName: user.name ?? "",
-            proposedByPosition: user.position ?? null,
-            proposedAt: new Date(),
-          } : {}),
         },
         include: ITEM_INCLUDE,
       });
@@ -188,10 +174,7 @@ export async function POST(req: NextRequest) {
     });
 
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-      `${code} (${type === "UNG" ? "Ứng" : "Đề xuất"}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}` +
-      (type === "DE_XUAT"
-        ? `, vật tư: ${selectedMaterial!.name}, SL: ${requestedQuantity}, thiết bị: ${replacementDeviceName}, trạng thái: ${nextStatus}`
-        : `, vật tư: ${selectedMaterial!.name}`));
+      `${code} (chưa chọn luồng, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementPoint.device.name}`);
     return ok(ticket);
   });
 }

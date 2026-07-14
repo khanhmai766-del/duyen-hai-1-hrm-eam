@@ -15,9 +15,9 @@ import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDevice, useUpdateDevice, type DeviceRecord } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
-import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import { announcementShiftRosterPositionOptions } from "@/lib/positions";
 
 const NONE = "__none__";
 
@@ -28,7 +28,10 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
   const isEdit = !!device;
   const rbac = useRbacAccess();
   const canEditCode = !isEdit || rbac.can("device-code", ["full"]);
-  const positions = usePositions().filter(isSelectableManagingPosition);
+  const positions = React.useMemo<string[]>(
+    () => announcementShiftRosterPositionOptions().filter(isSelectableManagingPosition),
+    []
+  );
   const { data: equipmentTreeData } = useEquipmentTree();
   const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
 

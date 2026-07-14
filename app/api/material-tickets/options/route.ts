@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { getPositionScopes } from "@/lib/material-workflow";
-import { DEFECT_UNIT_POSITIONS } from "@/lib/constants";
+import { announcementShiftRosterPositionOptions } from "@/lib/positions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,14 +43,15 @@ export async function GET() {
     });
     const erpCodes = Array.from(new Set(materialsRaw.flatMap((m) => (m.erpCodes?.length ? m.erpCodes : [m.code]).filter(Boolean))));
     const erpRows = erpCodes.length
-      ? await prisma.$queryRaw<Array<{ code: string; erpStock: number }>>`
-          SELECT "code", "erpStock"
+      ? await prisma.$queryRaw<Array<{ code: string; name: string; erpStock: number }>>`
+          SELECT "code", "name", "erpStock"
           FROM "ErpMaterial"
           WHERE "code" = ANY(${erpCodes}::text[])
             AND "mappingStatus" = 'CONFIRMED'
         `
       : [];
     const erpStockByCode = new Map(erpRows.map((row) => [row.code, row.erpStock]));
+    const erpNameByCode = new Map(erpRows.map((row) => [row.code, row.name]));
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
       const positions = new Set<string>();
@@ -66,7 +67,7 @@ export async function GET() {
       return {
         id: m.id,
         code: m.code,
-        erpCodes: codes.map((code) => ({ code, erpStock: erpStockByCode.get(code) ?? 0 })),
+        erpCodes: codes.map((code) => ({ code, name: erpNameByCode.get(code) ?? m.name, erpStock: erpStockByCode.get(code) ?? 0 })),
         name: m.name,
         unit: m.unit,
         quantity: m.quantity,
@@ -77,22 +78,9 @@ export async function GET() {
       };
     });
 
-    // Danh sách cương vị có phân giao cây thiết bị -> để Trưởng Ca chọn khi tạo phiếu
-    const posRows = await prisma.positionSystemScope.findMany({
-      distinct: ["position"],
-      select: { position: true },
-      orderBy: { position: "asc" },
-    });
-    const positions = posRows.length
-      ? posRows.map((r) => r.position)
-      : Array.from(
-          new Set([
-            ...Object.values(DEFECT_UNIT_POSITIONS).flat(),
-            ...(await prisma.user.findMany({ select: { position: true }, distinct: ["position"] }))
-              .map((user) => user.position)
-              .filter((position): position is string => Boolean(position?.trim())),
-          ])
-        ).sort((a, b) => a.localeCompare(b, "vi"));
+    // Dùng cùng nguồn cương vị cố định với Mệnh lệnh/Forum. Không trộn dữ liệu
+    // user để tránh sinh bản sao chỉ khác kiểu viết hoa (Lò phó / Lò Phó...).
+    const positions = announcementShiftRosterPositionOptions();
 
     return ok({ devices, materials, scopes, positions });
   });

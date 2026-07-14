@@ -977,11 +977,15 @@ function MaterialsPageContent() {
                 )}
                 {selectedErpGroups.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {selectedErpGroups.map((group) => (
-                      <span key={group.id} className="rounded-md bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">
-                        {group.name} · {fmtNumber(group.totalErpStock)} {group.unit}
-                      </span>
-                    ))}
+                    {selectedErpGroups.flatMap((group) =>
+                      group.erpCodes
+                        .filter((code) => selectedErpCodeSet.has(code))
+                        .map((code) => (
+                          <span key={`${group.id}-${code}`} className="rounded-md bg-accent/10 px-2 py-1 font-mono text-xs font-semibold text-accent">
+                            {code}
+                          </span>
+                        ))
+                    )}
                   </div>
                 )}
               </Field>

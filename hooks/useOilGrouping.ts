@@ -140,6 +140,19 @@ export function useCreateGroupedErpMaterial() {
   });
 }
 
+export function useUpdateGroupedErpStock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { id: string; erpStock: number }) =>
+      apiMutate("/api/vat-tu/oil-grouping/materials", "PUT", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+    },
+  });
+}
+
 export function useImportGroupedErpMaterials() {
   const qc = useQueryClient();
   return useMutation({
