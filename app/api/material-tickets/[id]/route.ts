@@ -159,15 +159,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device)) {
           return fail("Thiết bị đã chọn không còn tồn tại trong cây thiết bị");
         }
-        const manualName = manualDeviceId
-          ? replacementPoint.location || replacementPoint.device?.name || replacementPoint.system || "Thiết bị nhập tay"
-          : null;
+        const replacementDeviceLabel = replacementPoint.location || replacementPoint.device?.name || replacementPoint.system || replacementPoint.deviceSeq || "Thiết bị nhập tay";
         editedItemData = {
           materialId,
           erpCode,
           quantity: proposedQuantity,
-          deviceSeq: manualName ? null : replacementPoint.deviceSeq,
-          deviceNameManual: manualName,
+          deviceSeq: manualDeviceId ? null : replacementPoint.deviceSeq,
+          deviceNameManual: replacementDeviceLabel,
         };
         data.proposalNote = proposalNote;
       }
@@ -325,6 +323,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
       });
       const declSet = new Set(decls.map((d) => `${d.materialId}::${d.deviceSeq}`));
+      const replacementLabelMap = new Map(
+        decls.map((d) => [`${d.materialId}::${d.deviceSeq}`, d.location || d.device?.name || d.system || d.deviceSeq || "Thiết bị thay thế"])
+      );
       const manualDeclMap = new Map(
         decls.map((d) => [`${d.materialId}::manual:${d.id}`, d.location || d.device?.name || d.system || "Thiết bị nhập tay"])
       );
@@ -347,12 +348,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
       return items.map((i) => {
         const manualName = manualDeclMap.get(`${i.materialId}::${i.deviceSeq}`);
+        const replacementLabel = replacementLabelMap.get(`${i.materialId}::${i.deviceSeq}`);
         return {
           ticketId: t!.id,
           materialId: i.materialId,
           erpCode: i.erpCode || null,
           deviceSeq: manualName ? null : i.deviceSeq,
-          deviceNameManual: manualName ?? null,
+          deviceNameManual: manualName ?? replacementLabel ?? null,
           quantity: Math.trunc(Number(i.quantity)),
         };
       });
@@ -571,6 +573,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
       const receiptSource = body.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
+      const repairRequestNumber = t.type === "UNG" ? "" : String(body.repairRequestNumber || "").trim();
+      if (t.type !== "UNG" && !repairRequestNumber) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const erpCode = String(body.erpCode || item.erpCode || "").trim();
@@ -633,8 +637,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: t.type === "UNG" ? "CHO_THONG_KE" : "CHO_PHIEU_YCSC",
+            status: t.type === "UNG" ? "CHO_THONG_KE" : "SU_DUNG_VAT_TU",
             receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
+            ...(t.type !== "UNG" ? { repairRequestNumber } : {}),
             remainingQuantity: receivedQuantity - (t.usedQuantity ?? 0),
             ...(documents ? {
               docUrl: documents.bbnt.url,
@@ -651,19 +656,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${t.code}: ${receiptSource === "ERP" ? "lãnh kho ERP" : "lãnh ngoài kho"} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
+        `${t.code}: ${receiptSource === "ERP" ? "lãnh kho ERP" : "lãnh ngoài kho"} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
       );
       return ok(up);
     }
 
     if (action === "repairRequest") {
-      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_PHIEU_YCSC") return fail("Phiếu không ở bước nhập phiếu yêu cầu sửa chữa");
+      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_PHIEU_YCSC") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
       const assignedError = assignedPositionError(user, t); if (assignedError) return assignedError;
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền nhập phiếu yêu cầu sửa chữa", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh", 403);
       const value = String(body.repairRequestNumber || "").trim();
       if (!value) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
       const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "SU_DUNG_VAT_TU", repairRequestNumber: value }, include: ITEM_INCLUDE });
-      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${t.code}: phiếu yêu cầu sửa chữa ${value}`);
+      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${t.code}: xác nhận vật tư lãnh, phiếu yêu cầu sửa chữa ${value}`);
       return ok(up);
     }
 

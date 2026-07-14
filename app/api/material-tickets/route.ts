@@ -41,6 +41,26 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 200,
     });
+    const itemPairs = tickets.flatMap((ticket) =>
+      ticket.items
+        .filter((item) => item.deviceSeq)
+        .map((item) => ({ materialId: item.materialId, deviceSeq: item.deviceSeq! }))
+    );
+    const replacementLabels = itemPairs.length
+      ? await prisma.materialReplacement.findMany({
+          where: {
+            isActive: false,
+            OR: itemPairs.map((item) => ({ materialId: item.materialId, deviceSeq: item.deviceSeq })),
+          },
+          select: { materialId: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
+        })
+      : [];
+    const replacementLabelByKey = new Map(
+      replacementLabels.map((item) => [
+        `${item.materialId}::${item.deviceSeq}`,
+        item.location || item.device?.name || item.system || item.deviceSeq || "Thiết bị thay thế",
+      ])
+    );
     const activityRows = tickets.length ? await prisma.auditLog.findMany({
       where: { entity: "MaterialTicket", entityId: { in: tickets.map((ticket) => ticket.id) } },
       include: { user: { select: { name: true, position: true } } },
@@ -53,6 +73,10 @@ export async function GET(req: NextRequest) {
     }
     const ticketsWithActivity = tickets.map((ticket) => ({
       ...ticket,
+      items: ticket.items.map((item) => ({
+        ...item,
+        deviceNameManual: item.deviceNameManual || (item.deviceSeq ? replacementLabelByKey.get(`${item.materialId}::${item.deviceSeq}`) ?? null : null),
+      })),
       activityLogs: activityByTicket.get(ticket.id) ?? [],
     }));
 
@@ -138,11 +162,12 @@ export async function POST(req: NextRequest) {
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
     const replacementPoint = await prisma.materialReplacement.findFirst({
       where: { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq, isActive: false },
-      select: { deviceSeq: true, device: { select: { name: true } } },
+      select: { deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
     });
     if (!replacementPoint?.deviceSeq || !replacementPoint.device) {
       return fail("Thiết bị chưa được khai báo trong Chi tiết điểm thay thế của vật tư");
     }
+    const replacementDeviceLabel = replacementPoint.location || replacementPoint.device.name || replacementPoint.system || replacementPoint.deviceSeq;
 
     const { ticket, code } = await prisma.$transaction(async (tx) => {
       const code = await nextTicketCode("DE_XUAT", tx);
@@ -164,7 +189,7 @@ export async function POST(req: NextRequest) {
               erpCode: null,
               quantity: proposedQuantity,
               deviceSeq: replacementPoint.deviceSeq,
-              deviceNameManual: null,
+              deviceNameManual: replacementDeviceLabel,
             }],
           },
         },
@@ -174,7 +199,7 @@ export async function POST(req: NextRequest) {
     });
 
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-      `${code} (chưa chọn luồng, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementPoint.device.name}`);
+      `${code} (chưa chọn luồng, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabel}`);
     return ok(ticket);
   });
 }

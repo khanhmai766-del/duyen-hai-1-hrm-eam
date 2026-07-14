@@ -33,7 +33,7 @@ const STATUS: Record<string, { label: string; c: string }> = {
   VHV_LANH_VAT_TU: { label: "Chờ VHV lãnh vật tư", c: "#2563eb" },
   NHAN_TU_HIEN_CO: { label: "Nhận vật tư từ Hiện có", c: "#0891b2" },
   NHAN_VAT_TU: { label: "Xác nhận vật tư lãnh", c: "#0891b2" },
-  CHO_PHIEU_YCSC: { label: "Chờ phiếu yêu cầu sửa chữa", c: "#0891b2" },
+  CHO_PHIEU_YCSC: { label: "Xác nhận vật tư lãnh", c: "#0891b2" },
   SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
   CHO_QUYET_TOAN: { label: "Chờ quyết toán", c: "#7c3aed" },
@@ -55,7 +55,6 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống kê nhập số phiếu", who: "Thống kê" },
     { key: "CHO_XAC_NHAN_PHAT", label: "Xác nhận giao phiếu ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
-    { key: "CHO_PHIEU_YCSC", label: "Phiếu yêu cầu sửa chữa", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Sử dụng vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBKT + BBNT DO", who: "Theo phân quyền quy trình" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
@@ -82,11 +81,14 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
 };
 const ORDER: Record<string, string[]> = {
   CHUA_CHON: ["B0", "CHO_XAC_NHAN"],
-  DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT", "NHAN_VAT_TU", "CHO_PHIEU_YCSC", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
+  DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
   UNG: ["B0", "CHO_THONG_KE", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT", "CHO_QUYET_TOAN", "HOAN_TAT"],
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
 };
-const flowStatusKey = (status: string) => status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO" : status;
+const flowStatusKey = (status: string) =>
+  status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
+  : status === "CHO_PHIEU_YCSC" ? "NHAN_VAT_TU"
+  : status;
 const fmt = (s?: string | null) =>
   s ? new Date(s).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
 const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
@@ -932,7 +934,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   </div>
                   <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                   <div className="material-meta-row">
-                    <span className="soft material-device-line">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Chưa nhập thiết bị"}</span>
+                    <span className="soft material-device-line">{it.deviceNameManual || (it.device ? `${it.device.seq} · ${it.device.name}` : "Chưa nhập thiết bị")}</span>
                     {itemIndex === 0 && t.proposalNumber && (
                       <span className="material-proposal-line">
                         Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}
@@ -1330,25 +1332,29 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       const canUseExistingStock = existingStockShortages.length === 0;
       const proposalBlockedByErp = !!selectedErp && qty > selectedErp.erpStock;
       return <div className="act">
-        <label className="lb">Bước 1 — Trưởng ca/Trưởng kíp xác nhận luồng</label>
-        <div className="seg3">
-          <button
-            className={workflowType === "DE_XUAT" ? "on" : ""}
-            disabled={proposalBlockedByErp}
-            title={proposalBlockedByErp ? "Tồn ERP không đủ số lượng đề xuất" : "Chọn luồng Đề xuất"}
-            onClick={() => setWorkflowType("DE_XUAT")}
-          >
-            Đề xuất
-          </button>
-          <button className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button>
-          <button
-            className={workflowType === "SU_DUNG_HIEN_CO" ? "on" : ""}
-            disabled={!canUseExistingStock}
-            title={canUseExistingStock ? "Sử dụng số lượng vật tư hiện có" : "Số lượng hiện có không đủ"}
-            onClick={() => setWorkflowType("SU_DUNG_HIEN_CO")}
-          >
-            Sử dụng hiện có
-          </button>
+        <div className="act-title-row">
+          <label className="lb">Bước 1 — Trưởng ca/Trưởng kíp xác nhận luồng</label>
+          <div className="seg3 flow-toggle" aria-label="Chọn luồng vật tư">
+            <button
+              type="button"
+              className={workflowType === "DE_XUAT" ? "on" : ""}
+              disabled={proposalBlockedByErp}
+              title={proposalBlockedByErp ? "Tồn ERP không đủ số lượng đề xuất" : "Chọn luồng Đề xuất"}
+              onClick={() => setWorkflowType("DE_XUAT")}
+            >
+              Đề xuất
+            </button>
+            <button type="button" className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button>
+            <button
+              type="button"
+              className={workflowType === "SU_DUNG_HIEN_CO" ? "on" : ""}
+              disabled={!canUseExistingStock}
+              title={canUseExistingStock ? "Sử dụng số lượng vật tư hiện có" : "Số lượng hiện có không đủ"}
+              onClick={() => setWorkflowType("SU_DUNG_HIEN_CO")}
+            >
+              Sử dụng hiện có
+            </button>
+          </div>
         </div>
         {proposalBlockedByErp && (
           <div className="warnbox">
@@ -1486,7 +1492,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedReceiveErp = receiveCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <label className="lb">Xác nhận vật tư lãnh — khối lượng lãnh &amp; phiếu giao hàng</label>
+        <label className="lb">Xác nhận vật tư lãnh</label>
         {isAdvance && <>
           <label>Mã vật tư *</label>
           <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}><option value="">— Chọn mã vật tư ERP —</option>{receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}</select>
@@ -1503,16 +1509,34 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <label>Số phiếu giao hàng *</label>
           <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
         </div>
+        {!isAdvance && (
+          <div className="act-field-row">
+            <label>Số phiếu yêu cầu sửa chữa *</label>
+            <input placeholder="Nhập số phiếu yêu cầu sửa chữa" value={num} onChange={(e) => setNum(e.target.value)} />
+          </div>
+        )}
         {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBKT</b>, <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn.</span></div>}
-        <button className="btn primary big" disabled={qty <= 0 || (isAdvance && !erpCode) || !method.trim() || act.isPending}
-          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource, ...(isAdvance ? { erpCode } : {}) }, isAdvance ? "Đã xác nhận vật tư lãnh và xuất các biên bản" : "Đã lưu phiếu giao hàng")}>
+        <button className="btn primary big" disabled={qty <= 0 || (isAdvance && !erpCode) || !method.trim() || (!isAdvance && !num.trim()) || act.isPending}
+          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource, ...(isAdvance ? { erpCode } : { repairRequestNumber: num.trim() }) }, isAdvance ? "Đã xác nhận vật tư lãnh và xuất các biên bản" : "Đã xác nhận vật tư lãnh")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : isAdvance ? <FileText size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận & xuất biên bản" : "Xác nhận"}
         </button>
       </div>
     );
   }
 
-  if (acts.includes("repairRequest")) return <div className="act"><label className="lb">Nhập số phiếu yêu cầu sửa chữa</label><input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Số phiếu yêu cầu sửa chữa *"/><button className="btn primary big" disabled={!num.trim() || act.isPending} onClick={() => run({ action: "repairRequest", repairRequestNumber: num.trim() }, "Đã lưu phiếu yêu cầu sửa chữa")}><Check size={15}/> Lưu và tiếp tục</button></div>;
+  if (acts.includes("repairRequest")) return (
+    <div className="act">
+      <label className="lb">Xác nhận vật tư lãnh</label>
+      <div className="note"><FileText size={15} /> Phiếu đang ở trạng thái cũ, vui lòng bổ sung số phiếu yêu cầu sửa chữa để chuyển sang bước Sử dụng vật tư.</div>
+      <div className="act-field-row">
+        <label>Số phiếu yêu cầu sửa chữa *</label>
+        <input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Nhập số phiếu yêu cầu sửa chữa" />
+      </div>
+      <button className="btn primary big" disabled={!num.trim() || act.isPending} onClick={() => run({ action: "repairRequest", repairRequestNumber: num.trim() }, "Đã xác nhận vật tư lãnh")}>
+        <Check size={15}/> Xác nhận
+      </button>
+    </div>
+  );
 
   if (acts.includes("use")) {
     const unit = t.items[0]?.material.unit ?? "";
@@ -1840,6 +1864,13 @@ const CSS = `
 .seg3 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg3 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
 .seg3 button:disabled{cursor:not-allowed;border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;opacity:.72;}
+.act-title-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:2px;}
+.act-title-row .lb{margin-bottom:0;min-width:0;}
+.flow-toggle{display:inline-flex;grid-template-columns:none;align-items:center;gap:3px;width:auto;max-width:100%;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:${C.navy};box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 18px rgba(15,23,42,.12);}
+.flow-toggle button{min-width:92px;height:32px;padding:0 14px;border:0;border-radius:9px;background:transparent;color:#dbeafe;font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;transition:background .16s ease,color .16s ease,opacity .16s ease;}
+.flow-toggle button:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff;}
+.flow-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
+.flow-toggle button:disabled{background:transparent;color:#93a4bb;opacity:.52;cursor:not-allowed;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row .field{min-width:0;margin:0;}
 .confirm-field-row select,.confirm-field-row input{width:100%;}
@@ -1922,5 +1953,5 @@ const CSS = `
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .95fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.flow-toggle{width:100%;}.flow-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
