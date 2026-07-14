@@ -1333,7 +1333,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       const proposalBlockedByErp = !!selectedErp && qty > selectedErp.erpStock;
       return <div className="act">
         <div className="act-title-row">
-          <label className="lb">Bước 1 — Trưởng ca/Trưởng kíp xác nhận luồng</label>
+          <label className="lb">Xác nhận yêu cầu</label>
           <div className="seg3 flow-toggle" aria-label="Chọn luồng vật tư">
             <button
               type="button"
@@ -1368,7 +1368,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. Bạn vẫn có thể chọn {proposalBlockedByErp ? <b>Ứng</b> : <><b>Đề xuất</b> hoặc <b>Ứng</b></>}.
           </div>
         )}
-        <div className="confirm-field-row">
+        <div className={`confirm-field-row ${workflowType === "UNG" && !proposalBlockedByErp ? "two-even" : ""}`}>
           {(workflowType !== "UNG" || proposalBlockedByErp) && (
             <label className="field confirm-code-field">Mã vật tư *
               <select value={erpCode} onChange={(e) => {
@@ -1866,12 +1866,13 @@ const CSS = `
 .seg3 button:disabled{cursor:not-allowed;border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;opacity:.72;}
 .act-title-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:2px;}
 .act-title-row .lb{margin-bottom:0;min-width:0;}
-.flow-toggle{display:inline-flex;grid-template-columns:none;align-items:center;gap:3px;width:auto;max-width:100%;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:${C.navy};box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 18px rgba(15,23,42,.12);}
+.flow-toggle{display:inline-flex;grid-template-columns:none;align-items:center;gap:3px;width:auto;max-width:100%;padding:4px;border:1px solid ${C.accent};border-radius:12px;background:${C.accent};box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 8px 18px ${C.accent}26;}
 .flow-toggle button{min-width:92px;height:32px;padding:0 14px;border:0;border-radius:9px;background:transparent;color:#dbeafe;font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;transition:background .16s ease,color .16s ease,opacity .16s ease;}
 .flow-toggle button:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff;}
 .flow-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
 .flow-toggle button:disabled{background:transparent;color:#93a4bb;opacity:.52;cursor:not-allowed;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
+.confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row .field{min-width:0;margin:0;}
 .confirm-field-row select,.confirm-field-row input{width:100%;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
