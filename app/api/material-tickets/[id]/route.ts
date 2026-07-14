@@ -224,11 +224,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       } else if (step === "stats") {
-        if (!t.statsAt) return fail("Bước nhập số phiếu chưa hoàn thành");
+        if (!t.statsAt && !t.proposalIssuedAt) return fail("Bước Thống Kê xác nhận ĐXVT chưa hoàn thành");
         const value = String(body.proposalNumber || "").trim();
+        const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
         if (!value) return fail("Vui lòng nhập số phiếu ĐXVT");
-        before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"}`; after = `Số phiếu ĐXVT: ${value}`;
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value }, include: ITEM_INCLUDE });
+        if (!proposalReceiverName) return fail("Vui lòng nhập tên VHV nhận phiếu ĐXVT");
+        before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"}; VHV nhận: ${t.proposalReceiverName ?? "—"}`;
+        after = `Số phiếu ĐXVT: ${value}; VHV nhận: ${proposalReceiverName}`;
+        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value, proposalReceiverName }, include: ITEM_INCLUDE });
       } else if (step === "receive") {
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
         const value = Math.trunc(Number(body.receivedQuantity));
@@ -523,41 +526,28 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B2 — Thống kê nhập số phiếu ĐXVT (CHỈ cương vị Thống kê; không còn khóa 2 ngày)
+    // B2 — Thống Kê xác nhận ĐXVT: nhập số phiếu + VHV nhận phiếu trong cùng bước.
     if (action === "stats") {
-      if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống kê");
+      if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
-        return fail("Bạn không có quyền nhập số phiếu ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const num = String(body.proposalNumber || "").trim();
+        return fail("Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const num = String(body.proposalNumber || t.proposalNumber || "").trim();
+      const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "CHO_XAC_NHAN_PHAT", proposalNumber: num,
-          statsById: user.id, statsByName: user.name ?? "",
-          statsByPosition: user.position ?? null, statsAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
-      });
-      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Nhập số phiếu ĐXVT: ${num}`);
-      return ok(up);
-    }
-
-    if (action === "issueProposal") {
-      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_XAC_NHAN_PHAT") return fail("Phiếu không ở bước xác nhận giao phiếu ĐXVT");
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user)) return fail("Bạn không có quyền xác nhận giao phiếu ĐXVT", 403);
-      const proposalReceiverName = String(body.proposalReceiverName || "").trim();
       if (!proposalReceiverName) return fail("Vui lòng nhập tên VHV nhận phiếu ĐXVT");
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
           status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU",
+          proposalNumber: num,
           proposalIssuedAt: new Date(),
           proposalReceiverName,
+          statsById: user.id, statsByName: user.name ?? "",
+          statsByPosition: user.position ?? null, statsAt: new Date(),
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ISSUE_PROPOSAL", "MaterialTicket", t.id, `${t.code}: giao phiếu ĐXVT cho ${proposalReceiverName}`);
+      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Thống Kê xác nhận ĐXVT: ${num}; VHV nhận phiếu ${proposalReceiverName}`);
       return ok(up);
     }
 

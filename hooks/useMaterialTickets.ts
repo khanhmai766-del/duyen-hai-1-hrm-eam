@@ -231,8 +231,7 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && canOperateAssigned && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     if (t.status === "VAT_TU_KHONG_CO" && canOperateAssigned && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
-    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.steps?.stats) a.push("stats");
-    if (t.status === "CHO_XAC_NHAN_PHAT" && v.steps?.stats) a.push("issueProposal");
+    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO" || t.status === "CHO_XAC_NHAN_PHAT") && v.steps?.stats) a.push("stats");
     if (t.status === "VHV_LANH_VAT_TU" && canOperateAssigned) a.push("vhvReceive");
     if (t.status === "NHAN_TU_HIEN_CO" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
     if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
