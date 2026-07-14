@@ -26,7 +26,7 @@ const C = {
 const STATUS: Record<string, { label: string; c: string }> = {
   CHO_DE_XUAT: { label: "Chờ đề xuất", c: C.accent },
   CHO_XAC_NHAN: { label: "Chờ xác nhận", c: C.navy },
-  CHO_XAC_NHAN_PHAT: { label: "Chờ xác nhận đã trả phiếu", c: "#0f766e" },
+  CHO_XAC_NHAN_PHAT: { label: "Chờ xác nhận giao phiếu ĐXVT", c: "#0f766e" },
   CHO_PHIEU__XUAT_KHO: { label: "Chờ phiếu xuất kho", c: "#0f766e" },
   VAT_TU_KHONG_CO: { label: "Vật tư không có", c: C.bad },
   CHO_THONG_KE: { label: "Chờ thống kê", c: "#7c3aed" },
@@ -53,7 +53,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống kê nhập số phiếu", who: "Thống kê" },
-    { key: "CHO_XAC_NHAN_PHAT", label: "Xác nhận đã trả phiếu", who: "Thống kê" },
+    { key: "CHO_XAC_NHAN_PHAT", label: "Xác nhận giao phiếu ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "CHO_PHIEU_YCSC", label: "Phiếu yêu cầu sửa chữa", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Sử dụng vật tư", who: "Theo phân quyền quy trình" },
@@ -68,7 +68,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh + xuất biên bản", who: "Theo phân quyền quy trình" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống kê nhập số phiếu", who: "Thống kê" },
-    { key: "CHO_XAC_NHAN_PHAT", label: "Xác nhận đã trả phiếu", who: "Thống kê" },
+    { key: "CHO_XAC_NHAN_PHAT", label: "Xác nhận giao phiếu ĐXVT", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   SU_DUNG_HIEN_CO: [
@@ -662,7 +662,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const [selectedErpCode, setSelectedErpCode] = useState(t.items[0]?.erpCode ?? "");
   const [proposedQuantity, setProposedQuantity] = useState(t.items[0]?.quantity ?? 1);
   const [note, setNote] = useState(t.proposalNote ?? "");
-  const [replacementDeviceName, setReplacementDeviceName] = useState(t.items[0]?.deviceNameManual ?? t.items[0]?.device?.name ?? "");
+  const [replacementDeviceSeq, setReplacementDeviceSeq] = useState(t.items[0]?.deviceSeq ?? "");
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
@@ -695,12 +695,14 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
+      if (replacementDeviceSeq) setReplacementDeviceSeq("");
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
+      setReplacementDeviceSeq("");
     }
-  }, [materialCards, selectedMaterialId, selectedErpCode, t.type]);
+  }, [materialCards, selectedMaterialId, selectedErpCode, replacementDeviceSeq, t.type]);
 
   React.useEffect(() => {
     if (!['DE_XUAT', 'UNG'].includes(t.type)) return;
@@ -713,10 +715,22 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     }
   }, [selectedErpCode, selectedErpOptions, t.type]);
 
+  React.useEffect(() => {
+    if (!["DE_XUAT", "UNG"].includes(t.type)) return;
+    if (!selectedMaterial) {
+      if (replacementDeviceSeq) setReplacementDeviceSeq("");
+      return;
+    }
+    if (replacementDeviceSeq && !selectedMaterial.devices.some((device) => device.seq === replacementDeviceSeq)) {
+      setReplacementDeviceSeq("");
+    }
+  }, [replacementDeviceSeq, selectedMaterial, t.type]);
+
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
     setSelectedMaterialId("");
     setSelectedErpCode("");
+    setReplacementDeviceSeq("");
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
@@ -729,7 +743,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
         erpCode: selectedErpCode || undefined,
         proposedQuantity,
         note: note.trim() || undefined,
-        replacementDeviceName: replacementDeviceName.trim() || undefined,
+        replacementDeviceSeq: replacementDeviceSeq || undefined,
       });
       toast.success(`Đã cập nhật phiếu ${t.code}`);
       onClose();
@@ -751,7 +765,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           ))}</div>
 
           <label>Cương vị được giao thực hiện *</label>
-          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); }}>
+          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>
             <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
             {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -759,7 +773,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <label>Loại vật tư *</label>
           <div className="cats">
             {CATEGORIES.map((c) => (
-              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); }}>{c}</button>
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>{c}</button>
             ))}
           </div>
 
@@ -775,7 +789,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                       key={m.id}
                       type="button"
                       className={selectedMaterialId === m.id ? "on" : ""}
-                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); }}
+                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}
                       title={`${m.code} - ${m.name}`}
                     >
                       <span>{m.name}</span>
@@ -815,12 +829,12 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 </div>
               </div>
 
-              <label>Tên thiết bị thay thế *</label>
-              <input
-                value={replacementDeviceName}
-                onChange={(e) => setReplacementDeviceName(e.target.value)}
-                placeholder="Nhập tên thiết bị thay thế"
-              />
+              <label>Thiết bị thay thế *</label>
+              <select value={replacementDeviceSeq} disabled={!selectedMaterialId} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
+                <option value="">{selectedMaterialId ? "— Chọn thiết bị từ Chi tiết điểm thay thế —" : "— Chọn tên vật tư trước —"}</option>
+                {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
+              </select>
+              {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
 
@@ -834,7 +848,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 act.isPending ||
                 !assigned ||
                 !category ||
-                (["DE_XUAT", "UNG"].includes(t.type) && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || !replacementDeviceName.trim()))
+                (["DE_XUAT", "UNG"].includes(t.type) && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || !replacementDeviceSeq))
               }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
@@ -860,6 +874,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
     t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.vhvMaterialCode ? ` · Mã ${t.vhvMaterialCode}` : " · Không có mã vật tư"}` },
     t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Nhập số phiếu ${t.proposalNumber ?? ""}` },
+    t.proposalIssuedAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Giao phiếu ĐXVT${t.proposalReceiverName ? ` cho ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${t.receiptSource === "OUTSIDE" ? "Lãnh ngoài kho" : "Lãnh kho ERP"} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === "UNG" ? "Đã nghiệm thu, chờ xác nhận vật tư lãnh để xuất biên bản" : "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
@@ -916,12 +931,14 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                     )}
                   </div>
                   <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
-                  <span className="soft">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Chưa nhập thiết bị"}</span>
-                  {itemIndex === 0 && t.proposalNumber && (
-                    <span className="material-proposal-line">
-                      Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}
-                    </span>
-                  )}
+                  <div className="material-meta-row">
+                    <span className="soft material-device-line">{it.device ? `${it.device.seq} · ${it.device.name}` : it.deviceNameManual || "Chưa nhập thiết bị"}</span>
+                    {itemIndex === 0 && t.proposalNumber && (
+                      <span className="material-proposal-line">
+                        Số phiếu ĐXVT: <b>{t.proposalNumber}</b> · {t.statsByName}
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1081,6 +1098,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [num, setNum] = useState("");
   const [pct, setPct] = useState("");
   const [chiHuy, setChiHuy] = useState("");
+  const [proposalReceiverName, setProposalReceiverName] = useState(t.proposalReceiverName ?? "");
   const [reason, setReason] = useState("");
   const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
@@ -1344,21 +1362,34 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. Bạn vẫn có thể chọn {proposalBlockedByErp ? <b>Ứng</b> : <><b>Đề xuất</b> hoặc <b>Ứng</b></>}.
           </div>
         )}
-        {(workflowType !== "UNG" || proposalBlockedByErp) && <>
-          <label>Mã vật tư *</label><select value={erpCode} onChange={(e) => {
-            const nextCode = e.target.value;
-            const nextErp = codeOptions.find((option) => option.code === nextCode);
-            setErpCode(nextCode);
-            if (workflowType === "DE_XUAT" && nextErp && qty > nextErp.erpStock) setWorkflowType("UNG");
-          }}><option value="">— Chọn mã vật tư —</option>{codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {t.items[0]?.material.unit ?? ""}</option>)}</select>
-          {selectedErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedErp.name}<br/><b>Số lượng ERP:</b> {selectedErp.erpStock} {t.items[0]?.material.unit ?? ""}<br/><span className="hint">Tên và số lượng này được lấy theo đúng mã ERP đang chọn.</span></div>}
-        </>}
-        {workflowType !== "SU_DUNG_HIEN_CO" && <><label>Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : "ứng"} *</label><input type="number" min={1} value={qty} onChange={(e) => {
-          const nextQuantity = Math.max(1, Number(e.target.value) || 1);
-          setQty(nextQuantity);
-          if (workflowType === "DE_XUAT" && selectedErp && nextQuantity > selectedErp.erpStock) setWorkflowType("UNG");
-        }} /></>}
-        <label>Số Biên bản kiểm tra (nếu có)</label><input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Nhập số BBKT" />
+        <div className="confirm-field-row">
+          {(workflowType !== "UNG" || proposalBlockedByErp) && (
+            <label className="field confirm-code-field">Mã vật tư *
+              <select value={erpCode} onChange={(e) => {
+                const nextCode = e.target.value;
+                const nextErp = codeOptions.find((option) => option.code === nextCode);
+                setErpCode(nextCode);
+                if (workflowType === "DE_XUAT" && nextErp && qty > nextErp.erpStock) setWorkflowType("UNG");
+              }}>
+                <option value="">— Chọn mã vật tư —</option>
+                {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {t.items[0]?.material.unit ?? ""}</option>)}
+              </select>
+            </label>
+          )}
+          {workflowType !== "SU_DUNG_HIEN_CO" && (
+            <label className="field qty-field">Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : "ứng"} *
+              <input type="number" min={1} value={qty} onChange={(e) => {
+                const nextQuantity = Math.max(1, Number(e.target.value) || 1);
+                setQty(nextQuantity);
+                if (workflowType === "DE_XUAT" && selectedErp && nextQuantity > selectedErp.erpStock) setWorkflowType("UNG");
+              }} />
+            </label>
+          )}
+          <label className="field">Số Biên bản kiểm tra (nếu có)
+            <input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Nhập số BBKT" />
+          </label>
+        </div>
+        {selectedErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedErp.name} <b>Số lượng ERP:</b> {selectedErp.erpStock} {t.items[0]?.material.unit ?? ""} <span className="hint">Tên và số lượng này được lấy theo đúng mã ERP đang chọn.</span></div>}
         <button className="btn primary big" disabled={(workflowType !== "UNG" && !erpCode) || (workflowType !== "SU_DUNG_HIEN_CO" && qty <= 0) || (workflowType === "DE_XUAT" && proposalBlockedByErp) || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, ...(workflowType !== "UNG" ? { erpCode } : {}), ...(workflowType !== "SU_DUNG_HIEN_CO" ? { proposedQuantity: qty } : {}), bbktNumber: num.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
       </div>;
     }
@@ -1424,7 +1455,26 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     </div>;
   }
 
-  if (acts.includes("issueProposal")) return <div className="act"><label className="lb">Thống kê — xác nhận đã trả phiếu</label><p className="hint">Số phiếu đề xuất: <b>{t.proposalNumber}</b></p><button className="btn primary big" disabled={act.isPending} onClick={() => run({ action: "issueProposal" }, "Đã xác nhận trả phiếu")}><Check size={15} /> Xác nhận đã trả phiếu</button></div>;
+  if (acts.includes("issueProposal")) return (
+    <div className="act">
+      <label className="lb">Thống kê — xác nhận giao phiếu ĐXVT</label>
+      <p className="hint">Số phiếu ĐXVT: <b>{t.proposalNumber}</b></p>
+      <label>Tên VHV nhận phiếu ĐXVT *
+        <input
+          value={proposalReceiverName}
+          onChange={(e) => setProposalReceiverName(e.target.value)}
+          placeholder="Nhập tên VHV nhận phiếu ĐXVT"
+        />
+      </label>
+      <button
+        className="btn primary big"
+        disabled={act.isPending || !proposalReceiverName.trim()}
+        onClick={() => run({ action: "issueProposal", proposalReceiverName: proposalReceiverName.trim() }, "Đã xác nhận giao phiếu ĐXVT")}
+      >
+        <Check size={15} /> Xác nhận giao phiếu ĐXVT
+      </button>
+    </div>
+  );
 
   if (acts.includes("receive")) {
     const unit = t.items[0]?.material.unit ?? "";
@@ -1790,6 +1840,9 @@ const CSS = `
 .seg3 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg3 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
 .seg3 button:disabled{cursor:not-allowed;border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;opacity:.72;}
+.confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
+.confirm-field-row .field{min-width:0;margin:0;}
+.confirm-field-row select,.confirm-field-row input{width:100%;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
 .note.ung{background:${C.ungBg};color:${C.ung};}
 .frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
@@ -1822,7 +1875,9 @@ const CSS = `
 .material-line b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .material-code-link{flex:0 0 auto;border-radius:7px;background:${C.accent}10;padding:3px 8px;font-family:Poppins,Inter,sans-serif;font-size:11px;font-weight:800;color:${C.accent};text-decoration:none;}
 .material-code-link:hover{background:${C.accent};color:#fff;}
-.material-proposal-line{align-self:flex-end;margin-top:2px;max-width:100%;font-size:12px;font-weight:600;color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.material-meta-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;flex-wrap:wrap;}
+.material-device-line{flex:1 1 240px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.material-proposal-line{flex:0 1 360px;min-width:220px;max-width:55%;margin-left:auto;font-size:12px;font-weight:600;color:${C.muted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
 .material-proposal-line b{font-size:12px;color:${C.navy};}
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
@@ -1866,6 +1921,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .95fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .95fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

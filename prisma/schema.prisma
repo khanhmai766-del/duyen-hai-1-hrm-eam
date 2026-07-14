@@ -855,7 +855,8 @@ model MaterialTicket {
   proposalNote   String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
   pctNumber      String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
   proposalNumber String? // số phiếu đề xuất vật tư (Thống kê nhập)
-  proposalIssuedAt DateTime? // Thống kê xác nhận đã trả phiếu (giữ tên cột cũ để tương thích dữ liệu)
+  proposalIssuedAt DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
+  proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
   deliveryNoteNumber String? // số phiếu giao hàng
   repairRequestNumber String? // số phiếu yêu cầu sửa chữa
   completionNote String? // thông tin xác nhận thay thế xong

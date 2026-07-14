@@ -29,6 +29,7 @@ export interface MaterialTicket {
   pctNumber: string | null;
   proposalNumber: string | null;
   proposalIssuedAt: string | null;
+  proposalReceiverName: string | null;
   deliveryNoteNumber: string | null;
   repairRequestNumber: string | null;
   completionNote: string | null;
