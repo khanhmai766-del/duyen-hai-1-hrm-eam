@@ -232,7 +232,7 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Tiến trình</span><span>Chờ</span><span>Thao tác</span>
+          <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
@@ -240,10 +240,6 @@ export default function MaterialTicketBoard({
 	          const meta = t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl)
             ? { label: `${baseMeta.label} · Chờ xác nhận trả vật tư thu hồi`, c: C.warn }
 	            : baseMeta;
-	          const order = ORDER[t.type];
-	          const flowStatus = flowStatusKey(t.status);
-	          const idx = t.status === "TU_CHOI" ? -1 : order.indexOf(flowStatus);
-	          const done = t.status === "HOAN_TAT" ? order.length : idx;
 	          const mine = actionsFor(t, viewer).length > 0;
 	          const isAssignedToViewer = !!viewer && positionKey(viewer.position) === positionKey(t.assignedPosition);
 	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
@@ -288,9 +284,6 @@ export default function MaterialTicketBoard({
               <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>
                 {mine && <i className="pd" />}{meta.label}
               </span>
-              <span className="dots">{order.slice(0, order.length - 1).map((s, i) => (
-                <i key={s} className={i < done ? "d on" : i === done && t.status !== "HOAN_TAT" ? "d cur" : "d"} />
-              ))}</span>
               <span className="wait-cell">
                 {FINISHED_STATUSES.includes(t.status)
                   ? <span className="soft">—</span>
@@ -1701,14 +1694,14 @@ const CSS = `
 .btn.tiny{font-size:11.5px;padding:5px 9px;border-radius:8px;align-self:flex-start;}
 .mini{border:1px solid ${C.line};background:#fff;border-radius:8px;cursor:pointer;color:#94a3b8;display:grid;place-items:center;width:30px;}
 .list{background:#fff;border:1px solid ${C.line};border-radius:16px;overflow-x:auto;overflow-y:hidden;}
-.row{display:grid;grid-template-columns:.95fr .85fr .95fr 1.25fr 1fr .6fr 1fr .76fr 72px 74px;gap:8px;align-items:center;min-width:1238px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
+.row{display:grid;grid-template-columns:.95fr .85fr .95fr 1.25fr 1fr .6fr 1.08fr 72px 74px;gap:8px;align-items:center;min-width:1140px;width:100%;text-align:left;padding:12px 16px;border:0;border-bottom:1px solid ${C.line};background:#fff;cursor:pointer;font-size:13px;}
 .code-cell{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;}
 .code-cell .code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ops{display:flex;gap:6px;justify-content:center;}
 .op{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#fff;color:${C.muted};cursor:pointer;transition:.15s;}
 .op:hover{border-color:${C.accent};color:${C.accent};}
 .op.del:hover{border-color:${C.bad};color:${C.bad};background:${C.badBg};}
-.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8),.row>span:nth-child(9){text-align:center;justify-self:stretch;}
+.row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:#fffbeb;box-shadow:inset 3px 0 0 #f59e0b;}
 .row.mine:hover{background:#fef3c7;}
@@ -1730,7 +1723,7 @@ const CSS = `
 .kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
 .exp.open{background:#f43f5e;}
-.detail-inline{min-width:1230px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
+.detail-inline{min-width:1132px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
 .dclose{position:absolute;top:10px;right:10px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
 .dclose:hover{background:#eef2f7;color:#0f172a;}
@@ -1749,7 +1742,6 @@ const CSS = `
 .activity-row span{font-size:11.5px;color:${C.muted};line-height:1.35;}
 .kind-sub{display:block;max-width:100%;color:${C.soft};font-size:10.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .material-name{display:block;min-width:0;color:${C.navy};font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.dots{display:flex;justify-content:center;gap:4px;}
 .d{width:9px;height:9px;border-radius:50%;background:#e2e8f0;}
 .d.on{background:${C.ok};}
 .d.cur{background:${C.accent};box-shadow:0 0 0 3px ${C.accent}30;}
@@ -1874,6 +1866,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1130px;padding:10px 12px;}.row{min-width:1130px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .9fr .7fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:.95fr .8fr .9fr 1.15fr .95fr .6fr .95fr 68px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid{grid-template-columns:1fr 118px;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
