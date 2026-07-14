@@ -1315,16 +1315,58 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
             .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
       const selectedErp = codeOptions.find((option) => option.code === erpCode);
+      const existingStockShortages = t.items.filter((item) => item.quantity > item.material.quantity);
+      const canUseExistingStock = existingStockShortages.length === 0;
+      const proposalBlockedByErp = !!selectedErp && qty > selectedErp.erpStock;
       return <div className="act">
         <label className="lb">Bước 1 — Trưởng ca/Trưởng kíp xác nhận luồng</label>
-        <div className="seg3"><button className={workflowType === "DE_XUAT" ? "on" : ""} onClick={() => setWorkflowType("DE_XUAT")}>Đề xuất</button><button className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button><button className={workflowType === "SU_DUNG_HIEN_CO" ? "on" : ""} onClick={() => setWorkflowType("SU_DUNG_HIEN_CO")}>Sử dụng hiện có</button></div>
-        {workflowType !== "UNG" && <>
-          <label>Mã vật tư *</label><select value={erpCode} onChange={(e) => setErpCode(e.target.value)}><option value="">— Chọn mã vật tư —</option>{codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {t.items[0]?.material.unit ?? ""}</option>)}</select>
+        <div className="seg3">
+          <button
+            className={workflowType === "DE_XUAT" ? "on" : ""}
+            disabled={proposalBlockedByErp}
+            title={proposalBlockedByErp ? "Tồn ERP không đủ số lượng đề xuất" : "Chọn luồng Đề xuất"}
+            onClick={() => setWorkflowType("DE_XUAT")}
+          >
+            Đề xuất
+          </button>
+          <button className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button>
+          <button
+            className={workflowType === "SU_DUNG_HIEN_CO" ? "on" : ""}
+            disabled={!canUseExistingStock}
+            title={canUseExistingStock ? "Sử dụng số lượng vật tư hiện có" : "Số lượng hiện có không đủ"}
+            onClick={() => setWorkflowType("SU_DUNG_HIEN_CO")}
+          >
+            Sử dụng hiện có
+          </button>
+        </div>
+        {proposalBlockedByErp && (
+          <div className="warnbox">
+            <AlertTriangle size={15} />
+            Mã ERP <b>{selectedErp.code}</b> chỉ còn <b>{selectedErp.erpStock} {t.items[0]?.material.unit ?? ""}</b>, không đủ số lượng đề xuất <b>{qty} {t.items[0]?.material.unit ?? ""}</b>. Chỉ có thể chọn luồng <b>Ứng</b>{canUseExistingStock ? " hoặc Sử dụng hiện có" : ""}.
+          </div>
+        )}
+        {!canUseExistingStock && (
+          <div className="warnbox">
+            <AlertTriangle size={15} />
+            Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. Bạn vẫn có thể chọn {proposalBlockedByErp ? <b>Ứng</b> : <><b>Đề xuất</b> hoặc <b>Ứng</b></>}.
+          </div>
+        )}
+        {(workflowType !== "UNG" || proposalBlockedByErp) && <>
+          <label>Mã vật tư *</label><select value={erpCode} onChange={(e) => {
+            const nextCode = e.target.value;
+            const nextErp = codeOptions.find((option) => option.code === nextCode);
+            setErpCode(nextCode);
+            if (workflowType === "DE_XUAT" && nextErp && qty > nextErp.erpStock) setWorkflowType("UNG");
+          }}><option value="">— Chọn mã vật tư —</option>{codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {t.items[0]?.material.unit ?? ""}</option>)}</select>
           {selectedErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedErp.name}<br/><b>Số lượng ERP:</b> {selectedErp.erpStock} {t.items[0]?.material.unit ?? ""}<br/><span className="hint">Tên và số lượng này được lấy theo đúng mã ERP đang chọn.</span></div>}
         </>}
-        {workflowType !== "SU_DUNG_HIEN_CO" && <><label>Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : "ứng"} *</label><input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} /></>}
+        {workflowType !== "SU_DUNG_HIEN_CO" && <><label>Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : "ứng"} *</label><input type="number" min={1} value={qty} onChange={(e) => {
+          const nextQuantity = Math.max(1, Number(e.target.value) || 1);
+          setQty(nextQuantity);
+          if (workflowType === "DE_XUAT" && selectedErp && nextQuantity > selectedErp.erpStock) setWorkflowType("UNG");
+        }} /></>}
         <label>Số Biên bản kiểm tra (nếu có)</label><input value={num} onChange={(e) => setNum(e.target.value)} placeholder="Nhập số BBKT" />
-        <button className="btn primary big" disabled={(workflowType !== "UNG" && !erpCode) || (workflowType !== "SU_DUNG_HIEN_CO" && qty <= 0) || act.isPending} onClick={() => run({ action: "confirm", workflowType, ...(workflowType !== "UNG" ? { erpCode } : {}), ...(workflowType !== "SU_DUNG_HIEN_CO" ? { proposedQuantity: qty } : {}), bbktNumber: num.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
+        <button className="btn primary big" disabled={(workflowType !== "UNG" && !erpCode) || (workflowType !== "SU_DUNG_HIEN_CO" && qty <= 0) || (workflowType === "DE_XUAT" && proposalBlockedByErp) || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, ...(workflowType !== "UNG" ? { erpCode } : {}), ...(workflowType !== "SU_DUNG_HIEN_CO" ? { proposedQuantity: qty } : {}), bbktNumber: num.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
       </div>;
     }
     const short = t.items.some((it) => it.quantity > it.material.quantity);
@@ -1755,6 +1797,7 @@ const CSS = `
 .seg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .seg3 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg3 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
+.seg3 button:disabled{cursor:not-allowed;border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;opacity:.72;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
 .note.ung{background:${C.ungBg};color:${C.ung};}
 .frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
