@@ -269,11 +269,36 @@ export async function PUT(req: NextRequest) {
       return ok({ updated: res.count });
     }
     if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
+    const approvedMembers = await prisma.hcCheckIn.findMany({
+      where: { ...where, isApproved: false },
+      select: { isRegistered: true, user: { select: { name: true } } },
+    });
     const res = await prisma.hcCheckIn.updateMany({
       where,
       data: { isApproved: true, ...(note !== undefined ? { note: cleanNote || null } : {}) },
     });
-    await audit(user.id, "HC_APPROVE", "HcGroup", groupId, `Duyệt chấm công HC (${res.count})`);
+    const registeredNames = approvedMembers.filter((member) => member.isRegistered).map((member) => member.user.name);
+    const checkInNames = approvedMembers.filter((member) => !member.isRegistered).map((member) => member.user.name);
+    if (registeredNames.length) {
+      await audit(
+        user.id,
+        "HC_REGISTER_APPROVE",
+        "HcGroup",
+        groupId,
+        `Duyệt đăng ký đi hành chính cho ${registeredNames.join(", ")} (${registeredNames.length})`
+      );
+    }
+    if (checkInNames.length || !approvedMembers.length) {
+      await audit(
+        user.id,
+        "HC_APPROVE",
+        "HcGroup",
+        groupId,
+        checkInNames.length
+          ? `Duyệt chấm công hành chính cho ${checkInNames.join(", ")} (${checkInNames.length})`
+          : `Duyệt chấm công hành chính (${res.count})`
+      );
+    }
     return ok({ approved: res.count });
   });
 }

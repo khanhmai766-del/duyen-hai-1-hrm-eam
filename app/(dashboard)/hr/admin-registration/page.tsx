@@ -3,9 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Archive, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, Search, X } from "lucide-react";
+import { Archive, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Clock3, History, Loader2, Pencil, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
+import { RegistrationActivityDrawer } from "@/components/hr/registration-activity-drawer";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   useHcApprove,
+  useHcActivity,
   useHcCancelRegistration,
   useHcCheckIn,
   useHcGroups,
@@ -121,6 +123,8 @@ export default function AdministrativeRegistrationPage() {
   const [registerDate, setRegisterDate] = React.useState(minRegisterDate);
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
   const [note, setNote] = React.useState("");
+  const [activityOpen, setActivityOpen] = React.useState(false);
+  const activity = useHcActivity(today, activityOpen);
   const { data: groupsData } = useHcGroups(registerDate);
   const { data: registrationsData, isLoading: registrationsLoading } = useHcRegistrations(today);
   const { data: historyData, isLoading: historyLoading } = useHcRegistrations(historyFrom, historyTo);
@@ -169,7 +173,11 @@ export default function AdministrativeRegistrationPage() {
         <ArrowLeft className="h-4 w-4" /> Lịch làm việc
       </Link>
 
-      <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày, trước 16h30 và chờ người có quyền duyệt" />
+      <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày, trước 16h30 và chờ người có quyền duyệt">
+        <Button variant="outline" onClick={() => setActivityOpen(true)}><History className="h-4 w-4" /> Nhật ký đăng ký</Button>
+      </PageHeader>
+
+      <RegistrationActivityDrawer open={activityOpen} onOpenChange={setActivityOpen} date={today} logs={activity.data?.data ?? []} loading={activity.isLoading} refreshing={activity.isFetching} onRefresh={() => activity.refetch()} />
 
       <Card className="overflow-hidden">
         <CardHeader className="grid gap-3 border-b border-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">

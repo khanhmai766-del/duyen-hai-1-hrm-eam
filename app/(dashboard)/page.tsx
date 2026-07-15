@@ -305,11 +305,28 @@ function DutyPositionCard({
   const dutyDate = m?.dutyDate
     ? `${shiftLabel ? `Ca ${shiftLabel} · ` : ""}${new Date(m.dutyDate).toLocaleDateString("vi-VN")}`
     : null;
+  const opensAdminAttendance = shouldOpenAdminAttendance(userPosition);
+  const attendanceHref = opensAdminAttendance ? "/hr/admin-attendance" : "/hr/org-chart";
+  const openAttendanceCard = () => router.push(attendanceHref);
+  const handleAttendanceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      router.push(attendanceHref);
+    }
+  };
+  const attendanceCardClassName =
+    "cursor-pointer transition-colors hover:border-accent/45 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2";
 
   // Image variant: full-bleed control screen + legibility gradient + white text.
   if (img) {
     return (
-      <Card className="relative h-full min-h-[230px] overflow-hidden border-0 text-white">
+      <Card
+        role="link"
+        tabIndex={0}
+        onClick={openAttendanceCard}
+        onKeyDown={handleAttendanceKeyDown}
+        className={cn("relative h-full min-h-[230px] overflow-hidden border-0 text-white", attendanceCardClassName)}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
@@ -342,30 +359,23 @@ function DutyPositionCard({
 
   // Plain variant: no assigned seat (or a seat without a dedicated image).
   const hasDutyPosition = !!m?.position;
-  const opensAdminAttendance = shouldOpenAdminAttendance(userPosition);
-  const attendanceHref = opensAdminAttendance ? "/hr/admin-attendance" : "/hr/org-chart";
   const attendanceLabel = opensAdminAttendance
     ? "Chấm công hành chính"
     : "Điểm danh tại sơ đồ tổ chức ca";
   const positionHint = opensAdminAttendance ? "Hãy nhấn vào đây" : "Cương vị trực ca";
-  const canOpenAttendance = !hasDutyPosition && !m?.pendingPosition;
-  const openAttendanceCard = () => {
-    if (canOpenAttendance) router.push(attendanceHref);
-  };
-  const handleAttendanceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!canOpenAttendance) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      router.push(attendanceHref);
-    }
-  };
 
   // Quản đốc/Phó Quản đốc đã chấm công hành chính hôm nay → nền ảnh phòng điều khiển.
   // Tự reset về trạng thái thường sau 18h tối (theo giờ máy người dùng = giờ VN).
   const adminAttendanceActive = opensAdminAttendance && !!m?.adminCheckedInToday && new Date().getHours() < 18;
   if (adminAttendanceActive) {
     return (
-      <Card className="relative h-full min-h-[230px] overflow-hidden border-0 text-white">
+      <Card
+        role="link"
+        tabIndex={0}
+        onClick={openAttendanceCard}
+        onKeyDown={handleAttendanceKeyDown}
+        className={cn("relative h-full min-h-[230px] overflow-hidden border-0 text-white", attendanceCardClassName)}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/chucvu/cham-cong-hanh-chinh.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
@@ -387,14 +397,11 @@ function DutyPositionCard({
 
   const card = (
     <Card
-      role={canOpenAttendance ? "link" : undefined}
-      tabIndex={canOpenAttendance ? 0 : undefined}
+      role="link"
+      tabIndex={0}
       onClick={openAttendanceCard}
       onKeyDown={handleAttendanceKeyDown}
-      className={cn(
-        "h-full bg-navy/5",
-        canOpenAttendance && "cursor-pointer transition-colors hover:border-accent/45 hover:bg-accent/5 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
-      )}
+      className={cn("h-full bg-navy/5 hover:bg-accent/5", attendanceCardClassName)}
     >
       <CardContent className="flex h-full flex-col justify-between p-5">
         <div className="flex items-start justify-between gap-2">

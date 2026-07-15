@@ -28,11 +28,29 @@ export interface HcGroup {
 export interface HcRegistration extends HcMember {
   group: Omit<HcGroup, "members">;
 }
+export interface HcActivityLog {
+  id: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  detail: string | null;
+  createdAt: string;
+  user: { id: string; name: string };
+}
 
 export function useHcGroups(date: string) {
   return useQuery({
     queryKey: ["hc-groups", date],
     queryFn: () => apiGet<HcGroup[]>(`/api/hc-groups?date=${date}`),
+  });
+}
+
+export function useHcActivity(date: string, enabled = true) {
+  return useQuery({
+    queryKey: ["hc-activity", date],
+    queryFn: () => apiGet<HcActivityLog[]>(`/api/hc-groups/activity?date=${date}`),
+    enabled,
+    refetchInterval: 30_000,
   });
 }
 
@@ -80,6 +98,7 @@ export function useHcCheckIn() {
       apiMutate("/api/hc-groups/checkin", "POST", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-activity"] });
       qc.invalidateQueries({ queryKey: ["hc-registrations"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
     },
@@ -92,6 +111,7 @@ export function useHcRecall() {
     mutationFn: (groupId: string) => apiMutate(`/api/hc-groups/checkin?groupId=${groupId}`, "DELETE"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-activity"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
     },
   });
@@ -103,6 +123,7 @@ export function useHcApprove() {
     mutationFn: (body: { groupId: string; ids?: string[]; note?: string }) => apiMutate("/api/hc-groups/checkin", "PUT", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-activity"] });
       qc.invalidateQueries({ queryKey: ["hc-registrations"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
     },
@@ -116,6 +137,7 @@ export function useHcUpdateRegistrationNote() {
       apiMutate("/api/hc-groups/checkin", "PUT", { groupId: body.groupId, ids: [body.id], note: body.note, action: "NOTE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-activity"] });
       qc.invalidateQueries({ queryKey: ["hc-registrations"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
     },
@@ -129,6 +151,7 @@ export function useHcUpdateWorkNote() {
       apiMutate("/api/hc-groups/checkin", "PUT", { groupId: body.groupId, ids: [body.id], note: body.note, action: "NOTE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-activity"] });
       qc.invalidateQueries({ queryKey: ["hc-registrations"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
     },
@@ -141,6 +164,7 @@ export function useHcCancelRegistration() {
     mutationFn: (checkInId: string) => apiMutate(`/api/hc-groups/checkin?checkInId=${checkInId}`, "DELETE"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hc-groups"] });
+      qc.invalidateQueries({ queryKey: ["hc-activity"] });
       qc.invalidateQueries({ queryKey: ["hc-registrations"] });
       qc.invalidateQueries({ queryKey: ["me-dashboard"] });
     },
