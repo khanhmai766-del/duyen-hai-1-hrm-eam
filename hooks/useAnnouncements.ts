@@ -6,10 +6,10 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 
 export type AnnouncementCategory = "BULLETIN" | "ORDER";
 
+// Chỉ userId + readAt — tên/chức vụ người đọc map từ danh sách user đã cache ở client.
 export interface AnnouncementReader {
   userId: string;
   readAt: string;
-  user: { name: string; position: string | null; secondaryPosition?: string | null; currentPosition?: string | null; avatarUrl: string | null };
 }
 
 export interface Announcement {
@@ -47,11 +47,20 @@ interface AnnouncementInput {
   fileName?: string | null;
 }
 
-export function useAnnouncements() {
+/**
+ * Danh sách mệnh lệnh, lọc năm phía server để chặn payload phình theo thời gian.
+ * Mặc định: năm hiện tại. Truyền "ALL" để tải tất cả các năm (vd theo deep-link).
+ * meta.years = các năm có dữ liệu (cho dropdown lọc năm).
+ */
+export function useAnnouncements(year?: string) {
+  const activeYear = year ?? String(new Date().getFullYear());
   return useQuery({
-    queryKey: ["announcements"],
-    queryFn: () => apiGet<Announcement[]>("/api/announcements"),
-    staleTime: 30 * 1000,
+    queryKey: ["announcements", activeYear],
+    queryFn: () =>
+      apiGet<Announcement[]>(
+        activeYear === "ALL" ? "/api/announcements" : `/api/announcements?year=${activeYear}`
+      ),
+    staleTime: 60 * 1000,
   });
 }
 
@@ -110,37 +119,25 @@ export function useMarkAnnouncementRead() {
     mutationFn: (announcementId: string) => apiMutate("/api/announcements/read", "POST", { announcementId }),
     onMutate: async (announcementId: string) => {
       await qc.cancelQueries({ queryKey: ["announcements"] });
-      const previous = qc.getQueryData<{ data: Announcement[]; meta: any }>(["announcements"]);
+      // Cập nhật lạc quan trên mọi query năm đang cache (["announcements", <năm>]).
+      const previous = qc.getQueriesData<{ data: Announcement[]; meta: any }>({ queryKey: ["announcements"] });
       const userId = session?.user?.id;
-      if (previous?.data && userId) {
-        qc.setQueryData<{ data: Announcement[]; meta: any }>(["announcements"], {
-          ...previous,
-          data: previous.data.map((item) => {
-            if (item.id !== announcementId || item.reads.some((read) => read.userId === userId)) return item;
-            return {
-              ...item,
-              reads: [
-                ...item.reads,
-                {
-                  userId,
-                  readAt: new Date().toISOString(),
-                  user: {
-                    name: session.user?.name ?? "Bạn",
-                    position: session.user?.position ?? null,
-                    secondaryPosition: session.user?.secondaryPosition ?? null,
-                    currentPosition: session.user?.currentPosition ?? null,
-                    avatarUrl: null,
-                  },
-                },
-              ],
-            };
-          }),
+      if (userId) {
+        qc.setQueriesData<{ data: Announcement[]; meta: any }>({ queryKey: ["announcements"] }, (cached) => {
+          if (!cached?.data) return cached;
+          return {
+            ...cached,
+            data: cached.data.map((item) => {
+              if (item.id !== announcementId || item.reads.some((read) => read.userId === userId)) return item;
+              return { ...item, reads: [...item.reads, { userId, readAt: new Date().toISOString() }] };
+            }),
+          };
         });
       }
       return { previous };
     },
     onError: (_error, _announcementId, context) => {
-      if (context?.previous) qc.setQueryData(["announcements"], context.previous);
+      for (const [key, data] of context?.previous ?? []) qc.setQueryData(key, data);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
   });

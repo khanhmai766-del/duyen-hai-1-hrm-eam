@@ -27,31 +27,11 @@ async function removeAttachment(fileUrl: string | null | undefined) {
   }
 }
 
-async function ensureAnnouncementLifecycleColumns() {
-  await prisma.$executeRawUnsafe(`
-    ALTER TABLE "Announcement"
-    ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'BULLETIN',
-    ADD COLUMN IF NOT EXISTS "classification" TEXT,
-    ADD COLUMN IF NOT EXISTS "stt" TEXT,
-    ADD COLUMN IF NOT EXISTS "orderedBy" TEXT,
-    ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3),
-    ADD COLUMN IF NOT EXISTS "invalidatedAt" TIMESTAMP(3),
-    ADD COLUMN IF NOT EXISTS "linkUrl" TEXT,
-    ADD COLUMN IF NOT EXISTS "fileUrl" TEXT,
-    ADD COLUMN IF NOT EXISTS "fileName" TEXT
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "AnnouncementRead" (
-      id TEXT PRIMARY KEY,
-      "announcementId" TEXT NOT NULL,
-      "userId" TEXT NOT NULL,
-      "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "AnnouncementRead_announcementId_userId_key"
-    ON "AnnouncementRead" ("announcementId", "userId")
-  `);
+// Giờ Việt Nam (UTC+7, không có DST) — mốc năm tính theo giờ nhà máy.
+const VN_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function vnYearStart(year: number) {
+  return new Date(Date.UTC(year, 0, 1) - VN_UTC_OFFSET_MS);
 }
 
 function parseNullableDate(value: string | null | undefined) {
@@ -61,21 +41,39 @@ function parseNullableDate(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** GET /api/announcements — bảng tin nội bộ. Mọi người đăng nhập đều xem được. */
-export async function GET() {
+/** GET /api/announcements?year=YYYY — bảng tin nội bộ. Mọi người đăng nhập đều xem được.
+ * Không truyền year (hoặc year không hợp lệ) → trả toàn bộ. meta.years liệt kê các năm có dữ liệu. */
+export async function GET(req: NextRequest) {
   return handle(async () => {
-    await ensureAnnouncementLifecycleColumns();
     await requireUser();
-    const items = await prisma.announcement.findMany({
-      orderBy: [{ pinned: "desc" }, { issuedAt: "desc" }, { createdAt: "desc" }],
-      include: {
-        createdBy: { select: { name: true } },
-        reads: {
-          select: { userId: true, readAt: true, user: { select: { name: true, position: true, secondaryPosition: true, currentPosition: true, avatarUrl: true } } },
+    const yearParam = req.nextUrl.searchParams.get("year");
+    const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : null;
+    // Lọc theo ngày ra mệnh lệnh (issuedAt), rơi về ngày tạo nếu thiếu — khớp cách hiển thị ở client.
+    const where = year
+      ? {
+          OR: [
+            { issuedAt: { gte: vnYearStart(year), lt: vnYearStart(year + 1) } },
+            { issuedAt: null, createdAt: { gte: vnYearStart(year), lt: vnYearStart(year + 1) } },
+          ],
+        }
+      : undefined;
+    const [items, yearRows] = await Promise.all([
+      prisma.announcement.findMany({
+        where,
+        orderBy: [{ pinned: "desc" }, { issuedAt: "desc" }, { createdAt: "desc" }],
+        include: {
+          createdBy: { select: { name: true } },
+          // Chỉ trả userId + readAt; tên/chức vụ người đọc client tự map từ danh sách user đã cache.
+          reads: { select: { userId: true, readAt: true } },
         },
-      },
-    });
-    return ok(items);
+      }),
+      prisma.$queryRaw<Array<{ year: number }>>`
+        SELECT DISTINCT EXTRACT(YEAR FROM (COALESCE("issuedAt", "createdAt") + interval '7 hours'))::int AS year
+        FROM "Announcement"
+        ORDER BY year DESC
+      `,
+    ]);
+    return ok(items, { years: yearRows.map((row) => row.year) });
   });
 }
 
@@ -84,7 +82,6 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requireAnnouncementManager(user);
-    await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, linkUrl, fileUrl, fileName } = body as {
       title?: string; body?: string; pinned?: boolean; category?: string; classification?: string | null; stt?: string | null; orderedBy?: string | null; issuedAt?: string | null; linkUrl?: string | null; fileUrl?: string | null; fileName?: string | null;
@@ -117,7 +114,6 @@ export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requireAnnouncementManager(user);
-    await ensureAnnouncementLifecycleColumns();
     const body = await req.json();
     const { id, title, body: content, pinned, category, classification, stt, orderedBy, issuedAt, invalidatedAt, action, linkUrl, fileUrl, fileName } = body as {
       id?: string; title?: string; body?: string; pinned?: boolean; category?: string; classification?: string | null; stt?: string | null; orderedBy?: string | null; issuedAt?: string | null; invalidatedAt?: string | null; action?: "INVALIDATE" | "RESTORE"; linkUrl?: string | null; fileUrl?: string | null; fileName?: string | null;

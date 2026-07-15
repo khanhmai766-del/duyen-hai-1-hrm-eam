@@ -50,6 +50,7 @@ import {
   parseAnnouncementTargets,
   targetsAllPositions,
 } from "@/lib/announcement-targets";
+import type { SafeUser } from "@/types";
 
 /** Ensure an outbound link has a scheme so it opens correctly in a new tab. */
 function normalizeUrl(u: string) {
@@ -133,6 +134,212 @@ function isArchivedInvalidAnnouncement(a: Announcement) {
   return Boolean(a.invalidatedAt) && invalidArchiveDaysLeft(a.invalidatedAt) === 0;
 }
 
+interface PostCardProps {
+  a: Announcement;
+  activeUsers: SafeUser[];
+  myId?: string;
+  currentPosition: string | null;
+  linkedAnnouncementId: string | null;
+  canManage: boolean;
+  isManager: boolean;
+  markReadPending: boolean;
+  onConfirmRead: (a: Announcement) => void;
+  onEdit: (a: Announcement) => void;
+  onInvalidate: (a: Announcement) => void;
+  onRestore: (a: Announcement) => void;
+  onDelete: (a: Announcement) => void;
+  onShowReaders: (a: Announcement) => void;
+}
+
+/** A single admin post card (bảng tin or mệnh lệnh). Module-level + memo để không bị remount khi trang re-render (gõ tìm kiếm, mở dialog...). */
+const PostCard = React.memo(function PostCard({
+  a,
+  activeUsers,
+  myId,
+  currentPosition,
+  linkedAnnouncementId,
+  canManage,
+  isManager,
+  markReadPending,
+  onConfirmRead,
+  onEdit,
+  onInvalidate,
+  onRestore,
+  onDelete,
+  onShowReaders,
+}: PostCardProps) {
+  const { readCount, total, readByMe, allRead } = React.useMemo(() => {
+    const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, effectiveUserPosition(u)));
+    const targetUserIds = new Set(targetUsers.map((u) => u.id));
+    const trackedReads = a.reads.filter((r) => targetUserIds.has(r.userId));
+    const readUserIds = new Set(trackedReads.map((r) => r.userId));
+    return {
+      readCount: trackedReads.length,
+      total: targetUsers.length,
+      readByMe: myId ? readUserIds.has(myId) : false,
+      allRead: targetUsers.length > 0 && trackedReads.length >= targetUsers.length,
+    };
+  }, [a.classification, a.reads, activeUsers, myId]);
+  const mustReadByMe = mustConfirmAnnouncementRead(a.classification, currentPosition);
+  const isInvalid = Boolean(a.invalidatedAt);
+  const daysLeft = invalidArchiveDaysLeft(a.invalidatedAt);
+  const archivedInvalid = isArchivedInvalidAnnouncement(a);
+  return (
+    <Card
+      id={`announcement-${a.id}`}
+      tabIndex={-1}
+      className={cn(
+        "group overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        linkedAnnouncementId === a.id && "ring-2 ring-accent ring-offset-2",
+        isInvalid
+          ? "border-red-300 bg-red-50/90 ring-1 ring-red-200"
+          : a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",
+        !isInvalid && allRead &&
+          "border-amber-300 bg-gradient-to-br from-amber-100 via-yellow-100 to-amber-200 dark:border-amber-500/40 dark:from-amber-500/20 dark:via-yellow-500/10 dark:to-amber-600/20"
+      )}
+    >
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-start gap-1.5 sm:items-center">
+              {a.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" />}
+              {a.stt && (
+                <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-xs font-bold text-accent">
+                  {a.stt}
+                </span>
+              )}
+              <h3 className="min-w-0 max-w-full break-words font-semibold leading-snug text-ink">{a.title}</h3>
+              {isInvalid && (
+                <span className="shrink-0 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                  Không còn hiệu lực
+                </span>
+              )}
+              {a.classification && (
+                <span className="min-w-0 max-w-full basis-full whitespace-normal break-words rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium leading-snug text-muted-foreground sm:basis-auto">
+                  {announcementTargetLabel(a.classification)}
+                </span>
+              )}
+            </div>
+            <div className={cn("mt-1 text-sm font-semibold", isInvalid ? "text-red-700" : "text-ink")}>
+              Ngày ra mệnh lệnh: {formatDate(announcementDate(a))}
+            </div>
+            <div
+              className={cn(
+                "mt-3 rounded-lg border px-4 py-3",
+                isInvalid
+                  ? "border-red-200 bg-white/75 text-red-900"
+                  : "border-slate-200 bg-slate-50/80 text-ink"
+              )}
+            >
+              <div className={cn("mb-1 text-[11px] font-bold uppercase tracking-normal", isInvalid ? "text-red-600" : "text-muted-foreground")}>
+                Nội dung mệnh lệnh
+              </div>
+              <div className="whitespace-pre-wrap text-[15px] font-bold leading-7">
+                {a.body}
+              </div>
+            </div>
+            {(a.linkUrl || a.fileUrl) && (
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {a.linkUrl && (
+                  <a
+                    href={normalizeUrl(a.linkUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/5"
+                  >
+                    <Link2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="max-w-[220px] truncate">{a.linkUrl.replace(/^https?:\/\//i, "")}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                )}
+                {a.fileUrl && (
+                  <a
+                    href={a.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-muted"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                    <span className="max-w-[220px] truncate">{a.fileName ?? "Tệp PDF"}</span>
+                  </a>
+                )}
+              </div>
+            )}
+            {a.orderedBy && (
+              <div className="mt-2 text-xs font-medium text-ink">
+                Theo lệnh: <span className="text-accent">{a.orderedBy}</span>
+              </div>
+            )}
+            <div className="mt-2 text-xs text-muted-foreground">
+              Cập nhật bởi: <span className="font-medium text-ink">Quản trị viên</span> - {formatDate(a.updatedAt)}
+            </div>
+            {isInvalid && (
+              <div className="mt-2 rounded-md border border-red-200 bg-white/70 px-3 py-2 text-xs font-medium text-red-700">
+                Mệnh lệnh không còn hiệu lực từ {formatDate(a.invalidatedAt)}.
+                {archivedInvalid
+                  ? " Đang nằm trong mục Mệnh lệnh hết hiệu lực."
+                  : ` Sẽ chuyển vào mục Mệnh lệnh hết hiệu lực sau ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày.`}
+              </div>
+            )}
+          </div>
+          {canManage && (
+            <div className="flex shrink-0 items-center gap-1 self-end opacity-100 transition-opacity sm:self-start sm:opacity-0 sm:group-hover:opacity-100">
+              {isInvalid ? (
+                <button onClick={() => onRestore(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => onEdit(a)} title="Sửa" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-ink">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => onInvalidate(a)} title="Mệnh lệnh không còn hiệu lực" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700">
+                    <Ban className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+              <button onClick={() => onDelete(a)} title="Xoá" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Xác nhận đã đọc — cho tất cả user; quản lý xem được ai đã/chưa đọc */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+          {allRead ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+              <CheckCircle2 className="h-4 w-4" /> Tất cả đã xác nhận đọc
+            </span>
+          ) : !mustReadByMe ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Check className="h-4 w-4" /> Không thuộc diện cần xác nhận đọc
+            </span>
+          ) : readByMe ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="h-4 w-4" /> Bạn đã xác nhận đọc
+            </span>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => onConfirmRead(a)} disabled={markReadPending}>
+              {markReadPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Xác nhận đã đọc
+            </Button>
+          )}
+          {isManager && (
+            <button
+              onClick={() => onShowReaders(a)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-ink"
+              title="Xem ai đã/chưa đọc"
+            >
+              <Users className="h-3.5 w-3.5" /> Đã đọc {readCount}/{total}
+            </button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+});
+
 export default function NotificationsPage() {
   const searchParams = useSearchParams();
   const linkedAnnouncementId = searchParams.get("announcementId");
@@ -145,23 +352,45 @@ export default function NotificationsPage() {
   // Cấp quản lý xem được ai đã/chưa đọc mệnh lệnh.
   const isManager = rbac.can("announcement-manage", ["manage", "full"]);
 
-  const { data: annData, isLoading: annLoading } = useAnnouncements();
-  const announcements = annData?.data ?? [];
+  const currentYear = new Date().getFullYear();
+  const [yearFilter, setYearFilter] = React.useState(String(currentYear));
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
+  const [search, setSearch] = React.useState("");
+  const [debouncedSearch, setDebouncedSearch] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const [showInvalidArchive, setShowInvalidArchive] = React.useState(false);
+
+  // Gõ tìm kiếm chỉ lọc lại sau 250ms — tránh lọc + render lại theo từng phím.
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  // Server chỉ trả mệnh lệnh của năm đang xem ("ALL" = tất cả các năm).
+  const { data: annData, isLoading: annLoading } = useAnnouncements(yearFilter);
+  const announcements = React.useMemo(() => annData?.data ?? [], [annData?.data]);
   const { data: usersData } = useUsers();
-  const allUsers = usersData?.data ?? [];
+  const allUsers = React.useMemo(() => usersData?.data ?? [], [usersData?.data]);
+  // Map tra cứu người đọc — payload mệnh lệnh chỉ còn userId, thông tin user lấy từ cache này.
+  const userById = React.useMemo(() => new Map(allUsers.map((u) => [u.id, u])), [allUsers]);
   // Người ra lệnh cấp LĐPX: các Quản đốc / Phó quản đốc trong hệ thống.
-  const managers = allUsers.filter((u) => (u.position ?? "").toLowerCase().includes("quản đốc"));
+  const managers = React.useMemo(
+    () => allUsers.filter((u) => (u.position ?? "").toLowerCase().includes("quản đốc")),
+    [allUsers]
+  );
   // "Tất cả user" để tính đã đọc/chưa đọc = toàn bộ nhân sự đang hoạt động.
-  const activeUsers = allUsers.filter(
-    (u) => {
-      const position = effectiveUserPosition(u);
-      return u.isActive && !isAnnouncementReadExemptPosition(position) && isAnnouncementShiftRosterPosition(position);
-    }
+  const activeUsers = React.useMemo(
+    () =>
+      allUsers.filter((u) => {
+        const position = effectiveUserPosition(u);
+        return u.isActive && !isAnnouncementReadExemptPosition(position) && isAnnouncementShiftRosterPosition(position);
+      }),
+    [allUsers]
   );
   const positionOptions = React.useMemo(() => {
     return announcementShiftRosterPositionOptions();
   }, []);
-  const bulletins = announcements.filter((a) => a.category !== "ORDER");
+  const bulletins = React.useMemo(() => announcements.filter((a) => a.category !== "ORDER"), [announcements]);
 
   const create = useCreateAnnouncement();
   const update = useUpdateAnnouncement();
@@ -197,64 +426,72 @@ export default function NotificationsPage() {
     });
   }
 
-  async function confirmRead(a: Announcement) {
-    try {
-      await markRead.mutateAsync(a.id);
-      toast.success("Đã xác nhận đọc");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
-
-  const currentYear = new Date().getFullYear();
-  const [yearFilter, setYearFilter] = React.useState("ALL");
-  const [positionFilter, setPositionFilter] = React.useState("ALL");
-  const [search, setSearch] = React.useState("");
-  const [page, setPage] = React.useState(1);
-  const [showInvalidArchive, setShowInvalidArchive] = React.useState(false);
-  const archivedBulletins = bulletins.filter(isArchivedInvalidAnnouncement);
-  const activeBulletins = bulletins.filter((a) => !isArchivedInvalidAnnouncement(a));
-  const currentBulletins = showInvalidArchive ? archivedBulletins : activeBulletins;
-  const years = Array.from(
-    new Set([currentYear, ...currentBulletins.map((a) => new Date(announcementDate(a)).getFullYear())])
-  ).filter((year) => !Number.isNaN(year)).sort((x, y) => y - x);
-  const nq = normalizeText(search.trim());
-  const filtered = currentBulletins.filter(
-    (a) =>
-      (yearFilter === "ALL" || new Date(announcementDate(a)).getFullYear() === Number(yearFilter)) &&
-      (positionFilter === "ALL" || isAnnouncementTargetForPosition(a.classification, positionFilter)) &&
-      (!nq || normalizeText([a.title, a.body, announcementTargetLabel(a.classification), a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
+  // Dep là mutateAsync (ổn định trong TanStack v5) — không dùng cả object mutation vì nó đổi identity mỗi render.
+  const confirmRead = React.useCallback(
+    async (a: Announcement) => {
+      try {
+        await markRead.mutateAsync(a.id);
+        toast.success("Đã xác nhận đọc");
+      } catch (e) {
+        toast.error((e as Error).message);
+      }
+    },
+    [markRead.mutateAsync]
   );
-  function mustReadByCurrentUser(a: Announcement) {
-    return mustConfirmAnnouncementRead(a.classification, currentPosition);
-  }
-  function isUnreadByCurrentUser(a: Announcement) {
-    return Boolean(myId) && mustReadByCurrentUser(a) && !a.reads.some((r) => r.userId === myId);
-  }
-  const sortedFiltered = [...filtered].sort((a, b) => {
-    const unreadDiff = Number(isUnreadByCurrentUser(b)) - Number(isUnreadByCurrentUser(a));
-    if (unreadDiff !== 0) return unreadDiff;
-    return new Date(announcementDate(b)).getTime() - new Date(announcementDate(a)).getTime();
-  });
+
+  const archivedBulletins = React.useMemo(() => bulletins.filter(isArchivedInvalidAnnouncement), [bulletins]);
+  const activeBulletins = React.useMemo(() => bulletins.filter((a) => !isArchivedInvalidAnnouncement(a)), [bulletins]);
+  const currentBulletins = showInvalidArchive ? archivedBulletins : activeBulletins;
+  // Dropdown năm: server trả danh sách năm có dữ liệu qua meta (không phụ thuộc năm đang tải).
+  const years = React.useMemo(() => {
+    const metaYears: number[] = Array.isArray(annData?.meta?.years) ? annData.meta.years : [];
+    return Array.from(new Set([currentYear, ...metaYears]))
+      .filter((year) => !Number.isNaN(year))
+      .sort((x, y) => y - x);
+  }, [annData?.meta?.years, currentYear]);
+  const nq = normalizeText(debouncedSearch.trim());
+  const filtered = React.useMemo(
+    () =>
+      currentBulletins.filter(
+        (a) =>
+          (yearFilter === "ALL" || new Date(announcementDate(a)).getFullYear() === Number(yearFilter)) &&
+          (positionFilter === "ALL" || isAnnouncementTargetForPosition(a.classification, positionFilter)) &&
+          (!nq || normalizeText([a.title, a.body, announcementTargetLabel(a.classification), a.orderedBy, a.stt].filter(Boolean).join(" ")).includes(nq))
+      ),
+    [currentBulletins, yearFilter, positionFilter, nq]
+  );
+  const sortedFiltered = React.useMemo(() => {
+    const isUnread = (a: Announcement) =>
+      Boolean(myId) && mustConfirmAnnouncementRead(a.classification, currentPosition) && !a.reads.some((r) => r.userId === myId);
+    return [...filtered].sort((a, b) => {
+      const unreadDiff = Number(isUnread(b)) - Number(isUnread(a));
+      if (unreadDiff !== 0) return unreadDiff;
+      return new Date(announcementDate(b)).getTime() - new Date(announcementDate(a)).getTime();
+    });
+  }, [filtered, myId, currentPosition]);
   const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / ORDERS_PER_PAGE));
   const firstShown = sortedFiltered.length ? (page - 1) * ORDERS_PER_PAGE + 1 : 0;
   const lastShown = Math.min(page * ORDERS_PER_PAGE, sortedFiltered.length);
   const pagedAnnouncements = sortedFiltered.slice((page - 1) * ORDERS_PER_PAGE, page * ORDERS_PER_PAGE);
   React.useEffect(() => {
     setPage(1);
-  }, [yearFilter, positionFilter, search, showInvalidArchive]);
+  }, [yearFilter, positionFilter, debouncedSearch, showInvalidArchive]);
   React.useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
   React.useEffect(() => {
-    if (!linkedAnnouncementId || !announcements.length) return;
+    if (!linkedAnnouncementId || annLoading) return;
     const target = announcements.find((item) => item.id === linkedAnnouncementId);
-    if (!target) return;
+    if (!target) {
+      // Mệnh lệnh deep-link có thể thuộc năm khác — mở rộng bộ lọc ra tất cả các năm.
+      setYearFilter((current) => (current === "ALL" ? current : "ALL"));
+      return;
+    }
     setYearFilter("ALL");
     setPositionFilter("ALL");
     setSearch("");
     setShowInvalidArchive(isArchivedInvalidAnnouncement(target));
-  }, [announcements, linkedAnnouncementId]);
+  }, [announcements, annLoading, linkedAnnouncementId]);
   React.useEffect(() => {
     if (!linkedAnnouncementId) return;
     const targetIndex = sortedFiltered.findIndex((item) => item.id === linkedAnnouncementId);
@@ -276,27 +513,31 @@ export default function NotificationsPage() {
   const noun = isOrder ? "mệnh lệnh" : "thông báo";
 
   // Dữ liệu xuất PDF/Excel — theo đúng danh sách mệnh lệnh đang hiển thị.
-  const exportRows = sortedFiltered.map((a, i) => {
-    const { orderAuthority, orderedBy } = a.orderedBy
-      ? splitOrderedBy(a.orderedBy)
-      : { orderAuthority: "", orderedBy: "" };
-    return {
-      stt: a.stt || String(i + 1),
-      title: a.title,
-      issuedAt: formatDate(announcementDate(a)),
-      targetPositions: announcementTargetLabel(a.classification),
-      orderAuthority,
-      orderedBy,
-      content: a.body,
-    };
-  });
+  const exportRows = React.useMemo(
+    () =>
+      sortedFiltered.map((a, i) => {
+        const { orderAuthority, orderedBy } = a.orderedBy
+          ? splitOrderedBy(a.orderedBy)
+          : { orderAuthority: "", orderedBy: "" };
+        return {
+          stt: a.stt || String(i + 1),
+          title: a.title,
+          issuedAt: formatDate(announcementDate(a)),
+          targetPositions: announcementTargetLabel(a.classification),
+          orderAuthority,
+          orderedBy,
+          content: a.body,
+        };
+      }),
+    [sortedFiltered]
+  );
 
   function openCreate(category: AnnouncementCategory) {
     setEditing(null);
     setForm({ ...EMPTY_FORM, category, issuedAt: formatDateInput(new Date()) });
     setDialogOpen(true);
   }
-  function openEdit(a: Announcement) {
+  const openEdit = React.useCallback((a: Announcement) => {
     const order = splitOrderedBy(a.orderedBy);
     setEditing(a);
     setForm({
@@ -314,7 +555,7 @@ export default function NotificationsPage() {
       fileName: a.fileName ?? "",
     });
     setDialogOpen(true);
-  }
+  }, []);
 
   function selectedTargetPositions() {
     return parseAnnouncementTargets(form.classification);
@@ -385,193 +626,29 @@ export default function NotificationsPage() {
     }
   }
 
-  async function markIneffective(a: Announcement) {
-    try {
-      await invalidate.mutateAsync(a.id);
-      toast.success("Đã đánh dấu mệnh lệnh không còn hiệu lực");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
+  const markIneffective = React.useCallback(
+    async (a: Announcement) => {
+      try {
+        await invalidate.mutateAsync(a.id);
+        toast.success("Đã đánh dấu mệnh lệnh không còn hiệu lực");
+      } catch (e) {
+        toast.error((e as Error).message);
+      }
+    },
+    [invalidate.mutateAsync]
+  );
 
-  async function restoreOrder(a: Announcement) {
-    try {
-      await restore.mutateAsync(a.id);
-      toast.success("Đã khôi phục mệnh lệnh");
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
-
-  /** A single admin post card (bảng tin or mệnh lệnh). */
-  function PostCard({ a }: { a: Announcement }) {
-    const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, effectiveUserPosition(u)));
-    const targetUserIds = new Set(targetUsers.map((u) => u.id));
-    const trackedReads = a.reads.filter((r) => targetUserIds.has(r.userId));
-    const readUserIds = new Set(trackedReads.map((r) => r.userId));
-    const readByMe = myId ? readUserIds.has(myId) : false;
-    const mustReadByMe = mustConfirmAnnouncementRead(a.classification, currentPosition);
-    const readCount = trackedReads.length;
-    const total = targetUsers.length;
-    const allRead = total > 0 && readCount >= total;
-    const isInvalid = Boolean(a.invalidatedAt);
-    const daysLeft = invalidArchiveDaysLeft(a.invalidatedAt);
-    const archivedInvalid = isArchivedInvalidAnnouncement(a);
-    return (
-      <Card
-        id={`announcement-${a.id}`}
-        tabIndex={-1}
-        className={cn(
-          "group overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-          linkedAnnouncementId === a.id && "ring-2 ring-accent ring-offset-2",
-          isInvalid
-            ? "border-red-300 bg-red-50/90 ring-1 ring-red-200"
-            : a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",
-          !isInvalid && allRead &&
-            "border-amber-300 bg-gradient-to-br from-amber-100 via-yellow-100 to-amber-200 dark:border-amber-500/40 dark:from-amber-500/20 dark:via-yellow-500/10 dark:to-amber-600/20"
-        )}
-      >
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-start gap-1.5 sm:items-center">
-                {a.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" />}
-                {a.stt && (
-                  <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-xs font-bold text-accent">
-                    {a.stt}
-                  </span>
-                )}
-                <h3 className="min-w-0 max-w-full break-words font-semibold leading-snug text-ink">{a.title}</h3>
-                {isInvalid && (
-                  <span className="shrink-0 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
-                    Không còn hiệu lực
-                  </span>
-                )}
-                {a.classification && (
-                  <span className="min-w-0 max-w-full basis-full whitespace-normal break-words rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium leading-snug text-muted-foreground sm:basis-auto">
-                    {announcementTargetLabel(a.classification)}
-                  </span>
-                )}
-              </div>
-              <div className={cn("mt-1 text-sm font-semibold", isInvalid ? "text-red-700" : "text-ink")}>
-                Ngày ra mệnh lệnh: {formatDate(announcementDate(a))}
-              </div>
-              <div
-                className={cn(
-                  "mt-3 rounded-lg border px-4 py-3",
-                  isInvalid
-                    ? "border-red-200 bg-white/75 text-red-900"
-                    : "border-slate-200 bg-slate-50/80 text-ink"
-                )}
-              >
-                <div className={cn("mb-1 text-[11px] font-bold uppercase tracking-normal", isInvalid ? "text-red-600" : "text-muted-foreground")}>
-                  Nội dung mệnh lệnh
-                </div>
-                <div className="whitespace-pre-wrap text-[15px] font-bold leading-7">
-                  {a.body}
-                </div>
-              </div>
-              {(a.linkUrl || a.fileUrl) && (
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {a.linkUrl && (
-                    <a
-                      href={normalizeUrl(a.linkUrl)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/5"
-                    >
-                      <Link2 className="h-3.5 w-3.5 shrink-0" />
-                      <span className="max-w-[220px] truncate">{a.linkUrl.replace(/^https?:\/\//i, "")}</span>
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
-                  )}
-                  {a.fileUrl && (
-                    <a
-                      href={a.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-muted"
-                    >
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                      <span className="max-w-[220px] truncate">{a.fileName ?? "Tệp PDF"}</span>
-                    </a>
-                  )}
-                </div>
-              )}
-              {a.orderedBy && (
-                <div className="mt-2 text-xs font-medium text-ink">
-                  Theo lệnh: <span className="text-accent">{a.orderedBy}</span>
-                </div>
-              )}
-              <div className="mt-2 text-xs text-muted-foreground">
-                Cập nhật bởi: <span className="font-medium text-ink">Quản trị viên</span> - {formatDate(a.updatedAt)}
-              </div>
-              {isInvalid && (
-                <div className="mt-2 rounded-md border border-red-200 bg-white/70 px-3 py-2 text-xs font-medium text-red-700">
-                  Mệnh lệnh không còn hiệu lực từ {formatDate(a.invalidatedAt)}.
-                  {archivedInvalid
-                    ? " Đang nằm trong mục Mệnh lệnh hết hiệu lực."
-                    : ` Sẽ chuyển vào mục Mệnh lệnh hết hiệu lực sau ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày.`}
-                </div>
-              )}
-            </div>
-            {canManageAnnouncements && (
-              <div className="flex shrink-0 items-center gap-1 self-end opacity-100 transition-opacity sm:self-start sm:opacity-0 sm:group-hover:opacity-100">
-                {isInvalid ? (
-                  <button onClick={() => restoreOrder(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
-                    <RotateCcw className="h-4 w-4" />
-                  </button>
-                ) : (
-                  <>
-                    <button onClick={() => openEdit(a)} title="Sửa" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-ink">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => markIneffective(a)} title="Mệnh lệnh không còn hiệu lực" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700">
-                      <Ban className="h-4 w-4" />
-                    </button>
-                  </>
-                )}
-                <button onClick={() => setDeleting(a)} title="Xoá" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Xác nhận đã đọc — cho tất cả user; quản lý xem được ai đã/chưa đọc */}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-            {allRead ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                <CheckCircle2 className="h-4 w-4" /> Tất cả đã xác nhận đọc
-              </span>
-            ) : !mustReadByMe ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Check className="h-4 w-4" /> Không thuộc diện cần xác nhận đọc
-              </span>
-            ) : readByMe ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <Check className="h-4 w-4" /> Bạn đã xác nhận đọc
-              </span>
-            ) : (
-              <Button size="sm" variant="outline" onClick={() => confirmRead(a)} disabled={markRead.isPending}>
-                {markRead.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Xác nhận đã đọc
-              </Button>
-            )}
-            {isManager && (
-              <button
-                onClick={() => setReadersOf(a)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-ink"
-                title="Xem ai đã/chưa đọc"
-              >
-                <Users className="h-3.5 w-3.5" /> Đã đọc {readCount}/{total}
-              </button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const restoreOrder = React.useCallback(
+    async (a: Announcement) => {
+      try {
+        await restore.mutateAsync(a.id);
+        toast.success("Đã khôi phục mệnh lệnh");
+      } catch (e) {
+        toast.error((e as Error).message);
+      }
+    },
+    [restore.mutateAsync]
+  );
 
   return (
     <div className="space-y-6">
@@ -661,7 +738,25 @@ export default function NotificationsPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {pagedAnnouncements.map((a) => <PostCard key={a.id} a={a} />)}
+            {pagedAnnouncements.map((a) => (
+              <PostCard
+                key={a.id}
+                a={a}
+                activeUsers={activeUsers}
+                myId={myId}
+                currentPosition={currentPosition}
+                linkedAnnouncementId={linkedAnnouncementId}
+                canManage={canManageAnnouncements}
+                isManager={isManager}
+                markReadPending={markRead.isPending}
+                onConfirmRead={confirmRead}
+                onEdit={openEdit}
+                onInvalidate={markIneffective}
+                onRestore={restoreOrder}
+                onDelete={setDeleting}
+                onShowReaders={setReadersOf}
+              />
+            ))}
             {sortedFiltered.length > ORDERS_PER_PAGE && (
               <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs font-medium text-muted-foreground">
@@ -874,15 +969,19 @@ export default function NotificationsPage() {
                     <p className="text-xs text-muted-foreground">Chưa có ai xác nhận đọc.</p>
                   ) : (
                     <ul className="space-y-1">
-                      {trackedReads.map((r) => (
-                        <li key={r.userId} className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-sm dark:bg-emerald-500/10">
-                          <span className="min-w-0 truncate">
-                            <span className="font-medium text-ink">{r.user.name}</span>
-                            {effectiveUserPosition(r.user) && <span className="ml-1.5 text-xs text-muted-foreground">{effectiveUserPosition(r.user)}</span>}
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">{formatDate(r.readAt)}</span>
-                        </li>
-                      ))}
+                      {trackedReads.map((r) => {
+                        const reader = userById.get(r.userId);
+                        const readerPosition = reader ? effectiveUserPosition(reader) : null;
+                        return (
+                          <li key={r.userId} className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-sm dark:bg-emerald-500/10">
+                            <span className="min-w-0 truncate">
+                              <span className="font-medium text-ink">{reader?.name ?? "Người dùng"}</span>
+                              {readerPosition && <span className="ml-1.5 text-xs text-muted-foreground">{readerPosition}</span>}
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground">{formatDate(r.readAt)}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>

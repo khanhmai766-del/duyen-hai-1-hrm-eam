@@ -96,6 +96,7 @@ model Announcement {
   reads     AnnouncementRead[]
 
   @@index([category, pinned, createdAt])
+  @@index([pinned, issuedAt, createdAt]) // khớp orderBy của GET /api/announcements
   @@index([createdById])
 }
 
