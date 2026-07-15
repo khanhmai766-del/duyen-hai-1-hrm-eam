@@ -34,3 +34,6 @@ public/videos/*
 
 # Bản sao lưu do script dedupe thiết bị sinh ra (không đưa vào git)
 scripts/data/equipment-dedupe-backup-*.json
+
+# Index cuc bo cua CodeGraph (khong dua vao git)
+/.codegraph/
