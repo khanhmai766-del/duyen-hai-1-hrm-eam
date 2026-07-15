@@ -55,7 +55,6 @@ async function canManageTicket(
   t: { createdById: string; assignedPosition: string }
 ) {
   if (user.role === "ADMIN") return true;
-  if (!isAssignedPosition(user, t)) return false;
   const map = await getWorkflowRoleMap();
   if (map.manage.length > 0) return stepAllowedWithMap(map, "manage", user);
   return t.createdById === user.id;
@@ -214,11 +213,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!permission) return fail("Bước chỉnh sửa không hợp lệ");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), permission, user))
         return fail("Bạn không có quyền chỉnh sửa bước này (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      if (["receive", "use", "accept"].includes(step)) {
-        const assignedError = assignedPositionError(user, t);
-        if (assignedError) return assignedError;
-      }
-
       let before = "";
       let after = "";
       let up: FullTicket | null = null;
@@ -237,15 +231,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const value = String(body.proposalNumber || "").trim();
         const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
         if (!value) return fail("Vui lòng nhập số phiếu ĐXVT");
-        if (!proposalReceiverName) return fail("Vui lòng nhập tên VHV nhận phiếu ĐXVT");
         before = `Số phiếu ĐXVT: ${t.proposalNumber ?? "—"}; VHV nhận: ${t.proposalReceiverName ?? "—"}`;
-        after = `Số phiếu ĐXVT: ${value}; VHV nhận: ${proposalReceiverName}`;
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value, proposalReceiverName }, include: ITEM_INCLUDE });
+        after = `Số phiếu ĐXVT: ${value}; VHV nhận: ${proposalReceiverName || "—"}`;
+        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { proposalNumber: value, proposalReceiverName: proposalReceiverName || null }, include: ITEM_INCLUDE });
       } else if (step === "receive") {
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
         const value = Math.trunc(Number(body.receivedQuantity));
         const method = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
-        const receiptSource = normalizeReceiptSource(body.receiptSource);
+        const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
         if (value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.receivedQuantity;
@@ -456,8 +449,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (action === "receiveExisting") {
       if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "NHAN_TU_HIEN_CO") return fail("Phiếu không ở bước Nhận vật tư từ Hiện có");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
+        return fail("Bạn không có quyền ở bước Nhận vật tư từ Hiện có (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const quantity = Math.trunc(Number(body.quantity));
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -484,8 +477,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Số đã lãnh được cộng vào Hiện có để bước Sử dụng có thể trừ sau đó; ERP không thay đổi.
     if (action === "vhvReceive") {
       if (t.type !== "UNG" || t.status !== "VHV_LANH_VAT_TU") return fail("Phiếu không ở bước VHV lãnh vật tư");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
+      const wfMap = await getWorkflowRoleMap();
+      if (wfMap.vhvReceive.length > 0) {
+        if (!stepAllowedWithMap(wfMap, "vhvReceive", user)) return fail("Bạn không có quyền ở bước VHV lãnh vật tư", 403);
+      } else {
+        const assignedError = assignedPositionError(user, t);
+        if (assignedError) return assignedError;
+      }
       const quantity = Math.trunc(Number(body.quantity));
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
       const materialCode = String(body.materialCode || "").trim();
@@ -520,8 +518,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B1' — Từ chối khi vật tư không có/không đủ hoặc lý do khác. Phiếu đóng vĩnh viễn.
     if (action === "reject") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_XAC_NHAN", "VAT_TU_KHONG_CO"].includes(t.status)) return fail("Phiếu không ở bước có thể từ chối");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
       const canReject = isShiftLeader(user.position) || user.role === "ADMIN" || t.createdById === user.id;
       if (!canReject) return fail("Chỉ người tạo phiếu, Quản trị hoặc Trưởng Ca / Trưởng Kíp được từ chối", 403);
       const reason = String(body.reason || "").trim();
@@ -535,8 +531,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B2 — Thống Kê xác nhận ĐXVT: thống kê xác nhận số phiếu trước,
-    // sau đó xác nhận VHV nhận phiếu trong cùng một bước hiển thị.
+    // B2 — Nhập số phiếu trước, sau đó xác nhận đã giao/trả phiếu.
+    // Luồng Ứng không yêu cầu tên VHV nhận phiếu.
     if (action === "stats") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
@@ -560,34 +556,31 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return ok(up);
       }
 
-      if (!proposalReceiverName) return fail("Vui lòng nhập tên VHV nhận phiếu ĐXVT");
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
           status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "NHAN_VAT_TU",
           proposalNumber: num,
           proposalIssuedAt: new Date(),
-          proposalReceiverName,
+          proposalReceiverName: t.type === "UNG" ? null : proposalReceiverName || null,
           statsById: user.id, statsByName: user.name ?? "",
           statsByPosition: user.position ?? null, statsAt: new Date(),
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận ĐXVT: ${num}; VHV nhận phiếu ${proposalReceiverName}`);
+      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận ĐXVT: ${num}${t.type === "UNG" ? "; đã xác nhận trả phiếu" : proposalReceiverName ? `; VHV nhận phiếu ${proposalReceiverName}` : ""}`);
       return ok(up);
     }
 
     // B2' — NHẬN VẬT TƯ: khối lượng lãnh + hình thức lãnh → chuyển Sử dụng vật tư
     if (action === "receive") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
         return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
       const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
-      const receiptSource = normalizeReceiptSource(body.receiptSource);
+      const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
       const repairRequestNumber = t.type === "UNG" ? "" : String(body.repairRequestNumber || "").trim();
       if (t.type !== "UNG" && !repairRequestNumber) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
@@ -682,7 +675,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (action === "repairRequest") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_PHIEU_YCSC") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
-      const assignedError = assignedPositionError(user, t); if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh", 403);
       const value = String(body.repairRequestNumber || "").trim();
       if (!value) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
@@ -696,8 +688,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Tồn kho đã cộng khối lượng lãnh ở bước Nhận vật tư; bước này trừ khối lượng dùng.
     if (action === "use") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
         return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const recoveryRequired = body.recoveryRequired === true;
@@ -758,8 +748,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // B3 — Trưởng Ca nghiệm thu: nhập PCT/LCT + nội dung + chỉ huy → xuất Word → HOÀN TẤT
     if (action === "accept") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_NGHIEM_THU") return fail("Phiếu không ở bước Nghiệm thu");
-      const assignedError = assignedPositionError(user, t);
-      if (assignedError) return assignedError;
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "accept", user))
         return fail("Bạn không có quyền nghiệm thu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       // PCT/chỉ huy/nội dung đã nhập ở bước SỬ DỤNG VẬT TƯ; phiếu cũ (trước khi có
@@ -798,13 +786,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${t.code}: đã nghiệm thu, chờ xác nhận vật tư lãnh để xuất biên bản` : `${t.code}: nghiệm thu, xuất biên bản`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${t.code}: đã nghiệm thu, chuyển xác nhận vật tư lãnh` : `${t.code}: nghiệm thu, xuất biên bản`);
       return ok(up);
     }
 
     if (action === "settle") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
       const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "HOAN_TAT", settledAt: new Date(), settledByName: user.name ?? "" }, include: ITEM_INCLUDE });
       await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${t.code}: đã quyết toán vật tư`);
       return ok(up);
