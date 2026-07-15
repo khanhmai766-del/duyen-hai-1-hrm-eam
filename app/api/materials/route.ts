@@ -56,12 +56,18 @@ async function normalizeMaterialDocument(body: { documentUrl?: unknown; document
   return { documentUrl, documentName: documentUrl ? documentName : null };
 }
 
-async function materialDocumentMap() {
+async function materialDocumentMap(ids?: string[]) {
   try {
     await ensureMaterialDocumentColumns();
-    const rows = await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
-      SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material"
-    `;
+    // Chỉ quét đúng các vật tư cần trả về (khi có ids) thay vì cả bảng.
+    if (ids && ids.length === 0) return new Map<string, MaterialDocumentFields>();
+    const rows = ids
+      ? await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
+          SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material" WHERE "id" = ANY(${ids}::text[])
+        `
+      : await prisma.$queryRaw<Array<{ id: string; documentUrl: string | null; documentName: string | null; erpCodes: string[] | null }>>`
+          SELECT "id", "documentUrl", "documentName", "erpCodes" FROM "Material"
+        `;
     return new Map(rows.map((row) => [row.id, { documentUrl: row.documentUrl, documentName: row.documentName, erpCodes: row.erpCodes ?? [] }]));
   } catch {
     return new Map<string, MaterialDocumentFields>();
@@ -196,16 +202,40 @@ async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
   `;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const access = await resolveEquipmentAccessForUser(user);
-    const materials = await prisma.material.findMany({
-      orderBy: { code: "asc" },
-      include: MATERIAL_INCLUDE,
-    });
-    const documents = await materialDocumentMap();
+    // ?machine=S1|S2|COMMON: lọc theo tổ máy ngay trong query (tab Danh mục vật tư).
+    // ?include=usage: kèm lịch sử tiêu hao theo thiết bị (chỉ trang Reports cần).
+    const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
+    const includeUsage = req.nextUrl.searchParams.get("include") === "usage";
+    const [access, materials] = await Promise.all([
+      resolveEquipmentAccessForUser(user),
+      prisma.material.findMany({
+        where: machine ? { machine } : undefined,
+        orderBy: { code: "asc" },
+        include: {
+          replacements: MATERIAL_INCLUDE.replacements,
+          ...(includeUsage ? { deviceMaterials: MATERIAL_INCLUDE.deviceMaterials } : {}),
+        },
+      }),
+    ]);
+    const documents = await materialDocumentMap(materials.map((material) => material.id));
     const data = materials.map((material) => mapMaterial(material, documents.get(material.id)));
+    // Khi KHÔNG tải usage nhưng vẫn phải xét quyền hiển thị: tra bản nhẹ 2 cột
+    // (materialId, deviceSeq) thay vì chở cả lịch sử tiêu hao về client.
+    const usageMap = new Map<string, string[]>();
+    if (!includeUsage && access.hasExplicitScopes && materials.length) {
+      const usageRows = await prisma.equipmentMaterial.findMany({
+        where: { materialId: { in: materials.map((material) => material.id) } },
+        select: { materialId: true, deviceSeq: true },
+      });
+      for (const row of usageRows) {
+        const list = usageMap.get(row.materialId);
+        if (list) list.push(row.deviceSeq);
+        else usageMap.set(row.materialId, [row.deviceSeq]);
+      }
+    }
     const filtered = access.hasExplicitScopes
       ? data
           .map((material) => {
@@ -219,6 +249,7 @@ export async function GET() {
           })
           .filter((material) => {
             if ((material.deviceMaterials ?? []).length || (material.replacements ?? []).length) return true;
+            if ((usageMap.get(material.id) ?? []).some((seq) => access.canViewSeq(seq))) return true;
             return material.system ? access.visibleSystemNames.has(normalizeText(material.system)) : false;
           })
       : data;

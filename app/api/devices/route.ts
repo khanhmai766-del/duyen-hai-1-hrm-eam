@@ -12,7 +12,7 @@ import { normalizeText } from "@/lib/nav";
 import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
-import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
@@ -94,7 +94,9 @@ function toDeviceRecordWithStats(
 }
 
 async function getDeviceLikeRecords() {
-  const nodes = await getNormalizedEquipmentNodes(prisma);
+  // Bản đầy đủ từ cache 60s — trước đây mỗi cache-miss của danh sách thiết bị
+  // (mỗi tổ hợp scope × từ khoá) lại đọc + normalize ~6.6k dòng từ DB.
+  const nodes = await getCachedEquipmentNodeFull();
   const index = buildEquipmentTreeIndex(nodes);
   const leafNodes = nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0);
   const leafSeqs = leafNodes.map((node) => node.seq);

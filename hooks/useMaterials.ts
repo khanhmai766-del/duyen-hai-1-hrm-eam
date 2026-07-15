@@ -40,8 +40,20 @@ export interface MaterialWithDevices extends Material {
   shortfall?: number; // đề xuất thêm = max(0, tổng nhu cầu − tồn kho)
 }
 
-export function useMaterials() {
-  return useQuery({ queryKey: ["materials"], queryFn: () => apiGet<MaterialWithDevices[]>("/api/materials") });
+/**
+ * Danh mục vật tư.
+ * - machine: lọc theo tổ máy (S1/S2/COMMON) ngay từ server — payload nhỏ hơn nhiều.
+ * - includeUsage: kèm lịch sử tiêu hao theo thiết bị (deviceMaterials) — chỉ Reports cần.
+ * Mutation invalidate theo prefix ["materials"] nên mọi biến thể đều được làm mới.
+ */
+export function useMaterials(params: { machine?: string; includeUsage?: boolean } = {}) {
+  const qs = new URLSearchParams();
+  if (params.machine) qs.set("machine", params.machine);
+  if (params.includeUsage) qs.set("include", "usage");
+  return useQuery({
+    queryKey: ["materials", params],
+    queryFn: () => apiGet<MaterialWithDevices[]>(`/api/materials?${qs.toString()}`),
+  });
 }
 
 export type MaterialReplacementInput = {

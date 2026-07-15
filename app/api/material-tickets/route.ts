@@ -62,11 +62,14 @@ export async function GET(req: NextRequest) {
         .filter((item) => item.deviceSeq)
         .map((item) => ({ materialId: item.materialId, deviceSeq: item.deviceSeq! }))
     );
+    // Tra nhãn thiết bị theo cặp (vật tư × thiết bị): dùng 2 mảng IN (đi theo index sẵn có)
+    // thay vì OR hàng trăm cặp — kết quả có thể dư cặp không khớp nhưng Map chỉ tra đúng cặp thật.
     const replacementLabels = itemPairs.length
       ? await prisma.materialReplacement.findMany({
           where: {
             isActive: false,
-            OR: itemPairs.map((item) => ({ materialId: item.materialId, deviceSeq: item.deviceSeq })),
+            materialId: { in: [...new Set(itemPairs.map((item) => item.materialId))] },
+            deviceSeq: { in: [...new Set(itemPairs.map((item) => item.deviceSeq))] },
           },
           select: { materialId: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
         })
@@ -77,15 +80,23 @@ export async function GET(req: NextRequest) {
         item.location || item.device?.name || item.system || item.deviceSeq || "Thiết bị thay thế",
       ])
     );
+    // Chỉ tải log SỬA BƯỚC (UI chi tiết phiếu chỉ hiển thị loại này) — trước đây tải
+    // TOÀN BỘ audit log của 500 phiếu không giới hạn, nặng dần theo thời gian sử dụng.
     const activityRows = tickets.length ? await prisma.auditLog.findMany({
-      where: { entity: "MaterialTicket", entityId: { in: tickets.map((ticket) => ticket.id) } },
+      where: {
+        entity: "MaterialTicket",
+        action: "MT_EDIT_STEP",
+        entityId: { in: tickets.map((ticket) => ticket.id) },
+      },
       include: { user: { select: { name: true, position: true } } },
       orderBy: { createdAt: "asc" },
     }) : [];
     const activityByTicket = new Map<string, typeof activityRows>();
     for (const row of activityRows) {
       if (!row.entityId) continue;
-      activityByTicket.set(row.entityId, [...(activityByTicket.get(row.entityId) ?? []), row]);
+      const list = activityByTicket.get(row.entityId);
+      if (list) list.push(row);
+      else activityByTicket.set(row.entityId, [row]);
     }
     const ticketsWithActivity = tickets.map((ticket) => ({
       ...ticket,
@@ -96,10 +107,13 @@ export async function GET(req: NextRequest) {
       activityLogs: activityByTicket.get(ticket.id) ?? [],
     }));
 
-    const scopes = await getPositionScopes(user.position);
-    const totalScopeCount = await prisma.positionSystemScope.count();
+    // 3 truy vấn độc lập — chạy song song thay vì tuần tự.
     // Quyền theo từng bước (admin cấu hình trong MaterialWorkflowRole; trống = mặc định cũ).
-    const wfMap = await getWorkflowRoleMap();
+    const [scopes, totalScopeCount, wfMap] = await Promise.all([
+      getPositionScopes(user.position),
+      prisma.positionSystemScope.count(),
+      getWorkflowRoleMap(),
+    ]);
     return ok(ticketsWithActivity, {
       months: monthGroups.map((group) => ({ month: group.sequenceMonth, count: group._count._all })),
       viewer: {
