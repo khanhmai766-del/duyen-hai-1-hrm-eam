@@ -869,6 +869,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   const order = ORDER[t.type];
   const flowStatus = flowStatusKey(t.status);
   const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
+  const receiptSourceLabel = t.receiptSource === "OUTSIDE" ? "Lãnh kho VH1" : "Lãnh kho DH1";
   const activityLogs = [
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -953,7 +954,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             {t.proposalNote && <div className="meta-line">Ghi chú lý do: <b>{t.proposalNote}</b></div>}
             {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
             {t.receivedQuantity != null && (
-              <div className="meta-line">Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Nguồn lãnh: <b>{t.receiptSource === "OUTSIDE" ? "Ngoài kho" : "Kho ERP"}</b> · Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b> — đã cộng vào số lượng hiện có</div>
+              <div className="meta-line received-summary">
+                <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
+                <span>Nguồn lãnh: <b className="source-badge">{receiptSourceLabel}</b></span>
+                <span>Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b></span>
+                <em>đã cộng vào số lượng hiện có</em>
+              </div>
             )}
             {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
             {t.usedQuantity != null && (
@@ -1568,7 +1574,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <div className="seg2"><button type="button" className={!recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(false)}>Không</button><button type="button" className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
 	          </label>
 	        </div>
-	        {recoveryRequired && <><label>Số lượng vật tư thu hồi{unit ? ` (${unit})` : ""} *</label><div className="relative"><input className="!pr-20" type="number" min={1} value={Number(num) || 1} onChange={(e) => setNum(e.target.value)} /><span className="pointer-events-none absolute inset-y-0 right-4 flex items-center font-semibold text-slate-500">{unit}</span></div><label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800"><input className="!h-5 !w-5 shrink-0 cursor-pointer accent-blue-600" type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} /><span>Xác nhận đã trả vật tư thu hồi</span></label><div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div></>}
+		        {recoveryRequired && <>
+		          <div className="recovery-detail-grid">
+		            <label className="field">Số lượng vật tư thu hồi{unit ? ` (${unit})` : ""} *
+		              <input type="number" min={1} value={Number(num) || 1} onChange={(e) => setNum(e.target.value)} />
+		            </label>
+		            <label className="recovery-return-check">
+		              <input type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
+		              <span>Xác nhận đã trả vật tư thu hồi</span>
+		            </label>
+		          </div>
+		          <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div>
+		        </>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
         )}
@@ -1934,16 +1951,26 @@ const CSS = `
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
 .log-export{margin:18px 0 0;max-width:max-content;}
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
-.act{border:1.5px dashed ${C.accent}66;background:${C.accent}07;border-radius:14px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:9px;}
+.received-summary{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;}
+.received-summary span{display:inline-flex;align-items:center;gap:4px;}
+.received-summary em{font-style:normal;color:#94a3b8;}
+.source-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0f2fe;color:#0369a1;padding:2px 8px;font-size:12px;line-height:1.3;}
+.act{border:1.5px dashed ${C.accent}66;background:linear-gradient(180deg,#f8fbff 0%,${C.accent}08 100%);border-radius:16px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
 .stats-issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
 .stats-issue-grid.single{grid-template-columns:1fr;}
 .stats-issue-grid .field{min-width:0;margin:0!important;}
 .stats-issue-grid .field input{margin-top:6px;}
-.use-field-grid{display:grid;grid-template-columns:minmax(220px,.95fr) minmax(300px,1.35fr);gap:10px;align-items:end;}
+.use-field-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
-.use-field-grid .field input{margin-top:6px;}
-.recovery-toggle-field .seg2{margin-top:6px;}
+.use-field-grid .field input{height:42px;margin-top:6px;}
+.recovery-toggle-field .seg2{height:42px;margin-top:6px;background:#fff;border-color:${C.line};}
+.recovery-toggle-field .seg2 button{min-height:38px;}
+.recovery-detail-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}
+.recovery-detail-grid .field{min-width:0;margin:0!important;}
+.recovery-detail-grid .field input{height:42px;margin-top:6px;}
+.recovery-return-check{display:flex!important;min-height:42px;align-items:center;gap:9px;margin:0!important;border:1px solid ${C.line};border-radius:10px;background:#fff;padding:0 13px;font-size:12px;font-weight:700;color:${C.navy};box-shadow:0 1px 0 rgba(15,23,42,.03);}
+.recovery-return-check input{height:18px!important;width:18px!important;min-width:18px;margin:0;accent-color:${C.accent};}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}
@@ -1979,6 +2006,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.use-field-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
