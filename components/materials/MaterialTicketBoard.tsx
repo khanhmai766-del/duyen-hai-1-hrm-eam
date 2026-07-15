@@ -142,7 +142,6 @@ export default function MaterialTicketBoard({
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
-  const ticketOrder = useMemo(() => new Map(tickets.map((t, index) => [t.id, index + 1])), [tickets]);
   const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
   const myTurnIds = useMemo(() => new Set(myTurn.map((t) => t.id)), [myTurn]);
   const waitDays = useMemo(() => new Map(tickets.map((t) => [t.id, waitDaysOf(t)])), [tickets]);
@@ -157,7 +156,6 @@ export default function MaterialTicketBoard({
 
   const searchText = normalizeText(searchQ);
   const shown = useMemo(() => {
-    const wait = (t: MaterialTicket) => waitDays.get(t.id) ?? 0;
     const list = tickets.filter((t) => {
       const matchesStatus =
         filter === "ALL" ? true
@@ -174,20 +172,9 @@ export default function MaterialTicketBoard({
       const matchesSearch = !searchText || searchable.includes(searchText);
       return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
     });
-    // Tab "Đến lượt bạn": phiếu nghẽn lâu nhất lên đầu.
-    if (filter === "MINE") return list.sort((a, b) => wait(b) - wait(a));
-    // Tất cả / Đang thực hiện: ghim phiếu đến lượt mình lên đầu (cũng theo chờ lâu nhất).
-    if (filter === "ALL" || filter === "RUNNING") {
-      return list.sort((a, b) => {
-        const ma = myTurnIds.has(a.id) ? 1 : 0;
-        const mb = myTurnIds.has(b.id) ? 1 : 0;
-        if (ma !== mb) return mb - ma;
-        if (ma) return wait(b) - wait(a);
-        return (ticketOrder.get(a.id) ?? 0) - (ticketOrder.get(b.id) ?? 0);
-      });
-    }
-    return list;
-  }, [tickets, filter, myTurnIds, waitDays, ticketOrder, materialCategoryFilter, unitFilter, searchText]);
+    // STT cao nhất tương ứng phiếu mới nhất và luôn được đưa lên đầu ở mọi tab.
+    return list.sort((a, b) => b.sequenceNumber - a.sequenceNumber || b.createdAt.localeCompare(a.createdAt));
+  }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, searchText]);
   const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : materialCategoryFilter;
   const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
 
@@ -241,10 +228,8 @@ export default function MaterialTicketBoard({
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
-	          const baseMeta = STATUS[t.status] ?? { label: t.status, c: C.soft };
-	          const meta = t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl)
-            ? { label: `${baseMeta.label} · Chờ xác nhận trả vật tư thu hồi`, c: C.warn }
-	            : baseMeta;
+		          const baseMeta = STATUS[t.status] ?? { label: t.status, c: C.soft };
+		          const recoveryPending = t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
 	          const mine = actionsFor(t, viewer).length > 0;
 	          const isAssignedToViewer = !!viewer && positionKey(viewer.position) === positionKey(t.assignedPosition);
 	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
@@ -266,7 +251,7 @@ export default function MaterialTicketBoard({
                 <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
                   {isOpen ? <Minus size={12} /> : <Plus size={12} />}
                 </span>
-                <span className="code">{ticketOrder.get(t.id) ?? "—"}</span>
+                <span className="code">{t.sequenceNumber}</span>
               </span>
               <span className="kind-cell">
                 {t.type === "UNG"
@@ -286,9 +271,16 @@ export default function MaterialTicketBoard({
                   : <span className="nophieu">Chưa có phiếu đề xuất</span>}
               </span>
               <span>{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
-              <span className="st" style={{ color: meta.c, background: meta.c + "16" }}>
-                {mine && <i className="pd" />}{meta.label}
-              </span>
+	              <span className="status-stack">
+	                <span className="st status-primary" style={{ color: baseMeta.c, background: baseMeta.c + "16" }}>
+	                  {mine && <i className="pd" />}{baseMeta.label}
+	                </span>
+	                {recoveryPending && (
+	                  <span className="st status-secondary" style={{ color: C.warn, background: C.warn + "16" }}>
+	                    Chờ xác nhận trả vật tư thu hồi
+	                  </span>
+	                )}
+	              </span>
               <span className="wait-cell">
                 {FINISHED_STATUSES.includes(t.status)
                   ? <span className="soft">—</span>
@@ -892,9 +884,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   return (
     <>
       {/* Thông tin phiếu (mã, loại, giao, trạng thái...) đã hiện ở dòng bảng — chi tiết chỉ còn tiến trình + nội dung */}
-      <button className="activity-toggle" onClick={() => setShowActivity(true)} title="Xem hoạt động ghi nhận"><Clock size={14} /> Hoạt động</button>
-      <button className="dclose" onClick={onClose} title="Thu gọn"><X size={15} /></button>
-
       <div className="p-body">
         {/* Hàng trên: tiến trình (trái) + Dấu vết (phải) */}
         <div className="p-top">
@@ -924,9 +913,15 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
         </div>
 
         <div className="items top-items">
+          <div className="top-items-head">
+            {t.items.length > 0 && <label className="lb"><Package size={13} /> Vật tư trong phiếu</label>}
+            <div className="detail-actions">
+              <button className="activity-toggle" onClick={() => setShowActivity(true)} title="Xem hoạt động ghi nhận"><Clock size={14} /> Hoạt động</button>
+              <button className="dclose" onClick={onClose} title="Thu gọn"><X size={15} /></button>
+            </div>
+          </div>
           {t.items.length > 0 && (
             <>
-            <label className="lb"><Package size={13} /> Vật tư trong phiếu</label>
             {t.items.map((it, itemIndex) => {
               const short = ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) && it.quantity > it.material.quantity;
               return (
@@ -1082,8 +1077,18 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         </>}
         {editStep === "receive" && <>
           <label>Khối lượng lãnh<input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} /></label>
-          <label>Nguồn lãnh vật tư</label><div className="seg2"><button type="button" disabled={!canEdit} className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho DH1</button><button type="button" disabled={!canEdit} className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh vật tư "Hiện có"</button></div>
-          <label>Số phiếu giao hàng<input value={receivedMethod} disabled={!canEdit} onChange={(e) => setReceivedMethod(e.target.value)} /></label>
+          <div className="review-receive-row">
+            <div className="review-receive-source">
+              <label>Nguồn lãnh vật tư</label>
+              <div className="seg2 review-receive-toggle">
+                <button type="button" disabled={!canEdit} className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho DH1</button>
+                <button type="button" disabled={!canEdit} className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh vật tư "Hiện có"</button>
+              </div>
+            </div>
+            <label className="field review-delivery-field">Số phiếu giao hàng
+              <input value={receivedMethod} disabled={!canEdit} onChange={(e) => setReceivedMethod(e.target.value)} />
+            </label>
+          </div>
         </>}
         {(editStep === "ungAdvance" || editStep === "ungEntry") && quantities.map((row) => <label key={row.itemId}>{t.items.find((item) => item.id === row.itemId)?.material.name} — {editStep === "ungEntry" ? "Số lượng thay thế" : "Số lượng ứng"}<input type="number" min={1} value={row.quantity} disabled={!canEdit} onChange={(e) => setQuantities((current) => current.map((item) => item.itemId === row.itemId ? { ...item, quantity: Number(e.target.value) } : item))} /></label>)}
         {(editStep === "use") && <>
@@ -1662,7 +1667,25 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     );
   }
 
-  if (acts.includes("settle")) return <div className="act"><label className="lb">Thống kê — quyết toán vật tư</label><label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800"><input className="!h-5 !w-5 shrink-0 cursor-pointer accent-blue-600" type="checkbox" onChange={(e) => setRecoveryReturned(e.target.checked)} checked={recoveryReturned}/><span>Xác nhận đã quyết toán vật tư</span></label><button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Phiếu đã hoàn thành")}><CircleCheck size={15}/> Hoàn tất phiếu</button></div>;
+  if (acts.includes("settle")) return (
+    <div className="act">
+      <label className="lb">Thống kê — quyết toán vật tư</label>
+      <label className={`settlement-check ${recoveryReturned ? "checked" : ""}`}>
+        <input
+          type="checkbox"
+          checked={recoveryReturned}
+          onChange={(e) => setRecoveryReturned(e.target.checked)}
+        />
+        <span className="settlement-check-box" aria-hidden="true">
+          {recoveryReturned && <Check size={14} strokeWidth={3} />}
+        </span>
+        <span>Xác nhận đã quyết toán vật tư</span>
+      </label>
+      <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Phiếu đã hoàn thành")}>
+        <CircleCheck size={15}/> Hoàn tất phiếu
+      </button>
+    </div>
+  );
 
   if (acts.includes("ungAdvance")) return (
     <div className="act">
@@ -1803,6 +1826,12 @@ const CSS = `
 .step.recovery-pending{color:${C.warn};background:${C.warnBg};}
 .recovery-review-warning{display:flex;align-items:center;gap:8px;margin:0;color:${C.warn};font-size:13px;font-weight:650;}
 .step-review-dialog{width:min(560px,calc(100vw - 32px));max-height:86vh;overflow-y:auto;}
+.review-receive-row{display:grid;grid-template-columns:max-content minmax(170px,1fr);gap:12px;align-items:end;min-width:0;}
+.review-receive-source{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.review-receive-toggle{display:inline-flex;width:max-content;max-width:100%;gap:6px;}
+.review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
+.review-delivery-field{gap:6px;min-width:0;}
+.review-delivery-field input{height:40px;margin:0;}
 .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
 .head-l{display:flex;gap:13px;align-items:center;}
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}
@@ -1861,10 +1890,11 @@ const CSS = `
 .exp.open{background:#f43f5e;}
 .detail-inline{min-width:1132px;border-bottom:1px solid ${C.line};background:#f6f8fb;padding:12px 16px;}
 .detail-inline .dwrap{position:relative;border:1px solid ${C.line};border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.07);}
-.dclose{position:absolute;top:10px;right:10px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
+.dclose{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;border-radius:8px;border:1px solid ${C.line};background:#f8fafc;color:#64748b;cursor:pointer;}
 .dclose:hover{background:#eef2f7;color:#0f172a;}
-.activity-toggle{position:absolute;top:10px;right:48px;z-index:2;display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid ${C.line};border-radius:8px;background:#f8fafc;color:${C.navy};padding:0 10px;font-size:11.5px;font-weight:700;cursor:pointer;}
+.activity-toggle{display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid ${C.line};border-radius:8px;background:#f8fafc;color:${C.navy};padding:0 10px;font-size:11.5px;font-weight:700;white-space:nowrap;cursor:pointer;}
 .activity-toggle:hover{border-color:${C.accent};color:${C.accent};}
+.detail-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto;}
 .activity-backdrop{position:absolute;inset:0;z-index:4;border:0;background:rgba(15,23,42,.18);cursor:pointer;}
 .activity-drawer{position:absolute;z-index:5;top:0;right:0;bottom:0;width:min(380px,42%);background:#fff;box-shadow:-12px 0 32px rgba(15,23,42,.16);transform:translateX(105%);transition:transform .2s ease;display:flex;flex-direction:column;pointer-events:none;}
 .activity-drawer.open{transform:translateX(0);pointer-events:auto;}
@@ -1882,6 +1912,9 @@ const CSS = `
 .d.on{background:${C.ok};}
 .d.cur{background:${C.accent};box-shadow:0 0 0 3px ${C.accent}30;}
 .st{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:9px;text-align:center;white-space:nowrap;}
+.status-stack{display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;min-width:0;width:100%;}
+.status-stack .st{display:block;width:100%;box-sizing:border-box;}
+.status-stack .status-secondary{white-space:normal;line-height:1.25;}
 .empty{padding:40px;text-align:center;color:${C.soft};display:flex;gap:8px;align-items:center;justify-content:center;}
 .spin{animation:mtwspin 1s linear infinite;}@keyframes mtwspin{to{transform:rotate(360deg);}}
 .ovl{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:40;}
@@ -1996,6 +2029,13 @@ const CSS = `
 .source-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0f2fe;color:#0369a1;padding:2px 8px;font-size:12px;line-height:1.3;}
 .act{border:1.5px dashed ${C.accent}66;background:linear-gradient(180deg,#f8fbff 0%,${C.accent}08 100%);border-radius:16px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
+.act .settlement-check{display:flex;align-items:center;gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.act .settlement-check:hover{border-color:${C.accent}66;background:#fafdff;box-shadow:0 3px 10px rgba(15,35,64,.06);}
+.act .settlement-check.checked{border-color:${C.accent}80;background:${C.accent}08;}
+.settlement-check input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+.settlement-check-box{display:inline-flex;align-items:center;justify-content:center;flex:0 0 21px;width:21px;height:21px;border:1.5px solid #94a3b8;border-radius:6px;background:#fff;color:#fff;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.settlement-check.checked .settlement-check-box{border-color:${C.accent};background:${C.accent};box-shadow:0 0 0 3px ${C.accent}18;}
+.settlement-check:focus-within .settlement-check-box{box-shadow:0 0 0 3px ${C.accent}24;}
 .stats-issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
 .stats-issue-grid.single{grid-template-columns:1fr;}
 .stats-issue-grid .field{min-width:0;margin:0!important;}
@@ -2040,14 +2080,16 @@ const CSS = `
 .frm-item{display:grid;grid-template-columns:1.25fr 1.1fr 1.2fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
-.p-top{display:grid;grid-template-columns:minmax(180px,.55fr) minmax(560px,2fr);gap:4px 20px;align-items:start;padding-top:28px;}
+.p-top{display:grid;grid-template-columns:minmax(180px,.55fr) minmax(560px,2fr);gap:4px 20px;align-items:start;}
 .p-top .top-items{border-left:1px dashed ${C.line};padding:4px 0 4px 16px;margin-bottom:0;}
+.top-items-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;margin:-4px 0 6px;}
+.top-items-head .lb{min-width:0;margin:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
 @media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}.activity-drawer{width:min(420px,70%);}}
 .logrow{display:flex;align-items:baseline;gap:9px;font-size:12px;padding:5px 0;color:#475569;white-space:nowrap;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols,.review-receive-row{grid-template-columns:1fr;gap:8px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

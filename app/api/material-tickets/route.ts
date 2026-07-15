@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
     const tickets = await prisma.materialTicket.findMany({
       where,
       include: ITEM_INCLUDE,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ sequenceNumber: "desc" }, { createdAt: "desc" }],
       take: 200,
     });
     const itemPairs = tickets.flatMap((ticket) =>

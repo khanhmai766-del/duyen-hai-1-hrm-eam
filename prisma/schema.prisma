@@ -969,7 +969,8 @@ model BgtsTurbineShutdownRow {
 
 // Phiếu thay thế vật tư (2 luồng: Đề xuất chuẩn & Ứng xử lý gấp).
 model MaterialTicket {
-  id     String @id @default(cuid())
+  id             String @id @default(cuid())
+  sequenceNumber Int    @unique @default(autoincrement()) // STT cố định, tăng liên tục theo thứ tự tạo phiếu
   code   String @unique // VT-2026-0001 (luồng Ứng có hậu tố U)
   type   String // "DE_XUAT" | "UNG"
   unit   String // Tổ máy: S1 | S2 | COMMON

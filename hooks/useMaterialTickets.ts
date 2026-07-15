@@ -18,6 +18,7 @@ export interface TicketItem {
 
 export interface MaterialTicket {
   id: string;
+  sequenceNumber: number;
   code: string;
   type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO";
   unit: string;
