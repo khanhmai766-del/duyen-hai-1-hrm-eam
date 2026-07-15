@@ -9,49 +9,58 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  employeeId   String   @unique
-  email        String   @unique
-  workEmail    String?  @map("work_email")
-  username     String?  @unique
-  phone        String?
-  avatarUrl    String?
-  signatureUrl String? // chữ ký số: PNG nền trong suốt (base64) hoặc URL ngoài
-  avatarKey    String?  @map("avatar_key") // S3 object key, không lưu file thật trong DB
-  signatureKey String?  @map("signature_key") // S3 object key, không lưu signed URL cố định
-  passwordHash String
-  mustChangePassword Boolean @default(false) @map("must_change_password")
-  passwordChangedAt DateTime @default(now()) @map("password_changed_at")
-  failedLoginAttempts Int @default(0) @map("failed_login_attempts")
-  lockedAt DateTime? @map("locked_at")
-  role         Role     @default(VIEWER)
-  position     String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
-  secondaryPosition String? // chức vụ phụ khi nhân sự trực luân phiên 2 vị trí
-  currentPosition String? // chức vụ hiện tại người dùng đang chọn để nhận thông báo/quyền theo cương vị
-  department   String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id                  String    @id @default(cuid())
+  name                String
+  employeeId          String    @unique
+  email               String    @unique
+  workEmail           String?   @map("work_email")
+  username            String?   @unique
+  phone               String?
+  avatarUrl           String?
+  signatureUrl        String? // chữ ký số: PNG nền trong suốt (base64) hoặc URL ngoài
+  avatarKey           String?   @map("avatar_key") // S3 object key, không lưu file thật trong DB
+  signatureKey        String?   @map("signature_key") // S3 object key, không lưu signed URL cố định
+  passwordHash        String
+  mustChangePassword  Boolean   @default(false) @map("must_change_password")
+  passwordChangedAt   DateTime  @default(now()) @map("password_changed_at")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedAt            DateTime? @map("locked_at")
+  role                Role      @default(VIEWER)
+  position            String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
+  secondaryPosition   String? // chức vụ phụ khi nhân sự trực luân phiên 2 vị trí
+  currentPosition     String? // chức vụ hiện tại người dùng đang chọn để nhận thông báo/quyền theo cương vị
+  department          String?
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
 
-  checkIns         CheckIn[]
-  shiftAssignments ShiftAssignment[]
-  repairLogs       RepairLog[]       @relation("CreatedBy")
-  approvedLogs     RepairLog[]       @relation("ApprovedBy")
-  auditLogs        AuditLog[]
-  operationEvents  OperationEvent[]  @relation("OpCreatedBy")
-  hcGroups          HcGroup[]          @relation("HcGroupCreator")
-  hcCheckIns        HcCheckIn[]        @relation("HcCheckInUser")
-  announcements     Announcement[]     @relation("AnnouncementCreator")
-  announcementReads AnnouncementRead[] @relation("AnnouncementReader")
-  materialReplacements    MaterialReplacement[]    @relation("MrCreatedBy")
-  materialReplacementLogs MaterialReplacementLog[] @relation("MrDoneBy")
-  defects                 Defect[]                 @relation("DefectCreatedBy")
-  defectHistories         DefectHistory[]          @relation("DefectHistoryCreatedBy")
-  webAuthnCredentials     WebAuthnCredential[]
-  forumPosts              ForumPost[]              @relation("ForumPostAuthor")
-  forumReplies            ForumReply[]             @relation("ForumReplyAuthor")
-  forumPostLikes          ForumPostLike[]           @relation("ForumPostLikeUser")
-  forumReplyLikes         ForumReplyLike[]          @relation("ForumReplyLikeUser")
+  checkIns                 CheckIn[]
+  shiftAssignments         ShiftAssignment[]
+  repairLogs               RepairLog[]                  @relation("CreatedBy")
+  approvedLogs             RepairLog[]                  @relation("ApprovedBy")
+  auditLogs                AuditLog[]
+  operationEvents          OperationEvent[]             @relation("OpCreatedBy")
+  hcGroups                 HcGroup[]                    @relation("HcGroupCreator")
+  hcCheckIns               HcCheckIn[]                  @relation("HcCheckInUser")
+  announcements            Announcement[]               @relation("AnnouncementCreator")
+  announcementReads        AnnouncementRead[]           @relation("AnnouncementReader")
+  materialReplacements     MaterialReplacement[]        @relation("MrCreatedBy")
+  materialReplacementLogs  MaterialReplacementLog[]     @relation("MrDoneBy")
+  defects                  Defect[]                     @relation("DefectCreatedBy")
+  defectHistories          DefectHistory[]              @relation("DefectHistoryCreatedBy")
+  webAuthnCredentials      WebAuthnCredential[]
+  forumPosts               ForumPost[]                  @relation("ForumPostAuthor")
+  forumReplies             ForumReply[]                 @relation("ForumReplyAuthor")
+  forumPostLikes           ForumPostLike[]              @relation("ForumPostLikeUser")
+  forumReplyLikes          ForumReplyLike[]             @relation("ForumReplyLikeUser")
+  shiftStaffingAssignments ShiftStaffingAssignment[]    @relation("ShiftStaffingUser")
+  shiftStaffingCreated     ShiftStaffingAssignment[]    @relation("ShiftStaffingCreatedBy")
+  shiftStaffingUpdated     ShiftStaffingAssignment[]    @relation("ShiftStaffingUpdatedBy")
+  shiftPositionCreated     ShiftPositionConfig[]        @relation("ShiftPositionCreatedBy")
+  shiftPositionUpdated     ShiftPositionConfig[]        @relation("ShiftPositionUpdatedBy")
+  rotationTemplatesCreated RotationTemplate[]           @relation("RotationTemplateCreatedBy")
+  rotationTemplatesUpdated RotationTemplate[]           @relation("RotationTemplateUpdatedBy")
+  positionRotationsCreated PositionRotationAssignment[] @relation("PositionRotationCreatedBy")
+  positionRotationsUpdated PositionRotationAssignment[] @relation("PositionRotationUpdatedBy")
 
   @@index([position])
   @@index([role])
@@ -59,13 +68,13 @@ model User {
 }
 
 model WebAuthnCredential {
-  id           String   @id @default(cuid())
-  credentialId String   @unique
+  id           String    @id @default(cuid())
+  credentialId String    @unique
   publicKey    String
-  counter      Int      @default(0)
+  counter      Int       @default(0)
   userId       String
   deviceName   String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   lastUsedAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -75,22 +84,22 @@ model WebAuthnCredential {
 
 // Bảng tin nội bộ: bài đăng do Quản trị (ADMIN) tạo, mọi người chỉ xem.
 model Announcement {
-  id          String   @id @default(cuid())
-  category       String   @default("BULLETIN") // BULLETIN (bảng tin) | ORDER (mệnh lệnh sản xuất)
+  id             String    @id @default(cuid())
+  category       String    @default("BULLETIN") // BULLETIN (bảng tin) | ORDER (mệnh lệnh sản xuất)
   classification String? // phân loại: Vận hành | An toàn vệ sinh lao động
   stt            String? // số thứ tự (tuỳ chọn), vd "01"
-  title       String
-  body        String
-  pinned      Boolean  @default(false)
-  orderedBy   String? // "Theo lệnh" — tên quản đốc / phó quản đốc ra lệnh
-  issuedAt    DateTime? // ngày ra mệnh lệnh
-  invalidatedAt DateTime? // ngày đánh dấu mệnh lệnh không còn hiệu lực; tự xoá sau 15 ngày
-  linkUrl     String? // optional website link
-  fileUrl     String? // optional attached PDF (public URL)
-  fileName    String? // original PDF file name
-  createdById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  title          String
+  body           String
+  pinned         Boolean   @default(false)
+  orderedBy      String? // "Theo lệnh" — tên quản đốc / phó quản đốc ra lệnh
+  issuedAt       DateTime? // ngày ra mệnh lệnh
+  invalidatedAt  DateTime? // ngày đánh dấu mệnh lệnh không còn hiệu lực; tự xoá sau 15 ngày
+  linkUrl        String? // optional website link
+  fileUrl        String? // optional attached PDF (public URL)
+  fileName       String? // original PDF file name
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   createdBy User               @relation("AnnouncementCreator", fields: [createdById], references: [id])
   reads     AnnouncementRead[]
@@ -113,40 +122,40 @@ model AnnouncementRead {
 }
 
 model ForumPost {
-  id          String   @id @default(cuid())
-  title       String
-  content     String
-  category    String   @default("DISCUSSION")
-  tags        String[]
-  attachments String[]
-  targetPositions String[] @default([])
-  isPinned    Boolean  @default(false)
-  closeSummary String?
-  closedAt    DateTime?
-  closedById  String?
-  authorId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String    @id @default(cuid())
+  title           String
+  content         String
+  category        String    @default("DISCUSSION")
+  tags            String[]
+  attachments     String[]
+  targetPositions String[]  @default([])
+  isPinned        Boolean   @default(false)
+  closeSummary    String?
+  closedAt        DateTime?
+  closedById      String?
+  authorId        String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  author  User         @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  author  User            @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   replies ForumReply[]
   likes   ForumPostLike[]
 }
 
 model ForumReply {
-  id          String   @id @default(cuid())
-  postId      String
+  id            String   @id @default(cuid())
+  postId        String
   parentReplyId String?
-  content     String
-  attachments String[]
-  authorId    String
-  createdAt   DateTime @default(now())
+  content       String
+  attachments   String[]
+  authorId      String
+  createdAt     DateTime @default(now())
 
-  post          ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parentReply   ForumReply? @relation("ForumReplyThread", fields: [parentReplyId], references: [id], onDelete: SetNull)
-  childReplies  ForumReply[] @relation("ForumReplyThread")
-  author        User      @relation("ForumReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  likes         ForumReplyLike[]
+  post         ForumPost        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentReply  ForumReply?      @relation("ForumReplyThread", fields: [parentReplyId], references: [id], onDelete: SetNull)
+  childReplies ForumReply[]     @relation("ForumReplyThread")
+  author       User             @relation("ForumReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  likes        ForumReplyLike[]
 
   @@index([parentReplyId])
 }
@@ -208,11 +217,11 @@ enum ActivityLogCategory {
 }
 
 model Shift {
-  id        String    @id @default(cuid())
-  date      DateTime
-  shiftType ShiftType
-  unit      String // "Vận hành 1", "Vận hành 2"
-  isAttendanceLocked Boolean @default(false) @map("is_attendance_locked")
+  id                 String    @id @default(cuid())
+  date               DateTime
+  shiftType          ShiftType
+  unit               String // "Vận hành 1", "Vận hành 2"
+  isAttendanceLocked Boolean   @default(false) @map("is_attendance_locked")
 
   assignments ShiftAssignment[]
   checkIns    CheckIn[]
@@ -242,6 +251,123 @@ model ShiftAssignment {
   @@index([shiftId])
   @@index([userId])
   @@index([parentId])
+}
+
+enum ShiftPositionType {
+  SINGLE
+  S1_S2
+}
+
+enum ShiftSlot {
+  S1
+  S2
+  FLEX
+}
+
+enum ShiftStaffingType {
+  OFFICIAL
+  BACKUP
+  TRAINING
+  TEMPORARY
+  ADMINISTRATIVE
+}
+
+enum ShiftStaffingStatus {
+  ACTIVE
+  ENDED
+}
+
+model ShiftPositionConfig {
+  id                     String             @id @default(cuid())
+  name                   String             @unique
+  requiredPerShift       Int?
+  requiredMorningStaff   Int?
+  requiredAfternoonStaff Int?
+  requiredNightStaff     Int?
+  positionType           ShiftPositionType?
+  isActive               Boolean            @default(true)
+  createdById            String
+  updatedById            String
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  createdBy   User                         @relation("ShiftPositionCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User                         @relation("ShiftPositionUpdatedBy", fields: [updatedById], references: [id])
+  assignments ShiftStaffingAssignment[]
+  rotations   PositionRotationAssignment[]
+
+  @@index([isActive])
+}
+
+model ShiftStaffingAssignment {
+  id             String              @id @default(cuid())
+  userId         String
+  positionId     String
+  crewCode       String?
+  phaseIndex     Int?
+  stationCode    ShiftSlot?
+  assignmentType ShiftStaffingType
+  startDate      DateTime            @db.Date
+  endDate        DateTime?           @db.Date
+  status         ShiftStaffingStatus @default(ACTIVE)
+  changeReason   String
+  note           String?
+  createdById    String
+  updatedById    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user      User                @relation("ShiftStaffingUser", fields: [userId], references: [id])
+  position  ShiftPositionConfig @relation(fields: [positionId], references: [id])
+  createdBy User                @relation("ShiftStaffingCreatedBy", fields: [createdById], references: [id])
+  updatedBy User                @relation("ShiftStaffingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([positionId, startDate, endDate])
+  @@index([positionId, phaseIndex])
+  @@index([userId, assignmentType, startDate, endDate])
+  @@index([status])
+}
+
+model RotationTemplate {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  cycleLength  Int
+  cyclePattern Json
+  description  String?
+  isActive     Boolean  @default(true)
+  createdById  String?
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdBy   User?                        @relation("RotationTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?                        @relation("RotationTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  assignments PositionRotationAssignment[]
+
+  @@index([isActive])
+}
+
+model PositionRotationAssignment {
+  id                 String    @id @default(cuid())
+  positionConfigId   String
+  rotationTemplateId String
+  effectiveFrom      DateTime  @db.Date
+  effectiveTo        DateTime? @db.Date
+  reason             String
+  isActive           Boolean   @default(true)
+  createdById        String
+  updatedById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  positionConfig   ShiftPositionConfig @relation(fields: [positionConfigId], references: [id], onDelete: Restrict)
+  rotationTemplate RotationTemplate    @relation(fields: [rotationTemplateId], references: [id], onDelete: Restrict)
+  createdBy        User                @relation("PositionRotationCreatedBy", fields: [createdById], references: [id])
+  updatedBy        User                @relation("PositionRotationUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([positionConfigId, effectiveFrom, effectiveTo])
+  @@index([rotationTemplateId])
 }
 
 model CheckIn {
@@ -297,8 +423,8 @@ model RepairLog {
   updatedAt    DateTime     @updatedAt
 
   device     EquipmentNode @relation(fields: [deviceSeq], references: [seq], onDelete: Cascade)
-  createdBy  User   @relation("CreatedBy", fields: [createdById], references: [id])
-  approvedBy User?  @relation("ApprovedBy", fields: [approvedById], references: [id])
+  createdBy  User          @relation("CreatedBy", fields: [createdById], references: [id])
+  approvedBy User?         @relation("ApprovedBy", fields: [approvedById], references: [id])
 
   @@index([deviceSeq])
   @@index([deviceSeq, machine])
@@ -326,24 +452,24 @@ enum Priority {
 }
 
 model Material {
-  id        String   @id @default(cuid())
-  code      String
-  erpCodes  String[] @default([])
-  name      String
-  unit      String
-  quantity  Int      @default(0)
-  minStock  Int      @default(0)
-  location  String?
-  system    String? // hệ thống thiết bị: Lò Hơi, Máy Nghiền, ESP, FGD...
-  category  String? // loại vật tư: Dầu bôi trơn, Bi nghiền than, Lõi lọc dầu, Thiết bị C&I, Vật tư tiêu hao
-  machine   String   @default("COMMON") // tổ máy sở hữu danh mục: S1 | S2 | COMMON
-  imageUrl  String? // ảnh minh hoạ vật tư (public URL)
+  id           String   @id @default(cuid())
+  code         String
+  erpCodes     String[] @default([])
+  name         String
+  unit         String
+  quantity     Int      @default(0)
+  minStock     Int      @default(0)
+  location     String?
+  system       String? // hệ thống thiết bị: Lò Hơi, Máy Nghiền, ESP, FGD...
+  category     String? // loại vật tư: Dầu bôi trơn, Bi nghiền than, Lõi lọc dầu, Thiết bị C&I, Vật tư tiêu hao
+  machine      String   @default("COMMON") // tổ máy sở hữu danh mục: S1 | S2 | COMMON
+  imageUrl     String? // ảnh minh hoạ vật tư (public URL)
   documentUrl  String? // tài liệu đính kèm (PDF hoặc link)
   documentName String? // tên file tài liệu đính kèm
-  supplier  String? // tái dùng làm "Định kỳ thay thế"
-  unitPrice Float?
-  note      String? // "Ghi chú"
-  createdAt DateTime @default(now())
+  supplier     String? // tái dùng làm "Định kỳ thay thế"
+  unitPrice    Float?
+  note         String? // "Ghi chú"
+  createdAt    DateTime @default(now())
 
   deviceMaterials EquipmentMaterial[]
   replacements    MaterialReplacement[]
@@ -391,23 +517,23 @@ model ErpMaterial {
 // Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí
 // tự do) theo chu kỳ riêng. Dùng để theo dõi & cảnh báo thời điểm thay thế.
 model MaterialReplacement {
-  id             String    @id @default(cuid())
-  materialId     String
-  deviceSeq      String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
-  location       String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
-  system         String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
-  quantity       Int      @default(1) // dung tích/số lượng cần thay CHO MỖI thiết bị (theo ĐVT của vật tư)
-  deviceCount    Int      @default(1) // số lượng thiết bị tại điểm này
+  id               String    @id @default(cuid())
+  materialId       String
+  deviceSeq        String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
+  location         String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
+  system           String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
+  quantity         Int       @default(1) // dung tích/số lượng cần thay CHO MỖI thiết bị (theo ĐVT của vật tư)
+  deviceCount      Int       @default(1) // số lượng thiết bị tại điểm này
   managingPosition String? // cương vị quản lý (đồng bộ danh sách với form khiếm khuyết)
-  intervalMonths Int // chu kỳ thay thế (tháng)
-  intervalNote   String? // ghi chú chu kỳ, vd "2500h"
-  lastReplacedAt DateTime? // lần thay gần nhất (user nhập)
-  nextDueAt      DateTime // ngày đến hạn kế tiếp
-  note           String?
-  isActive       Boolean   @default(true)
-  createdById    String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  intervalMonths   Int // chu kỳ thay thế (tháng)
+  intervalNote     String? // ghi chú chu kỳ, vd "2500h"
+  lastReplacedAt   DateTime? // lần thay gần nhất (user nhập)
+  nextDueAt        DateTime // ngày đến hạn kế tiếp
+  note             String?
+  isActive         Boolean   @default(true)
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   material  Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
   device    EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
@@ -461,26 +587,26 @@ model EquipmentMaterial {
 
 // Khiếm khuyết thiết bị (Defect) — phiếu ghi nhận khiếm khuyết theo tổ máy/hệ thống.
 model Defect {
-  id            String    @id @default(cuid())
-  unit          String // Tổ máy: S1 | S2
-  deviceSeq     String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
-  device        String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
-  system        String? // Cương vị (chức vụ phụ trách)
-  severity      String? // Mức độ: "1".."4"
-  condition     String? // Điều kiện thực hiện: A | B
-  fireSafetyImpact       String? // Ảnh hưởng PCCC: Có | Không
+  id                      String    @id @default(cuid())
+  unit                    String // Tổ máy: S1 | S2
+  deviceSeq               String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
+  device                  String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
+  system                  String? // Cương vị (chức vụ phụ trách)
+  severity                String? // Mức độ: "1".."4"
+  condition               String? // Điều kiện thực hiện: A | B
+  fireSafetyImpact        String? // Ảnh hưởng PCCC: Có | Không
   environmentSafetyImpact String? // Môi trường, ATVSLĐ: Có | Không
-  requestType   String? // Yêu cầu: Cơ | Điện | I&C | Khác
-  requestNumber String? // Số yêu cầu
-  content       String? // Nội dung
-  status        String    @default("CHUA_XU_LY") // Tình trạng khiếm khuyết
-  detectedAt    DateTime? // Ngày phát hiện
-  completedAt   DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
-  note          String? // Ghi chú
-  imageUrl      String? // Hình ảnh
-  createdById   String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  requestType             String? // Yêu cầu: Cơ | Điện | I&C | Khác
+  requestNumber           String? // Số yêu cầu
+  content                 String? // Nội dung
+  status                  String    @default("CHUA_XU_LY") // Tình trạng khiếm khuyết
+  detectedAt              DateTime? // Ngày phát hiện
+  completedAt             DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
+  note                    String? // Ghi chú
+  imageUrl                String? // Hình ảnh
+  createdById             String
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   createdBy User           @relation("DefectCreatedBy", fields: [createdById], references: [id])
   node      EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
@@ -536,14 +662,14 @@ model DefectHistory {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
+  id        String              @id @default(cuid())
   userId    String
   action    String // e.g. "CREATE_DEVICE", "DELETE_REPAIR"
   category  ActivityLogCategory @default(USER)
   entity    String // e.g. "Device", "RepairLog"
   entityId  String?
   detail    String?
-  createdAt DateTime @default(now())
+  createdAt DateTime            @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
@@ -576,11 +702,11 @@ model SystemAuditLog {
 model HcGroup {
   id          String   @id @default(cuid())
   date        DateTime // ngày chấm công
-  content     String   // nội dung đi hành chính
+  content     String // nội dung đi hành chính
   hours       Int      @default(8) // số giờ chấm công mặc định của nhóm
   period      String?  @default("FULL_DAY") // FULL_DAY | MORNING | AFTERNOON | MORNING_OFF
   unit        String?
-  createdById String   // chủ trì
+  createdById String // chủ trì
   createdAt   DateTime @default(now())
 
   createdBy User        @relation("HcGroupCreator", fields: [createdById], references: [id])
@@ -591,15 +717,15 @@ model HcGroup {
 }
 
 model HcCheckIn {
-  id         String   @id @default(cuid())
-  groupId    String
-  userId     String
-  hours      Int      @default(8)
-  isApproved Boolean  @default(false)
-  note       String?
-  isRegistered Boolean @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  id           String   @id @default(cuid())
+  groupId      String
+  userId       String
+  hours        Int      @default(8)
+  isApproved   Boolean  @default(false)
+  note         String?
+  isRegistered Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
 
   group HcGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user  User    @relation("HcCheckInUser", fields: [userId], references: [id])
@@ -613,7 +739,7 @@ model HcCheckIn {
 // SQL trong app/api/documents/route.ts (ensureDigitalDocumentTable); khai báo ở
 // đây để db push không đề nghị xoá. attachmentUrls lưu JSON (mảng data URL) dạng text.
 model DigitalDocument {
-  id               String   @id
+  id               String    @id
   category         String
   title            String
   decisionNumber   String?
@@ -628,8 +754,8 @@ model DigitalDocument {
   attachmentUrls   String?
   createdById      String?
   updatedById      String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now())
 
   @@index([category, updatedAt(sort: Desc)])
 }
@@ -673,23 +799,23 @@ model SafeOperationSetting {
 // dạng chấm (vd "1.1.1" là cha của "1.1.1.1"). Tách riêng khỏi Device vận hành:
 // khóa duy nhất là `seq` (mã thiết bị `code` có thể trùng giữa các node).
 model EquipmentNode {
-  id        String   @id @default(cuid())
-  seq       String   @unique // số thứ tự, vd "1.1.1.2"
-  parentSeq String? // seq cha (bỏ đoạn cuối); null nếu là gốc
-  code      String // mã thiết bị (KHÔNG duy nhất)
-  name      String // tên thiết bị
-  kks       String? // mã KKS
-  drawing   String? // bản vẽ liên quan
-  depth     Int // số đoạn của seq (1..n)
-  sort      Int // thứ tự ổn định theo file nguồn
+  id           String   @id @default(cuid())
+  seq          String   @unique // số thứ tự, vd "1.1.1.2"
+  parentSeq    String? // seq cha (bỏ đoạn cuối); null nếu là gốc
+  code         String // mã thiết bị (KHÔNG duy nhất)
+  name         String // tên thiết bị
+  kks          String? // mã KKS
+  drawing      String? // bản vẽ liên quan
+  depth        Int // số đoạn của seq (1..n)
+  sort         Int // thứ tự ổn định theo file nguồn
   // Người dùng tự bổ sung khi sửa thẻ thiết bị (tách khỏi dữ liệu nhập từ Excel).
   attachedInfo String? // thông tin thêm
   documentUrl  String? // tài liệu đính kèm (link)
   imageUrl     String? // 1 hình ảnh (base64 hoặc URL)
   // true nếu node do đồng bộ khi TẠO MỚI thiết bị sinh ra (seq không có trong danh mục gốc).
   // Dùng để xóa node theo khi xóa Device, mà không đụng node danh mục nhập từ Excel.
-  deviceSynced Boolean @default(false)
-  createdAt DateTime @default(now())
+  deviceSynced Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   repairLogs           RepairLog[]
   deviceMaterials      EquipmentMaterial[]
@@ -736,7 +862,7 @@ model PositionSystemScope {
 model TimesheetOverride {
   userId      String
   date        String // YYYY-MM-DD
-  line        String @default("shift1") // shift1 | shift2 | hc
+  line        String   @default("shift1") // shift1 | shift2 | hc
   value       String
   note        String?
   updatedById String?
@@ -744,26 +870,27 @@ model TimesheetOverride {
 
   @@id([userId, date, line])
 }
+
 // Dữ liệu vòi dầu buồng đốt: 36 vòi/tổ máy (S1, S2), trạng thái khả dụng + khiếm khuyết.
 model OilGun {
-  id        String   @id @default(cuid())
-  machine   String   // "S1" | "S2"
-  code      String   // "D1", "E1", "A3"...
-  wall      String   // "REAR" (tường sau) | "FRONT" (tường trước)
-  position  Int      @default(0) // thứ tự hiển thị trên sơ đồ
-  status    String   @default("available") // available | unavailable
-  defect     String? // (legacy) khiếm khuyết cũ 1 ô — đã tách thành defectSccn/defectScd, giữ để không mất dữ liệu
-  defectSccn String? // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
-  defectScd  String? // Khiếm khuyết SCĐ (sửa chữa điện)
-  forceFlame Boolean @default(false) // Force tín hiệu ngọn lửa vòi dầu
+  id             String    @id @default(cuid())
+  machine        String // "S1" | "S2"
+  code           String // "D1", "E1", "A3"...
+  wall           String // "REAR" (tường sau) | "FRONT" (tường trước)
+  position       Int       @default(0) // thứ tự hiển thị trên sơ đồ
+  status         String    @default("available") // available | unavailable
+  defect         String? // (legacy) khiếm khuyết cũ 1 ô — đã tách thành defectSccn/defectScd, giữ để không mất dữ liệu
+  defectSccn     String? // Khiếm khuyết SCCN (sửa chữa cơ nhiệt)
+  defectScd      String? // Khiếm khuyết SCĐ (sửa chữa điện)
+  forceFlame     Boolean   @default(false) // Force tín hiệu ngọn lửa vòi dầu
   // Lớp vòi than — chung vị trí với vòi dầu (Hướng A: cột song song)
   coalStatus     String    @default("available") // available | unavailable
   coalDefectNote String? // khiếm khuyết vòi than (1 ô, vì than ít)
   coalUpdatedBy  String?
   coalUpdatedAt  DateTime?
-  updatedBy String?  // tên người cập nhật gần nhất
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
+  updatedBy      String? // tên người cập nhật gần nhất
+  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
 
   @@unique([machine, code])
   @@index([machine])
@@ -774,28 +901,28 @@ model OilGunNote {
   machine   String   @id // "S1" | "S2"
   note      String   @default("")
   updatedBy String?
-  updatedAt DateTime @updatedAt @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 // BGTS Tuabin ngừng: bảng ghi thông số DCS theo ngày, dùng trong Thư mục lưu trữ
 // > Dữ liệu tách lưới > BGTS Tuabin Ngừng. API tạo/đồng bộ bảng bằng raw SQL để
 // bổ sung an toàn trên DB dev hiện có; khai báo ở đây để db push không đề nghị xoá.
 model BgtsTurbineShutdownRecord {
-  id                String   @id
-  unit              String
-  date              String   // YYYY-MM-DD
-  dayShiftSigner    String?
-  middleShiftSigner String?
-  nightShiftSigner  String?
+  id                     String    @id
+  unit                   String
+  date                   String // YYYY-MM-DD
+  dayShiftSigner         String?
+  middleShiftSigner      String?
+  nightShiftSigner       String?
   // Mốc xác nhận từng ca — tạo/đồng bộ bằng raw SQL trong app/api/bgts-tuabin-ngung/route.ts;
   // khai báo ở đây để migrate diff / db push không đề nghị xoá (giữ dữ liệu xác nhận).
   dayShiftConfirmedAt    DateTime?
   middleShiftConfirmedAt DateTime?
   nightShiftConfirmedAt  DateTime?
-  createdById       String?
-  updatedById       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @default(now())
+  createdById            String?
+  updatedById            String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now())
 
   rows BgtsTurbineShutdownRow[]
 
@@ -804,35 +931,35 @@ model BgtsTurbineShutdownRecord {
 }
 
 model BgtsTurbineShutdownRow {
-  id                                      String  @id
-  recordId                                String
-  timeHour                                Int
-  turbineLubeOilPressure                  Float?
-  shaftJackingOilPressure                 Float?
-  rotateSpeed                             Float?
-  turningGearElectricity                  Float?
-  eccentricity                            Float?
-  hpMpCasingExpansionLeft                 Float?
-  hpMpCasingExpansionRight                Float?
-  axialDisplacement                       Float?
-  hpMpCasingDifferentialExpansion         Float?
-  lpCasingDifferentialExpansion           Float?
-  hpMainSteamValveWallTempInside          Float?
-  hpMainSteamValveWallTempOutside         Float?
-  hpRegulatingValveWallTempInside         Float?
-  hpRegulatingValveWallTempOutside        Float?
-  hpInnerCasingLowerPartTempInside        Float?
-  hpInnerCasingLowerPartTempOutside       Float?
-  hpExhaustOuterCasingInnerWallTempTop    Float?
-  hpExhaustOuterCasingInnerWallTempLower  Float?
-  hpExhaustPipeTempLeft1                  Float?
-  hpExhaustPipeTempLeft2                  Float?
-  hpExhaustPipeTempRight1                 Float?
-  hpExhaustPipeTempRight2                 Float?
-  mpIntakeMetalTempInnerWall              Float?
-  mpIntakeMetalTempOuterWall              Float?
-  mpExhaustInnerWallTempTop               Float?
-  mpExhaustInnerWallTempLower             Float?
+  id                                     String @id
+  recordId                               String
+  timeHour                               Int
+  turbineLubeOilPressure                 Float?
+  shaftJackingOilPressure                Float?
+  rotateSpeed                            Float?
+  turningGearElectricity                 Float?
+  eccentricity                           Float?
+  hpMpCasingExpansionLeft                Float?
+  hpMpCasingExpansionRight               Float?
+  axialDisplacement                      Float?
+  hpMpCasingDifferentialExpansion        Float?
+  lpCasingDifferentialExpansion          Float?
+  hpMainSteamValveWallTempInside         Float?
+  hpMainSteamValveWallTempOutside        Float?
+  hpRegulatingValveWallTempInside        Float?
+  hpRegulatingValveWallTempOutside       Float?
+  hpInnerCasingLowerPartTempInside       Float?
+  hpInnerCasingLowerPartTempOutside      Float?
+  hpExhaustOuterCasingInnerWallTempTop   Float?
+  hpExhaustOuterCasingInnerWallTempLower Float?
+  hpExhaustPipeTempLeft1                 Float?
+  hpExhaustPipeTempLeft2                 Float?
+  hpExhaustPipeTempRight1                Float?
+  hpExhaustPipeTempRight2                Float?
+  mpIntakeMetalTempInnerWall             Float?
+  mpIntakeMetalTempOuterWall             Float?
+  mpExhaustInnerWallTempTop              Float?
+  mpExhaustInnerWallTempLower            Float?
 
   record BgtsTurbineShutdownRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
 
@@ -989,16 +1116,16 @@ enum MappingStatus {
 }
 
 model OilType {
-  id        String @id @default(cuid())
-  code      String @unique // "T32", "VG46", "15W40", "LOC-TB"...
+  id        String  @id @default(cuid())
+  code      String  @unique // "T32", "VG46", "15W40", "LOC-TB"...
   name      String // "Dầu tuabin T32", "Lõi lọc dầu tuabin"...
   baseUnit  String // đơn vị chuẩn để cộng tồn: "Lít", "Cái", "Kg", "Viên"
   minStock  Float? // ngưỡng cảnh báo đề xuất nhập (theo baseUnit)
-  onHandQty Float  @default(0) // "Hiện có" — số đếm thực tế tại kho, nhập tay trên UI
+  onHandQty Float   @default(0) // "Hiện có" — số đếm thực tế tại kho, nhập tay trên UI
   note      String?
   // Loại vật tư của nhóm — khớp Material.category / ErpMaterial.category:
   // "Dầu bôi trơn" | "Lõi lọc dầu" | "Hóa Chất" | "Bi Nghiền Than"
-  category String @default("Dầu bôi trơn")
+  category  String  @default("Dầu bôi trơn")
 
   materials ErpMaterial[]
   logs      OilTypeMappingLog[]

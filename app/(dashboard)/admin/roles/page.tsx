@@ -294,6 +294,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "shift-staffing-manage",
+    group: "Nhân sự / Ca vận hành",
+    feature: "Quản lý biên chế trực ca",
+    note: "Cấp Chỉ xem tra cứu biên chế; Quản lý được gán, đổi kíp, đổi S1/S2, tách và điều chuyển; Toàn quyền được thêm cấu hình cương vị.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
     id: "user-manage",
     group: "Quản trị người dùng",
     feature: "Quản lý tài khoản người dùng",
