@@ -547,7 +547,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
           include: ITEM_INCLUDE,
         });
-        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Thống Kê xác nhận số phiếu ĐXVT: ${num}`);
+        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận số phiếu ĐXVT: ${num}`);
         return ok(up);
       }
 
@@ -564,7 +564,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Thống Kê xác nhận ĐXVT: ${num}; VHV nhận phiếu ${proposalReceiverName}`);
+      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận ĐXVT: ${num}; VHV nhận phiếu ${proposalReceiverName}`);
       return ok(up);
     }
 

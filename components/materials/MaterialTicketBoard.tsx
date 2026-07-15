@@ -54,7 +54,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
-    { key: "SU_DUNG_VAT_TU", label: "Sử dụng vật tư", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBKT + BBNT DO", who: "Theo phân quyền quy trình" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
@@ -62,7 +62,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "VHV_LANH_VAT_TU", label: "VHV lãnh vật tư", who: "VHV được giao thực hiện" },
-    { key: "SU_DUNG_VAT_TU", label: "Sử dụng vật tư", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh + xuất biên bản", who: "Theo phân quyền quy trình" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
@@ -72,7 +72,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "NHAN_TU_HIEN_CO", label: "Nhận vật tư từ Hiện có", who: "Theo phân quyền quy trình" },
-    { key: "SU_DUNG_VAT_TU", label: "Sử dụng vật tư", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất biên bản", who: "Theo phân quyền quy trình" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
@@ -874,8 +874,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
     t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
     t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.vhvMaterialCode ? ` · Mã ${t.vhvMaterialCode}` : " · Không có mã vật tư"}` },
-    t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Thống Kê xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
-    t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Thống Kê xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
+    t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
+    t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${t.receiptSource === "OUTSIDE" ? "Lãnh kho VH1" : "Lãnh kho DH1"} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === "UNG" ? "Đã nghiệm thu, chờ xác nhận vật tư lãnh để xuất biên bản" : "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
@@ -900,10 +900,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const cur = s.key === flowStatus;
 	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
-	            const statsCaption = s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
-	              ? `VHV nhận phiếu ĐXVT: ${t.proposalReceiverName}`
-	              : s.who;
-	            const caption = `${statsCaption}${reviewable ? " · Xem lại" : ""}`;
+	            const caption = s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
+	              ? "Xem lại"
+	              : `${s.who}${reviewable ? " · Xem lại" : ""}`;
 	            return (
 	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""}`}>
 	                {recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
@@ -1181,7 +1180,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       VHV_LANH_VAT_TU: `Cương vị VHV được giao "${t.assignedPosition}"`,
       NHAN_TU_HIEN_CO: `Cương vị được giao "${t.assignedPosition}" nhận vật tư từ Hiện có`,
       NHAN_VAT_TU: "Người được phân quyền Xác nhận vật tư lãnh",
-      SU_DUNG_VAT_TU: "Người được phân quyền Sử dụng vật tư",
+      SU_DUNG_VAT_TU: "Người được phân quyền Xác nhận sử dụng vật tư",
       CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
       CHO_NHAP_LIEU: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
       CHO_NHAP_LIEU_THAY_THE: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
@@ -1559,13 +1558,17 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const remaining = received - qty;
     const quantityExceedsStock = qty > stock;
     const quantityExceedsReceived = t.type === "SU_DUNG_HIEN_CO" && qty > received;
-    return (
-      <div className="act">
-        <label className="lb">Sử dụng vật tư — kết quả thay thế</label>
-        <label>Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *</label>
-        <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
-        <label>Có vật tư thu hồi hay không?</label><div className="seg2"><button className={!recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(false)}>Không</button><button className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
-        {recoveryRequired && <><label>Số lượng vật tư thu hồi{unit ? ` (${unit})` : ""} *</label><div className="relative"><input className="!pr-20" type="number" min={1} value={Number(num) || 1} onChange={(e) => setNum(e.target.value)} /><span className="pointer-events-none absolute inset-y-0 right-4 flex items-center font-semibold text-slate-500">{unit}</span></div><label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800"><input className="!h-5 !w-5 shrink-0 cursor-pointer accent-blue-600" type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} /><span>Xác nhận đã trả vật tư thu hồi</span></label><div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div></>}
+	            return (
+	              <div className="act">
+	        <div className="use-field-grid">
+	          <label className="field">Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *
+	            <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+	          </label>
+	          <label className="field recovery-toggle-field">Có vật tư thu hồi hay không?
+	            <div className="seg2"><button type="button" className={!recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(false)}>Không</button><button type="button" className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
+	          </label>
+	        </div>
+	        {recoveryRequired && <><label>Số lượng vật tư thu hồi{unit ? ` (${unit})` : ""} *</label><div className="relative"><input className="!pr-20" type="number" min={1} value={Number(num) || 1} onChange={(e) => setNum(e.target.value)} /><span className="pointer-events-none absolute inset-y-0 right-4 flex items-center font-semibold text-slate-500">{unit}</span></div><label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800"><input className="!h-5 !w-5 shrink-0 cursor-pointer accent-blue-600" type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} /><span>Xác nhận đã trả vật tư thu hồi</span></label><div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div></>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
         )}
@@ -1937,6 +1940,10 @@ const CSS = `
 .stats-issue-grid.single{grid-template-columns:1fr;}
 .stats-issue-grid .field{min-width:0;margin:0!important;}
 .stats-issue-grid .field input{margin-top:6px;}
+.use-field-grid{display:grid;grid-template-columns:minmax(220px,.95fr) minmax(300px,1.35fr);gap:10px;align-items:end;}
+.use-field-grid .field{min-width:0;margin:0!important;}
+.use-field-grid .field input{margin-top:6px;}
+.recovery-toggle-field .seg2{margin-top:6px;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}
@@ -1972,6 +1979,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.use-field-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
