@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { handle, ok, requireUser } from "@/lib/api";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { dateRange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,13 @@ const REGISTRATION_ACTIONS = [
 /** Nhật ký thao tác hành chính phát sinh trong một ngày, kể cả dữ liệu đã bị xoá. */
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requirePermissionLevel(
+      user,
+      "hc-attendance-approve",
+      ["approve", "manage", "full"],
+      "Không đủ quyền xem nhật ký đăng ký đi hành chính"
+    );
     const date = req.nextUrl.searchParams.get("date");
     const { start, end } = dateRange(date);
 
