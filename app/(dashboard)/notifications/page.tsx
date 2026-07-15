@@ -199,9 +199,9 @@ const PostCard = React.memo(function PostCard({
       )}
     >
       <CardContent className="p-3 sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-start gap-1.5 sm:items-center">
+        <div className="relative">
+          <div className="min-w-0 w-full">
+            <div className={cn("flex min-w-0 flex-wrap items-start gap-1.5 sm:items-center", canManage && "pr-24")}>
               {a.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" />}
               {a.stt && (
                 <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-xs font-bold text-accent">
@@ -234,7 +234,7 @@ const PostCard = React.memo(function PostCard({
               <div className={cn("mb-1 text-[11px] font-bold uppercase tracking-normal", isInvalid ? "text-red-600" : "text-muted-foreground")}>
                 Nội dung mệnh lệnh
               </div>
-              <div className="whitespace-pre-wrap text-[15px] font-bold leading-7">
+              <div className="whitespace-pre-wrap text-justify text-[15px] font-bold leading-7 [text-justify:inter-word]">
                 {a.body}
               </div>
             </div>
@@ -283,7 +283,7 @@ const PostCard = React.memo(function PostCard({
             )}
           </div>
           {canManage && (
-            <div className="flex shrink-0 items-center gap-1 self-end opacity-100 transition-opacity sm:self-start sm:opacity-0 sm:group-hover:opacity-100">
+            <div className="absolute right-0 top-0 flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
               {isInvalid ? (
                 <button onClick={() => onRestore(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
                   <RotateCcw className="h-4 w-4" />
