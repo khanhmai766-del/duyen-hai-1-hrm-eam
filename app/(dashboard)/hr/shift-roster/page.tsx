@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw, Search, X, UsersRound } from "lucide-react";
+import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw, Search, X } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -398,11 +398,6 @@ export default function ShiftRosterPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="LỊCH TRỰC CA" description="Lịch trực ca & bảng công của phân xưởng Vận hành 1">
-        {rbac.can("shift-staffing-manage", ["read", "manage", "full"]) && (
-          <Button variant="outline" size="sm" onClick={() => router.push("/hr/shift-roster/staffing")}>
-            <UsersRound className="h-4 w-4" /> Quản lý biên chế
-          </Button>
-        )}
         {/* View toggle: official roster PDF vs approved timesheet */}
         <div className="flex rounded-lg border border-border p-1">
           <button
@@ -795,9 +790,6 @@ function RosterPdfView({ canManage }: { canManage: boolean }) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="border-b border-sky-200 bg-sky-50 px-4 py-2.5 text-center text-sm font-semibold text-sky-900">
-        Lịch PDF đã phê duyệt là lịch trực chính thức.
-      </div>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="flex items-center gap-2">

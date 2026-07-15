@@ -12,7 +12,6 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "hc-attendance-check-in": { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
   "hc-attendance-approve": { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
   "timesheet-edit": { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
-  "shift-staffing-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "user-manage": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "user-reset-viewer-password": { ADMIN: "approve", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "rbac-manage": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
