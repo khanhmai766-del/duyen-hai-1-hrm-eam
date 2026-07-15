@@ -18,8 +18,8 @@ export interface TicketItem {
 
 export interface MaterialTicket {
   id: string;
+  sequenceMonth: string;
   sequenceNumber: number;
-  code: string;
   type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO";
   unit: string;
   status: string;
@@ -148,13 +148,24 @@ export function useSaveWorkflowRoles() {
   });
 }
 
-export function useMaterialTickets() {
+export interface MaterialTicketMonthSummary {
+  month: string;
+  count: number;
+}
+
+export function useMaterialTickets(month = "ALL") {
   return useQuery({
-    queryKey: ["material-tickets"],
+    queryKey: ["material-tickets", month],
     staleTime: 0,
     queryFn: async () => {
-      const res = await apiGet<MaterialTicket[]>("/api/material-tickets");
-      return { tickets: res.data, viewer: (res.meta?.viewer ?? null) as TicketViewer | null };
+      const qs = new URLSearchParams();
+      if (month !== "ALL") qs.set("month", month);
+      const res = await apiGet<MaterialTicket[]>(`/api/material-tickets?${qs.toString()}`);
+      return {
+        tickets: res.data,
+        viewer: (res.meta?.viewer ?? null) as TicketViewer | null,
+        months: (res.meta?.months ?? []) as MaterialTicketMonthSummary[],
+      };
     },
   });
 }

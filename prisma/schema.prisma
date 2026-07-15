@@ -970,8 +970,8 @@ model BgtsTurbineShutdownRow {
 // Phiếu thay thế vật tư (2 luồng: Đề xuất chuẩn & Ứng xử lý gấp).
 model MaterialTicket {
   id             String @id @default(cuid())
-  sequenceNumber Int    @unique @default(autoincrement()) // STT cố định, tăng liên tục theo thứ tự tạo phiếu
-  code   String @unique // VT-2026-0001 (luồng Ứng có hậu tố U)
+  sequenceMonth  String // YYYY-MM theo giờ Việt Nam; mỗi tháng có dãy STT riêng
+  sequenceNumber Int    // STT cố định trong tháng, tăng liên tục theo thứ tự tạo phiếu
   type   String // "DE_XUAT" | "UNG"
   unit   String // Tổ máy: S1 | S2 | COMMON
   status String // máy trạng thái theo type
@@ -1051,6 +1051,7 @@ model MaterialTicket {
   @@index([unit, status])
   @@index([type])
   @@index([assignedPosition])
+  @@unique([sequenceMonth, sequenceNumber])
 }
 
 // Phân quyền các bước của quy trình phiếu thay thế vật tư: admin gán CƯƠNG VỊ nào

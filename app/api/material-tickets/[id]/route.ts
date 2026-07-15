@@ -4,6 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBlankDocx } from "@/lib/blank-doc";
+import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 
 export const dynamic = "force-dynamic";
 
@@ -91,9 +92,37 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!t) return fail("Không tìm thấy phiếu", 404);
     if (!(await canManageTicket(user, t)))
       return fail("Bạn không có quyền xóa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-    await prisma.materialTicket.delete({ where: { id: t.id } });
-    await audit(user.id, "MT_DELETE", "MaterialTicket", t.id, `${t.code}: xóa phiếu`);
-    return ok({ id: t.id });
+    await prisma.$transaction(async (tx) => {
+      // Chặn thao tác tạo/xóa đồng thời trong lúc dồn STT để không phát sinh
+      // số trùng hoặc khoảng trống giữa các phiếu.
+      await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
+      await tx.materialTicket.delete({ where: { id: t.id } });
+
+      // Chỉ dồn STT trong tháng của phiếu vừa xóa. Các tháng cũ giữ nguyên
+      // dãy số riêng để tra cứu lịch sử.
+      await tx.$executeRaw`
+        UPDATE "MaterialTicket"
+        SET "sequenceNumber" = -"sequenceNumber"
+        WHERE "sequenceMonth" = ${t.sequenceMonth}
+      `;
+      await tx.$executeRaw`
+        WITH ranked AS (
+          SELECT
+            id,
+            ROW_NUMBER() OVER (
+              ORDER BY "sequenceNumber" DESC, "createdAt" ASC, id ASC
+            )::INTEGER AS "nextSequenceNumber"
+          FROM "MaterialTicket"
+          WHERE "sequenceMonth" = ${t.sequenceMonth}
+        )
+        UPDATE "MaterialTicket" AS ticket
+        SET "sequenceNumber" = ranked."nextSequenceNumber"
+        FROM ranked
+        WHERE ticket.id = ranked.id
+      `;
+    });
+    await audit(user.id, "MT_DELETE", "MaterialTicket", t.id, `${materialTicketReference(t)}: xóa phiếu`);
+    return ok({ id: t.id, sequenceNumber: t.sequenceNumber, sequenceMonth: t.sequenceMonth });
   });
 }
 
@@ -199,7 +228,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_EDIT_INFO", "MaterialTicket", t.id, `${t.code}: sửa thông tin phiếu`);
+      await audit(user.id, "MT_EDIT_INFO", "MaterialTicket", t.id, `${materialTicketReference(t)}: sửa thông tin phiếu`);
       return ok(up);
     }
 
@@ -273,7 +302,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const delta = value - t.usedQuantity;
         if (item.material.quantity - delta < 0) return fail("Không đủ số lượng hiện có để tăng số lượng sử dụng");
         const recoveryDocument = recoveryRequired && !t.recoveryDocUrl
-          ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+          ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
           : null;
         before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
@@ -298,11 +327,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
-        const { url } = await generateBbntDoc({ code: t.code, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, items: toBbntItems(t) });
+        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, items: toBbntItems(t) });
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url }, include: ITEM_INCLUDE });
       }
       if (!up) return fail("Không thể cập nhật bước");
-      await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${t.code}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
+      await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${materialTicketReference(t)}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
       return ok(up);
     }
 
@@ -394,7 +423,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_PROPOSE", "MaterialTicket", t.id, `${t.code}: gửi đề xuất`);
+      await audit(user.id, "MT_PROPOSE", "MaterialTicket", t.id, `${materialTicketReference(t)}: gửi đề xuất`);
       return ok(up);
     }
 
@@ -450,7 +479,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id, `${t.code}: chọn luồng ${workflowType}`);
+      await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id, `${materialTicketReference(t)}: chọn luồng ${workflowType}`);
       return ok(up);
     }
 
@@ -476,7 +505,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_RECEIVE_EXISTING", "MaterialTicket", t.id, `${t.code}: nhận ${quantity} từ Hiện có, chưa trừ tồn`);
+      await audit(user.id, "MT_RECEIVE_EXISTING", "MaterialTicket", t.id, `${materialTicketReference(t)}: nhận ${quantity} từ Hiện có, chưa trừ tồn`);
       return ok(up);
     }
 
@@ -513,7 +542,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
-      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${t.code}: VHV lãnh ${quantity}${materialCode ? `, mã ${materialCode}` : ", không có mã"}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
+      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${materialCode ? `, mã ${materialCode}` : ", không có mã"}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
       return ok(up);
     }
 
@@ -531,7 +560,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         data: { status: "TU_CHOI", rejectedReason: reason },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_REJECT", "MaterialTicket", t.id, `${t.code}: từ chối — ${reason}`);
+      await audit(user.id, "MT_REJECT", "MaterialTicket", t.id, `${materialTicketReference(t)}: từ chối — ${reason}`);
       return ok(up);
     }
 
@@ -556,7 +585,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
           include: ITEM_INCLUDE,
         });
-        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận số phiếu ĐXVT: ${num}`);
+        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận số phiếu ĐXVT: ${num}`);
         return ok(up);
       }
 
@@ -573,7 +602,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận ĐXVT: ${num}; VHV nhận phiếu ${proposalReceiverName}`);
+      await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${materialTicketReference(t)}: Xác nhận ĐXVT: ${num}; VHV nhận phiếu ${proposalReceiverName}`);
       return ok(up);
     }
 
@@ -623,7 +652,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
       const documents = t.type === "UNG" ? {
         bbkt: await generateBbntDoc({
-          code: t.code,
+          fileBaseName: materialTicketFileBase(t),
           soBBKT: t.bbktNumber,
           soPCT: t.pctNumber,
           noiDung: t.completionNote ?? "",
@@ -637,9 +666,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             ? { ...row, materialCode: erpCode, materialName: erpMaterial.name, quantity: receivedQuantity }
             : row),
         }),
-        bbnt: await generateBlankDocx(t.code, "BBNT-DO"),
+        bbnt: await generateBlankDocx(materialTicketFileBase(t), "BBNT-DO"),
         recovery: t.recoveryRequired
-          ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+          ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
           : null,
       } : null;
       const up = await prisma.$transaction(async (tx) => {
@@ -675,7 +704,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${t.code}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
+        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
       );
       return ok(up);
     }
@@ -688,7 +717,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!value) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
       if (sameTicketNumber(value, t.proposalNumber)) return fail("Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
       const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "SU_DUNG_VAT_TU", repairRequestNumber: value }, include: ITEM_INCLUDE });
-      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${t.code}: xác nhận vật tư lãnh, phiếu yêu cầu sửa chữa ${value}`);
+      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận vật tư lãnh, phiếu yêu cầu sửa chữa ${value}`);
       return ok(up);
     }
 
@@ -722,7 +751,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const newQty = mat.quantity - usedQuantity;
       const recoveryDocument = recoveryRequired && t.type !== "UNG"
-        ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+        ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
         : null;
 
       const up = await prisma.$transaction(async (tx) => {
@@ -750,7 +779,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_USE", "MaterialTicket", t.id,
-        `${t.code}: lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
+        `${materialTicketReference(t)}: lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
       );
       return ok(up);
     }
@@ -778,13 +807,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
       const documents = t.type !== "UNG" ? {
         bbkt: await generateBbntDoc({
-          code: t.code, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
+          fileBaseName: materialTicketFileBase(t), soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
           items: toBbntItems(t),
         }),
-        bbnt: await generateBlankDocx(t.code, "BBNT-DO"),
+        bbnt: await generateBlankDocx(materialTicketFileBase(t), "BBNT-DO"),
       } : null;
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
@@ -798,7 +827,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${t.code}: đã nghiệm thu, chờ xác nhận vật tư lãnh để xuất biên bản` : `${t.code}: nghiệm thu, xuất biên bản`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${materialTicketReference(t)}: đã nghiệm thu, chờ xác nhận vật tư lãnh để xuất biên bản` : `${materialTicketReference(t)}: nghiệm thu, xuất biên bản`);
       return ok(up);
     }
 
@@ -806,7 +835,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
       const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "HOAN_TAT", settledAt: new Date(), settledByName: user.name ?? "" }, include: ITEM_INCLUDE });
-      await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${t.code}: đã quyết toán vật tư`);
+      await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${materialTicketReference(t)}: đã quyết toán vật tư`);
       return ok(up);
     }
 

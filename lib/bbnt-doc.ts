@@ -24,7 +24,7 @@ export interface BbntItem {
 }
 
 export interface BbntData {
-  code: string;             // số phiếu VT-2026-xxxx (dùng đặt tên file)
+  fileBaseName: string;     // định danh kỹ thuật tháng + STT, chỉ dùng đặt tên file
   soBBKT?: string | null;   // Ứng: có thể chưa có -> in "(bổ sung sau)"
   soPCT?: string | null;
   thoiGianBatDau?: Date | string | null;
@@ -78,12 +78,12 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
-  const key = `public/tickets/${d.code}-BBNT.docx`;
+  const key = `public/tickets/${d.fileBaseName}-BBNT.docx`;
   await uploadS3Object({
     key,
     body: buf,
     contentType: DOCX_MIME,
-    originalName: `${d.code}-BBNT.docx`,
+    originalName: `${d.fileBaseName}-BBNT.docx`,
   });
 
   // Link tải qua proxy của app (/api/files/s3): chỉ người đã đăng nhập tải được,

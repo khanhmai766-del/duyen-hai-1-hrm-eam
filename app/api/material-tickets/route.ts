@@ -5,11 +5,15 @@ import {
   isShiftLeader,
   isStats,
   getPositionScopes,
-  nextTicketCode,
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
 import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import {
+  isMaterialTicketMonthKey,
+  materialTicketMonthKey,
+  materialTicketReference,
+} from "@/lib/material-ticket-sequence";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +38,25 @@ export async function GET(req: NextRequest) {
     if (sp.get("status")) where.status = sp.get("status");
     if (sp.get("type")) where.type = sp.get("type");
     if (sp.get("unit")) where.unit = sp.get("unit");
+    const month = sp.get("month")?.trim();
+    if (month && month !== "ALL") {
+      if (!isMaterialTicketMonthKey(month)) return fail("Tháng tra cứu không hợp lệ");
+      where.sequenceMonth = month;
+    }
 
-    const tickets = await prisma.materialTicket.findMany({
-      where,
-      include: ITEM_INCLUDE,
-      orderBy: [{ sequenceNumber: "desc" }, { createdAt: "desc" }],
-      take: 200,
-    });
+    const [tickets, monthGroups] = await Promise.all([
+      prisma.materialTicket.findMany({
+        where,
+        include: ITEM_INCLUDE,
+        orderBy: [{ sequenceMonth: "desc" }, { sequenceNumber: "desc" }, { createdAt: "desc" }],
+        take: 500,
+      }),
+      prisma.materialTicket.groupBy({
+        by: ["sequenceMonth"],
+        _count: { _all: true },
+        orderBy: { sequenceMonth: "desc" },
+      }),
+    ]);
     const itemPairs = tickets.flatMap((ticket) =>
       ticket.items
         .filter((item) => item.deviceSeq)
@@ -85,6 +101,7 @@ export async function GET(req: NextRequest) {
     // Quyền theo từng bước (admin cấu hình trong MaterialWorkflowRole; trống = mặc định cũ).
     const wfMap = await getWorkflowRoleMap();
     return ok(ticketsWithActivity, {
+      months: monthGroups.map((group) => ({ month: group.sequenceMonth, count: group._count._all })),
       viewer: {
         id: user.id,
         name: user.name,
@@ -169,11 +186,19 @@ export async function POST(req: NextRequest) {
     }
     const replacementDeviceLabel = replacementPoint.location || replacementPoint.device.name || replacementPoint.system || replacementPoint.deviceSeq;
 
-    const { ticket, code } = await prisma.$transaction(async (tx) => {
-      const code = await nextTicketCode("DE_XUAT", tx);
+    const sequenceMonth = materialTicketMonthKey();
+    const ticket = await prisma.$transaction(async (tx) => {
+      // Tuần tự hóa thao tác tạo/xóa để STT trong tháng luôn duy nhất và liên tục.
+      await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
+      const latestSequence = await tx.materialTicket.aggregate({
+        where: { sequenceMonth },
+        _max: { sequenceNumber: true },
+      });
+      const sequenceNumber = (latestSequence._max.sequenceNumber ?? 0) + 1;
       const ticket = await tx.materialTicket.create({
         data: {
-          code,
+          sequenceMonth,
+          sequenceNumber,
           type,
           unit,
           status: nextStatus,
@@ -195,11 +220,11 @@ export async function POST(req: NextRequest) {
         },
         include: ITEM_INCLUDE,
       });
-      return { ticket, code };
+      return ticket;
     });
 
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-      `${code} (chưa chọn luồng, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabel}`);
+      `${materialTicketReference(ticket)} (chưa chọn luồng, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabel}`);
     return ok(ticket);
   });
 }

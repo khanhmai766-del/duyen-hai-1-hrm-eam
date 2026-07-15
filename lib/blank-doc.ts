@@ -4,7 +4,7 @@ import { uploadS3Object, s3ProxyUrl } from "@/lib/s3";
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 /** Tạo DOCX một trang trắng hợp lệ để giữ luồng hồ sơ khi chưa có mẫu chính thức. */
-export async function generateBlankDocx(code: string, documentType: string) {
+export async function generateBlankDocx(fileBaseName: string, documentType: string) {
   const zip = new PizZip();
   zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -20,7 +20,7 @@ export async function generateBlankDocx(code: string, documentType: string) {
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p/><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`);
   const body = zip.generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
   const safeType = documentType.replace(/[^A-Za-z0-9_-]+/g, "-");
-  const key = `public/tickets/${code}-${safeType}.docx`;
-  await uploadS3Object({ key, body, contentType: DOCX_MIME, originalName: `${code}-${safeType}.docx` });
+  const key = `public/tickets/${fileBaseName}-${safeType}.docx`;
+  await uploadS3Object({ key, body, contentType: DOCX_MIME, originalName: `${fileBaseName}-${safeType}.docx` });
   return { key, url: s3ProxyUrl(key) };
 }

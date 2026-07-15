@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Plus, Minus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
-  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog,
+  AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -15,6 +15,11 @@ import {
 import { usePositions } from "@/hooks/useUsers";
 import { isPositionAllowedForDefectUnit, MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import {
+  materialTicketMonthKey,
+  materialTicketMonthLabel,
+  materialTicketReference,
+} from "@/lib/material-ticket-sequence";
 
 /* ============ meta hiển thị ============ */
 const C = {
@@ -126,7 +131,8 @@ export default function MaterialTicketBoard({
   onOpenRoles?: () => void;
   onCloseRoles?: () => void;
 } = {}) {
-  const { data, isLoading } = useMaterialTickets();
+  const [monthFilter, setMonthFilter] = useState(() => materialTicketMonthKey());
+  const { data, isLoading } = useMaterialTickets(monthFilter);
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState("ALL");
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("ALL");
@@ -142,6 +148,16 @@ export default function MaterialTicketBoard({
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
+  const monthOptions = useMemo(() => {
+    const options = [...(data?.months ?? [])];
+    if (monthFilter !== "ALL" && !options.some((item) => item.month === monthFilter)) {
+      options.push({ month: monthFilter, count: 0 });
+    }
+    return options.sort((a, b) => b.month.localeCompare(a.month));
+  }, [data?.months, monthFilter]);
+  const selectedMonthCount = monthFilter === "ALL"
+    ? monthOptions.reduce((sum, item) => sum + item.count, 0)
+    : monthOptions.find((item) => item.month === monthFilter)?.count ?? 0;
   const myTurn = useMemo(() => tickets.filter((t) => actionsFor(t, viewer).length > 0), [tickets, viewer]);
   const myTurnIds = useMemo(() => new Set(myTurn.map((t) => t.id)), [myTurn]);
   const waitDays = useMemo(() => new Map(tickets.map((t) => [t.id, waitDaysOf(t)])), [tickets]);
@@ -172,8 +188,12 @@ export default function MaterialTicketBoard({
       const matchesSearch = !searchText || searchable.includes(searchText);
       return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
     });
-    // STT cao nhất tương ứng phiếu mới nhất và luôn được đưa lên đầu ở mọi tab.
-    return list.sort((a, b) => b.sequenceNumber - a.sequenceNumber || b.createdAt.localeCompare(a.createdAt));
+    // Tháng mới nhất đứng trước; trong từng tháng, STT cao nhất là phiếu mới nhất.
+    return list.sort((a, b) =>
+      b.sequenceMonth.localeCompare(a.sequenceMonth)
+      || b.sequenceNumber - a.sequenceNumber
+      || b.createdAt.localeCompare(a.createdAt)
+    );
   }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, searchText]);
   const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : materialCategoryFilter;
   const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
@@ -193,6 +213,27 @@ export default function MaterialTicketBoard({
           ))}
         </div>
         <div className="turn-spacer" />
+        <label className="month-filter" title="Lọc và thống kê phiếu theo tháng">
+          <CalendarDays size={14} aria-hidden="true" />
+          <select
+            value={monthFilter}
+            onChange={(e) => {
+              setOpenId(null);
+              setMonthFilter(e.target.value);
+            }}
+            aria-label="Lọc phiếu vật tư theo tháng"
+          >
+            <option value="ALL">Tất cả tháng</option>
+            {monthOptions.map((item) => (
+              <option key={item.month} value={item.month}>
+                {materialTicketMonthLabel(item.month)} ({item.count})
+              </option>
+            ))}
+          </select>
+          <span className="month-count" aria-label={`${selectedMonthCount} phiếu`}>
+            {selectedMonthCount}
+          </span>
+        </label>
         <label className="unit-filter category-filter">
           <select
             value={materialCategoryFilter}
@@ -330,7 +371,7 @@ export default function MaterialTicketBoard({
         <>
           <div className="ovl" onClick={() => setDelTicket(null)} />
           <div className="dlg" style={{ width: 420 }}>
-            <div className="dlg-h"><b>Xóa phiếu {delTicket.code}?</b>
+            <div className="dlg-h"><b>Xóa phiếu {materialTicketReference(delTicket)}?</b>
               <button className="x" onClick={() => setDelTicket(null)}><X size={16} /></button></div>
             <div className="frm">
               <p className="note" style={{ background: C.badBg, color: C.bad }}>
@@ -342,7 +383,7 @@ export default function MaterialTicketBoard({
                   onClick={async () => {
                     try {
                       await del.mutateAsync(delTicket.id);
-                      toast.success(`Đã xóa phiếu ${delTicket.code}`);
+                      toast.success(`Đã xóa phiếu ${materialTicketReference(delTicket)}`);
                       if (openId === delTicket.id) setOpenId(null);
                       setDelTicket(null);
                     } catch (e) { toast.error(e instanceof Error ? e.message : "Xóa thất bại"); }
@@ -440,7 +481,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         proposedQuantity,
         replacementDeviceSeq: replacementDeviceSeq || undefined,
       });
-      toast.success(`Đã tạo phiếu ${res.code}`);
+      toast.success(`Đã tạo phiếu ${materialTicketReference(res)}`);
       onClose();
       onOpen(res.id);
     } catch (e) {
@@ -742,7 +783,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
         note: note.trim() || undefined,
         replacementDeviceSeq: replacementDeviceSeq || undefined,
       });
-      toast.success(`Đã cập nhật phiếu ${t.code}`);
+      toast.success(`Đã cập nhật phiếu ${materialTicketReference(t)}`);
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Cập nhật thất bại");
@@ -753,7 +794,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     <>
       <div className="ovl" onClick={onClose} />
       <div className="dlg dlg-scroll">
-        <div className="dlg-h"><b>Sửa phiếu {t.code}</b>
+        <div className="dlg-h"><b>Sửa phiếu {materialTicketReference(t)}</b>
           <button className="x" onClick={onClose}><X size={16} /></button></div>
         <div className="frm frm-scroll">
           <label>Tổ máy</label>
@@ -1839,6 +1880,11 @@ const CSS = `
 .head p{margin:2px 0 0;font-size:12.5px;color:${C.muted};}
 .top-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .turn-spacer{flex:1 1 auto;min-width:0;}
+.month-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid #bfdbfe;background:linear-gradient(180deg,#fff 0%,#f8fbff 100%);border-radius:11px;padding:3px 5px 3px 10px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .15s,box-shadow .15s;}
+.month-filter:focus-within{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.month-filter>svg{flex:0 0 auto;color:${C.accent};}
+.month-filter select{height:30px;min-width:114px;border:0;background:transparent;padding:0 18px 0 7px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;}
+.month-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;border-radius:8px;background:#e8f1ff;color:#1d4ed8;font-size:11.5px;font-weight:900;font-variant-numeric:tabular-nums;}
 .unit-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 5px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
 .unit-filter select{height:30px;min-width:0;border:0;background:#fff;padding:0 20px 0 6px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;box-sizing:content-box;}
 .category-filter select{min-width:0;}
@@ -2091,5 +2137,5 @@ const CSS = `
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols,.review-receive-row{grid-template-columns:1fr;gap:8px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
