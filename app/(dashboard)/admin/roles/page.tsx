@@ -294,6 +294,48 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "shift-staffing-manage",
+    group: "Nhân sự / Ca vận hành",
+    feature: "Quản lý biên chế trực ca",
+    note: "Cấp Chỉ xem tra cứu biên chế; Quản lý được gán, đổi kíp, đổi S1/S2, tách và điều chuyển; Toàn quyền được thêm cấu hình cương vị.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "shift-schedule-view", group: "Nhân sự / Ca vận hành", feature: "Xem lịch dự kiến",
+    note: "Xem phiên bản lịch dự kiến và kết quả so sánh.",
+    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "shift-schedule-generate", group: "Nhân sự / Ca vận hành", feature: "Phát sinh lịch dự kiến",
+    note: "Tạo bản nháp lịch theo biên chế, kíp và mẫu xoay ca.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "shift-schedule-regenerate", group: "Nhân sự / Ca vận hành", feature: "Tạo lại lịch",
+    note: "Tạo phiên bản mới từ ngày thay đổi biên chế.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "shift-schedule-lock", group: "Nhân sự / Ca vận hành", feature: "Khóa lịch",
+    note: "Khóa ngày, ca hoặc ô phân công để bảo vệ dữ liệu.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "shift-schedule-approve", group: "Nhân sự / Ca vận hành", feature: "Duyệt lịch dự kiến",
+    note: "Chuyển bản nháp sang trạng thái được duyệt.",
+    matrix: { ADMIN: "full", MANAGER: "approve", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "shift-schedule-publish", group: "Nhân sự / Ca vận hành", feature: "Công bố lịch",
+    note: "Công bố phiên bản lịch đã được duyệt.",
+    matrix: { ADMIN: "full", MANAGER: "approve", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "shift-schedule-export", group: "Nhân sự / Ca vận hành", feature: "Xuất lịch",
+    note: "Xuất dữ liệu lịch từ phiên bản đã duyệt.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
     id: "user-manage",
     group: "Quản trị người dùng",
     feature: "Quản lý tài khoản người dùng",
