@@ -22,6 +22,15 @@ async function getTicket(id: string) {
   return prisma.materialTicket.findUnique({ where: { id }, include: ITEM_INCLUDE });
 }
 
+const normalizeReceiptSource = (source: unknown): "ERP" | "EXISTING" =>
+  source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
+
+const receiptSourceLabel = (source: unknown) =>
+  normalizeReceiptSource(source) === "ERP" ? "lãnh kho DH1" : 'lãnh vật tư "Hiện có"';
+
+const sameTicketNumber = (left?: string | null, right?: string | null) =>
+  !!left?.trim() && !!right?.trim() && left.trim().toLocaleLowerCase("vi") === right.trim().toLocaleLowerCase("vi");
+
 /** Sửa/Xoá phiếu: ADMIN, cương vị được cấu hình bước "manage"; khi CHƯA cấu hình → người tạo phiếu (mặc định cũ). */
 function samePosition(a?: string | null, b?: string | null) {
   const left = (a ?? "").trim().toLocaleLowerCase("vi");
@@ -236,14 +245,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!t.receivedAt || t.receivedQuantity == null) return fail("Bước xác nhận vật tư lãnh chưa hoàn thành");
         const value = Math.trunc(Number(body.receivedQuantity));
         const method = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
-        const receiptSource = body.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
+        const receiptSource = normalizeReceiptSource(body.receiptSource);
         if (value <= 0 || !method) return fail("Khối lượng lãnh hoặc số phiếu giao hàng không hợp lệ");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.receivedQuantity;
         const erpCode = item.erpCode || item.material.code;
         const erpRows = await prisma.$queryRaw<Array<{ erpStock: number }>>`SELECT "erpStock" FROM "ErpMaterial" WHERE "code" = ${erpCode} LIMIT 1`;
         if (!erpRows.length) return fail(`Không tìm thấy mã vật tư ERP "${erpCode}"`, 404);
-        const oldSource = t.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
+        const oldSource = normalizeReceiptSource(t.receiptSource);
         const erpDelta = (oldSource === "ERP" ? t.receivedQuantity : 0) - (receiptSource === "ERP" ? value : 0);
         if (item.material.quantity + delta < 0 || erpRows[0].erpStock + erpDelta < 0) return fail("Không thể điều chỉnh vì số lượng hiện có hoặc ERP sẽ âm");
         before = `Nhận ${t.receivedQuantity}, phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}`; after = `Nhận ${value}, phiếu giao hàng ${method}`;
@@ -578,10 +587,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
       const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
-      const receiptSource = body.receiptSource === "OUTSIDE" ? "OUTSIDE" : "ERP";
+      const receiptSource = normalizeReceiptSource(body.receiptSource);
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
       const repairRequestNumber = t.type === "UNG" ? "" : String(body.repairRequestNumber || "").trim();
       if (t.type !== "UNG" && !repairRequestNumber) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
+      if (t.type !== "UNG" && sameTicketNumber(repairRequestNumber, t.proposalNumber)) {
+        return fail("Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
+      }
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const erpCode = String(body.erpCode || item.erpCode || "").trim();
@@ -663,7 +675,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${t.code}: ${receiptSource === "ERP" ? "lãnh kho DH1" : "lãnh kho VH1"} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
+        `${t.code}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
       );
       return ok(up);
     }
@@ -674,6 +686,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh", 403);
       const value = String(body.repairRequestNumber || "").trim();
       if (!value) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
+      if (sameTicketNumber(value, t.proposalNumber)) return fail("Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
       const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "SU_DUNG_VAT_TU", repairRequestNumber: value }, include: ITEM_INCLUDE });
       await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${t.code}: xác nhận vật tư lãnh, phiếu yêu cầu sửa chữa ${value}`);
       return ok(up);

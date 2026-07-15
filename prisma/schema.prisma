@@ -1024,7 +1024,7 @@ model MaterialTicket {
   // Bước NHẬN VẬT TƯ (NHAN_VAT_TU)
   receivedQuantity    Int? // khối lượng vật tư lãnh
   receivedMethod      String? // hình thức lãnh nhập tự do
-  receiptSource       String? // ERP | OUTSIDE — nguồn lãnh vật tư
+  receiptSource       String? // ERP | EXISTING — nguồn lãnh vật tư (OUTSIDE là giá trị cũ)
   receivedById        String?
   receivedByName      String?
   receivedByPosition  String?
