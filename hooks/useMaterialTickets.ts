@@ -155,7 +155,9 @@ export interface MaterialTicketMonthSummary {
 export function useMaterialTickets(month = "ALL") {
   return useQuery({
     queryKey: ["material-tickets", month],
-    staleTime: 0,
+    // 30s: mutation nào cũng invalidate query này nên thao tác của CHÍNH MÌNH vẫn
+    // hiện tức thì; staleTime 0 trước đây khiến mỗi lần mount lại tải toàn bộ phiếu.
+    staleTime: 30_000,
     queryFn: async () => {
       const qs = new URLSearchParams();
       if (month !== "ALL") qs.set("month", month);
