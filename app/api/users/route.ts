@@ -274,6 +274,11 @@ export async function DELETE(req: NextRequest) {
         await tx.shiftStaffingAssignment.deleteMany({ where: { userId: id } });
         await tx.shiftStaffingAssignment.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
         await tx.shiftStaffingAssignment.updateMany({ where: { updatedById: id }, data: { updatedById: user.id } });
+        await tx.crewRotationConfig.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.crewRotationConfig.updateMany({ where: { updatedById: id }, data: { updatedById: user.id } });
+        await tx.staffingChangeEvent.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.shiftScheduleVersion.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.shiftScheduleVersion.updateMany({ where: { approvedById: id }, data: { approvedById: null } });
 
         await tx.announcementRead.deleteMany({ where: { userId: id } });
         await tx.announcement.deleteMany({ where: { createdById: id } });

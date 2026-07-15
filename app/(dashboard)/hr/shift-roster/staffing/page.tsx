@@ -6,10 +6,14 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRightLeft,
+  BriefcaseBusiness,
   CalendarClock,
   Check,
+  Clock3,
+  GripVertical,
   History,
   Loader2,
+  Plus,
   Settings2,
   ShieldCheck,
   UserMinus,
@@ -56,6 +60,12 @@ const SHIFT_LABEL = {
   NIGHT: "Đ",
   OFF: "N",
 } as const;
+const SHIFT_NAME = {
+  MORNING: "Ca sáng",
+  AFTERNOON: "Ca chiều",
+  NIGHT: "Ca đêm",
+  OFF: "Nghỉ",
+} as const;
 const QUICK_CREWS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
 const today = () => new Date().toISOString().slice(0, 10);
 const viDate = (value?: string | null) =>
@@ -74,6 +84,24 @@ const effective = (
   (item.effectiveFrom ?? item.startDate ?? "").slice(0, 10) <= at &&
   (!(item.effectiveTo ?? item.endDate) ||
     (item.effectiveTo ?? item.endDate)!.slice(0, 10) >= at);
+const utcDayNumber = (value: string) =>
+  Math.floor(new Date(`${value.slice(0, 10)}T00:00:00.000Z`).getTime() / 86_400_000);
+const cycleStepAt = (
+  item: Pick<StaffingAssignment, "cycleStartDate" | "phaseIndex" | "startDate">,
+  template: RotationTemplate,
+  at = today(),
+) => {
+  const baseDate = item.cycleStartDate?.slice(0, 10) ?? item.startDate.slice(0, 10);
+  const baseStep = item.cycleStartDate ? 0 : item.phaseIndex;
+  if (baseStep === null) return null;
+  const elapsed = utcDayNumber(at) - utcDayNumber(baseDate);
+  return ((baseStep + elapsed) % template.cycleLength + template.cycleLength) % template.cycleLength;
+};
+const cycleStartForStep = (effectiveDate: string, step: number) => {
+  const result = new Date(`${effectiveDate}T00:00:00.000Z`);
+  result.setUTCDate(result.getUTCDate() - step);
+  return result.toISOString().slice(0, 10);
+};
 const uniformCoverage = (p: StaffingPosition) =>
   p.requiredMorningStaff !== null &&
   p.requiredMorningStaff === p.requiredAfternoonStaff &&
@@ -150,8 +178,8 @@ function metrics(
     warnings.push("Có hai mẫu xoay ca chồng lấn");
   if (current.some((item) => !item.crewCode))
     warnings.push("Có nhân sự chưa được phân kíp");
-  if (current.some((item) => item.phaseIndex === null))
-    warnings.push("Có nhân sự chưa có phaseIndex");
+  if (current.some((item) => !item.cycleStartDate && item.phaseIndex === null))
+    warnings.push("Có nhân sự chưa xác định được bước chu kỳ");
   if (
     rotation &&
     current.some(
@@ -160,7 +188,7 @@ function metrics(
         item.phaseIndex >= rotation.rotationTemplate.cycleLength,
     )
   )
-    warnings.push("phaseIndex nằm ngoài độ dài chu kỳ");
+    warnings.push("Có bước chu kỳ không phù hợp với mẫu đang áp dụng");
   const phases = current
     .map((x) => x.phaseIndex)
     .filter((x): x is number => x !== null)
@@ -171,8 +199,8 @@ function metrics(
       (i) => !phases.includes(i),
     )
   )
-    warnings.push("Có phaseIndex bị thiếu");
-  const phaseKeys = new Set<string>();
+    warnings.push("Chu kỳ đang thiếu một số bước");
+  const phaseCrews = new Map<string, Set<string>>();
   let duplicatePhase = false;
   for (const item of current) {
     if (item.phaseIndex === null) continue;
@@ -180,15 +208,15 @@ function metrics(
       position.positionType === "SINGLE"
         ? `${item.phaseIndex}`
         : `${item.phaseIndex}:${item.stationCode ?? "NONE"}`;
-    if (phaseKeys.has(key)) duplicatePhase = true;
-    phaseKeys.add(key);
+    const crews = phaseCrews.get(key) ?? new Set<string>();
+    crews.add(item.crewCode ?? "NONE");
+    if (crews.size > 1) duplicatePhase = true;
+    phaseCrews.set(key, crews);
   }
-  if (duplicatePhase) warnings.push("Có phaseIndex trùng không hợp lệ");
+  if (duplicatePhase) warnings.push("Có bước chu kỳ bị trùng giữa các kíp");
   if (position.positionType === "S1_S2") {
     if (current.some((item) => !item.stationCode))
       warnings.push("Có nhân sự chưa được phân S1/S2/FLEX");
-    if (!current.some((item) => item.stationCode === "FLEX"))
-      warnings.push("Cương vị S1/S2 chưa có người FLEX");
     const s1 = current.filter((x) => x.stationCode === "S1").length,
       s2 = current.filter((x) => x.stationCode === "S2").length;
     if (Math.abs(s1 - s2) > 1) warnings.push("Phân bổ S1/S2 chưa cân bằng");
@@ -229,6 +257,7 @@ const initialForm = {
   positionId: "",
   crewCode: "",
   phaseIndex: "",
+  cycleStartDate: "",
   stationCode: "",
   assignmentType: "OFFICIAL",
   effectiveDate: today(),
@@ -248,18 +277,52 @@ export default function ShiftStaffingPage() {
     assignments = data?.assignments ?? [],
     rotations = data?.positionRotations ?? [],
     templates = data?.rotationTemplates ?? [];
+  const positionGroups = React.useMemo(() => {
+    const shift: StaffingPosition[] = [];
+    const administrative: StaffingPosition[] = [];
+    for (const position of positions) {
+      const hasShiftAssignment = assignments.some(
+        (item) =>
+          item.positionId === position.id &&
+          item.assignmentType !== "ADMINISTRATIVE" &&
+          !!item.crewCode &&
+          effective(item),
+      );
+      const hasCurrentRotation = rotations.some(
+        (item) => item.positionConfigId === position.id && effective(item),
+      );
+      (hasShiftAssignment || hasCurrentRotation ? shift : administrative).push(
+        position,
+      );
+    }
+    return [
+      {
+        key: "shift",
+        label: "Cương vị đi ca",
+        description: "Có biên chế kíp hoặc mẫu xoay đang áp dụng",
+        icon: Clock3,
+        positions: shift,
+        tone: "border-sky-200 bg-sky-50/80 text-sky-900",
+      },
+      {
+        key: "administrative",
+        label: "Cương vị hành chính",
+        description: "Không tham gia vòng xoay ca hiện hành",
+        icon: BriefcaseBusiness,
+        positions: administrative,
+        tone: "border-emerald-200 bg-emerald-50/80 text-emerald-900",
+      },
+    ];
+  }, [assignments, positions, rotations]);
   const [selectedName, setSelectedName] = React.useState("");
-  const selected =
-    positions.find((p) => p.name === selectedName) ?? positions[0];
-  React.useEffect(() => {
-    if (!selectedName && positions[0]) setSelectedName(positions[0].name);
-  }, [positions, selectedName]);
+  const selected = positions.find((p) => p.name === selectedName);
   const selectedMetrics = selected
     ? metrics(selected, assignments, rotations)
     : null;
   const [showHistory, setShowHistory] = React.useState(false),
     [configOpen, setConfigOpen] = React.useState(false),
     [rotationOpen, setRotationOpen] = React.useState(false);
+  const [lastEffectiveChange, setLastEffectiveChange] = React.useState<{ date: string; positionId: string } | null>(null);
   const [coverage, setCoverage] = React.useState({
     morning: 1,
     afternoon: 1,
@@ -276,7 +339,9 @@ export default function ShiftStaffingPage() {
   const [mode, setMode] = React.useState<FormMode | null>(null),
     [editing, setEditing] = React.useState<StaffingAssignment | null>(null),
     [form, setForm] = React.useState(initialForm),
-    [userSearch, setUserSearch] = React.useState("");
+    [userSearch, setUserSearch] = React.useState(""),
+    [selectedUserIds, setSelectedUserIds] = React.useState<string[]>([]),
+    [showCycleStepPicker, setShowCycleStepPicker] = React.useState(false);
   const filteredUsers = React.useMemo(() => {
     const keyword = normalizeText(userSearch.trim());
     if (!keyword) return data?.users ?? [];
@@ -291,8 +356,31 @@ export default function ShiftStaffingPage() {
         (x) => x.positionId === selected.id && (showHistory || effective(x)),
       )
     : [];
+  const formRotation = rotations.find(
+    (item) =>
+      item.positionConfigId === form.positionId &&
+      effective(item, form.effectiveDate || today()),
+  );
+  const formTemplate = formRotation?.rotationTemplate;
   function setField(key: keyof typeof form, value: string) {
     setForm((old) => ({ ...old, [key]: value }));
+  }
+  function setCrewCode(value: string) {
+    const crewCode = value.toUpperCase();
+    setForm((old) => {
+      const existingCrew = assignments.find(
+        (item) =>
+          item.positionId === old.positionId &&
+          item.crewCode === crewCode &&
+          !!item.cycleStartDate &&
+          effective(item, old.effectiveDate || today()),
+      );
+      return {
+        ...old,
+        crewCode,
+        cycleStartDate: old.cycleStartDate || existingCrew?.cycleStartDate?.slice(0, 10) || "",
+      };
+    });
   }
   function openConfig(p: StaffingPosition) {
     const m = p.requiredMorningStaff ?? 1,
@@ -327,12 +415,80 @@ export default function ShiftStaffingPage() {
     if (!selected?.id) return toast.error("Hãy cấu hình cương vị trước");
     setEditing(null);
     setUserSearch("");
+    setSelectedUserIds([]);
     setForm({
       ...initialForm,
       positionId: selected.id,
       effectiveDate: today(),
     });
     setMode("assign");
+  }
+  function openMatrixCell(
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+  ) {
+    if (!position.id) return toast.error("Hãy cấu hình cương vị trước");
+    setSelectedName(position.name);
+    setEditing(null);
+    setUserSearch("");
+    setSelectedUserIds([]);
+    const existingCrew = assignments.find(
+      (item) =>
+        item.positionId === position.id &&
+        item.crewCode === crewCode &&
+        !!item.cycleStartDate &&
+        effective(item),
+    );
+    setForm({
+      ...initialForm,
+      positionId: position.id,
+      crewCode,
+      stationCode,
+      cycleStartDate: existingCrew?.cycleStartDate?.slice(0, 10) ?? "",
+      effectiveDate: today(),
+    });
+    setMode("assign");
+  }
+  function openMatrixMove(
+    item: StaffingAssignment,
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+  ) {
+    if (!position.id) return;
+    if (
+      item.positionId === position.id &&
+      item.crewCode === crewCode &&
+      (item.stationCode ?? "") === stationCode
+    ) return;
+    setSelectedName(position.name);
+    setEditing(item);
+    setUserSearch("");
+    const existingCrew = assignments.find(
+      (assignment) =>
+        assignment.positionId === position.id &&
+        assignment.crewCode === crewCode &&
+        !!assignment.cycleStartDate &&
+        effective(assignment),
+    );
+    setForm({
+      userId: item.userId,
+      positionId: position.id,
+      crewCode,
+      phaseIndex: "",
+      cycleStartDate:
+        existingCrew?.cycleStartDate?.slice(0, 10) ??
+        item.cycleStartDate?.slice(0, 10) ??
+        "",
+      stationCode,
+      assignmentType: item.assignmentType,
+      effectiveDate: today(),
+      endDate: "",
+      reason: "",
+      note: item.note ?? "",
+    });
+    setMode("change");
   }
   function openChange(item: StaffingAssignment) {
     setEditing(item);
@@ -342,6 +498,7 @@ export default function ShiftStaffingPage() {
       positionId: item.positionId,
       crewCode: item.crewCode ?? "",
       phaseIndex: item.phaseIndex === null ? "" : String(item.phaseIndex),
+      cycleStartDate: item.cycleStartDate?.slice(0, 10) ?? "",
       stationCode: item.stationCode ?? "",
       assignmentType: item.assignmentType,
       effectiveDate: today(),
@@ -403,11 +560,24 @@ export default function ShiftStaffingPage() {
       else {
         const target = positions.find((p) => p.id === form.positionId);
         await mutation.mutateAsync({
-          action: mode === "assign" ? "ASSIGN" : "CHANGE",
+          action:
+            mode === "assign" && selectedUserIds.length > 1
+              ? "BULK_ASSIGN"
+              : mode === "assign"
+                ? "ASSIGN"
+                : "CHANGE",
           ...(editing ? { assignmentId: editing.id } : {}),
           ...form,
+          ...(mode === "assign" && selectedUserIds.length > 1
+            ? {
+                userIds: selectedUserIds,
+              }
+            : mode === "assign" && selectedUserIds.length === 1
+              ? { userId: selectedUserIds[0] }
+              : {}),
           crewCode: form.crewCode.trim() || null,
           phaseIndex: form.phaseIndex === "" ? null : Number(form.phaseIndex),
+          cycleStartDate: form.cycleStartDate || null,
           stationCode:
             target?.positionType === "SINGLE" ? null : form.stationCode || null,
           endDate: form.endDate || null,
@@ -415,11 +585,17 @@ export default function ShiftStaffingPage() {
       }
       toast.success(
         mode === "assign"
-          ? "Đã gán nhân sự"
+          ? selectedUserIds.length > 1
+            ? `Đã gán ${selectedUserIds.length} nhân sự theo thứ tự đã chọn`
+            : "Đã gán nhân sự"
           : mode === "detach"
             ? "Đã kết thúc phân công"
             : "Đã tạo phân công mới và giữ lịch sử cũ",
       );
+      setLastEffectiveChange({
+        date: form.effectiveDate,
+        positionId: mode === "detach" ? editing?.positionId ?? form.positionId : form.positionId,
+      });
       setMode(null);
     } catch (e) {
       toast.error((e as Error).message);
@@ -442,7 +618,7 @@ export default function ShiftStaffingPage() {
     <div className="space-y-6">
       <PageHeader
         title="QUẢN LÝ BIÊN CHẾ TRỰC CA"
-        description="Nhu cầu từng ca · pha chu kỳ · S1/S2/FLEX · mẫu xoay theo thời gian"
+        description="Nhu cầu từng ca · ngày bắt đầu chu kỳ · S1/S2/FLEX · mẫu xoay theo thời gian"
       >
         <Link href="/hr/shift-roster">
           <Button variant="outline">
@@ -454,8 +630,29 @@ export default function ShiftStaffingPage() {
           {canConfigure ? "Toàn quyền" : canManage ? "Quản lý" : "Chỉ xem"}
         </Badge>
       </PageHeader>
-      <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-        <Card className="overflow-hidden">
+      {lastEffectiveChange && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 border-blue-200 bg-blue-50/70 p-4">
+          <div>
+            <div className="font-semibold text-blue-950">Biên chế đã thay đổi từ {viDate(lastEffectiveChange.date)}</div>
+            <div className="text-sm text-blue-800">Có thể tạo một phiên bản lịch mới; lịch đã công bố không bị ghi đè.</div>
+          </div>
+          <Link href={`/hr/shift-roster/planning?from=${lastEffectiveChange.date}&positionId=${lastEffectiveChange.positionId}`}>
+            <Button><CalendarClock className="h-4 w-4" /> Tạo lại lịch từ ngày hiệu lực</Button>
+          </Link>
+        </Card>
+      )}
+      <StaffingMatrix
+        positions={positionGroups[0]?.positions ?? []}
+        assignments={assignments}
+        selectedName={selectedName}
+        canManage={canManage}
+        onSelectPosition={setSelectedName}
+        onOpenCell={openMatrixCell}
+        onOpenAssignment={openChange}
+        onMoveAssignment={openMatrixMove}
+      />
+      <div className="grid gap-6 xl:grid-cols-1">
+        <Card className="hidden overflow-hidden">
           <div className="border-b bg-slate-50 px-4 py-3">
             <div className="font-semibold">Danh sách cương vị</div>
             <div className="text-xs text-muted-foreground">
@@ -463,40 +660,72 @@ export default function ShiftStaffingPage() {
             </div>
           </div>
           <div className="max-h-[76vh] overflow-y-auto p-2">
-            {positions.map((p) => {
-              const m = metrics(p, assignments, rotations);
+            {positionGroups.map((group) => {
+              const Icon = group.icon;
               return (
-                <button
-                  key={p.name}
-                  onClick={() => setSelectedName(p.name)}
-                  className={cn(
-                    "mb-1 w-full cursor-pointer rounded-lg border p-3 text-left transition-colors",
-                    selected?.name === p.name
-                      ? "border-amber-300 bg-amber-50"
-                      : "border-transparent hover:border-slate-200 hover:bg-slate-50",
-                  )}
-                >
-                  <div className="flex justify-between gap-2">
-                    <span className="font-semibold text-ink">{p.name}</span>
-                    {m.warnings.length > 0 && (
-                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                <section key={group.key} className="mb-3 last:mb-0">
+                  <div
+                    className={cn(
+                      "mb-2 rounded-lg border px-3 py-2.5",
+                      group.tone,
                     )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-sm font-bold">
+                        <Icon className="h-4 w-4" />
+                        {group.label}
+                      </div>
+                      <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-bold tabular-nums shadow-sm">
+                        {group.positions.length}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] opacity-75">
+                      {group.description}
+                    </div>
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-1 text-center text-xs">
-                    <Mini label="Sáng" value={p.requiredMorningStaff ?? "—"} />
-                    <Mini
-                      label="Chiều"
-                      value={p.requiredAfternoonStaff ?? "—"}
-                    />
-                    <Mini label="Đêm" value={p.requiredNightStaff ?? "—"} />
-                  </div>
-                  <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                    <span>{coverageLabel(p)}</span>
-                    <span>
-                      {m.rotation?.rotationTemplate.code ?? "Chưa có mẫu"}
-                    </span>
-                  </div>
-                </button>
+                  {group.positions.map((p) => {
+                    const m = metrics(p, assignments, rotations);
+                    const isAdministrative = group.key === "administrative";
+                    return (
+                      <button
+                        key={p.name}
+                        onClick={() => setSelectedName(p.name)}
+                        className={cn(
+                          "mb-1 w-full cursor-pointer rounded-lg border p-3 text-left transition-colors",
+                          selected?.name === p.name
+                            ? isAdministrative
+                              ? "border-emerald-300 bg-emerald-50"
+                              : "border-amber-300 bg-amber-50"
+                            : "border-transparent hover:border-slate-200 hover:bg-slate-50",
+                        )}
+                      >
+                        <div className="flex justify-between gap-2">
+                          <span className="font-semibold text-ink">{p.name}</span>
+                          {!isAdministrative && m.warnings.length > 0 && (
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                          )}
+                        </div>
+                        {isAdministrative ? (
+                          <div className="mt-1.5 text-xs text-emerald-700">
+                            Hành chính · không phát sinh lịch xoay ca
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mt-2 grid grid-cols-3 gap-1 text-center text-xs">
+                              <Mini label="Sáng" value={p.requiredMorningStaff ?? "—"} />
+                              <Mini label="Chiều" value={p.requiredAfternoonStaff ?? "—"} />
+                              <Mini label="Đêm" value={p.requiredNightStaff ?? "—"} />
+                            </div>
+                            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                              <span>{coverageLabel(p)}</span>
+                              <span>{m.rotation?.rotationTemplate.code ?? "Chưa có mẫu"}</span>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </section>
               );
             })}
           </div>
@@ -612,7 +841,7 @@ export default function ShiftStaffingPage() {
                       {[
                         "Mã NV / Họ tên",
                         "Mã kíp",
-                        "Pha",
+                        "Bắt đầu chu kỳ",
                         "S1/S2/FLEX",
                         "Loại",
                         "Bắt đầu",
@@ -641,8 +870,15 @@ export default function ShiftStaffingPage() {
                             <span className="text-amber-700">Chưa phân</span>
                           )}
                         </td>
-                        <td className="px-3 py-3 font-mono">
-                          {item.phaseIndex ?? "—"}
+                        <td className="px-3 py-3">
+                          <CycleCell
+                            item={item}
+                            rotation={rotations.find(
+                              (rotation) =>
+                                rotation.positionConfigId === item.positionId &&
+                                effective(rotation, item.startDate.slice(0, 10)),
+                            )}
+                          />
                         </td>
                         <td className="px-3 py-3">
                           {selected.positionType === "S1_S2"
@@ -843,6 +1079,7 @@ export default function ShiftStaffingPage() {
                 template={templates.find(
                   (x) => x.id === rotationForm.templateId,
                 )!}
+                detailed
               />
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -930,7 +1167,15 @@ export default function ShiftStaffingPage() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nhân sự">
+              <div className={cn("space-y-2", mode === "assign" && "sm:col-span-2")}>
+                <Label>
+                  Nhân sự
+                  {mode === "assign" && selectedUserIds.length > 0 && (
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      Đã chọn {selectedUserIds.length} người
+                    </span>
+                  )}
+                </Label>
                 <div className="space-y-2">
                   {mode !== "change" && (
                     <Input
@@ -941,26 +1186,48 @@ export default function ShiftStaffingPage() {
                       aria-label="Tìm nhân sự để phân công"
                     />
                   )}
-                  <select
-                    disabled={mode === "change"}
-                    value={form.userId}
-                    onChange={(e) => setField("userId", e.target.value)}
-                    className="h-10 w-full rounded-md border bg-white px-3"
-                  >
-                    <option value="">
-                      {filteredUsers.length
-                        ? `Chọn nhân sự (${filteredUsers.length} kết quả)`
-                        : "Không tìm thấy nhân sự"}
-                    </option>
-                    {filteredUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.employeeId} — {u.name}
-                        {u.position ? ` · ${u.position}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  {mode === "assign" ? (
+                    <div className="max-h-56 overflow-y-auto rounded-lg border bg-slate-50/60 p-1">
+                      {filteredUsers.length ? filteredUsers.map((u) => {
+                        const order = selectedUserIds.indexOf(u.id);
+                        return (
+                          <button
+                            type="button"
+                            key={u.id}
+                            onClick={() => setSelectedUserIds((old) =>
+                              old.includes(u.id)
+                                ? old.filter((id) => id !== u.id)
+                                : old.length < 20 ? [...old, u.id] : old,
+                            )}
+                            className={cn(
+                              "flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                              order >= 0 ? "bg-blue-50 text-blue-950" : "hover:bg-white",
+                            )}
+                          >
+                            <span className={cn(
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                              order >= 0 ? "border-blue-600 bg-blue-600 text-white" : "bg-white text-muted-foreground",
+                            )}>
+                              {order >= 0 ? order + 1 : ""}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="font-medium">{u.employeeId} — {u.name}</span>
+                              {u.position && <span className="ml-2 text-muted-foreground">· {u.position}</span>}
+                            </span>
+                            {order >= 0 && <Check className="h-4 w-4 text-blue-700" />}
+                          </button>
+                        );
+                      }) : (
+                        <div className="px-3 py-6 text-center text-sm text-muted-foreground">Không tìm thấy nhân sự</div>
+                      )}
+                    </div>
+                  ) : (
+                    <select disabled value={form.userId} className="h-10 w-full rounded-md border bg-slate-50 px-3">
+                      <option>{editing?.user.employeeId} — {editing?.user.name}</option>
+                    </select>
+                  )}
                 </div>
-              </Field>
+              </div>
               <Field label="Cương vị">
                 <select
                   value={form.positionId}
@@ -983,9 +1250,7 @@ export default function ShiftStaffingPage() {
                 <Input
                   list="crew-codes"
                   value={form.crewCode}
-                  onChange={(e) =>
-                    setField("crewCode", e.target.value.toUpperCase())
-                  }
+                  onChange={(e) => setCrewCode(e.target.value)}
                   placeholder="A–K hoặc mã khác"
                   maxLength={20}
                 />
@@ -994,15 +1259,6 @@ export default function ShiftStaffingPage() {
                     <option key={x} value={x} />
                   ))}
                 </datalist>
-              </Field>
-              <Field label="Thứ tự pha">
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.phaseIndex}
-                  onChange={(e) => setField("phaseIndex", e.target.value)}
-                  placeholder="Ví dụ: 0"
-                />
               </Field>
               {positions.find((p) => p.id === form.positionId)?.positionType ===
                 "S1_S2" && (
@@ -1032,13 +1288,66 @@ export default function ShiftStaffingPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Ngày bắt đầu">
+              <Field label="Ngày hiệu lực biên chế">
                 <Input
                   type="date"
                   value={form.effectiveDate}
                   onChange={(e) => setField("effectiveDate", e.target.value)}
                 />
               </Field>
+              <Field label="Ngày bắt đầu chu kỳ">
+                <Input
+                  type="date"
+                  max={form.effectiveDate}
+                  value={form.cycleStartDate}
+                  onChange={(e) => setField("cycleStartDate", e.target.value)}
+                />
+              </Field>
+              {formTemplate ? (
+                <div className="sm:col-span-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-blue-950">{formTemplate.name}</div>
+                      <div className="text-xs text-blue-800">Chu kỳ gồm {formTemplate.cycleLength} bước</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCycleStepPicker((value) => !value)}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      {showCycleStepPicker ? "Ẩn lựa chọn nâng cao" : "Không biết ngày bắt đầu?"}
+                    </Button>
+                  </div>
+                  <div className="mt-3">
+                    <Pattern template={formTemplate} detailed />
+                  </div>
+                  {showCycleStepPicker && (
+                    <div className="mt-4 border-t border-blue-200 pt-3">
+                      <Label>Trạng thái tại ngày hiệu lực</Label>
+                      <p className="mb-2 text-xs text-blue-800">Chọn trạng thái đang diễn ra; hệ thống sẽ tự điền ngày bắt đầu chu kỳ.</p>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {formTemplate.cyclePattern.map((step, index) => (
+                          <button
+                            type="button"
+                            key={`${step}-${index}`}
+                            onClick={() => setField("cycleStartDate", cycleStartForStep(form.effectiveDate, index))}
+                            className="min-h-11 cursor-pointer rounded-lg border bg-white px-3 py-2 text-left text-sm transition-colors hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                          >
+                            <span className="font-semibold">Bước {index + 1}</span>
+                            <span className="ml-2 text-muted-foreground">{SHIFT_NAME[step]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Cương vị chưa có mẫu xoay ca áp dụng tại ngày hiệu lực. Hãy cấu hình mẫu trước khi nhập ngày bắt đầu chu kỳ.
+                </div>
+              )}
               <Field label="Ngày kết thúc">
                 <Input
                   type="date"
@@ -1050,12 +1359,6 @@ export default function ShiftStaffingPage() {
                 <Textarea
                   value={form.reason}
                   onChange={(e) => setField("reason", e.target.value)}
-                />
-              </Field>
-              <Field label="Ghi chú">
-                <Textarea
-                  value={form.note}
-                  onChange={(e) => setField("note", e.target.value)}
                 />
               </Field>
             </div>
@@ -1070,7 +1373,10 @@ export default function ShiftStaffingPage() {
                 mutation.isPending ||
                 !form.effectiveDate ||
                 form.reason.trim().length < 3 ||
-                (mode !== "detach" && (!form.userId || !form.positionId))
+                (mode !== "detach" &&
+                  (!form.positionId ||
+                    (mode === "assign" ? selectedUserIds.length === 0 : !form.userId) ||
+                    (!!formTemplate && !form.cycleStartDate)))
               }
             >
               {mutation.isPending && (
@@ -1082,6 +1388,189 @@ export default function ShiftStaffingPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function StaffingMatrix({
+  positions,
+  assignments,
+  selectedName,
+  canManage,
+  onSelectPosition,
+  onOpenCell,
+  onOpenAssignment,
+  onMoveAssignment,
+}: {
+  positions: StaffingPosition[];
+  assignments: StaffingAssignment[];
+  selectedName: string;
+  canManage: boolean;
+  onSelectPosition: (name: string) => void;
+  onOpenCell: (
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+  ) => void;
+  onOpenAssignment: (item: StaffingAssignment) => void;
+  onMoveAssignment: (
+    item: StaffingAssignment,
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+  ) => void;
+}) {
+  const crews = ["A", "B", "C", "D", "E"];
+  const current = assignments.filter(
+    (item) => item.assignmentType === "OFFICIAL" && effective(item),
+  );
+  const rows: Array<{
+    position: StaffingPosition;
+    stationCode: "S1" | "S2" | "FLEX" | "";
+  }> = [];
+  for (const position of positions) {
+    const people = current.filter((item) => item.positionId === position.id);
+    if (position.positionType !== "S1_S2") {
+      rows.push({ position, stationCode: "" });
+      continue;
+    }
+    const stations = (["S1", "S2", "FLEX"] as const).filter((station) =>
+      people.some((item) => item.stationCode === station),
+    );
+    for (const stationCode of stations.length
+      ? stations
+      : (["S1", "S2"] as const))
+      rows.push({ position, stationCode });
+  }
+  return (
+    <Card className="overflow-hidden border-slate-300 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-[linear-gradient(110deg,#0f172a_0%,#1e3a5f_72%,#b45309_160%)] px-5 py-4 text-white">
+        <div>
+          <div className="text-sm font-bold uppercase tracking-[0.14em] text-amber-300">
+            Bảng biên chế vận hành
+          </div>
+          <div className="mt-1 text-xs text-slate-200">
+            Nhấp ô để thêm người · kéo thẻ nhân sự sang ô khác để điều chuyển
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold">
+            {positions.length} cương vị
+          </span>
+          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold">
+            {current.length} nhân sự
+          </span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1180px] table-fixed border-collapse text-sm">
+          <thead>
+            <tr className="bg-amber-50 text-slate-900">
+              <th className="w-12 border-b border-r border-slate-300 px-2 py-3 text-center text-xs">STT</th>
+              <th className="w-64 border-b border-r border-slate-300 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Cương vị</th>
+              {crews.map((crew) => (
+                <th key={crew} className="border-b border-r border-slate-300 px-3 py-3 text-center text-xs font-bold uppercase tracking-wide last:border-r-0">
+                  Tổ vận hành {crew}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ position, stationCode }, rowIndex) => {
+              const active = selectedName === position.name;
+              return (
+                <tr key={`${position.name}-${stationCode || "single"}`} className={cn("group", active && "bg-amber-50/60") }>
+                  <td className="border-b border-r border-slate-300 px-2 py-3 text-center text-xs font-semibold text-slate-500">{rowIndex + 1}</td>
+                  <td className="border-b border-r border-slate-300 p-0 align-top">
+                    <button
+                      type="button"
+                      onClick={() => onSelectPosition(position.name)}
+                      className={cn(
+                        "flex min-h-20 w-full cursor-pointer items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-amber-50",
+                        active && "border-l-4 border-amber-500 bg-amber-50 pl-3",
+                      )}
+                    >
+                      <span>
+                        <span className="block font-bold text-slate-950">{position.name}</span>
+                        {stationCode && (
+                          <span className={cn(
+                            "mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold",
+                            stationCode === "S1" ? "bg-sky-100 text-sky-800" : stationCode === "S2" ? "bg-emerald-100 text-emerald-800" : "bg-violet-100 text-violet-800",
+                          )}>{stationCode}</span>
+                        )}
+                      </span>
+                      <Settings2 className={cn("mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-colors", active && "text-amber-700")} />
+                    </button>
+                  </td>
+                  {crews.map((crew) => {
+                    const people = current.filter(
+                      (item) =>
+                        item.positionId === position.id &&
+                        item.crewCode === crew &&
+                        (stationCode ? item.stationCode === stationCode : true),
+                    );
+                    return (
+                      <td
+                        key={crew}
+                        onClick={() => canManage && onOpenCell(position, crew, stationCode)}
+                        onDragOver={(event) => canManage && event.preventDefault()}
+                        onDrop={(event) => {
+                          if (!canManage) return;
+                          event.preventDefault();
+                          const id = event.dataTransfer.getData("application/x-shift-assignment");
+                          const item = assignments.find((assignment) => assignment.id === id);
+                          if (item) onMoveAssignment(item, position, crew, stationCode);
+                        }}
+                        className={cn(
+                          "relative border-b border-r border-slate-300 p-2 align-top last:border-r-0",
+                          canManage && "cursor-pointer transition-colors hover:bg-blue-50/70",
+                        )}
+                      >
+                        <div className="flex min-h-16 flex-col gap-1.5">
+                          {people.map((item) => (
+                            <button
+                              type="button"
+                              key={item.id}
+                              draggable={canManage}
+                              onDragStart={(event) => {
+                                event.stopPropagation();
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("application/x-shift-assignment", item.id);
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onSelectPosition(position.name);
+                                if (canManage) onOpenAssignment(item);
+                              }}
+                              className="group/person flex w-full cursor-grab items-start gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md active:cursor-grabbing"
+                              title={`${item.user.employeeId} · Bắt đầu chu kỳ ${item.cycleStartDate ? viDate(item.cycleStartDate) : "chưa cấu hình"}`}
+                            >
+                              {canManage && <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 group-hover/person:text-blue-500" />}
+                              <span className="min-w-0">
+                                <span className="block leading-snug font-semibold text-slate-900">{item.user.name}</span>
+                                <span className="mt-0.5 block font-mono text-[10px] text-slate-500">{item.user.employeeId}</span>
+                              </span>
+                            </button>
+                          ))}
+                          {canManage && (
+                            <span className="mt-auto flex items-center justify-center gap-1 rounded border border-dashed border-slate-300 py-1 text-[11px] font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100">
+                              <Plus className="h-3 w-3" /> Thêm nhân sự
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        <span>Nhấp tên cương vị để mở Nhu cầu, Mẫu xoay và bảng chi tiết.</span>
+        <span>Kéo thả luôn mở hộp xác nhận trước khi lưu thay đổi.</span>
+      </div>
+    </Card>
   );
 }
 
@@ -1158,17 +1647,51 @@ function RotationSection({
     </Card>
   );
 }
-function Pattern({ template }: { template: RotationTemplate }) {
+function CycleCell({
+  item,
+  rotation,
+}: {
+  item: StaffingAssignment;
+  rotation?: PositionRotation;
+}) {
+  const template = rotation?.rotationTemplate;
+  const step = template ? cycleStepAt(item, template) : null;
+  const detail = step !== null && template
+    ? `Tại ngày hôm nay: bước ${step + 1}/${template.cycleLength} – ${SHIFT_NAME[template.cyclePattern[step]].toLocaleLowerCase("vi")}`
+    : undefined;
+  return (
+    <div title={detail} className="min-w-[130px]">
+      {item.cycleStartDate ? (
+        <div className="font-medium">{viDate(item.cycleStartDate)}</div>
+      ) : (
+        <div className="text-amber-700">Chưa bổ sung</div>
+      )}
+      {detail && <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div>}
+      {!item.cycleStartDate && item.phaseIndex !== null && (
+        <div className="mt-0.5 text-xs text-muted-foreground">Dữ liệu cũ vẫn đang được áp dụng</div>
+      )}
+    </div>
+  );
+}
+function Pattern({
+  template,
+  detailed = false,
+}: {
+  template: RotationTemplate;
+  detailed?: boolean;
+}) {
   return (
     <div
-      className="flex flex-wrap gap-1"
+      className={cn("flex flex-wrap gap-1", detailed && "grid gap-2 sm:grid-cols-3")}
       title={template.description ?? undefined}
     >
       {template.cyclePattern.map((item, index) => (
         <span
           key={`${item}-${index}`}
           className={cn(
-            "flex h-7 w-7 items-center justify-center rounded text-xs font-bold",
+            detailed
+              ? "flex min-h-10 items-center rounded-lg border px-3 py-2 text-sm"
+              : "flex h-7 w-7 items-center justify-center rounded text-xs font-bold",
             item === "MORNING"
               ? "bg-amber-100 text-amber-800"
               : item === "AFTERNOON"
@@ -1178,7 +1701,9 @@ function Pattern({ template }: { template: RotationTemplate }) {
                   : "bg-slate-200 text-slate-600",
           )}
         >
-          {SHIFT_LABEL[item]}
+          {detailed ? (
+            <><b>Bước {index + 1}</b><span className="ml-2">{SHIFT_NAME[item]}</span></>
+          ) : SHIFT_LABEL[item]}
         </span>
       ))}
     </div>

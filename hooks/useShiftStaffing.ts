@@ -23,6 +23,7 @@ export type StaffingAssignment = {
   positionId: string;
   crewCode: string | null;
   phaseIndex: number | null;
+  cycleStartDate: string | null;
   stationCode: "S1" | "S2" | "FLEX" | null;
   assignmentType:
     "OFFICIAL" | "BACKUP" | "TRAINING" | "TEMPORARY" | "ADMINISTRATIVE";

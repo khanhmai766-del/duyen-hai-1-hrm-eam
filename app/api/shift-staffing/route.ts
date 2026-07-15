@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { normalizeText } from "@/lib/nav";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
@@ -22,6 +23,7 @@ const baseAssignment = z.object({
   positionId: z.string().min(1),
   crewCode: z.string().trim().max(20).nullable().optional(),
   phaseIndex: z.number().int().nonnegative().nullable().optional(),
+  cycleStartDate: day.nullable().optional(),
   stationCode,
   assignmentType: z.enum([
     "OFFICIAL",
@@ -34,6 +36,12 @@ const baseAssignment = z.object({
   endDate: day.nullable().optional(),
   reason,
   note: z.string().trim().max(500).nullable().optional(),
+});
+const bulkAssignment = baseAssignment.omit({
+  userId: true,
+  phaseIndex: true,
+}).extend({
+  userIds: z.array(z.string().min(1)).min(1, "Hãy chọn ít nhất một nhân sự").max(20),
 });
 const templateFields = z.object({
   code: z
@@ -59,6 +67,7 @@ const inputSchema = z.discriminatedUnion("action", [
     reason: z.string().trim().max(500).default(""),
   }),
   baseAssignment.extend({ action: z.literal("ASSIGN") }),
+  bulkAssignment.extend({ action: z.literal("BULK_ASSIGN") }),
   baseAssignment.extend({
     action: z.literal("CHANGE"),
     assignmentId: z.string().min(1),
@@ -98,6 +107,9 @@ function previousDay(value: string) {
   result.setUTCDate(result.getUTCDate() - 1);
   return result;
 }
+function daysBetween(from: Date, to: Date) {
+  return Math.floor((to.getTime() - from.getTime()) / 86_400_000);
+}
 function snapshot(value: unknown) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -135,7 +147,8 @@ async function ensureValidAssignment(
   excludeId?: string,
 ) {
   const startDate = date(data.effectiveDate),
-    endDate = data.endDate ? date(data.endDate) : null;
+    endDate = data.endDate ? date(data.endDate) : null,
+    cycleStartDate = data.cycleStartDate ? date(data.cycleStartDate) : null;
   if (endDate && startDate > endDate)
     throw fail("Ngày bắt đầu không được sau ngày kết thúc");
   const position = await tx.shiftPositionConfig.findUnique({
@@ -151,11 +164,18 @@ async function ensureValidAssignment(
     throw fail("Cương vị chưa được cấu hình hoặc đã ngừng sử dụng");
   if (position.positionType === "SINGLE" && data.stationCode)
     throw fail("Cương vị một vị trí không được lưu S1, S2 hoặc FLEX");
-  if (data.phaseIndex !== null && data.phaseIndex !== undefined) {
-    const rotation = await activeRotation(tx, data.positionId, startDate);
-    if (rotation && data.phaseIndex >= rotation.rotationTemplate.cycleLength)
+  const rotation = await activeRotation(tx, data.positionId, startDate);
+  if (cycleStartDate && cycleStartDate > startDate)
+    throw fail("Ngày bắt đầu chu kỳ không được sau ngày hiệu lực biên chế");
+  const resolvedPhaseIndex = cycleStartDate && rotation
+    ? daysBetween(cycleStartDate, startDate) % rotation.rotationTemplate.cycleLength
+    : data.phaseIndex;
+  if (cycleStartDate && !rotation)
+    throw fail("Cương vị chưa có mẫu xoay ca áp dụng tại ngày hiệu lực");
+  if (resolvedPhaseIndex !== null && resolvedPhaseIndex !== undefined) {
+    if (rotation && resolvedPhaseIndex >= rotation.rotationTemplate.cycleLength)
       throw fail(
-        `Thứ tự pha phải nhỏ hơn ${rotation.rotationTemplate.cycleLength}`,
+        `Bước chu kỳ phải nằm trong ${rotation.rotationTemplate.cycleLength} bước của mẫu đang áp dụng`,
       );
   }
   if (data.assignmentType === "OFFICIAL") {
@@ -175,28 +195,68 @@ async function ensureValidAssignment(
       throw fail(
         "Nhân sự đã có phân công chính thức chồng lấn trong thời gian này",
       );
-    if (data.phaseIndex !== null && data.phaseIndex !== undefined) {
-      const samePhase = await tx.shiftStaffingAssignment.findFirst({
+    if (resolvedPhaseIndex !== null && resolvedPhaseIndex !== undefined) {
+      const samePhases = await tx.shiftStaffingAssignment.findMany({
         where: {
           positionId: data.positionId,
           assignmentType: "OFFICIAL",
-          phaseIndex: data.phaseIndex,
+          phaseIndex: resolvedPhaseIndex,
           ...(excludeId ? { id: { not: excludeId } } : {}),
           ...overlapRange,
         },
       });
-      if (
-        samePhase &&
+      if (samePhases.some((samePhase) =>
         (position.positionType === "SINGLE" ||
           !data.stationCode ||
-          samePhase.stationCode === data.stationCode)
-      )
+          samePhase.stationCode === data.stationCode) &&
+        samePhase.crewCode !== data.crewCode
+      ))
         throw fail(
-          "Thứ tự pha bị trùng không hợp lệ trong cùng cương vị và thời gian hiệu lực",
+          "Hai kíp khác nhau không thể cùng bắt đầu tại một bước chu kỳ trong thời gian này",
         );
     }
   }
-  return { position, startDate, endDate };
+  return { position, startDate, endDate, cycleStartDate, phaseIndex: resolvedPhaseIndex ?? null };
+}
+
+async function syncCrewRotation(
+  tx: Prisma.TransactionClient,
+  data: z.infer<typeof baseAssignment>,
+  actorId: string,
+) {
+  if (!data.crewCode || !data.cycleStartDate) return;
+  const at = date(data.effectiveDate);
+  const rotation = await activeRotation(tx, data.positionId, at);
+  if (!rotation) return;
+  const current = await tx.crewRotationConfig.findFirst({
+    where: {
+      positionConfigId: data.positionId,
+      crewCode: data.crewCode,
+      effectiveFrom: { lte: at },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: at } }],
+    },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  const values = {
+    rotationTemplateId: rotation.rotationTemplateId,
+    cycleStartDate: date(data.cycleStartDate),
+    reason: data.reason,
+    updatedById: actorId,
+  };
+  if (current) {
+    await tx.crewRotationConfig.update({ where: { id: current.id }, data: values });
+  } else {
+    await tx.crewRotationConfig.create({
+      data: {
+        positionConfigId: data.positionId,
+        crewCode: data.crewCode,
+        effectiveFrom: at,
+        effectiveTo: data.endDate ? date(data.endDate) : null,
+        createdById: actorId,
+        ...values,
+      },
+    });
+  }
 }
 
 export async function GET() {
@@ -244,13 +304,16 @@ export async function GET() {
       }),
       assignedPermissionLevel(user, PERMISSION),
     ]);
-    const configuredNames = new Set(configs.map((item) => item.name));
+    const configuredNames = new Set(
+      configs.map((item) => normalizeText(item.name)),
+    );
     const unconfigured = Array.from(
       new Set(
         users
           .map((item) => item.position?.trim())
           .filter(
-            (item): item is string => !!item && !configuredNames.has(item),
+            (item): item is string =>
+              !!item && !configuredNames.has(normalizeText(item)),
           ),
       ),
     ).sort((a, b) => a.localeCompare(b, "vi"));
@@ -525,43 +588,71 @@ export async function POST(req: Request) {
       );
       return ok(after);
     }
-    if (input.action === "ASSIGN") {
+    if (input.action === "ASSIGN" || input.action === "BULK_ASSIGN") {
+      const rows = input.action === "BULK_ASSIGN"
+        ? input.userIds.map((userId) => ({
+            ...input,
+            userId,
+            phaseIndex: null,
+          }))
+        : [input];
+      if (new Set(rows.map((row) => row.userId)).size !== rows.length)
+        throw fail("Danh sách nhân sự được chọn bị trùng");
       const created = await prisma.$transaction(
         async (tx) => {
-          const valid = await ensureValidAssignment(tx, input);
-          return tx.shiftStaffingAssignment.create({
-            data: {
-              userId: input.userId,
-              positionId: input.positionId,
-              crewCode: input.crewCode || null,
-              phaseIndex: input.phaseIndex ?? null,
-              stationCode: input.stationCode ?? null,
-              assignmentType: input.assignmentType,
-              startDate: valid.startDate,
-              endDate: valid.endDate,
-              status: "ACTIVE",
-              changeReason: input.reason,
-              note: input.note ?? null,
-              createdById: actor.id,
-              updatedById: actor.id,
-            },
-          });
+          const results = [];
+          for (const row of rows) {
+            const valid = await ensureValidAssignment(tx, row);
+            const createdAssignment = await tx.shiftStaffingAssignment.create({
+              data: {
+                userId: row.userId,
+                positionId: row.positionId,
+                crewCode: row.crewCode || null,
+                phaseIndex: valid.phaseIndex,
+                cycleStartDate: valid.cycleStartDate,
+                stationCode: row.stationCode ?? null,
+                assignmentType: row.assignmentType,
+                startDate: valid.startDate,
+                endDate: valid.endDate,
+                status: "ACTIVE",
+                changeReason: row.reason,
+                note: row.note ?? null,
+                createdById: actor.id,
+                updatedById: actor.id,
+              },
+            });
+            const employee = await tx.user.findUniqueOrThrow({ where: { id: row.userId }, select: { employeeId: true } });
+            await syncCrewRotation(tx, row, actor.id);
+            await tx.staffingChangeEvent.create({
+              data: {
+                employeeId: employee.employeeId,
+                changeType: row.assignmentType === "ADMINISTRATIVE" ? "MOVE_TO_OFFICE" : "ASSIGN_POSITION",
+                sourcePositionId: null,
+                targetPositionId: row.assignmentType === "ADMINISTRATIVE" ? null : row.positionId,
+                effectiveDate: valid.startDate,
+                reason: row.reason,
+                createdById: actor.id,
+              },
+            });
+            results.push(createdAssignment);
+          }
+          return results;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
       await audit(
         actor.id,
-        "ASSIGN_SHIFT_STAFFING",
+        input.action === "BULK_ASSIGN" ? "BULK_ASSIGN_SHIFT_STAFFING" : "ASSIGN_SHIFT_STAFFING",
         "ShiftStaffingAssignment",
-        created.id,
-        detail(input.reason, input.effectiveDate),
+        created[0].id,
+        detail(`${input.reason} (${created.length} nhân sự)`, input.effectiveDate),
         {
           actorName: actor.name,
           afterData: snapshot(created),
           saveToAuditLog: true,
         },
       );
-      return ok(created);
+      return ok(input.action === "BULK_ASSIGN" ? created : created[0]);
     }
     const old = await prisma.shiftStaffingAssignment.findUnique({
       where: { id: input.assignmentId },
@@ -570,8 +661,8 @@ export async function POST(req: Request) {
     if (input.action === "DETACH") {
       if (date(input.effectiveDate) <= old.startDate)
         throw fail("Ngày tách phải sau ngày bắt đầu phân công");
-      const ended = await prisma.$transaction((tx) =>
-        tx.shiftStaffingAssignment.update({
+      const ended = await prisma.$transaction(async (tx) => {
+        const result = await tx.shiftStaffingAssignment.update({
           where: { id: old.id },
           data: {
             endDate: previousDay(input.effectiveDate),
@@ -579,8 +670,21 @@ export async function POST(req: Request) {
             changeReason: input.reason,
             updatedById: actor.id,
           },
-        }),
-      );
+        });
+        const employee = await tx.user.findUniqueOrThrow({ where: { id: old.userId }, select: { employeeId: true } });
+        await tx.staffingChangeEvent.create({
+          data: {
+            employeeId: employee.employeeId,
+            changeType: "REMOVE_POSITION",
+            sourcePositionId: old.positionId,
+            targetPositionId: null,
+            effectiveDate: date(input.effectiveDate),
+            reason: input.reason,
+            createdById: actor.id,
+          },
+        });
+        return result;
+      });
       await audit(
         actor.id,
         "DETACH_SHIFT_STAFFING",
@@ -600,7 +704,7 @@ export async function POST(req: Request) {
       throw fail("Ngày hiệu lực mới phải sau ngày bắt đầu phân công cũ");
     const result = await prisma.$transaction(
       async (tx) => {
-        await ensureValidAssignment(tx, input, old.id);
+        const valid = await ensureValidAssignment(tx, input, old.id);
         const ended = await tx.shiftStaffingAssignment.update({
           where: { id: old.id },
           data: {
@@ -615,7 +719,8 @@ export async function POST(req: Request) {
             userId: input.userId,
             positionId: input.positionId,
             crewCode: input.crewCode || null,
-            phaseIndex: input.phaseIndex ?? null,
+            phaseIndex: valid.phaseIndex,
+            cycleStartDate: valid.cycleStartDate,
             stationCode: input.stationCode ?? null,
             assignmentType: input.assignmentType,
             startDate: date(input.effectiveDate),
@@ -627,6 +732,26 @@ export async function POST(req: Request) {
             updatedById: actor.id,
           },
         });
+        const employee = await tx.user.findUniqueOrThrow({ where: { id: input.userId }, select: { employeeId: true } });
+        const changeType = input.assignmentType === "ADMINISTRATIVE"
+          ? "MOVE_TO_OFFICE"
+          : old.positionId !== input.positionId
+            ? "TRANSFER_POSITION"
+            : old.crewCode !== input.crewCode
+              ? "CHANGE_CREW"
+              : "CHANGE_STATION";
+        await syncCrewRotation(tx, input, actor.id);
+        await tx.staffingChangeEvent.create({
+          data: {
+            employeeId: employee.employeeId,
+            changeType,
+            sourcePositionId: old.positionId,
+            targetPositionId: input.assignmentType === "ADMINISTRATIVE" ? null : input.positionId,
+            effectiveDate: valid.startDate,
+            reason: input.reason,
+            createdById: actor.id,
+          },
+        });
         return { ended, created };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -636,6 +761,8 @@ export async function POST(req: Request) {
         ? "TRANSFER_SHIFT_STAFFING"
         : old.crewCode !== input.crewCode
           ? "UPDATE_SHIFT_CREW_CODE"
+          : (old.cycleStartDate?.toISOString().slice(0, 10) ?? null) !== (input.cycleStartDate ?? null)
+            ? "UPDATE_SHIFT_CYCLE_START_DATE"
           : old.phaseIndex !== input.phaseIndex
             ? "UPDATE_SHIFT_PHASE_INDEX"
             : old.stationCode !== input.stationCode

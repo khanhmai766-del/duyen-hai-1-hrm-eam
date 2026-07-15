@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw, Search, X, UsersRound } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Upload, FileText, FileSpreadsheet, Download, Trash2, Loader2, Eye, PencilLine, RotateCcw, Search, X, UsersRound } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
@@ -398,6 +398,11 @@ export default function ShiftRosterPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="LỊCH TRỰC CA" description="Lịch trực ca & bảng công của phân xưởng Vận hành 1">
+        {rbac.can("shift-schedule-view", ["read", "manage", "full"]) && (
+          <Button variant="outline" size="sm" onClick={() => router.push("/hr/shift-roster/planning")}>
+            <CalendarClock className="h-4 w-4" /> Lịch dự kiến
+          </Button>
+        )}
         {rbac.can("shift-staffing-manage", ["read", "manage", "full"]) && (
           <Button variant="outline" size="sm" onClick={() => router.push("/hr/shift-roster/staffing")}>
             <UsersRound className="h-4 w-4" /> Quản lý biên chế

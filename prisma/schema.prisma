@@ -61,6 +61,11 @@ model User {
   rotationTemplatesUpdated RotationTemplate[]           @relation("RotationTemplateUpdatedBy")
   positionRotationsCreated PositionRotationAssignment[] @relation("PositionRotationCreatedBy")
   positionRotationsUpdated PositionRotationAssignment[] @relation("PositionRotationUpdatedBy")
+  crewRotationsCreated     CrewRotationConfig[]          @relation("CrewRotationCreatedBy")
+  crewRotationsUpdated     CrewRotationConfig[]          @relation("CrewRotationUpdatedBy")
+  staffingChangesCreated   StaffingChangeEvent[]         @relation("StaffingChangeCreatedBy")
+  scheduleVersionsCreated  ShiftScheduleVersion[]        @relation("ScheduleVersionCreatedBy")
+  scheduleVersionsApproved ShiftScheduleVersion[]        @relation("ScheduleVersionApprovedBy")
 
   @@index([position])
   @@index([role])
@@ -295,6 +300,8 @@ model ShiftPositionConfig {
   updatedBy   User                         @relation("ShiftPositionUpdatedBy", fields: [updatedById], references: [id])
   assignments ShiftStaffingAssignment[]
   rotations   PositionRotationAssignment[]
+  crewRotations CrewRotationConfig[]
+  scheduleEntries ShiftScheduleEntry[]
 
   @@index([isActive])
 }
@@ -305,6 +312,7 @@ model ShiftStaffingAssignment {
   positionId     String
   crewCode       String?
   phaseIndex     Int?
+  cycleStartDate DateTime?           @db.Date
   stationCode    ShiftSlot?
   assignmentType ShiftStaffingType
   startDate      DateTime            @db.Date
@@ -324,6 +332,7 @@ model ShiftStaffingAssignment {
 
   @@index([positionId, startDate, endDate])
   @@index([positionId, phaseIndex])
+  @@index([cycleStartDate])
   @@index([userId, assignmentType, startDate, endDate])
   @@index([status])
 }
@@ -344,6 +353,7 @@ model RotationTemplate {
   createdBy   User?                        @relation("RotationTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   updatedBy   User?                        @relation("RotationTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   assignments PositionRotationAssignment[]
+  crewRotations CrewRotationConfig[]
 
   @@index([isActive])
 }
@@ -368,6 +378,118 @@ model PositionRotationAssignment {
 
   @@index([positionConfigId, effectiveFrom, effectiveTo])
   @@index([rotationTemplateId])
+}
+
+model CrewRotationConfig {
+  id                 String    @id @default(cuid())
+  positionConfigId   String
+  crewCode            String
+  rotationTemplateId String
+  cycleStartDate      DateTime  @db.Date
+  effectiveFrom      DateTime  @db.Date
+  effectiveTo        DateTime? @db.Date
+  reason             String
+  createdById        String
+  updatedById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  positionConfig   ShiftPositionConfig @relation(fields: [positionConfigId], references: [id], onDelete: Restrict)
+  rotationTemplate RotationTemplate    @relation(fields: [rotationTemplateId], references: [id], onDelete: Restrict)
+  createdBy        User                @relation("CrewRotationCreatedBy", fields: [createdById], references: [id])
+  updatedBy        User                @relation("CrewRotationUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([positionConfigId, crewCode, effectiveFrom, effectiveTo])
+  @@index([rotationTemplateId])
+}
+
+enum StaffingChangeType {
+  ASSIGN_POSITION
+  REMOVE_POSITION
+  TRANSFER_POSITION
+  MOVE_TO_OFFICE
+  CHANGE_CREW
+  CHANGE_STATION
+}
+
+model StaffingChangeEvent {
+  id               String             @id @default(cuid())
+  employeeId       String
+  changeType       StaffingChangeType
+  sourcePositionId String?
+  targetPositionId String?
+  effectiveDate    DateTime           @db.Date
+  reason           String
+  createdById      String
+  createdAt        DateTime           @default(now())
+
+  createdBy User @relation("StaffingChangeCreatedBy", fields: [createdById], references: [id])
+
+  @@index([effectiveDate])
+  @@index([sourcePositionId, targetPositionId])
+  @@index([employeeId])
+}
+
+enum ShiftScheduleVersionStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  PUBLISHED
+  SUPERSEDED
+}
+
+enum ShiftScheduleEntrySource {
+  GENERATED
+  MANUAL
+}
+
+model ShiftScheduleVersion {
+  id                 String                     @id @default(cuid())
+  unit               String
+  year               Int
+  month              Int
+  versionNumber      Int
+  status             ShiftScheduleVersionStatus @default(DRAFT)
+  generatedFromDate  DateTime                   @db.Date
+  basedOnVersionId   String?
+  generationReason   String
+  generationWarnings Json?
+  createdById        String
+  approvedById       String?
+  createdAt          DateTime                   @default(now())
+  approvedAt         DateTime?
+  publishedAt        DateTime?
+
+  basedOnVersion ShiftScheduleVersion?  @relation("ScheduleVersionLineage", fields: [basedOnVersionId], references: [id], onDelete: SetNull)
+  derivedVersions ShiftScheduleVersion[] @relation("ScheduleVersionLineage")
+  createdBy      User                   @relation("ScheduleVersionCreatedBy", fields: [createdById], references: [id])
+  approvedBy     User?                  @relation("ScheduleVersionApprovedBy", fields: [approvedById], references: [id])
+  entries        ShiftScheduleEntry[]
+
+  @@unique([unit, year, month, versionNumber])
+  @@index([year, month, status])
+}
+
+model ShiftScheduleEntry {
+  id               String                   @id @default(cuid())
+  scheduleVersionId String
+  date             DateTime                 @db.Date
+  shiftType        ShiftType
+  positionConfigId String
+  stationCode      ShiftSlot?
+  employeeId       String
+  source           ShiftScheduleEntrySource @default(GENERATED)
+  isLocked         Boolean                  @default(false)
+  note             String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  scheduleVersion ShiftScheduleVersion @relation(fields: [scheduleVersionId], references: [id], onDelete: Cascade)
+  positionConfig  ShiftPositionConfig  @relation(fields: [positionConfigId], references: [id], onDelete: Restrict)
+
+  @@unique([scheduleVersionId, date, shiftType, positionConfigId, employeeId])
+  @@index([scheduleVersionId, date, shiftType])
+  @@index([employeeId, date])
 }
 
 model CheckIn {
