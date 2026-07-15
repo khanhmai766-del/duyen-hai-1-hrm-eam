@@ -89,7 +89,9 @@ function ReportsPageContent() {
   const defectsQuery = useDefects();
   const historyQuery = useDefectHistory({ from: from || undefined, to: to || undefined });
   const replacementsQuery = useReplacements({});
-  const materialsQuery = useMaterials();
+  // Reports cần cả lịch sử tiêu hao theo thiết bị (deviceMaterials) — opt-in để
+  // trang Danh mục vật tư (không cần) nhận payload nhẹ hơn.
+  const materialsQuery = useMaterials({ includeUsage: true });
   const equipmentTreeQuery = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
   const allPositions = usePositions();

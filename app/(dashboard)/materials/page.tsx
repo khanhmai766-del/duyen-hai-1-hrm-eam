@@ -72,7 +72,6 @@ function MaterialsPageContent() {
   const role = session?.user?.role;
   // Xem bảng: mọi cương vị. Thao tác (Thêm/Sửa/Xoá/Xuất): Quản đốc/Phó Quản đốc/Kỹ thuật viên/Quản trị.
   const canManage = canManageMaterialCatalog({ role, position: session?.user?.position });
-  const { data, isLoading, refetch: refetchMaterials } = useMaterials();
   const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
@@ -114,6 +113,10 @@ function MaterialsPageContent() {
     ? (mayParam as (typeof DEFECT_UNITS)[number])
     : "S1";
   const machineLabel = MACHINE_TABS.find((t) => t.key === machineTab)?.label ?? machineTab;
+  const trackId = params.get("track");
+  // Lọc theo tổ máy NGAY TỪ SERVER (payload nhỏ hơn nhiều); riêng khi mở theo
+  // ?track= (từ chuông thông báo) thì tải toàn bộ vì vật tư có thể ở tab khác.
+  const { data, isLoading, refetch: refetchMaterials } = useMaterials(trackId ? {} : { machine: machineTab });
   const erpMaterials = (erpMaterialsQuery.data?.data ?? []) as Array<{
     id: string;
     code: string;
@@ -201,7 +204,6 @@ function MaterialsPageContent() {
     }
   }, [categoryParam]);
 
-  const trackId = params.get("track");
   React.useEffect(() => {
     if (!trackId) return;
     const m = (data?.data ?? []).find((x) => x.id === trackId);
