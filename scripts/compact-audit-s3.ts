@@ -1,6 +1,5 @@
 import { loadEnvConfig } from "@next/env";
 import { createHash } from "node:crypto";
-import { gzipSync, gunzipSync } from "node:zlib";
 import { deleteS3ObjectByKey, getS3ObjectBuffer, listS3ObjectKeys, uploadS3Object } from "../lib/s3";
 
 loadEnvConfig(process.cwd());
@@ -25,11 +24,14 @@ async function main() {
   const [year, month, day] = date.split("-");
   const root = (process.env.AUDIT_LOG_S3_PREFIX || "audit-logs").replace(/^\/+|\/+$/g, "");
   const folder = `${root}/daily/${year}/${month}/${day}`;
-  const outputKey = `${folder}/audit-${date}.ndjson.gz`;
-  const keys = (await listS3ObjectKeys(`${folder}/parts/`)).filter((key) => key.endsWith(".ndjson")).sort();
+  const outputKey = `${folder}/audit-${date}.txt`;
+  // Nhận cả định dạng TXT mới và NDJSON cũ để không bỏ sót lịch sử khi chuyển đổi.
+  const keys = (await listS3ObjectKeys(`${folder}/parts/`))
+    .filter((key) => key.endsWith(".txt") || key.endsWith(".ndjson"))
+    .sort();
   let previous = Buffer.alloc(0);
   try {
-    previous = gunzipSync(await getS3ObjectBuffer(outputKey));
+    previous = await getS3ObjectBuffer(outputKey);
   } catch {
     // Chưa có bản tổng hợp: tạo mới từ các part còn nguyên.
   }
@@ -51,14 +53,13 @@ async function main() {
     [...records.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((item) => item.line).join("\n") + "\n",
     "utf8"
   );
-  const compressed = gzipSync(body, { level: 9 });
   await uploadS3Object({
     key: outputKey,
-    body: compressed,
-    contentType: "application/gzip",
-    originalName: `audit-${date}.ndjson.gz`,
+    body,
+    contentType: "text/plain; charset=utf-8",
+    originalName: `audit-${date}.txt`,
   });
-  const uploaded = gunzipSync(await getS3ObjectBuffer(outputKey));
+  const uploaded = await getS3ObjectBuffer(outputKey);
   const digest = (value: Buffer) => createHash("sha256").update(value).digest("hex");
   if (uploaded.length !== body.length || digest(uploaded) !== digest(body)) {
     throw new Error("Tệp audit sau khi tải lên không khớp dữ liệu nguồn; giữ nguyên toàn bộ part");

@@ -122,7 +122,6 @@ export default function AdminUsersPage() {
   const update = useUpdateUser();
   const del = useDeleteUser();
   const permanentDelete = usePermanentDeleteUser();
-  const audit = useQuery({ queryKey: ["audit"], queryFn: () => apiGet<ActivityLogRow[]>("/api/audit"), enabled: canViewActivityLog });
   const rbacQuery = useQuery({
     queryKey: ["rbac-config"],
     queryFn: () => apiGet<RbacConfig>("/api/rbac"),
@@ -157,7 +156,7 @@ export default function AdminUsersPage() {
   const [auditPage, setAuditPage] = React.useState(1);
   const [activityDetail, setActivityDetail] = React.useState<ActivityLogRow | null>(null);
   const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
-  const systemAuditParams = React.useMemo(() => {
+  const auditParams = React.useMemo(() => {
     const params = new URLSearchParams({ page: String(auditPage), pageSize: "25" });
     if (auditSearch.trim()) params.set("q", auditSearch.trim());
     if (auditAction.trim()) params.set("action", auditAction.trim());
@@ -165,10 +164,15 @@ export default function AdminUsersPage() {
     if (auditTo) params.set("to", `${auditTo}T23:59:59.999+07:00`);
     return params.toString();
   }, [auditAction, auditFrom, auditPage, auditSearch, auditTo]);
+  const audit = useQuery({
+    queryKey: ["audit", auditParams],
+    queryFn: () => apiGet<ActivityLogRow[]>(`/api/audit?${auditParams}`),
+    enabled: canViewActivityLog && auditTab === "activity",
+  });
   const systemAudit = useQuery({
-    queryKey: ["system-audit", systemAuditParams],
-    queryFn: () => apiGet<SystemAuditLogRow[]>(`/api/system-audit?${systemAuditParams}`),
-    enabled: canViewActivityLog,
+    queryKey: ["system-audit", auditParams],
+    queryFn: () => apiGet<SystemAuditLogRow[]>(`/api/system-audit?${auditParams}`),
+    enabled: canViewActivityLog && auditTab === "system",
   });
   const usersQuery = useAdminUsers({
     page,
@@ -197,7 +201,8 @@ export default function AdminUsersPage() {
   const firstShown = totalUsers ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, totalUsers);
   const pagedUsers = users;
-  const auditRows = (audit.data?.data ?? []).slice(0, 50);
+  const auditRows = audit.data?.data ?? [];
+  const activityAuditMeta = audit.data?.meta as AuditMeta | null;
   const systemAuditRows = (systemAudit.data?.data ?? []).slice(0, 100);
   const systemAuditMeta = systemAudit.data?.meta as AuditMeta | null;
 
@@ -207,7 +212,7 @@ export default function AdminUsersPage() {
 
   React.useEffect(() => {
     setAuditPage(1);
-  }, [auditSearch, auditAction, auditFrom, auditTo]);
+  }, [auditSearch, auditAction, auditFrom, auditTo, auditTab]);
 
   React.useEffect(() => {
     setPage((current) => Math.min(Math.max(1, current), totalPages));
@@ -519,11 +524,10 @@ export default function AdminUsersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {auditTab === "system" && (
-            <div className="grid gap-3 border-b border-border bg-slate-50/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_170px_170px_auto]">
+          <div className="grid gap-3 border-b border-border bg-slate-50/70 p-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_170px_170px_auto]">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} className="bg-white pl-9" placeholder="Người thao tác, đối tượng, mã hoặc IP" aria-label="Tìm kiếm audit hệ thống" />
+                <Input value={auditSearch} onChange={(event) => setAuditSearch(event.target.value)} className="bg-white pl-9" placeholder={auditTab === "activity" ? "Người dùng, đối tượng hoặc nội dung" : "Người thao tác, đối tượng, mã hoặc IP"} aria-label={auditTab === "activity" ? "Tìm kiếm nhật ký hoạt động" : "Tìm kiếm audit hệ thống"} />
               </div>
               <Input value={auditAction} onChange={(event) => setAuditAction(event.target.value)} className="bg-white font-mono text-xs" placeholder="Hành động, ví dụ UPDATE_USER" aria-label="Lọc theo hành động" />
               <Input type="date" value={auditFrom} onChange={(event) => setAuditFrom(event.target.value)} className="bg-white" aria-label="Từ ngày" />
@@ -532,7 +536,6 @@ export default function AdminUsersPage() {
                 <X className="mr-2 h-4 w-4" /> Xóa lọc
               </Button>
             </div>
-          )}
           {auditTab === "activity" ? (
             <Table wrapperClassName="max-h-[460px]">
               <TableHeader>
@@ -592,13 +595,13 @@ export default function AdminUsersPage() {
               </TableBody>
             </Table>
           )}
-          {auditTab === "system" && (
+          {canViewActivityLog && (
             <div className="flex flex-col gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <span>{systemAuditMeta?.total ?? 0} bản ghi phù hợp</span>
+              <span>{(auditTab === "activity" ? activityAuditMeta?.total : systemAuditMeta?.total) ?? 0} bản ghi phù hợp</span>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" disabled={auditPage <= 1 || systemAudit.isFetching} onClick={() => setAuditPage((value) => Math.max(1, value - 1))}><ChevronLeft className="mr-1 h-4 w-4" /> Trước</Button>
-                <span className="rounded-md bg-muted px-3 py-1 font-semibold text-ink">{auditPage}/{systemAuditMeta?.totalPages ?? 1}</span>
-                <Button type="button" variant="outline" size="sm" disabled={auditPage >= (systemAuditMeta?.totalPages ?? 1) || systemAudit.isFetching} onClick={() => setAuditPage((value) => value + 1)}>Sau <ChevronRight className="ml-1 h-4 w-4" /></Button>
+                <Button type="button" variant="outline" size="sm" disabled={auditPage <= 1 || audit.isFetching || systemAudit.isFetching} onClick={() => setAuditPage((value) => Math.max(1, value - 1))}><ChevronLeft className="mr-1 h-4 w-4" /> Trước</Button>
+                <span className="rounded-md bg-muted px-3 py-1 font-semibold text-ink">{auditPage}/{(auditTab === "activity" ? activityAuditMeta?.totalPages : systemAuditMeta?.totalPages) ?? 1}</span>
+                <Button type="button" variant="outline" size="sm" disabled={auditPage >= ((auditTab === "activity" ? activityAuditMeta?.totalPages : systemAuditMeta?.totalPages) ?? 1) || audit.isFetching || systemAudit.isFetching} onClick={() => setAuditPage((value) => value + 1)}>Sau <ChevronRight className="ml-1 h-4 w-4" /></Button>
               </div>
             </div>
           )}

@@ -134,13 +134,13 @@ async function writeAuditObjectToS3(kind: "activity" | "system", id: string, cre
   try {
     const time = vietnamDateParts(createdAt);
     // Mỗi part là bất biến để các request đồng thời không đọc/ghi đè cùng một file S3.
-    // Script audit:s3:compact sẽ hợp nhất các part thành một file NDJSON theo ngày.
-    const key = `${auditS3Prefix()}/daily/${datePath(createdAt)}/parts/${time.hour}-${time.minute}-${time.second}-${id}-${kind}.ndjson`;
+    // Script audit:s3:compact sẽ hợp nhất các part thành một file TXT theo ngày.
+    const key = `${auditS3Prefix()}/daily/${datePath(createdAt)}/parts/${time.hour}-${time.minute}-${time.second}-${id}-${kind}.txt`;
     await uploadS3Object({
       key,
       body: Buffer.from(`${JSON.stringify(payload)}\n`, "utf8"),
-      contentType: "application/x-ndjson; charset=utf-8",
-      originalName: `${id}-${kind}.ndjson`,
+      contentType: "text/plain; charset=utf-8",
+      originalName: `${id}-${kind}.txt`,
     });
   } catch (error) {
     console.warn("Không thể lưu audit log lên S3", error);
