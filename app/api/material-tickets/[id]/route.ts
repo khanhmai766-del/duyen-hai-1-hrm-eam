@@ -526,7 +526,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B2 — Thống Kê xác nhận ĐXVT: nhập số phiếu + VHV nhận phiếu trong cùng bước.
+    // B2 — Thống Kê xác nhận ĐXVT: thống kê xác nhận số phiếu trước,
+    // sau đó xác nhận VHV nhận phiếu trong cùng một bước hiển thị.
     if (action === "stats") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
@@ -534,6 +535,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const num = String(body.proposalNumber || t.proposalNumber || "").trim();
       const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
+
+      if (t.status !== "CHO_XAC_NHAN_PHAT") {
+        const up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_XAC_NHAN_PHAT",
+            proposalNumber: num,
+            statsById: user.id, statsByName: user.name ?? "",
+            statsByPosition: user.position ?? null, statsAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
+        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Thống Kê xác nhận số phiếu ĐXVT: ${num}`);
+        return ok(up);
+      }
+
       if (!proposalReceiverName) return fail("Vui lòng nhập tên VHV nhận phiếu ĐXVT");
       const up = await prisma.materialTicket.update({
         where: { id: t.id },

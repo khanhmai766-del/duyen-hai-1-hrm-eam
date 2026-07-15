@@ -894,19 +894,23 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
         {/* Hàng trên: tiến trình (trái) + Dấu vết (phải) */}
         <div className="p-top">
         <div className="steps">
-          {flow.map((s) => {
-            const si = order.indexOf(s.key);
-            const done = t.status === "HOAN_TAT" || si < idx;
-            const cur = s.key === flowStatus;
-            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
-            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
-            return (
-              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""}`}>
-                {recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
-                <div><b>{s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : `${s.who}${reviewable ? " · Xem lại" : ""}`}</span></div>
-              </button>
-            );
-          })}
+	          {flow.map((s) => {
+	            const si = order.indexOf(s.key);
+	            const done = t.status === "HOAN_TAT" || si < idx;
+	            const cur = s.key === flowStatus;
+	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
+	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
+	            const statsCaption = s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
+	              ? `VHV nhận phiếu ĐXVT: ${t.proposalReceiverName}`
+	              : s.who;
+	            const caption = `${statsCaption}${reviewable ? " · Xem lại" : ""}`;
+	            return (
+	              <button type="button" key={s.key} disabled={!reviewable} onClick={() => setReviewStep(s.key)} className={`step step-review ${done && !recoveryPending ? "done" : ""} ${recoveryPending ? "recovery-pending" : ""} ${cur ? "cur" : ""}`}>
+	                {recoveryPending ? <AlertTriangle size={17} /> : done ? <CircleCheck size={17} /> : cur ? <CircleDot size={17} /> : <Circle size={17} />}
+	                <div><b>{s.label}</b><span>{recoveryPending ? "Chưa xác nhận trả vật tư thu hồi · Xem lại" : caption}</span></div>
+	              </button>
+	            );
+	          })}
           {t.status === "TU_CHOI" && (
             <div className="step rejected"><Ban size={17} /><div><b>Phiếu bị từ chối</b><span>{t.rejectedReason}</span></div></div>
           )}
@@ -1427,24 +1431,35 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   }
 
   if (acts.includes("stats")) {
+    const isReceiverPhase = t.status === "CHO_XAC_NHAN_PHAT";
     return (
       <div className="act">
-        <label className="lb">Thống Kê xác nhận ĐXVT</label>
-        <div className="stats-issue-grid">
-          <label className="field">Số phiếu ĐXVT *
-            <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={num} onChange={(e) => setNum(e.target.value)} />
-          </label>
-          <label className="field">Tên VHV nhận phiếu ĐXVT *
-            <input
-              value={proposalReceiverName}
-              onChange={(e) => setProposalReceiverName(e.target.value)}
-              placeholder="Nhập tên VHV nhận phiếu ĐXVT"
-            />
-          </label>
+        <div className="stats-issue-grid single">
+          {!isReceiverPhase ? (
+            <label className="field">Số phiếu ĐXVT *
+              <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={num} onChange={(e) => setNum(e.target.value)} />
+            </label>
+          ) : (
+            <label className="field">Tên VHV nhận phiếu ĐXVT *
+              <input
+                value={proposalReceiverName}
+                onChange={(e) => setProposalReceiverName(e.target.value)}
+                placeholder="Nhập tên VHV nhận phiếu ĐXVT"
+              />
+            </label>
+          )}
         </div>
-        <button className="btn primary big" disabled={!num.trim() || !proposalReceiverName.trim() || act.isPending}
-          onClick={() => run({ action: "stats", proposalNumber: num.trim(), proposalReceiverName: proposalReceiverName.trim() }, "Đã Thống Kê xác nhận ĐXVT")}>
-          <Check size={15} /> Xác nhận ĐXVT
+        <button
+          className="btn primary big"
+          disabled={(!isReceiverPhase && !num.trim()) || (isReceiverPhase && !proposalReceiverName.trim()) || act.isPending}
+          onClick={() => run(
+            isReceiverPhase
+              ? { action: "stats", proposalNumber: num.trim(), proposalReceiverName: proposalReceiverName.trim() }
+              : { action: "stats", proposalNumber: num.trim() },
+            isReceiverPhase ? "Đã xác nhận VHV nhận phiếu ĐXVT" : "Đã xác nhận số phiếu ĐXVT"
+          )}
+        >
+          <Check size={15} /> {isReceiverPhase ? "Xác nhận VHV nhận phiếu ĐXVT" : "Xác nhận số phiếu ĐXVT"}
         </button>
       </div>
     );
@@ -1919,6 +1934,7 @@ const CSS = `
 .act{border:1.5px dashed ${C.accent}66;background:${C.accent}07;border-radius:14px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:9px;}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
 .stats-issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
+.stats-issue-grid.single{grid-template-columns:1fr;}
 .stats-issue-grid .field{min-width:0;margin:0!important;}
 .stats-issue-grid .field input{margin-top:6px;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
