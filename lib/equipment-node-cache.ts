@@ -1,39 +1,62 @@
 import type { NormalizedEquipmentNode } from "@/lib/equipment-tree";
-import { getNormalizedEquipmentNodeList } from "@/lib/equipment-tree";
+import { getNormalizedEquipmentNodeList, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
 import { prisma } from "@/lib/prisma";
 
-// Cây danh mục thiết bị (~9k node) gần như tĩnh giữa các lần sửa, và danh sách "nhẹ"
-// (không kèm ảnh base64) sau khi normalize là GIỐNG NHAU cho mọi người dùng — việc lọc
-// quyền được làm sau. Cache in-process để không phải đọc + normalize 9k dòng trên mỗi
-// request (tải cây, xem chi tiết node, kiểm tra quyền theo cương vị...).
+// Cây danh mục thiết bị (~9k node) gần như tĩnh giữa các lần sửa, và sau khi normalize
+// là GIỐNG NHAU cho mọi người dùng — việc lọc quyền được làm sau. Cache in-process để
+// không phải đọc + normalize 9k dòng trên mỗi request. Có 2 biến thể:
+//  - "list": bản nhẹ (không ảnh/tài liệu) — cây thiết bị, kiểm tra quyền.
+//  - "full": kèm imageUrl/attachedInfo/documentUrl — thẻ QR, chi tiết thiết bị,
+//    danh sách thiết bị (trước đây các chỗ này đọc thẳng DB mỗi request).
 const TTL_MS = 60_000;
 
-let entry: { value: NormalizedEquipmentNode[]; expiresAt: number } | null = null;
-let inFlight: Promise<NormalizedEquipmentNode[]> | null = null;
+type CacheEntry = { value: NormalizedEquipmentNode[]; expiresAt: number };
+
 let generation = 0;
 
-export async function getCachedEquipmentNodeList(): Promise<NormalizedEquipmentNode[]> {
-  const now = Date.now();
-  if (entry && entry.expiresAt > now) return entry.value;
-  if (inFlight) return inFlight;
-
-  const gen = generation;
-  inFlight = getNormalizedEquipmentNodeList(prisma)
-    .then((value) => {
-      // Bỏ qua nếu đã bị invalidate trong lúc đang tải (tránh cache dữ liệu cũ).
-      if (gen === generation) {
-        entry = { value, expiresAt: Date.now() + TTL_MS };
-      }
-      return value;
-    })
-    .finally(() => {
+function makeCachedLoader(load: () => Promise<NormalizedEquipmentNode[]>) {
+  let entry: CacheEntry | null = null;
+  let inFlight: Promise<NormalizedEquipmentNode[]> | null = null;
+  return {
+    get(): Promise<NormalizedEquipmentNode[]> {
+      const now = Date.now();
+      if (entry && entry.expiresAt > now) return Promise.resolve(entry.value);
+      if (inFlight) return inFlight;
+      const gen = generation;
+      inFlight = load()
+        .then((value) => {
+          // Bỏ qua nếu đã bị invalidate trong lúc đang tải (tránh cache dữ liệu cũ).
+          if (gen === generation) {
+            entry = { value, expiresAt: Date.now() + TTL_MS };
+          }
+          return value;
+        })
+        .finally(() => {
+          inFlight = null;
+        });
+      return inFlight;
+    },
+    clear() {
+      entry = null;
       inFlight = null;
-    });
-  return inFlight;
+    },
+  };
+}
+
+const lightCache = makeCachedLoader(() => getNormalizedEquipmentNodeList(prisma));
+const fullCache = makeCachedLoader(() => getNormalizedEquipmentNodes(prisma));
+
+export function getCachedEquipmentNodeList(): Promise<NormalizedEquipmentNode[]> {
+  return lightCache.get();
+}
+
+/** Bản đầy đủ (ảnh/thông tin/tài liệu đính kèm) — cùng TTL và cơ chế invalidate với bản nhẹ. */
+export function getCachedEquipmentNodeFull(): Promise<NormalizedEquipmentNode[]> {
+  return fullCache.get();
 }
 
 export function invalidateEquipmentNodeCache() {
   generation++;
-  entry = null;
-  inFlight = null;
+  lightCache.clear();
+  fullCache.clear();
 }

@@ -4,9 +4,9 @@ import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
   compareEquipmentSeq,
-  getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
+import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { filterEquipmentNodesForUser } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
@@ -53,7 +53,7 @@ export async function GET() {
     if (!cards.length) return ok([], { total: 0 });
 
     const cardSeqs = new Set(cards.map((c) => c.deviceSeq));
-    const nodes = await getNormalizedEquipmentNodes(prisma);
+    const nodes = await getCachedEquipmentNodeFull();
     const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
     const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
     const index = buildEquipmentTreeIndex(nodes);
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     const deviceSeq = String(body.deviceSeq ?? "").trim();
     if (!deviceSeq) return fail("Chưa chọn thiết bị");
 
-    const nodes = await getNormalizedEquipmentNodes(prisma);
+    const nodes = await getCachedEquipmentNodeFull();
     const index = buildEquipmentTreeIndex(nodes);
     const node = index.bySeq.get(deviceSeq);
     if (!node) return fail("Không tìm thấy thiết bị trong cây thư mục", 404);

@@ -3,13 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
-  getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
-import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
@@ -49,7 +48,7 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
 
 async function findEquipmentRecord(seq: string) {
   await Promise.all([ensureRepairMachineColumn(), ensureDeviceQrCardTable()]);
-  const nodes = await getNormalizedEquipmentNodes(prisma);
+  const nodes = await getCachedEquipmentNodeFull();
   const index = buildEquipmentTreeIndex(nodes);
   const node = index.bySeq.get(seq);
   if (!node) return null;
