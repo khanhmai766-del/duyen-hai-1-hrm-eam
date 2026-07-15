@@ -1608,11 +1608,23 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       <div className="act">
         <label className="lb">{t.type === "UNG" ? "Nghiệm thu — lưu thông tin, xuất biên bản sau khi xác nhận vật tư lãnh" : "Nghiệm thu — BBKT (nếu có) & xuất Biên Bản (Word)"}</label>
           <>
-            <input placeholder="Số PCT/LCT *" value={pct} onChange={(e) => setPct(e.target.value)} />
-            <input placeholder="Tên chỉ huy trực tiếp (SCCN) *" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
+            <div className="accept-two-grid">
+              <label className="field">Số PCT/LCT *
+                <input placeholder="Nhập số PCT/LCT" value={pct} onChange={(e) => setPct(e.target.value)} />
+              </label>
+              <label className="field">Tên chỉ huy trực tiếp (SCCN) *
+                <input placeholder="Nhập tên chỉ huy trực tiếp" value={chiHuy} onChange={(e) => setChiHuy(e.target.value)} />
+              </label>
+            </div>
             <textarea rows={3} placeholder="Nội dung nghiệm thu…" value={note} onChange={(e) => setNote(e.target.value)} />
-            <label>Thời gian bắt đầu nghiệm thu *</label><input type="datetime-local" value={startedAt} onChange={(e) => setStartedAt(e.target.value)} />
-            <label>Thời gian kết thúc nghiệm thu *</label><input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} />
+            <div className="accept-two-grid">
+              <label className="field">Thời gian bắt đầu nghiệm thu *
+                <input type="datetime-local" value={startedAt} onChange={(e) => setStartedAt(e.target.value)} />
+              </label>
+              <label className="field">Thời gian kết thúc nghiệm thu *
+                <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} />
+              </label>
+            </div>
           </>
         <input placeholder="Số BBKT (nếu có) — VD: BBKT-120/VH1" value={num} onChange={(e) => setNum(e.target.value)} />
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
@@ -1961,6 +1973,9 @@ const CSS = `
 .stats-issue-grid.single{grid-template-columns:1fr;}
 .stats-issue-grid .field{min-width:0;margin:0!important;}
 .stats-issue-grid .field input{margin-top:6px;}
+.accept-two-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:12px;align-items:end;}
+.accept-two-grid .field{min-width:0;margin:0!important;}
+.accept-two-grid .field input{height:42px;margin-top:6px;}
 .use-field-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
@@ -2006,6 +2021,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols{grid-template-columns:1fr;gap:8px;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
