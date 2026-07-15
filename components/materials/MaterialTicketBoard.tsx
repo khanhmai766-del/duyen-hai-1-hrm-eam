@@ -37,6 +37,7 @@ const STATUS: Record<string, { label: string; c: string }> = {
   SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
   CHO_QUYET_TOAN: { label: "Chờ quyết toán", c: "#7c3aed" },
+  CHO_THONG_KE_XUAT_BIEN_BAN: { label: "Chờ Thống kê xuất biên bản", c: "#0f766e" },
   CHO_NHAP_LIEU: { label: "Chờ nhập số lượng ứng", c: C.ung },
   CHO_NHAP_LIEU_THAY_THE: { label: "Chờ nhập liệu thay thế", c: C.ung },
   CHO_XAC_NHAN_PDF: { label: "Chờ xác nhận xuất file", c: C.ung },
@@ -55,7 +56,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBKT + BBNT DO", who: "Theo phân quyền quy trình" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay + BBNT DO", who: "Theo phân quyền quy trình" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   UNG: [
@@ -72,7 +73,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "NHAN_TU_HIEN_CO", label: "Nhận vật tư từ Hiện có", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất biên bản", who: "Theo phân quyền quy trình" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu", who: "Theo phân quyền quy trình" },
+    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận và xuất biên bản", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
 };
@@ -80,7 +82,7 @@ const ORDER: Record<string, string[]> = {
   CHUA_CHON: ["B0", "CHO_XAC_NHAN"],
   DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
   UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", "HOAN_TAT"],
-  SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
+  SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
 };
 const flowStatusKey = (status: string) =>
   status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
@@ -458,12 +460,12 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         {!type ? (
           <div className="pick">
             <button className="card dx" onClick={() => setType("DE_XUAT")}>
-              <ClipboardList size={26} /><b>BBKT + Đề xuất vật tư</b>
+              <ClipboardList size={26} /><b>BBNT ký tay + Đề xuất vật tư</b>
               <span>Tạo phiếu, chọn vật tư, nhập số lượng và kiểm kho ngay từ đầu</span>
             </button>
             <button className="card ung" onClick={() => setType("UNG")}>
               <Zap size={26} /><b>Ứng vật tư</b>
-              <span>Xử lý gấp: thay thế trước → hoàn tất BBKT &amp; thống kê song song sau</span>
+              <span>Xử lý gấp: thay thế trước → hoàn tất BBNT ký tay &amp; thống kê song song sau</span>
             </button>
           </div>
         ) : (
@@ -543,10 +545,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
                 </select>
                 {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
-                <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số BBKT sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
+                <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số BBNT ký tay sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
               </>
             ) : (
-              <p className="note ung"><Zap size={13} /> Luồng Ứng: số BBKT sẽ bổ sung sau bước xác nhận xuất file.</p>
+              <p className="note ung"><Zap size={13} /> Luồng Ứng: số BBNT ký tay sẽ bổ sung sau bước xác nhận xuất file.</p>
             )}
             <div className="frm-f">
               <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -577,7 +579,7 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = 
   { key: "stats", label: "Thống kê xác nhận ĐXVT (nhập số + xác nhận giao/trả phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "receive", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "accept", label: "Nghiệm thu + BBKT + xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", label: "Nghiệm thu + BBNT ký tay + xuất BBNT DO", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "settle", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
@@ -834,8 +836,8 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
             </>
           )}
 
-          <label>Số Biên Bản Kiểm Tra (BBKT) (nếu có)</label>
-          <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="VD: BBKT-120/VH1" />
+          <label>Số BBNT ký tay (nếu có)</label>
+          <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số BBNT ký tay" />
 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -969,6 +971,17 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             )}
             {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
 
+            {(t.docUrl || t.bbktDocUrl || t.recoveryDocUrl) && (
+              <div className="document-downloads" aria-label="Biên bản đã xuất">
+                <span className="document-downloads-label"><FileText size={14} /> Biên bản đã xuất</span>
+                <div className="document-download-links">
+                  {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT DO</a>}
+                  {t.bbktDocUrl && <a className="pdf" href={t.bbktDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT ký tay</a>}
+                  {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên bản vật tư thu hồi</a>}
+                </div>
+              </div>
+            )}
+
             <ActionArea t={t} viewer={viewer} />
           </div>
         </div>
@@ -997,7 +1010,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
           {t.bbktDocUrl && (
             <a className="pdf log-export" href={t.bbktDocUrl} target="_blank" rel="noreferrer">
-              <Download size={14} /> Biên bản kiểm tra - BBKT (Word)
+              <Download size={14} /> BBNT ký tay (Word)
             </a>
           )}
           {t.recoveryDocUrl && (
@@ -1060,7 +1073,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Mã vật tư ERP<input value={t.items[0]?.erpCode ?? "—"} disabled /></label>
           <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
           <label>Số lượng đã xác nhận<input value={`${t.items[0]?.quantity ?? 0} ${t.items[0]?.material.unit ?? ""}`} disabled /></label>
-          <label>Số Biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số BBKT" /></label>
+          <label>Số BBNT ký tay (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số BBNT ký tay" /></label>
         </>}
         {editStep === "stats" && <>
           <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
@@ -1105,12 +1118,12 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
-  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose");
+  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("statsExportDocuments");
   const { data: opts } = useTicketOptions(needItems);
   const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
   // Tách riêng từng loại số chứng từ. Trước đây dùng chung một state `num`, nên
-  // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số BBKT ở bước sau.
+  // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số BBNT ký tay ở bước sau.
   const [proposalNumberInput, setProposalNumberInput] = useState("");
   const [bbktNumberInput, setBbktNumberInput] = useState("");
   const [repairRequestNumber, setRepairRequestNumber] = useState(t.repairRequestNumber ?? "");
@@ -1219,7 +1232,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       CHO_XAC_NHAN_PDF: "Người được phân quyền xác nhận luồng Ứng",
     };
     const waiting = t.status === "CHO_HOAN_THIEN"
-      ? [!t.bbktNumber && "Người được phân quyền bổ sung BBKT", !t.proposalNumber && "Người được phân quyền nhập số phiếu ĐXVT"].filter(Boolean).join(" + ")
+      ? [!t.bbktNumber && "Người được phân quyền bổ sung số BBNT ký tay", !t.proposalNumber && "Người được phân quyền nhập số phiếu ĐXVT"].filter(Boolean).join(" + ")
       : waitMap[t.status];
     return <div className="wait"><Clock size={14} /> Đang chờ: <b>{waiting}</b> — bạn không có thao tác ở bước này.</div>;
   }
@@ -1362,14 +1375,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("confirm")) {
     if (t.type === "CHUA_CHON") {
       const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
-      const codeOptions = selectedMaterialOption?.erpCodes?.length
+      const erpInfoRows = selectedMaterialOption?.erpCodes?.length
         ? selectedMaterialOption.erpCodes
         : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
-            .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
-      const selectedErp = codeOptions.find((option) => option.code === erpCode);
-      const existingStockShortages = t.items.filter((item) => item.quantity > item.material.quantity);
+            .map((code) => ({ code, name: t.items[0]?.material.name ?? "—", erpStock: 0 }));
+      const existingStockShortages = t.items.filter((item, index) => (index === 0 ? qty : item.quantity) > item.material.quantity);
       const canUseExistingStock = existingStockShortages.length === 0;
-      const proposalBlockedByErp = !!selectedErp && qty > selectedErp.erpStock;
       return <div className="act">
         <div className="act-title-row">
           <label className="lb">Xác nhận yêu cầu</label>
@@ -1377,8 +1388,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <button
               type="button"
               className={workflowType === "DE_XUAT" ? "on" : ""}
-              disabled={proposalBlockedByErp}
-              title={proposalBlockedByErp ? "Tồn ERP không đủ số lượng đề xuất" : "Chọn luồng Đề xuất"}
               onClick={() => setWorkflowType("DE_XUAT")}
             >
               Đề xuất
@@ -1395,47 +1404,41 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </button>
           </div>
         </div>
-        {proposalBlockedByErp && (
-          <div className="warnbox">
-            <AlertTriangle size={15} />
-            Mã ERP <b>{selectedErp.code}</b> chỉ còn <b>{selectedErp.erpStock} {t.items[0]?.material.unit ?? ""}</b>, không đủ số lượng đề xuất <b>{qty} {t.items[0]?.material.unit ?? ""}</b>. Chỉ có thể chọn luồng <b>Ứng</b>{canUseExistingStock ? " hoặc Sử dụng hiện có" : ""}.
-          </div>
-        )}
         {!canUseExistingStock && (
           <div className="warnbox">
             <AlertTriangle size={15} />
-            Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. Bạn vẫn có thể chọn {proposalBlockedByErp ? <b>Ứng</b> : <><b>Đề xuất</b> hoặc <b>Ứng</b></>}.
+            Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.id === t.items[0]?.id ? qty : item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. Bạn vẫn có thể chọn <b>Đề xuất</b> hoặc <b>Ứng</b>.
           </div>
         )}
-        <div className={`confirm-field-row ${workflowType === "UNG" && !proposalBlockedByErp ? "two-even" : ""}`}>
-          {(workflowType !== "UNG" || proposalBlockedByErp) && (
-            <label className="field confirm-code-field">Mã vật tư *
-              <select value={erpCode} onChange={(e) => {
-                const nextCode = e.target.value;
-                const nextErp = codeOptions.find((option) => option.code === nextCode);
-                setErpCode(nextCode);
-                if (workflowType === "DE_XUAT" && nextErp && qty > nextErp.erpStock) setWorkflowType("UNG");
-              }}>
-                <option value="">— Chọn mã vật tư —</option>
-                {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {t.items[0]?.material.unit ?? ""}</option>)}
-              </select>
-            </label>
-          )}
-          {workflowType !== "SU_DUNG_HIEN_CO" && (
-            <label className="field qty-field">Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : "ứng"} *
-              <input type="number" min={1} value={qty} onChange={(e) => {
-                const nextQuantity = Math.max(1, Number(e.target.value) || 1);
-                setQty(nextQuantity);
-                if (workflowType === "DE_XUAT" && selectedErp && nextQuantity > selectedErp.erpStock) setWorkflowType("UNG");
-              }} />
-            </label>
-          )}
-          <label className="field">Số Biên bản kiểm tra (nếu có)
-            <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số BBKT" />
+        {workflowType !== "SU_DUNG_HIEN_CO" && (
+          <div className="erp-readonly-panel" aria-label="Thông tin vật tư ERP chỉ để xem">
+            <div className="erp-readonly-head">
+              <span><Package size={15} /> Thông tin vật tư ERP</span>
+              <em>Chỉ để xem</em>
+            </div>
+            <div className="erp-readonly-table">
+              <div className="erp-readonly-row erp-readonly-labels" aria-hidden="true">
+                <span>Mã vật tư</span><span>Tên vật tư</span><span>Số lượng ERP</span>
+              </div>
+              {erpInfoRows.map((row) => (
+                <div className="erp-readonly-row" key={row.code}>
+                  <b>{row.code}</b>
+                  <span>{row.name || t.items[0]?.material.name || "—"}</span>
+                  <strong>{row.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="confirm-field-row two-even">
+          <label className="field qty-field">Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : workflowType === "UNG" ? "ứng" : "sử dụng hiện có"} *
+            <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
+          </label>
+          <label className="field">Số BBNT ký tay (nếu có)
+            <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số BBNT ký tay" />
           </label>
         </div>
-        {selectedErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedErp.name} <b>Số lượng ERP:</b> {selectedErp.erpStock} {t.items[0]?.material.unit ?? ""} <span className="hint">Tên và số lượng này được lấy theo đúng mã ERP đang chọn.</span></div>}
-        <button className="btn primary big" disabled={(workflowType !== "UNG" && !erpCode) || (workflowType !== "SU_DUNG_HIEN_CO" && qty <= 0) || (workflowType === "DE_XUAT" && proposalBlockedByErp) || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, ...(workflowType !== "UNG" ? { erpCode } : {}), ...(workflowType !== "SU_DUNG_HIEN_CO" ? { proposedQuantity: qty } : {}), bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
+        <button className="btn primary big" disabled={qty <= 0 || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
       </div>;
     }
     const short = t.items.some((it) => it.quantity > it.material.quantity);
@@ -1464,13 +1467,30 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("stats")) {
     const isReceiverPhase = t.status === "CHO_XAC_NHAN_PHAT";
     const asksForReceiver = isReceiverPhase && t.type !== "UNG";
+    const asksForErpCode = !isReceiverPhase && t.type === "DE_XUAT";
+    const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
+    const statsCodeOptions = selectedMaterialOption?.erpCodes?.length
+      ? selectedMaterialOption.erpCodes
+      : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
+          .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
+    const selectedStatsErp = statsCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <div className="stats-issue-grid single">
+        <div className={`stats-issue-grid ${asksForErpCode ? "" : "single"}`}>
           {!isReceiverPhase ? (
-            <label className="field">Số phiếu ĐXVT *
-              <input name={`proposal-number-${t.id}`} autoComplete="off" placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
-            </label>
+            <>
+              {asksForErpCode && (
+                <label className="field">Mã vật tư *
+                  <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+                    <option value="">— Chọn mã vật tư ERP —</option>
+                    {statsCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="field">Số phiếu ĐXVT *
+                <input name={`proposal-number-${t.id}`} autoComplete="off" placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
+              </label>
+            </>
           ) : asksForReceiver ? (
             <label className="field">Tên VHV nhận phiếu ĐXVT (không bắt buộc)
               <input
@@ -1481,15 +1501,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </label>
           ) : <div className="warnbox"><AlertTriangle size={15} /> Chưa xác nhận đã trả phiếu.</div>}
         </div>
+        {asksForErpCode && selectedStatsErp && (
+          <div className="note"><Package size={14} /><span><b>Tên vật tư ERP:</b> {selectedStatsErp.name} · <b>Số lượng ERP:</b> {selectedStatsErp.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</span></div>
+        )}
         <button
           className="btn primary big"
-          disabled={(!isReceiverPhase && !proposalNumberInput.trim()) || act.isPending}
+          disabled={(!isReceiverPhase && (!proposalNumberInput.trim() || (asksForErpCode && !erpCode))) || act.isPending}
           onClick={() => run(
             asksForReceiver
               ? { action: "stats", proposalNumber: t.proposalNumber, proposalReceiverName: proposalReceiverName.trim() }
               : isReceiverPhase
                 ? { action: "stats", proposalNumber: t.proposalNumber }
-              : { action: "stats", proposalNumber: proposalNumberInput.trim() },
+              : { action: "stats", proposalNumber: proposalNumberInput.trim(), ...(asksForErpCode ? { erpCode } : {}) },
             asksForReceiver ? "Đã xác nhận VHV nhận phiếu ĐXVT" : isReceiverPhase ? "Đã xác nhận trả phiếu" : "Đã xác nhận số phiếu ĐXVT"
           )}
         >
@@ -1566,7 +1589,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {!isAdvance && repairRequestConflictsProposal && (
           <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
         )}
-        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBKT</b>, <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn.</span></div>}
+        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBNT ký tay</b>, <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn.</span></div>}
         <button className="btn primary big" disabled={qty <= 0 || (isAdvance && !erpCode) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
           onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận vật tư lãnh và xuất các biên bản" : "Đã xác nhận vật tư lãnh")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : isAdvance ? <FileText size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận & xuất biên bản" : "Xác nhận"}
@@ -1619,7 +1642,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 		              <span>Xác nhận đã trả vật tư thu hồi</span>
 		            </label>
 		          </div>
-		          <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div>
+	          <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : t.type === "SU_DUNG_HIEN_CO" ? "Biên bản vật tư thu hồi sẽ được tạo tại bước Thống kê xác nhận và xuất biên bản." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div>
 		        </>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
@@ -1641,7 +1664,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     // phiếu cũ (trước khi thêm bước) vẫn nhập tại đây để tương thích.
     return (
       <div className="act">
-        <label className="lb">{t.type === "UNG" ? "Nghiệm thu — chuyển xác nhận vật tư lãnh" : "Nghiệm thu — BBKT (nếu có) & xuất Biên Bản (Word)"}</label>
+        <label className="lb">{t.type === "UNG" ? "Nghiệm thu — chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Nghiệm thu — chuyển Thống kê xác nhận" : "Nghiệm thu — biên bản ký tay (nếu có) & xuất Biên Bản (Word)"}</label>
           <>
             <div className="accept-two-grid">
               <label className="field">Số PCT/LCT *
@@ -1661,10 +1684,44 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               </label>
             </div>
           </>
-        <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBKT (nếu có) — VD: BBKT-120/VH1" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+        <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số biên bản ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
-          onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT DO trắng"}
+          onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : t.type === "SU_DUNG_HIEN_CO" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT DO trắng"}
+        </button>
+      </div>
+    );
+  }
+
+  if (acts.includes("statsExportDocuments")) {
+    const unit = t.items[0]?.material.unit ?? "";
+    const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
+    const codeOptions = selectedMaterialOption?.erpCodes?.length
+      ? selectedMaterialOption.erpCodes
+      : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
+          .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
+    const selectedErp = codeOptions.find((option) => option.code === erpCode);
+    return (
+      <div className="act">
+        <label className="lb">Thống kê xác nhận và xuất biên bản</label>
+        <label className="field">Mã vật tư *
+          <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+            <option value="">— Chọn mã vật tư ERP —</option>
+            {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {unit}</option>)}
+          </select>
+        </label>
+        {selectedErp && (
+          <div className="erp-readonly-panel" aria-label="Thông tin vật tư dùng để xuất biên bản">
+            <div className="erp-readonly-head"><span><Package size={15} /> Thông tin đưa vào biên bản</span><em>Đã đối chiếu ERP</em></div>
+            <div className="erp-readonly-row">
+              <b>{selectedErp.code}</b><span>{selectedErp.name}</span><strong>{selectedErp.erpStock.toLocaleString("vi-VN")} {unit}</strong>
+            </div>
+          </div>
+        )}
+        <p className="hint">Mã và tên vật tư đã chọn sẽ được lưu vào phiếu và dùng để xuất biên bản{t.recoveryRequired ? ", bao gồm Biên bản vật tư thu hồi" : ""}.</p>
+        <button className="btn primary big" disabled={!erpCode || act.isPending}
+          onClick={() => run({ action: "statsExportDocuments", erpCode }, "Đã xác nhận mã vật tư và xuất biên bản")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận & xuất biên bản
         </button>
       </div>
     );
@@ -1863,6 +1920,17 @@ const CSS = `
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row .field{min-width:0;margin:0;}
 .confirm-field-row select,.confirm-field-row input{width:100%;}
+.erp-readonly-panel{overflow:hidden;border:1px solid #d9e3ef;border-radius:11px;background:#f8fbff;box-shadow:inset 3px 0 0 ${C.accent};}
+.erp-readonly-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;border-bottom:1px solid #e2eaf3;background:#f1f6fc;color:${C.navy};}
+.erp-readonly-head span{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;}
+.erp-readonly-head em{border:1px solid #cbd9e8;border-radius:999px;background:white;padding:2px 8px;color:${C.muted};font-size:10px;font-style:normal;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.erp-readonly-table{display:grid;}
+.erp-readonly-row{display:grid;grid-template-columns:minmax(120px,.75fr) minmax(220px,1.7fr) minmax(120px,.65fr);gap:12px;align-items:center;padding:9px 12px;border-top:1px solid #e8eef5;color:#334155;font-size:12.5px;}
+.erp-readonly-row:first-child{border-top:0;}
+.erp-readonly-row b{color:${C.navy};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+.erp-readonly-row strong{color:#0f766e;text-align:right;white-space:nowrap;}
+.erp-readonly-labels{padding-top:6px;padding-bottom:6px;background:#f8fafc;color:${C.muted};font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.045em;}
+.erp-readonly-labels span:last-child{text-align:right;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
 .note.ung{background:${C.ungBg};color:${C.ung};}
 .frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
@@ -1904,6 +1972,11 @@ const CSS = `
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
+.document-downloads{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid #cfe3dc;border-radius:11px;background:#f3faf7;padding:10px 12px;}
+.document-downloads-label{display:flex;align-items:center;gap:7px;color:#0f766e;font-size:12.5px;font-weight:800;}
+.document-download-links{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.document-download-links .pdf{margin:0;padding:7px 10px;border-width:1px;border-color:#94a3b8;font-size:12px;}
+.document-download-links .recovery-download{border-color:#0f766e;background:#ecfdf5;color:#0f766e;}
 .log-export{margin:18px 0 0;max-width:max-content;}
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .received-summary{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;}
@@ -1973,6 +2046,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols,.review-receive-row{grid-template-columns:1fr;gap:8px;}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols,.review-receive-row{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.unit-filter{align-self:flex-start;max-width:100%;}.unit-filter select,.category-filter select{max-width:calc(100vw - 64px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

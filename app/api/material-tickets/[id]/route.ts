@@ -220,7 +220,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (step === "confirm") {
         if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
         const value = String(body.bbktNumber || "").trim();
-        before = `Số BBKT: ${t.bbktNumber ?? "—"}`; after = `Số BBKT: ${value || "—"}`;
+        before = `Số BBNT ký tay: ${t.bbktNumber ?? "—"}`; after = `Số BBNT ký tay: ${value || "—"}`;
         up = await prisma.materialTicket.update({
           where: { id: t.id },
           data: { bbktNumber: value || null },
@@ -399,37 +399,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const workflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
-      const erpCode = String(body.erpCode || item.erpCode || "").trim();
       const quantity = Math.trunc(Number(body.proposedQuantity || item.quantity));
       const bbktNumber = String(body.bbktNumber || "").trim();
-      if (workflowType !== "UNG" && !erpCode) return fail("Vui lòng chọn mã vật tư");
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
-      const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
-      if (workflowType !== "UNG" && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
-      const erpMaterial = workflowType !== "UNG"
-        ? await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true, erpStock: true } })
-        : null;
-      if (workflowType !== "UNG" && !erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
-      if (workflowType === "DE_XUAT" && quantity > (erpMaterial?.erpStock ?? 0)) {
-        return fail(
-          `Tồn ERP của mã ${erpCode} chỉ còn ${erpMaterial?.erpStock ?? 0} ${item.material.unit}, ` +
-          `không đủ số lượng đề xuất ${quantity} ${item.material.unit}. Vui lòng chọn luồng Ứng.`
-        );
-      }
-      const short = t.items.filter((it) => it.quantity > it.material.quantity);
+      const short = t.items.filter((it) => (it.id === item.id ? quantity : it.quantity) > it.material.quantity);
       if (workflowType === "SU_DUNG_HIEN_CO" && short.length > 0) {
         return fail(
           "Số lượng hiện có không đủ: " +
-          short.map((s) => `${s.material.name} (cần ${s.quantity}, tồn ${s.material.quantity})`).join("; ") +
+          short.map((s) => `${s.material.name} (cần ${s.id === item.id ? quantity : s.quantity}, tồn ${s.material.quantity})`).join("; ") +
           " — không thể chọn luồng Sử dụng hiện có. Vui lòng chọn Đề xuất hoặc Ứng."
         );
       }
       const up = await prisma.$transaction(async (tx) => {
-        // Lưu mã/tên ERP và chuyển trạng thái trong cùng transaction: nếu một
-        // phần lỗi thì toàn bộ rollback, không để phiếu đứng sai bước.
+        // Bước chọn luồng chỉ xác nhận số lượng; mã ERP được chọn ở bước nhận vật tư.
         await tx.materialTicketItem.update({
           where: { id: item.id },
-          data: { erpCode: workflowType !== "UNG" ? erpCode : null, erpName: workflowType !== "UNG" ? erpMaterial?.name : null, quantity },
+          data: { erpCode: null, erpName: null, quantity },
         });
         return tx.materialTicket.update({
           where: { id: t.id },
@@ -542,17 +527,34 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
 
       if (t.status !== "CHO_XAC_NHAN_PHAT") {
-        const up = await prisma.materialTicket.update({
-          where: { id: t.id },
-          data: {
-            status: "CHO_XAC_NHAN_PHAT",
-            proposalNumber: num,
-            statsById: user.id, statsByName: user.name ?? "",
-            statsByPosition: user.position ?? null, statsAt: new Date(),
-          },
-          include: ITEM_INCLUDE,
+        const item = t.items[0];
+        if (!item) return fail("Phiếu chưa có vật tư");
+        const erpCode = String(body.erpCode || "").trim();
+        let erpName: string | null = null;
+        if (t.type === "DE_XUAT") {
+          if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
+          const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+          if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+          const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
+          if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
+          erpName = erpMaterial.name;
+        }
+        const up = await prisma.$transaction(async (tx) => {
+          if (t.type === "DE_XUAT") {
+            await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName } });
+          }
+          return tx.materialTicket.update({
+            where: { id: t.id },
+            data: {
+              status: "CHO_XAC_NHAN_PHAT",
+              proposalNumber: num,
+              statsById: user.id, statsByName: user.name ?? "",
+              statsByPosition: user.position ?? null, statsAt: new Date(),
+            },
+            include: ITEM_INCLUDE,
+          });
         });
-        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận số phiếu ĐXVT: ${num}`);
+        await audit(user.id, "MT_STATS", "MaterialTicket", t.id, `${t.code}: Xác nhận số phiếu ĐXVT: ${num}${erpCode ? `; mã vật tư ${erpCode}` : ""}`);
         return ok(up);
       }
 
@@ -668,7 +670,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${t.code}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBKT, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
+        `${t.code}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBNT ký tay, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
       );
       return ok(up);
     }
@@ -711,7 +713,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail(`Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. ${mat.name} hiện còn ${mat.quantity}; vui lòng nhập lại số lượng.`);
       }
       const newQty = mat.quantity - usedQuantity;
-      const recoveryDocument = recoveryRequired && t.type !== "UNG"
+      const recoveryDocument = recoveryRequired && t.type === "DE_XUAT"
         ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
         : null;
 
@@ -757,14 +759,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const chiHuy = String(body.chiHuyName || "").trim();
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
-      const bbkt = String(body.bbktNumber || "").trim(); // Số BBKT bổ sung ở bước này (nếu có)
+      const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
 
-      const documents = t.type !== "UNG" ? {
+      const documents = t.type === "DE_XUAT" ? {
         bbkt: await generateBbntDoc({
           code: t.code, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
@@ -777,7 +779,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
-          status: t.type === "UNG" ? "NHAN_VAT_TU" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+          status: t.type === "UNG" ? "NHAN_VAT_TU" : t.type === "SU_DUNG_HIEN_CO" ? "CHO_THONG_KE_XUAT_BIEN_BAN" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
           ...(documents ? { docUrl: documents.bbnt.url, bbktDocUrl: documents.bbkt.url } : {}),
           workStartedAt, workEndedAt,
           ...(bbkt ? { bbktNumber: bbkt } : {}),
@@ -786,7 +788,52 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${t.code}: đã nghiệm thu, chuyển xác nhận vật tư lãnh` : `${t.code}: nghiệm thu, xuất biên bản`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${t.code}: đã nghiệm thu, chuyển xác nhận vật tư lãnh` : t.type === "SU_DUNG_HIEN_CO" ? `${t.code}: nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản` : `${t.code}: nghiệm thu, xuất biên bản`);
+      return ok(up);
+    }
+
+    if (action === "statsExportDocuments") {
+      if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "CHO_THONG_KE_XUAT_BIEN_BAN") return fail("Phiếu không ở bước Thống kê xác nhận và xuất biên bản");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
+        return fail("Bạn không có quyền Thống kê xác nhận và xuất biên bản", 403);
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const erpCode = String(body.erpCode || "").trim();
+      if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
+      const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+      if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+      const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
+      if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
+
+      const items = toBbntItems(t).map((row, index) => index === 0
+        ? { ...row, materialCode: erpCode, materialName: erpMaterial.name }
+        : row);
+      const documents = {
+        bbkt: await generateBbntDoc({
+          code: t.code, soBBKT: t.bbktNumber, soPCT: t.pctNumber, noiDung: t.completionNote ?? "",
+          thoiGianBatDau: t.workStartedAt, thoiGianKetThuc: t.workEndedAt,
+          tenChiHuy: t.chiHuyName ?? "", tenTruongCa: t.completedByName ?? "",
+          tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, items,
+        }),
+        bbnt: await generateBlankDocx(t.code, "BBNT-DO"),
+        recovery: t.recoveryRequired
+          ? await generateBlankDocx(t.code, "BIEN-BAN-VAT-TU-THU-HOI")
+          : null,
+      };
+      const up = await prisma.$transaction(async (tx) => {
+        await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_QUYET_TOAN",
+            docUrl: documents.bbnt.url,
+            bbktDocUrl: documents.bbkt.url,
+            recoveryDocUrl: documents.recovery?.url ?? null,
+          },
+          include: ITEM_INCLUDE,
+        });
+      });
+      await audit(user.id, "MT_STATS_EXPORT", "MaterialTicket", t.id, `${t.code}: xác nhận mã ${erpCode}, xuất BBNT ký tay, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, chuyển Quyết toán`);
       return ok(up);
     }
 

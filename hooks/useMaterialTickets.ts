@@ -238,6 +238,7 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_PHIEU_YCSC" && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
+    if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");
     if (t.status === "CHO_QUYET_TOAN" && v.steps?.settle) a.push("settle");
   } else {
     if (t.status === "NHAN_VAT_TU" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
