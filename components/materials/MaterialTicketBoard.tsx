@@ -1894,17 +1894,18 @@ const CSS = `
 .wait-badge.warm{color:${C.warn};}
 .wait-badge.hot{color:${C.bad};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
-.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;}
+.rhead .type-head{display:flex;justify-content:center;}
+.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;text-align:center;text-align-last:center;}
 .rhead .type-head select.filtering{color:${C.navy};}
 .code{font-family:Poppins,Inter,sans-serif;font-weight:600;color:${C.navy};}
-.proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;}
+.proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:center;gap:3px;text-align:center;}
 .proposal-cell small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${C.muted};font-size:10.5px;font-weight:600;}
 .nophieu{display:inline-block;background:${C.warnBg};color:${C.warn};font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;}
 .soft{color:${C.soft};}
 .tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;}
 .tag.ung{background:${C.ungBg};color:${C.ung};}
 .tag.dx{background:${C.accent}14;color:${C.accent};}
-.kind-cell{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
+.kind-cell{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;text-align:center;}
 .kind-top{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .exp{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:0 0 auto;border-radius:50%;background:#10b981;color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.2);}
 .exp.open{background:#f43f5e;}
