@@ -249,7 +249,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (step === "confirm") {
         if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
         const value = String(body.bbktNumber || "").trim();
-        before = `Số BBNT ký tay: ${t.bbktNumber ?? "—"}`; after = `Số BBNT ký tay: ${value || "—"}`;
+        before = `Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`; after = `Số biên bản kiểm tra: ${value || "—"}`;
         up = await prisma.materialTicket.update({
           where: { id: t.id },
           data: { bbktNumber: value || null },
@@ -286,10 +286,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       } else if (step === "use") {
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
+        const materialUserName = String(body.materialUserName || "").trim();
         const recoveryRequired = body.recoveryRequired === true;
         const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
         const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
         if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
+        if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
         if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.usedQuantity;
@@ -306,6 +308,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             data: {
               usedQuantity: value,
               remainingQuantity: (t.receivedQuantity ?? 0) - value,
+              materialUserName,
               recoveryRequired,
               recoveryQuantity,
               recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
@@ -725,8 +728,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
       const recoveryReturned = body.recoveryReturned === true;
       const usedQuantity = Math.trunc(Number(body.usedQuantity));
+      const materialUserName = String(body.materialUserName || "").trim();
       if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
       if (!Number.isFinite(usedQuantity) || usedQuantity <= 0) return fail("Khối lượng vật tư sử dụng phải lớn hơn 0");
+      if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -762,7 +767,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             recoveryRequired, recoveryQuantity,
             recoveryReturnedAt: recoveryRequired && recoveryReturned ? new Date() : null,
             recoveryDocUrl: recoveryDocument?.url ?? null,
-            usedQuantity, remainingQuantity: remaining,
+            usedQuantity, remainingQuantity: remaining, materialUserName,
             usedById: user.id, usedByName: user.name ?? "",
             usedByPosition: user.position ?? null, usedAt: new Date(),
           },
@@ -771,7 +776,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_USE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
+        `${materialTicketReference(t)}: VHV sử dụng ${materialUserName}; lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
       );
       return ok(up);
     }

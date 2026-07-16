@@ -10,7 +10,7 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, Trash2, Upload, type LucideIcon } from "lucide-react";
+import { CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, Search, Trash2, Upload, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -38,6 +38,8 @@ import {
   type GroupedErpMaterialInput,
 } from "@/hooks/useOilGrouping";
 import { downloadErpImportTemplate, readErpImportFile } from "@/lib/erp-import";
+import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
+import { normalizeText } from "@/lib/nav";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
 
@@ -111,7 +113,7 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
   const [formError, setFormError] = useState("");
 
   const exportRows = groups.map((g) => ({
-    maNhom: g.code,
+    maNhom: g.code.startsWith(STANDALONE_GROUP_PREFIX) ? "" : g.code,
     tenNhom: g.name,
     hienCo: g.onHandQty,
     tongTonERP: g.totalQty,
@@ -306,8 +308,9 @@ function StockBoard({
 
   const saveEdit = async () => {
     if (!edit) return;
-    if (!edit.code.trim() || !edit.name.trim() || !edit.baseUnit.trim()) {
-      toast.error("Vui lòng nhập đủ mã, tên và ĐVT chuẩn của nhóm");
+    const isStandalone = edit.code.startsWith(STANDALONE_GROUP_PREFIX);
+    if ((!isStandalone && !edit.code.trim()) || !edit.name.trim() || !edit.baseUnit.trim()) {
+      toast.error(isStandalone ? "Vui lòng nhập đủ tên và ĐVT chuẩn của nhóm" : "Vui lòng nhập đủ mã, tên và ĐVT chuẩn của nhóm");
       return;
     }
     try {
@@ -329,7 +332,8 @@ function StockBoard({
     if (!deleting) return;
     try {
       const res = await deleteGroup.mutateAsync(deleting.id);
-      toast.success(`Đã xoá nhóm ${deleting.code}${res.ungrouped ? ` — ${res.ungrouped} mã trở về chờ phân nhóm` : ""}`);
+      const label = deleting.code.startsWith(STANDALONE_GROUP_PREFIX) ? deleting.name : deleting.code;
+      toast.success(`Đã xoá nhóm ${label}${res.ungrouped ? ` — ${res.ungrouped} mã trở về chờ phân nhóm` : ""}`);
       setDeleting(null);
     } catch (e) {
       toast.error((e as Error).message);
@@ -390,10 +394,12 @@ function StockBoard({
           <DialogHeader><DialogTitle>Sửa nhóm vật tư</DialogTitle></DialogHeader>
           {edit && (
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 sm:col-span-1">
-                <Label className="mb-1.5 block">Mã nhóm *</Label>
-                <Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} />
-              </div>
+              {!edit.code.startsWith(STANDALONE_GROUP_PREFIX) && (
+                <div className="col-span-2 sm:col-span-1">
+                  <Label className="mb-1.5 block">Mã nhóm *</Label>
+                  <Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} />
+                </div>
+              )}
               <div className="col-span-2 sm:col-span-1">
                 <Label className="mb-1.5 block">ĐVT chuẩn *</Label>
                 <Input value={edit.baseUnit} onChange={(e) => setEdit({ ...edit, baseUnit: e.target.value })} />
@@ -424,7 +430,7 @@ function StockBoard({
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title={deleting ? `Xoá nhóm ${deleting.code} · ${deleting.name}?` : "Xoá nhóm"}
+        title={deleting ? `Xoá nhóm ${deleting.code.startsWith(STANDALONE_GROUP_PREFIX) ? deleting.name : `${deleting.code} · ${deleting.name}`}?` : "Xoá nhóm"}
         description={
           deleting
             ? deleting.materialCount > 0
@@ -461,7 +467,9 @@ function GroupRows({
       <tr className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => toggle(g.id)}>
         <td className="px-4 py-3 text-slate-400">{open ? "▾" : "▸"}</td>
         <td className="px-2 py-3">
-          <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5 mr-2 text-slate-600">{g.code}</span>
+          {!g.code.startsWith(STANDALONE_GROUP_PREFIX) && (
+            <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5 mr-2 text-slate-600">{g.code}</span>
+          )}
           <span className="font-semibold text-slate-800">{g.name}</span>
         </td>
         <td className="px-4 py-3 text-right" onClick={(event) => event.stopPropagation()}>
@@ -621,6 +629,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<string[] | null>(null);
+  const [search, setSearch] = useState("");
   // form gom nhóm
   const [targetType, setTargetType] = useState<string>("");
   const [newCode, setNewCode] = useState("");
@@ -632,6 +641,32 @@ function PendingTab({ category }: { category: GroupingCategory }) {
   const busy = sync.isPending || confirm.isPending || deletePending.isPending;
 
   const typeById = useMemo(() => new Map(oilTypes.map((t) => [t.id, t])), [oilTypes]);
+  const filteredItems = useMemo(() => {
+    const query = normalizeText(search.trim());
+    if (!query) return items;
+    return items.filter((item) => {
+      const suggestion = item.suggestedOilTypeId ? typeById.get(item.suggestedOilTypeId) : null;
+      return normalizeText([
+        item.erpCode,
+        item.name,
+        item.unit,
+        suggestion?.code,
+        suggestion?.name,
+      ].filter(Boolean).join(" ")).includes(query);
+    });
+  }, [items, search, typeById]);
+  const allFilteredChecked = filteredItems.length > 0 && filteredItems.every((item) => checked.has(item.id));
+
+  const toggleAllFiltered = (select: boolean) => {
+    setChecked((current) => {
+      const next = new Set(current);
+      for (const item of filteredItems) {
+        if (select) next.add(item.id);
+        else next.delete(item.id);
+      }
+      return next;
+    });
+  };
 
   const toggleCheck = (id: string) =>
     setChecked((p) => {
@@ -689,9 +724,9 @@ function PendingTab({ category }: { category: GroupingCategory }) {
     submit(base, `Đã gom ${checked.size} mã vào nhóm`);
   };
 
-  const ignoreSelected = () => {
+  const createStandaloneGroups = () => {
     if (checked.size === 0) return;
-    submit({ materialIds: [...checked], action: "IGNORE" }, `Đã bỏ qua ${checked.size} mã (không cần gom nhóm)`);
+    submit({ materialIds: [...checked], action: "SINGLE" }, `Đã tạo ${checked.size} nhóm vật tư riêng`);
   };
 
   const confirmDeleteSelected = async () => {
@@ -720,7 +755,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
           🔍 Quét gợi ý lại
         </button>
         <span className="text-sm text-slate-500">
-          {items.length} mã chờ phân nhóm • Đã chọn {checked.size}
+          {search.trim() ? `${filteredItems.length}/${items.length} mã phù hợp` : `${items.length} mã chờ phân nhóm`} • Đã chọn {checked.size}
         </span>
         <Button
           type="button"
@@ -741,6 +776,28 @@ function PendingTab({ category }: { category: GroupingCategory }) {
       ) : (
         <>
           <div className="rounded-xl border border-slate-200 overflow-hidden bg-white mb-4">
+            <div className="border-b border-slate-200 bg-slate-50/70 p-3">
+              <div className="relative max-w-xl">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Tìm theo mã, tên vật tư hoặc nhóm gợi ý..."
+                  aria-label="Tìm kiếm vật tư chờ phân nhóm"
+                  className="h-10 bg-white pl-9 pr-10"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    aria-label="Xóa nội dung tìm kiếm"
+                    className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -748,10 +805,9 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                     <th className="px-4 py-3 w-10">
                       <input
                         type="checkbox"
-                        checked={checked.size === items.length && items.length > 0}
-                        onChange={(e) =>
-                          setChecked(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())
-                        }
+                        checked={allFilteredChecked}
+                        onChange={(e) => toggleAllFiltered(e.target.checked)}
+                        aria-label="Chọn tất cả vật tư đang hiển thị"
                       />
                     </th>
                     <th className="text-left px-2 py-3">Mã vật tư</th>
@@ -762,7 +818,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it) => {
+                  {filteredItems.map((it) => {
                     const sug = it.suggestedOilTypeId ? typeById.get(it.suggestedOilTypeId) : null;
                     return (
                       <tr key={it.id} className="border-t border-slate-100 hover:bg-blue-50/30">
@@ -809,6 +865,13 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                       </tr>
                     );
                   })}
+                  {filteredItems.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-400">
+                        Không tìm thấy vật tư phù hợp với “{search.trim()}”.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -826,7 +889,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                   className="block mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm min-w-56"
                 >
                   <option value="">— Chọn nhóm —</option>
-                  {oilTypes.map((t) => (
+                  {oilTypes.filter((t) => !t.code.startsWith(STANDALONE_GROUP_PREFIX)).map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.code} · {t.name} ({t.baseUnit})
                     </option>
@@ -893,11 +956,11 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                 Gom nhóm
               </button>
               <button
-                onClick={ignoreSelected}
+                onClick={createStandaloneGroups}
                 disabled={busy || checked.size === 0}
                 className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 border border-slate-300 hover:bg-slate-50 disabled:opacity-40"
               >
-                Không cần gom — bỏ qua
+                Không cần gom
               </button>
             </div>
           </div>
