@@ -61,8 +61,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay + BBNT DO", who: "Theo phân quyền quy trình" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay + BB thu hồi", who: "Theo phân quyền quy trình" },
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + BBNT DO", who: "Thống kê" },
   ],
   UNG: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
@@ -621,7 +621,7 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = 
   { key: "stats", label: "Thống kê xác nhận ĐXVT (nhập số + xác nhận giao/trả phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "receive", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "accept", label: "Nghiệm thu + BBNT ký tay + xuất BBNT DO", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", label: "Nghiệm thu + BBNT ký tay + BB thu hồi", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "settle", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
@@ -1740,7 +1740,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : t.type === "SU_DUNG_HIEN_CO" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT D-Office"}
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : t.type === "SU_DUNG_HIEN_CO" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT ký tay"}
         </button>
       </div>
     );
@@ -1794,6 +1794,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         </span>
         <span className="settlement-check-label">Xác nhận đã quyết toán vật tư</span>
       </label>
+      {t.type === "DE_XUAT" && <div className="note"><FileText size={15}/> Khi hoàn tất phiếu, hệ thống sẽ xuất <b>Biên Bản Nghiệm Thu D-Office</b>.</div>}
       <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Phiếu đã hoàn thành")}>
         <CircleCheck size={15}/> Hoàn tất phiếu
       </button>

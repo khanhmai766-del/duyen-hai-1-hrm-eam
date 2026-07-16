@@ -956,16 +956,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
           items: toBbntItems(t),
         }),
-        bbnt: await buildBbntDoDocument(t, { pctNumber: pct, workStartedAt, workEndedAt }),
-        // Luồng Đề xuất tạo BBTHVT từ bước Sử dụng vật tư (chưa có PCT) — tạo lại
-        // tại đây để cột Ghi chú đồng bộ số PCT/LCT vừa nhập.
+        // BBNT DO của luồng Đề xuất xuất ở bước Quyết toán (sau khi Thống kê xác nhận).
+        // BBTHVT tạo lại tại đây (bước Sử dụng vật tư chưa có PCT) để Ghi chú có số PCT/LCT.
         recovery: t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null,
       } : null;
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
           status: t.type === "UNG" ? "NHAN_VAT_TU" : t.type === "SU_DUNG_HIEN_CO" ? "CHO_THONG_KE_XUAT_BIEN_BAN" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
-          ...(documents ? { docUrl: documents.bbnt.url, bbktDocUrl: documents.bbkt.url } : {}),
+          ...(documents ? { bbktDocUrl: documents.bbkt.url } : {}),
           ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
           workStartedAt, workEndedAt,
           ...(bbkt ? { bbktNumber: bbkt } : {}),
@@ -974,7 +973,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${materialTicketReference(t)}: đã nghiệm thu, chuyển xác nhận vật tư lãnh` : t.type === "SU_DUNG_HIEN_CO" ? `${materialTicketReference(t)}: nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản` : `${materialTicketReference(t)}: nghiệm thu, xuất biên bản`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${materialTicketReference(t)}: đã nghiệm thu, chuyển xác nhận vật tư lãnh` : t.type === "SU_DUNG_HIEN_CO" ? `${materialTicketReference(t)}: nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản` : `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay${documents?.recovery ? " và Biên bản vật tư thu hồi" : ""}, chờ Thống kê quyết toán`);
       return ok(up);
     }
 
@@ -1031,8 +1030,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "settle") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
-      const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "HOAN_TAT", settledAt: new Date(), settledByName: user.name ?? "" }, include: ITEM_INCLUDE });
-      await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${materialTicketReference(t)}: đã quyết toán vật tư`);
+      // Luồng Đề xuất: BBNT DO xuất tại bước Quyết toán, sau khi Thống kê xác nhận
+      // (các luồng khác đã xuất ở bước xuất biên bản trước đó).
+      const bbnt = t.type === "DE_XUAT" ? await buildBbntDoDocument(t) : null;
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: { status: "HOAN_TAT", settledAt: new Date(), settledByName: user.name ?? "", ...(bbnt ? { docUrl: bbnt.url } : {}) },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${materialTicketReference(t)}: đã quyết toán vật tư${bbnt ? ", xuất BBNT DO" : ""}`);
       return ok(up);
     }
 
