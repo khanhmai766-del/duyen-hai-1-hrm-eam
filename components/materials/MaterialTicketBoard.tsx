@@ -61,7 +61,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay + BB thu hồi", who: "Theo phân quyền quy trình" },
+    { key: "CHO_NGHIEM_THU", label: "BBNT ký tay + BBNT thu hồi", who: "Theo phân quyền quy trình" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + BBNT DO", who: "Thống kê" },
   ],
   UNG: [
@@ -78,7 +78,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "NHAN_TU_HIEN_CO", label: "Nhận vật tư hiện có", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay + BB thu hồi", who: "Theo phân quyền quy trình" },
+    { key: "CHO_NGHIEM_THU", label: "BBNT ký tay + BBNT thu hồi", who: "Theo phân quyền quy trình" },
     { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận + BBNT D-Office", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
@@ -334,7 +334,7 @@ export default function MaterialTicketBoard({
               <span className="proposal-cell">
                 {t.proposalNumber
                   ? <span className="code">{t.proposalNumber}</span>
-                  : <span className="nophieu">Chưa có phiếu đề xuất</span>}
+                  : <span className="nophieu">{t.type === "SU_DUNG_HIEN_CO" ? "Không cần phiếu đề xuất" : "Chưa có phiếu đề xuất"}</span>}
               </span>
               <span>{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
 	              <span className="status-stack">
@@ -642,7 +642,7 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = 
   { key: "stats", label: "Thống kê xác nhận ĐXVT (nhập số + xác nhận giao/trả phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "receive", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "accept", label: "Nghiệm thu + BBNT ký tay + BB thu hồi", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", label: "Nghiệm thu — BBNT ký tay + BBNT thu hồi", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "settle", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
