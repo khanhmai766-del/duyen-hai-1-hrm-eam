@@ -3,8 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
+import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
 import { generateBlankDocx } from "@/lib/blank-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
+import { normalizeText } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +72,62 @@ function toBbntItems(t: FullTicket, quantityOverrides?: Map<string, number>): Bb
     deviceName: it.deviceNameManual || it.device?.name || "",
     deviceKks: it.device?.kks ?? null,
   }));
+}
+
+/**
+ * Xuất BBNT DO đã điền dữ liệu từ templates/bbnt-do-template.docx (thay file trắng cũ).
+ * Chèn chữ ký số: Quản đốc (đại diện chủ quản) + người sử dụng vật tư (Người lập).
+ * `overrides` cho giá trị vừa nhập trong request hiện tại nhưng chưa ghi vào `t`.
+ */
+async function buildBbntDoDocument(
+  t: FullTicket,
+  overrides?: {
+    pctNumber?: string;
+    workStartedAt?: Date;
+    workEndedAt?: Date;
+    receivedQuantity?: number;
+    itemOverride?: { materialCode: string; materialName: string };
+  }
+) {
+  const items: BbntDoItem[] = t.items.map((it, index) => ({
+    deviceSeq: it.deviceSeq,
+    deviceName: it.deviceNameManual || it.device?.name || "",
+    materialCode: (index === 0 ? overrides?.itemOverride?.materialCode : undefined) || it.erpCode || it.material.code,
+    materialName: (index === 0 ? overrides?.itemOverride?.materialName : undefined) || it.erpName || it.material.name,
+    materialUnit: it.material.unit,
+  }));
+  const signatureSelect = { name: true, position: true, signatureKey: true, signatureUrl: true } as const;
+  const [usedByUser, activeUsers] = await Promise.all([
+    t.usedById
+      ? prisma.user.findUnique({ where: { id: t.usedById }, select: signatureSelect })
+      : Promise.resolve(null),
+    prisma.user.findMany({ where: { isActive: true }, select: signatureSelect }),
+  ]);
+  // Quản đốc (không tính Phó quản đốc): chức vụ chuẩn hóa bắt đầu bằng "quan doc".
+  const quanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
+  const [chuKyNguoiLap, chuKyQuanDoc] = await Promise.all([
+    resolveSignatureBuffer(usedByUser),
+    resolveSignatureBuffer(quanDoc),
+  ]);
+  return generateBbntDoDoc({
+    fileBaseName: materialTicketFileBase(t),
+    unit: t.unit,
+    pctNumber: overrides?.pctNumber ?? t.pctNumber,
+    proposalNumber: t.proposalNumber,
+    proposalReceiverName: t.proposalReceiverName,
+    quanDocName: quanDoc?.name ?? null,
+    usedByName: t.usedByName,
+    usedByPosition: t.usedByPosition,
+    workStartedAt: overrides?.workStartedAt ?? t.workStartedAt,
+    workEndedAt: overrides?.workEndedAt ?? t.workEndedAt,
+    receivedQuantity: overrides?.receivedQuantity ?? t.receivedQuantity,
+    usedQuantity: t.usedQuantity,
+    recoveryQuantity: t.recoveryQuantity,
+    recoveryReturned: Boolean(t.recoveryReturnedAt),
+    items,
+    chuKyQuanDoc,
+    chuKyNguoiLap,
+  });
 }
 
 // GET /api/material-tickets/[id]
@@ -320,7 +378,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
-        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, items: toBbntItems(t) });
+        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url }, include: ITEM_INCLUDE });
       }
       if (!up) return fail("Không thể cập nhật bước");
@@ -657,11 +715,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           tenTruongCa: t.completedByName ?? "",
           tenVHV: t.proposedByName,
           chucVuVHV: t.proposedByPosition,
+          unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition,
           items: toBbntItems(t).map((row, index) => index === 0
             ? { ...row, materialCode: erpCode, materialName: erpMaterial.name, quantity: receivedQuantity }
             : row),
         }),
-        bbnt: await generateBlankDocx(materialTicketFileBase(t), "BBNT-DO"),
+        bbnt: await buildBbntDoDocument(t, {
+          receivedQuantity,
+          itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
+        }),
         recovery: t.recoveryRequired
           ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
           : null,
@@ -801,9 +863,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
+          unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition,
           items: toBbntItems(t),
         }),
-        bbnt: await generateBlankDocx(materialTicketFileBase(t), "BBNT-DO"),
+        bbnt: await buildBbntDoDocument(t, { pctNumber: pct, workStartedAt, workEndedAt }),
       } : null;
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
@@ -842,9 +905,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: t.pctNumber, noiDung: t.completionNote ?? "",
           thoiGianBatDau: t.workStartedAt, thoiGianKetThuc: t.workEndedAt,
           tenChiHuy: t.chiHuyName ?? "", tenTruongCa: t.completedByName ?? "",
-          tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, items,
+          tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
+          unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition, items,
         }),
-        bbnt: await generateBlankDocx(materialTicketFileBase(t), "BBNT-DO"),
+        bbnt: await buildBbntDoDocument(t, {
+          itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
+        }),
         recovery: t.recoveryRequired
           ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
           : null,

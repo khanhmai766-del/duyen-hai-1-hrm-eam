@@ -35,6 +35,9 @@ export interface BbntData {
   tenTruongCa: string;      // tên thật tài khoản Trưởng Ca/TK xác nhận xuất
   tenVHV?: string | null;   // người đề xuất / nhập liệu
   chucVuVHV?: string | null;
+  unit?: string | null;       // tổ máy S1 | S2 | COMMON
+  usedByName?: string | null; // người sử dụng vật tư (mẫu mới); thiếu thì rơi về tenVHV
+  usedByPosition?: string | null;
   items: BbntItem[];
 }
 
@@ -50,6 +53,8 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
     delimiters: { start: "{{", end: "}}" },
     paragraphLoop: true,
     linebreaks: true,
+    // Token có trong mẫu nhưng thiếu dữ liệu → in chuỗi rỗng, không in "undefined"
+    nullGetter: () => "",
   });
 
   const today = new Date();
@@ -75,6 +80,12 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
     chucVuVHV: d.chucVuVHV || "",
     tenChiHuy: d.tenChiHuy || "",
     tenTruongCa: d.tenTruongCa || "",
+    // Bộ token của mẫu mới (bbnt-template.docx bản chỉnh tay) — điền song song với tên cũ
+    unit: d.unit || "",
+    pctNumber: d.soPCT || "",
+    deviceNameManual: joinUniq(d.items.map((i) => i.deviceName)),
+    usedByName: d.usedByName || d.tenVHV || "",
+    usedByPosition: d.usedByPosition || d.chucVuVHV || "",
   });
 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;

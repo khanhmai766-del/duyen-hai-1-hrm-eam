@@ -24,6 +24,13 @@ export function bbntHandwrittenFileName(deviceNames: string[], issuedAt = new Da
   return `BBNT_ky_tay_${safeFilePart(uniqueDeviceNames)}_${day}${month}${year.slice(-2)}.docx`;
 }
 
+/** Tên file BBNT DO: "BBNT DO <tên thiết bị>_ddmmyy" — ddmmyy theo ngày bổ sung của BBNT ký tay. */
+export function bbntDoFileName(deviceNames: string[], issuedAt = new Date()) {
+  const { day, month, year } = vietnamDateParts(issuedAt);
+  const uniqueDeviceNames = [...new Set(deviceNames.map((name) => name.trim()).filter(Boolean))].join(", ");
+  return `BBNT DO ${safeFilePart(uniqueDeviceNames)}_${day}${month}${year.slice(-2)}.docx`;
+}
+
 export function vietnamDocumentDate(value: Date) {
   const { day, month, year } = vietnamDateParts(value);
   return `${day}/${month}/${year}`;
