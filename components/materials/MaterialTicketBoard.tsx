@@ -975,24 +975,26 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               const short = ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) && it.quantity > it.material.quantity;
               return (
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
-                  <div className="material-line">
-                    <b>{it.erpName || it.material.name}</b>
-                    {it.erpCode && (
-                      <Link className="material-code-link" href={materialCatalogHref(t, it.erpCode)}>
-                        {it.erpCode}
-                      </Link>
-                    )}
-                  </div>
-                  <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
-                  <div className="material-meta-row">
-                    <span className="soft material-device-line">{it.deviceNameManual || (it.device ? `${it.device.seq} · ${it.device.name}` : "Chưa nhập thiết bị")}</span>
-                    {itemIndex === 0 && (
-                      <span className="material-proposal-line">
-                        <span>Số biên bản kiểm tra: <b>{t.bbktNumber ?? ""}</b></span>
-                        {t.proposalNumber && <span>Số phiếu ĐXVT: <b>{t.proposalNumber}</b></span>}
-                        {t.proposalReceiverName && <small>VHV nhận: <b>{t.proposalReceiverName}</b></small>}
-                      </span>
-                    )}
+                  <div className="material-overview-grid">
+                    <div className="material-info-column">
+                      <b>{it.erpName || it.material.name}</b>
+                      <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
+                      <span className="soft material-device-line">{it.deviceNameManual || (it.device ? `${it.device.seq} · ${it.device.name}` : "Chưa nhập thiết bị")}</span>
+                    </div>
+                    <div className="material-info-column material-info-column-right">
+                      {it.erpCode && (
+                        <Link className="material-code-link" href={materialCatalogHref(t, it.erpCode)}>
+                          {it.erpCode}
+                        </Link>
+                      )}
+                      {itemIndex === 0 && (
+                        <span className="material-proposal-line">
+                          <span>Số biên bản kiểm tra: <b>{t.bbktNumber ?? ""}</b></span>
+                          {t.proposalNumber && <span>Số phiếu ĐXVT: <b>{t.proposalNumber}</b></span>}
+                          {t.proposalReceiverName && <small>VHV nhận: <b>{t.proposalReceiverName}</b></small>}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1001,10 +1003,14 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
 
           <div className="step-workspace">
-            {t.proposalNote && <div className="meta-line">Ghi chú lý do: <b>{t.proposalNote}</b></div>}
+            {(t.proposalNote || t.repairRequestNumber) && (
+              <div className="ticket-note-row">
+                {t.proposalNote && <div className="meta-line">Ghi chú lý do: <b>{t.proposalNote}</b></div>}
+                {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
+              </div>
+            )}
             <div className={`completion-overview ${exportedDocumentCount > 0 ? "with-documents" : ""}`}>
               <div className="completion-details">
-                {t.repairRequestNumber && <div className="meta-line">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
                 {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
                 {t.receivedQuantity != null && (
                   <div className="meta-line received-summary">
@@ -2013,19 +2019,24 @@ const CSS = `
 .step-workspace .done-note{margin-bottom:8px;}
 .item{border:1px solid ${C.line};border-radius:11px;padding:10px 12px;margin-bottom:7px;display:flex;flex-direction:column;gap:2px;font-size:12.5px;}
 .item b{font-size:13px;color:${C.navy};}
-.material-line{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
-.material-line b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.material-overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start;min-width:0;}
+.material-info-column{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;line-height:1.35;}
+.material-info-column>b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.material-info-column-right{align-items:flex-end;text-align:right;}
 .material-code-link{flex:0 0 auto;border-radius:7px;background:${C.accent}10;padding:3px 8px;font-family:Poppins,Inter,sans-serif;font-size:11px;font-weight:800;color:${C.accent};text-decoration:none;}
 .material-code-link:hover{background:${C.accent};color:#fff;}
-.material-meta-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;flex-wrap:wrap;}
-.material-device-line{flex:1 1 240px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.material-proposal-line{display:flex;flex:0 1 360px;min-width:220px;max-width:55%;margin-left:auto;flex-direction:column;align-items:flex-end;gap:3px;font-size:12px;font-weight:600;color:${C.muted};text-align:right;}
+.material-device-line{display:block;width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.material-proposal-line{display:flex;width:100%;min-width:0;margin:0;flex-direction:column;align-items:flex-end;gap:3px;font-size:12px;font-weight:600;color:${C.muted};text-align:right;}
 .material-proposal-line>span,.material-proposal-line small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .material-proposal-line small{font-size:11px;}
 .material-proposal-line b{font-size:12px;color:${C.navy};}
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
+.ticket-note-row{display:flex;align-items:center;gap:6px 26px;min-width:0;margin-bottom:8px;flex-wrap:wrap;}
+.ticket-note-row .meta-line{display:flex;align-items:baseline;gap:4px;min-width:0;margin:0;}
+.ticket-note-row .repair-request-meta{flex:0 1 auto;}
+.ticket-note-row b{overflow-wrap:anywhere;}
 .completion-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch;min-width:0;}
 .completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(320px,35%);}
 .completion-details{display:flex;min-width:0;flex-direction:column;padding-top:1px;}
