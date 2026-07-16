@@ -1737,10 +1737,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               </label>
             </div>
           </>
-        <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số biên bản ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+        <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : t.type === "SU_DUNG_HIEN_CO" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT DO trắng"}
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : t.type === "SU_DUNG_HIEN_CO" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT D-Office"}
         </button>
       </div>
     );
