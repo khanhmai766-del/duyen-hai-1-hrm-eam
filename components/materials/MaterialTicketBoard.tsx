@@ -140,8 +140,9 @@ export default function MaterialTicketBoard({
   const { data, isLoading } = useMaterialTickets(monthFilter);
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState("ALL");
-  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("ALL");
-  const [unitFilter, setUnitFilter] = useState("ALL");
+  // Mặc định lọc theo loại/tổ máy dùng nhiều nhất; người dùng vẫn chọn lại "Tất cả" được.
+  const [materialCategoryFilter, setMaterialCategoryFilter] = useState("Dầu bôi trơn");
+  const [unitFilter, setUnitFilter] = useState("S1");
   const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
