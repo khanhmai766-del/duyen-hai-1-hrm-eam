@@ -1695,7 +1695,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 		              <span>Xác nhận đã trả vật tư thu hồi</span>
 		            </label>
 		          </div>
-	          <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : t.type === "SU_DUNG_HIEN_CO" ? "Biên bản vật tư thu hồi sẽ được tạo tại bước Thống kê xác nhận và xuất biên bản." : "Hệ thống sẽ xuất file Word trắng “Biên bản vật tư thu hồi”. Mẫu chính thức sẽ được thay sau."}</div>
+	          {t.type !== "DE_XUAT" && <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Biên bản vật tư thu hồi sẽ được tạo tại bước Thống kê xác nhận và xuất biên bản."}</div>}
 		        </>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
