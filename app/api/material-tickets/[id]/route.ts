@@ -86,6 +86,7 @@ async function buildBbntDoDocument(
     workStartedAt?: Date;
     workEndedAt?: Date;
     receivedQuantity?: number;
+    deliveryNoteNumber?: string;
     itemOverride?: { materialCode: string; materialName: string };
   }
 ) {
@@ -96,6 +97,24 @@ async function buildBbntDoDocument(
     materialName: (index === 0 ? overrides?.itemOverride?.materialName : undefined) || it.erpName || it.material.name,
     materialUnit: it.material.unit,
   }));
+  // "Hệ thống, thiết bị" theo cột Hệ thống/thiết bị của Chi tiết điểm thay thế:
+  // tên node cây thiết bị; thiết bị đã xóa thì rơi về hệ thống của điểm thay thế.
+  const missingDevice = t.items.filter((it) => !it.device?.name && it.deviceSeq);
+  const systemBySeq = new Map<string, string>();
+  if (missingDevice.length) {
+    const points = await prisma.materialReplacement.findMany({
+      where: { OR: missingDevice.map((it) => ({ materialId: it.materialId, deviceSeq: it.deviceSeq! })) },
+      select: { deviceSeq: true, system: true },
+    });
+    for (const point of points) {
+      if (point.deviceSeq && point.system) systemBySeq.set(point.deviceSeq, point.system);
+    }
+  }
+  const heThongThietBi = [...new Set(
+    t.items
+      .map((it) => it.device?.name || (it.deviceSeq ? systemBySeq.get(it.deviceSeq) : null) || it.deviceSeq)
+      .filter(Boolean) as string[]
+  )].join(", ");
   const signatureSelect = { name: true, position: true, signatureKey: true, signatureUrl: true } as const;
   const [usedByUser, activeUsers] = await Promise.all([
     t.usedById
@@ -120,9 +139,10 @@ async function buildBbntDoDocument(
   return generateBbntDoDoc({
     fileBaseName: materialTicketFileBase(t),
     unit: t.unit,
+    heThongThietBi,
     pctNumber: overrides?.pctNumber ?? t.pctNumber,
     proposalNumber: t.proposalNumber,
-    proposalReceiverName: t.proposalReceiverName,
+    deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
     quanDocName: quanDoc?.name ?? null,
     usedByName: materialUserName || t.usedByName,
     usedByPosition: (materialUserName ? signer?.position : null) ?? t.usedByPosition,
@@ -733,6 +753,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         }),
         bbnt: await buildBbntDoDocument(t, {
           receivedQuantity,
+          deliveryNoteNumber: receivedMethod || undefined,
           itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
         }),
         recovery: t.recoveryRequired

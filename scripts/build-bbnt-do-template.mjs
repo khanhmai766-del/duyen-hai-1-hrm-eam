@@ -58,7 +58,7 @@ const body1 = [
   p(run("NGHIỆM THU LẮP ĐẶT, CHẠY THỬ VÀ HOÀN THÀNH ĐƯA VÀO SỬ DỤNG", { b: true, sz: 26 }), { align: "center", after: 120 }),
 
   p(run("1.", { b: true }) + tabR() + run("Đối tượng nghiệm thu:", { b: true })),
-  p(run("-") + tabR() + run("Hệ thống, thiết bị: {{unit}} - {{deviceSeq}}"), { ind: 567 }),
+  p(run("-") + tabR() + run("Hệ thống, thiết bị: {{unit}} - {{heThongThietBi}}"), { ind: 567 }),
   p(run("-") + tabR() + run("Vị trí lắp đặt: {{deviceNameManual}}"), { ind: 567 }),
   p(run("-") + tabR() + run("PCT/LCT số: {{pctNumber}}"), { ind: 567 }),
 
@@ -80,7 +80,7 @@ const body1 = [
   p(run("5.1.", { b: true, i: true }) + tabR() + run("Tài liệu căn cứ nghiệm thu:", { b: true, i: true }), { ind: 567 }),
   p(run("-") + tabR() + run("Kết quả kiểm tra:"), { ind: 900 }),
   p(run("-") + tabR() + run("Phương án chi tiết sửa chữa, bảo dưỡng hệ thống, thiết bị ") + run("(không);", { i: true }), { ind: 900 }),
-  p(run("-") + tabR() + run("{{proposalNumber}}. {{proposalReceiverName}}"), { ind: 900 }),
+  p(run("-") + tabR() + run("{{proposalNumber}}. {{deliveryNote}}"), { ind: 900 }),
   p(run("-") + tabR() + run("Vật tư công ty cấp;"), { ind: 900 }),
   p(run("-") + tabR() + run("Biên bản nghiệm thu vật tư, thiết bị trước khi đưa vào sử dụng ngày ") + run("(nếu có);", { i: true }), { ind: 900 }),
   p(run("-") + tabR() + run("Các tài liệu kỹ thuật, hồ sơ vật tư, thiết bị liên quan ") + run("(không)", { i: true }), { ind: 900 }),

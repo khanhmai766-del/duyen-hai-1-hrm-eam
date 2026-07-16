@@ -29,9 +29,10 @@ export interface BbntDoItem {
 export interface BbntDoData {
   fileBaseName: string; // định danh kỹ thuật tháng + STT, dùng làm thư mục lưu file
   unit: string; // tổ máy S1 | S2 | COMMON
+  heThongThietBi?: string | null; // tên hệ thống/thiết bị theo Chi tiết điểm thay thế (EquipmentNode.name)
   pctNumber?: string | null;
   proposalNumber?: string | null;
-  proposalReceiverName?: string | null;
+  deliveryNoteNumber?: string | null; // số phiếu giao hàng
   quanDocName?: string | null; // tên Quản đốc (đại diện đơn vị chủ quản)
   usedByName?: string | null; // người sử dụng vật tư = Người lập
   usedByPosition?: string | null;
@@ -68,14 +69,18 @@ function joinUniq(arr: Array<string | null | undefined>) {
   return [...new Set(arr.filter(Boolean) as string[])].join(", ");
 }
 
+/** "18 giờ 18 phút ngày 15 tháng 07 năm 2026" — định dạng chữ theo mẫu biên bản. */
 function vnDateTime(value?: Date | string | null) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("vi-VN", {
+  const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Ho_Chi_Minh",
     hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric",
-  });
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("hour")} giờ ${get("minute")} phút ngày ${get("day")} tháng ${get("month")} năm ${get("year")}`;
 }
 
 function vnDate(value?: Date | string | null) {
@@ -112,11 +117,11 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
   const issuedAt = d.issuedAt ?? new Date();
   doc.render({
     unit: d.unit,
-    deviceSeq: joinUniq(d.items.map((item) => item.deviceSeq)),
+    heThongThietBi: d.heThongThietBi || joinUniq(d.items.map((item) => item.deviceSeq)),
     deviceNameManual: joinUniq(d.items.map((item) => item.deviceName)),
     pctNumber: d.pctNumber || "",
     proposalNumber: d.proposalNumber ? `Phiếu đề xuất vật tư số ${d.proposalNumber}` : "Phiếu đề xuất vật tư: (không)",
-    proposalReceiverName: d.proposalReceiverName ? `VHV nhận phiếu: ${d.proposalReceiverName}` : "",
+    deliveryNote: d.deliveryNoteNumber ? `Phiếu giao hàng số ${d.deliveryNoteNumber}` : "",
     quanDocName: d.quanDocName || "……………………………",
     usedByName: d.usedByName || "……………………………",
     usedByPosition: d.usedByPosition || "……………………",
