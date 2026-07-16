@@ -188,6 +188,7 @@ async function buildRecoveryDocument(
   overrides?: {
     recoveryQuantity?: number | null;
     deliveryNoteNumber?: string;
+    pctNumber?: string;
     itemOverride?: { materialCode: string; materialName: string };
   }
 ) {
@@ -197,7 +198,7 @@ async function buildRecoveryDocument(
     soVB: String(docNo).padStart(2, "0"),
     recoveryQuantity: overrides?.recoveryQuantity !== undefined ? overrides.recoveryQuantity : t.recoveryQuantity,
     deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
-    pctNumber: t.pctNumber,
+    pctNumber: overrides?.pctNumber ?? t.pctNumber,
     materialCategory: t.materialCategory,
     items: t.items.map((it, index) => ({
       deviceName: it.deviceNameManual || it.device?.name || "",
@@ -460,7 +461,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
         const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url }, include: ITEM_INCLUDE });
+        // Đổi số PCT/LCT → xuất lại BBTHVT để cột Ghi chú đồng bộ số mới.
+        const recoveryDoc = t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
+        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url, ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}) }, include: ITEM_INCLUDE });
       }
       if (!up) return fail("Không thể cập nhật bước");
       await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${materialTicketReference(t)}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
@@ -954,12 +957,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           items: toBbntItems(t),
         }),
         bbnt: await buildBbntDoDocument(t, { pctNumber: pct, workStartedAt, workEndedAt }),
+        // Luồng Đề xuất tạo BBTHVT từ bước Sử dụng vật tư (chưa có PCT) — tạo lại
+        // tại đây để cột Ghi chú đồng bộ số PCT/LCT vừa nhập.
+        recovery: t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null,
       } : null;
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
           status: t.type === "UNG" ? "NHAN_VAT_TU" : t.type === "SU_DUNG_HIEN_CO" ? "CHO_THONG_KE_XUAT_BIEN_BAN" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
           ...(documents ? { docUrl: documents.bbnt.url, bbktDocUrl: documents.bbkt.url } : {}),
+          ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
           workStartedAt, workEndedAt,
           ...(bbkt ? { bbktNumber: bbkt } : {}),
           completedById: user.id, completedByName: user.name ?? "",
