@@ -143,6 +143,8 @@ export default function MaterialTicketBoard({
   // Mặc định lọc theo loại/tổ máy dùng nhiều nhất; người dùng vẫn chọn lại "Tất cả" được.
   const [materialCategoryFilter, setMaterialCategoryFilter] = useState("Dầu bôi trơn");
   const [unitFilter, setUnitFilter] = useState("S1");
+  // Lọc theo luồng phiếu (cột Yêu cầu): Đề xuất / Ứng / Sử dụng hiện có.
+  const [typeFilter, setTypeFilter] = useState("ALL");
   const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
@@ -189,12 +191,13 @@ export default function MaterialTicketBoard({
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
       const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
       const matchesUnit = unitFilter === "ALL" || t.unit === unitFilter;
+      const matchesType = typeFilter === "ALL" || t.type === typeFilter;
       const searchable = normalizeText([
         t.proposalNumber,
         ...t.items.flatMap((it) => [it.erpName, it.material.name, it.material.code]),
       ].filter(Boolean).join(" "));
       const matchesSearch = !searchText || searchable.includes(searchText);
-      return matchesStatus && matchesMaterialCategory && matchesUnit && matchesSearch;
+      return matchesStatus && matchesMaterialCategory && matchesUnit && matchesType && matchesSearch;
     });
     // Tháng mới nhất đứng trước; trong từng tháng, STT cao nhất là phiếu mới nhất.
     return list.sort((a, b) =>
@@ -202,7 +205,7 @@ export default function MaterialTicketBoard({
       || b.sequenceNumber - a.sequenceNumber
       || b.createdAt.localeCompare(a.createdAt)
     );
-  }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, searchText]);
+  }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, typeFilter, searchText]);
   const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : materialCategoryFilter;
   const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
 
@@ -273,7 +276,22 @@ export default function MaterialTicketBoard({
 
       <div className="list">
         <div className="row rhead">
-          <span>Số thứ tự</span><span>Yêu cầu</span><span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
+          <span>Số thứ tự</span>
+          <span className="type-head">
+            <select
+              className={typeFilter !== "ALL" ? "filtering" : ""}
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              aria-label="Lọc theo luồng phiếu"
+              title="Lọc theo luồng phiếu"
+            >
+              <option value="ALL">Yêu cầu</option>
+              <option value="DE_XUAT">Đề xuất</option>
+              <option value="UNG">Ứng</option>
+              <option value="SU_DUNG_HIEN_CO">Sử dụng hiện có</option>
+            </select>
+          </span>
+          <span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
@@ -1876,6 +1894,8 @@ const CSS = `
 .wait-badge.warm{color:${C.warn};}
 .wait-badge.hot{color:${C.bad};}
 .rhead{background:#fbfbfa;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:default;}
+.rhead .type-head select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${C.soft};cursor:pointer;outline:0;padding:0;max-width:100%;}
+.rhead .type-head select.filtering{color:${C.navy};}
 .code{font-family:Poppins,Inter,sans-serif;font-weight:600;color:${C.navy};}
 .proposal-cell{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;}
 .proposal-cell small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${C.muted};font-size:10.5px;font-weight:600;}
