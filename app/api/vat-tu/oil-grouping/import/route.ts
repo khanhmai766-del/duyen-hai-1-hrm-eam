@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { canManageMaterialCatalog } from "@/lib/constants";
 import { isGroupableCategory, runOilGroupingSync, type GroupableCategory } from "@/lib/oil-grouping-sync";
+import { parseErpNumber } from "@/lib/parse-number";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ function cleanString(value: unknown) {
 }
 
 function cleanStock(value: unknown) {
-  const stock = Math.round(Number(value));
+  const stock = Math.round(parseErpNumber(value));
   return Number.isFinite(stock) && stock > 0 ? stock : 0;
 }
 

@@ -312,10 +312,7 @@ export default function MaterialTicketBoard({
               <span className="material-name" title={materialText}>{materialText}</span>
               <span className="proposal-cell">
                 {t.proposalNumber
-                  ? <>
-                      <span className="code">{t.proposalNumber}</span>
-                      {t.proposalReceiverName && <small title={t.proposalReceiverName}>VHV nhận: {t.proposalReceiverName}</small>}
-                    </>
+                  ? <span className="code">{t.proposalNumber}</span>
                   : <span className="nophieu">Chưa có phiếu đề xuất</span>}
               </span>
               <span>{t.items.some((i) => i.quantity > 0) ? t.items.filter((i) => i.quantity > 0).map((i) => `${i.quantity} ${i.material.unit}`).join(", ") : "Chưa nhập"}</span>
@@ -505,12 +502,12 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         {!type ? (
           <div className="pick">
             <button className="card dx" onClick={() => setType("DE_XUAT")}>
-              <ClipboardList size={26} /><b>BBNT ký tay + Đề xuất vật tư</b>
+              <ClipboardList size={26} /><b>BBKT + Đề xuất vật tư</b>
               <span>Tạo phiếu, chọn vật tư, nhập số lượng và kiểm kho ngay từ đầu</span>
             </button>
             <button className="card ung" onClick={() => setType("UNG")}>
               <Zap size={26} /><b>Ứng vật tư</b>
-              <span>Xử lý gấp: thay thế trước → hoàn tất BBNT ký tay &amp; thống kê song song sau</span>
+              <span>Xử lý gấp: thay thế trước → hoàn tất BBKT &amp; thống kê song song sau</span>
             </button>
           </div>
         ) : (
@@ -590,10 +587,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
                 </select>
                 {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
-                <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số BBNT ký tay sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
+                <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số biên bản kiểm tra sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
               </>
             ) : (
-              <p className="note ung"><Zap size={13} /> Luồng Ứng: số BBNT ký tay sẽ bổ sung sau bước xác nhận xuất file.</p>
+              <p className="note ung"><Zap size={13} /> Luồng Ứng: số biên bản kiểm tra sẽ bổ sung sau bước xác nhận xuất file.</p>
             )}
             <div className="frm-f">
               <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -881,8 +878,8 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
             </>
           )}
 
-          <label>Số BBNT ký tay (nếu có)</label>
-          <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số BBNT ký tay" />
+          <label>Số biên bản kiểm tra (nếu có)</label>
+          <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -926,7 +923,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${receiptSourceLabel(t.receiptSource)} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
-    t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
+    t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
@@ -989,9 +986,10 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                   <div className="material-meta-row">
                     <span className="soft material-device-line">{it.deviceNameManual || (it.device ? `${it.device.seq} · ${it.device.name}` : "Chưa nhập thiết bị")}</span>
-                    {itemIndex === 0 && t.proposalNumber && (
+                    {itemIndex === 0 && (
                       <span className="material-proposal-line">
-                        <span>Số phiếu ĐXVT: <b>{t.proposalNumber}</b></span>
+                        <span>Số biên bản kiểm tra: <b>{t.bbktNumber ?? ""}</b></span>
+                        {t.proposalNumber && <span>Số phiếu ĐXVT: <b>{t.proposalNumber}</b></span>}
                         {t.proposalReceiverName && <small>VHV nhận: <b>{t.proposalReceiverName}</b></small>}
                       </span>
                     )}
@@ -1006,6 +1004,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
             {t.proposalNote && <div className="meta-line">Ghi chú lý do: <b>{t.proposalNote}</b></div>}
             <div className={`completion-overview ${exportedDocumentCount > 0 ? "with-documents" : ""}`}>
               <div className="completion-details">
+                {t.repairRequestNumber && <div className="meta-line">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
                 {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
                 {t.receivedQuantity != null && (
                   <div className="meta-line received-summary">
@@ -1018,7 +1017,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                 {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
                 {t.usedQuantity != null && (
                   <div className="meta-line">
-                    Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
+                    {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
                     {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
                   </div>
                 )}
@@ -1079,6 +1078,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [receivedMethod, setReceivedMethod] = useState(t.deliveryNoteNumber ?? t.receivedMethod ?? "");
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">(normalizeReceiptSource(t.receiptSource));
   const [usedQuantity, setUsedQuantity] = useState(t.usedQuantity ?? 1);
+  const [materialUserName, setMaterialUserName] = useState(t.materialUserName ?? "");
   const [pctNumber, setPctNumber] = useState(t.pctNumber ?? "");
   const [chiHuyName, setChiHuyName] = useState(t.chiHuyName ?? "");
   const [completionNote, setCompletionNote] = useState(t.completionNote ?? "");
@@ -1096,6 +1096,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (editStep === "receive") Object.assign(payload, { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource });
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
+      materialUserName: materialUserName.trim(),
       recoveryRequired,
       recoveryQuantity: recoveryRequired ? recoveryQuantity : null,
       recoveryReturned: recoveryRequired && recoveryReturned,
@@ -1116,7 +1117,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Mã vật tư ERP<input value={t.items[0]?.erpCode ?? "—"} disabled /></label>
           <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
           <label>Số lượng đã xác nhận<input value={`${t.items[0]?.quantity ?? 0} ${t.items[0]?.material.unit ?? ""}`} disabled /></label>
-          <label>Số BBNT ký tay (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số BBNT ký tay" /></label>
+          <label>Số biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số biên bản kiểm tra" /></label>
         </>}
         {editStep === "stats" && <>
           <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
@@ -1140,6 +1141,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           </div>
         </>}
         {(editStep === "use") && <>
+          <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
           <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
           <label>Có vật tư thu hồi hay không?</label>
           <div className="seg2"><button type="button" disabled={!canEdit} className={!recoveryRequired ? "on" : ""} onClick={() => { setRecoveryRequired(false); setRecoveryReturned(false); }}>Không</button><button type="button" disabled={!canEdit} className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
@@ -1166,10 +1168,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
   // Tách riêng từng loại số chứng từ. Trước đây dùng chung một state `num`, nên
-  // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số BBNT ký tay ở bước sau.
+  // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số biên bản kiểm tra ở bước sau.
   const [proposalNumberInput, setProposalNumberInput] = useState("");
   const [bbktNumberInput, setBbktNumberInput] = useState("");
   const [repairRequestNumber, setRepairRequestNumber] = useState(t.repairRequestNumber ?? "");
+  const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
   const [pct, setPct] = useState("");
   const [chiHuy, setChiHuy] = useState("");
   const [proposalReceiverName, setProposalReceiverName] = useState(t.proposalReceiverName ?? "");
@@ -1275,7 +1278,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       CHO_XAC_NHAN_PDF: "Người được phân quyền xác nhận luồng Ứng",
     };
     const waiting = t.status === "CHO_HOAN_THIEN"
-      ? [!t.bbktNumber && "Người được phân quyền bổ sung số BBNT ký tay", !t.proposalNumber && "Người được phân quyền nhập số phiếu ĐXVT"].filter(Boolean).join(" + ")
+      ? [!t.bbktNumber && "Người được phân quyền bổ sung số biên bản kiểm tra", !t.proposalNumber && "Người được phân quyền nhập số phiếu ĐXVT"].filter(Boolean).join(" + ")
       : waitMap[t.status];
     return <div className="wait"><Clock size={14} /> Đang chờ: <b>{waiting}</b> — bạn không có thao tác ở bước này.</div>;
   }
@@ -1477,8 +1480,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <label className="field qty-field">Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : workflowType === "UNG" ? "ứng" : "sử dụng hiện có"} *
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
           </label>
-          <label className="field">Số BBNT ký tay (nếu có)
-            <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số BBNT ký tay" />
+          <label className="field">Số biên bản kiểm tra (nếu có)
+            <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
           </label>
         </div>
         <button className="btn primary big" disabled={qty <= 0 || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
@@ -1667,6 +1670,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const quantityExceedsReceived = t.type === "SU_DUNG_HIEN_CO" && qty > received;
 	            return (
 	              <div className="act">
+	        <label className="field">Tên VHV sử dụng vật tư *
+	          <input value={materialUserNameInput} onChange={(e) => setMaterialUserNameInput(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" />
+	        </label>
 	        <div className="use-field-grid">
 	          <label className="field">Khối lượng vật tư sử dụng{unit ? ` (${unit})` : ""} *
 	            <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
@@ -1694,8 +1700,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <p className="hint">
           {t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>} · Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
         </p>
-        <button className="btn primary big" disabled={qty <= 0 || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && Number(recoveryQuantityInput) <= 0) || act.isPending}
-          onClick={() => run({ action: "use", usedQuantity: qty, recoveryRequired, recoveryQuantity: recoveryRequired ? Number(recoveryQuantityInput) : undefined, recoveryReturned }, "Đã xác nhận sử dụng vật tư")}>
+        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && Number(recoveryQuantityInput) <= 0) || act.isPending}
+          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, recoveryRequired, recoveryQuantity: recoveryRequired ? Number(recoveryQuantityInput) : undefined, recoveryReturned }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
       </div>
@@ -1802,12 +1808,12 @@ const CSS = `
 .step-review:not(:disabled):hover{background:#f8fafc;border-radius:10px;}
 .step.recovery-pending{color:${C.warn};background:${C.warnBg};}
 .recovery-review-warning{display:flex;align-items:center;gap:8px;margin:0;color:${C.warn};font-size:13px;font-weight:650;}
-.step-review-dialog{width:min(560px,calc(100vw - 32px));max-height:86vh;overflow-y:auto;}
-.review-receive-row{display:grid;grid-template-columns:max-content minmax(170px,1fr);gap:12px;align-items:end;min-width:0;}
+.step-review-dialog{width:min(560px,calc(100vw - 32px));max-height:86vh;overflow-x:hidden;overflow-y:auto;}
+.review-receive-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:12px;align-items:end;min-width:0;}
 .review-receive-row.single{grid-template-columns:minmax(0,1fr) minmax(170px,1fr);}
 .review-receive-source{display:flex;flex-direction:column;gap:6px;min-width:0;}
 .fixed-receive-source{display:flex;height:40px;align-items:center;border:1px solid ${C.line};border-radius:9px;background:#f8fafc;padding:0 12px;color:${C.navy};font-size:12px;font-weight:700;}
-.review-receive-toggle{display:inline-flex;width:max-content;max-width:100%;gap:6px;}
+.review-receive-toggle{display:grid;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}

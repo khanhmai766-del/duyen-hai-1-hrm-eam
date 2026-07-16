@@ -12,7 +12,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { canManageMaterialCatalog } from "@/lib/constants";
-import { isGroupableCategory } from "@/lib/oil-grouping-sync";
+import { isGroupableCategory, STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,51 @@ export async function POST(req: NextRequest) {
 
     if (!Array.isArray(materialIds) || materialIds.length === 0) {
       return fail("Thiếu danh sách mã vật tư (materialIds)");
+    }
+
+    // Mỗi mã là một nhóm độc lập, dùng tên và ĐVT của chính vật tư.
+    if (action === "SINGLE") {
+      const result = await prisma.$transaction(async (tx) => {
+        const materials = await tx.erpMaterial.findMany({
+          where: { id: { in: materialIds } },
+          select: { id: true, name: true, unit: true, category: true },
+        });
+        if (materials.length !== materialIds.length) throw fail("Có mã vật tư không tồn tại");
+
+        for (const material of materials) {
+          const category = material.category ?? "Dầu bôi trơn";
+          if (!isGroupableCategory(category)) throw fail(`Loại vật tư của "${material.name}" không hợp lệ`);
+          const code = `${STANDALONE_GROUP_PREFIX}${material.id}`;
+          const group = await tx.oilType.upsert({
+            where: { code },
+            create: { code, name: material.name, baseUnit: material.unit, category },
+            update: { name: material.name, baseUnit: material.unit, category },
+          });
+          await tx.erpMaterial.update({
+            where: { id: material.id },
+            data: {
+              oilTypeId: group.id,
+              mappingStatus: "CONFIRMED",
+              conversionFactor: 1,
+              suggestedOilTypeId: null,
+              suggestedScore: null,
+              suggestedReason: null,
+            },
+          });
+          await tx.oilTypeMappingLog.create({
+            data: {
+              materialId: material.id,
+              oilTypeId: group.id,
+              action: "CONFIRMED",
+              userId: user.id,
+              reason: "Vật tư không cần gom — tạo nhóm riêng",
+            },
+          });
+        }
+        return { confirmed: materials.length };
+      });
+      await audit(user.id, "OIL_GROUPING_SINGLE", "ErpMaterial", undefined, `Tạo ${result.confirmed} nhóm vật tư riêng`);
+      return ok(result);
     }
 
     // ---------- BỎ QUA (không phải dầu) ----------
@@ -88,6 +133,9 @@ export async function POST(req: NextRequest) {
       // 2. Kiểm tra loại + ĐVT
       const target = await tx.oilType.findUnique({ where: { id: targetId } });
       if (!target) throw fail("Không tìm thấy nhóm vật tư đích", 404);
+      if (target.code.startsWith(STANDALONE_GROUP_PREFIX)) {
+        throw fail("Đây là nhóm riêng của một vật tư, không thể gom thêm mã khác");
+      }
       const mats = await tx.erpMaterial.findMany({
         where: { id: { in: materialIds } },
         select: { id: true, unit: true, category: true },

@@ -907,6 +907,7 @@ model MaterialTicket {
   // Bước SỬ DỤNG VẬT TƯ (SU_DUNG_VAT_TU)
   usedQuantity        Int? // khối lượng vật tư sử dụng
   remainingQuantity   Int? // còn lại = lãnh − dùng (âm = dùng vượt phần lãnh, trừ vào tồn kho)
+  materialUserName    String? // tên VHV trực tiếp sử dụng vật tư
   usedById            String?
   usedByName          String?
   usedByPosition      String?

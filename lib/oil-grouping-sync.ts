@@ -5,6 +5,7 @@ import { suggestOilType, proposeNewGroups, type MaterialLike, type OilTypeLike, 
 // Các loại vật tư được gom nhóm (khớp Material.category / ErpMaterial.category).
 export const GROUPABLE_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Bi Nghiền Than"] as const;
 export type GroupableCategory = (typeof GROUPABLE_CATEGORIES)[number];
+export const STANDALONE_GROUP_PREFIX = "__SINGLE__";
 
 export function isGroupableCategory(value: unknown): value is GroupableCategory {
   return typeof value === "string" && (GROUPABLE_CATEGORIES as readonly string[]).includes(value);
@@ -36,7 +37,7 @@ export async function runOilGroupingSync(only?: GroupableCategory): Promise<OilG
   for (const category of categories) {
     // 1. Nạp các nhóm CÙNG LOẠI + thành viên đã CONFIRMED
     const oilTypes = await prisma.oilType.findMany({
-      where: { category },
+      where: { category, NOT: { code: { startsWith: STANDALONE_GROUP_PREFIX } } },
       include: {
         materials: {
           where: { mappingStatus: "CONFIRMED" },

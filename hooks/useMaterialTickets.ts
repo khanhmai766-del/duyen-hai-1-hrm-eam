@@ -70,6 +70,7 @@ export interface MaterialTicket {
   receivedAt: string | null;
   usedQuantity: number | null;
   remainingQuantity: number | null;
+  materialUserName: string | null;
   usedByName: string | null;
   usedByPosition: string | null;
   usedAt: string | null;

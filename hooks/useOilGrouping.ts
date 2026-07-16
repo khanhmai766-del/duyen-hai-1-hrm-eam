@@ -66,7 +66,7 @@ export interface OilSuggestionsData {
 
 export interface OilConfirmInput {
   materialIds: string[];
-  action: "CONFIRM" | "IGNORE";
+  action: "CONFIRM" | "IGNORE" | "SINGLE";
   oilTypeId?: string;
   newOilType?: { code: string; name: string; baseUnit: string; minStock?: number; category: GroupingCategory };
   conversionFactor?: number;
@@ -115,7 +115,7 @@ export function useOilGroupingSync() {
   });
 }
 
-/** Duyệt gom mã vào nhóm (có sẵn / tạo mới) hoặc bỏ qua (IGNORE). */
+/** Duyệt gom mã, tạo nhóm riêng (SINGLE), hoặc xử lý dữ liệu cũ theo IGNORE. */
 export function useOilGroupingConfirm() {
   const qc = useQueryClient();
   return useMutation({

@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { GROUPING_CATEGORIES, type GroupedErpMaterialInput, type GroupingCategory } from "@/hooks/useOilGrouping";
 import { normalizeText } from "@/lib/nav";
+import { parseErpNumber } from "@/lib/parse-number";
 
 export const ERP_EXPORT_HEADERS = ["Mã", "Tên", "ĐVT", "Loại vật tư", "Số liệu ERP"];
 
@@ -40,7 +41,8 @@ export function parseErpImportRows(
       const name = String(row[nameIndex] ?? "").trim();
       const unit = String(row[unitIndex] ?? "").trim();
       const category = categoryIndex >= 0 ? canonicalGroupedCategory(String(row[categoryIndex] ?? "").trim()) : defaultCategory;
-      const erpStock = stockIndex >= 0 ? Math.max(0, Math.round(Number(row[stockIndex]) || 0)) : 0;
+      const parsedStock = stockIndex >= 0 ? parseErpNumber(row[stockIndex]) : 0;
+      const erpStock = Number.isFinite(parsedStock) ? Math.max(0, Math.round(parsedStock)) : 0;
       return { code, name, unit, category, erpStock };
     })
     .filter((row) => row.code || row.name || row.unit);
