@@ -36,7 +36,7 @@ const STATUS: Record<string, { label: string; c: string }> = {
   VAT_TU_KHONG_CO: { label: "Vật tư không có", c: C.bad },
   CHO_THONG_KE: { label: "Chờ thống kê", c: "#7c3aed" },
   VHV_LANH_VAT_TU: { label: "Chờ VHV lãnh vật tư", c: "#2563eb" },
-  NHAN_TU_HIEN_CO: { label: "Nhận vật tư từ Hiện có", c: "#0891b2" },
+  NHAN_TU_HIEN_CO: { label: "Nhận vật tư hiện có", c: "#0891b2" },
   NHAN_VAT_TU: { label: "Xác nhận vật tư lãnh", c: "#0891b2" },
   CHO_PHIEU_YCSC: { label: "Xác nhận vật tư lãnh", c: "#0891b2" },
   SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
@@ -76,10 +76,10 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
-    { key: "NHAN_TU_HIEN_CO", label: "Nhận vật tư từ Hiện có", who: "Theo phân quyền quy trình" },
+    { key: "NHAN_TU_HIEN_CO", label: "Nhận vật tư hiện có", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu", who: "Theo phân quyền quy trình" },
-    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận và xuất biên bản", who: "Thống kê" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay + BB thu hồi", who: "Theo phân quyền quy trình" },
+    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận + BBNT D-Office", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
 };
@@ -1610,7 +1610,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const unit = t.items[0]?.material.unit ?? "";
     const stock = t.items[0]?.material.quantity ?? 0;
     return <div className="act">
-      <label className="lb">Nhận vật tư từ Hiện có</label>
+      <label className="lb">Nhận vật tư hiện có</label>
       <p className="hint">Hiện có: <b>{stock} {unit}</b>. Bước này chỉ ghi nhận số lượng nhận, chưa trừ Hiện có.</p>
       <label>Số lượng nhận{unit ? ` (${unit})` : ""} *</label>
       <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
@@ -1716,7 +1716,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 		              <span>Xác nhận đã trả vật tư thu hồi</span>
 		            </label>
 		          </div>
-	          {t.type !== "DE_XUAT" && <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Biên bản vật tư thu hồi sẽ được tạo tại bước Thống kê xác nhận và xuất biên bản."}</div>}
+	          {t.type !== "DE_XUAT" && <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Biên bản vật tư thu hồi sẽ được tạo tại bước Nghiệm thu."}</div>}
 		        </>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
@@ -1761,7 +1761,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : t.type === "SU_DUNG_HIEN_CO" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT ký tay"}
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT ký tay"}
         </button>
       </div>
     );
@@ -1777,7 +1777,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedErp = codeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <label className="lb">Thống kê xác nhận và xuất biên bản</label>
+        <label className="lb">Thống kê xác nhận và xuất BBNT D-Office</label>
         <label className="field">Mã vật tư *
           <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
             <option value="">— Chọn mã vật tư ERP —</option>
@@ -1792,10 +1792,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </div>
           </div>
         )}
-        <p className="hint">Mã và tên vật tư đã chọn sẽ được lưu vào phiếu và dùng để xuất biên bản{t.recoveryRequired ? ", bao gồm Biên bản vật tư thu hồi" : ""}.</p>
+        <p className="hint">Mã và tên vật tư đã chọn sẽ được lưu vào phiếu và dùng để xuất Biên Bản Nghiệm Thu D-Office.</p>
         <button className="btn primary big" disabled={!erpCode || act.isPending}
-          onClick={() => run({ action: "statsExportDocuments", erpCode }, "Đã xác nhận mã vật tư và xuất biên bản")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận & xuất biên bản
+          onClick={() => run({ action: "statsExportDocuments", erpCode }, "Đã xác nhận mã vật tư và xuất BBNT D-Office")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận & xuất BBNT D-Office
         </button>
       </div>
     );
