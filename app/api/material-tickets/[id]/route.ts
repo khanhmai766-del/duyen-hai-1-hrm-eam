@@ -158,6 +158,30 @@ async function buildBbntDoDocument(
   });
 }
 
+/** Năm hiện tại theo giờ Việt Nam — mốc reset dãy số văn bản BBTHVT. */
+function vietnamYear(value = new Date()) {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric" }).format(value));
+}
+
+/**
+ * Cấp số văn bản BBTHVT cho phiếu: tăng dần trong năm, sang năm mới reset về 1.
+ * Số đã cấp lưu trên phiếu — xuất lại biên bản vẫn giữ nguyên số.
+ */
+async function assignRecoveryDocNo(t: FullTicket) {
+  if (t.recoveryDocNo != null) return t.recoveryDocNo;
+  const year = vietnamYear();
+  const seq = await prisma.recoveryDocSequence.upsert({
+    where: { year },
+    create: { year, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+  await prisma.materialTicket.update({
+    where: { id: t.id },
+    data: { recoveryDocNo: seq.value, recoveryDocNoYear: year },
+  });
+  return seq.value;
+}
+
 /** Xuất Biên bản vật tư thu hồi (QLVT.06) đã điền dữ liệu — thay file trắng cũ. */
 async function buildRecoveryDocument(
   t: FullTicket,
@@ -167,8 +191,10 @@ async function buildRecoveryDocument(
     itemOverride?: { materialCode: string; materialName: string };
   }
 ) {
+  const docNo = await assignRecoveryDocNo(t);
   return generateBbthvtDoc({
     fileBaseName: materialTicketFileBase(t),
+    soVB: String(docNo).padStart(2, "0"),
     recoveryQuantity: overrides?.recoveryQuantity !== undefined ? overrides.recoveryQuantity : t.recoveryQuantity,
     deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
     pctNumber: t.pctNumber,

@@ -41,7 +41,7 @@ const headerTable = table(
     tc(10500,
       p(run("TỔNG CÔNG TY PHÁT ĐIỆN 1", { sz: 24 }), { align: "center", after: 0 }) +
       p(run("CÔNG TY NHIỆT ĐIỆN DUYÊN HẢI", { b: true, sz: 24, u: true }), { align: "center", after: 0 }) +
-      p(run("Số: 07/ PXVH1 BBVTTH - SCTX", { sz: 24 }), { align: "center", after: 0 }),
+      p(run("Số: {{soVB}}/ PXVH1 BBVTTH - SCTX", { sz: 24 }), { align: "center", after: 0 }),
       { borders: NO_BORDER }) +
     tc(2000, p(run(""), { after: 0 }), { borders: NO_BORDER }) +
     tc(2070, p(run("QLVT.06", { b: true }), { align: "center", after: 0 }), { borders: BOX, valign: "center" })

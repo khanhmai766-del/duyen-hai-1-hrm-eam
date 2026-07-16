@@ -869,6 +869,8 @@ model MaterialTicket {
   recoveryQuantity Int?
   recoveryReturnedAt DateTime?
   recoveryDocUrl String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
+  recoveryDocNo     Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
+  recoveryDocNoYear Int? // năm cấp số văn bản (dãy số reset mỗi năm)
   workStartedAt DateTime? // thời gian ghi vào BBNT DO
   workEndedAt DateTime?
   settledAt DateTime? // Thống kê xác nhận đã quyết toán
@@ -941,6 +943,13 @@ model MaterialWorkflowRole {
 
   @@unique([step, position])
   @@index([step])
+}
+
+// Cấp số văn bản Biên bản vật tư thu hồi (BBTHVT): tăng dần 1, 2, 3… và reset về 1
+// khi sang năm mới. Mỗi năm một dòng; tăng số bằng upsert increment (atomic).
+model RecoveryDocSequence {
+  year  Int @id
+  value Int @default(0)
 }
 
 model MaterialTicketItem {

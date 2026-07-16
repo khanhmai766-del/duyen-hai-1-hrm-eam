@@ -27,6 +27,7 @@ export interface BbthvtItem {
 
 export interface BbthvtData {
   fileBaseName: string; // định danh kỹ thuật tháng + STT, dùng làm thư mục lưu file
+  soVB?: string | null; // số văn bản BBTHVT — cấp tăng dần, reset theo năm
   recoveryQuantity?: number | null; // số lượng vật tư thu hồi
   deliveryNoteNumber?: string | null; // số phiếu giao hàng
   pctNumber?: string | null; // in vào cột Ghi chú theo mẫu
@@ -38,7 +39,10 @@ export interface BbthvtData {
 /** Mác vật liệu / Phân loại theo loại vật tư. Chưa nhận diện được thì để trống điền tay. */
 function wasteLabels(category?: string | null) {
   const normalized = normalizeText(category ?? "");
-  if (normalized === "dau boi tron") return { macVatTu: "Dầu thải", phanLoai: "CTNH" };
+  // "Lọc dầu" (loại trên phiếu) và "Lõi lọc dầu" (danh mục) đều khớp "loc dau" — xét trước
+  // để không rơi nhầm vào nhánh dầu bôi trơn.
+  if (normalized.includes("loc dau")) return { macVatTu: "Lõi lọc (Sắt)", phanLoai: "CTNH" };
+  if (normalized.includes("dau boi tron")) return { macVatTu: "Dầu thải", phanLoai: "CTNH" };
   return { macVatTu: "", phanLoai: "" };
 }
 
@@ -56,6 +60,7 @@ export async function generateBbthvtDoc(d: BbthvtData): Promise<{ key: string; u
   const { macVatTu, phanLoai } = wasteLabels(d.materialCategory);
   doc.render({
     // Giá trị mức phiếu — các dòng trong bảng tra lên scope cha khi thiếu khóa riêng
+    soVB: d.soVB || "……",
     deliveryNote: d.deliveryNoteNumber || "",
     macVatTu,
     phanLoai,
