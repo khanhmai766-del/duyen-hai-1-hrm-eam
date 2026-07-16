@@ -183,6 +183,8 @@ export default function MaterialTicketBoard({
         filter === "ALL" ? true
         : filter === "MINE" ? myTurnIds.has(t.id)
         : filter === "RUNNING" ? !FINISHED_STATUSES.includes(t.status)
+        // Tab "Thu hồi": các phiếu có vật tư thu hồi (đã xuất hoặc sẽ xuất biên bản thu hồi)
+        : filter === "RECOVERY" ? Boolean(t.recoveryRequired || t.recoveryDocUrl)
         : t.status === filter;
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
       const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
@@ -214,7 +216,7 @@ export default function MaterialTicketBoard({
             <Zap size={13} /> Đến lượt bạn
             <span className="mine-count">{myTurn.length}</span>
           </button>
-          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["TU_CHOI", "Từ chối"]].map(([k, l]) => (
+          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["RECOVERY", "Thu hồi"]].map(([k, l]) => (
             <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
           ))}
         </div>
