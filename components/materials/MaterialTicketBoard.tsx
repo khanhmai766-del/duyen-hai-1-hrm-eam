@@ -1023,6 +1023,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   </div>
                 )}
                 {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
+
+                <ActionArea t={t} viewer={viewer} />
               </div>
 
               {exportedDocumentCount > 0 && (
@@ -1039,8 +1041,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               </div>
               )}
             </div>
-
-            <ActionArea t={t} viewer={viewer} />
           </div>
         </div>
 
@@ -2021,9 +2021,10 @@ const CSS = `
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
 .completion-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch;min-width:0;}
-.completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(270px,320px);}
-.completion-details{min-width:0;padding-top:1px;}
-.document-downloads{display:flex;min-width:0;flex-direction:column;justify-content:center;gap:10px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:12px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
+.completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(320px,35%);}
+.completion-details{display:flex;min-width:0;flex-direction:column;padding-top:1px;}
+.completion-details>.act{margin-bottom:0;}
+.document-downloads{display:flex;min-width:0;min-height:100%;align-self:stretch;flex-direction:column;justify-content:flex-start;gap:12px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:14px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
 .document-downloads-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
 .document-downloads-label{display:flex;align-items:center;gap:7px;min-width:0;color:#0f766e;font-size:12.5px;font-weight:800;}
 .document-downloads-count{flex:0 0 auto;border-radius:999px;background:#dff3eb;color:#0f766e;padding:3px 7px;font-size:10.5px;font-weight:800;line-height:1.2;}
@@ -2039,12 +2040,12 @@ const CSS = `
 .source-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0f2fe;color:#0369a1;padding:2px 8px;font-size:12px;line-height:1.3;}
 .act{border:1.5px dashed ${C.accent}66;background:linear-gradient(180deg,#f8fbff 0%,${C.accent}08 100%);border-radius:16px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
-.act .settlement-check{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.act label.settlement-check{position:relative;display:flex;align-items:center;gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
 .act .settlement-check:hover{border-color:${C.accent}66;background:#fafdff;box-shadow:0 3px 10px rgba(15,35,64,.06);}
 .act .settlement-check.checked{border-color:${C.accent}80;background:${C.accent}08;}
 .act .settlement-check input{position:absolute;width:1px;height:1px;margin:0;padding:0;border:0;border-radius:0;background:transparent;opacity:0;pointer-events:none;appearance:none;}
 .settlement-check-box{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;box-sizing:border-box;border:1.5px solid #94a3b8;border-radius:6px;background:#fff;color:#fff;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
-.settlement-check-label{display:block;min-width:0;color:${C.navy};line-height:1.4;}
+.settlement-check-label{display:inline-block;min-width:0;color:${C.navy};line-height:1.4;white-space:nowrap;}
 .settlement-check.checked .settlement-check-box{border-color:${C.accent};background:${C.accent};box-shadow:0 0 0 3px ${C.accent}18;}
 .settlement-check:focus-within .settlement-check-box{box-shadow:0 0 0 3px ${C.accent}24;}
 .stats-issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
