@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { uploadS3Object, s3ProxyUrl } from "@/lib/s3";
+import { bbntHandwrittenFileName, vietnamDocumentDate } from "@/lib/material-document-name";
 
 /* ============================================================
    lib/bbnt-doc.ts
@@ -52,7 +53,7 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
   });
 
   const today = new Date();
-  const ngayXuat = today.toLocaleDateString("vi-VN"); // dd/mm/yyyy
+  const ngayXuat = vietnamDocumentDate(today);
   const formatDateTime = (value?: Date | string | null) => value
     ? new Date(value).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" })
     : "";
@@ -78,15 +79,17 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
-  const key = `public/tickets/${d.fileBaseName}-BBNT.docx`;
+  const fileName = bbntHandwrittenFileName(d.items.map((item) => item.deviceName), today);
+  // Thư mục kỹ thuật giữ file của từng phiếu tách biệt; tên cuối là tên người dùng tải về.
+  const key = `public/tickets/${d.fileBaseName}/${fileName}`;
   await uploadS3Object({
     key,
     body: buf,
     contentType: DOCX_MIME,
-    originalName: `${d.fileBaseName}-BBNT.docx`,
+    originalName: fileName,
   });
 
   // Link tải qua proxy của app (/api/files/s3): chỉ người đã đăng nhập tải được,
   // không phụ thuộc bucket policy công khai trên MinIO.
-  return { key, url: s3ProxyUrl(key) };
+  return { key, url: s3ProxyUrl(key, fileName) };
 }

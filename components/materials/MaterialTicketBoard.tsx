@@ -100,6 +100,10 @@ const normalizeReceiptSource = (source?: string | null): "ERP" | "EXISTING" =>
   source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
 const receiptSourceLabel = (source?: string | null) =>
   normalizeReceiptSource(source) === "ERP" ? "Lãnh kho DH1" : 'Lãnh vật tư "Hiện có"';
+const bbntDownloadUrl = (url: string, deviceName: string) => {
+  if (!deviceName || /[?&]filename=/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}deviceName=${encodeURIComponent(deviceName)}`;
+};
 const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
   const qs = new URLSearchParams({ may: ticket.unit, search: code });
   const category = ticket.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[ticket.materialCategory] ?? ticket.materialCategory : "";
@@ -908,6 +912,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   const flowStatus = flowStatusKey(t.status);
   const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
   const currentReceiptSourceLabel = receiptSourceLabel(t.receiptSource);
+  const replacementDeviceName = Array.from(new Set(t.items
+    .map((item) => item.deviceNameManual || item.device?.name || "")
+    .filter(Boolean)))
+    .join(", ");
+  const handwrittenBbntUrl = t.bbktDocUrl ? bbntDownloadUrl(t.bbktDocUrl, replacementDeviceName) : null;
+  const exportedDocumentCount = [t.docUrl, handwrittenBbntUrl, t.recoveryDocUrl].filter(Boolean).length;
   const activityLogs = [
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -994,34 +1004,41 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 
           <div className="step-workspace">
             {t.proposalNote && <div className="meta-line">Ghi chú lý do: <b>{t.proposalNote}</b></div>}
-            {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
-            {t.receivedQuantity != null && (
-              <div className="meta-line received-summary">
-                <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
-                <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
-                <span>Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b></span>
-                <em>đã cộng vào số lượng hiện có</em>
+            <div className={`completion-overview ${exportedDocumentCount > 0 ? "with-documents" : ""}`}>
+              <div className="completion-details">
+                {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
+                {t.receivedQuantity != null && (
+                  <div className="meta-line received-summary">
+                    <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
+                    <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
+                    <span>Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b></span>
+                    <em>đã cộng vào số lượng hiện có</em>
+                  </div>
+                )}
+                {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
+                {t.usedQuantity != null && (
+                  <div className="meta-line">
+                    Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
+                    {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
+                  </div>
+                )}
+                {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
               </div>
-            )}
-            {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
-            {t.usedQuantity != null && (
-              <div className="meta-line">
-                Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
-                {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
-              </div>
-            )}
-            {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
 
-            {(t.docUrl || t.bbktDocUrl || t.recoveryDocUrl) && (
+              {exportedDocumentCount > 0 && (
               <div className="document-downloads" aria-label="Biên bản đã xuất">
-                <span className="document-downloads-label"><FileText size={14} /> Biên bản đã xuất</span>
+                <div className="document-downloads-head">
+                  <span className="document-downloads-label"><FileText size={14} /> Biên bản đã xuất</span>
+                  <span className="document-downloads-count">{exportedDocumentCount} tệp</span>
+                </div>
                 <div className="document-download-links">
                   {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT DO</a>}
-                  {t.bbktDocUrl && <a className="pdf" href={t.bbktDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT ký tay</a>}
+                  {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT ký tay</a>}
                   {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên bản vật tư thu hồi</a>}
                 </div>
               </div>
-            )}
+              )}
+            </div>
 
             <ActionArea t={t} viewer={viewer} />
           </div>
@@ -1044,21 +1061,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               <span>{log.what}</span>
             </div>
           ))}
-          {t.docUrl && (
-            <a className="pdf log-export" href={t.docUrl} target="_blank" rel="noreferrer">
-              <Download size={14} /> BBNT DO (Word)
-            </a>
-          )}
-          {t.bbktDocUrl && (
-            <a className="pdf log-export" href={t.bbktDocUrl} target="_blank" rel="noreferrer">
-              <Download size={14} /> BBNT ký tay (Word)
-            </a>
-          )}
-          {t.recoveryDocUrl && (
-            <a className="pdf log-export" href={t.recoveryDocUrl} target="_blank" rel="noreferrer">
-              <Download size={14} /> Biên bản vật tư thu hồi (Word)
-            </a>
-          )}
         </div>
       </aside>
       {reviewStep && <StepReviewDialog t={t} viewer={viewer} stepKey={reviewStep} onClose={() => setReviewStep(null)} />}
@@ -1780,7 +1782,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <span className="settlement-check-box" aria-hidden="true">
           {recoveryReturned && <Check size={14} strokeWidth={3} />}
         </span>
-        <span>Xác nhận đã quyết toán vật tư</span>
+        <span className="settlement-check-label">Xác nhận đã quyết toán vật tư</span>
       </label>
       <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Phiếu đã hoàn thành")}>
         <CircleCheck size={15}/> Hoàn tất phiếu
@@ -2018,12 +2020,18 @@ const CSS = `
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
-.document-downloads{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid #cfe3dc;border-radius:11px;background:#f3faf7;padding:10px 12px;}
-.document-downloads-label{display:flex;align-items:center;gap:7px;color:#0f766e;font-size:12.5px;font-weight:800;}
-.document-download-links{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-.document-download-links .pdf{margin:0;padding:7px 10px;border-width:1px;border-color:#94a3b8;font-size:12px;}
+.completion-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch;min-width:0;}
+.completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(270px,320px);}
+.completion-details{min-width:0;padding-top:1px;}
+.document-downloads{display:flex;min-width:0;flex-direction:column;justify-content:center;gap:10px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:12px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
+.document-downloads-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
+.document-downloads-label{display:flex;align-items:center;gap:7px;min-width:0;color:#0f766e;font-size:12.5px;font-weight:800;}
+.document-downloads-count{flex:0 0 auto;border-radius:999px;background:#dff3eb;color:#0f766e;padding:3px 7px;font-size:10.5px;font-weight:800;line-height:1.2;}
+.document-download-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;}
+.document-download-links .pdf{justify-content:center;min-width:0;margin:0;padding:8px 9px;border-width:1px;border-color:#8fa7ba;border-radius:9px;font-size:11.5px;line-height:1.25;text-align:center;white-space:normal;transition:border-color .16s ease,background .16s ease,transform .16s ease;}
+.document-download-links .pdf:hover{border-color:#0f766e;background:#fff;transform:translateY(-1px);}
+.document-download-links .pdf:only-child,.document-download-links .recovery-download{grid-column:1/-1;}
 .document-download-links .recovery-download{border-color:#0f766e;background:#ecfdf5;color:#0f766e;}
-.log-export{margin:18px 0 0;max-width:max-content;}
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .received-summary{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;}
 .received-summary span{display:inline-flex;align-items:center;gap:4px;}
@@ -2031,11 +2039,12 @@ const CSS = `
 .source-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0f2fe;color:#0369a1;padding:2px 8px;font-size:12px;line-height:1.3;}
 .act{border:1.5px dashed ${C.accent}66;background:linear-gradient(180deg,#f8fbff 0%,${C.accent}08 100%);border-radius:16px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
-.act .settlement-check{display:flex;align-items:center;gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.act .settlement-check{position:relative;display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
 .act .settlement-check:hover{border-color:${C.accent}66;background:#fafdff;box-shadow:0 3px 10px rgba(15,35,64,.06);}
 .act .settlement-check.checked{border-color:${C.accent}80;background:${C.accent}08;}
-.settlement-check input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
-.settlement-check-box{display:inline-flex;align-items:center;justify-content:center;flex:0 0 21px;width:21px;height:21px;border:1.5px solid #94a3b8;border-radius:6px;background:#fff;color:#fff;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.act .settlement-check input{position:absolute;width:1px;height:1px;margin:0;padding:0;border:0;border-radius:0;background:transparent;opacity:0;pointer-events:none;appearance:none;}
+.settlement-check-box{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;box-sizing:border-box;border:1.5px solid #94a3b8;border-radius:6px;background:#fff;color:#fff;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
+.settlement-check-label{display:block;min-width:0;color:${C.navy};line-height:1.4;}
 .settlement-check.checked .settlement-check-box{border-color:${C.accent};background:${C.accent};box-shadow:0 0 0 3px ${C.accent}18;}
 .settlement-check:focus-within .settlement-check-box{box-shadow:0 0 0 3px ${C.accent}24;}
 .stats-issue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
@@ -2087,7 +2096,7 @@ const CSS = `
 .top-items-head{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px;margin:-4px 0 6px;}
 .top-items-head .lb{min-width:0;margin:0;}
 .p-top .loglist{border-top:0;border-left:1px dashed ${C.line};padding:4px 0 4px 16px;}
-@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}.activity-drawer{width:min(420px,70%);}}
+@media(max-width:1100px){.p-top{grid-template-columns:1fr;}.p-top .top-items,.p-top .loglist{border-left:0;padding-left:0;border-top:1px dashed ${C.line};padding-top:12px;margin-bottom:10px;}.completion-overview.with-documents{grid-template-columns:1fr;}.document-downloads{width:100%;}.activity-drawer{width:min(420px,70%);}}
 .logrow{display:flex;align-items:baseline;gap:9px;font-size:12px;padding:5px 0;color:#475569;white-space:nowrap;}
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
