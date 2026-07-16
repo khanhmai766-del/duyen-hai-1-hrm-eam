@@ -1037,9 +1037,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   <span className="document-downloads-count">{exportedDocumentCount} tệp</span>
                 </div>
                 <div className="document-download-links">
-                  {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT DO</a>}
-                  {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> BBNT ký tay</a>}
-                  {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên bản vật tư thu hồi</a>}
+                  {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu Ký Tay</a>}
+                  {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu D-Office</a>}
+                  {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
                 </div>
               </div>
               )}
@@ -2045,10 +2045,9 @@ const CSS = `
 .document-downloads-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
 .document-downloads-label{display:flex;align-items:center;gap:7px;min-width:0;color:#0f766e;font-size:12.5px;font-weight:800;}
 .document-downloads-count{flex:0 0 auto;border-radius:999px;background:#dff3eb;color:#0f766e;padding:3px 7px;font-size:10.5px;font-weight:800;line-height:1.2;}
-.document-download-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;}
+.document-download-links{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;}
 .document-download-links .pdf{justify-content:center;min-width:0;margin:0;padding:8px 9px;border-width:1px;border-color:#8fa7ba;border-radius:9px;font-size:11.5px;line-height:1.25;text-align:center;white-space:normal;transition:border-color .16s ease,background .16s ease,transform .16s ease;}
 .document-download-links .pdf:hover{border-color:#0f766e;background:#fff;transform:translateY(-1px);}
-.document-download-links .pdf:only-child,.document-download-links .recovery-download{grid-column:1/-1;}
 .document-download-links .recovery-download{border-color:#0f766e;background:#ecfdf5;color:#0f766e;}
 .meta-line{font-size:12.5px;color:${C.muted};margin-bottom:8px;}
 .received-summary{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;}
