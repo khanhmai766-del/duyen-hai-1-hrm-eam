@@ -4,7 +4,7 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
-import { generateBlankDocx } from "@/lib/blank-doc";
+import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
 
@@ -155,6 +155,30 @@ async function buildBbntDoDocument(
     items,
     chuKyQuanDoc,
     chuKyNguoiLap,
+  });
+}
+
+/** Xuất Biên bản vật tư thu hồi (QLVT.06) đã điền dữ liệu — thay file trắng cũ. */
+async function buildRecoveryDocument(
+  t: FullTicket,
+  overrides?: {
+    recoveryQuantity?: number | null;
+    deliveryNoteNumber?: string;
+    itemOverride?: { materialCode: string; materialName: string };
+  }
+) {
+  return generateBbthvtDoc({
+    fileBaseName: materialTicketFileBase(t),
+    recoveryQuantity: overrides?.recoveryQuantity !== undefined ? overrides.recoveryQuantity : t.recoveryQuantity,
+    deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
+    pctNumber: t.pctNumber,
+    materialCategory: t.materialCategory,
+    items: t.items.map((it, index) => ({
+      deviceName: it.deviceNameManual || it.device?.name || "",
+      materialCode: (index === 0 ? overrides?.itemOverride?.materialCode : undefined) || it.erpCode || it.material.code,
+      materialName: (index === 0 ? overrides?.itemOverride?.materialName : undefined) || it.erpName || it.material.name,
+      materialUnit: it.material.unit,
+    })),
   });
 }
 
@@ -383,7 +407,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const delta = value - t.usedQuantity;
         if (item.material.quantity - delta < 0) return fail("Không đủ số lượng hiện có để tăng số lượng sử dụng");
         const recoveryDocument = recoveryRequired && !t.recoveryDocUrl
-          ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
+          ? await buildRecoveryDocument(t, { recoveryQuantity })
           : null;
         before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
@@ -757,7 +781,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
         }),
         recovery: t.recoveryRequired
-          ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
+          ? await buildRecoveryDocument(t, {
+              deliveryNoteNumber: receivedMethod || undefined,
+              itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
+            })
           : null,
       } : null;
       const up = await prisma.$transaction(async (tx) => {
@@ -839,7 +866,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const newQty = mat.quantity - usedQuantity;
       const recoveryDocument = recoveryRequired && t.type === "DE_XUAT"
-        ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
+        ? await buildRecoveryDocument(t, { recoveryQuantity })
         : null;
 
       const up = await prisma.$transaction(async (tx) => {
@@ -946,7 +973,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
         }),
         recovery: t.recoveryRequired
-          ? await generateBlankDocx(materialTicketFileBase(t), "BIEN-BAN-VAT-TU-THU-HOI")
+          ? await buildRecoveryDocument(t, {
+              itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
+            })
           : null,
       };
       const up = await prisma.$transaction(async (tx) => {
