@@ -980,6 +980,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                       <b>{it.erpName || it.material.name}</b>
                       <span>{it.quantity > 0 ? `Số lượng đề xuất: ${it.quantity} ${it.material.unit}` : "Số lượng đề xuất: Chưa nhập"} · Hiện có: {it.material.quantity}{short ? " — THIẾU" : ""}</span>
                       <span className="soft material-device-line">{it.deviceNameManual || (it.device ? `${it.device.seq} · ${it.device.name}` : "Chưa nhập thiết bị")}</span>
+                      {itemIndex === 0 && t.bbktNumber && <span className="material-bbkt-line">Số biên bản kiểm tra: <b>{t.bbktNumber}</b></span>}
                     </div>
                     <div className="material-info-column material-info-column-right">
                       {it.erpCode && (
@@ -989,8 +990,8 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                       )}
                       {itemIndex === 0 && (
                         <span className="material-proposal-line">
-                          <span>Số biên bản kiểm tra: <b>{t.bbktNumber ?? ""}</b></span>
                           {t.proposalNumber && <span>Số phiếu ĐXVT: <b>{t.proposalNumber}</b></span>}
+                          {(t.deliveryNoteNumber || t.receivedMethod) && <span>Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod}</b></span>}
                           {t.proposalReceiverName && <small>VHV nhận: <b>{t.proposalReceiverName}</b></small>}
                         </span>
                       )}
@@ -1003,9 +1004,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
 
           <div className="step-workspace">
-            {(t.proposalNote || t.repairRequestNumber) && (
+            {(t.pctNumber || t.repairRequestNumber) && (
               <div className="ticket-note-row">
-                {t.proposalNote && <div className="meta-line">Ghi chú lý do: <b>{t.proposalNote}</b></div>}
+                {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
                 {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
               </div>
             )}
@@ -1016,7 +1017,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   <div className="meta-line received-summary">
                     <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
                     <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
-                    <span>Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b></span>
                     <em>đã cộng vào số lượng hiện có</em>
                   </div>
                 )}
@@ -1027,8 +1027,6 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                     {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
                   </div>
                 )}
-                {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
-
                 <ActionArea t={t} viewer={viewer} />
               </div>
 
@@ -2026,6 +2024,8 @@ const CSS = `
 .material-code-link{flex:0 0 auto;border-radius:7px;background:${C.accent}10;padding:3px 8px;font-family:Poppins,Inter,sans-serif;font-size:11px;font-weight:800;color:${C.accent};text-decoration:none;}
 .material-code-link:hover{background:${C.accent};color:#fff;}
 .material-device-line{display:block;width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.material-bbkt-line{display:block;width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${C.muted};font-size:12px;font-weight:600;}
+.material-bbkt-line b{font-size:12px;}
 .material-proposal-line{display:flex;width:100%;min-width:0;margin:0;flex-direction:column;align-items:flex-end;gap:3px;font-size:12px;font-weight:600;color:${C.muted};text-align:right;}
 .material-proposal-line>span,.material-proposal-line small{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .material-proposal-line small{font-size:11px;}
