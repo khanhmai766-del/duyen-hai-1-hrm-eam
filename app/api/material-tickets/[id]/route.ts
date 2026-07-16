@@ -105,8 +105,16 @@ async function buildBbntDoDocument(
   ]);
   // Quản đốc (không tính Phó quản đốc): chức vụ chuẩn hóa bắt đầu bằng "quan doc".
   const quanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
+  // Người in vào biên bản: ưu tiên tên VHV trực tiếp sử dụng vật tư (nhập tay ở bước
+  // sử dụng); chữ ký lấy theo tài khoản khớp tên đó, không khớp thì theo tài khoản
+  // thao tác bước sử dụng (chỉ khi cùng tên) để tránh ký nhầm người.
+  const materialUserName = t.materialUserName?.trim() || null;
+  let signer: typeof usedByUser = usedByUser;
+  if (materialUserName && normalizeText(materialUserName) !== normalizeText(usedByUser?.name ?? "")) {
+    signer = activeUsers.find((u) => normalizeText(u.name) === normalizeText(materialUserName)) ?? null;
+  }
   const [chuKyNguoiLap, chuKyQuanDoc] = await Promise.all([
-    resolveSignatureBuffer(usedByUser),
+    resolveSignatureBuffer(signer),
     resolveSignatureBuffer(quanDoc),
   ]);
   return generateBbntDoDoc({
@@ -116,8 +124,8 @@ async function buildBbntDoDocument(
     proposalNumber: t.proposalNumber,
     proposalReceiverName: t.proposalReceiverName,
     quanDocName: quanDoc?.name ?? null,
-    usedByName: t.usedByName,
-    usedByPosition: t.usedByPosition,
+    usedByName: materialUserName || t.usedByName,
+    usedByPosition: (materialUserName ? signer?.position : null) ?? t.usedByPosition,
     workStartedAt: overrides?.workStartedAt ?? t.workStartedAt,
     workEndedAt: overrides?.workEndedAt ?? t.workEndedAt,
     receivedQuantity: overrides?.receivedQuantity ?? t.receivedQuantity,
@@ -381,7 +389,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
-        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
+        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url }, include: ITEM_INCLUDE });
       }
       if (!up) return fail("Không thể cập nhật bước");
@@ -718,7 +726,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           tenTruongCa: t.completedByName ?? "",
           tenVHV: t.proposedByName,
           chucVuVHV: t.proposedByPosition,
-          unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition,
+          unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
           items: toBbntItems(t).map((row, index) => index === 0
             ? { ...row, materialCode: erpCode, materialName: erpMaterial.name, quantity: receivedQuantity }
             : row),
@@ -868,7 +876,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
-          unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition,
+          unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
           items: toBbntItems(t),
         }),
         bbnt: await buildBbntDoDocument(t, { pctNumber: pct, workStartedAt, workEndedAt }),
@@ -911,7 +919,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           thoiGianBatDau: t.workStartedAt, thoiGianKetThuc: t.workEndedAt,
           tenChiHuy: t.chiHuyName ?? "", tenTruongCa: t.completedByName ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
-          unit: t.unit, usedByName: t.usedByName, usedByPosition: t.usedByPosition, items,
+          unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items,
         }),
         bbnt: await buildBbntDoDocument(t, {
           itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
