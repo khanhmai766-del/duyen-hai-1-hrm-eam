@@ -1013,6 +1013,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                         <span className="material-proposal-line">
                           {t.proposalNumber && <span>Số phiếu ĐXVT: <b>{t.proposalNumber}</b></span>}
                           {(t.deliveryNoteNumber || t.receivedMethod) && <span>Số phiếu giao hàng: <b>{t.deliveryNoteNumber ?? t.receivedMethod}</b></span>}
+                          {t.type === "UNG" && t.pctNumber && <span>Số PCT/LCT: <b>{t.pctNumber}</b></span>}
                           {t.proposalReceiverName && <small>VHV nhận: <b>{t.proposalReceiverName}</b></small>}
                         </span>
                       )}
@@ -1025,9 +1026,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
 
           <div className="step-workspace">
-            {(t.pctNumber || t.repairRequestNumber) && (
+            {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber) && (
               <div className="ticket-note-row">
-                {t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
+                {t.type !== "UNG" && t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
                 {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
               </div>
             )}
@@ -1596,11 +1597,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("vhvReceive")) {
     const unit = t.items[0]?.material.unit ?? "";
     return <div className="act">
-      <label className="lb">VHV lãnh vật tư</label>
-      <label>Số lượng vật tư đã lãnh{unit ? ` (${unit})` : ""} *</label>
-      <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
-      <label>Mã vật tư (nếu có)</label>
-      <input value={manualMaterialCode} onChange={(e) => setManualMaterialCode(e.target.value)} placeholder="Nhập tay mã vật tư hoặc để trống" />
+      <div className="vhv-receive-grid">
+        <label className="field">Số lượng vật tư đã lãnh{unit ? ` (${unit})` : ""} *
+          <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        </label>
+        <label className="field">Mã vật tư (nếu có)
+          <input value={manualMaterialCode} onChange={(e) => setManualMaterialCode(e.target.value)} placeholder="Nhập tay mã vật tư hoặc để trống" />
+        </label>
+      </div>
       <p className="hint">Sau khi xác nhận, số lượng đã lãnh được cộng vào Hiện có để sử dụng ở bước sau. Số lượng ERP không thay đổi.</p>
       <button className="btn primary big" disabled={qty <= 0 || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, materialCode: manualMaterialCode.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
     </div>;
@@ -1669,7 +1673,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {!isAdvance && repairRequestConflictsProposal && (
           <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
         )}
-        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận ĐXVT, phiếu sẽ chuyển sang Quyết toán. <b>Biên Bản Nghiệm Thu D-Office</b>{t.recoveryRequired ? <> và <b>Biên Bản Vật Tư Thu Hồi</b></> : ""} sẽ được xuất tại bước Quyết toán vật tư.</span></div>}
         <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
           onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT, chuyển Quyết toán" : "Đã xác nhận vật tư lãnh")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận"}
@@ -1998,7 +2001,7 @@ const CSS = `
 .flow-toggle button:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff;}
 .flow-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
 .flow-toggle button:disabled{background:transparent;color:#93a4bb;opacity:.52;cursor:not-allowed;}
-.receive-location{display:flex;align-items:center;gap:8px;min-width:0;flex:1;}
+.receive-location{display:flex;align-items:flex-start;flex-direction:column;gap:2px;min-width:0;flex:1;}
 .receive-location span{font-size:12px;font-weight:850;color:${C.navy};letter-spacing:-.01em;white-space:nowrap;}
 .receive-location em{min-width:0;font-style:normal;font-size:11px;font-weight:600;color:${C.soft};line-height:1.35;}
 .receive-source-toggle{display:inline-flex;grid-template-columns:none;align-items:center;gap:3px;width:auto;max-width:100%;padding:4px;border:1px solid ${C.accent};border-radius:12px;background:${C.accent};box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 8px 18px ${C.accent}26;}
@@ -2009,6 +2012,9 @@ const CSS = `
 .receive-field-grid.advance-receive-fields{grid-template-columns:repeat(2,minmax(0,1fr));}
 .receive-field-grid .field{min-width:0;margin:0!important;}
 .receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
+.vhv-receive-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
+.vhv-receive-grid .field{min-width:0;margin:0!important;}
+.vhv-receive-grid .field input{width:100%;margin-top:6px;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row .field{min-width:0;margin:0;}
@@ -2153,6 +2159,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.review-receive-row{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
