@@ -290,6 +290,8 @@ model ShiftPositionConfig {
   requiredAfternoonStaff Int?
   requiredNightStaff     Int?
   positionType           ShiftPositionType?
+  trainingRowName        String?
+  showTrainingRow        Boolean            @default(false)
   isActive               Boolean            @default(true)
   createdById            String
   updatedById            String
@@ -310,9 +312,12 @@ model ShiftStaffingAssignment {
   id             String              @id @default(cuid())
   userId         String
   positionId     String
+  rosterColumn   String?
+  isTrainingRow  Boolean             @default(false)
   crewCode       String?
   phaseIndex     Int?
   cycleStartDate DateTime?           @db.Date
+  rosterStation  ShiftSlot?
   stationCode    ShiftSlot?
   assignmentType ShiftStaffingType
   startDate      DateTime            @db.Date
@@ -331,6 +336,7 @@ model ShiftStaffingAssignment {
   updatedBy User                @relation("ShiftStaffingUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([positionId, startDate, endDate])
+  @@index([positionId, rosterColumn])
   @@index([positionId, phaseIndex])
   @@index([cycleStartDate])
   @@index([userId, assignmentType, startDate, endDate])

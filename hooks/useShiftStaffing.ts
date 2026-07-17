@@ -9,6 +9,8 @@ export type StaffingPosition = {
   requiredAfternoonStaff: number | null;
   requiredNightStaff: number | null;
   positionType: "SINGLE" | "S1_S2" | null;
+  trainingRowName: string | null;
+  showTrainingRow: boolean;
   isActive: boolean;
 };
 export type StaffingUser = {
@@ -21,9 +23,12 @@ export type StaffingAssignment = {
   id: string;
   userId: string;
   positionId: string;
+  rosterColumn: string | null;
+  isTrainingRow: boolean;
   crewCode: string | null;
   phaseIndex: number | null;
   cycleStartDate: string | null;
+  rosterStation: "S1" | "S2" | "FLEX" | null;
   stationCode: "S1" | "S2" | "FLEX" | null;
   assignmentType:
     "OFFICIAL" | "BACKUP" | "TRAINING" | "TEMPORARY" | "ADMINISTRATIVE";

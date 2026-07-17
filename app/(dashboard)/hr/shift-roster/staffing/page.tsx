@@ -11,11 +11,15 @@ import {
   Check,
   Clock3,
   GripVertical,
+  GraduationCap,
   History,
+  Eye,
+  EyeOff,
   Loader2,
   Plus,
   Settings2,
   ShieldCheck,
+  Sparkles,
   UserMinus,
   UserPlus,
   UsersRound,
@@ -49,11 +53,16 @@ import {
 
 const TYPE_LABEL = {
   OFFICIAL: "Chính thức",
-  BACKUP: "Dự phòng",
-  TRAINING: "Đào tạo",
-  TEMPORARY: "Tạm thời",
-  ADMINISTRATIVE: "Hành chính",
+  BACKUP: "Dự phòng (cũ)",
+  TRAINING: "Tập sự (TS)",
+  TEMPORARY: "Tạm thời (cũ)",
+  ADMINISTRATIVE: "Hành chính (HC)",
 } as const;
+const ASSIGNMENT_OPTIONS = [
+  ["OFFICIAL", "Chính thức"],
+  ["TRAINING", "Tập sự (TS)"],
+  ["ADMINISTRATIVE", "Hành chính (HC)"],
+] as const;
 const SHIFT_LABEL = {
   MORNING: "S",
   AFTERNOON: "C",
@@ -128,10 +137,11 @@ const expectedCrews = (code?: string) =>
 function currentRotation(
   position: StaffingPosition,
   rotations: PositionRotation[],
+  at = today(),
 ) {
-  return rotations.find(
-    (item) => item.positionConfigId === position.id && effective(item),
-  );
+  return rotations
+    .filter((item) => item.positionConfigId === position.id && effective(item, at))
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
 }
 function metrics(
   position: StaffingPosition,
@@ -255,9 +265,12 @@ type FormMode = "assign" | "change" | "detach";
 const initialForm = {
   userId: "",
   positionId: "",
+  rosterColumn: "",
+  isTrainingRow: false,
   crewCode: "",
   phaseIndex: "",
   cycleStartDate: "",
+  rosterStation: "",
   stationCode: "",
   assignmentType: "OFFICIAL",
   effectiveDate: today(),
@@ -285,7 +298,7 @@ export default function ShiftStaffingPage() {
         (item) =>
           item.positionId === position.id &&
           item.assignmentType !== "ADMINISTRATIVE" &&
-          !!item.crewCode &&
+          !!item.rosterColumn &&
           effective(item),
       );
       const hasCurrentRotation = rotations.some(
@@ -356,10 +369,10 @@ export default function ShiftStaffingPage() {
         (x) => x.positionId === selected.id && (showHistory || effective(x)),
       )
     : [];
-  const formRotation = rotations.find(
-    (item) =>
-      item.positionConfigId === form.positionId &&
-      effective(item, form.effectiveDate || today()),
+  const formRotation = currentRotation(
+    { id: form.positionId } as StaffingPosition,
+    rotations,
+    form.effectiveDate || today(),
   );
   const formTemplate = formRotation?.rotationTemplate;
   function setField(key: keyof typeof form, value: string) {
@@ -367,20 +380,18 @@ export default function ShiftStaffingPage() {
   }
   function setCrewCode(value: string) {
     const crewCode = value.toUpperCase();
-    setForm((old) => {
-      const existingCrew = assignments.find(
-        (item) =>
-          item.positionId === old.positionId &&
-          item.crewCode === crewCode &&
-          !!item.cycleStartDate &&
-          effective(item, old.effectiveDate || today()),
-      );
-      return {
-        ...old,
-        crewCode,
-        cycleStartDate: old.cycleStartDate || existingCrew?.cycleStartDate?.slice(0, 10) || "",
-      };
-    });
+    const existingCrew = assignments.find(
+      (item) =>
+        item.positionId === form.positionId &&
+        item.crewCode === crewCode &&
+        !!item.cycleStartDate &&
+        effective(item, form.effectiveDate || today()),
+    );
+    setForm((old) => ({
+      ...old,
+      crewCode,
+      cycleStartDate: old.cycleStartDate || existingCrew?.cycleStartDate?.slice(0, 10) || "",
+    }));
   }
   function openConfig(p: StaffingPosition) {
     const m = p.requiredMorningStaff ?? 1,
@@ -427,6 +438,7 @@ export default function ShiftStaffingPage() {
     position: StaffingPosition,
     crewCode: string,
     stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType: "OFFICIAL" | "TRAINING" = "OFFICIAL",
   ) {
     if (!position.id) return toast.error("Hãy cấu hình cương vị trước");
     setSelectedName(position.name);
@@ -443,8 +455,12 @@ export default function ShiftStaffingPage() {
     setForm({
       ...initialForm,
       positionId: position.id,
+      rosterColumn: crewCode,
+      isTrainingRow: assignmentType === "TRAINING",
       crewCode,
+      rosterStation: stationCode,
       stationCode,
+      assignmentType,
       cycleStartDate: existingCrew?.cycleStartDate?.slice(0, 10) ?? "",
       effectiveDate: today(),
     });
@@ -455,34 +471,30 @@ export default function ShiftStaffingPage() {
     position: StaffingPosition,
     crewCode: string,
     stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType: "OFFICIAL" | "TRAINING" = "OFFICIAL",
   ) {
     if (!position.id) return;
+    const targetIsTrainingRow = assignmentType === "TRAINING";
     if (
       item.positionId === position.id &&
-      item.crewCode === crewCode &&
-      (item.stationCode ?? "") === stationCode
+      item.rosterColumn === crewCode &&
+      (item.rosterStation ?? item.stationCode ?? "") === stationCode &&
+      item.isTrainingRow === targetIsTrainingRow
     ) return;
     setSelectedName(position.name);
     setEditing(item);
     setUserSearch("");
-    const existingCrew = assignments.find(
-      (assignment) =>
-        assignment.positionId === position.id &&
-        assignment.crewCode === crewCode &&
-        !!assignment.cycleStartDate &&
-        effective(assignment),
-    );
     setForm({
       userId: item.userId,
       positionId: position.id,
-      crewCode,
+      rosterColumn: crewCode,
+      isTrainingRow: targetIsTrainingRow,
+      crewCode: item.crewCode ?? crewCode,
       phaseIndex: "",
-      cycleStartDate:
-        existingCrew?.cycleStartDate?.slice(0, 10) ??
-        item.cycleStartDate?.slice(0, 10) ??
-        "",
-      stationCode,
-      assignmentType: item.assignmentType,
+      cycleStartDate: item.cycleStartDate?.slice(0, 10) ?? "",
+      rosterStation: stationCode,
+      stationCode: item.stationCode === "FLEX" ? "FLEX" : stationCode,
+      assignmentType: targetIsTrainingRow ? "TRAINING" : item.assignmentType,
       effectiveDate: today(),
       endDate: "",
       reason: "",
@@ -496,9 +508,12 @@ export default function ShiftStaffingPage() {
     setForm({
       userId: item.userId,
       positionId: item.positionId,
+      rosterColumn: item.rosterColumn ?? item.crewCode ?? "",
+      isTrainingRow: item.isTrainingRow,
       crewCode: item.crewCode ?? "",
       phaseIndex: item.phaseIndex === null ? "" : String(item.phaseIndex),
       cycleStartDate: item.cycleStartDate?.slice(0, 10) ?? "",
+      rosterStation: item.rosterStation ?? (item.stationCode === "FLEX" ? "S1" : item.stationCode) ?? "",
       stationCode: item.stationCode ?? "",
       assignmentType: item.assignmentType,
       effectiveDate: today(),
@@ -507,6 +522,25 @@ export default function ShiftStaffingPage() {
       note: item.note ?? "",
     });
     setMode("change");
+  }
+  function openDetach(item: StaffingAssignment) {
+    setEditing(item);
+    setForm({
+      ...initialForm,
+      effectiveDate: today(),
+    });
+    setMode("detach");
+  }
+  function openMatrixRotation(position: StaffingPosition, templateId: string) {
+    if (!position.id || !templateId) return;
+    setSelectedName(position.name);
+    setRotationForm({
+      templateId,
+      effectiveFrom: today(),
+      effectiveTo: "",
+      reason: "Cập nhật mẫu xoay ca từ bảng biên chế",
+    });
+    setRotationOpen(true);
   }
   async function saveConfig() {
     if (!selected) return;
@@ -528,6 +562,25 @@ export default function ShiftStaffingPage() {
       setConfigOpen(false);
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  }
+  async function updateTrainingRow(
+    position: StaffingPosition,
+    values: { trainingRowName?: string; showTrainingRow?: boolean },
+  ) {
+    if (!position.id) return;
+    const trainingRowName = (values.trainingRowName ?? position.trainingRowName ?? `ĐT - ${position.name}`).trim();
+    if (!trainingRowName) return toast.error("Tên hàng đào tạo không được để trống");
+    try {
+      await mutation.mutateAsync({
+        action: "UPDATE_TRAINING_ROW",
+        positionId: position.id,
+        trainingRowName,
+        showTrainingRow: values.showTrainingRow ?? position.showTrainingRow,
+      });
+      toast.success(values.showTrainingRow === false ? "Đã ẩn hàng đào tạo" : "Đã lưu hàng đào tạo");
+    } catch (error) {
+      toast.error((error as Error).message);
     }
   }
   async function saveRotation() {
@@ -576,8 +629,11 @@ export default function ShiftStaffingPage() {
               ? { userId: selectedUserIds[0] }
               : {}),
           crewCode: form.crewCode.trim() || null,
+          rosterColumn: form.rosterColumn.trim() || null,
+          isTrainingRow: form.isTrainingRow,
           phaseIndex: form.phaseIndex === "" ? null : Number(form.phaseIndex),
           cycleStartDate: form.cycleStartDate || null,
+          rosterStation: form.rosterStation || null,
           stationCode:
             target?.positionType === "SINGLE" ? null : form.stationCode || null,
           endDate: form.endDate || null,
@@ -590,7 +646,7 @@ export default function ShiftStaffingPage() {
             : "Đã gán nhân sự"
           : mode === "detach"
             ? "Đã kết thúc phân công"
-            : "Đã tạo phân công mới và giữ lịch sử cũ",
+            : "Đã lưu thay đổi cho nhân sự đang chọn",
       );
       setLastEffectiveChange({
         date: form.effectiveDate,
@@ -599,6 +655,48 @@ export default function ShiftStaffingPage() {
       setMode(null);
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  }
+  async function autoFillCycles() {
+    if (!editing || form.assignmentType !== "OFFICIAL")
+      return toast.error("Hãy chọn một nhân sự chính thức làm mốc");
+    if (!form.cycleStartDate)
+      return toast.error("Hãy nhập ngày bắt đầu chu kỳ của nhân sự mốc");
+    try {
+      const response = await mutation.mutateAsync({
+        action: "AUTO_ALIGN_CYCLES",
+        anchorAssignmentId: editing.id,
+        effectiveDate: form.effectiveDate,
+        cycleStartDate: form.cycleStartDate,
+      }) as { data?: { aligned?: number } };
+      toast.success(`Đã tự động điền chu kỳ cho ${response.data?.aligned ?? 0} phân công`);
+      setMode(null);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  async function autoFillPositionCycles(position: StaffingPosition) {
+    const anchor = assignments
+      .filter((item) =>
+        item.positionId === position.id &&
+        item.assignmentType === "OFFICIAL" &&
+        !!item.crewCode &&
+        !!item.cycleStartDate &&
+        effective(item),
+      )
+      .sort((a, b) => (a.crewCode === "A" ? -1 : b.crewCode === "A" ? 1 : (a.crewCode ?? "").localeCompare(b.crewCode ?? "")))[0];
+    if (!anchor)
+      return toast.error("Hãy nhập ngày bắt đầu chu kỳ cho ít nhất một kíp làm mốc");
+    try {
+      const response = await mutation.mutateAsync({
+        action: "AUTO_ALIGN_CYCLES",
+        anchorAssignmentId: anchor.id,
+        effectiveDate: today(),
+        cycleStartDate: anchor.cycleStartDate!.slice(0, 10),
+      }) as { data?: { aligned?: number } };
+      toast.success(`Đã tự động điền chu kỳ cho ${response.data?.aligned ?? 0} phân công của ${position.name}`);
+    } catch (error) {
+      toast.error((error as Error).message);
     }
   }
   if (query.isLoading)
@@ -644,12 +742,18 @@ export default function ShiftStaffingPage() {
       <StaffingMatrix
         positions={positionGroups[0]?.positions ?? []}
         assignments={assignments}
+        rotations={rotations}
+        templates={templates}
         selectedName={selectedName}
         canManage={canManage}
         onSelectPosition={setSelectedName}
         onOpenCell={openMatrixCell}
         onOpenAssignment={openChange}
+        onDetachAssignment={openDetach}
         onMoveAssignment={openMatrixMove}
+        onUpdateTrainingRow={updateTrainingRow}
+        onSelectRotation={openMatrixRotation}
+        onAutoFillCycles={autoFillPositionCycles}
       />
       <div className="grid gap-6 xl:grid-cols-1">
         <Card className="hidden overflow-hidden">
@@ -840,7 +944,8 @@ export default function ShiftStaffingPage() {
                     <tr>
                       {[
                         "Mã NV / Họ tên",
-                        "Mã kíp",
+                        "Cột biên chế",
+                        "Kíp xếp lịch",
                         "Bắt đầu chu kỳ",
                         "S1/S2/FLEX",
                         "Loại",
@@ -866,6 +971,9 @@ export default function ShiftStaffingPage() {
                           </div>
                         </td>
                         <td className="px-3 py-3 font-bold">
+                          {item.rosterColumn ?? "—"}
+                        </td>
+                        <td className="px-3 py-3 font-bold">
                           {item.crewCode ?? (
                             <span className="text-amber-700">Chưa phân</span>
                           )}
@@ -873,10 +981,10 @@ export default function ShiftStaffingPage() {
                         <td className="px-3 py-3">
                           <CycleCell
                             item={item}
-                            rotation={rotations.find(
-                              (rotation) =>
-                                rotation.positionConfigId === item.positionId &&
-                                effective(rotation, item.startDate.slice(0, 10)),
+                            rotation={currentRotation(
+                              { id: item.positionId } as StaffingPosition,
+                              rotations,
+                              item.startDate.slice(0, 10),
                             )}
                           />
                         </td>
@@ -914,14 +1022,7 @@ export default function ShiftStaffingPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => {
-                                  setEditing(item);
-                                  setForm({
-                                    ...initialForm,
-                                    effectiveDate: today(),
-                                  });
-                                  setMode("detach");
-                                }}
+                                onClick={() => openDetach(item)}
                                 title="Tách nhân sự"
                               >
                                 <UserMinus className="h-4 w-4 text-destructive" />
@@ -934,7 +1035,7 @@ export default function ShiftStaffingPage() {
                     {!visibleAssignments.length && (
                       <tr>
                         <td
-                          colSpan={10}
+                          colSpan={11}
                           className="px-4 py-12 text-center text-muted-foreground"
                         >
                           <UsersRound className="mx-auto mb-2 h-8 w-8 opacity-40" />
@@ -1158,7 +1259,7 @@ export default function ShiftStaffingPage() {
                   onChange={(e) => setField("effectiveDate", e.target.value)}
                 />
               </Field>
-              <Field label="Lý do">
+              <Field label="Lý do (không bắt buộc)">
                 <Textarea
                   value={form.reason}
                   onChange={(e) => setField("reason", e.target.value)}
@@ -1251,7 +1352,7 @@ export default function ShiftStaffingPage() {
                   list="crew-codes"
                   value={form.crewCode}
                   onChange={(e) => setCrewCode(e.target.value)}
-                  placeholder="A–K hoặc mã khác"
+                  placeholder="Kíp dùng để xếp lịch, ví dụ A–K"
                   maxLength={20}
                 />
                 <datalist id="crew-codes">
@@ -1260,12 +1361,27 @@ export default function ShiftStaffingPage() {
                   ))}
                 </datalist>
               </Field>
+              <Field label="Cột biên chế trên bảng">
+                <select
+                  value={form.rosterColumn}
+                  onChange={(e) => setField("rosterColumn", e.target.value)}
+                  className="h-10 w-full rounded-md border bg-white px-3"
+                >
+                  <option value="">Chọn cột</option>
+                  {QUICK_CREWS.slice(0, 5).map((crew) => <option key={crew} value={crew}>Kíp {crew}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">Chỉ quyết định vị trí hiển thị; không dùng để tính ca.</p>
+              </Field>
               {positions.find((p) => p.id === form.positionId)?.positionType ===
                 "S1_S2" && (
-                <Field label="Vị trí">
+                <Field label="Tổ máy xếp lịch">
                   <select
                     value={form.stationCode}
-                    onChange={(e) => setField("stationCode", e.target.value)}
+                    onChange={(e) => {
+                      setField("stationCode", e.target.value);
+                      if (!form.rosterStation && e.target.value !== "FLEX")
+                        setField("rosterStation", e.target.value);
+                    }}
                     className="h-10 w-full rounded-md border bg-white px-3"
                   >
                     <option value="">Chưa phân</option>
@@ -1275,13 +1391,27 @@ export default function ShiftStaffingPage() {
                   </select>
                 </Field>
               )}
+              {positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && (
+                <Field label="Hàng hiển thị trên bảng">
+                  <select
+                    value={form.rosterStation}
+                    onChange={(e) => setField("rosterStation", e.target.value)}
+                    className="h-10 w-full rounded-md border bg-white px-3"
+                  >
+                    <option value="">Chọn hàng</option>
+                    <option value="S1">S1</option>
+                    <option value="S2">S2</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">Chỉ quyết định hàng hiển thị; FLEX vẫn giữ nguyên khi chuyển hàng.</p>
+                </Field>
+              )}
               <Field label="Loại phân công">
                 <select
                   value={form.assignmentType}
                   onChange={(e) => setField("assignmentType", e.target.value)}
                   className="h-10 w-full rounded-md border bg-white px-3"
                 >
-                  {Object.entries(TYPE_LABEL).map(([k, v]) => (
+                  {ASSIGNMENT_OPTIONS.map(([k, v]) => (
                     <option key={k} value={k}>
                       {v}
                     </option>
@@ -1295,15 +1425,36 @@ export default function ShiftStaffingPage() {
                   onChange={(e) => setField("effectiveDate", e.target.value)}
                 />
               </Field>
-              <Field label="Ngày bắt đầu chu kỳ">
+              {form.assignmentType === "OFFICIAL" && <Field label="Ngày bắt đầu chu kỳ (có thể bổ sung sau)">
                 <Input
                   type="date"
                   max={form.effectiveDate}
                   value={form.cycleStartDate}
                   onChange={(e) => setField("cycleStartDate", e.target.value)}
                 />
-              </Field>
-              {formTemplate ? (
+                {mode === "change" && editing?.assignmentType === "OFFICIAL" && (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3">
+                    <p className="text-xs leading-4 text-emerald-900">
+                      <b>Điền tự động:</b> lấy ngày của người này làm mốc và sắp ngày cho toàn bộ kíp còn lại trong cùng cương vị.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
+                      onClick={autoFillCycles}
+                      disabled={mutation.isPending || !form.cycleStartDate}
+                    >
+                      <Sparkles className="h-4 w-4" /> Tự động điền cho các kíp
+                    </Button>
+                  </div>
+                )}
+              </Field>}
+              {form.assignmentType !== "OFFICIAL" ? (
+                <div className="sm:col-span-2 rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-950">
+                  Nhân sự đào tạo chỉ hiển thị ở hàng đào tạo, không tham gia định biên chính thức và vòng xoay ca.
+                </div>
+              ) : formTemplate ? (
                 <div className="sm:col-span-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1355,7 +1506,7 @@ export default function ShiftStaffingPage() {
                   onChange={(e) => setField("endDate", e.target.value)}
                 />
               </Field>
-              <Field label="Lý do">
+              <Field label="Lý do (không bắt buộc)">
                 <Textarea
                   value={form.reason}
                   onChange={(e) => setField("reason", e.target.value)}
@@ -1372,11 +1523,11 @@ export default function ShiftStaffingPage() {
               disabled={
                 mutation.isPending ||
                 !form.effectiveDate ||
-                form.reason.trim().length < 3 ||
                 (mode !== "detach" &&
                   (!form.positionId ||
-                    (mode === "assign" ? selectedUserIds.length === 0 : !form.userId) ||
-                    (!!formTemplate && !form.cycleStartDate)))
+                    !form.rosterColumn ||
+                    (positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && !form.rosterStation) ||
+                    (mode === "assign" ? selectedUserIds.length === 0 : !form.userId)))
               }
             >
               {mutation.isPending && (
@@ -1394,15 +1545,23 @@ export default function ShiftStaffingPage() {
 function StaffingMatrix({
   positions,
   assignments,
+  rotations,
+  templates,
   selectedName,
   canManage,
   onSelectPosition,
   onOpenCell,
   onOpenAssignment,
+  onDetachAssignment,
   onMoveAssignment,
+  onUpdateTrainingRow,
+  onSelectRotation,
+  onAutoFillCycles,
 }: {
   positions: StaffingPosition[];
   assignments: StaffingAssignment[];
+  rotations: PositionRotation[];
+  templates: RotationTemplate[];
   selectedName: string;
   canManage: boolean;
   onSelectPosition: (name: string) => void;
@@ -1410,36 +1569,45 @@ function StaffingMatrix({
     position: StaffingPosition,
     crewCode: string,
     stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType?: "OFFICIAL" | "TRAINING",
   ) => void;
   onOpenAssignment: (item: StaffingAssignment) => void;
+  onDetachAssignment: (item: StaffingAssignment) => void;
   onMoveAssignment: (
     item: StaffingAssignment,
     position: StaffingPosition,
     crewCode: string,
     stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType?: "OFFICIAL" | "TRAINING",
   ) => void;
+  onUpdateTrainingRow: (
+    position: StaffingPosition,
+    values: { trainingRowName?: string; showTrainingRow?: boolean },
+  ) => void;
+  onSelectRotation: (position: StaffingPosition, templateId: string) => void;
+  onAutoFillCycles: (position: StaffingPosition) => void;
 }) {
   const crews = ["A", "B", "C", "D", "E"];
-  const current = assignments.filter(
-    (item) => item.assignmentType === "OFFICIAL" && effective(item),
+  const official = assignments.filter(
+    (item) => !item.isTrainingRow && effective(item),
+  );
+  const training = assignments.filter(
+    (item) => item.isTrainingRow && effective(item),
   );
   const rows: Array<{
     position: StaffingPosition;
     stationCode: "S1" | "S2" | "FLEX" | "";
+    isTraining: boolean;
   }> = [];
   for (const position of positions) {
-    const people = current.filter((item) => item.positionId === position.id);
     if (position.positionType !== "S1_S2") {
-      rows.push({ position, stationCode: "" });
-      continue;
+      rows.push({ position, stationCode: "", isTraining: false });
+    } else {
+      for (const stationCode of (["S1", "S2"] as const))
+        rows.push({ position, stationCode, isTraining: false });
     }
-    const stations = (["S1", "S2", "FLEX"] as const).filter((station) =>
-      people.some((item) => item.stationCode === station),
-    );
-    for (const stationCode of stations.length
-      ? stations
-      : (["S1", "S2"] as const))
-      rows.push({ position, stationCode });
+    if (position.showTrainingRow)
+      rows.push({ position, stationCode: "", isTraining: true });
   }
   return (
     <Card className="overflow-hidden border-slate-300 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
@@ -1457,12 +1625,12 @@ function StaffingMatrix({
             {positions.length} cương vị
           </span>
           <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold">
-            {current.length} nhân sự
+            {official.length + training.length} nhân sự trên bảng
           </span>
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] table-fixed border-collapse text-sm">
+        <table className="w-full min-w-[1510px] table-fixed border-collapse text-sm">
           <thead>
             <tr className="bg-amber-50 text-slate-900">
               <th className="w-12 border-b border-r border-slate-300 px-2 py-3 text-center text-xs">STT</th>
@@ -1472,25 +1640,44 @@ function StaffingMatrix({
                   Tổ vận hành {crew}
                 </th>
               ))}
+              <th className="w-80 border-b border-slate-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-wide">
+                Mẫu xoay ca
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ position, stationCode }, rowIndex) => {
+            {rows.map(({ position, stationCode, isTraining }, rowIndex) => {
               const active = selectedName === position.name;
               return (
-                <tr key={`${position.name}-${stationCode || "single"}`} className={cn("group", active && "bg-amber-50/60") }>
+                <tr key={`${position.name}-${stationCode || "single"}-${isTraining ? "training" : "official"}`} className={cn("group", isTraining ? "bg-cyan-50/55" : active && "bg-amber-50/60") }>
                   <td className="border-b border-r border-slate-300 px-2 py-3 text-center text-xs font-semibold text-slate-500">{rowIndex + 1}</td>
                   <td className="border-b border-r border-slate-300 p-0 align-top">
-                    <button
-                      type="button"
-                      onClick={() => onSelectPosition(position.name)}
+                    <div
                       className={cn(
                         "flex min-h-20 w-full cursor-pointer items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-amber-50",
-                        active && "border-l-4 border-amber-500 bg-amber-50 pl-3",
+                        isTraining ? "border-l-4 border-cyan-500 bg-cyan-50 pl-3 hover:bg-cyan-100/70" : active && "border-l-4 border-amber-500 bg-amber-50 pl-3",
                       )}
                     >
-                      <span>
-                        <span className="block font-bold text-slate-950">{position.name}</span>
+                      <span className="min-w-0 flex-1" onClick={() => !isTraining && onSelectPosition(position.name)}>
+                        {isTraining ? (
+                          <span className="flex items-start gap-2">
+                            <GraduationCap className="mt-1 h-4 w-4 shrink-0 text-cyan-700" />
+                            <span className="min-w-0 flex-1">
+                              <Input
+                                defaultValue={position.trainingRowName ?? `ĐT - ${position.name}`}
+                                aria-label={`Tên hàng đào tạo của ${position.name}`}
+                                onClick={(event) => event.stopPropagation()}
+                                onBlur={(event) => {
+                                  const name = event.target.value.trim();
+                                  if (name && name !== (position.trainingRowName ?? `ĐT - ${position.name}`))
+                                    onUpdateTrainingRow(position, { trainingRowName: name });
+                                }}
+                                className="h-8 border-cyan-200 bg-white/90 font-bold text-cyan-950 focus-visible:ring-cyan-600"
+                              />
+                              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-cyan-700">Nhân sự đào tạo cương vị</span>
+                            </span>
+                          </span>
+                        ) : <span className="block font-bold text-slate-950">{position.name}</span>}
                         {stationCode && (
                           <span className={cn(
                             "mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold",
@@ -1498,27 +1685,38 @@ function StaffingMatrix({
                           )}>{stationCode}</span>
                         )}
                       </span>
-                      <Settings2 className={cn("mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-colors", active && "text-amber-700")} />
-                    </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateTrainingRow(position, { showTrainingRow: isTraining ? false : !position.showTrainingRow })}
+                          className={cn("rounded-md p-1.5 transition-colors", isTraining ? "text-cyan-700 hover:bg-cyan-200" : "text-slate-400 hover:bg-slate-100 hover:text-cyan-700")}
+                          title={isTraining ? "Ẩn hàng đào tạo" : position.showTrainingRow ? "Ẩn hàng đào tạo" : "Hiện hàng đào tạo"}
+                        >
+                          {isTraining || position.showTrainingRow ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {crews.map((crew) => {
-                    const people = current.filter(
+                    const people = (isTraining ? training : official).filter(
                       (item) =>
                         item.positionId === position.id &&
-                        item.crewCode === crew &&
-                        (stationCode ? item.stationCode === stationCode : true),
+                        item.rosterColumn === crew &&
+                        (stationCode
+                          ? (item.rosterStation ?? (item.stationCode === "FLEX" ? "S1" : item.stationCode)) === stationCode
+                          : true),
                     );
                     return (
                       <td
                         key={crew}
-                        onClick={() => canManage && onOpenCell(position, crew, stationCode)}
+                        onClick={() => canManage && onOpenCell(position, crew, stationCode, isTraining ? "TRAINING" : "OFFICIAL")}
                         onDragOver={(event) => canManage && event.preventDefault()}
                         onDrop={(event) => {
                           if (!canManage) return;
                           event.preventDefault();
                           const id = event.dataTransfer.getData("application/x-shift-assignment");
                           const item = assignments.find((assignment) => assignment.id === id);
-                          if (item) onMoveAssignment(item, position, crew, stationCode);
+                          if (item) onMoveAssignment(item, position, crew, stationCode, isTraining ? "TRAINING" : "OFFICIAL");
                         }}
                         className={cn(
                           "relative border-b border-r border-slate-300 p-2 align-top last:border-r-0",
@@ -1527,8 +1725,7 @@ function StaffingMatrix({
                       >
                         <div className="flex min-h-16 flex-col gap-1.5">
                           {people.map((item) => (
-                            <button
-                              type="button"
+                            <div
                               key={item.id}
                               draggable={canManage}
                               onDragStart={(event) => {
@@ -1536,20 +1733,54 @@ function StaffingMatrix({
                                 event.dataTransfer.effectAllowed = "move";
                                 event.dataTransfer.setData("application/x-shift-assignment", item.id);
                               }}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onSelectPosition(position.name);
-                                if (canManage) onOpenAssignment(item);
-                              }}
                               className="group/person flex w-full cursor-grab items-start gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md active:cursor-grabbing"
                               title={`${item.user.employeeId} · Bắt đầu chu kỳ ${item.cycleStartDate ? viDate(item.cycleStartDate) : "chưa cấu hình"}`}
                             >
                               {canManage && <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 group-hover/person:text-blue-500" />}
-                              <span className="min-w-0">
-                                <span className="block leading-snug font-semibold text-slate-900">{item.user.name}</span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onSelectPosition(position.name);
+                                  if (canManage) onOpenAssignment(item);
+                                }}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <span className="flex flex-wrap items-center gap-1 leading-snug font-semibold text-slate-900">
+                                  <span>
+                                    {item.user.name}{item.crewCode ? ` (${item.crewCode})` : ""}
+                                  </span>
+                                  {item.stationCode === "FLEX" && (
+                                    <span className="inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">
+                                      FLEX
+                                    </span>
+                                  )}
+                                  {item.assignmentType === "TRAINING" && (
+                                    <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">TS</span>
+                                  )}
+                                  {item.assignmentType === "ADMINISTRATIVE" && (
+                                    <span className="inline-flex rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800">HC</span>
+                                  )}
+                                </span>
                                 <span className="mt-0.5 block font-mono text-[10px] text-slate-500">{item.user.employeeId}</span>
-                              </span>
-                            </button>
+                              </button>
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDetachAssignment(item);
+                                  }}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  draggable={false}
+                                  aria-label={`Xóa ${item.user.name} khỏi bảng biên chế`}
+                                  title="Xóa khỏi cương vị"
+                                  className="-mr-0.5 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                >
+                                  <UserMinus className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
                           ))}
                           {canManage && (
                             <span className="mt-auto flex items-center justify-center gap-1 rounded border border-dashed border-slate-300 py-1 text-[11px] font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100">
@@ -1560,6 +1791,54 @@ function StaffingMatrix({
                       </td>
                     );
                   })}
+                  <td className={cn("border-b border-slate-300 p-3 align-top", isTraining ? "bg-cyan-50/70" : "bg-slate-50/70") }>
+                    {isTraining ? (
+                      <div className="flex min-h-16 items-center gap-2 text-xs font-medium text-cyan-700">
+                        <GraduationCap className="h-4 w-4" /> Không áp dụng
+                      </div>
+                    ) : (() => {
+                      const activeRotation = currentRotation(position, rotations);
+                      return (
+                        <div className="space-y-1.5">
+                          <select
+                            value={activeRotation?.rotationTemplateId ?? ""}
+                            disabled={!canManage}
+                            onChange={(event) => onSelectRotation(position, event.target.value)}
+                            aria-label={`Mẫu xoay ca của ${position.name}`}
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900 shadow-sm transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
+                          >
+                            <option value="">Chưa chọn mẫu</option>
+                            {templates.filter((template) => template.isActive).map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {template.code} — {template.name}
+                              </option>
+                            ))}
+                          </select>
+                          {activeRotation ? (
+                            <div className="rounded-md border border-blue-100 bg-blue-50/80 px-2.5 py-2 text-left text-[11px] leading-4 text-blue-950">
+                              <span className="block font-bold text-blue-700">Đang áp dụng</span>
+                              <span className="mt-0.5 block break-words font-semibold">
+                                {activeRotation.rotationTemplate.code} — {activeRotation.rotationTemplate.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-slate-500">Chưa cấu hình vòng xoay</div>
+                          )}
+                          {canManage && activeRotation && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-full border-emerald-300 bg-emerald-50 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
+                              onClick={() => onAutoFillCycles(position)}
+                            >
+                              <Sparkles className="h-3.5 w-3.5" /> Tự động điền ngày
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
                 </tr>
               );
             })}

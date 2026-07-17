@@ -126,8 +126,10 @@ export async function generateShiftSchedule(input: GenerateInput) {
           const fallbackRotation = positionRotations.find(
             (item) => item.positionConfigId === position.id && overlaps(item.effectiveFrom, item.effectiveTo, day),
           );
-          const template = crewConfig?.rotationTemplate ?? fallbackRotation?.rotationTemplate;
-          const cycleStart = crewConfig?.cycleStartDate ?? assignment.cycleStartDate;
+          // Mẫu đang áp dụng cho cương vị là nguồn chuẩn. Cấu hình kíp chỉ là
+          // dữ liệu tương thích cho các bản ghi cũ khi cương vị chưa có mẫu chung.
+          const template = fallbackRotation?.rotationTemplate ?? crewConfig?.rotationTemplate;
+          const cycleStart = assignment.cycleStartDate ?? crewConfig?.cycleStartDate;
           if (!template || (!cycleStart && assignment.phaseIndex === null)) continue;
           const pattern = template.cyclePattern as string[];
           const index = cycleStart
@@ -147,14 +149,24 @@ export async function generateShiftSchedule(input: GenerateInput) {
           const people = scheduled.filter((item) => item.shiftType === shiftType);
           const fixed = people.filter((item) => item.stationCode !== ShiftSlot.FLEX);
           const flex = people.filter((item) => item.stationCode === ShiftSlot.FLEX);
-          const s1 = fixed.filter((item) => item.stationCode === ShiftSlot.S1).length;
-          const s2 = fixed.filter((item) => item.stationCode === ShiftSlot.S2).length;
-          let nextFlex: ShiftSlot = s1 <= s2 ? ShiftSlot.S1 : ShiftSlot.S2;
+          let s1 = fixed.filter((item) => item.stationCode === ShiftSlot.S1).length;
+          let s2 = fixed.filter((item) => item.stationCode === ShiftSlot.S2).length;
+          const required = shiftType === ShiftType.MORNING
+            ? position.requiredMorningStaff
+            : shiftType === ShiftType.AFTERNOON
+              ? position.requiredAfternoonStaff
+              : position.requiredNightStaff;
+          const flexNeeded = required === null
+            ? flex
+            : flex.slice(0, Math.max(0, required - fixed.length));
           const resolved = [
             ...fixed,
-            ...flex.map((item) => {
-              const stationCode = position.positionType === "S1_S2" ? nextFlex : null;
-              nextFlex = nextFlex === ShiftSlot.S1 ? ShiftSlot.S2 : ShiftSlot.S1;
+            ...flexNeeded.map((item) => {
+              const stationCode = position.positionType === "S1_S2"
+                ? (s1 <= s2 ? ShiftSlot.S1 : ShiftSlot.S2)
+                : null;
+              if (stationCode === ShiftSlot.S1) s1 += 1;
+              if (stationCode === ShiftSlot.S2) s2 += 1;
               return { ...item, stationCode };
             }),
           ];
@@ -176,11 +188,6 @@ export async function generateShiftSchedule(input: GenerateInput) {
               isLocked: false,
             });
           }
-          const required = shiftType === ShiftType.MORNING
-            ? position.requiredMorningStaff
-            : shiftType === ShiftType.AFTERNOON
-              ? position.requiredAfternoonStaff
-              : position.requiredNightStaff;
           if (required !== null && resolved.length < required) {
             warnings.push({
               date: isoDay(day),
@@ -210,6 +217,17 @@ export async function generateShiftSchedule(input: GenerateInput) {
     if (entries.length) {
       await tx.shiftScheduleEntry.createMany({
         data: entries.map((entry) => ({ ...entry, scheduleVersionId: version.id })),
+      });
+    }
+    const obsoleteDrafts = await tx.shiftScheduleVersion.findMany({
+      where: { unit: UNIT, year: input.year, month: input.month, status: "DRAFT" },
+      orderBy: [{ versionNumber: "desc" }, { createdAt: "desc" }],
+      skip: 2,
+      select: { id: true },
+    });
+    if (obsoleteDrafts.length) {
+      await tx.shiftScheduleVersion.deleteMany({
+        where: { id: { in: obsoleteDrafts.map((draft) => draft.id) } },
       });
     }
     return tx.shiftScheduleVersion.findUniqueOrThrow({

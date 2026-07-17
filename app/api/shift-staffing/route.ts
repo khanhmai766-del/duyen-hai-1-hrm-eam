@@ -16,25 +16,27 @@ const reason = z
   .trim()
   .min(3, "Vui lòng nhập lý do thay đổi")
   .max(500);
+const optionalReason = z.string().trim().max(500).default("");
 const stationCode = z.enum(["S1", "S2", "FLEX"]).nullable().optional();
 const patternCode = z.enum(["MORNING", "AFTERNOON", "NIGHT", "OFF"]);
 const baseAssignment = z.object({
   userId: z.string().min(1),
   positionId: z.string().min(1),
+  rosterColumn: z.string().trim().max(20).nullable().optional(),
+  isTrainingRow: z.boolean().default(false),
   crewCode: z.string().trim().max(20).nullable().optional(),
   phaseIndex: z.number().int().nonnegative().nullable().optional(),
   cycleStartDate: day.nullable().optional(),
+  rosterStation: stationCode,
   stationCode,
   assignmentType: z.enum([
     "OFFICIAL",
-    "BACKUP",
     "TRAINING",
-    "TEMPORARY",
     "ADMINISTRATIVE",
   ]),
   effectiveDate: day,
   endDate: day.nullable().optional(),
-  reason,
+  reason: optionalReason,
   note: z.string().trim().max(500).nullable().optional(),
 });
 const bulkAssignment = baseAssignment.omit({
@@ -66,6 +68,12 @@ const inputSchema = z.discriminatedUnion("action", [
     isActive: z.boolean().default(true),
     reason: z.string().trim().max(500).default(""),
   }),
+  z.object({
+    action: z.literal("UPDATE_TRAINING_ROW"),
+    positionId: z.string().min(1),
+    trainingRowName: z.string().trim().min(1, "Tên hàng đào tạo không được để trống").max(150),
+    showTrainingRow: z.boolean(),
+  }),
   baseAssignment.extend({ action: z.literal("ASSIGN") }),
   bulkAssignment.extend({ action: z.literal("BULK_ASSIGN") }),
   baseAssignment.extend({
@@ -76,7 +84,13 @@ const inputSchema = z.discriminatedUnion("action", [
     action: z.literal("DETACH"),
     assignmentId: z.string().min(1),
     effectiveDate: day,
-    reason,
+    reason: optionalReason,
+  }),
+  z.object({
+    action: z.literal("AUTO_ALIGN_CYCLES"),
+    anchorAssignmentId: z.string().min(1),
+    effectiveDate: day,
+    cycleStartDate: day,
   }),
   templateFields.extend({ action: z.literal("CREATE_ROTATION_TEMPLATE") }),
   templateFields.extend({
@@ -98,6 +112,19 @@ const inputSchema = z.discriminatedUnion("action", [
     reason,
   }),
 ]);
+
+const CREW_PHASE_LAYOUTS: Record<string, Record<string, Record<string, number>>> = {
+  "45K_SINGLE_DAY": {
+    S1: { A: 0, B: 8, C: 7, D: 1, E: 2 },
+    S2: { A: 2, B: 5, C: 4, D: 3, E: 7 },
+    FLEX: { E: 6 },
+  },
+  "45K_DOUBLE_DAY": {
+    S1: { A: 2, B: 0, C: 7, D: 5, E: 6 },
+    S2: { A: 1, B: 8, C: 6, D: 4, E: 2 },
+    FLEX: { E: 3 },
+  },
+};
 
 function date(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
@@ -195,7 +222,7 @@ async function ensureValidAssignment(
       throw fail(
         "Nhân sự đã có phân công chính thức chồng lấn trong thời gian này",
       );
-    if (resolvedPhaseIndex !== null && resolvedPhaseIndex !== undefined) {
+    if (resolvedPhaseIndex !== null && resolvedPhaseIndex !== undefined && !data.cycleStartDate) {
       const samePhases = await tx.shiftStaffingAssignment.findMany({
         where: {
           positionId: data.positionId,
@@ -257,6 +284,96 @@ async function syncCrewRotation(
       },
     });
   }
+}
+
+async function alignPositionCycles(
+  tx: Prisma.TransactionClient,
+  input: z.infer<typeof baseAssignment>,
+  actorId: string,
+) {
+  if (input.assignmentType !== "OFFICIAL" || !input.crewCode || !input.cycleStartDate) return 0;
+  const at = date(input.effectiveDate);
+  const rotation = await activeRotation(tx, input.positionId, at);
+  if (!rotation) return 0;
+  const template = rotation.rotationTemplate;
+  if (template.code.startsWith("55K"))
+    throw fail("Mẫu 5,5 kíp chưa có quy ước pha tự động; vui lòng cấu hình ngày cho từng kíp");
+  const assignments = await tx.shiftStaffingAssignment.findMany({
+    where: {
+      positionId: input.positionId,
+      assignmentType: "OFFICIAL",
+      status: "ACTIVE",
+      startDate: { lte: at },
+      OR: [{ endDate: null }, { endDate: { gte: at } }],
+      crewCode: { not: null },
+    },
+  });
+  const anchorCycleStart = date(input.cycleStartDate);
+  const anchorLayoutKey = input.stationCode === "FLEX" ? "FLEX" : (input.rosterStation ?? input.stationCode ?? "");
+  const anchorLayout = CREW_PHASE_LAYOUTS[template.code]?.[anchorLayoutKey];
+  const anchorLayoutStep = anchorLayout?.[input.crewCode] ?? null;
+  const crews = template.code === "5K_STANDARD"
+    ? ["A", "B", "C", "D", "E"]
+    : Array.from(new Set(assignments.map((item) => item.crewCode!).concat(input.crewCode))).sort();
+  const anchorIndex = crews.indexOf(input.crewCode);
+  const stride = template.cycleLength % crews.length === 0 ? template.cycleLength / crews.length : null;
+  let updated = 0;
+  for (const assignment of assignments) {
+    const crew = assignment.crewCode!;
+    const layoutKey = assignment.stationCode === "FLEX" ? "FLEX" : (assignment.rosterStation ?? assignment.stationCode ?? "");
+    const layout = CREW_PHASE_LAYOUTS[template.code]?.[layoutKey];
+    let relativeOffset: number | null = null;
+    if (layout?.[crew] !== undefined && anchorLayoutStep !== null)
+      relativeOffset = layout[crew] - anchorLayoutStep;
+    else if (stride !== null && anchorIndex >= 0 && crews.indexOf(crew) >= 0)
+      relativeOffset = (crews.indexOf(crew) - anchorIndex) * stride;
+    if (relativeOffset === null) continue;
+    const cycleStart = new Date(anchorCycleStart);
+    cycleStart.setUTCDate(cycleStart.getUTCDate() - relativeOffset);
+    while (cycleStart > at)
+      cycleStart.setUTCDate(cycleStart.getUTCDate() - template.cycleLength);
+    const step = ((daysBetween(cycleStart, at) % template.cycleLength) + template.cycleLength) % template.cycleLength;
+    await tx.shiftStaffingAssignment.update({
+      where: { id: assignment.id },
+      data: { cycleStartDate: cycleStart, phaseIndex: step, updatedById: actorId },
+    });
+    const crewRotation = await tx.crewRotationConfig.findFirst({
+      where: {
+        positionConfigId: assignment.positionId,
+        crewCode: crew,
+        effectiveFrom: { lte: at },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: at } }],
+      },
+      orderBy: { effectiveFrom: "desc" },
+    });
+    if (crewRotation) {
+      await tx.crewRotationConfig.update({
+        where: { id: crewRotation.id },
+        data: {
+          rotationTemplateId: rotation.rotationTemplateId,
+          cycleStartDate: cycleStart,
+          reason: "Tự động điền ngày bắt đầu chu kỳ",
+          updatedById: actorId,
+        },
+      });
+    } else {
+      await tx.crewRotationConfig.create({
+        data: {
+          positionConfigId: assignment.positionId,
+          crewCode: crew,
+          rotationTemplateId: rotation.rotationTemplateId,
+          cycleStartDate: cycleStart,
+          effectiveFrom: at,
+          effectiveTo: assignment.endDate,
+          reason: "Tự động điền ngày bắt đầu chu kỳ",
+          createdById: actorId,
+          updatedById: actorId,
+        },
+      });
+    }
+    updated += 1;
+  }
+  return updated;
 }
 
 export async function GET() {
@@ -328,6 +445,8 @@ export async function GET() {
           requiredAfternoonStaff: null,
           requiredNightStaff: null,
           positionType: null,
+          trainingRowName: null,
+          showTrainingRow: false,
           isActive: true,
         })),
       ],
@@ -347,6 +466,40 @@ export async function POST(req: Request) {
     if (!parsed.success)
       throw fail(parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ");
     const input = parsed.data;
+    if (input.action === "UPDATE_TRAINING_ROW") {
+      await requirePermissionLevel(
+        actor,
+        PERMISSION,
+        ["manage", "full"],
+        "Không đủ quyền cập nhật hàng đào tạo",
+      );
+      const before = await prisma.shiftPositionConfig.findUnique({
+        where: { id: input.positionId },
+      });
+      if (!before) throw fail("Không tìm thấy cương vị");
+      const after = await prisma.shiftPositionConfig.update({
+        where: { id: input.positionId },
+        data: {
+          trainingRowName: input.trainingRowName,
+          showTrainingRow: input.showTrainingRow,
+          updatedById: actor.id,
+        },
+      });
+      await audit(
+        actor.id,
+        "UPDATE_SHIFT_TRAINING_ROW",
+        "ShiftPositionConfig",
+        after.id,
+        detail("Cập nhật hàng đào tạo cương vị"),
+        {
+          actorName: actor.name,
+          beforeData: snapshot(before),
+          afterData: snapshot(after),
+          saveToAuditLog: true,
+        },
+      );
+      return ok(after);
+    }
     if (input.action === "CONFIGURE_POSITION") {
       await requirePermissionLevel(
         actor,
@@ -477,6 +630,40 @@ export async function POST(req: Request) {
       ["manage", "full"],
       "Không đủ quyền thay đổi biên chế trực ca",
     );
+    if (input.action === "AUTO_ALIGN_CYCLES") {
+      const anchor = await prisma.shiftStaffingAssignment.findUnique({
+        where: { id: input.anchorAssignmentId },
+      });
+      if (!anchor || !anchor.crewCode)
+        throw fail("Nhân sự mốc chưa có mã kíp xếp lịch");
+      if (anchor.assignmentType !== "OFFICIAL")
+        throw fail("Chỉ tự động xếp chu kỳ cho nhân sự chính thức");
+      const aligned = await prisma.$transaction((tx) => alignPositionCycles(tx, {
+        userId: anchor.userId,
+        positionId: anchor.positionId,
+        rosterColumn: anchor.rosterColumn,
+        isTrainingRow: anchor.isTrainingRow,
+        crewCode: anchor.crewCode,
+        phaseIndex: anchor.phaseIndex,
+        cycleStartDate: input.cycleStartDate,
+        rosterStation: anchor.rosterStation,
+        stationCode: anchor.stationCode,
+        assignmentType: "OFFICIAL",
+        effectiveDate: input.effectiveDate,
+        endDate: anchor.endDate?.toISOString().slice(0, 10) ?? null,
+        reason: "Tự động điền ngày bắt đầu chu kỳ",
+        note: anchor.note,
+      }, actor.id));
+      await audit(
+        actor.id,
+        "AUTO_ALIGN_SHIFT_CYCLES",
+        "ShiftPositionConfig",
+        anchor.positionId,
+        detail(`Tự động điền chu kỳ cho ${aligned} phân công`, input.effectiveDate),
+        { actorName: actor.name, afterData: { anchorAssignmentId: anchor.id, aligned }, saveToAuditLog: true },
+      );
+      return ok({ aligned });
+    }
     if (input.action === "ASSIGN_POSITION_ROTATION") {
       const from = date(input.effectiveFrom),
         to = input.effectiveTo ? date(input.effectiveTo) : null;
@@ -607,9 +794,12 @@ export async function POST(req: Request) {
               data: {
                 userId: row.userId,
                 positionId: row.positionId,
+                rosterColumn: row.rosterColumn || null,
+                isTrainingRow: row.isTrainingRow,
                 crewCode: row.crewCode || null,
                 phaseIndex: valid.phaseIndex,
                 cycleStartDate: valid.cycleStartDate,
+                rosterStation: row.rosterStation ?? row.stationCode ?? null,
                 stationCode: row.stationCode ?? null,
                 assignmentType: row.assignmentType,
                 startDate: valid.startDate,
@@ -700,6 +890,46 @@ export async function POST(req: Request) {
       );
       return ok(ended);
     }
+    if (date(input.effectiveDate).getTime() === old.startDate.getTime()) {
+      const updated = await prisma.$transaction(async (tx) => {
+        const valid = await ensureValidAssignment(tx, input, old.id);
+        const result = await tx.shiftStaffingAssignment.update({
+          where: { id: old.id },
+          data: {
+            userId: input.userId,
+            positionId: input.positionId,
+            rosterColumn: input.rosterColumn || null,
+            isTrainingRow: input.isTrainingRow,
+            crewCode: input.crewCode || null,
+            phaseIndex: valid.phaseIndex,
+            cycleStartDate: valid.cycleStartDate,
+            rosterStation: input.rosterStation ?? input.stationCode ?? null,
+            stationCode: input.stationCode ?? null,
+            assignmentType: input.assignmentType,
+            endDate: valid.endDate,
+            changeReason: input.reason,
+            note: input.note ?? null,
+            updatedById: actor.id,
+          },
+        });
+        await syncCrewRotation(tx, input, actor.id);
+        return result;
+      });
+      await audit(
+        actor.id,
+        "UPDATE_SAME_DAY_SHIFT_STAFFING",
+        "ShiftStaffingAssignment",
+        updated.id,
+        detail(input.reason || "Điều chỉnh biên chế trong ngày bắt đầu", input.effectiveDate),
+        {
+          actorName: actor.name,
+          beforeData: snapshot(old),
+          afterData: snapshot(updated),
+          saveToAuditLog: true,
+        },
+      );
+      return ok(updated);
+    }
     if (date(input.effectiveDate) <= old.startDate)
       throw fail("Ngày hiệu lực mới phải sau ngày bắt đầu phân công cũ");
     const result = await prisma.$transaction(
@@ -718,9 +948,12 @@ export async function POST(req: Request) {
           data: {
             userId: input.userId,
             positionId: input.positionId,
+            rosterColumn: input.rosterColumn || null,
+            isTrainingRow: input.isTrainingRow,
             crewCode: input.crewCode || null,
             phaseIndex: valid.phaseIndex,
             cycleStartDate: valid.cycleStartDate,
+            rosterStation: input.rosterStation ?? input.stationCode ?? null,
             stationCode: input.stationCode ?? null,
             assignmentType: input.assignmentType,
             startDate: date(input.effectiveDate),
@@ -761,6 +994,12 @@ export async function POST(req: Request) {
         ? "TRANSFER_SHIFT_STAFFING"
         : old.crewCode !== input.crewCode
           ? "UPDATE_SHIFT_CREW_CODE"
+          : old.rosterColumn !== input.rosterColumn
+            ? "UPDATE_SHIFT_ROSTER_COLUMN"
+          : old.isTrainingRow !== input.isTrainingRow
+            ? "UPDATE_SHIFT_TRAINING_ROW_PLACEMENT"
+          : old.rosterStation !== input.rosterStation
+            ? "UPDATE_SHIFT_ROSTER_STATION"
           : (old.cycleStartDate?.toISOString().slice(0, 10) ?? null) !== (input.cycleStartDate ?? null)
             ? "UPDATE_SHIFT_CYCLE_START_DATE"
           : old.phaseIndex !== input.phaseIndex
