@@ -68,9 +68,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "VHV_LANH_VAT_TU", label: "VHV lãnh vật tư", who: "VHV được giao thực hiện" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu", who: "Theo phân quyền quy trình" },
-    { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh + xuất biên bản", who: "Theo phân quyền quy trình" },
-    { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay", who: "Theo phân quyền quy trình" },
+    { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   SU_DUNG_HIEN_CO: [
@@ -296,6 +295,8 @@ export default function MaterialTicketBoard({
 	        {!isLoading && shown.map((t) => {
 		          const baseMeta = t.type === "UNG" && t.status === "CHO_XAC_NHAN_PHAT"
 		            ? { label: "Chưa xác nhận trả phiếu", c: C.warn }
+		            : t.type === "UNG" && t.status === "NHAN_VAT_TU"
+		            ? { label: "Chờ xác nhận ĐXVT", c: "#0891b2" }
 		            : STATUS[t.status] ?? { label: t.status, c: C.soft };
 		          const recoveryPending = t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
 	          const mine = actionsFor(t, viewer).length > 0;
@@ -944,7 +945,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${receiptSourceLabel(t.receiptSource)} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
-    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : "Nghiệm thu, xuất Biên Bản Nghiệm Thu" },
+    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất BBNT ký tay" },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
     })),
@@ -1628,6 +1629,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedReceiveErp = receiveCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
+        {isAdvance && <label className="lb">Thống kê — Xác nhận ĐXVT</label>}
         {isAdvance && <div className="act-title-row receive-title-row">
           <div className="receive-location">
             <span>Vị trí lãnh vật tư:</span>
@@ -1650,6 +1652,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <label className="field">Số phiếu giao hàng *
             <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
           </label>
+          {isAdvance && (
+            <label className="field">Số phiếu ĐXVT *
+              <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
+            </label>
+          )}
           {!isAdvance && (
             <label className="field">Số phiếu yêu cầu sửa chữa *
               <input placeholder="Nhập số phiếu yêu cầu sửa chữa" value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} />
@@ -1659,9 +1666,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {!isAdvance && repairRequestConflictsProposal && (
           <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
         )}
-        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBNT ký tay</b>, <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn.</span></div>}
-        <button className="btn primary big" disabled={qty <= 0 || (isAdvance && !erpCode) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
-          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận vật tư lãnh và xuất các biên bản" : "Đã xác nhận vật tư lãnh")}>
+        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn, phiếu chuyển sang Quyết toán.</span></div>}
+        <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
+          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT và xuất biên bản" : "Đã xác nhận vật tư lãnh")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : isAdvance ? <FileText size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận & xuất biên bản" : "Xác nhận"}
         </button>
       </div>
@@ -1715,7 +1722,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 		              <span>Xác nhận đã trả vật tư thu hồi</span>
 		            </label>
 		          </div>
-	          {t.type !== "DE_XUAT" && <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo sau bước Xác nhận vật tư lãnh." : "Biên bản vật tư thu hồi sẽ được tạo tại bước Nghiệm thu."}</div>}
+	          {t.type !== "DE_XUAT" && <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo tại bước Xác nhận ĐXVT." : "Biên bản vật tư thu hồi sẽ được tạo tại bước Nghiệm thu."}</div>}
 		        </>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
@@ -1760,7 +1767,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "UNG" ? "Xác nhận nghiệm thu" : "Nghiệm thu & xuất BBNT ký tay"}
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu & xuất BBNT ký tay
         </button>
       </div>
     );

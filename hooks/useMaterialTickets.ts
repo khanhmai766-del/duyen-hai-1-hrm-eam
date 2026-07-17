@@ -254,7 +254,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO" || t.status === "CHO_XAC_NHAN_PHAT") && v.steps?.stats) a.push("stats");
     if (t.status === "VHV_LANH_VAT_TU" && (v.steps?.vhvReceiveConfigured ? v.steps.vhvReceive : canOperateAssigned)) a.push("vhvReceive");
     if (t.status === "NHAN_TU_HIEN_CO" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
-    if (t.status === "NHAN_VAT_TU" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
+    // Ứng: bước gộp "Xác nhận ĐXVT" — chỉ Thống kê; luồng khác giữ quyền Nhận vật tư.
+    if (t.status === "NHAN_VAT_TU" && (t.type === "UNG" ? v.steps?.stats : (v.steps?.receive ?? v.isShiftLeader))) a.push("receive");
     if (t.status === "CHO_PHIEU_YCSC" && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");

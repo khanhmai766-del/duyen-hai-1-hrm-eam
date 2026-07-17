@@ -745,16 +745,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B2' — NHẬN VẬT TƯ: khối lượng lãnh + hình thức lãnh → chuyển Sử dụng vật tư
+    // B2' — Đề xuất: NHẬN VẬT TƯ (quyền receive) → chuyển Sử dụng vật tư.
+    // Ứng: bước gộp "XÁC NHẬN ĐXVT" (chỉ Thống kê): nguồn lãnh + mã ERP + khối lượng
+    // + số phiếu giao hàng + số phiếu ĐXVT, xuất BBNT DO/BBTHVT → chuyển Quyết toán.
     if (action === "receive") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
-        return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const requiredStep = t.type === "UNG" ? "stats" : "receive";
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), requiredStep, user))
+        return fail(t.type === "UNG" ? "Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)" : "Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
       const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
       const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
+      const proposalNumber = t.type === "UNG" ? String(body.proposalNumber || t.proposalNumber || "").trim() : "";
+      if (t.type === "UNG" && !proposalNumber) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
       const repairRequestNumber = t.type === "UNG" ? "" : String(body.repairRequestNumber || "").trim();
       if (t.type !== "UNG" && !repairRequestNumber) return fail("Vui lòng nhập số phiếu yêu cầu sửa chữa");
       if (t.type !== "UNG" && sameTicketNumber(repairRequestNumber, t.proposalNumber)) {
@@ -787,23 +792,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ? receivedQuantity - (t.vhvReceivedQuantity ?? 0)
         : receivedQuantity;
       if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
+      // BBNT ký tay đã xuất ở bước Nghiệm thu; tại đây xuất BBNT DO + BBTHVT
+      // bằng thông tin ERP + số phiếu giao hàng vừa nhập.
       const documents = t.type === "UNG" ? {
-        bbkt: await generateBbntDoc({
-          fileBaseName: materialTicketFileBase(t),
-          soBBKT: t.bbktNumber,
-          soPCT: t.pctNumber,
-          noiDung: t.completionNote ?? "",
-          thoiGianBatDau: t.workStartedAt,
-          thoiGianKetThuc: t.workEndedAt,
-          tenChiHuy: t.chiHuyName ?? "",
-          tenTruongCa: t.completedByName ?? "",
-          tenVHV: t.proposedByName,
-          chucVuVHV: t.proposedByPosition,
-          unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
-          items: toBbntItems(t).map((row, index) => index === 0
-            ? { ...row, materialCode: erpCode, materialName: erpMaterial.name, quantity: receivedQuantity }
-            : row),
-        }),
         bbnt: await buildBbntDoDocument(t, {
           receivedQuantity,
           deliveryNoteNumber: receivedMethod || undefined,
@@ -830,13 +821,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: t.type === "UNG" ? "CHO_THONG_KE" : "SU_DUNG_VAT_TU",
+            status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "SU_DUNG_VAT_TU",
             receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
             ...(t.type !== "UNG" ? { repairRequestNumber } : {}),
+            // Ứng: bước gộp kiêm luôn Thống kê xác nhận ĐXVT — lưu số phiếu + dấu vết Thống kê.
+            ...(t.type === "UNG" ? {
+              proposalNumber,
+              proposalIssuedAt: new Date(),
+              statsById: user.id, statsByName: user.name ?? "",
+              statsByPosition: user.position ?? null, statsAt: new Date(),
+            } : {}),
             remainingQuantity: receivedQuantity - (t.usedQuantity ?? 0),
             ...(documents ? {
               docUrl: documents.bbnt.url,
-              bbktDocUrl: documents.bbkt.url,
               recoveryDocUrl: documents.recovery?.url ?? null,
             } : {}),
             receivedById: user.id, receivedByName: user.name ?? "",
@@ -849,7 +846,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : ""}${documents ? `; đã xuất BBNT ký tay, BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}` : ""}`
+        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : `; số phiếu ĐXVT ${proposalNumber}`}${documents ? `; đã xuất BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, chuyển Quyết toán` : ""}`
       );
       return ok(up);
     }
@@ -947,10 +944,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
 
-      // Đề xuất & Sử dụng hiện có: nghiệm thu xuất BBNT ký tay + Biên bản vật tư thu hồi;
-      // BBNT DO xuất sau khi Thống kê xác nhận (Đề xuất: bước Quyết toán,
-      // Sử dụng hiện có: bước Thống kê xác nhận và xuất biên bản).
-      const documents = ["DE_XUAT", "SU_DUNG_HIEN_CO"].includes(t.type) ? {
+      // Mọi luồng: nghiệm thu xuất BBNT ký tay. Đề xuất & Sử dụng hiện có kèm Biên bản
+      // vật tư thu hồi; Ứng xuất BBTHVT ở bước Xác nhận ĐXVT (cần số phiếu giao hàng).
+      // BBNT DO xuất sau khi Thống kê xác nhận (Đề xuất: Quyết toán, Sử dụng hiện có:
+      // Thống kê xác nhận + BBNT D-Office, Ứng: Xác nhận ĐXVT).
+      const documents = {
         bbkt: await generateBbntDoc({
           fileBaseName: materialTicketFileBase(t), soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
@@ -960,8 +958,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           items: toBbntItems(t),
         }),
         // BBTHVT tạo lại tại đây (bước Sử dụng vật tư chưa có PCT) để Ghi chú có số PCT/LCT.
-        recovery: t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null,
-      } : null;
+        recovery: t.type !== "UNG" && t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null,
+      };
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
@@ -975,7 +973,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, t.type === "UNG" ? `${materialTicketReference(t)}: đã nghiệm thu, chuyển xác nhận vật tư lãnh` : `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay${documents?.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận và xuất BBNT DO" : "chờ Thống kê quyết toán"}`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận và xuất BBNT DO" : "chờ Thống kê quyết toán"}`);
       return ok(up);
     }
 
