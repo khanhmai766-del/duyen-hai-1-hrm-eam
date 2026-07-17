@@ -15,8 +15,8 @@ const SHIFT_ROWS: Array<[ShiftType, string]> = [
 const NOTE = "Lịch đi HC áp dụng cho CBCNV theo sự sắp xếp của Lãnh đạo Phân xưởng. Các điều chỉnh đặc biệt thực hiện theo lịch đã được công bố.";
 const POSITION_EXPORT_ORDER = [
   "Trưởng ca",
-  "Trưởng kíp lò máy",
-  "Lò trưởng",
+  "TK Lò máy",
+  "Lò Trưởng",
   "Lò phó",
   "Máy trưởng",
   "Trợ thủ",
@@ -24,17 +24,17 @@ const POSITION_EXPORT_ORDER = [
   "Máy phó",
   "Trạm bơm tuần hoàn",
   "Trạm bơm nước thô",
-  "TK điện",
-  "Trực chính điện",
+  "Trưởng kíp điện",
+  "Trực chính Điện",
   "Trực phụ điện",
   "Thải xỉ",
   "ESP",
   "FGD",
-  "VHV Trạm khí nén – Nhà dầu HFO 300m3",
-  "VHV XLN hỗn hợp",
-  "VHV XLN thải – Nhà dầu 5000m3",
-  "VHV Trạm NH3 - Lò hơi phụ",
-  "VHV Thiết bị đo lường điều khiển",
+  "Khí Nén – Nhà Dầu",
+  "XLN hỗn hợp",
+  "XLNT",
+  "NH3 - Lò hơi phụ",
+  "Thiết bị đo lường điều khiển",
 ];
 
 function monthRange(from: string, count: number) {
