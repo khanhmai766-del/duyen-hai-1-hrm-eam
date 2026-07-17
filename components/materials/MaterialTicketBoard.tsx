@@ -70,7 +70,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + xuất biên bản", who: "Thống kê" },
   ],
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
@@ -1629,7 +1629,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedReceiveErp = receiveCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        {isAdvance && <label className="lb">Thống kê — Xác nhận ĐXVT</label>}
         {isAdvance && <div className="act-title-row receive-title-row">
           <div className="receive-location">
             <span>Vị trí lãnh vật tư:</span>
@@ -1640,36 +1639,40 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <button type="button" className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh ngoài</button>
           </div>
         </div>}
-        {isAdvance && <>
-          <label>Mã vật tư *</label>
-          <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}><option value="">— Chọn mã vật tư ERP —</option>{receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}</select>
-          {selectedReceiveErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedReceiveErp.name}<br/><b>Số lượng ERP:</b> {selectedReceiveErp.erpStock} {unit}</div>}
-        </>}
-        <div className={`receive-field-grid ${isAdvance ? "two-cols" : ""}`}>
+        <div className={`receive-field-grid ${isAdvance ? "advance-receive-fields" : ""}`}>
+          {isAdvance && (
+            <label className="field">Mã vật tư *
+              <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+                <option value="">— Chọn mã vật tư ERP —</option>
+                {receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}
+              </select>
+            </label>
+          )}
           <label className="field">Khối lượng vật tư lãnh
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
-          </label>
-          <label className="field">Số phiếu giao hàng *
-            <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
           </label>
           {isAdvance && (
             <label className="field">Số phiếu ĐXVT *
               <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
             </label>
           )}
+          <label className="field">Số phiếu giao hàng *
+            <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
+          </label>
           {!isAdvance && (
             <label className="field">Số phiếu yêu cầu sửa chữa *
               <input placeholder="Nhập số phiếu yêu cầu sửa chữa" value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} />
             </label>
           )}
         </div>
+        {isAdvance && selectedReceiveErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedReceiveErp.name}<br/><b>Số lượng ERP:</b> {selectedReceiveErp.erpStock} {unit}</div>}
         {!isAdvance && repairRequestConflictsProposal && (
           <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
         )}
-        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận, hệ thống sẽ xuất <b>BBNT DO</b>{t.recoveryRequired ? <> và <b>Biên bản vật tư thu hồi</b></> : ""} bằng thông tin ERP đã chọn, phiếu chuyển sang Quyết toán.</span></div>}
+        {isAdvance && <div className="note"><FileText size={15} /><span>Sau khi xác nhận ĐXVT, phiếu sẽ chuyển sang Quyết toán. <b>Biên Bản Nghiệm Thu D-Office</b>{t.recoveryRequired ? <> và <b>Biên Bản Vật Tư Thu Hồi</b></> : ""} sẽ được xuất tại bước Quyết toán vật tư.</span></div>}
         <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
-          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT và xuất biên bản" : "Đã xác nhận vật tư lãnh")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : isAdvance ? <FileText size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận & xuất biên bản" : "Xác nhận"}
+          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT, chuyển Quyết toán" : "Đã xác nhận vật tư lãnh")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận"}
         </button>
       </div>
     );
@@ -1822,8 +1825,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <span className="settlement-check-label">Xác nhận đã quyết toán vật tư</span>
       </label>
       {t.type === "DE_XUAT" && <div className="note"><FileText size={15}/> Khi hoàn tất phiếu, hệ thống sẽ xuất <b>Biên Bản Nghiệm Thu D-Office</b>.</div>}
-      <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Phiếu đã hoàn thành")}>
-        <CircleCheck size={15}/> Hoàn tất phiếu
+      {t.type === "UNG" && <div className="note"><FileText size={15}/> Khi quyết toán, hệ thống sẽ xuất <b>Biên Bản Nghiệm Thu D-Office</b>{t.recoveryRequired ? <> và <b>Biên Bản Vật Tư Thu Hồi</b></> : ""}.</div>}
+      <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, t.type === "UNG" ? "Đã quyết toán và xuất biên bản" : "Phiếu đã hoàn thành")}>
+        {t.type === "UNG" ? <FileText size={15}/> : <CircleCheck size={15}/>} {t.type === "UNG" ? "Quyết toán & xuất biên bản" : "Hoàn tất phiếu"}
       </button>
     </div>
   );
@@ -2002,9 +2006,9 @@ const CSS = `
 .receive-source-toggle button:hover{background:rgba(255,255,255,.1);color:#fff;}
 .receive-source-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
 .receive-field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;}
-.receive-field-grid.two-cols{grid-template-columns:repeat(2,minmax(0,1fr));}
+.receive-field-grid.advance-receive-fields{grid-template-columns:repeat(2,minmax(0,1fr));}
 .receive-field-grid .field{min-width:0;margin:0!important;}
-.receive-field-grid .field input{margin-top:6px;}
+.receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
 .confirm-field-row .field{min-width:0;margin:0;}
@@ -2149,6 +2153,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.two-cols,.review-receive-row{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.review-receive-row{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

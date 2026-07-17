@@ -747,7 +747,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B2' — Đề xuất: NHẬN VẬT TƯ (quyền receive) → chuyển Sử dụng vật tư.
     // Ứng: bước gộp "XÁC NHẬN ĐXVT" (chỉ Thống kê): nguồn lãnh + mã ERP + khối lượng
-    // + số phiếu giao hàng + số phiếu ĐXVT, xuất BBNT DO/BBTHVT → chuyển Quyết toán.
+    // + số phiếu giao hàng + số phiếu ĐXVT → chuyển Quyết toán; chưa xuất biên bản tại đây.
     if (action === "receive") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
       const requiredStep = t.type === "UNG" ? "stats" : "receive";
@@ -792,21 +792,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ? receivedQuantity - (t.vhvReceivedQuantity ?? 0)
         : receivedQuantity;
       if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
-      // BBNT ký tay đã xuất ở bước Nghiệm thu; tại đây xuất BBNT DO + BBTHVT
-      // bằng thông tin ERP + số phiếu giao hàng vừa nhập.
-      const documents = t.type === "UNG" ? {
-        bbnt: await buildBbntDoDocument(t, {
-          receivedQuantity,
-          deliveryNoteNumber: receivedMethod || undefined,
-          itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
-        }),
-        recovery: t.recoveryRequired
-          ? await buildRecoveryDocument(t, {
-              deliveryNoteNumber: receivedMethod || undefined,
-              itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
-            })
-          : null,
-      } : null;
       const up = await prisma.$transaction(async (tx) => {
         const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
         const sharedQuantity = before + materialIncrement;
@@ -832,10 +817,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               statsByPosition: user.position ?? null, statsAt: new Date(),
             } : {}),
             remainingQuantity: receivedQuantity - (t.usedQuantity ?? 0),
-            ...(documents ? {
-              docUrl: documents.bbnt.url,
-              recoveryDocUrl: documents.recovery?.url ?? null,
-            } : {}),
             receivedById: user.id, receivedByName: user.name ?? "",
             receivedByPosition: user.position ?? null, receivedAt: new Date(),
           },
@@ -846,7 +827,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : `; số phiếu ĐXVT ${proposalNumber}`}${documents ? `; đã xuất BBNT DO${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, chuyển Quyết toán` : ""}`
+        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
       );
       return ok(up);
     }
@@ -945,9 +926,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
 
       // Mọi luồng: nghiệm thu xuất BBNT ký tay. Đề xuất & Sử dụng hiện có kèm Biên bản
-      // vật tư thu hồi; Ứng xuất BBTHVT ở bước Xác nhận ĐXVT (cần số phiếu giao hàng).
-      // BBNT DO xuất sau khi Thống kê xác nhận (Đề xuất: Quyết toán, Sử dụng hiện có:
-      // Thống kê xác nhận + BBNT D-Office, Ứng: Xác nhận ĐXVT).
+      // vật tư thu hồi; luồng Ứng xuất BBNT D-Office và Biên bản vật tư thu hồi ở bước Quyết toán.
+      // Luồng Đề xuất cũng xuất BBNT D-Office tại Quyết toán; Sử dụng hiện có xuất tại bước
+      // Thống kê xác nhận + BBNT D-Office.
       const documents = {
         bbkt: await generateBbntDoc({
           fileBaseName: materialTicketFileBase(t), soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
@@ -1013,15 +994,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "settle") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
-      // Luồng Đề xuất: BBNT DO xuất tại bước Quyết toán, sau khi Thống kê xác nhận
-      // (các luồng khác đã xuất ở bước xuất biên bản trước đó).
-      const bbnt = t.type === "DE_XUAT" ? await buildBbntDoDocument(t) : null;
+      // Luồng Đề xuất và Ứng: BBNT D-Office được xuất khi quyết toán.
+      // Riêng luồng Ứng, nếu có vật tư thu hồi thì đồng thời xuất Biên bản vật tư thu hồi.
+      const bbnt = ["DE_XUAT", "UNG"].includes(t.type) ? await buildBbntDoDocument(t) : null;
+      const recovery = t.type === "UNG" && t.recoveryRequired
+        ? await buildRecoveryDocument(t)
+        : null;
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
-        data: { status: "HOAN_TAT", settledAt: new Date(), settledByName: user.name ?? "", ...(bbnt ? { docUrl: bbnt.url } : {}) },
+        data: {
+          status: "HOAN_TAT",
+          settledAt: new Date(),
+          settledByName: user.name ?? "",
+          ...(bbnt ? { docUrl: bbnt.url } : {}),
+          ...(recovery ? { recoveryDocUrl: recovery.url } : {}),
+        },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_SETTLE", "MaterialTicket", t.id, `${materialTicketReference(t)}: đã quyết toán vật tư${bbnt ? ", xuất BBNT DO" : ""}`);
+      await audit(
+        user.id,
+        "MT_SETTLE",
+        "MaterialTicket",
+        t.id,
+        `${materialTicketReference(t)}: đã quyết toán vật tư${bbnt ? ", xuất BBNT D-Office" : ""}${recovery ? " và Biên bản vật tư thu hồi" : ""}`
+      );
       return ok(up);
     }
 
