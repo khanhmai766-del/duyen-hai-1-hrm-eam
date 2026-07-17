@@ -99,7 +99,7 @@ const fmt = (s?: string | null) =>
 const normalizeReceiptSource = (source?: string | null): "ERP" | "EXISTING" =>
   source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
 const receiptSourceLabel = (source?: string | null) =>
-  normalizeReceiptSource(source) === "ERP" ? "Lãnh kho DH1" : 'Lãnh vật tư "Hiện có"';
+  normalizeReceiptSource(source) === "ERP" ? "Lãnh kho DH1" : "Lãnh ngoài";
 const bbntDownloadUrl = (url: string, deviceName: string) => {
   if (!deviceName || /[?&]filename=/.test(url)) return url;
   return `${url}${url.includes("?") ? "&" : "?"}deviceName=${encodeURIComponent(deviceName)}`;
@@ -1155,7 +1155,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               {t.type === "UNG" ? (
                 <div className="seg2 review-receive-toggle">
                   <button type="button" disabled={!canEdit} className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho DH1</button>
-                  <button type="button" disabled={!canEdit} className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh vật tư "Hiện có"</button>
+                  <button type="button" disabled={!canEdit} className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh ngoài</button>
                 </div>
               ) : <div className="fixed-receive-source">Lãnh kho DH1</div>}
             </div>
@@ -1631,11 +1631,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {isAdvance && <div className="act-title-row receive-title-row">
           <div className="receive-location">
             <span>Vị trí lãnh vật tư:</span>
-            <em>{receiptSource === "ERP" ? "Số lượng lãnh sẽ được trừ khỏi số lượng ERP." : 'Lãnh vật tư "Hiện có" không làm thay đổi số lượng ERP.'}</em>
+            <em>{receiptSource === "ERP" ? "Số lượng lãnh sẽ được trừ khỏi số lượng ERP." : "Lãnh ngoài không làm thay đổi số lượng ERP."}</em>
           </div>
           <div className="seg2 receive-source-toggle" aria-label="Nguồn lãnh vật tư">
             <button type="button" className={receiptSource === "ERP" ? "on" : ""} onClick={() => setReceiptSource("ERP")}>Lãnh kho DH1</button>
-            <button type="button" className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh vật tư "Hiện có"</button>
+            <button type="button" className={receiptSource === "EXISTING" ? "on" : ""} onClick={() => setReceiptSource("EXISTING")}>Lãnh ngoài</button>
           </div>
         </div>}
         {isAdvance && <>

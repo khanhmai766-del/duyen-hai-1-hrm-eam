@@ -29,7 +29,7 @@ const normalizeReceiptSource = (source: unknown): "ERP" | "EXISTING" =>
   source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
 
 const receiptSourceLabel = (source: unknown) =>
-  normalizeReceiptSource(source) === "ERP" ? "lãnh kho DH1" : 'lãnh vật tư "Hiện có"';
+  normalizeReceiptSource(source) === "ERP" ? "lãnh kho DH1" : "lãnh ngoài";
 
 const sameTicketNumber = (left?: string | null, right?: string | null) =>
   !!left?.trim() && !!right?.trim() && left.trim().toLocaleLowerCase("vi") === right.trim().toLocaleLowerCase("vi");
