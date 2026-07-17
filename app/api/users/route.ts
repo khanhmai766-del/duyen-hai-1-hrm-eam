@@ -265,6 +265,20 @@ export async function DELETE(req: NextRequest) {
         await tx.digitalDocument.updateMany({ where: { updatedById: id }, data: { updatedById: null } });
         await tx.rbacConfig.updateMany({ where: { updatedById: id }, data: { updatedById: null } });
         await tx.systemBroadcast.updateMany({ where: { createdById: id }, data: { createdById: null, createdByName: null } });
+        await tx.rotationTemplate.updateMany({ where: { createdById: id }, data: { createdById: null } });
+        await tx.rotationTemplate.updateMany({ where: { updatedById: id }, data: { updatedById: null } });
+        await tx.positionRotationAssignment.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.positionRotationAssignment.updateMany({ where: { updatedById: id }, data: { updatedById: user.id } });
+        await tx.shiftPositionConfig.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.shiftPositionConfig.updateMany({ where: { updatedById: id }, data: { updatedById: user.id } });
+        await tx.shiftStaffingAssignment.deleteMany({ where: { userId: id } });
+        await tx.shiftStaffingAssignment.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.shiftStaffingAssignment.updateMany({ where: { updatedById: id }, data: { updatedById: user.id } });
+        await tx.crewRotationConfig.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.crewRotationConfig.updateMany({ where: { updatedById: id }, data: { updatedById: user.id } });
+        await tx.staffingChangeEvent.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.shiftScheduleVersion.updateMany({ where: { createdById: id }, data: { createdById: user.id } });
+        await tx.shiftScheduleVersion.updateMany({ where: { approvedById: id }, data: { approvedById: null } });
 
         await tx.announcementRead.deleteMany({ where: { userId: id } });
         await tx.announcement.deleteMany({ where: { createdById: id } });

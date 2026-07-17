@@ -1,0 +1,3 @@
+ALTER TABLE "ShiftPositionConfig"
+  ADD COLUMN IF NOT EXISTS "trainingRowName" TEXT,
+  ADD COLUMN IF NOT EXISTS "showTrainingRow" BOOLEAN NOT NULL DEFAULT false;

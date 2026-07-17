@@ -1,0 +1,2046 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRightLeft,
+  BriefcaseBusiness,
+  CalendarClock,
+  Check,
+  Clock3,
+  GripVertical,
+  GraduationCap,
+  History,
+  Eye,
+  EyeOff,
+  Loader2,
+  Plus,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  UserMinus,
+  UserPlus,
+  UsersRound,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/shared/page-header";
+import { TableSkeleton } from "@/components/shared/skeletons";
+import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/nav";
+import {
+  PositionRotation,
+  RotationTemplate,
+  StaffingAssignment,
+  StaffingPosition,
+  useMutateShiftStaffing,
+  useShiftStaffing,
+} from "@/hooks/useShiftStaffing";
+
+const TYPE_LABEL = {
+  OFFICIAL: "Chính thức",
+  BACKUP: "Dự phòng (cũ)",
+  TRAINING: "Tập sự (TS)",
+  TEMPORARY: "Tạm thời (cũ)",
+  ADMINISTRATIVE: "Hành chính (HC)",
+} as const;
+const ASSIGNMENT_OPTIONS = [
+  ["OFFICIAL", "Chính thức"],
+  ["TRAINING", "Tập sự (TS)"],
+  ["ADMINISTRATIVE", "Hành chính (HC)"],
+] as const;
+const SHIFT_LABEL = {
+  MORNING: "S",
+  AFTERNOON: "C",
+  NIGHT: "Đ",
+  OFF: "N",
+} as const;
+const SHIFT_NAME = {
+  MORNING: "Ca sáng",
+  AFTERNOON: "Ca chiều",
+  NIGHT: "Ca đêm",
+  OFF: "Nghỉ",
+} as const;
+const QUICK_CREWS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+const today = () => new Date().toISOString().slice(0, 10);
+const viDate = (value?: string | null) =>
+  value
+    ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "UTC" })
+    : "Không thời hạn";
+const effective = (
+  item: {
+    effectiveFrom?: string;
+    effectiveTo?: string | null;
+    startDate?: string;
+    endDate?: string | null;
+  },
+  at = today(),
+) =>
+  (item.effectiveFrom ?? item.startDate ?? "").slice(0, 10) <= at &&
+  (!(item.effectiveTo ?? item.endDate) ||
+    (item.effectiveTo ?? item.endDate)!.slice(0, 10) >= at);
+const utcDayNumber = (value: string) =>
+  Math.floor(new Date(`${value.slice(0, 10)}T00:00:00.000Z`).getTime() / 86_400_000);
+const cycleStepAt = (
+  item: Pick<StaffingAssignment, "cycleStartDate" | "phaseIndex" | "startDate">,
+  template: RotationTemplate,
+  at = today(),
+) => {
+  const baseDate = item.cycleStartDate?.slice(0, 10) ?? item.startDate.slice(0, 10);
+  const baseStep = item.cycleStartDate ? 0 : item.phaseIndex;
+  if (baseStep === null) return null;
+  const elapsed = utcDayNumber(at) - utcDayNumber(baseDate);
+  return ((baseStep + elapsed) % template.cycleLength + template.cycleLength) % template.cycleLength;
+};
+const cycleStartForStep = (effectiveDate: string, step: number) => {
+  const result = new Date(`${effectiveDate}T00:00:00.000Z`);
+  result.setUTCDate(result.getUTCDate() - step);
+  return result.toISOString().slice(0, 10);
+};
+const uniformCoverage = (p: StaffingPosition) =>
+  p.requiredMorningStaff !== null &&
+  p.requiredMorningStaff === p.requiredAfternoonStaff &&
+  p.requiredMorningStaff === p.requiredNightStaff;
+const coverageLabel = (p: StaffingPosition) =>
+  uniformCoverage(p)
+    ? `${p.requiredMorningStaff} người/ca`
+    : p.requiredMorningStaff === null
+      ? "Chưa cấu hình"
+      : "Theo từng ca";
+const expectedCrews = (code?: string) =>
+  code?.startsWith("45K")
+    ? 4.5
+    : code?.startsWith("55K")
+      ? 5.5
+      : code?.startsWith("4K")
+        ? 4
+        : code?.startsWith("5K")
+          ? 5
+          : code?.startsWith("6K")
+            ? 6
+            : null;
+
+function currentRotation(
+  position: StaffingPosition,
+  rotations: PositionRotation[],
+  at = today(),
+) {
+  return rotations
+    .filter((item) => item.positionConfigId === position.id && effective(item, at))
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+}
+function metrics(
+  position: StaffingPosition,
+  assignments: StaffingAssignment[],
+  rotations: PositionRotation[],
+) {
+  const current = assignments.filter(
+    (item) =>
+      item.positionId === position.id &&
+      item.assignmentType === "OFFICIAL" &&
+      effective(item),
+  );
+  const rotation = currentRotation(position, rotations);
+  const rotationHistory = rotations.filter(
+    (item) => item.positionConfigId === position.id,
+  );
+  const uniform = uniformCoverage(position);
+  const required = uniform ? position.requiredMorningStaff : null;
+  const equivalent = required ? current.length / required : null;
+  const warnings: string[] = [];
+  if (position.requiredMorningStaff === null)
+    warnings.push("Chưa cấu hình nhu cầu từng ca");
+  if (!uniform && position.requiredMorningStaff !== null)
+    warnings.push(
+      "Cương vị có nhu cầu theo từng ca cần kiểm tra bằng lịch thực tế",
+    );
+  if (!rotation)
+    warnings.push(
+      rotationHistory.length
+        ? "Mẫu xoay ca đã hết hiệu lực"
+        : "Mẫu xoay ca chưa được chọn",
+    );
+  const sortedRotations = [...rotationHistory].sort((a, b) =>
+    a.effectiveFrom.localeCompare(b.effectiveFrom),
+  );
+  if (
+    sortedRotations.some(
+      (item, index) =>
+        index > 0 &&
+        (!sortedRotations[index - 1].effectiveTo ||
+          sortedRotations[index - 1].effectiveTo! >= item.effectiveFrom),
+    )
+  )
+    warnings.push("Có hai mẫu xoay ca chồng lấn");
+  if (current.some((item) => !item.crewCode))
+    warnings.push("Có nhân sự chưa được phân kíp");
+  if (current.some((item) => !item.cycleStartDate && item.phaseIndex === null))
+    warnings.push("Có nhân sự chưa xác định được bước chu kỳ");
+  if (
+    rotation &&
+    current.some(
+      (item) =>
+        item.phaseIndex !== null &&
+        item.phaseIndex >= rotation.rotationTemplate.cycleLength,
+    )
+  )
+    warnings.push("Có bước chu kỳ không phù hợp với mẫu đang áp dụng");
+  const phases = current
+    .map((x) => x.phaseIndex)
+    .filter((x): x is number => x !== null)
+    .sort((a, b) => a - b);
+  if (
+    phases.length &&
+    Array.from({ length: Math.max(...phases) + 1 }, (_, i) => i).some(
+      (i) => !phases.includes(i),
+    )
+  )
+    warnings.push("Chu kỳ đang thiếu một số bước");
+  const phaseCrews = new Map<string, Set<string>>();
+  let duplicatePhase = false;
+  for (const item of current) {
+    if (item.phaseIndex === null) continue;
+    const key =
+      position.positionType === "SINGLE"
+        ? `${item.phaseIndex}`
+        : `${item.phaseIndex}:${item.stationCode ?? "NONE"}`;
+    const crews = phaseCrews.get(key) ?? new Set<string>();
+    crews.add(item.crewCode ?? "NONE");
+    if (crews.size > 1) duplicatePhase = true;
+    phaseCrews.set(key, crews);
+  }
+  if (duplicatePhase) warnings.push("Có bước chu kỳ bị trùng giữa các kíp");
+  if (position.positionType === "S1_S2") {
+    if (current.some((item) => !item.stationCode))
+      warnings.push("Có nhân sự chưa được phân S1/S2/FLEX");
+    const s1 = current.filter((x) => x.stationCode === "S1").length,
+      s2 = current.filter((x) => x.stationCode === "S2").length;
+    if (Math.abs(s1 - s2) > 1) warnings.push("Phân bổ S1/S2 chưa cân bằng");
+    for (const crew of new Set(
+      current.map((x) => x.crewCode).filter(Boolean),
+    )) {
+      const crewItems = current.filter((x) => x.crewCode === crew);
+      if (
+        !crewItems.some(
+          (x) => x.stationCode === "S1" || x.stationCode === "FLEX",
+        ) ||
+        !crewItems.some(
+          (x) => x.stationCode === "S2" || x.stationCode === "FLEX",
+        )
+      )
+        warnings.push(`Kíp ${crew} đang thiếu S1 hoặc S2`);
+    }
+  }
+  const expected = expectedCrews(rotation?.rotationTemplate.code);
+  if (equivalent !== null && expected !== null && equivalent !== expected)
+    warnings.push("Số nhân sự không phù hợp với mẫu đang áp dụng");
+  return {
+    current,
+    rotation,
+    uniform,
+    equivalent,
+    warnings,
+    s1: current.filter((x) => x.stationCode === "S1").length,
+    s2: current.filter((x) => x.stationCode === "S2").length,
+    flex: current.filter((x) => x.stationCode === "FLEX").length,
+    unstationed: current.filter((x) => !x.stationCode).length,
+  };
+}
+
+type FormMode = "assign" | "change" | "detach";
+const initialForm = {
+  userId: "",
+  positionId: "",
+  rosterColumn: "",
+  isTrainingRow: false,
+  crewCode: "",
+  phaseIndex: "",
+  cycleStartDate: "",
+  rosterStation: "",
+  stationCode: "",
+  assignmentType: "OFFICIAL",
+  effectiveDate: today(),
+  endDate: "",
+  reason: "",
+  note: "",
+};
+
+export default function ShiftStaffingPage() {
+  const query = useShiftStaffing(),
+    mutation = useMutateShiftStaffing(),
+    data = query.data?.data;
+  const canManage =
+      data?.permissionLevel === "manage" || data?.permissionLevel === "full",
+    canConfigure = data?.permissionLevel === "full";
+  const positions = data?.positions ?? [],
+    assignments = data?.assignments ?? [],
+    rotations = data?.positionRotations ?? [],
+    templates = data?.rotationTemplates ?? [];
+  const positionGroups = React.useMemo(() => {
+    const shift: StaffingPosition[] = [];
+    const administrative: StaffingPosition[] = [];
+    for (const position of positions) {
+      const hasShiftAssignment = assignments.some(
+        (item) =>
+          item.positionId === position.id &&
+          item.assignmentType !== "ADMINISTRATIVE" &&
+          !!item.rosterColumn &&
+          effective(item),
+      );
+      const hasCurrentRotation = rotations.some(
+        (item) => item.positionConfigId === position.id && effective(item),
+      );
+      (position.id || hasShiftAssignment || hasCurrentRotation ? shift : administrative).push(
+        position,
+      );
+    }
+    return [
+      {
+        key: "shift",
+        label: "Cương vị đi ca",
+        description: "Có biên chế kíp hoặc mẫu xoay đang áp dụng",
+        icon: Clock3,
+        positions: shift,
+        tone: "border-sky-200 bg-sky-50/80 text-sky-900",
+      },
+      {
+        key: "administrative",
+        label: "Cương vị hành chính",
+        description: "Không tham gia vòng xoay ca hiện hành",
+        icon: BriefcaseBusiness,
+        positions: administrative,
+        tone: "border-emerald-200 bg-emerald-50/80 text-emerald-900",
+      },
+    ];
+  }, [assignments, positions, rotations]);
+  const [selectedName, setSelectedName] = React.useState("");
+  const selected = positions.find((p) => p.name === selectedName);
+  const selectedMetrics = selected
+    ? metrics(selected, assignments, rotations)
+    : null;
+  const [showHistory, setShowHistory] = React.useState(false),
+    [configOpen, setConfigOpen] = React.useState(false),
+    [rotationOpen, setRotationOpen] = React.useState(false);
+  const [lastEffectiveChange, setLastEffectiveChange] = React.useState<{ date: string; positionId: string } | null>(null);
+  const [coverage, setCoverage] = React.useState({
+    morning: 1,
+    afternoon: 1,
+    night: 1,
+    mode: "one",
+    reason: "",
+  });
+  const [rotationForm, setRotationForm] = React.useState({
+    templateId: "",
+    effectiveFrom: today(),
+    effectiveTo: "",
+    reason: "",
+  });
+  const [mode, setMode] = React.useState<FormMode | null>(null),
+    [editing, setEditing] = React.useState<StaffingAssignment | null>(null),
+    [form, setForm] = React.useState(initialForm),
+    [userSearch, setUserSearch] = React.useState(""),
+    [selectedUserIds, setSelectedUserIds] = React.useState<string[]>([]),
+    [showCycleStepPicker, setShowCycleStepPicker] = React.useState(false);
+  const filteredUsers = React.useMemo(() => {
+    const keyword = normalizeText(userSearch.trim());
+    if (!keyword) return data?.users ?? [];
+    return (data?.users ?? []).filter((user) =>
+      normalizeText(
+        `${user.employeeId} ${user.name} ${user.position ?? ""}`,
+      ).includes(keyword),
+    );
+  }, [data?.users, userSearch]);
+  const visibleAssignments = selected
+    ? assignments.filter(
+        (x) => x.positionId === selected.id && (showHistory || effective(x)),
+      )
+    : [];
+  const formRotation = currentRotation(
+    { id: form.positionId } as StaffingPosition,
+    rotations,
+    form.effectiveDate || today(),
+  );
+  const formTemplate = formRotation?.rotationTemplate;
+  function setField(key: keyof typeof form, value: string) {
+    setForm((old) => ({ ...old, [key]: value }));
+  }
+  function setCrewCode(value: string) {
+    const crewCode = value.toUpperCase();
+    const existingCrew = assignments.find(
+      (item) =>
+        item.positionId === form.positionId &&
+        item.crewCode === crewCode &&
+        !!item.cycleStartDate &&
+        effective(item, form.effectiveDate || today()),
+    );
+    setForm((old) => ({
+      ...old,
+      crewCode,
+      cycleStartDate: old.cycleStartDate || existingCrew?.cycleStartDate?.slice(0, 10) || "",
+    }));
+  }
+  function openConfig(p: StaffingPosition) {
+    const m = p.requiredMorningStaff ?? 1,
+      a = p.requiredAfternoonStaff ?? m,
+      n = p.requiredNightStaff ?? m;
+    setCoverage({
+      morning: m,
+      afternoon: a,
+      night: n,
+      mode:
+        m === a && a === n && m === 1
+          ? "one"
+          : m === a && a === n && m === 2
+            ? "two"
+            : "custom",
+      reason: "",
+    });
+    setConfigOpen(true);
+  }
+  function quickCoverage(modeValue: string) {
+    setCoverage((old) => ({
+      ...old,
+      mode: modeValue,
+      ...(modeValue === "one"
+        ? { morning: 1, afternoon: 1, night: 1 }
+        : modeValue === "two"
+          ? { morning: 2, afternoon: 2, night: 2 }
+          : {}),
+    }));
+  }
+  function openAssign() {
+    if (!selected?.id) return toast.error("Hãy cấu hình cương vị trước");
+    setEditing(null);
+    setUserSearch("");
+    setSelectedUserIds([]);
+    setForm({
+      ...initialForm,
+      positionId: selected.id,
+      effectiveDate: today(),
+    });
+    setMode("assign");
+  }
+  function openMatrixCell(
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType: "OFFICIAL" | "TRAINING" = "OFFICIAL",
+  ) {
+    if (!position.id) return toast.error("Hãy cấu hình cương vị trước");
+    setSelectedName(position.name);
+    setEditing(null);
+    setUserSearch("");
+    setSelectedUserIds([]);
+    const existingCrew = assignments.find(
+      (item) =>
+        item.positionId === position.id &&
+        item.crewCode === crewCode &&
+        !!item.cycleStartDate &&
+        effective(item),
+    );
+    setForm({
+      ...initialForm,
+      positionId: position.id,
+      rosterColumn: crewCode,
+      isTrainingRow: assignmentType === "TRAINING",
+      crewCode,
+      rosterStation: stationCode,
+      stationCode,
+      assignmentType,
+      cycleStartDate: existingCrew?.cycleStartDate?.slice(0, 10) ?? "",
+      effectiveDate: today(),
+    });
+    setMode("assign");
+  }
+  function openMatrixMove(
+    item: StaffingAssignment,
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType: "OFFICIAL" | "TRAINING" = "OFFICIAL",
+  ) {
+    if (!position.id) return;
+    const targetIsTrainingRow = assignmentType === "TRAINING";
+    if (
+      item.positionId === position.id &&
+      item.rosterColumn === crewCode &&
+      (item.rosterStation ?? item.stationCode ?? "") === stationCode &&
+      item.isTrainingRow === targetIsTrainingRow
+    ) return;
+    setSelectedName(position.name);
+    setEditing(item);
+    setUserSearch("");
+    setForm({
+      userId: item.userId,
+      positionId: position.id,
+      rosterColumn: crewCode,
+      isTrainingRow: targetIsTrainingRow,
+      crewCode: item.crewCode ?? crewCode,
+      phaseIndex: "",
+      cycleStartDate: item.cycleStartDate?.slice(0, 10) ?? "",
+      rosterStation: stationCode,
+      stationCode: item.stationCode === "FLEX" ? "FLEX" : stationCode,
+      assignmentType: targetIsTrainingRow ? "TRAINING" : item.assignmentType,
+      effectiveDate: today(),
+      endDate: "",
+      reason: "",
+      note: item.note ?? "",
+    });
+    setMode("change");
+  }
+  function openChange(item: StaffingAssignment) {
+    setEditing(item);
+    setUserSearch("");
+    setForm({
+      userId: item.userId,
+      positionId: item.positionId,
+      rosterColumn: item.rosterColumn ?? item.crewCode ?? "",
+      isTrainingRow: item.isTrainingRow,
+      crewCode: item.crewCode ?? "",
+      phaseIndex: item.phaseIndex === null ? "" : String(item.phaseIndex),
+      cycleStartDate: item.cycleStartDate?.slice(0, 10) ?? "",
+      rosterStation: item.rosterStation ?? (item.stationCode === "FLEX" ? "S1" : item.stationCode) ?? "",
+      stationCode: item.stationCode ?? "",
+      assignmentType: item.assignmentType,
+      effectiveDate: today(),
+      endDate: "",
+      reason: "",
+      note: item.note ?? "",
+    });
+    setMode("change");
+  }
+  function openDetach(item: StaffingAssignment) {
+    setEditing(item);
+    setForm({
+      ...initialForm,
+      effectiveDate: today(),
+    });
+    setMode("detach");
+  }
+  function openMatrixRotation(position: StaffingPosition, templateId: string) {
+    if (!position.id || !templateId) return;
+    setSelectedName(position.name);
+    setRotationForm({
+      templateId,
+      effectiveFrom: today(),
+      effectiveTo: "",
+      reason: "Cập nhật mẫu xoay ca từ bảng biên chế",
+    });
+    setRotationOpen(true);
+  }
+  async function saveConfig() {
+    if (!selected) return;
+    if (selected.id && coverage.reason.trim().length < 3) {
+      toast.error("Vui lòng nhập lý do thay đổi (ít nhất 3 ký tự)");
+      return;
+    }
+    try {
+      await mutation.mutateAsync({
+        action: "CONFIGURE_POSITION",
+        name: selected.name,
+        requiredMorningStaff: coverage.morning,
+        requiredAfternoonStaff: coverage.afternoon,
+        requiredNightStaff: coverage.night,
+        isActive: true,
+        reason: coverage.reason,
+      });
+      toast.success("Đã cập nhật nhu cầu từng ca");
+      setConfigOpen(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+  async function updateTrainingRow(
+    position: StaffingPosition,
+    values: { trainingRowName?: string; showTrainingRow?: boolean },
+  ) {
+    if (!position.id) return;
+    const trainingRowName = (values.trainingRowName ?? position.trainingRowName ?? `ĐT - ${position.name}`).trim();
+    if (!trainingRowName) return toast.error("Tên hàng đào tạo không được để trống");
+    try {
+      await mutation.mutateAsync({
+        action: "UPDATE_TRAINING_ROW",
+        positionId: position.id,
+        trainingRowName,
+        showTrainingRow: values.showTrainingRow ?? position.showTrainingRow,
+      });
+      toast.success(values.showTrainingRow === false ? "Đã ẩn hàng đào tạo" : "Đã lưu hàng đào tạo");
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  async function saveRotation() {
+    if (!selected?.id) return;
+    try {
+      await mutation.mutateAsync({
+        action: "ASSIGN_POSITION_ROTATION",
+        positionConfigId: selected.id,
+        rotationTemplateId: rotationForm.templateId,
+        effectiveFrom: rotationForm.effectiveFrom,
+        effectiveTo: rotationForm.effectiveTo || null,
+        reason: rotationForm.reason,
+      });
+      toast.success("Đã áp dụng mẫu xoay ca và giữ lịch sử cũ");
+      setRotationOpen(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+  async function saveAssignment() {
+    if (!mode || (!editing && mode !== "assign")) return;
+    try {
+      if (mode === "detach")
+        await mutation.mutateAsync({
+          action: "DETACH",
+          assignmentId: editing!.id,
+          effectiveDate: form.effectiveDate,
+          reason: form.reason,
+        });
+      else {
+        const target = positions.find((p) => p.id === form.positionId);
+        await mutation.mutateAsync({
+          action:
+            mode === "assign" && selectedUserIds.length > 1
+              ? "BULK_ASSIGN"
+              : mode === "assign"
+                ? "ASSIGN"
+                : "CHANGE",
+          ...(editing ? { assignmentId: editing.id } : {}),
+          ...form,
+          ...(mode === "assign" && selectedUserIds.length > 1
+            ? {
+                userIds: selectedUserIds,
+              }
+            : mode === "assign" && selectedUserIds.length === 1
+              ? { userId: selectedUserIds[0] }
+              : {}),
+          crewCode: form.crewCode.trim() || null,
+          rosterColumn: form.rosterColumn.trim() || null,
+          isTrainingRow: form.isTrainingRow,
+          phaseIndex: form.phaseIndex === "" ? null : Number(form.phaseIndex),
+          cycleStartDate: form.cycleStartDate || null,
+          rosterStation: form.rosterStation || null,
+          stationCode:
+            target?.positionType === "SINGLE" ? null : form.stationCode || null,
+          endDate: form.endDate || null,
+        });
+      }
+      toast.success(
+        mode === "assign"
+          ? selectedUserIds.length > 1
+            ? `Đã gán ${selectedUserIds.length} nhân sự theo thứ tự đã chọn`
+            : "Đã gán nhân sự"
+          : mode === "detach"
+            ? "Đã kết thúc phân công"
+            : "Đã lưu thay đổi cho nhân sự đang chọn",
+      );
+      setLastEffectiveChange({
+        date: form.effectiveDate,
+        positionId: mode === "detach" ? editing?.positionId ?? form.positionId : form.positionId,
+      });
+      setMode(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+  async function autoFillCycles() {
+    if (!editing || form.assignmentType !== "OFFICIAL")
+      return toast.error("Hãy chọn một nhân sự chính thức làm mốc");
+    if (!form.cycleStartDate)
+      return toast.error("Hãy nhập ngày bắt đầu chu kỳ của nhân sự mốc");
+    try {
+      const response = await mutation.mutateAsync({
+        action: "AUTO_ALIGN_CYCLES",
+        anchorAssignmentId: editing.id,
+        effectiveDate: form.effectiveDate,
+        cycleStartDate: form.cycleStartDate,
+      }) as { data?: { aligned?: number } };
+      toast.success(`Đã tự động điền chu kỳ cho ${response.data?.aligned ?? 0} phân công`);
+      setMode(null);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  async function autoFillPositionCycles(position: StaffingPosition) {
+    const anchor = assignments
+      .filter((item) =>
+        item.positionId === position.id &&
+        item.assignmentType === "OFFICIAL" &&
+        !!item.crewCode &&
+        !!item.cycleStartDate &&
+        effective(item),
+      )
+      .sort((a, b) => (a.crewCode === "A" ? -1 : b.crewCode === "A" ? 1 : (a.crewCode ?? "").localeCompare(b.crewCode ?? "")))[0];
+    if (!anchor)
+      return toast.error("Hãy nhập ngày bắt đầu chu kỳ cho ít nhất một kíp làm mốc");
+    try {
+      const response = await mutation.mutateAsync({
+        action: "AUTO_ALIGN_CYCLES",
+        anchorAssignmentId: anchor.id,
+        effectiveDate: today(),
+        cycleStartDate: anchor.cycleStartDate!.slice(0, 10),
+      }) as { data?: { aligned?: number } };
+      toast.success(`Đã tự động điền chu kỳ cho ${response.data?.aligned ?? 0} phân công của ${position.name}`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  if (query.isLoading)
+    return (
+      <div className="space-y-6">
+        <PageHeader title="QUẢN LÝ BIÊN CHẾ TRỰC CA" />
+        <TableSkeleton />
+      </div>
+    );
+  if (query.isError)
+    return (
+      <Card className="p-8 text-center text-destructive">
+        {(query.error as Error).message}
+      </Card>
+    );
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="QUẢN LÝ BIÊN CHẾ TRỰC CA"
+        description="Nhu cầu từng ca · ngày bắt đầu chu kỳ · S1/S2/FLEX · mẫu xoay theo thời gian"
+      >
+        <Link href="/hr/shift-roster">
+          <Button variant="outline">
+            <ArrowLeft className="h-4 w-4" /> Lịch trực ca
+          </Button>
+        </Link>
+        <Badge variant="outline" className="h-9 px-3">
+          <ShieldCheck className="mr-1.5 h-4 w-4" />
+          {canConfigure ? "Toàn quyền" : canManage ? "Quản lý" : "Chỉ xem"}
+        </Badge>
+      </PageHeader>
+      {lastEffectiveChange && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 border-blue-200 bg-blue-50/70 p-4">
+          <div>
+            <div className="font-semibold text-blue-950">Biên chế đã thay đổi từ {viDate(lastEffectiveChange.date)}</div>
+            <div className="text-sm text-blue-800">Có thể tạo một phiên bản lịch mới; lịch đã công bố không bị ghi đè.</div>
+          </div>
+          <Link href={`/hr/shift-roster/planning?from=${lastEffectiveChange.date}&positionId=${lastEffectiveChange.positionId}`}>
+            <Button><CalendarClock className="h-4 w-4" /> Tạo lại lịch từ ngày hiệu lực</Button>
+          </Link>
+        </Card>
+      )}
+      <StaffingMatrix
+        positions={positionGroups[0]?.positions ?? []}
+        assignments={assignments}
+        rotations={rotations}
+        templates={templates}
+        selectedName={selectedName}
+        canManage={canManage}
+        onSelectPosition={setSelectedName}
+        onOpenCell={openMatrixCell}
+        onOpenAssignment={openChange}
+        onDetachAssignment={openDetach}
+        onMoveAssignment={openMatrixMove}
+        onUpdateTrainingRow={updateTrainingRow}
+        onSelectRotation={openMatrixRotation}
+        onAutoFillCycles={autoFillPositionCycles}
+      />
+      <div className="grid gap-6 xl:grid-cols-1">
+        <Card className="hidden overflow-hidden">
+          <div className="border-b bg-slate-50 px-4 py-3">
+            <div className="font-semibold">Danh sách cương vị</div>
+            <div className="text-xs text-muted-foreground">
+              Nhu cầu sáng · chiều · đêm và mẫu hiện hành
+            </div>
+          </div>
+          <div className="max-h-[76vh] overflow-y-auto p-2">
+            {positionGroups.map((group) => {
+              const Icon = group.icon;
+              return (
+                <section key={group.key} className="mb-3 last:mb-0">
+                  <div
+                    className={cn(
+                      "mb-2 rounded-lg border px-3 py-2.5",
+                      group.tone,
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-sm font-bold">
+                        <Icon className="h-4 w-4" />
+                        {group.label}
+                      </div>
+                      <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-bold tabular-nums shadow-sm">
+                        {group.positions.length}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-[11px] opacity-75">
+                      {group.description}
+                    </div>
+                  </div>
+                  {group.positions.map((p) => {
+                    const m = metrics(p, assignments, rotations);
+                    const isAdministrative = group.key === "administrative";
+                    return (
+                      <button
+                        key={p.name}
+                        onClick={() => setSelectedName(p.name)}
+                        className={cn(
+                          "mb-1 w-full cursor-pointer rounded-lg border p-3 text-left transition-colors",
+                          selected?.name === p.name
+                            ? isAdministrative
+                              ? "border-emerald-300 bg-emerald-50"
+                              : "border-amber-300 bg-amber-50"
+                            : "border-transparent hover:border-slate-200 hover:bg-slate-50",
+                        )}
+                      >
+                        <div className="flex justify-between gap-2">
+                          <span className="font-semibold text-ink">{p.name}</span>
+                          {!isAdministrative && m.warnings.length > 0 && (
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                          )}
+                        </div>
+                        {isAdministrative ? (
+                          <div className="mt-1.5 text-xs text-emerald-700">
+                            Hành chính · không phát sinh lịch xoay ca
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mt-2 grid grid-cols-3 gap-1 text-center text-xs">
+                              <Mini label="Sáng" value={p.requiredMorningStaff ?? "—"} />
+                              <Mini label="Chiều" value={p.requiredAfternoonStaff ?? "—"} />
+                              <Mini label="Đêm" value={p.requiredNightStaff ?? "—"} />
+                            </div>
+                            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                              <span>{coverageLabel(p)}</span>
+                              <span>{m.rotation?.rotationTemplate.code ?? "Chưa có mẫu"}</span>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </section>
+              );
+            })}
+          </div>
+        </Card>
+        {selected && selectedMetrics && (
+          <div className="min-w-0 space-y-4">
+            <Card className="border-l-4 border-l-amber-500 p-5">
+              <div className="flex flex-wrap justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                    Cương vị đang chọn
+                  </div>
+                  <h2 className="mt-1 text-xl font-bold">{selected.name}</h2>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {selectedMetrics.uniform
+                      ? `Đồng đều · ${coverageLabel(selected)}`
+                      : "Biên chế theo từng ca"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {canConfigure && (
+                    <Button
+                      variant="outline"
+                      onClick={() => openConfig(selected)}
+                    >
+                      <Settings2 className="h-4 w-4" /> Nhu cầu
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setRotationForm({
+                          templateId:
+                            selectedMetrics.rotation?.rotationTemplateId ??
+                            templates[0]?.id ??
+                            "",
+                          effectiveFrom: today(),
+                          effectiveTo: "",
+                          reason: "",
+                        });
+                        setRotationOpen(true);
+                      }}
+                      disabled={!selected.id}
+                    >
+                      <CalendarClock className="h-4 w-4" /> Chọn mẫu xoay
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button onClick={openAssign} disabled={!selected.id}>
+                      <UserPlus className="h-4 w-4" /> Gán nhân sự
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                <Stat
+                  label="Chính thức"
+                  value={selectedMetrics.current.length}
+                />
+                <Stat
+                  label="Kíp hiệu dụng"
+                  value={
+                    selectedMetrics.uniform &&
+                    selectedMetrics.equivalent !== null
+                      ? String(selectedMetrics.equivalent).replace(".", ",")
+                      : "Theo ca"
+                  }
+                />
+                <Stat label="S1" value={selectedMetrics.s1} />
+                <Stat label="S2" value={selectedMetrics.s2} />
+                <Stat label="FLEX" value={selectedMetrics.flex} />
+                <Stat label="Chưa vị trí" value={selectedMetrics.unstationed} />
+                <Stat
+                  label="Mẫu xoay"
+                  value={selectedMetrics.rotation?.rotationTemplate.code ?? "—"}
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {selectedMetrics.warnings.map((warning) => (
+                  <span
+                    key={warning}
+                    className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200"
+                  >
+                    {warning}
+                  </span>
+                ))}
+              </div>
+            </Card>
+            <Card className="overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+                <div>
+                  <div className="font-semibold">Nhân sự của cương vị</div>
+                  <div className="text-xs text-muted-foreground">
+                    Mẫu hiện tại:{" "}
+                    {selectedMetrics.rotation?.rotationTemplate.name ??
+                      "chưa chọn"}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowHistory((x) => !x)}
+                >
+                  <History className="h-4 w-4" />{" "}
+                  {showHistory ? "Chỉ hiện tại" : "Xem lịch sử"}
+                </Button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1080px] text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      {[
+                        "Mã NV / Họ tên",
+                        "Cột biên chế",
+                        "Kíp xếp lịch",
+                        "Bắt đầu chu kỳ",
+                        "S1/S2/FLEX",
+                        "Loại",
+                        "Bắt đầu",
+                        "Kết thúc",
+                        "Trạng thái",
+                        "Ghi chú",
+                        "Thao tác",
+                      ].map((x) => (
+                        <th key={x} className="px-3 py-2.5 font-semibold">
+                          {x}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleAssignments.map((item) => (
+                      <tr key={item.id} className="border-t hover:bg-slate-50">
+                        <td className="px-3 py-3">
+                          <div className="font-medium">{item.user.name}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {item.user.employeeId}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 font-bold">
+                          {item.rosterColumn ?? "—"}
+                        </td>
+                        <td className="px-3 py-3 font-bold">
+                          {item.crewCode ?? (
+                            <span className="text-amber-700">Chưa phân</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <CycleCell
+                            item={item}
+                            rotation={currentRotation(
+                              { id: item.positionId } as StaffingPosition,
+                              rotations,
+                              item.startDate.slice(0, 10),
+                            )}
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          {selected.positionType === "S1_S2"
+                            ? (item.stationCode ?? "—")
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-3">
+                          {TYPE_LABEL[item.assignmentType]}
+                        </td>
+                        <td className="px-3 py-3">{viDate(item.startDate)}</td>
+                        <td className="px-3 py-3">{viDate(item.endDate)}</td>
+                        <td className="px-3 py-3">
+                          <Badge
+                            variant={effective(item) ? "default" : "secondary"}
+                          >
+                            {effective(item) ? "Đang hiệu lực" : "Đã kết thúc"}
+                          </Badge>
+                        </td>
+                        <td className="max-w-[190px] px-3 py-3 text-xs text-muted-foreground">
+                          {item.note || item.changeReason}
+                        </td>
+                        <td className="px-3 py-3">
+                          {canManage && effective(item) && (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openChange(item)}
+                                title="Thay đổi phân công"
+                              >
+                                <ArrowRightLeft className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openDetach(item)}
+                                title="Tách nhân sự"
+                              >
+                                <UserMinus className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!visibleAssignments.length && (
+                      <tr>
+                        <td
+                          colSpan={11}
+                          className="px-4 py-12 text-center text-muted-foreground"
+                        >
+                          <UsersRound className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                          Chưa có nhân sự
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+            <RotationSection
+              position={selected}
+              rotations={rotations}
+              templates={templates}
+              canConfigure={canConfigure}
+            />
+          </div>
+        )}
+      </div>
+      <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cấu hình nhu cầu từng ca</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                ["one", "1 người mỗi ca"],
+                ["two", "2 người mỗi ca"],
+                ["custom", "Tùy chỉnh"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => quickCoverage(key)}
+                  className={cn(
+                    "cursor-pointer rounded-lg border p-3 text-sm font-semibold transition-colors",
+                    coverage.mode === key
+                      ? "border-amber-400 bg-amber-50"
+                      : "hover:bg-slate-50",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <NumberField
+                label="Ca sáng"
+                value={coverage.morning}
+                disabled={coverage.mode !== "custom"}
+                onChange={(v) => setCoverage((x) => ({ ...x, morning: v }))}
+              />
+              <NumberField
+                label="Ca chiều"
+                value={coverage.afternoon}
+                disabled={coverage.mode !== "custom"}
+                onChange={(v) => setCoverage((x) => ({ ...x, afternoon: v }))}
+              />
+              <NumberField
+                label="Ca đêm"
+                value={coverage.night}
+                disabled={coverage.mode !== "custom"}
+                onChange={(v) => setCoverage((x) => ({ ...x, night: v }))}
+              />
+            </div>
+            <Field
+              label={
+                selected?.id
+                  ? "Lý do thay đổi *"
+                  : "Lý do khởi tạo (không bắt buộc)"
+              }
+            >
+              <Textarea
+                value={coverage.reason}
+                onChange={(e) =>
+                  setCoverage((x) => ({ ...x, reason: e.target.value }))
+                }
+                placeholder="Ví dụ: Điều chỉnh định biên theo phương án vận hành mới"
+                aria-required={selected?.id ? "true" : "false"}
+              />
+              <p
+                className={cn(
+                  "text-xs",
+                  selected?.id &&
+                    coverage.reason.length > 0 &&
+                    coverage.reason.trim().length < 3
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {selected?.id
+                  ? "Bắt buộc nhập ít nhất 3 ký tự để lưu vết thay đổi."
+                  : "Lần cấu hình đầu tiên có thể để trống; hệ thống sẽ ghi nhận là khởi tạo cấu hình."}
+              </p>
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfigOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={saveConfig}
+              disabled={
+                mutation.isPending ||
+                coverage.morning + coverage.afternoon + coverage.night <= 0
+              }
+            >
+              {mutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              Lưu nhu cầu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={rotationOpen} onOpenChange={setRotationOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Áp dụng mẫu xoay ca</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Field label="Mẫu xoay ca">
+              <select
+                value={rotationForm.templateId}
+                onChange={(e) =>
+                  setRotationForm((x) => ({ ...x, templateId: e.target.value }))
+                }
+                className="h-10 w-full rounded-md border bg-white px-3"
+              >
+                {templates
+                  .filter((x) => x.isActive)
+                  .map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.code} — {x.name}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            {templates.find((x) => x.id === rotationForm.templateId) && (
+              <Pattern
+                template={templates.find(
+                  (x) => x.id === rotationForm.templateId,
+                )!}
+                detailed
+              />
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Ngày hiệu lực">
+                <Input
+                  type="date"
+                  value={rotationForm.effectiveFrom}
+                  onChange={(e) =>
+                    setRotationForm((x) => ({
+                      ...x,
+                      effectiveFrom: e.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Ngày kết thúc (nếu có)">
+                <Input
+                  type="date"
+                  value={rotationForm.effectiveTo}
+                  onChange={(e) =>
+                    setRotationForm((x) => ({
+                      ...x,
+                      effectiveTo: e.target.value,
+                    }))
+                  }
+                />
+              </Field>
+            </div>
+            <Field label="Lý do thay đổi">
+              <Textarea
+                value={rotationForm.reason}
+                onChange={(e) =>
+                  setRotationForm((x) => ({ ...x, reason: e.target.value }))
+                }
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRotationOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={saveRotation}
+              disabled={
+                mutation.isPending ||
+                !rotationForm.templateId ||
+                rotationForm.reason.trim().length < 3
+              }
+            >
+              Áp dụng mẫu
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!mode} onOpenChange={(open) => !open && setMode(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {mode === "assign"
+                ? "Gán nhân sự"
+                : mode === "detach"
+                  ? "Tách nhân sự"
+                  : "Thay đổi phân công"}
+            </DialogTitle>
+          </DialogHeader>
+          {mode === "detach" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-amber-50 p-3 text-sm">
+                Phân công cũ kết thúc vào ngày liền trước ngày hiệu lực; lịch sử
+                không bị xóa.
+              </div>
+              <Field label="Ngày hiệu lực">
+                <Input
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={(e) => setField("effectiveDate", e.target.value)}
+                />
+              </Field>
+              <Field label="Lý do (không bắt buộc)">
+                <Textarea
+                  value={form.reason}
+                  onChange={(e) => setField("reason", e.target.value)}
+                />
+              </Field>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className={cn("space-y-2", mode === "assign" && "sm:col-span-2")}>
+                <Label>
+                  Nhân sự
+                  {mode === "assign" && selectedUserIds.length > 0 && (
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      Đã chọn {selectedUserIds.length} người
+                    </span>
+                  )}
+                </Label>
+                <div className="space-y-2">
+                  {mode !== "change" && (
+                    <Input
+                      value={userSearch}
+                      onChange={(event) => setUserSearch(event.target.value)}
+                      placeholder="Tìm mã NV, họ tên hoặc cương vị..."
+                      autoComplete="off"
+                      aria-label="Tìm nhân sự để phân công"
+                    />
+                  )}
+                  {mode === "assign" ? (
+                    <div className="max-h-56 overflow-y-auto rounded-lg border bg-slate-50/60 p-1">
+                      {filteredUsers.length ? filteredUsers.map((u) => {
+                        const order = selectedUserIds.indexOf(u.id);
+                        return (
+                          <button
+                            type="button"
+                            key={u.id}
+                            onClick={() => setSelectedUserIds((old) =>
+                              old.includes(u.id)
+                                ? old.filter((id) => id !== u.id)
+                                : old.length < 20 ? [...old, u.id] : old,
+                            )}
+                            className={cn(
+                              "flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                              order >= 0 ? "bg-blue-50 text-blue-950" : "hover:bg-white",
+                            )}
+                          >
+                            <span className={cn(
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                              order >= 0 ? "border-blue-600 bg-blue-600 text-white" : "bg-white text-muted-foreground",
+                            )}>
+                              {order >= 0 ? order + 1 : ""}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="font-medium">{u.employeeId} — {u.name}</span>
+                              {u.position && <span className="ml-2 text-muted-foreground">· {u.position}</span>}
+                            </span>
+                            {order >= 0 && <Check className="h-4 w-4 text-blue-700" />}
+                          </button>
+                        );
+                      }) : (
+                        <div className="px-3 py-6 text-center text-sm text-muted-foreground">Không tìm thấy nhân sự</div>
+                      )}
+                    </div>
+                  ) : (
+                    <select disabled value={form.userId} className="h-10 w-full rounded-md border bg-slate-50 px-3">
+                      <option>{editing?.user.employeeId} — {editing?.user.name}</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+              <Field label="Cương vị">
+                <select
+                  value={form.positionId}
+                  onChange={(e) => {
+                    setField("positionId", e.target.value);
+                    setField("stationCode", "");
+                  }}
+                  className="h-10 w-full rounded-md border bg-white px-3"
+                >
+                  {positions
+                    .filter((p) => p.id)
+                    .map((p) => (
+                      <option key={p.id!} value={p.id!}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label="Mã kíp">
+                <Input
+                  list="crew-codes"
+                  value={form.crewCode}
+                  onChange={(e) => setCrewCode(e.target.value)}
+                  placeholder="Kíp dùng để xếp lịch, ví dụ A–K"
+                  maxLength={20}
+                />
+                <datalist id="crew-codes">
+                  {QUICK_CREWS.map((x) => (
+                    <option key={x} value={x} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Cột biên chế trên bảng">
+                <select
+                  value={form.rosterColumn}
+                  onChange={(e) => setField("rosterColumn", e.target.value)}
+                  className="h-10 w-full rounded-md border bg-white px-3"
+                >
+                  <option value="">Chọn cột</option>
+                  {QUICK_CREWS.slice(0, 5).map((crew) => <option key={crew} value={crew}>Kíp {crew}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">Chỉ quyết định vị trí hiển thị; không dùng để tính ca.</p>
+              </Field>
+              {positions.find((p) => p.id === form.positionId)?.positionType ===
+                "S1_S2" && (
+                <Field label="Tổ máy xếp lịch">
+                  <select
+                    value={form.stationCode}
+                    onChange={(e) => {
+                      setField("stationCode", e.target.value);
+                      if (!form.rosterStation && e.target.value !== "FLEX")
+                        setField("rosterStation", e.target.value);
+                    }}
+                    className="h-10 w-full rounded-md border bg-white px-3"
+                  >
+                    <option value="">Chưa phân</option>
+                    <option>S1</option>
+                    <option>S2</option>
+                    <option>FLEX</option>
+                  </select>
+                </Field>
+              )}
+              {positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && (
+                <Field label="Hàng hiển thị trên bảng">
+                  <select
+                    value={form.rosterStation}
+                    onChange={(e) => setField("rosterStation", e.target.value)}
+                    className="h-10 w-full rounded-md border bg-white px-3"
+                  >
+                    <option value="">Chọn hàng</option>
+                    <option value="S1">S1</option>
+                    <option value="S2">S2</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">Chỉ quyết định hàng hiển thị; FLEX vẫn giữ nguyên khi chuyển hàng.</p>
+                </Field>
+              )}
+              <Field label="Loại phân công">
+                <select
+                  value={form.assignmentType}
+                  onChange={(e) => setField("assignmentType", e.target.value)}
+                  className="h-10 w-full rounded-md border bg-white px-3"
+                >
+                  {ASSIGNMENT_OPTIONS.map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Ngày hiệu lực biên chế">
+                <Input
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={(e) => setField("effectiveDate", e.target.value)}
+                />
+              </Field>
+              {form.assignmentType === "OFFICIAL" && <Field label="Ngày bắt đầu chu kỳ (có thể bổ sung sau)">
+                <Input
+                  type="date"
+                  max={form.effectiveDate}
+                  value={form.cycleStartDate}
+                  onChange={(e) => setField("cycleStartDate", e.target.value)}
+                />
+                {mode === "change" && editing?.assignmentType === "OFFICIAL" && (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3">
+                    <p className="text-xs leading-4 text-emerald-900">
+                      <b>Điền tự động:</b> lấy ngày của người này làm mốc và sắp ngày cho toàn bộ kíp còn lại trong cùng cương vị.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
+                      onClick={autoFillCycles}
+                      disabled={mutation.isPending || !form.cycleStartDate}
+                    >
+                      <Sparkles className="h-4 w-4" /> Tự động điền cho các kíp
+                    </Button>
+                  </div>
+                )}
+              </Field>}
+              {form.assignmentType !== "OFFICIAL" ? (
+                <div className="sm:col-span-2 rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-950">
+                  Nhân sự đào tạo chỉ hiển thị ở hàng đào tạo, không tham gia định biên chính thức và vòng xoay ca.
+                </div>
+              ) : formTemplate ? (
+                <div className="sm:col-span-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-blue-950">{formTemplate.name}</div>
+                      <div className="text-xs text-blue-800">Chu kỳ gồm {formTemplate.cycleLength} bước</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCycleStepPicker((value) => !value)}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      {showCycleStepPicker ? "Ẩn lựa chọn nâng cao" : "Không biết ngày bắt đầu?"}
+                    </Button>
+                  </div>
+                  <div className="mt-3">
+                    <Pattern template={formTemplate} detailed />
+                  </div>
+                  {showCycleStepPicker && (
+                    <div className="mt-4 border-t border-blue-200 pt-3">
+                      <Label>Trạng thái tại ngày hiệu lực</Label>
+                      <p className="mb-2 text-xs text-blue-800">Chọn trạng thái đang diễn ra; hệ thống sẽ tự điền ngày bắt đầu chu kỳ.</p>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {formTemplate.cyclePattern.map((step, index) => (
+                          <button
+                            type="button"
+                            key={`${step}-${index}`}
+                            onClick={() => setField("cycleStartDate", cycleStartForStep(form.effectiveDate, index))}
+                            className="min-h-11 cursor-pointer rounded-lg border bg-white px-3 py-2 text-left text-sm transition-colors hover:border-blue-400 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                          >
+                            <span className="font-semibold">Bước {index + 1}</span>
+                            <span className="ml-2 text-muted-foreground">{SHIFT_NAME[step]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Cương vị chưa có mẫu xoay ca áp dụng tại ngày hiệu lực. Hãy cấu hình mẫu trước khi nhập ngày bắt đầu chu kỳ.
+                </div>
+              )}
+              <Field label="Ngày kết thúc">
+                <Input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) => setField("endDate", e.target.value)}
+                />
+              </Field>
+              <Field label="Lý do (không bắt buộc)">
+                <Textarea
+                  value={form.reason}
+                  onChange={(e) => setField("reason", e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMode(null)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={saveAssignment}
+              disabled={
+                mutation.isPending ||
+                !form.effectiveDate ||
+                (mode !== "detach" &&
+                  (!form.positionId ||
+                    !form.rosterColumn ||
+                    (positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && !form.rosterStation) ||
+                    (mode === "assign" ? selectedUserIds.length === 0 : !form.userId)))
+              }
+            >
+              {mutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}{" "}
+              Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StaffingMatrix({
+  positions,
+  assignments,
+  rotations,
+  templates,
+  selectedName,
+  canManage,
+  onSelectPosition,
+  onOpenCell,
+  onOpenAssignment,
+  onDetachAssignment,
+  onMoveAssignment,
+  onUpdateTrainingRow,
+  onSelectRotation,
+  onAutoFillCycles,
+}: {
+  positions: StaffingPosition[];
+  assignments: StaffingAssignment[];
+  rotations: PositionRotation[];
+  templates: RotationTemplate[];
+  selectedName: string;
+  canManage: boolean;
+  onSelectPosition: (name: string) => void;
+  onOpenCell: (
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType?: "OFFICIAL" | "TRAINING",
+  ) => void;
+  onOpenAssignment: (item: StaffingAssignment) => void;
+  onDetachAssignment: (item: StaffingAssignment) => void;
+  onMoveAssignment: (
+    item: StaffingAssignment,
+    position: StaffingPosition,
+    crewCode: string,
+    stationCode: "S1" | "S2" | "FLEX" | "",
+    assignmentType?: "OFFICIAL" | "TRAINING",
+  ) => void;
+  onUpdateTrainingRow: (
+    position: StaffingPosition,
+    values: { trainingRowName?: string; showTrainingRow?: boolean },
+  ) => void;
+  onSelectRotation: (position: StaffingPosition, templateId: string) => void;
+  onAutoFillCycles: (position: StaffingPosition) => void;
+}) {
+  const crews = ["A", "B", "C", "D", "E"];
+  const official = assignments.filter(
+    (item) => !item.isTrainingRow && effective(item),
+  );
+  const training = assignments.filter(
+    (item) => item.isTrainingRow && effective(item),
+  );
+  const rows: Array<{
+    position: StaffingPosition;
+    stationCode: "S1" | "S2" | "FLEX" | "";
+    isTraining: boolean;
+  }> = [];
+  for (const position of positions) {
+    if (position.positionType !== "S1_S2") {
+      rows.push({ position, stationCode: "", isTraining: false });
+    } else {
+      for (const stationCode of (["S1", "S2"] as const))
+        rows.push({ position, stationCode, isTraining: false });
+    }
+    if (position.showTrainingRow)
+      rows.push({ position, stationCode: "", isTraining: true });
+  }
+  return (
+    <Card className="overflow-hidden border-slate-300 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-[linear-gradient(110deg,#0f172a_0%,#1e3a5f_72%,#b45309_160%)] px-5 py-4 text-white">
+        <div>
+          <div className="text-sm font-bold uppercase tracking-[0.14em] text-amber-300">
+            Bảng biên chế vận hành
+          </div>
+          <div className="mt-1 text-xs text-slate-200">
+            Nhấp ô để thêm người · kéo thẻ nhân sự sang ô khác để điều chuyển
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold">
+            {positions.length} cương vị
+          </span>
+          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 font-semibold">
+            {official.length + training.length} nhân sự trên bảng
+          </span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1510px] table-fixed border-collapse text-sm">
+          <thead>
+            <tr className="bg-amber-50 text-slate-900">
+              <th className="w-12 border-b border-r border-slate-300 px-2 py-3 text-center text-xs">STT</th>
+              <th className="w-64 border-b border-r border-slate-300 px-4 py-3 text-left text-xs font-bold uppercase tracking-wide">Cương vị</th>
+              {crews.map((crew) => (
+                <th key={crew} className="border-b border-r border-slate-300 px-3 py-3 text-center text-xs font-bold uppercase tracking-wide last:border-r-0">
+                  Tổ vận hành {crew}
+                </th>
+              ))}
+              <th className="w-80 border-b border-slate-300 px-3 py-3 text-left text-xs font-bold uppercase tracking-wide">
+                Mẫu xoay ca
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ position, stationCode, isTraining }, rowIndex) => {
+              const active = selectedName === position.name;
+              return (
+                <tr key={`${position.name}-${stationCode || "single"}-${isTraining ? "training" : "official"}`} className={cn("group", isTraining ? "bg-cyan-50/55" : active && "bg-amber-50/60") }>
+                  <td className="border-b border-r border-slate-300 px-2 py-3 text-center text-xs font-semibold text-slate-500">{rowIndex + 1}</td>
+                  <td className="border-b border-r border-slate-300 p-0 align-top">
+                    <div
+                      className={cn(
+                        "flex min-h-20 w-full cursor-pointer items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-amber-50",
+                        isTraining ? "border-l-4 border-cyan-500 bg-cyan-50 pl-3 hover:bg-cyan-100/70" : active && "border-l-4 border-amber-500 bg-amber-50 pl-3",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1" onClick={() => !isTraining && onSelectPosition(position.name)}>
+                        {isTraining ? (
+                          <span className="flex items-start gap-2">
+                            <GraduationCap className="mt-1 h-4 w-4 shrink-0 text-cyan-700" />
+                            <span className="min-w-0 flex-1">
+                              <Input
+                                defaultValue={position.trainingRowName ?? `ĐT - ${position.name}`}
+                                aria-label={`Tên hàng đào tạo của ${position.name}`}
+                                onClick={(event) => event.stopPropagation()}
+                                onBlur={(event) => {
+                                  const name = event.target.value.trim();
+                                  if (name && name !== (position.trainingRowName ?? `ĐT - ${position.name}`))
+                                    onUpdateTrainingRow(position, { trainingRowName: name });
+                                }}
+                                className="h-8 border-cyan-200 bg-white/90 font-bold text-cyan-950 focus-visible:ring-cyan-600"
+                              />
+                              <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-cyan-700">Nhân sự đào tạo cương vị</span>
+                            </span>
+                          </span>
+                        ) : <span className="block font-bold text-slate-950">{position.name}</span>}
+                        {stationCode && (
+                          <span className={cn(
+                            "mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold",
+                            stationCode === "S1" ? "bg-sky-100 text-sky-800" : stationCode === "S2" ? "bg-emerald-100 text-emerald-800" : "bg-violet-100 text-violet-800",
+                          )}>{stationCode}</span>
+                        )}
+                      </span>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateTrainingRow(position, { showTrainingRow: isTraining ? false : !position.showTrainingRow })}
+                          className={cn("rounded-md p-1.5 transition-colors", isTraining ? "text-cyan-700 hover:bg-cyan-200" : "text-slate-400 hover:bg-slate-100 hover:text-cyan-700")}
+                          title={isTraining ? "Ẩn hàng đào tạo" : position.showTrainingRow ? "Ẩn hàng đào tạo" : "Hiện hàng đào tạo"}
+                        >
+                          {isTraining || position.showTrainingRow ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  {crews.map((crew) => {
+                    const people = (isTraining ? training : official).filter(
+                      (item) =>
+                        item.positionId === position.id &&
+                        item.rosterColumn === crew &&
+                        (stationCode
+                          ? (item.rosterStation ?? (item.stationCode === "FLEX" ? "S1" : item.stationCode)) === stationCode
+                          : true),
+                    );
+                    return (
+                      <td
+                        key={crew}
+                        onClick={() => canManage && onOpenCell(position, crew, stationCode, isTraining ? "TRAINING" : "OFFICIAL")}
+                        onDragOver={(event) => canManage && event.preventDefault()}
+                        onDrop={(event) => {
+                          if (!canManage) return;
+                          event.preventDefault();
+                          const id = event.dataTransfer.getData("application/x-shift-assignment");
+                          const item = assignments.find((assignment) => assignment.id === id);
+                          if (item) onMoveAssignment(item, position, crew, stationCode, isTraining ? "TRAINING" : "OFFICIAL");
+                        }}
+                        className={cn(
+                          "relative border-b border-r border-slate-300 p-2 align-top last:border-r-0",
+                          canManage && "cursor-pointer transition-colors hover:bg-blue-50/70",
+                        )}
+                      >
+                        <div className="flex min-h-16 flex-col gap-1.5">
+                          {people.map((item) => (
+                            <div
+                              key={item.id}
+                              draggable={canManage}
+                              onDragStart={(event) => {
+                                event.stopPropagation();
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("application/x-shift-assignment", item.id);
+                              }}
+                              className="group/person flex w-full cursor-grab items-start gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md active:cursor-grabbing"
+                              title={`${item.user.employeeId} · Bắt đầu chu kỳ ${item.cycleStartDate ? viDate(item.cycleStartDate) : "chưa cấu hình"}`}
+                            >
+                              {canManage && <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 group-hover/person:text-blue-500" />}
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onSelectPosition(position.name);
+                                  if (canManage) onOpenAssignment(item);
+                                }}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <span className="flex flex-wrap items-center gap-1 leading-snug font-semibold text-slate-900">
+                                  <span>
+                                    {item.user.name}{item.crewCode ? ` (${item.crewCode})` : ""}
+                                  </span>
+                                  {item.stationCode === "FLEX" && (
+                                    <span className="inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">
+                                      FLEX
+                                    </span>
+                                  )}
+                                  {item.assignmentType === "TRAINING" && (
+                                    <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">TS</span>
+                                  )}
+                                  {item.assignmentType === "ADMINISTRATIVE" && (
+                                    <span className="inline-flex rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800">HC</span>
+                                  )}
+                                </span>
+                                <span className="mt-0.5 block font-mono text-[10px] text-slate-500">{item.user.employeeId}</span>
+                              </button>
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDetachAssignment(item);
+                                  }}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  draggable={false}
+                                  aria-label={`Xóa ${item.user.name} khỏi bảng biên chế`}
+                                  title="Xóa khỏi cương vị"
+                                  className="-mr-0.5 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                >
+                                  <UserMinus className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {canManage && (
+                            <span className="mt-auto flex items-center justify-center gap-1 rounded border border-dashed border-slate-300 py-1 text-[11px] font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100">
+                              <Plus className="h-3 w-3" /> Thêm nhân sự
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td className={cn("border-b border-slate-300 p-3 align-top", isTraining ? "bg-cyan-50/70" : "bg-slate-50/70") }>
+                    {isTraining ? (
+                      <div className="flex min-h-16 items-center gap-2 text-xs font-medium text-cyan-700">
+                        <GraduationCap className="h-4 w-4" /> Không áp dụng
+                      </div>
+                    ) : (() => {
+                      const activeRotation = currentRotation(position, rotations);
+                      return (
+                        <div className="space-y-1.5">
+                          <select
+                            value={activeRotation?.rotationTemplateId ?? ""}
+                            disabled={!canManage}
+                            onChange={(event) => onSelectRotation(position, event.target.value)}
+                            aria-label={`Mẫu xoay ca của ${position.name}`}
+                            className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900 shadow-sm transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:bg-slate-100"
+                          >
+                            <option value="">Chưa chọn mẫu</option>
+                            {templates.filter((template) => template.isActive).map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {template.code} — {template.name}
+                              </option>
+                            ))}
+                          </select>
+                          {activeRotation ? (
+                            <div className="rounded-md border border-blue-100 bg-blue-50/80 px-2.5 py-2 text-left text-[11px] leading-4 text-blue-950">
+                              <span className="block font-bold text-blue-700">Đang áp dụng</span>
+                              <span className="mt-0.5 block break-words font-semibold">
+                                {activeRotation.rotationTemplate.code} — {activeRotation.rotationTemplate.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-slate-500">Chưa cấu hình vòng xoay</div>
+                          )}
+                          {canManage && activeRotation && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 w-full border-emerald-300 bg-emerald-50 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100"
+                              onClick={() => onAutoFillCycles(position)}
+                            >
+                              <Sparkles className="h-3.5 w-3.5" /> Tự động điền ngày
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        <span>Nhấp tên cương vị để mở Nhu cầu, Mẫu xoay và bảng chi tiết.</span>
+        <span>Kéo thả luôn mở hộp xác nhận trước khi lưu thay đổi.</span>
+      </div>
+    </Card>
+  );
+}
+
+function RotationSection({
+  position,
+  rotations,
+  templates,
+  canConfigure,
+}: {
+  position: StaffingPosition;
+  rotations: PositionRotation[];
+  templates: RotationTemplate[];
+  canConfigure: boolean;
+}) {
+  const history = rotations.filter((x) => x.positionConfigId === position.id);
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b bg-slate-50 px-4 py-3">
+        <div className="font-semibold">Mẫu xoay ca</div>
+        <div className="text-xs text-muted-foreground">
+          Chu kỳ chuẩn và lịch sử áp dụng theo thời gian
+        </div>
+      </div>
+      <div className="grid gap-4 p-4 lg:grid-cols-[1.2fr_1fr]">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {templates.map((template) => (
+            <div key={template.id} className="rounded-lg border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-mono text-xs font-bold text-blue-700">
+                    {template.code}
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold">
+                    {template.name}
+                  </div>
+                </div>
+                {template.isActive && (
+                  <Check className="h-4 w-4 text-emerald-600" />
+                )}
+              </div>
+              <div className="mt-3">
+                <Pattern template={template} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div className="mb-2 text-sm font-semibold">
+            Lịch sử của {position.name}
+          </div>
+          <div className="space-y-2">
+            {history.map((item) => (
+              <div
+                key={item.id}
+                className="relative rounded-lg border-l-4 border-l-blue-500 bg-slate-50 p-3"
+              >
+                <div className="font-semibold">
+                  {item.rotationTemplate.name}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {viDate(item.effectiveFrom)} → {viDate(item.effectiveTo)}
+                </div>
+                <div className="mt-1 text-xs">{item.reason}</div>
+              </div>
+            ))}
+            {!history.length && (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Chưa có lịch sử áp dụng mẫu
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+function CycleCell({
+  item,
+  rotation,
+}: {
+  item: StaffingAssignment;
+  rotation?: PositionRotation;
+}) {
+  const template = rotation?.rotationTemplate;
+  const step = template ? cycleStepAt(item, template) : null;
+  const detail = step !== null && template
+    ? `Tại ngày hôm nay: bước ${step + 1}/${template.cycleLength} – ${SHIFT_NAME[template.cyclePattern[step]].toLocaleLowerCase("vi")}`
+    : undefined;
+  return (
+    <div title={detail} className="min-w-[130px]">
+      {item.cycleStartDate ? (
+        <div className="font-medium">{viDate(item.cycleStartDate)}</div>
+      ) : (
+        <div className="text-amber-700">Chưa bổ sung</div>
+      )}
+      {detail && <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div>}
+      {!item.cycleStartDate && item.phaseIndex !== null && (
+        <div className="mt-0.5 text-xs text-muted-foreground">Dữ liệu cũ vẫn đang được áp dụng</div>
+      )}
+    </div>
+  );
+}
+function Pattern({
+  template,
+  detailed = false,
+}: {
+  template: RotationTemplate;
+  detailed?: boolean;
+}) {
+  return (
+    <div
+      className={cn("flex flex-wrap gap-1", detailed && "grid gap-2 sm:grid-cols-3")}
+      title={template.description ?? undefined}
+    >
+      {template.cyclePattern.map((item, index) => (
+        <span
+          key={`${item}-${index}`}
+          className={cn(
+            detailed
+              ? "flex min-h-10 items-center rounded-lg border px-3 py-2 text-sm"
+              : "flex h-7 w-7 items-center justify-center rounded text-xs font-bold",
+            item === "MORNING"
+              ? "bg-amber-100 text-amber-800"
+              : item === "AFTERNOON"
+                ? "bg-sky-100 text-sky-800"
+                : item === "NIGHT"
+                  ? "bg-indigo-100 text-indigo-800"
+                  : "bg-slate-200 text-slate-600",
+          )}
+        >
+          {detailed ? (
+            <><b>Bước {index + 1}</b><span className="ml-2">{SHIFT_NAME[item]}</span></>
+          ) : SHIFT_LABEL[item]}
+        </span>
+      ))}
+    </div>
+  );
+}
+function Mini({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <span className="rounded bg-slate-100 px-1.5 py-1">
+      <span className="text-muted-foreground">{label}</span>
+      <b className="ml-1">{value}</b>
+    </span>
+  );
+}
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border bg-slate-50 px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-0.5 truncate text-lg font-bold" title={String(value)}>
+        {value}
+      </div>
+    </div>
+  );
+}
+function NumberField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Field label={label}>
+      <Input
+        type="number"
+        min={0}
+        step={1}
+        disabled={disabled}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value)))}
+      />
+    </Field>
+  );
+}
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  );
+}

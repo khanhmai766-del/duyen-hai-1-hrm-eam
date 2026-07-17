@@ -21,3 +21,14 @@ export async function apiMutate<T>(
   if (!res.ok || json.error) throw new Error(json.error || "Thao tác thất bại");
   return json.data as T;
 }
+
+export async function apiDownload(url: string) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const json = await res.json().catch(() => null) as ApiResponse<unknown> | null;
+    throw new Error(json?.error || "Không thể tải tệp");
+  }
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "download.xlsx";
+  return { blob: await res.blob(), filename };
+}
