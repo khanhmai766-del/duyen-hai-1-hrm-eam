@@ -129,17 +129,14 @@ export async function POST(req: NextRequest) {
         if (!existingRegistration && !canRegisterForDate(date)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
         }
+        if (existingRegistration?.registrationStatus === "REJECTED" && existingRegistration.rejectionCount >= 2) {
+          return fail("Đăng ký ngày này đã không được duyệt 2 lần nên không thể đăng ký lại");
+        }
+        if (existingRegistration && !["REJECTED", "CANCELLED"].includes(existingRegistration.registrationStatus)) {
+          return fail("Ngày này đã có đăng ký đi hành chính");
+        }
       } else if (date !== vietnamDateInput()) {
         return fail("Chỉ được chấm công hành chính trong ngày hiện tại");
-      }
-
-      if (existingRegistration) {
-        const checkIn = await prisma.hcCheckIn.update({
-          where: { id: existingRegistration.id },
-          data: { note: registerNote },
-        });
-        await audit(user.id, "HC_REGISTER_UPDATE", "HcCheckIn", checkIn.id, "Cập nhật nội dung đăng ký đi hành chính");
-        return ok(checkIn);
       }
 
       const group =
@@ -158,6 +155,30 @@ export async function POST(req: NextRequest) {
             createdById: user.id,
           },
         }));
+
+      if (hasNote && existingRegistration) {
+        const checkIn = await prisma.hcCheckIn.update({
+          where: { id: existingRegistration.id },
+          data: {
+            groupId: group.id,
+            hours: option.hours,
+            note: registerNote,
+            isApproved: false,
+            registrationStatus: "PENDING",
+            cancellationReason: null,
+          },
+        });
+        await audit(
+          user.id,
+          "HC_REGISTER_RESUBMIT",
+          "HcCheckIn",
+          checkIn.id,
+          existingRegistration.registrationStatus === "CANCELLED"
+            ? `Đăng ký lại đi hành chính sau khi bị hủy: ${option.label}`
+            : `Đăng ký lại đi hành chính sau lần không duyệt thứ ${existingRegistration.rejectionCount}: ${option.label}`
+        );
+        return ok(checkIn);
+      }
 
       await prisma.hcCheckIn.deleteMany({
         where: {
@@ -222,6 +243,7 @@ export async function PATCH(req: NextRequest) {
     const checkInId = String(body.checkInId ?? "").trim();
     const action = body.action as "REJECT" | "CANCEL" | undefined;
     const reason = String(body.reason ?? "").trim();
+    const note = String(body.note ?? "").trim();
     if (!checkInId) return fail("Thiếu đăng ký cần xử lý");
     if (action !== "REJECT" && action !== "CANCEL") return fail("Trạng thái xử lý không hợp lệ");
 
@@ -237,7 +259,12 @@ export async function PATCH(req: NextRequest) {
     const registrationStatus = action === "REJECT" ? "REJECTED" : "CANCELLED";
     const updated = await prisma.hcCheckIn.update({
       where: { id: checkInId },
-      data: { isApproved: false, registrationStatus, cancellationReason: action === "CANCEL" ? reason || null : null },
+      data: {
+        isApproved: false,
+        registrationStatus,
+        cancellationReason: action === "CANCEL" ? reason || null : null,
+        ...(action === "REJECT" ? { note: note || null, rejectionCount: { increment: 1 } } : {}),
+      },
     });
     await audit(
       user.id,
@@ -245,7 +272,7 @@ export async function PATCH(req: NextRequest) {
       "HcCheckIn",
       checkInId,
       action === "REJECT"
-        ? `Không duyệt đăng ký đi hành chính của ${current.user.name}`
+        ? `Không duyệt đăng ký đi hành chính của ${current.user.name} (lần ${current.rejectionCount + 1})${note ? `. Nội dung công việc: ${note}` : ""}`
         : `Hủy đăng ký đi hành chính của ${current.user.name}${reason ? `. Lý do: ${reason}` : ""}`
     );
     return ok(updated);

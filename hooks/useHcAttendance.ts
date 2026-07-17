@@ -12,6 +12,7 @@ export interface HcMember {
   isRegistered: boolean;
   registrationStatus: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
   cancellationReason: string | null;
+  rejectionCount: number;
   createdAt: string;
   updatedAt: string;
   user: { id: string; name: string; position: string | null; avatarUrl: string | null; phone: string | null };
@@ -163,7 +164,7 @@ export function useHcUpdateWorkNote() {
 export function useHcCancelRegistration() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: string | { checkInId: string; action: "REJECT" | "CANCEL"; reason?: string }) =>
+    mutationFn: (input: string | { checkInId: string; action: "REJECT" | "CANCEL"; reason?: string; note?: string }) =>
       typeof input === "string"
         ? apiMutate(`/api/hc-groups/checkin?checkInId=${input}`, "DELETE")
         : apiMutate("/api/hc-groups/checkin", "PATCH", input),
