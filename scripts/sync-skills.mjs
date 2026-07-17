@@ -1,46 +1,55 @@
-// Đồng bộ skill AI giữa hai công cụ: .claude/skills (bản gốc — Claude Code đọc)
-// → .agents/skills (bản sao — Codex và các agent theo chuẩn AGENTS.md đọc).
-// Cách dùng: chỉ thêm/sửa skill trong .claude/skills, rồi chạy:
+// Đồng bộ skill/agent AI giữa hai công cụ: .claude/* (bản gốc — Claude Code đọc)
+// → .agents/* (bản sao — Codex và các agent theo chuẩn AGENTS.md đọc).
+// Cách dùng: chỉ thêm/sửa trong .claude/skills hoặc .claude/agents, rồi chạy:
 //   node scripts/sync-skills.mjs
-// Script mirror toàn bộ: skill có ở nguồn sẽ được copy đè, skill không còn ở nguồn
-// sẽ bị xóa khỏi .agents/skills để hai bên luôn giống hệt nhau.
+// Script mirror toàn bộ: mục có ở nguồn sẽ được copy đè, mục không còn ở nguồn
+// sẽ bị xóa khỏi đích để hai bên luôn giống hệt nhau.
 import { cpSync, rmSync, mkdirSync, readdirSync, existsSync } from "fs";
 import path from "path";
 
 const root = process.cwd();
-const SOURCE = path.join(root, ".claude", "skills");
-const TARGET = path.join(root, ".agents", "skills");
 
-if (!existsSync(SOURCE)) {
-  console.error("Không tìm thấy thư mục nguồn .claude/skills — dừng lại, không xóa gì.");
-  process.exit(1);
-}
+/** Mirror một thư mục con (skills/agents) từ .claude sang .agents. */
+function mirror(folder, { required }) {
+  const source = path.join(root, ".claude", folder);
+  const target = path.join(root, ".agents", folder);
 
-const sourceSkills = readdirSync(SOURCE, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
-
-if (sourceSkills.length === 0) {
-  console.error(".claude/skills đang rỗng — dừng lại để tránh xóa nhầm .agents/skills.");
-  process.exit(1);
-}
-
-// Xóa skill ở đích không còn trong nguồn
-if (existsSync(TARGET)) {
-  for (const entry of readdirSync(TARGET, { withFileTypes: true })) {
-    if (entry.isDirectory() && !sourceSkills.includes(entry.name)) {
-      rmSync(path.join(TARGET, entry.name), { recursive: true, force: true });
-      console.log(`− Xóa skill không còn ở nguồn: ${entry.name}`);
+  if (!existsSync(source)) {
+    if (required) {
+      console.error(`Không tìm thấy thư mục nguồn .claude/${folder} — dừng lại, không xóa gì.`);
+      process.exit(1);
     }
+    return; // thư mục tùy chọn (vd agents) chưa có thì bỏ qua
   }
-} else {
-  mkdirSync(TARGET, { recursive: true });
+
+  const entries = readdirSync(source, { withFileTypes: true }).filter(
+    (entry) => entry.isDirectory() || entry.name.endsWith(".md")
+  );
+  if (entries.length === 0) {
+    console.error(`.claude/${folder} đang rỗng — bỏ qua để tránh xóa nhầm .agents/${folder}.`);
+    return;
+  }
+  const sourceNames = entries.map((entry) => entry.name);
+
+  // Xóa mục ở đích không còn trong nguồn
+  if (existsSync(target)) {
+    for (const entry of readdirSync(target, { withFileTypes: true })) {
+      if (!sourceNames.includes(entry.name)) {
+        rmSync(path.join(target, entry.name), { recursive: true, force: true });
+        console.log(`− Xóa khỏi .agents/${folder} (không còn ở nguồn): ${entry.name}`);
+      }
+    }
+  } else {
+    mkdirSync(target, { recursive: true });
+  }
+
+  // Copy đè từng mục từ nguồn sang đích
+  for (const name of sourceNames) {
+    cpSync(path.join(source, name), path.join(target, name), { recursive: true, force: true });
+    console.log(`✓ Đồng bộ ${folder}: ${name}`);
+  }
+  console.log(`Xong — ${sourceNames.length} mục trong .agents/${folder} khớp với .claude/${folder}.`);
 }
 
-// Copy đè từng skill từ nguồn sang đích
-for (const name of sourceSkills) {
-  cpSync(path.join(SOURCE, name), path.join(TARGET, name), { recursive: true, force: true });
-  console.log(`✓ Đồng bộ skill: ${name}`);
-}
-
-console.log(`Xong — ${sourceSkills.length} skill trong .agents/skills khớp với .claude/skills.`);
+mirror("skills", { required: true });
+mirror("agents", { required: false });

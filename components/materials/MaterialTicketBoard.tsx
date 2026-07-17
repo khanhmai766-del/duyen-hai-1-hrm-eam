@@ -940,7 +940,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
     t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
-    t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.vhvMaterialCode ? ` · Mã ${t.vhvMaterialCode}` : " · Không có mã vật tư"}` },
+    t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.repairRequestNumber ? ` · Số yêu cầu sửa chữa ${t.repairRequestNumber}` : ""}` },
     t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${receiptSourceLabel(t.receiptSource)} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
@@ -1205,7 +1205,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [reason, setReason] = useState("");
   const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
-  const [manualMaterialCode, setManualMaterialCode] = useState("");
+  const [manualMaterialCode, setManualMaterialCode] = useState(t.vhvMaterialCode ?? "");
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
   const [workflowType, setWorkflowType] = useState<"DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO">("DE_XUAT");
   const [erpCode, setErpCode] = useState(t.items[0]?.erpCode ?? "");
@@ -1506,7 +1506,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <label className="field qty-field">Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : workflowType === "UNG" ? "ứng" : "sử dụng hiện có"} *
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
           </label>
-          <label className="field">Số biên bản kiểm tra (nếu có)
+          <label className="field">Lý do + Biên Bản Kiểm Tra (nếu có)
             <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
           </label>
         </div>
@@ -1601,12 +1601,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <label className="field">Số lượng vật tư đã lãnh{unit ? ` (${unit})` : ""} *
           <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
         </label>
-        <label className="field">Mã vật tư (nếu có)
-          <input value={manualMaterialCode} onChange={(e) => setManualMaterialCode(e.target.value)} placeholder="Nhập tay mã vật tư hoặc để trống" />
+        <label className="field">Số yêu cầu sửa chữa (nếu có)
+          <input value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} placeholder="Nhập số yêu cầu sửa chữa hoặc để trống" />
         </label>
       </div>
       <p className="hint">Sau khi xác nhận, số lượng đã lãnh được cộng vào Hiện có để sử dụng ở bước sau. Số lượng ERP không thay đổi.</p>
-      <button className="btn primary big" disabled={qty <= 0 || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, materialCode: manualMaterialCode.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
+      <button className="btn primary big" disabled={qty <= 0 || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, repairRequestNumber: repairRequestNumber.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
     </div>;
   }
 
@@ -1720,7 +1720,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <div className="seg2"><button type="button" className={!recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(false)}>Không</button><button type="button" className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
 	          </label>
 	          <p className="hint use-quantity-hint">
-	            {t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>} · Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
+	            <span>{t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>} · Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.</span>
 	          </p>
 	        </div>
 		        {recoveryRequired && <>
@@ -1772,9 +1772,20 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               </label>
             </div>
           </>
-        <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+        {t.type === "UNG" ? (
+          <div className="accept-two-grid">
+            <label className="field">Số BBNT ký tay (nếu có)
+              <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Nhập số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+            </label>
+            <label className="field">Mã vật tư nhập tay (nếu có)
+              <input name={`manual-material-code-${t.id}`} autoComplete="off" placeholder="Nhập tay mã vật tư hoặc để trống" value={manualMaterialCode} onChange={(e) => setManualMaterialCode(e.target.value)} />
+            </label>
+          </div>
+        ) : (
+          <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+        )}
         <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
-          onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
+          onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, ...(t.type === "UNG" ? { materialCode: manualMaterialCode.trim() || undefined } : {}), workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu & xuất BBNT ký tay
         </button>
       </div>
@@ -2014,7 +2025,7 @@ const CSS = `
 .receive-field-grid.advance-receive-fields{grid-template-columns:repeat(2,minmax(0,1fr));}
 .receive-field-grid .field{min-width:0;margin:0!important;}
 .receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
-.vhv-receive-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
+.vhv-receive-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
 .vhv-receive-grid .field{min-width:0;margin:0!important;}
 .vhv-receive-grid .field input{width:100%;margin-top:6px;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
@@ -2117,9 +2128,10 @@ const CSS = `
 .use-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
-.use-recovery-toggle-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;min-width:0;}
+.use-recovery-toggle-row{display:grid;grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr);gap:12px;align-items:stretch;min-width:0;}
 .use-recovery-toggle-row .recovery-toggle-field{min-width:0;margin:0!important;}
-.use-quantity-hint{display:flex;align-items:center;min-width:0;margin:0!important;padding-top:17px;line-height:1.45;}
+.use-quantity-hint{display:flex;align-items:center;min-width:0;margin:0!important;padding-top:17px;font-size:10px;line-height:1.35;letter-spacing:-.012em;}
+.use-quantity-hint>span{display:block;min-width:0;white-space:nowrap;}
 .recovery-toggle-field .seg2{height:42px;margin-top:6px;background:#fff;border-color:${C.line};}
 .recovery-toggle-field .seg2 button{min-height:38px;}
 .recovery-detail-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}

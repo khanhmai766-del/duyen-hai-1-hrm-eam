@@ -629,7 +629,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // Luồng Ứng — VHV ghi nhận số lượng thực tế đã lãnh; mã vật tư nhập tay và không bắt buộc.
+    // Luồng Ứng — VHV chỉ ghi nhận số lượng thực tế đã lãnh.
+    // Mã vật tư nhập tay (nếu có) được bổ sung tại bước Nghiệm thu + BBNT ký tay.
     // Số đã lãnh được cộng vào Hiện có để bước Sử dụng có thể trừ sau đó; ERP không thay đổi.
     if (action === "vhvReceive") {
       if (t.type !== "UNG" || t.status !== "VHV_LANH_VAT_TU") return fail("Phiếu không ở bước VHV lãnh vật tư");
@@ -642,7 +643,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const quantity = Math.trunc(Number(body.quantity));
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
-      const materialCode = String(body.materialCode || "").trim();
+      const repairRequestNumber = String(body.repairRequestNumber || "").trim();
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
@@ -652,7 +653,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           data: {
             status: "SU_DUNG_VAT_TU",
             vhvReceivedQuantity: quantity,
-            vhvMaterialCode: materialCode || null,
+            repairRequestNumber: repairRequestNumber || null,
             vhvReceivedByName: user.name ?? "",
             vhvReceivedByPosition: user.position ?? null,
             vhvReceivedAt: new Date(),
@@ -667,7 +668,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
-      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${materialCode ? `, mã ${materialCode}` : ", không có mã"}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
+      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${repairRequestNumber ? `; số yêu cầu sửa chữa ${repairRequestNumber}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
       return ok(up);
     }
 
@@ -919,6 +920,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
+      const materialCode = t.type === "UNG" ? String(body.materialCode || "").trim() : "";
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
@@ -949,12 +951,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
           workStartedAt, workEndedAt,
           ...(bbkt ? { bbktNumber: bbkt } : {}),
+          ...(t.type === "UNG" ? { vhvMaterialCode: materialCode || null } : {}),
           completedById: user.id, completedByName: user.name ?? "",
           completedByPosition: user.position ?? null, completedAt: new Date(),
         },
         include: ITEM_INCLUDE,
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận và xuất BBNT DO" : "chờ Thống kê quyết toán"}`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay${t.type === "UNG" ? `, mã vật tư nhập tay ${materialCode || "không có"}` : ""}${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận và xuất BBNT DO" : "chờ Thống kê quyết toán"}`);
       return ok(up);
     }
 
