@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
-import { getWorkflowRoleMap, WORKFLOW_STEPS, type WorkflowStep } from "@/lib/material-workflow";
+import { getWorkflowRoleMap, invalidateWorkflowConfigCache, WORKFLOW_STEPS, type WorkflowStep } from "@/lib/material-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,8 @@ export async function PUT(req: NextRequest) {
       prisma.materialWorkflowRole.deleteMany({}),
       ...(rows.length ? [prisma.materialWorkflowRole.createMany({ data: rows })] : []),
     ]);
+    // Cấu hình vừa đổi — xóa cache RAM để request kế tiếp đọc bản mới ngay.
+    invalidateWorkflowConfigCache();
     await audit(
       user.id,
       "MT_WORKFLOW_ROLES",

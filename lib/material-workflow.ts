@@ -60,8 +60,26 @@ export const WORKFLOW_STEP_LABELS: Record<WorkflowStep, string> = {
   manage: "Sửa / Xoá phiếu",
 };
 
+/* Cache trong RAM cho các bảng cấu hình gần như không đổi (phân quyền bước,
+   phạm vi hệ thống theo cương vị). Mỗi lần tải danh sách phiếu trước đây tốn
+   3 truy vấn cho các bảng này; TTL 60s + xóa cache khi admin lưu phân quyền
+   là đủ tươi. Lưu ý: chỉ đúng khi app chạy 1 process (pm2 1 instance). */
+const CONFIG_CACHE_TTL_MS = 60_000;
+type CacheEntry<T> = { value: T; expires: number };
+let roleMapCache: CacheEntry<Record<WorkflowStep, string[]>> | null = null;
+const scopesCache = new Map<string, CacheEntry<string[]>>();
+let scopeCountCache: CacheEntry<number> | null = null;
+
+/** Xóa cache phân quyền — gọi ngay sau khi admin lưu cấu hình MaterialWorkflowRole. */
+export function invalidateWorkflowConfigCache() {
+  roleMapCache = null;
+  scopesCache.clear();
+  scopeCountCache = null;
+}
+
 /** Đọc toàn bộ cấu hình phân quyền: step → danh sách cương vị. */
 export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[]>> {
+  if (roleMapCache && roleMapCache.expires > Date.now()) return roleMapCache.value;
   const rows = await prisma.materialWorkflowRole.findMany({ select: { step: true, position: true } });
   const map: Record<WorkflowStep, string[]> = {
     create: [], confirm: [], vhvReceive: [], stats: [], receive: [], use: [], accept: [], settle: [], manage: [],
@@ -69,6 +87,7 @@ export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[
   for (const r of rows) {
     if ((WORKFLOW_STEPS as readonly string[]).includes(r.step)) map[r.step as WorkflowStep].push(r.position);
   }
+  roleMapCache = { value: map, expires: Date.now() + CONFIG_CACHE_TTL_MS };
   return map;
 }
 
@@ -112,11 +131,23 @@ export async function canDoStep(step: WorkflowStep, user: { role?: string | null
 /** Lấy danh sách systemSeq được phân giao cho một cương vị (PositionSystemScope) */
 export async function getPositionScopes(position?: string | null): Promise<string[]> {
   if (!position) return [];
+  const cached = scopesCache.get(position);
+  if (cached && cached.expires > Date.now()) return cached.value;
   const rows = await prisma.positionSystemScope.findMany({
     where: { position },
     select: { systemSeq: true },
   });
-  return rows.map((r) => r.systemSeq);
+  const scopes = rows.map((r) => r.systemSeq);
+  scopesCache.set(position, { value: scopes, expires: Date.now() + CONFIG_CACHE_TTL_MS });
+  return scopes;
+}
+
+/** Tổng số dòng phân giao phạm vi — 0 nghĩa là chưa cấu hình, mọi cương vị đều có scope. */
+export async function getPositionScopeCount(): Promise<number> {
+  if (scopeCountCache && scopeCountCache.expires > Date.now()) return scopeCountCache.value;
+  const count = await prisma.positionSystemScope.count();
+  scopeCountCache = { value: count, expires: Date.now() + CONFIG_CACHE_TTL_MS };
+  return count;
 }
 
 /** deviceSeq có nằm trong phạm vi phân giao? (chính nó hoặc con cháu theo prefix) */

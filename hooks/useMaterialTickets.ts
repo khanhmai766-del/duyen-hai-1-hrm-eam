@@ -159,6 +159,9 @@ export function useMaterialTickets(month = "ALL") {
     // 30s: mutation nào cũng invalidate query này nên thao tác của CHÍNH MÌNH vẫn
     // hiện tức thì; staleTime 0 trước đây khiến mỗi lần mount lại tải toàn bộ phiếu.
     staleTime: 30_000,
+    // Quy trình nhiều người chờ lượt nhau: tự làm mới mỗi 60s để phiếu người khác
+    // vừa chuyển bước hiện ra mà không cần F5 (chỉ chạy khi tab đang mở).
+    refetchInterval: 60_000,
     queryFn: async () => {
       const qs = new URLSearchParams();
       if (month !== "ALL") qs.set("month", month);
@@ -176,6 +179,9 @@ export function useTicketOptions(enabled: boolean) {
   return useQuery({
     queryKey: ["material-ticket-options"],
     enabled,
+    // Endpoint nặng (cây thiết bị + toàn bộ danh mục kèm ERP) — không tải lại
+    // mỗi lần mở form; mutation liên quan vẫn invalidate nên dữ liệu không cũ.
+    staleTime: 60_000,
     queryFn: async () => {
       const res = await apiGet<{
         devices: { seq: string; name: string; depth: number }[];

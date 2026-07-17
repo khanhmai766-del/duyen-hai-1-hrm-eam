@@ -5,6 +5,7 @@ import {
   isShiftLeader,
   isStats,
   getPositionScopes,
+  getPositionScopeCount,
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
@@ -107,11 +108,11 @@ export async function GET(req: NextRequest) {
       activityLogs: activityByTicket.get(ticket.id) ?? [],
     }));
 
-    // 3 truy vấn độc lập — chạy song song thay vì tuần tự.
-    // Quyền theo từng bước (admin cấu hình trong MaterialWorkflowRole; trống = mặc định cũ).
+    // 3 nguồn cấu hình gần như không đổi — đọc qua cache RAM (TTL 60s trong
+    // lib/material-workflow.ts), chỉ chạm DB khi cache hết hạn.
     const [scopes, totalScopeCount, wfMap] = await Promise.all([
       getPositionScopes(user.position),
-      prisma.positionSystemScope.count(),
+      getPositionScopeCount(),
       getWorkflowRoleMap(),
     ]);
     return ok(ticketsWithActivity, {
