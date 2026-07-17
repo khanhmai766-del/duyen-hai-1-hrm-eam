@@ -518,23 +518,46 @@ function CheckInDialog({
   // Cương vị options = the seat titles defined in the org-chart template, so the
   // chosen value always matches a seat the name can drop into.
   const positions = ORG_SEAT_TITLES;
+  const preferredPosition = React.useMemo(() => {
+    const candidates = [
+      currentPosition.position,
+      ...currentPosition.options,
+      me?.position,
+      me?.secondaryPosition,
+      session?.user?.position,
+    ].filter((value): value is string => !!value?.trim());
+
+    for (const candidate of candidates) {
+      const normalizedCandidate = normalizeText(candidate);
+      const exact = positions.find((seat) => normalizeText(seat) === normalizedCandidate);
+      if (exact) return exact;
+      const close = positions.find((seat) => {
+        const normalizedSeat = normalizeText(seat);
+        return normalizedCandidate.includes(normalizedSeat) || normalizedSeat.includes(normalizedCandidate);
+      });
+      if (close) return close;
+    }
+    return positions[0];
+  }, [currentPosition.options, currentPosition.position, me?.position, me?.secondaryPosition, positions, session?.user?.position]);
+  const orderedPositions = React.useMemo(
+    () => [preferredPosition, ...positions.filter((seat) => seat !== preferredPosition)],
+    [positions, preferredPosition]
+  );
 
   const [position, setPosition] = React.useState("");
   const [hours, setHours] = React.useState(8);
   const [swap, setSwap] = React.useState(false);
   const [swapNote, setSwapNote] = React.useState("");
 
-  // Default to the seat matching the user's chức danh, else the first seat.
+  // Ưu tiên cương vị của người thao tác; chỉ rơi về ghế đầu tiên khi không khớp.
   React.useEffect(() => {
     if (open) {
-      const own = currentPosition.position || me?.position || "";
-      const secondary = me?.secondaryPosition ?? "";
-      setPosition(positions.includes(own) ? own : positions.includes(secondary) ? secondary : positions[0]);
+      setPosition(preferredPosition);
       setHours(8);
       setSwap(false);
       setSwapNote("");
     }
-  }, [open, currentPosition.position, me?.position, me?.secondaryPosition, positions]);
+  }, [open, preferredPosition]);
 
   const dateLabel = date.split("-").reverse().join("-"); // YYYY-MM-DD → DD-MM-YYYY
   const caLabel = `${SHIFT_TYPE[shiftType as keyof typeof SHIFT_TYPE]?.label ?? ""} ${dateLabel}`.trim();
@@ -566,7 +589,7 @@ function CheckInDialog({
             <Select value={position} onValueChange={setPosition}>
               <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
               <SelectContent className="max-h-72">
-                {positions.map((p) => (
+                {orderedPositions.map((p) => (
                   <SelectItem key={p} value={p}>{p}</SelectItem>
                 ))}
               </SelectContent>

@@ -87,6 +87,18 @@ export type GroupedErpImportResult = {
   errors: string[];
 };
 
+export type ErpStockUpdateInput = {
+  code: string;
+  erpStock: number | string | null;
+};
+
+export type ErpStockUpdateResult = {
+  updated: number;
+  notFound: number;
+  skipped: number;
+  errors: string[];
+};
+
 export function useOilStock(category: GroupingCategory) {
   return useQuery({
     queryKey: ["oil-stock", category],
@@ -161,6 +173,20 @@ export function useImportGroupedErpMaterials() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+    },
+  });
+}
+
+/** Chỉ cập nhật tồn ERP theo mã đã có; API không tạo mã vật tư mới. */
+export function useUpdateErpStocksFromFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rows: ErpStockUpdateInput[]) =>
+      apiMutate<ErpStockUpdateResult>("/api/vat-tu/oil-grouping/stock-import", "POST", { rows }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },

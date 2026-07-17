@@ -107,19 +107,28 @@ export default function AdminAttendancePage() {
   const groups = data?.data ?? [];
   const selfHcGroups = groups.filter(isSelfHcGroup);
   const managedGroups = groups.filter((g) => !isSelfHcGroup(g));
+  const activeSelfHcGroups = React.useMemo(
+    () => selfHcGroups.map((group) => ({
+      ...group,
+      members: group.members.filter((member) =>
+        !member.isRegistered || !["REJECTED", "CANCELLED"].includes(member.registrationStatus)
+      ),
+    })),
+    [selfHcGroups]
+  );
   const visibleSelfHcGroups = React.useMemo(() => {
     const managedSlotByUser = new Set(
       managedGroups.flatMap((group) =>
         group.members.flatMap((member) => periodSlots(group.period).map((slot) => `${member.userId}:${slot}`))
       )
     );
-    return selfHcGroups.map((group) => ({
+    return activeSelfHcGroups.map((group) => ({
       ...group,
       members: group.members.filter((member) =>
         periodSlots(group.period).some((slot) => !managedSlotByUser.has(`${member.userId}:${slot}`))
       ),
     }));
-  }, [managedGroups, selfHcGroups]);
+  }, [activeSelfHcGroups, managedGroups]);
   const openSelfCheckIn = React.useCallback(() => {
     setDate(vietnamDateInput());
     setFollowToday(true);
@@ -181,7 +190,7 @@ export default function AdminAttendancePage() {
         open={selfCheckInOpen}
         onOpenChange={setSelfCheckInOpen}
         date={date}
-        groups={selfHcGroups}
+        groups={activeSelfHcGroups}
         myId={myId}
       />
     </div>

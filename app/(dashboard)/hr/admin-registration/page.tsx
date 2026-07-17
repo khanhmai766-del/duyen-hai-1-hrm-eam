@@ -3,22 +3,19 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Archive, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Clock3, History, Loader2, Pencil, Search, X } from "lucide-react";
+import { Archive, ArrowLeft, CalendarPlus, Check, CheckCircle2, Clock3, Loader2, Pencil, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
-import { RegistrationActivityDrawer } from "@/components/hr/registration-activity-drawer";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useHcApprove,
-  useHcActivity,
   useHcCancelRegistration,
   useHcCheckIn,
   useHcGroups,
@@ -42,8 +39,27 @@ const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 type CancelTarget =
   | { type: "reject"; registration: HcRegistration }
-  | { type: "cancel"; registration: HcRegistration }
-  | { type: "date"; date: string; registrations: HcRegistration[] };
+  | { type: "cancel"; registration: HcRegistration };
+
+function registrationStatus(registration: Pick<HcRegistration, "registrationStatus" | "isApproved">) {
+  return registration.registrationStatus || (registration.isApproved ? "APPROVED" : "PENDING");
+}
+
+function registrationStatusLabel(registration: Pick<HcRegistration, "registrationStatus" | "isApproved">) {
+  const status = registrationStatus(registration);
+  if (status === "APPROVED") return "Đã duyệt";
+  if (status === "REJECTED") return "Không duyệt";
+  if (status === "CANCELLED") return "Đã hủy";
+  return "Chờ duyệt";
+}
+
+function registrationStatusClass(registration: Pick<HcRegistration, "registrationStatus" | "isApproved">) {
+  const status = registrationStatus(registration);
+  if (status === "APPROVED") return "bg-emerald-50 text-emerald-700";
+  if (status === "REJECTED") return "bg-red-50 text-red-700";
+  if (status === "CANCELLED") return "bg-slate-200 text-slate-700";
+  return "bg-amber-50 text-amber-700";
+}
 
 function vietnamDateInput(date: Date | string = new Date()) {
   const value = typeof date === "string" ? new Date(date) : date;
@@ -123,27 +139,33 @@ export default function AdministrativeRegistrationPage() {
   const [registerDate, setRegisterDate] = React.useState(minRegisterDate);
   const [period, setPeriod] = React.useState<(typeof HC_SELF_PERIODS)[number]["value"]>("FULL_DAY");
   const [note, setNote] = React.useState("");
-  const [activityOpen, setActivityOpen] = React.useState(false);
-  const activity = useHcActivity(today, activityOpen && canManage);
+  const [historyOpen, setHistoryOpen] = React.useState(false);
   const { data: groupsData } = useHcGroups(registerDate);
   const { data: registrationsData, isLoading: registrationsLoading } = useHcRegistrations(today);
   const { data: historyData, isLoading: historyLoading } = useHcRegistrations(historyFrom, historyTo);
-  const myRegistration = React.useMemo(() => {
+  const myDayRegistration = React.useMemo(() => {
     const groups = groupsData?.data ?? [];
     return groups
       .filter((group) => HC_SELF_CONTENTS.includes(group.content))
       .flatMap((group) => group.members.map((member) => ({ group, member })))
       .find(({ member }) => member.userId === myId && member.isRegistered);
   }, [groupsData, myId]);
+  const myRegistration = myDayRegistration && ["PENDING", "APPROVED"].includes(registrationStatus(myDayRegistration.member))
+    ? myDayRegistration
+    : undefined;
+  const canResubmit = myDayRegistration?.member.registrationStatus === "CANCELLED"
+    || (myDayRegistration?.member.registrationStatus === "REJECTED" && myDayRegistration.member.rejectionCount < 2);
+  const resubmitBlocked = myDayRegistration?.member.registrationStatus === "REJECTED" && myDayRegistration.member.rejectionCount >= 2;
 
   React.useEffect(() => {
-    if (!myRegistration) {
+    if (!myDayRegistration) {
       setNote("");
       return;
     }
-    const currentPeriod = HC_SELF_PERIODS.find((item) => myRegistration.group.content === `Hành chính - ${item.label}`);
+    const currentPeriod = HC_SELF_PERIODS.find((item) => myDayRegistration.group.content === `Hành chính - ${item.label}`);
     setPeriod(currentPeriod?.value ?? "FULL_DAY");
-  }, [myRegistration]);
+    setNote(canResubmit ? myDayRegistration.member.note ?? "" : "");
+  }, [canResubmit, myDayRegistration]);
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -158,9 +180,10 @@ export default function AdministrativeRegistrationPage() {
     e.preventDefault();
     if (!registrationOpen) return toast.error("Chỉ được đăng ký đi hành chính trước 16h30");
     if (myRegistration) return toast.error("Cập nhật nội dung tại danh sách đăng ký phía dưới");
+    if (resubmitBlocked) return toast.error("Đăng ký ngày này không thể gửi lại");
     try {
       await checkIn.mutateAsync({ date: registerDate, period, note });
-      toast.success("Đã gửi đăng ký đi hành chính");
+      toast.success(canResubmit ? "Đã gửi lại đăng ký đi hành chính" : "Đã gửi đăng ký đi hành chính");
       setNote("");
     } catch (err) {
       toast.error((err as Error).message);
@@ -173,17 +196,7 @@ export default function AdministrativeRegistrationPage() {
         <ArrowLeft className="h-4 w-4" /> Lịch làm việc
       </Link>
 
-      <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày, trước 16h30 và chờ người có quyền duyệt">
-        {canManage && (
-          <Button variant="outline" onClick={() => setActivityOpen(true)}>
-            <History className="h-4 w-4" /> Nhật ký đăng ký
-          </Button>
-        )}
-      </PageHeader>
-
-      {canManage && (
-        <RegistrationActivityDrawer open={activityOpen} onOpenChange={setActivityOpen} date={today} logs={activity.data?.data ?? []} loading={activity.isLoading} refreshing={activity.isFetching} onRefresh={() => activity.refetch()} />
-      )}
+      <PageHeader title="ĐĂNG KÝ ĐI HÀNH CHÍNH" description="Gửi đăng ký trước tối thiểu 2 ngày, trước 16h30 và chờ người có quyền duyệt" />
 
       <Card className="overflow-hidden">
         <CardHeader className="grid gap-3 border-b border-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
@@ -196,12 +209,13 @@ export default function AdministrativeRegistrationPage() {
               <p>Đọc kỹ và thực hiện đúng theo ô nội dung công việc.</p>
             </div>
           </div>
-          <div className="flex shrink-0 justify-end gap-2">
-            <Button asChild variant="outline">
-              <Link href="/hr">Huỷ</Link>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+              <Archive className="h-4 w-4" /> Kho lưu trữ
+              <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">{historyData?.data.length ?? 0}</Badge>
             </Button>
-            <Button type="submit" form="hc-registration-form" disabled={checkIn.isPending || !!myRegistration || !registrationOpen}>
-              {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {myRegistration ? "Đã đăng ký" : "Gửi đăng ký"}
+            <Button type="submit" form="hc-registration-form" disabled={checkIn.isPending || !!myRegistration || !!resubmitBlocked || !registrationOpen}>
+              {checkIn.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {myRegistration ? "Đã đăng ký" : resubmitBlocked ? "Không thể đăng ký lại" : canResubmit ? "Đăng ký lại" : "Gửi đăng ký"}
             </Button>
           </div>
         </CardHeader>
@@ -246,16 +260,32 @@ export default function AdministrativeRegistrationPage() {
             </div>
             {myRegistration && (
               <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                {myRegistration.member.isApproved ? (
+                {registrationStatus(myRegistration.member) === "APPROVED" ? (
                   <Badge variant="accent" className="gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Đã duyệt
                   </Badge>
+                ) : registrationStatus(myRegistration.member) === "REJECTED" ? (
+                  <Badge variant="secondary" className="gap-1.5 bg-red-50 text-red-700"><X className="h-3.5 w-3.5" /> Không duyệt</Badge>
+                ) : registrationStatus(myRegistration.member) === "CANCELLED" ? (
+                  <Badge variant="secondary" className="gap-1.5"><X className="h-3.5 w-3.5" /> Đã hủy</Badge>
                 ) : (
                   <Badge variant="secondary" className="gap-1.5">
                     <Clock3 className="h-3.5 w-3.5" /> Chờ duyệt
                   </Badge>
                 )}
                 <span>Bạn đã đăng ký ngày này. Cập nhật nội dung tại danh sách đăng ký phía dưới.</span>
+              </div>
+            )}
+            {canResubmit && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {myDayRegistration?.member.registrationStatus === "CANCELLED"
+                  ? "Đăng ký đã bị hủy. Bạn có thể điều chỉnh nội dung công việc và đăng ký lại."
+                  : "Đăng ký chưa được duyệt lần đầu. Bạn có thể điều chỉnh nội dung công việc và đăng ký lại một lần."}
+              </div>
+            )}
+            {resubmitBlocked && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                Đăng ký ngày này đã không được duyệt 2 lần và không thể đăng ký lại.
               </div>
             )}
             {!registrationOpen && (
@@ -267,20 +297,20 @@ export default function AdministrativeRegistrationPage() {
         </CardContent>
       </Card>
 
-      <div className="grid min-w-0 gap-6 min-[1800px]:grid-cols-[minmax(760px,1fr)_360px] min-[1800px]:items-start">
-        <RegistrationList
-          registrations={registrationsData?.data ?? []}
-          isLoading={registrationsLoading}
-          canManage={canManage}
-          myId={myId}
-        />
-        <RegistrationHistoryList
-          registrations={historyData?.data ?? []}
-          isLoading={historyLoading}
-          from={historyFrom}
-          to={historyTo}
-        />
-      </div>
+      <RegistrationList
+        registrations={registrationsData?.data ?? []}
+        isLoading={registrationsLoading}
+        canManage={canManage}
+        myId={myId}
+      />
+      <RegistrationHistoryList
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        registrations={historyData?.data ?? []}
+        isLoading={historyLoading}
+        from={historyFrom}
+        to={historyTo}
+      />
     </div>
   );
 }
@@ -321,17 +351,20 @@ function RegistrationList({
 }
 
 function RegistrationHistoryList({
+  open,
+  onOpenChange,
   registrations,
   isLoading,
   from,
   to,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   registrations: HcRegistration[];
   isLoading: boolean;
   from: string;
   to: string;
 }) {
-  const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const filteredRegistrations = React.useMemo(() => {
     const q = normalizeText(search);
@@ -342,35 +375,7 @@ function RegistrationHistoryList({
   const hasValidRange = from <= to;
 
   return (
-    <>
-      <Card className="overflow-hidden border-dashed bg-slate-50/70">
-        <CardContent className="p-4">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="flex w-full items-start gap-3 rounded-md text-left transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-accent/30"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-navy text-white shadow-sm">
-              <Archive className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1 space-y-1 py-0.5">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="font-bold text-ink">Kho lưu trữ đăng ký</span>
-                <Badge variant="secondary">{registrations.length} bản ghi</Badge>
-              </span>
-              <span className="block text-xs leading-5 text-muted-foreground">
-                {hasValidRange ? `Từ ${formatDateLabel(from)} đến ${formatDateLabel(to)}. ` : ""}
-                {hcRetentionDescription()}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent">
-                <CalendarClock className="h-3.5 w-3.5" /> Bấm để xem lịch sử
-              </span>
-            </span>
-          </button>
-        </CardContent>
-      </Card>
-
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -429,14 +434,19 @@ function RegistrationHistoryList({
                             <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                               {periodLabel(registration.group.content)}
                             </span>
-                            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", registration.isApproved ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")}>
-                              {registration.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+                            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", registrationStatusClass(registration))}>
+                              {registrationStatusLabel(registration)}
                             </span>
                           </div>
                         </div>
                         <div className={cn("mt-2 rounded-md px-2.5 py-1.5 text-xs leading-5", registration.note ? "bg-amber-50 text-amber-950" : "bg-muted text-muted-foreground")}>
                           {registration.note || "Chưa có nội dung công việc."}
                         </div>
+                        {registrationStatus(registration) === "CANCELLED" && registration.cancellationReason && (
+                          <div className="mt-2 rounded-md border border-red-100 bg-red-50 px-2.5 py-1.5 text-xs leading-5 text-red-800">
+                            <span className="font-semibold">Lý do hủy:</span> {registration.cancellationReason}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -446,7 +456,6 @@ function RegistrationHistoryList({
           )}
         </DialogContent>
       </Dialog>
-    </>
   );
 }
 
@@ -468,10 +477,15 @@ function RegistrationDateRow({
   const [reviewMode, setReviewMode] = React.useState(false);
   const [reviewingId, setReviewingId] = React.useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = React.useState<CancelTarget | null>(null);
+  const [cancelReason, setCancelReason] = React.useState("");
+  const [reviewNote, setReviewNote] = React.useState("");
   const [notes, setNotes] = React.useState<Record<string, string>>({});
-  const approvedCount = registrations.filter((registration) => registration.isApproved).length;
-  const pendingRegistrations = registrations.filter((registration) => !registration.isApproved);
-  const editableRegistrations = registrations.filter((registration) => canManage || registration.userId === myId);
+  const approvedCount = registrations.filter((registration) => registrationStatus(registration) === "APPROVED").length;
+  const pendingRegistrations = registrations.filter((registration) => registrationStatus(registration) === "PENDING");
+  const completedWithOtherStatus = registrations.length - approvedCount - pendingRegistrations.length;
+  const editableRegistrations = registrations.filter((registration) =>
+    registrationStatus(registration) === "PENDING" && (canManage || registration.userId === myId)
+  );
   const canEditNote = editableRegistrations.length > 0;
 
   React.useEffect(() => {
@@ -490,10 +504,10 @@ function RegistrationDateRow({
     }
   }
 
-  async function rejectRegistration(registration: HcRegistration) {
+  async function rejectRegistration(registration: HcRegistration, nextNote: string) {
     try {
       setReviewingId(registration.id);
-      await cancelRegistration.mutateAsync(registration.id);
+      await cancelRegistration.mutateAsync({ checkInId: registration.id, action: "REJECT", note: nextNote });
       toast.success(`Đã không duyệt đăng ký của ${registration.user.name}`);
     } catch (err) {
       toast.error((err as Error).message);
@@ -502,10 +516,24 @@ function RegistrationDateRow({
     }
   }
 
-  async function cancelRegistrationItem(registration: HcRegistration) {
+  async function approveFromReview(registration: HcRegistration) {
     try {
       setReviewingId(registration.id);
-      await cancelRegistration.mutateAsync(registration.id);
+      await approve.mutateAsync({ groupId: registration.group.id, ids: [registration.id], note: reviewNote });
+      toast.success(`Đã duyệt đăng ký của ${registration.user.name}`);
+      setCancelTarget(null);
+      setReviewNote("");
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  async function cancelRegistrationItem(registration: HcRegistration, reason: string) {
+    try {
+      setReviewingId(registration.id);
+      await cancelRegistration.mutateAsync({ checkInId: registration.id, action: "CANCEL", reason });
       toast.success(`Đã hủy đăng ký của ${registration.user.name}`);
     } catch (err) {
       toast.error((err as Error).message);
@@ -514,55 +542,22 @@ function RegistrationDateRow({
     }
   }
 
-  async function cancelDateGroup() {
-    try {
-      for (const registration of registrations) {
-        await cancelRegistration.mutateAsync(registration.id);
-      }
-      toast.success("Đã hủy đăng ký đi hành chính trong ngày");
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
   async function confirmCancel() {
     if (!cancelTarget) return;
     if (cancelTarget.type === "reject") {
-      await rejectRegistration(cancelTarget.registration);
+      await rejectRegistration(cancelTarget.registration, reviewNote.trim());
       setCancelTarget(null);
+      setReviewNote("");
       return;
     }
     if (cancelTarget.type === "cancel") {
-      await cancelRegistrationItem(cancelTarget.registration);
+      const reason = cancelReason.trim();
+      await cancelRegistrationItem(cancelTarget.registration, reason);
       setCancelTarget(null);
+      setCancelReason("");
       return;
     }
-    await cancelDateGroup();
-    setCancelTarget(null);
   }
-
-  const cancelDialogText = React.useMemo(() => {
-    if (!cancelTarget) return null;
-    if (cancelTarget.type === "reject") {
-      return {
-        title: "Xác nhận không duyệt đăng ký",
-        description: `Bạn chắc chắn muốn không duyệt đăng ký đi hành chính của ${cancelTarget.registration.user.name}?`,
-        confirmLabel: "Không duyệt",
-      };
-    }
-    if (cancelTarget.type === "cancel") {
-      return {
-        title: "Xác nhận hủy đăng ký",
-        description: `Bạn chắc chắn muốn hủy đăng ký đi hành chính của ${cancelTarget.registration.user.name}?`,
-        confirmLabel: "Hủy đăng ký",
-      };
-    }
-    return {
-      title: "Xác nhận hủy tất cả trong ngày",
-      description: `Bạn chắc chắn muốn hủy ${cancelTarget.registrations.length} đăng ký đi hành chính ngày ${formatDateLabel(cancelTarget.date)}?`,
-      confirmLabel: "Hủy tất cả",
-    };
-  }, [cancelTarget]);
 
   async function saveNotes() {
     try {
@@ -583,34 +578,23 @@ function RegistrationDateRow({
           <div className="text-base font-bold text-ink">{formatDateLabel(date)}</div>
           <div className="text-xs text-muted-foreground">{registrations.length} nhân sự đăng ký</div>
         </div>
-        <Badge variant={pendingRegistrations.length ? "secondary" : "accent"} className="gap-1.5">
+        <Badge variant={pendingRegistrations.length || completedWithOtherStatus ? "secondary" : "accent"} className="gap-1.5">
           {pendingRegistrations.length ? <Clock3 className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          {pendingRegistrations.length ? `${pendingRegistrations.length} chờ duyệt` : "Đã duyệt"}
+          {pendingRegistrations.length ? `${pendingRegistrations.length} chờ duyệt` : completedWithOtherStatus ? "Đã xử lý" : "Đã duyệt"}
         </Badge>
         {approvedCount > 0 && pendingRegistrations.length > 0 && (
           <div className="text-xs font-medium text-accent">{approvedCount}/{registrations.length} đã duyệt</div>
         )}
         {(canManage || canEditNote) && (
           <div className="space-y-2 border-t border-dashed border-slate-200 pt-3">
-            {canManage && registrations.length > 0 && (
+            {canManage && pendingRegistrations.length > 0 && (
               <Button className="w-full justify-center" size="sm" variant={reviewMode ? "outline" : "accent"} onClick={() => setReviewMode((open) => !open)}>
-                <Check className="h-4 w-4" /> {reviewMode ? "Ẩn duyệt" : "Duyệt"}
+                <Check className="h-4 w-4" /> {reviewMode ? "Ẩn duyệt" : "Duyệt/Không duyệt"}
               </Button>
             )}
             {canEditNote && (
               <Button className="w-full justify-center" size="sm" variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="h-4 w-4" /> Sửa nội dung
-              </Button>
-            )}
-            {canManage && (
-              <Button
-                className="w-full justify-center"
-                size="sm"
-                variant="destructive"
-                onClick={() => setCancelTarget({ type: "date", date, registrations })}
-                disabled={cancelRegistration.isPending}
-              >
-                {cancelRegistration.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Hủy tất cả trong ngày
               </Button>
             )}
           </div>
@@ -621,7 +605,7 @@ function RegistrationDateRow({
         <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
           {registrations.map((registration) => (
             <div key={registration.id} className="relative min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              {canManage && reviewMode && (
+              {canManage && reviewMode && registrationStatus(registration) === "PENDING" && (
                 <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-slate-200 bg-white/95 p-1 shadow-sm">
                   <button
                     type="button"
@@ -640,7 +624,7 @@ function RegistrationDateRow({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCancelTarget({ type: "reject", registration })}
+                    onClick={() => { setReviewNote(registration.note ?? ""); setCancelTarget({ type: "reject", registration }); }}
                     disabled={reviewingId === registration.id}
                     title="Không duyệt đăng ký"
                     className={cn(
@@ -652,7 +636,7 @@ function RegistrationDateRow({
                   </button>
                 </div>
               )}
-              {canManage && !reviewMode && (
+              {canManage && !reviewMode && ["PENDING", "APPROVED"].includes(registrationStatus(registration)) && (
                 <button
                   type="button"
                   onClick={() => setCancelTarget({ type: "cancel", registration })}
@@ -683,8 +667,8 @@ function RegistrationDateRow({
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                       {periodLabel(registration.group.content)}
                     </span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", registration.isApproved ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")}>
-                      {registration.isApproved ? "Đã duyệt" : "Chờ duyệt"}
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", registrationStatusClass(registration))}>
+                      {registrationStatusLabel(registration)}
                     </span>
                   </div>
                 </div>
@@ -692,6 +676,11 @@ function RegistrationDateRow({
               <div className={cn("mt-2 rounded-md px-3 py-2 text-xs leading-5", registration.note ? "bg-amber-50 text-amber-950" : "bg-muted text-muted-foreground")}>
                 {registration.note || "Chưa có nội dung công việc."}
               </div>
+              {registrationStatus(registration) === "CANCELLED" && registration.cancellationReason && (
+                <div className="mt-2 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
+                  <span className="font-semibold">Lý do hủy:</span> {registration.cancellationReason}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -720,15 +709,95 @@ function RegistrationDateRow({
         ) : null}
       </div>
 
-      <ConfirmDialog
-        open={!!cancelTarget}
-        onOpenChange={(open) => !open && setCancelTarget(null)}
-        title={cancelDialogText?.title ?? "Xác nhận hủy"}
-        description={cancelDialogText?.description}
-        confirmLabel={cancelDialogText?.confirmLabel ?? "Xác nhận"}
-        loading={cancelRegistration.isPending}
-        onConfirm={confirmCancel}
-      />
+      <Dialog
+        open={cancelTarget?.type === "reject"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+            setReviewNote("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Duyệt/Không duyệt đăng ký</DialogTitle>
+            <DialogDescription>
+              {cancelTarget?.type === "reject"
+                ? `Có thể thay đổi nội dung công việc của ${cancelTarget.registration.user.name} trước khi quyết định.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor={`review-note-${date}`}>Thay đổi nội dung công việc</Label>
+            <Textarea
+              id={`review-note-${date}`}
+              value={reviewNote}
+              onChange={(event) => setReviewNote(event.target.value)}
+              placeholder="Nhập nội dung công việc muốn phân công..."
+              rows={5}
+              autoFocus
+            />
+            {cancelTarget?.type === "reject" && (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Không duyệt lần đầu: người đăng ký được gửi lại một lần. Không duyệt lần hai: không thể đăng ký lại ngày này.
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={approve.isPending || cancelRegistration.isPending}>Đóng</Button>
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                onClick={confirmCancel}
+                disabled={approve.isPending || cancelRegistration.isPending}
+              >
+                {cancelRegistration.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Không duyệt
+              </Button>
+              <Button
+                onClick={() => cancelTarget?.type === "reject" && approveFromReview(cancelTarget.registration)}
+                disabled={approve.isPending || cancelRegistration.isPending}
+              >
+                {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Duyệt
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cancelTarget?.type === "cancel"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+            setCancelReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Hủy đăng ký đi hành chính</DialogTitle>
+            <DialogDescription>
+              {cancelTarget?.type === "cancel" ? `Xác nhận hủy đăng ký của ${cancelTarget.registration.user.name}. Có thể ghi thêm lý do nếu cần.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor={`cancel-reason-${date}`}>Lý do hủy (nếu có)</Label>
+            <Textarea
+              id={`cancel-reason-${date}`}
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="Nhập lý do hủy đăng ký nếu có..."
+              rows={4}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelRegistration.isPending}>Không hủy</Button>
+            <Button variant="destructive" onClick={confirmCancel} disabled={cancelRegistration.isPending}>
+              {cancelRegistration.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận hủy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
