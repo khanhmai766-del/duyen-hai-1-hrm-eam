@@ -154,7 +154,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = bbntDoFileName(d.items.map((item) => item.deviceName), issuedAt);
-  const key = `public/tickets/${d.fileBaseName}/${fileName}`;
+  // Gom theo loại biên bản trong public/Thay The Vat Tu/ — xem chú thích ở lib/bbnt-doc.ts.
+  const key = `public/Thay The Vat Tu/BBNT D-Office/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };
 }

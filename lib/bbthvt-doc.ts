@@ -78,7 +78,8 @@ export async function generateBbthvtDoc(d: BbthvtData): Promise<{ key: string; u
 
   const issuedAt = d.issuedAt ?? new Date();
   const fileName = bbthvtFileName(d.items.map((item) => item.deviceName), issuedAt);
-  const key = `public/tickets/${d.fileBaseName}/${fileName}`;
+  // Gom theo loại biên bản trong public/Thay The Vat Tu/ — xem chú thích ở lib/bbnt-doc.ts.
+  const key = `public/Thay The Vat Tu/BBTHVT/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };
 }

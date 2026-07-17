@@ -8,7 +8,7 @@ import { bbntHandwrittenFileName, vietnamDocumentDate } from "@/lib/material-doc
 /* ============================================================
    lib/bbnt-doc.ts
    Điền dữ liệu phiếu vào mẫu templates/bbnt-template.docx (15 token),
-   upload MinIO (public/tickets/) và trả về URL tải file Word.
+   upload MinIO (public/Thay The Vat Tu/BBNT ky tay/) và trả về URL tải file Word.
    Cần: npm install docxtemplater pizzip
    ============================================================ */
 
@@ -91,8 +91,9 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = bbntHandwrittenFileName(d.items.map((item) => item.deviceName), today);
-  // Thư mục kỹ thuật giữ file của từng phiếu tách biệt; tên cuối là tên người dùng tải về.
-  const key = `public/tickets/${d.fileBaseName}/${fileName}`;
+  // Gom theo loại biên bản trong public/Thay The Vat Tu/ (duyệt MinIO dễ);
+  // tiền tố định danh phiếu chống trùng tên, tên tải về vẫn là fileName gọn (originalName).
+  const key = `public/Thay The Vat Tu/BBNT ky tay/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({
     key,
     body: buf,
