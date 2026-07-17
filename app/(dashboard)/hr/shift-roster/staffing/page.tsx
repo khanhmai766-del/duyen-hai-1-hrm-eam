@@ -304,7 +304,7 @@ export default function ShiftStaffingPage() {
       const hasCurrentRotation = rotations.some(
         (item) => item.positionConfigId === position.id && effective(item),
       );
-      (hasShiftAssignment || hasCurrentRotation ? shift : administrative).push(
+      (position.id || hasShiftAssignment || hasCurrentRotation ? shift : administrative).push(
         position,
       );
     }
