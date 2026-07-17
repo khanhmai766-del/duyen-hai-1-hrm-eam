@@ -1,5 +1,10 @@
 import * as XLSX from "xlsx";
-import { GROUPING_CATEGORIES, type GroupedErpMaterialInput, type GroupingCategory } from "@/hooks/useOilGrouping";
+import {
+  GROUPING_CATEGORIES,
+  type ErpStockUpdateInput,
+  type GroupedErpMaterialInput,
+  type GroupingCategory,
+} from "@/hooks/useOilGrouping";
 import { normalizeText } from "@/lib/nav";
 import { parseErpNumber } from "@/lib/parse-number";
 
@@ -48,6 +53,30 @@ export function parseErpImportRows(
     .filter((row) => row.code || row.name || row.unit);
 }
 
+/** Đọc file cập nhật tồn kho: chỉ lấy cột Mã và Số liệu ERP từ mẫu import chuẩn. */
+export function parseErpStockUpdateRows(
+  rows: Array<Array<string | number | null>>
+): ErpStockUpdateInput[] {
+  const normalizedRows = rows.map((row) => row.map((cell) => normalizeText(String(cell ?? ""))));
+  const stockHeaders = ["so lieu erp", "erp", "erp stock", "solieu erp", "ton kho", "ton erp"];
+  const headerIndex = normalizedRows.findIndex((row) =>
+    row.some((cell) => ["ma", "ma vat tu", "code"].includes(cell)) && row.some((cell) => stockHeaders.includes(cell))
+  );
+  if (headerIndex < 0) return [];
+
+  const header = normalizedRows[headerIndex];
+  const codeIndex = header.findIndex((cell) => ["ma", "ma vat tu", "code"].includes(cell));
+  const stockIndex = header.findIndex((cell) => stockHeaders.includes(cell));
+
+  return rows
+    .slice(headerIndex + 1)
+    .map((row) => ({
+      code: String(row[codeIndex] ?? "").trim(),
+      erpStock: row[stockIndex] ?? null,
+    }))
+    .filter((row) => row.code || String(row.erpStock ?? "").trim());
+}
+
 export function downloadErpImportTemplate(sampleCategory: GroupingCategory = GROUPING_CATEGORIES[0]) {
   const aoa = [
     ["DANH MỤC VẬT TƯ ERP"],
@@ -74,4 +103,12 @@ export async function readErpImportFile(
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Array<string | number | null>>(sheet, { header: 1, defval: "" });
   return parseErpImportRows(rows, defaultCategory);
+}
+
+export async function readErpStockUpdateFile(file: File): Promise<ErpStockUpdateInput[]> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Array<string | number | null>>(sheet, { header: 1, defval: "" });
+  return parseErpStockUpdateRows(rows);
 }

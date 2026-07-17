@@ -175,7 +175,9 @@ export async function POST(req: NextRequest) {
         update: {
           hours: option.hours,
           isApproved: autoApproveSelfCheckIn,
-          ...(hasNote ? { note: registerNote, isRegistered: true } : { note: cleanWorkNote, isRegistered: false }),
+          ...(hasNote
+            ? { note: registerNote, isRegistered: true, registrationStatus: autoApproveSelfCheckIn ? "APPROVED" : "PENDING", cancellationReason: null }
+            : { note: cleanWorkNote, isRegistered: false }),
         },
         create: {
           groupId: group.id,
@@ -183,6 +185,7 @@ export async function POST(req: NextRequest) {
           hours: option.hours,
           isApproved: autoApproveSelfCheckIn,
           isRegistered: hasNote,
+          registrationStatus: hasNote && autoApproveSelfCheckIn ? "APPROVED" : "PENDING",
           note: hasNote ? registerNote : cleanWorkNote,
         },
       });
@@ -207,6 +210,45 @@ export async function POST(req: NextRequest) {
     });
     await audit(user.id, "HC_CHECKIN", "HcCheckIn", checkIn.id, `Điểm danh hành chính (${checkIn.hours}h)`);
     return ok(checkIn);
+  });
+}
+
+/** PATCH — giữ bản ghi đăng ký và cập nhật trạng thái Không duyệt / Đã hủy. */
+export async function PATCH(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
+    const body = await req.json();
+    const checkInId = String(body.checkInId ?? "").trim();
+    const action = body.action as "REJECT" | "CANCEL" | undefined;
+    const reason = String(body.reason ?? "").trim();
+    if (!checkInId) return fail("Thiếu đăng ký cần xử lý");
+    if (action !== "REJECT" && action !== "CANCEL") return fail("Trạng thái xử lý không hợp lệ");
+
+    const current = await prisma.hcCheckIn.findUnique({
+      where: { id: checkInId },
+      include: { user: { select: { name: true } } },
+    });
+    if (!current?.isRegistered) return fail("Không tìm thấy đăng ký đi hành chính", 404);
+    if (current.registrationStatus === "REJECTED" || current.registrationStatus === "CANCELLED") {
+      return fail("Đăng ký này đã được xử lý trước đó");
+    }
+
+    const registrationStatus = action === "REJECT" ? "REJECTED" : "CANCELLED";
+    const updated = await prisma.hcCheckIn.update({
+      where: { id: checkInId },
+      data: { isApproved: false, registrationStatus, cancellationReason: action === "CANCEL" ? reason || null : null },
+    });
+    await audit(
+      user.id,
+      action === "REJECT" ? "HC_REGISTER_REJECT" : "HC_REGISTER_CANCEL",
+      "HcCheckIn",
+      checkInId,
+      action === "REJECT"
+        ? `Không duyệt đăng ký đi hành chính của ${current.user.name}`
+        : `Hủy đăng ký đi hành chính của ${current.user.name}${reason ? `. Lý do: ${reason}` : ""}`
+    );
+    return ok(updated);
   });
 }
 
@@ -269,13 +311,17 @@ export async function PUT(req: NextRequest) {
       return ok({ updated: res.count });
     }
     if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
+    const actionableWhere = {
+      ...where,
+      NOT: { isRegistered: true, registrationStatus: { in: ["REJECTED", "CANCELLED"] } },
+    };
     const approvedMembers = await prisma.hcCheckIn.findMany({
-      where: { ...where, isApproved: false },
+      where: { ...actionableWhere, isApproved: false },
       select: { isRegistered: true, user: { select: { name: true } } },
     });
     const res = await prisma.hcCheckIn.updateMany({
-      where,
-      data: { isApproved: true, ...(note !== undefined ? { note: cleanNote || null } : {}) },
+      where: actionableWhere,
+      data: { isApproved: true, registrationStatus: "APPROVED", cancellationReason: null, ...(note !== undefined ? { note: cleanNote || null } : {}) },
     });
     const registeredNames = approvedMembers.filter((member) => member.isRegistered).map((member) => member.user.name);
     const checkInNames = approvedMembers.filter((member) => !member.isRegistered).map((member) => member.user.name);

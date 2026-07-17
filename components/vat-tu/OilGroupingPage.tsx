@@ -10,7 +10,7 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, Search, Trash2, Upload, X, type LucideIcon } from "lucide-react";
+import { CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -27,6 +27,7 @@ import {
   useCreateGroupedErpMaterial,
   useUpdateGroupedErpStock,
   useImportGroupedErpMaterials,
+  useUpdateErpStocksFromFile,
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
@@ -37,7 +38,7 @@ import {
   type OilConfirmInput,
   type GroupedErpMaterialInput,
 } from "@/hooks/useOilGrouping";
-import { downloadErpImportTemplate, readErpImportFile } from "@/lib/erp-import";
+import { downloadErpImportTemplate, readErpImportFile, readErpStockUpdateFile } from "@/lib/erp-import";
 import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 import { normalizeText } from "@/lib/nav";
 
@@ -107,7 +108,9 @@ function CategoryIcon({ category, className }: { category: GroupingCategory; cla
 
 function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; category: GroupingCategory }) {
   const importInputRef = useRef<HTMLInputElement>(null);
+  const stockInputRef = useRef<HTMLInputElement>(null);
   const importErp = useImportGroupedErpMaterials();
+  const updateStocks = useUpdateErpStocksFromFile();
   const createErp = useCreateGroupedErpMaterial();
   const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
   const [formError, setFormError] = useState("");
@@ -144,6 +147,29 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
       if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
     } catch (error) {
       toast.error((error as Error).message || "Không nhập được file Excel");
+    }
+  }
+
+  async function updateStockFromExcel(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+      toast.error("Chỉ chấp nhận file Excel .xlsx, .xls hoặc .csv");
+      return;
+    }
+
+    try {
+      const rows = await readErpStockUpdateFile(file);
+      if (!rows.length) {
+        toast.error("Không tìm thấy dữ liệu. File cần có cột Mã và Số liệu ERP.");
+        return;
+      }
+      const result = await updateStocks.mutateAsync(rows);
+      toast.success(`Đã cập nhật tồn kho ${result.updated} mã; bỏ qua ${result.notFound} mã không có trong hệ thống${result.skipped ? ` và ${result.skipped} dòng không hợp lệ` : ""}.`);
+      if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
+    } catch (error) {
+      toast.error((error as Error).message || "Không cập nhật được tồn kho ERP");
     }
   }
 
@@ -192,6 +218,10 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
         {importErp.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Nhập Excel
       </Button>
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importExcel} />
+      <Button type="button" variant="outline" size="sm" onClick={() => stockInputRef.current?.click()} disabled={updateStocks.isPending}>
+        {updateStocks.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Cập nhật tồn kho
+      </Button>
+      <input ref={stockInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={updateStockFromExcel} />
       <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
         <Plus className="h-4 w-4" /> Thêm vật tư ERP
       </Button>
