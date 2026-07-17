@@ -935,7 +935,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     .filter(Boolean)))
     .join(", ");
   const handwrittenBbntUrl = t.bbktDocUrl ? bbntDownloadUrl(t.bbktDocUrl, replacementDeviceName) : null;
-  const exportedDocumentCount = [t.docUrl, handwrittenBbntUrl, t.recoveryDocUrl].filter(Boolean).length;
+  const exportedDocumentCount = [t.proposalDocUrl, t.docUrl, handwrittenBbntUrl, t.recoveryDocUrl].filter(Boolean).length;
   const activityLogs = [
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -1059,6 +1059,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   <span className="document-downloads-count">{exportedDocumentCount} tệp</span>
                 </div>
                 <div className="document-download-links">
+                  {t.proposalDocUrl && <a className="pdf" href={t.proposalDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>}
                   {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu Ký Tay</a>}
                   {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu D-Office</a>}
                   {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
@@ -1540,6 +1541,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const isReceiverPhase = t.status === "CHO_XAC_NHAN_PHAT";
     const asksForReceiver = isReceiverPhase && t.type !== "UNG";
     const asksForErpCode = !isReceiverPhase && t.type === "DE_XUAT";
+    // Đề xuất: pha 1 xuất Phiếu ĐXVT (QLVT.12) rồi mới mở khóa nhập số phiếu (pha 2).
+    const proposalExported = Boolean(t.proposalDocUrl);
+    const proposalLocked = asksForErpCode && !proposalExported;
     const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
     const statsCodeOptions = selectedMaterialOption?.erpCodes?.length
       ? selectedMaterialOption.erpCodes
@@ -1553,14 +1557,21 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <>
               {asksForErpCode && (
                 <label className="field">Mã vật tư *
-                  <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+                  <select value={erpCode} disabled={proposalExported} onChange={(e) => setErpCode(e.target.value)}>
                     <option value="">— Chọn mã vật tư ERP —</option>
                     {statsCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
                   </select>
                 </label>
               )}
               <label className="field">Số phiếu ĐXVT *
-                <input name={`proposal-number-${t.id}`} autoComplete="off" placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
+                <input
+                  name={`proposal-number-${t.id}`}
+                  autoComplete="off"
+                  placeholder={proposalLocked ? "Xuất Phiếu ĐXVT trước khi nhập số" : "Số phiếu ĐXVT (vd: ĐXVT-051)"}
+                  disabled={proposalLocked}
+                  value={proposalNumberInput}
+                  onChange={(e) => setProposalNumberInput(e.target.value)}
+                />
               </label>
             </>
           ) : asksForReceiver ? (
@@ -1576,20 +1587,36 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {asksForErpCode && selectedStatsErp && (
           <div className="note"><Package size={14} /><span><b>Tên vật tư ERP:</b> {selectedStatsErp.name} · <b>Số lượng ERP:</b> {selectedStatsErp.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</span></div>
         )}
-        <button
-          className="btn primary big"
-          disabled={(!isReceiverPhase && (!proposalNumberInput.trim() || (asksForErpCode && !erpCode))) || act.isPending}
-          onClick={() => run(
-            asksForReceiver
-              ? { action: "stats", proposalNumber: t.proposalNumber, proposalReceiverName: proposalReceiverName.trim() }
-              : isReceiverPhase
-                ? { action: "stats", proposalNumber: t.proposalNumber }
-              : { action: "stats", proposalNumber: proposalNumberInput.trim(), ...(asksForErpCode ? { erpCode } : {}) },
-            asksForReceiver ? "Đã xác nhận VHV nhận phiếu ĐXVT" : isReceiverPhase ? "Đã xác nhận trả phiếu" : "Đã xác nhận số phiếu ĐXVT"
-          )}
-        >
-          <Check size={15} /> {asksForReceiver ? "Xác nhận VHV nhận phiếu ĐXVT" : isReceiverPhase ? "Xác nhận đã trả phiếu" : "Xác nhận số phiếu ĐXVT"}
-        </button>
+        {proposalLocked && (
+          <div className="note"><FileText size={15} /><span>Bấm xác nhận để xuất <b>Phiếu ĐXVT (QLVT.12)</b> theo mã vật tư đã chọn — sau đó ô số phiếu sẽ được mở khóa.</span></div>
+        )}
+        {asksForErpCode && proposalExported && (
+          <div className="note"><FileText size={15} /><span>Đã xuất Phiếu ĐXVT — <a className="pdf-inline" href={t.proposalDocUrl!} target="_blank" rel="noreferrer">tải xuống</a>. Nhập số phiếu ĐXVT để tiếp tục.</span></div>
+        )}
+        {proposalLocked ? (
+          <button
+            className="btn primary big"
+            disabled={!erpCode || act.isPending}
+            onClick={() => run({ action: "statsExportProposal", erpCode }, "Đã xuất Phiếu ĐXVT")}
+          >
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận & xuất Phiếu ĐXVT
+          </button>
+        ) : (
+          <button
+            className="btn primary big"
+            disabled={(!isReceiverPhase && !proposalNumberInput.trim()) || act.isPending}
+            onClick={() => run(
+              asksForReceiver
+                ? { action: "stats", proposalNumber: t.proposalNumber, proposalReceiverName: proposalReceiverName.trim() }
+                : isReceiverPhase
+                  ? { action: "stats", proposalNumber: t.proposalNumber }
+                : { action: "stats", proposalNumber: proposalNumberInput.trim() },
+              asksForReceiver ? "Đã xác nhận VHV nhận phiếu ĐXVT" : isReceiverPhase ? "Đã xác nhận trả phiếu" : "Đã xác nhận số phiếu ĐXVT"
+            )}
+          >
+            <Check size={15} /> {asksForReceiver ? "Xác nhận VHV nhận phiếu ĐXVT" : isReceiverPhase ? "Xác nhận đã trả phiếu" : "Xác nhận số phiếu ĐXVT"}
+          </button>
+        )}
       </div>
     );
   }
@@ -2087,6 +2114,7 @@ const CSS = `
 .item.short{border-color:${C.bad};background:${C.badBg};}
 .done-note{display:flex;gap:7px;align-items:flex-start;background:${C.okBg};color:${C.ok};border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;}
 .pdf{display:inline-flex;align-items:center;gap:7px;border:1.5px solid ${C.navy};color:${C.navy};background:#fff;border-radius:10px;padding:9px 13px;font-weight:600;font-size:13px;cursor:pointer;margin-bottom:12px;text-decoration:none;}
+.pdf-inline{color:${C.navy};font-weight:700;text-decoration:underline;}
 .ticket-note-row{display:flex;align-items:center;gap:6px 26px;min-width:0;margin-bottom:8px;flex-wrap:wrap;}
 .ticket-note-row .meta-line{display:flex;align-items:baseline;gap:4px;min-width:0;margin:0;}
 .ticket-note-row .repair-request-meta{flex:0 1 auto;}

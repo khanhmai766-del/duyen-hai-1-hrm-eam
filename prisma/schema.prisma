@@ -861,6 +861,7 @@ model MaterialTicket {
   proposalNote   String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
   pctNumber      String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
   proposalNumber String? // số phiếu đề xuất vật tư (Thống kê nhập)
+  proposalDocUrl String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
   proposalIssuedAt DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
   proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
   deliveryNoteNumber String? // số phiếu giao hàng

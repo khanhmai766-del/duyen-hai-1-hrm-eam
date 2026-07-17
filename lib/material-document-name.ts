@@ -31,6 +31,13 @@ export function bbntDoFileName(deviceNames: string[], issuedAt = new Date()) {
   return `BBNT DO ${safeFilePart(uniqueDeviceNames)}_${day}${month}${year.slice(-2)}.docx`;
 }
 
+/** Tên file Phiếu đề xuất vật tư (QLVT.12): "Phieu DXVT <tên thiết bị>_ddmmyy". */
+export function dxvtFileName(deviceNames: string[], issuedAt = new Date()) {
+  const { day, month, year } = vietnamDateParts(issuedAt);
+  const uniqueDeviceNames = [...new Set(deviceNames.map((name) => name.trim()).filter(Boolean))].join(", ");
+  return `Phieu DXVT ${safeFilePart(uniqueDeviceNames)}_${day}${month}${year.slice(-2)}.docx`;
+}
+
 /** Tên file Biên bản vật tư thu hồi: "BBTHVT <tên thiết bị>_ddmmyy" — ddmmyy theo ngày bổ sung của BBNT ký tay. */
 export function bbthvtFileName(deviceNames: string[], issuedAt = new Date()) {
   const { day, month, year } = vietnamDateParts(issuedAt);

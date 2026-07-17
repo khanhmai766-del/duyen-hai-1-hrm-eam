@@ -5,6 +5,7 @@ import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/mat
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
+import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
 
@@ -180,6 +181,43 @@ async function assignRecoveryDocNo(t: FullTicket) {
     data: { recoveryDocNo: seq.value, recoveryDocNoYear: year },
   });
   return seq.value;
+}
+
+/**
+ * Xuất Phiếu ĐXVT (QLVT.12 — Giấy đề nghị xuất vật tư thiết bị SCTX) tại bước
+ * Thống Kê xác nhận ĐXVT, với mã/tên ERP vừa đối chiếu. Chữ ký: Quản đốc +
+ * Thống kê đang thao tác (Người đề nghị).
+ */
+async function buildProposalDocument(
+  t: FullTicket,
+  statsUser: { id: string; name?: string | null },
+  itemOverride: { materialCode: string; materialName: string }
+) {
+  const signatureSelect = { name: true, position: true, signatureKey: true, signatureUrl: true } as const;
+  const [statsUserRow, activeUsers] = await Promise.all([
+    prisma.user.findUnique({ where: { id: statsUser.id }, select: signatureSelect }),
+    prisma.user.findMany({ where: { isActive: true }, select: signatureSelect }),
+  ]);
+  const quanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
+  const [chuKyThongKe, chuKyQuanDoc] = await Promise.all([
+    resolveSignatureBuffer(statsUserRow),
+    resolveSignatureBuffer(quanDoc),
+  ]);
+  return generateDxvtDoc({
+    fileBaseName: materialTicketFileBase(t),
+    soBBKT: t.bbktNumber,
+    quanDocName: quanDoc?.name ?? null,
+    tenThongKe: statsUserRow?.name ?? statsUser.name ?? null,
+    items: t.items.map((it, index) => ({
+      deviceName: it.deviceNameManual || it.device?.name || "",
+      materialCode: (index === 0 ? itemOverride.materialCode : undefined) || it.erpCode || it.material.code,
+      materialName: (index === 0 ? itemOverride.materialName : undefined) || it.erpName || it.material.name,
+      materialUnit: it.material.unit,
+      quantity: it.quantity,
+    })),
+    chuKyQuanDoc,
+    chuKyThongKe,
+  });
 }
 
 /** Xuất Biên bản vật tư thu hồi (QLVT.06) đã điền dữ liệu — thay file trắng cũ. */
@@ -690,10 +728,40 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B2 — Nhập số phiếu trước, sau đó xác nhận đã giao/trả phiếu.
     // Luồng Ứng không yêu cầu tên VHV nhận phiếu.
+    // PHA 1 của bước Thống Kê xác nhận ĐXVT (Đề xuất): đối chiếu mã ERP và xuất
+    // Phiếu ĐXVT (QLVT.12). Số phiếu ĐXVT bị khóa cho tới khi phiếu được xuất.
+    if (action === "statsExportProposal") {
+      if (t.type !== "DE_XUAT" || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
+        return fail("Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const erpCode = String(body.erpCode || item.erpCode || "").trim();
+      if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
+      const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+      if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+      const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
+      if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
+      const proposalDoc = await buildProposalDocument(t, user, { materialCode: erpCode, materialName: erpMaterial.name });
+      const up = await prisma.$transaction(async (tx) => {
+        await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: { proposalDocUrl: proposalDoc.url },
+          include: ITEM_INCLUDE,
+        });
+      });
+      await audit(user.id, "MT_STATS_EXPORT_PROPOSAL", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất Phiếu ĐXVT (QLVT.12)`);
+      return ok(up);
+    }
+
     if (action === "stats") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
         return fail("Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      // PHA 2 (Đề xuất): chỉ nhập được số phiếu ĐXVT sau khi đã xuất Phiếu ĐXVT.
+      if (t.type === "DE_XUAT" && t.status !== "CHO_XAC_NHAN_PHAT" && !t.proposalDocUrl)
+        return fail("Vui lòng xác nhận mã vật tư và xuất Phiếu ĐXVT trước khi nhập số phiếu");
       const num = String(body.proposalNumber || t.proposalNumber || "").trim();
       const proposalReceiverName = String(body.proposalReceiverName || t.proposalReceiverName || "").trim();
       if (!num) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
@@ -701,7 +769,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.status !== "CHO_XAC_NHAN_PHAT") {
         const item = t.items[0];
         if (!item) return fail("Phiếu chưa có vật tư");
-        const erpCode = String(body.erpCode || "").trim();
+        // Mã ERP đã đóng băng khi xuất Phiếu ĐXVT (pha 1) — pha 2 không cần gửi lại.
+        const erpCode = String(body.erpCode || item.erpCode || "").trim();
         let erpName: string | null = null;
         if (t.type === "DE_XUAT") {
           if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
