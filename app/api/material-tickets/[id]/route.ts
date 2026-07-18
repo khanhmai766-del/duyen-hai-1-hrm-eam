@@ -815,12 +815,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B2 — Nhập số phiếu trước, sau đó xác nhận đã giao/trả phiếu.
     // Luồng Ứng không yêu cầu tên VHV nhận phiếu.
-    // PHA 1 của bước Thống Kê xác nhận ĐXVT (Đề xuất): đối chiếu mã ERP và xuất
+    // PHA 1 của bước Thống Kê xác nhận ĐXVT (Đề xuất/Ứng): đối chiếu mã ERP và xuất
     // Phiếu ĐXVT (QLVT.12). Số phiếu ĐXVT bị khóa cho tới khi phiếu được xuất.
     if (action === "statsExportProposal") {
-      if (t.type !== "DE_XUAT" || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
+      const canExportProposal =
+        (t.type === "DE_XUAT" && ["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO"].includes(t.status)) ||
+        (t.type === "UNG" && t.status === "NHAN_VAT_TU");
+      if (!canExportProposal) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
         return fail("Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      if (t.proposalDocUrl) return fail("Phiếu ĐXVT đã được xuất; mã vật tư đã được khóa");
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const erpCode = String(body.erpCode || item.erpCode || "").trim();
@@ -912,6 +916,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail(t.type === "UNG" ? "Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)" : "Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
+      if (t.type === "UNG" && !t.proposalDocUrl)
+        return fail("Vui lòng chọn mã vật tư và xác nhận xuất Phiếu ĐXVT trước khi nhập số phiếu");
       const receivedMethod = String(body.deliveryNoteNumber || body.receivedMethod || "").trim();
       const receiptSource = t.type === "UNG" ? normalizeReceiptSource(body.receiptSource) : "ERP";
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
@@ -924,7 +930,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
-      const erpCode = String(body.erpCode || item.erpCode || "").trim();
+      const requestedErpCode = String(body.erpCode || "").trim();
+      if (t.type === "UNG" && requestedErpCode && requestedErpCode !== item.erpCode)
+        return fail("Mã vật tư không khớp với Phiếu ĐXVT đã xuất");
+      const erpCode = String(t.type === "UNG" ? item.erpCode : (requestedErpCode || item.erpCode) || "").trim();
       if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
       const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
       if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");

@@ -1678,6 +1678,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("receive")) {
     const unit = t.items[0]?.material.unit ?? "";
     const isAdvance = t.type === "UNG";
+    const advanceProposalExported = Boolean(t.proposalDocUrl);
+    const advanceDocumentLocked = isAdvance && !advanceProposalExported;
     const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
     const receiveCodeOptions = selectedMaterialOption?.erpCodes?.length
       ? selectedMaterialOption.erpCodes
@@ -1698,7 +1700,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <div className={`receive-field-grid ${isAdvance ? "advance-receive-fields" : ""}`}>
           {isAdvance && (
             <label className="field">Mã vật tư *
-              <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+              <select value={erpCode} disabled={advanceProposalExported} onChange={(e) => setErpCode(e.target.value)}>
                 <option value="">— Chọn mã vật tư ERP —</option>
                 {receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}
               </select>
@@ -1709,11 +1711,21 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           </label>
           {isAdvance && (
             <label className="field">Số phiếu ĐXVT *
-              <input placeholder="Số phiếu ĐXVT (vd: ĐXVT-051)" value={proposalNumberInput} onChange={(e) => setProposalNumberInput(e.target.value)} />
+              <input
+                placeholder={advanceDocumentLocked ? "Xuất Phiếu ĐXVT trước khi nhập số" : "Số phiếu ĐXVT (vd: ĐXVT-051)"}
+                disabled={advanceDocumentLocked}
+                value={proposalNumberInput}
+                onChange={(e) => setProposalNumberInput(e.target.value)}
+              />
             </label>
           )}
           <label className="field">Số phiếu giao hàng *
-            <input placeholder="Nhập số phiếu giao hàng" value={method} onChange={(e) => setMethod(e.target.value)} />
+            <input
+              placeholder={advanceDocumentLocked ? "Xuất Phiếu ĐXVT trước khi nhập số" : "Nhập số phiếu giao hàng"}
+              disabled={advanceDocumentLocked}
+              value={method}
+              onChange={(e) => setMethod(e.target.value)}
+            />
           </label>
           {!isAdvance && (
             <label className="field">Số phiếu yêu cầu sửa chữa *
@@ -1722,13 +1734,29 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           )}
         </div>
         {isAdvance && selectedReceiveErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedReceiveErp.name}<br/><b>Số lượng ERP:</b> {selectedReceiveErp.erpStock} {unit}</div>}
+        {advanceDocumentLocked && (
+          <div className="note"><FileText size={15} /><span>Chọn mã vật tư rồi xác nhận xuất <b>Phiếu Đề Xuất Vật Tư</b>. Sau khi xuất thành công, ô số phiếu ĐXVT và số phiếu giao hàng sẽ được mở khóa.</span></div>
+        )}
+        {isAdvance && advanceProposalExported && (
+          <div className="note"><FileText size={15} /><span>Đã xuất Phiếu Đề Xuất Vật Tư — <a className="pdf-inline" href={t.proposalDocUrl!} target="_blank" rel="noreferrer">tải xuống</a>. Mã vật tư đã được khóa; có thể nhập số phiếu để tiếp tục.</span></div>
+        )}
         {!isAdvance && repairRequestConflictsProposal && (
           <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
         )}
-        <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
-          onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT, chuyển Quyết toán" : "Đã xác nhận vật tư lãnh")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận"}
-        </button>
+        {advanceDocumentLocked ? (
+          <button
+            className="btn primary big"
+            disabled={!erpCode || act.isPending}
+            onClick={() => run({ action: "statsExportProposal", erpCode }, "Đã xác nhận và xuất Phiếu Đề Xuất Vật Tư")}
+          >
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Phiếu Đề Xuất Vật Tư
+          </button>
+        ) : (
+          <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
+            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT, chuyển Quyết toán" : "Đã xác nhận vật tư lãnh")}>
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận"}
+          </button>
+        )}
       </div>
     );
   }
