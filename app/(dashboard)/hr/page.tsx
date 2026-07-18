@@ -114,7 +114,7 @@ export default function HrOverviewPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Tổng nhân sự" value={duyenHaiStaffCount} icon={Users} tint="navy" bgCover="/brand/1.jpg" />
-        <Link href={LINKS[0].href} className="block h-full">
+        <Link href={LINKS[0].href} className="group block h-full">
           <HrLinkCard item={LINKS[0]} minHeightClass="min-h-[150px]" />
         </Link>
         <Link href="/hr/admin-attendance" className="block h-full">
@@ -221,13 +221,13 @@ function HrLinkCard({
 function ShiftOverviewCard({ shiftType }: { shiftType: ShiftTypeKey }) {
   const Icon = SHIFT_ICON[shiftType];
   return (
-    <Card className="relative h-full min-h-[132px] overflow-hidden border-0 text-white transition-shadow hover:shadow-md">
+    <Card className="group relative h-full min-h-[132px] overflow-hidden border-0 text-white transition-shadow hover:shadow-md">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={SHIFT_BG[shiftType]}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 hover:scale-105"
+        className="absolute inset-0 h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-105"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
       <CardContent className="relative p-4 [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">

@@ -315,7 +315,7 @@ function DutyPositionCard({
     }
   };
   const attendanceCardClassName =
-    "cursor-pointer transition-colors hover:border-accent/45 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2";
+    "cursor-pointer transition-[background-color,border-color,box-shadow] duration-300 hover:border-accent/45 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2";
 
   // Image variant: full-bleed control screen + legibility gradient + white text.
   if (img) {
@@ -463,7 +463,7 @@ function WeatherCard() {
   }, [backdrops]);
 
   return (
-    <Card className="relative h-full overflow-hidden border-0 text-white">
+    <Card className="group relative h-full overflow-hidden border-0 text-white transition-shadow duration-300 hover:shadow-md">
       {/* Cross-fading location photos */}
       {backdrops.map((src, i) => (
         // eslint-disable-next-line @next/next/no-img-element
@@ -473,7 +473,7 @@ function WeatherCard() {
           alt=""
           aria-hidden
           className={cn(
-            "absolute inset-0 h-full w-full select-none object-cover object-top transition-opacity duration-1000",
+            "absolute inset-0 h-full w-full select-none object-cover object-top transition-[opacity,transform] duration-1000 group-hover:scale-105",
             i === bg ? "opacity-100" : "opacity-0"
           )}
         />
