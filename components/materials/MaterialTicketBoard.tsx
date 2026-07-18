@@ -874,30 +874,45 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 ))}
               </select>
 
-              <label>Số lượng đề xuất *</label>
-              <input
-                type="number"
-                min={1}
-                value={proposedQuantity}
-                onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
-              />
-
-              <label>Thiết bị thay thế *</label>
-              <select value={replacementDeviceSeq} disabled={!selectedMaterialId} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
-                <option value="">{selectedMaterialId ? "— Chọn thiết bị từ Chi tiết điểm thay thế —" : "— Chọn tên vật tư trước —"}</option>
-                {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
-              </select>
+              <div className="edit-field-grid">
+                <div className="field">
+                  <label>Số lượng đề xuất *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={proposedQuantity}
+                    onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </div>
+                <div className="field">
+                  <label>Thiết bị thay thế *</label>
+                  <select value={replacementDeviceSeq} disabled={!selectedMaterialId} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
+                    <option value="">{selectedMaterialId ? "— Chọn thiết bị từ Chi tiết điểm thay thế —" : "— Chọn tên vật tư trước —"}</option>
+                    {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
+                  </select>
+                </div>
+              </div>
               {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
 
-          {["DE_XUAT", "UNG"].includes(t.type) && <>
-            <label>Lý do *</label>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nhập lý do thay thế vật tư" />
-          </>}
-
-          <label>Số biên bản kiểm tra (nếu có)</label>
-          <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
+          {["DE_XUAT", "UNG"].includes(t.type) ? (
+            <div className="edit-field-grid">
+              <div className="field">
+                <label>Lý do *</label>
+                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nhập lý do thay thế vật tư" />
+              </div>
+              <div className="field">
+                <label>Số biên bản kiểm tra (nếu có)</label>
+                <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
+              </div>
+            </div>
+          ) : (
+            <div className="field">
+              <label>Số biên bản kiểm tra (nếu có)</label>
+              <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
+            </div>
+          )}
 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -1127,7 +1142,14 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       recoveryReturned: recoveryRequired && recoveryReturned,
     });
     if (editStep === "accept") Object.assign(payload, { pctNumber, chiHuyName, completionNote });
-    try { await act.mutateAsync(payload); toast.success("Đã chỉnh sửa bước và cập nhật hoạt động"); onClose(); }
+    try {
+      await act.mutateAsync(payload);
+      const hasExportedDocuments = Boolean(t.proposalDocUrl || t.bbktDocUrl || t.docUrl || t.recoveryDocUrl);
+      toast.success(hasExportedDocuments
+        ? "Đã lưu chỉnh sửa và cập nhật biên bản đã xuất"
+        : "Đã chỉnh sửa bước và cập nhật hoạt động");
+      onClose();
+    }
     catch (error) { toast.error(error instanceof Error ? error.message : "Không thể chỉnh sửa bước"); }
   }
 
@@ -2017,6 +2039,7 @@ const CSS = `
 .frm-scroll{min-height:0;overflow-y:auto;padding-bottom:14px;}
 .frm label{font-size:12.5px;font-weight:600;color:${C.navy};}
 .field{display:flex;flex-direction:column;gap:7px;min-width:0;}
+.edit-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
 .bbkt-grid{display:grid;grid-template-columns:minmax(0,1fr) 142px;gap:10px;align-items:end;}
 .qty-field input{text-align:center;font-weight:800;color:${C.navy};}
 .frm input,.frm select,.act input,.act select,.act textarea,.frm-item select,.frm-item input{border:1.5px solid ${C.line};border-radius:10px;padding:10px 12px;font-size:13px;outline:0;width:100%;background:#fff;}
@@ -2165,13 +2188,13 @@ const CSS = `
 .use-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
-.use-recovery-toggle-row{display:grid;grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr);gap:12px;align-items:stretch;min-width:0;}
+.use-recovery-toggle-row{display:grid;grid-template-columns:minmax(200px,.45fr) minmax(0,1.55fr);gap:10px;align-items:stretch;min-width:0;}
 .use-recovery-toggle-row .recovery-toggle-field{min-width:0;margin:0!important;}
 .use-quantity-hint{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:3px;min-width:0;margin:0!important;padding-top:17px;font-size:10px;line-height:1.35;letter-spacing:-.012em;}
 .use-quantity-hint>span{display:block;max-width:100%;white-space:nowrap;}
 .use-quantity-received{color:${C.soft};}
 .use-quantity-after{color:${C.soft};}
-.recovery-toggle-field .seg2{height:42px;margin-top:6px;background:#fff;border-color:${C.line};}
+.recovery-toggle-field .seg2{height:42px;margin-top:6px;grid-template-columns:repeat(2,minmax(0,1fr));background:#fff;border-color:${C.line};}
 .recovery-toggle-field .seg2 button{min-height:38px;}
 .recovery-detail-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}
 .recovery-detail-grid .field{min-width:0;margin:0!important;}
@@ -2215,6 +2238,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

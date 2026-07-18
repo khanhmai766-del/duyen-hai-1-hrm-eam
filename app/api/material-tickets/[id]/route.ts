@@ -248,6 +248,81 @@ async function buildRecoveryDocument(
   });
 }
 
+type ExportedDocumentUrls = {
+  proposalDocUrl?: string;
+  docUrl?: string;
+  bbktDocUrl?: string;
+  recoveryDocUrl?: string;
+};
+
+/**
+ * Xuất lại đúng các biên bản đã tồn tại trước khi chỉnh sửa bước.
+ * Không tự sinh thêm loại biên bản của bước chưa hoàn thành.
+ */
+async function refreshExistingDocuments(
+  previous: FullTicket,
+  updated: FullTicket,
+  editor: { id: string; name?: string | null },
+  skip: ReadonlySet<keyof ExportedDocumentUrls> = new Set()
+) {
+  const urls: ExportedDocumentUrls = {};
+  const firstItem = updated.items[0];
+  const itemOverride = firstItem
+    ? {
+        materialCode: firstItem.erpCode || firstItem.material.code,
+        materialName: firstItem.erpName || firstItem.material.name,
+      }
+    : null;
+
+  if (previous.proposalDocUrl && itemOverride && !skip.has("proposalDocUrl")) {
+    const proposal = await buildProposalDocument(
+      updated,
+      {
+        id: updated.statsById || editor.id,
+        name: updated.statsByName || editor.name,
+      },
+      itemOverride
+    );
+    urls.proposalDocUrl = proposal.url;
+  }
+
+  if (previous.bbktDocUrl && !skip.has("bbktDocUrl")) {
+    const bbnt = await generateBbntDoc({
+      fileBaseName: materialTicketFileBase(updated),
+      lyDo: updated.proposalNote,
+      soBBKT: updated.bbktNumber,
+      soPCT: updated.pctNumber,
+      noiDung: updated.completionNote ?? "",
+      tenChiHuy: updated.chiHuyName ?? "",
+      tenTruongCa: updated.completedByName ?? "",
+      tenVHV: updated.proposedByName,
+      chucVuVHV: updated.proposedByPosition,
+      unit: updated.unit,
+      usedByName: updated.materialUserName || updated.usedByName,
+      usedByPosition: updated.usedByPosition,
+      items: toBbntItems(updated),
+    });
+    urls.bbktDocUrl = bbnt.url;
+  }
+
+  if (previous.docUrl && !skip.has("docUrl")) {
+    const bbntDo = await buildBbntDoDocument(updated);
+    urls.docUrl = bbntDo.url;
+  }
+
+  if (previous.recoveryDocUrl && !skip.has("recoveryDocUrl")) {
+    const recovery = await buildRecoveryDocument(updated);
+    urls.recoveryDocUrl = recovery.url;
+  }
+
+  if (Object.keys(urls).length === 0) return updated;
+  return prisma.materialTicket.update({
+    where: { id: updated.id },
+    data: urls,
+    include: ITEM_INCLUDE,
+  });
+}
+
 // GET /api/material-tickets/[id]
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -508,6 +583,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url, ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}) }, include: ITEM_INCLUDE });
       }
       if (!up) return fail("Không thể cập nhật bước");
+      // Bước accept đã tự xuất lại BBNT ký tay và biên bản thu hồi ở trên.
+      // Các file còn lại (nếu đã tồn tại) được tạo lại từ dữ liệu vừa lưu.
+      const skipRefreshedInStep = step === "accept"
+        ? new Set<keyof ExportedDocumentUrls>(["bbktDocUrl", "recoveryDocUrl"])
+        : new Set<keyof ExportedDocumentUrls>();
+      up = await refreshExistingDocuments(t, up, user, skipRefreshedInStep);
       await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${materialTicketReference(t)}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
       return ok(up);
     }
