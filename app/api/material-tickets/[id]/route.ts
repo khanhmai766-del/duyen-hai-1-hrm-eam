@@ -610,6 +610,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!item) return fail("Phiếu chưa có vật tư");
       const quantity = Math.trunc(Number(body.proposedQuantity || item.quantity));
       const bbktNumber = String(body.bbktNumber || "").trim();
+      const proposalNote = String(body.proposalNote || "").trim(); // Lý do — hiện ở "Ghi chú lý do" trên phiếu
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
       const short = t.items.filter((it) => (it.id === item.id ? quantity : it.quantity) > it.material.quantity);
       if (workflowType === "SU_DUNG_HIEN_CO" && short.length > 0) {
@@ -631,6 +632,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             type: workflowType,
             status: workflowType === "UNG" ? "VHV_LANH_VAT_TU" : workflowType === "SU_DUNG_HIEN_CO" ? "NHAN_TU_HIEN_CO" : "CHO_THONG_KE",
             bbktNumber: bbktNumber || null,
+            ...(proposalNote ? { proposalNote } : {}),
             confirmedById: user.id, confirmedByName: user.name ?? "",
             confirmedByPosition: user.position ?? null, confirmedAt: new Date(),
           },

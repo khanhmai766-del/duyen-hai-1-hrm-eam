@@ -1198,6 +1198,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // số ĐXVT vừa nhập có thể bị giữ lại và tự xuất hiện trong ô số biên bản kiểm tra ở bước sau.
   const [proposalNumberInput, setProposalNumberInput] = useState("");
   const [bbktNumberInput, setBbktNumberInput] = useState("");
+  const [confirmReasonInput, setConfirmReasonInput] = useState(t.proposalNote ?? ""); // Lý do — bước Xác nhận yêu cầu (lưu vào proposalNote)
   const [repairRequestNumber, setRepairRequestNumber] = useState(t.repairRequestNumber ?? "");
   const [materialUserNameInput, setMaterialUserNameInput] = useState(t.materialUserName ?? "");
   const [pct, setPct] = useState("");
@@ -1503,15 +1504,18 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </div>
           </div>
         )}
-        <div className="confirm-field-row two-even">
+        <div className="confirm-field-row three-even">
           <label className="field qty-field">Xác nhận lại số lượng {workflowType === "DE_XUAT" ? "đề xuất" : workflowType === "UNG" ? "ứng" : "sử dụng hiện có"} *
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
           </label>
-          <label className="field">Lý do + Biên Bản Kiểm Tra (nếu có)
+          <label className="field">Lý do
+            <input name={`reason-confirm-${t.id}`} autoComplete="off" value={confirmReasonInput} onChange={(e) => setConfirmReasonInput(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất…" />
+          </label>
+          <label className="field">Biên Bản Kiểm Tra (nếu có)
             <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
           </label>
         </div>
-        <button className="btn primary big" disabled={qty <= 0 || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
+        <button className="btn primary big" disabled={qty <= 0 || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, proposalNote: confirmReasonInput.trim() || undefined, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
       </div>;
     }
     const short = t.items.some((it) => it.quantity > it.material.quantity);
@@ -2057,6 +2061,7 @@ const CSS = `
 .vhv-receive-grid .field input{width:100%;margin-top:6px;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
 .confirm-field-row.two-even{grid-template-columns:repeat(2,minmax(0,1fr));}
+.confirm-field-row.three-even{grid-template-columns:minmax(160px,.7fr) minmax(0,1fr) minmax(0,1fr);}
 .confirm-field-row .field{min-width:0;margin:0;}
 .confirm-field-row select,.confirm-field-row input{width:100%;}
 .erp-readonly-panel{overflow:hidden;border:1px solid #d9e3ef;border-radius:11px;background:#f8fbff;box-shadow:inset 3px 0 0 ${C.accent};}
