@@ -1038,14 +1038,14 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           )}
 
           <div className="step-workspace">
-            {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber) && (
-              <div className="ticket-note-row">
-                {t.type !== "UNG" && t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
-                {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
-              </div>
-            )}
             <div className={`completion-overview ${exportedDocumentCount > 0 ? "with-documents" : ""}`}>
               <div className="completion-details">
+                {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber) && (
+                  <div className="ticket-note-row">
+                    {t.type !== "UNG" && t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
+                    {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
+                  </div>
+                )}
                 {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
                 {t.receivedQuantity != null && (
                   <div className="meta-line received-summary">
@@ -1189,13 +1189,19 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           </div>
         </>}
         {(editStep === "use") && <>
-          <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
-          <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
-          <label>Có vật tư thu hồi hay không?</label>
-          <div className="seg2"><button type="button" disabled={!canEdit} className={!recoveryRequired ? "on" : ""} onClick={() => { setRecoveryRequired(false); setRecoveryReturned(false); }}>Không</button><button type="button" disabled={!canEdit} className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
+          <div className="review-use-grid">
+            <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
+            <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
+          </div>
+          <div className="review-use-toggle">
+            <label>Có vật tư thu hồi hay không?</label>
+            <div className="seg2"><button type="button" disabled={!canEdit} className={!recoveryRequired ? "on" : ""} onClick={() => { setRecoveryRequired(false); setRecoveryReturned(false); }}>Không</button><button type="button" disabled={!canEdit} className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
+          </div>
           {recoveryRequired && <>
-            <label>Số lượng vật tư thu hồi ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} /></label>
-            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800"><input className="!h-5 !w-5 shrink-0 cursor-pointer accent-blue-600" type="checkbox" disabled={!canEdit} checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} /><span>Xác nhận đã trả vật tư thu hồi</span></label>
+            <div className="review-recovery-grid">
+              <label>Số lượng vật tư thu hồi ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} /></label>
+              <label className="review-recovery-check"><input type="checkbox" disabled={!canEdit} checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} /><span>Xác nhận đã trả vật tư thu hồi</span></label>
+            </div>
             {!recoveryReturned && <p className="recovery-review-warning"><AlertTriangle size={15} /> Bước này vẫn hiển thị màu vàng cho đến khi xác nhận đã trả vật tư.</p>}
           </>}
         </>}
@@ -1913,7 +1919,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   if (acts.includes("settle")) return (
     <div className="act">
-      <label className="lb">Thống kê — quyết toán vật tư</label>
       <label className={`settlement-check ${recoveryReturned ? "checked" : ""}`}>
         <input
           type="checkbox"
@@ -1954,6 +1959,12 @@ const CSS = `
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}
+.review-use-grid,.review-recovery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.review-use-toggle{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.review-use-toggle .seg2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.review-recovery-check{display:flex;min-height:40px;align-items:center;gap:10px;border:1.5px solid ${C.line};border-radius:10px;background:#fff;padding:9px 12px;color:${C.navy};cursor:pointer;}
+.frm .review-recovery-check input{width:20px;height:20px;flex:0 0 20px;margin:0;padding:0;cursor:pointer;accent-color:${C.accent};}
+.review-recovery-check span{line-height:1.3;}
 .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
 .head-l{display:flex;gap:13px;align-items:center;}
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}
@@ -2266,6 +2277,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
