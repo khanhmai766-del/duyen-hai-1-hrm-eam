@@ -9,9 +9,8 @@
 // Luật 2 ngày + 16h30 hiển thị ở client (lib/admin-day-rules), server chặn thật.
 // =====================================================================
 import * as React from "react";
-import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Archive, Loader2 } from "lucide-react";
+import { Archive, CheckCircle2, Clock3, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHcRegistrations,
@@ -22,13 +21,25 @@ import {
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { addDaysIso, canRegister, deadlineFor, earliestRegistrableDate, isWeekend, isoDateVN } from "@/lib/admin-day-rules";
+import { hcRetentionDescription, hcRetentionStartInput } from "@/lib/hc-retention";
+import { normalizeText } from "@/lib/nav";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 /* ---------------- Buổi ↔ nhóm hành chính sẵn có ---------------- */
-type SessionKey = "SANG" | "CHIEU" | "CA_NGAY";
-const SESSION_LABEL: Record<SessionKey, string> = { SANG: "Sáng", CHIEU: "Chiều", CA_NGAY: "Cả ngày" };
-const SESSION_TO_PERIOD: Record<SessionKey, "MORNING" | "AFTERNOON" | "FULL_DAY"> = {
+type SessionKey = "SANG" | "RA_CA_SANG" | "CHIEU" | "CA_NGAY";
+const SESSION_LABEL: Record<SessionKey, string> = {
+  SANG: "Sáng",
+  RA_CA_SANG: "Ra ca sáng",
+  CHIEU: "Chiều",
+  CA_NGAY: "Cả ngày",
+};
+const SESSION_TO_PERIOD: Record<SessionKey, "MORNING" | "MORNING_OFF" | "AFTERNOON" | "FULL_DAY"> = {
   SANG: "MORNING",
+  RA_CA_SANG: "MORNING_OFF",
   CHIEU: "AFTERNOON",
   CA_NGAY: "FULL_DAY",
 };
@@ -50,6 +61,20 @@ const DAY_NAMES = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join("");
 const hashColor = (s: string) => AVATAR_COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 const fmtVN = (dateIso: string) => new Date(dateIso + "T00:00:00").toLocaleDateString("vi-VN");
+
+function archiveGroups(registrations: HcRegistration[]) {
+  const groups = new Map<string, HcRegistration[]>();
+  for (const registration of registrations) {
+    const date = isoDateVN(new Date(registration.group.date));
+    groups.set(date, [...(groups.get(date) ?? []), registration]);
+  }
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, items]) => ({
+      date,
+      registrations: items.sort((a, b) => a.user.name.localeCompare(b.user.name, "vi")),
+    }));
+}
 
 function Avatar({ reg, size, ring }: { reg: HcRegistration; size: string; ring: string }) {
   return reg.user.avatarUrl ? (
@@ -83,6 +108,10 @@ export default function AdminDayBoard() {
   const [note, setNote] = React.useState("");
   const [cancelFor, setCancelFor] = React.useState<string | null>(null);
   const [cancelReason, setCancelReason] = React.useState("");
+  const [archiveOpen, setArchiveOpen] = React.useState(false);
+  const historyFrom = React.useMemo(() => hcRetentionStartInput(), []);
+  const historyTo = React.useMemo(() => addDaysIso(todayIso, -1), [todayIso]);
+  const history = useHcRegistrations(historyFrom, historyTo);
 
   const regsByDate = React.useMemo(() => {
     const m = new Map<string, HcRegistration[]>();
@@ -130,19 +159,20 @@ export default function AdminDayBoard() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full min-w-0">
       {/* ===== Header — dùng PageHeader chuẩn của site để đồng bộ kiểu chữ ===== */}
       <div className="mb-6">
         <PageHeader
           title="ĐĂNG KÝ ĐI HÀNH CHÍNH"
           description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6), trước 16h30 · ${canApprove ? "Bạn đang có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
         >
-          <Link
-            href="/hr/admin-registration/kho-luu-tru"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card text-sm font-semibold text-muted-foreground hover:bg-muted"
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <Archive className="h-4 w-4" /> Kho lưu trữ
-          </Link>
+          </button>
         </PageHeader>
       </div>
 
@@ -203,7 +233,7 @@ export default function AdminDayBoard() {
           <div className="text-sm font-bold text-ink mb-4">Đăng ký cho ngày {fmtVN(selDate)}</div>
 
           <div className="text-xs font-semibold text-muted-foreground mb-1.5">Buổi</div>
-          <div className="grid grid-cols-3 rounded-lg border border-border overflow-hidden text-sm font-semibold mb-4">
+          <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border text-sm font-semibold sm:grid-cols-4 mb-4">
             {(Object.keys(SESSION_LABEL) as SessionKey[]).map((s) => (
               <button
                 key={s}
@@ -352,6 +382,140 @@ export default function AdminDayBoard() {
           )}
         </div>
       </div>
+
+      <RegistrationArchiveDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        registrations={history.data?.data ?? []}
+        isLoading={history.isLoading}
+        from={historyFrom}
+        to={historyTo}
+      />
     </div>
+  );
+}
+
+function RegistrationArchiveDialog({
+  open,
+  onOpenChange,
+  registrations,
+  isLoading,
+  from,
+  to,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  registrations: HcRegistration[];
+  isLoading: boolean;
+  from: string;
+  to: string;
+}) {
+  const [search, setSearch] = React.useState("");
+  const filtered = React.useMemo(() => {
+    const query = normalizeText(search);
+    if (!query) return registrations;
+    return registrations.filter((registration) => normalizeText(registration.note ?? "").includes(query));
+  }, [registrations, search]);
+  const groups = React.useMemo(() => archiveGroups(filtered), [filtered]);
+  const hasValidRange = from <= to;
+
+  React.useEffect(() => {
+    if (!open) setSearch("");
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl overflow-hidden p-0">
+        <div className="border-b border-border bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-6 pb-4 pt-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="h-5 w-5 text-blue-600" /> Kho lưu trữ đăng ký đi hành chính
+            </DialogTitle>
+            <DialogDescription>
+              {hasValidRange ? `Từ ${fmtVN(from)} đến ${fmtVN(to)}. ` : ""}
+              {hcRetentionDescription()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-96">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm theo nội dung công việc..."
+                className="h-11 border-blue-200 bg-white pl-9 shadow-sm focus-visible:ring-blue-500"
+              />
+            </div>
+            <div className="shrink-0 text-xs font-medium text-muted-foreground">
+              Hiển thị {filtered.length}/{registrations.length} bản ghi
+            </div>
+          </div>
+        </div>
+
+        <div className="max-h-[58vh] overflow-y-auto bg-slate-50/60">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 px-4 py-16 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Đang tải lịch sử đăng ký...
+            </div>
+          ) : !hasValidRange || registrations.length === 0 ? (
+            <div className="px-4 py-16 text-center text-sm text-muted-foreground">Chưa có lịch sử đăng ký trong kỳ lưu trữ.</div>
+          ) : filtered.length === 0 ? (
+            <div className="px-4 py-16 text-center text-sm text-muted-foreground">Không tìm thấy nội dung công việc phù hợp.</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {groups.map((group) => {
+                const allApproved = group.registrations.every((registration) => registration.registrationStatus === "APPROVED" || registration.isApproved);
+                return (
+                  <section key={group.date} className="space-y-3 bg-white px-5 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-ink">{fmtVN(group.date)}</div>
+                        <div className="text-xs text-muted-foreground">{group.registrations.length} nhân sự đăng ký</div>
+                      </div>
+                      <Badge variant={allApproved ? "accent" : "secondary"} className="gap-1.5 rounded-full px-3">
+                        {allApproved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                        {allApproved ? "Đã duyệt" : "Có chờ duyệt"}
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-2 lg:grid-cols-2">
+                      {group.registrations.map((registration) => {
+                        const status = registration.registrationStatus || (registration.isApproved ? "APPROVED" : "PENDING");
+                        const statusUi = STATUS_UI[status as keyof typeof STATUS_UI] ?? STATUS_UI.PENDING;
+                        return (
+                          <article key={registration.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                            <div className="flex min-w-0 items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate font-semibold text-ink">{registration.user.name}</div>
+                                <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                                  {sessionLabelOf(registration)}
+                                </span>
+                                <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-semibold", statusUi.cls)}>{statusUi.label}</span>
+                              </div>
+                            </div>
+                            <div className={cn("mt-2 rounded-lg px-2.5 py-2 text-xs leading-5", registration.note ? "bg-amber-50 text-amber-950" : "bg-muted text-muted-foreground")}>
+                              {registration.note || "Chưa có nội dung công việc."}
+                            </div>
+                            {status === "CANCELLED" && registration.cancellationReason && (
+                              <div className="mt-2 rounded-lg border border-red-100 bg-red-50 px-2.5 py-1.5 text-xs leading-5 text-red-800">
+                                <span className="font-semibold">Lý do hủy:</span> {registration.cancellationReason}
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
