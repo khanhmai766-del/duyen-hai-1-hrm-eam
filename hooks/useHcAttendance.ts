@@ -1,7 +1,15 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import type { HcPeriod } from "@/lib/hc-period";
+
+function invalidateHcAttendance(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ["hc-groups"] });
+  void qc.invalidateQueries({ queryKey: ["hc-activity"] });
+  void qc.invalidateQueries({ queryKey: ["hc-registrations"] });
+  void qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+}
 
 export interface HcMember {
   id: string;
@@ -22,7 +30,7 @@ export interface HcGroup {
   date: string;
   content: string;
   hours: number;
-  period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON" | null;
+  period: HcPeriod | null;
   unit: string | null;
   createdById: string;
   createdBy: { id: string; name: string };
@@ -45,6 +53,7 @@ export function useHcGroups(date: string) {
   return useQuery({
     queryKey: ["hc-groups", date],
     queryFn: () => apiGet<HcGroup[]>(`/api/hc-groups?date=${date}`),
+    refetchInterval: 30_000,
   });
 }
 
@@ -63,22 +72,23 @@ export function useHcRegistrations(from: string, to?: string) {
   return useQuery({
     queryKey: ["hc-registrations", from, to ?? ""],
     queryFn: () => apiGet<HcRegistration[]>(`/api/hc-registrations?${qs.toString()}`),
+    refetchInterval: 30_000,
   });
 }
 
 export function useCreateHcGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { date: string; content: string; hours: number; period?: "FULL_DAY" | "MORNING" | "AFTERNOON" | "MORNING_OFF" }) => apiMutate("/api/hc-groups", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
+    mutationFn: (body: { date: string; content: string; hours: number; period?: HcPeriod }) => apiMutate("/api/hc-groups", "POST", body),
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
 export function useUpdateHcGroup() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { id: string; content?: string; hours?: number; period?: "FULL_DAY" | "MORNING" | "AFTERNOON" | "MORNING_OFF" }) => apiMutate("/api/hc-groups", "PUT", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
+    mutationFn: (body: { id: string; content?: string; hours?: number; period?: HcPeriod }) => apiMutate("/api/hc-groups", "PUT", body),
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -86,7 +96,7 @@ export function useDeleteHcGroup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/hc-groups?id=${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hc-groups"] }),
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -96,15 +106,10 @@ export function useHcCheckIn() {
     mutationFn: (
       body:
         | { groupId: string; hours: number }
-        | { date: string; period: "FULL_DAY" | "MORNING" | "MORNING_OFF" | "AFTERNOON"; note?: string; workNote?: string }
+        | { date: string; period: HcPeriod; note?: string; workNote?: string }
     ) =>
       apiMutate("/api/hc-groups/checkin", "POST", body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hc-groups"] });
-      qc.invalidateQueries({ queryKey: ["hc-activity"] });
-      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
-    },
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -112,11 +117,7 @@ export function useHcRecall() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (groupId: string) => apiMutate(`/api/hc-groups/checkin?groupId=${groupId}`, "DELETE"),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hc-groups"] });
-      qc.invalidateQueries({ queryKey: ["hc-activity"] });
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
-    },
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -124,12 +125,7 @@ export function useHcApprove() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { groupId: string; ids?: string[]; note?: string }) => apiMutate("/api/hc-groups/checkin", "PUT", body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hc-groups"] });
-      qc.invalidateQueries({ queryKey: ["hc-activity"] });
-      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
-    },
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -138,12 +134,7 @@ export function useHcUpdateRegistrationNote() {
   return useMutation({
     mutationFn: (body: { groupId: string; id: string; note: string }) =>
       apiMutate("/api/hc-groups/checkin", "PUT", { groupId: body.groupId, ids: [body.id], note: body.note, action: "NOTE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hc-groups"] });
-      qc.invalidateQueries({ queryKey: ["hc-activity"] });
-      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
-    },
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -152,12 +143,7 @@ export function useHcUpdateWorkNote() {
   return useMutation({
     mutationFn: (body: { groupId: string; id: string; note: string }) =>
       apiMutate("/api/hc-groups/checkin", "PUT", { groupId: body.groupId, ids: [body.id], note: body.note, action: "NOTE" }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hc-groups"] });
-      qc.invalidateQueries({ queryKey: ["hc-activity"] });
-      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
-    },
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }
 
@@ -168,11 +154,6 @@ export function useHcCancelRegistration() {
       typeof input === "string"
         ? apiMutate(`/api/hc-groups/checkin?checkInId=${input}`, "DELETE")
         : apiMutate("/api/hc-groups/checkin", "PATCH", input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hc-groups"] });
-      qc.invalidateQueries({ queryKey: ["hc-activity"] });
-      qc.invalidateQueries({ queryKey: ["hc-registrations"] });
-      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
-    },
+    onSuccess: () => invalidateHcAttendance(qc),
   });
 }

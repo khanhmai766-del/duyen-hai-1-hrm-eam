@@ -5,12 +5,11 @@ import { hcRetentionStartInput } from "@/lib/hc-retention";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { userWithSignedMedia } from "@/lib/s3";
 import { parseDateInput } from "@/lib/utils";
+import { HC_REGISTRATION_CONTENTS } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
 const APPROVE_PERMISSION_ID = "hc-attendance-approve";
-const HC_SELF_CONTENTS = ["Hành chính - Cả ngày", "Hành chính - Buổi sáng", "Hành chính - Ra ca sáng", "Hành chính - Buổi chiều"];
-
 function dayStart(date: string | null) {
   const d = parseDateInput(date);
   d.setHours(0, 0, 0, 0);
@@ -41,7 +40,7 @@ export async function GET(req: NextRequest) {
         ...(canManage ? {} : { userId: user.id }),
         group: {
           date: { gte: from, ...(to ? { lte: to } : {}) },
-          content: { in: HC_SELF_CONTENTS },
+          content: { in: HC_REGISTRATION_CONTENTS },
         },
       },
       include: {

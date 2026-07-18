@@ -2,7 +2,14 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
-import { normalizeHcPeriod } from "@/lib/hc-period";
+import {
+  HC_PERIOD_HOURS,
+  HC_PERIOD_LABEL,
+  HC_PERIODS,
+  HC_REGISTRATION_CONTENTS,
+  hcRegistrationContent,
+  type HcPeriod,
+} from "@/lib/hc-period";
 import { normalizeText } from "@/lib/nav";
 import { dateRange as localDateRange, vietnamNow, vietnamTodayUtcMidnight } from "@/lib/utils";
 import { isWeekend } from "@/lib/admin-day-rules";
@@ -10,13 +17,6 @@ import { isWeekend } from "@/lib/admin-day-rules";
 export const dynamic = "force-dynamic";
 
 const APPROVE_PERMISSION_ID = "hc-attendance-approve";
-const HC_SELF_PERIODS = {
-  FULL_DAY: { label: "Cả ngày", hours: 8 },
-  MORNING: { label: "Buổi sáng", hours: 4 },
-  AFTERNOON: { label: "Buổi chiều", hours: 4 },
-  MORNING_OFF: { label: "Ra ca sáng", hours: 3 },
-} as const;
-const HC_SELF_CONTENTS = Object.values(HC_SELF_PERIODS).map((p) => `Hành chính - ${p.label}`);
 const DEFAULT_REGISTER_NOTE = "Chờ phân công";
 const RECALL_WINDOW_MS = 5 * 60 * 1000;
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
@@ -93,17 +93,17 @@ export async function POST(req: NextRequest) {
       groupId?: string;
       hours?: number;
       date?: string;
-      period?: keyof typeof HC_SELF_PERIODS;
+      period?: HcPeriod;
       note?: string;
       workNote?: string;
     };
 
     if (!groupId) {
       if (!date) return fail("Thiếu ngày");
-      if (!period || !(period in HC_SELF_PERIODS)) return fail("Thiếu buổi");
+      if (!period || !HC_PERIODS.includes(period)) return fail("Thiếu buổi");
 
-      const option = HC_SELF_PERIODS[period];
-      const content = `Hành chính - ${option.label}`;
+      const option = { label: HC_PERIOD_LABEL[period], hours: HC_PERIOD_HOURS[period] };
+      const content = hcRegistrationContent(period);
       const { start, end } = dayRange(date);
       if (Number.isNaN(start.getTime())) return fail("Ngày không hợp lệ");
       const hasNote = Object.prototype.hasOwnProperty.call(body, "note");
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
           isRegistered: true,
           group: {
             date: { gte: start, lte: end },
-            content: { in: HC_SELF_CONTENTS },
+            content: { in: HC_REGISTRATION_CONTENTS },
           },
         },
         include: { group: true },
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
             date: start,
             content,
             hours: option.hours,
-            period: normalizeHcPeriod(period),
+            period,
             createdById: user.id,
           },
         }));
@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
           groupId: { not: group.id },
           group: {
             date: { gte: start, lte: end },
-            content: { in: HC_SELF_CONTENTS },
+            content: { in: HC_REGISTRATION_CONTENTS },
           },
         },
       });

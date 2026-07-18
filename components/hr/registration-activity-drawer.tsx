@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils";
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const LABELS: Record<string, string> = {
   HC_REGISTER: "Đăng ký đi hành chính",
-  HC_REGISTER_UPDATE: "Cập nhật đăng ký",
+  HC_REGISTER_RESUBMIT: "Đăng ký lại đi hành chính",
+  HC_NOTE_UPDATE: "Cập nhật nội dung công việc",
   HC_REGISTER_CANCEL: "Hủy đăng ký",
   HC_REGISTER_APPROVE: "Duyệt đăng ký",
+  HC_REGISTER_REJECT: "Không duyệt đăng ký",
 };
 
 function activityTime(value: string) {

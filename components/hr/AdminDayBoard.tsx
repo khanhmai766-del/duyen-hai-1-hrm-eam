@@ -5,29 +5,35 @@
 // - Danh sách:  GET /api/hc-registrations (useHcRegistrations)
 // - Đăng ký:    POST /api/hc-groups/checkin (useHcCheckIn — chế độ đăng ký)
 // - Duyệt:      PUT /api/hc-groups/checkin (useHcApprove)
-// - Hủy:        PATCH /api/hc-groups/checkin (useHcCancelRegistration)
+// - Duyệt/từ chối/hủy/sửa nội dung: /api/hc-groups/checkin
 // Luật 2 ngày + 16h30 hiển thị ở client (lib/admin-day-rules), server chặn thật.
 // =====================================================================
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Archive, CheckCircle2, Clock3, Loader2, Search } from "lucide-react";
+import { Archive, CheckCircle2, Clock3, History, Loader2, Pencil, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHcRegistrations,
   useHcCheckIn,
   useHcApprove,
   useHcCancelRegistration,
+  useHcActivity,
+  useHcUpdateRegistrationNote,
   type HcRegistration,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { addDaysIso, canRegister, deadlineFor, earliestRegistrableDate, isWeekend, isoDateVN } from "@/lib/admin-day-rules";
 import { hcRetentionDescription, hcRetentionStartInput } from "@/lib/hc-retention";
+import { HC_PERIOD_LABEL, normalizeHcPeriod, type HcPeriod } from "@/lib/hc-period";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { RegistrationActivityDrawer } from "@/components/hr/registration-activity-drawer";
+
+type RegistrationActionMode = "edit" | "reject" | "cancel";
 
 /* ---------------- Buổi ↔ nhóm hành chính sẵn có ---------------- */
 type SessionKey = "SANG" | "RA_CA_SANG" | "CHIEU" | "CA_NGAY";
@@ -37,14 +43,21 @@ const SESSION_LABEL: Record<SessionKey, string> = {
   CHIEU: "Chiều",
   CA_NGAY: "Cả ngày",
 };
-const SESSION_TO_PERIOD: Record<SessionKey, "MORNING" | "MORNING_OFF" | "AFTERNOON" | "FULL_DAY"> = {
+const SESSION_TO_PERIOD: Record<SessionKey, HcPeriod> = {
   SANG: "MORNING",
   RA_CA_SANG: "MORNING_OFF",
   CHIEU: "AFTERNOON",
   CA_NGAY: "FULL_DAY",
 };
+const PERIOD_TO_SESSION: Record<HcPeriod, SessionKey> = {
+  MORNING: "SANG",
+  MORNING_OFF: "RA_CA_SANG",
+  AFTERNOON: "CHIEU",
+  FULL_DAY: "CA_NGAY",
+};
 /** Nhãn buổi từ nội dung nhóm HC hiện có ("Hành chính - Buổi sáng"…) */
 function sessionLabelOf(reg: HcRegistration) {
+  if (reg.group.period) return HC_PERIOD_LABEL[normalizeHcPeriod(reg.group.period)];
   const content = reg.group.content.replace(/^Hành chính - /, "");
   return content || "Hành chính";
 }
@@ -101,17 +114,20 @@ export default function AdminDayBoard() {
   const checkIn = useHcCheckIn();
   const approveMut = useHcApprove();
   const cancelMut = useHcCancelRegistration();
-  const busy = checkIn.isPending || approveMut.isPending || cancelMut.isPending;
+  const updateNoteMut = useHcUpdateRegistrationNote();
+  const busy = checkIn.isPending || approveMut.isPending || cancelMut.isPending || updateNoteMut.isPending;
 
   const [selDate, setSelDate] = React.useState(earliestRegistrableDate());
   const [sessionKey, setSessionKey] = React.useState<SessionKey>("CA_NGAY");
   const [note, setNote] = React.useState("");
-  const [cancelFor, setCancelFor] = React.useState<string | null>(null);
-  const [cancelReason, setCancelReason] = React.useState("");
+  const [actionPanel, setActionPanel] = React.useState<{ id: string; mode: RegistrationActionMode } | null>(null);
+  const [actionText, setActionText] = React.useState("");
   const [archiveOpen, setArchiveOpen] = React.useState(false);
+  const [activityOpen, setActivityOpen] = React.useState(false);
   const historyFrom = React.useMemo(() => hcRetentionStartInput(), []);
   const historyTo = React.useMemo(() => addDaysIso(todayIso, -1), [todayIso]);
   const history = useHcRegistrations(historyFrom, historyTo);
+  const activity = useHcActivity(selDate, canApprove && activityOpen);
 
   const regsByDate = React.useMemo(() => {
     const m = new Map<string, HcRegistration[]>();
@@ -125,10 +141,24 @@ export default function AdminDayBoard() {
   }, [regs]);
 
   const dayRegs = regsByDate.get(selDate) ?? [];
-  const myDayReg = dayRegs.find((r) => r.userId === myId && !["CANCELLED"].includes(r.registrationStatus));
+  const myDayReg = dayRegs.find((r) => r.userId === myId && ["PENDING", "APPROVED"].includes(r.registrationStatus));
+  const rejectedMyReg = [...dayRegs].reverse().find((r) => r.userId === myId && r.registrationStatus === "REJECTED");
+  const resubmitBlocked = !!rejectedMyReg && rejectedMyReg.rejectionCount >= 2;
   const registrable = canRegister(selDate);
   const dl = deadlineFor(selDate);
   const dlLabel = dl.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+
+  React.useEffect(() => {
+    setActionPanel(null);
+    setActionText("");
+    if (rejectedMyReg && !myDayReg) {
+      setNote(rejectedMyReg.note ?? "");
+      setSessionKey(PERIOD_TO_SESSION[normalizeHcPeriod(rejectedMyReg.group.period)]);
+      return;
+    }
+    setNote("");
+    setSessionKey("CA_NGAY");
+  }, [selDate, myDayReg?.id, rejectedMyReg?.id]);
 
   const submit = async () => {
     try {
@@ -147,12 +177,28 @@ export default function AdminDayBoard() {
       toast.error((e as Error).message);
     }
   };
-  const doCancel = async (r: HcRegistration) => {
+  const openAction = (r: HcRegistration, mode: RegistrationActionMode) => {
+    setActionPanel({ id: r.id, mode });
+    setActionText(mode === "edit" || mode === "reject" ? r.note ?? "" : "");
+  };
+  const closeAction = () => {
+    setActionPanel(null);
+    setActionText("");
+  };
+  const applyAction = async (r: HcRegistration) => {
+    if (!actionPanel || actionPanel.id !== r.id) return;
     try {
-      await cancelMut.mutateAsync({ checkInId: r.id, action: "CANCEL", reason: cancelReason.trim() });
-      toast.success("Đã hủy đăng ký");
-      setCancelFor(null);
-      setCancelReason("");
+      if (actionPanel.mode === "edit") {
+        await updateNoteMut.mutateAsync({ groupId: r.group.id, id: r.id, note: actionText.trim() });
+        toast.success("Đã cập nhật nội dung công việc");
+      } else if (actionPanel.mode === "reject") {
+        await cancelMut.mutateAsync({ checkInId: r.id, action: "REJECT", note: actionText.trim() });
+        toast.success(`Đã không duyệt đăng ký của ${r.user.name}`);
+      } else {
+        await cancelMut.mutateAsync({ checkInId: r.id, action: "CANCEL", reason: actionText.trim() });
+        toast.success("Đã hủy đăng ký");
+      }
+      closeAction();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -166,6 +212,15 @@ export default function AdminDayBoard() {
           title="ĐĂNG KÝ ĐI HÀNH CHÍNH"
           description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6), trước 16h30 · ${canApprove ? "Bạn đang có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
         >
+          {canApprove && (
+            <button
+              type="button"
+              onClick={() => setActivityOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-semibold text-ink shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            >
+              <History className="h-4 w-4" /> Nhật ký
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setArchiveOpen(true)}
@@ -264,6 +319,16 @@ export default function AdminDayBoard() {
                 Bạn đã có đăng ký <b>{sessionLabelOf(myDayReg)}</b> ({STATUS_UI[myDayReg.registrationStatus].label}) cho ngày này.
               </span>
             </div>
+          ) : resubmitBlocked ? (
+            <div className="flex items-start gap-2.5 rounded-xl bg-red-50 px-3.5 py-3 text-sm text-red-700 mb-4">
+              <span className="mt-0.5">✖</span>
+              <span>Đăng ký ngày này đã không được duyệt 2 lần nên không thể gửi lại.</span>
+            </div>
+          ) : rejectedMyReg ? (
+            <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 px-3.5 py-3 text-sm text-amber-800 mb-4">
+              <span className="mt-0.5">ℹ</span>
+              <span>Đăng ký trước chưa được duyệt. Bạn được phép chỉnh nội dung và gửi lại thêm một lần.</span>
+            </div>
           ) : (
             <div className={`flex items-start gap-2.5 rounded-xl px-3.5 py-3 text-sm mb-4 ${registrable ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
               <span className="mt-0.5">{registrable ? "✔" : "✖"}</span>
@@ -286,7 +351,7 @@ export default function AdminDayBoard() {
 
           <button
             onClick={submit}
-            disabled={!registrable || !!myDayReg || busy}
+            disabled={!registrable || !!myDayReg || resubmitBlocked || busy}
             className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {checkIn.isPending ? "Đang gửi…" : "Gửi đăng ký"}
@@ -319,6 +384,8 @@ export default function AdminDayBoard() {
             <div className="space-y-3">
               {dayRegs.map((r) => {
                 const st = STATUS_UI[r.registrationStatus];
+                const panelOpen = actionPanel?.id === r.id;
+                const canEdit = r.registrationStatus === "PENDING" && (canApprove || r.userId === myId);
                 return (
                   <div key={r.id} className={`bg-card border border-border rounded-2xl p-4 ${["CANCELLED", "REJECTED"].includes(r.registrationStatus) ? "opacity-70" : ""}`}>
                     <div className="flex items-start gap-3">
@@ -337,40 +404,60 @@ export default function AdminDayBoard() {
                         {r.registrationStatus === "REJECTED" && (
                           <div className="text-xs text-orange-500 mt-1.5">Không được duyệt{r.rejectionCount >= 2 ? " (đã 2 lần — không thể đăng ký lại ngày này)" : ""}</div>
                         )}
-                        {cancelFor === r.id && (
-                          <div className="flex gap-2 mt-2">
+                        {panelOpen && (
+                          <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                            <div className="mb-2 text-xs font-semibold text-slate-700">
+                              {actionPanel.mode === "edit" ? "Sửa nội dung công việc" : actionPanel.mode === "reject" ? "Không duyệt đăng ký" : "Hủy đăng ký"}
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
                             <input
                               autoFocus
-                              value={cancelReason}
-                              onChange={(e) => setCancelReason(e.target.value)}
-                              placeholder="Lý do hủy (bắt buộc, hiển thị cho người đăng ký)"
-                              className="flex-1 border border-red-300 rounded-lg px-3 py-1.5 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-red-400/40"
+                              value={actionText}
+                              onChange={(e) => setActionText(e.target.value)}
+                              placeholder={actionPanel.mode === "edit" ? "Nhập nội dung công việc" : actionPanel.mode === "reject" ? "Ghi chú không duyệt (nếu có)" : "Lý do hủy (nếu có)"}
+                              className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
                             />
                             <button
-                              onClick={() => doCancel(r)}
-                              disabled={!cancelReason.trim() || busy}
-                              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold disabled:opacity-40"
+                              onClick={() => applyAction(r)}
+                              disabled={busy}
+                              className={cn(
+                                "shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40",
+                                actionPanel.mode === "edit" ? "bg-blue-600 hover:bg-blue-700" : actionPanel.mode === "reject" ? "bg-orange-600 hover:bg-orange-700" : "bg-red-600 hover:bg-red-700",
+                              )}
                             >
-                              Xác nhận hủy
+                              {actionPanel.mode === "edit" ? "Lưu nội dung" : actionPanel.mode === "reject" ? "Xác nhận không duyệt" : "Xác nhận hủy"}
                             </button>
-                            <button onClick={() => setCancelFor(null)} className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground">
+                            <button onClick={closeAction} className="shrink-0 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted">
                               Thôi
                             </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                      {canApprove && cancelFor !== r.id && r.registrationStatus === "PENDING" && (
-                        <div className="flex gap-2 shrink-0">
+                      {!panelOpen && r.registrationStatus === "PENDING" && (
+                        <div className="flex max-w-64 shrink-0 flex-wrap justify-end gap-2">
+                          {canEdit && (
+                            <button onClick={() => openAction(r, "edit")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40">
+                              <Pencil className="h-3.5 w-3.5" /> Sửa
+                            </button>
+                          )}
+                          {canApprove && (
+                            <>
                           <button onClick={() => approve(r)} disabled={busy} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-40">
                             ✔ Duyệt
                           </button>
-                          <button onClick={() => setCancelFor(r.id)} className="px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 text-xs font-bold">
+                              <button onClick={() => openAction(r, "reject")} disabled={busy} className="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-50 disabled:opacity-40">
+                                Không duyệt
+                              </button>
+                          <button onClick={() => openAction(r, "cancel")} disabled={busy} className="px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 text-xs font-bold disabled:opacity-40">
                             Hủy
                           </button>
+                            </>
+                          )}
                         </div>
                       )}
-                      {canApprove && cancelFor !== r.id && r.registrationStatus === "APPROVED" && (
-                        <button onClick={() => setCancelFor(r.id)} className="shrink-0 px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted text-xs font-semibold">
+                      {canApprove && !panelOpen && r.registrationStatus === "APPROVED" && (
+                        <button onClick={() => openAction(r, "cancel")} disabled={busy} className="shrink-0 px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted text-xs font-semibold disabled:opacity-40">
                           Hủy
                         </button>
                       )}
@@ -390,6 +477,15 @@ export default function AdminDayBoard() {
         isLoading={history.isLoading}
         from={historyFrom}
         to={historyTo}
+      />
+      <RegistrationActivityDrawer
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        date={selDate}
+        logs={activity.data?.data ?? []}
+        loading={activity.isLoading}
+        refreshing={activity.isFetching}
+        onRefresh={() => { void activity.refetch(); }}
       />
     </div>
   );
