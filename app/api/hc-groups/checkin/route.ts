@@ -5,6 +5,7 @@ import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 import { normalizeHcPeriod } from "@/lib/hc-period";
 import { normalizeText } from "@/lib/nav";
 import { dateRange as localDateRange, vietnamNow, vietnamTodayUtcMidnight } from "@/lib/utils";
+import { isWeekend } from "@/lib/admin-day-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,9 @@ export async function POST(req: NextRequest) {
       });
       if (!hasNote && existingRegistration) return fail("Ngày này đã có đăng ký đi hành chính, chỉ được cập nhật nội dung công việc");
       if (hasNote) {
+        if (isWeekend(date)) {
+          return fail("Không cho phép đăng ký đi hành chính vào ngày cuối tuần (Thứ 7, Chủ nhật) — chỉ được đăng ký các ngày từ Thứ 2 đến Thứ 6");
+        }
         if (!isBeforeRegistrationCutoff()) {
           return fail("Chỉ được đăng ký đi hành chính trước 16h30");
         }
