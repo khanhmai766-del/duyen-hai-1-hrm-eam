@@ -2120,7 +2120,7 @@ const CSS = `
 .ticket-note-row .repair-request-meta{flex:0 1 auto;}
 .ticket-note-row b{overflow-wrap:anywhere;}
 .completion-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch;min-width:0;}
-.completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(320px,35%);}
+.completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(250px,26%);}
 .completion-details{display:flex;min-width:0;flex-direction:column;padding-top:1px;}
 .completion-details>.act{margin-bottom:0;}
 .document-downloads{display:flex;min-width:0;min-height:100%;align-self:stretch;flex-direction:column;justify-content:flex-start;gap:12px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:14px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
