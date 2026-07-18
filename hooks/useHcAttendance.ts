@@ -66,12 +66,19 @@ export function useHcActivity(date: string, enabled = true) {
   });
 }
 
-export function useHcRegistrations(from: string, to?: string) {
+type HcRegistrationQueryOptions = {
+  archive?: boolean;
+  enabled?: boolean;
+};
+
+export function useHcRegistrations(from: string, to?: string, options: HcRegistrationQueryOptions = {}) {
   const qs = new URLSearchParams({ from });
   if (to) qs.set("to", to);
+  if (options.archive) qs.set("scope", "archive");
   return useQuery({
-    queryKey: ["hc-registrations", from, to ?? ""],
+    queryKey: ["hc-registrations", options.archive ? "archive" : "timeline", from, to ?? ""],
     queryFn: () => apiGet<HcRegistration[]>(`/api/hc-registrations?${qs.toString()}`),
+    enabled: options.enabled ?? true,
     refetchInterval: 30_000,
   });
 }

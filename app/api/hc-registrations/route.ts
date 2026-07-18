@@ -1,15 +1,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, requireUser, handle } from "@/lib/api";
+import { fail, ok, requireUser, handle } from "@/lib/api";
 import { hcRetentionStartInput } from "@/lib/hc-retention";
-import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { canViewHcRegistrationArchive } from "@/lib/hc-registration-access";
 import { userWithSignedMedia } from "@/lib/s3";
 import { parseDateInput } from "@/lib/utils";
 import { HC_REGISTRATION_CONTENTS } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
-const APPROVE_PERMISSION_ID = "hc-attendance-approve";
 function dayStart(date: string | null) {
   const d = parseDateInput(date);
   d.setHours(0, 0, 0, 0);
@@ -26,7 +25,11 @@ function dayEnd(date: string | null) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const canManage = await hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
+    const isArchiveRequest = req.nextUrl.searchParams.get("scope") === "archive";
+    if (isArchiveRequest && !canViewHcRegistrationArchive(user)) {
+      throw fail("Không đủ quyền xem kho lưu trữ đăng ký đi hành chính", 403);
+    }
+
     const retentionStart = dayStart(hcRetentionStartInput());
     await prisma.hcGroup.deleteMany({ where: { date: { lt: retentionStart } } });
     const requestedFrom = dayStart(req.nextUrl.searchParams.get("from"));
@@ -37,7 +40,16 @@ export async function GET(req: NextRequest) {
     const registrations = await prisma.hcCheckIn.findMany({
       where: {
         isRegistered: true,
-        ...(canManage ? {} : { userId: user.id }),
+        // Timeline chung: mọi user đều thấy đăng ký đang hoạt động. Các bản ghi
+        // đã từ chối/hủy chỉ hiển thị cho chính chủ để giữ luồng gửi lại.
+        ...(isArchiveRequest
+          ? {}
+          : {
+              OR: [
+                { registrationStatus: { in: ["PENDING", "APPROVED"] } },
+                { userId: user.id },
+              ],
+            }),
         group: {
           date: { gte: from, ...(to ? { lte: to } : {}) },
           content: { in: HC_REGISTRATION_CONTENTS },

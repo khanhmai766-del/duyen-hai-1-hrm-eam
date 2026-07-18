@@ -24,6 +24,7 @@ import {
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { addDaysIso, canRegister, deadlineFor, earliestRegistrableDate, isWeekend, isoDateVN } from "@/lib/admin-day-rules";
 import { hcRetentionDescription, hcRetentionStartInput } from "@/lib/hc-retention";
+import { canViewHcRegistrationArchive } from "@/lib/hc-registration-access";
 import { HC_PERIOD_LABEL, normalizeHcPeriod, type HcPeriod } from "@/lib/hc-period";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -108,6 +109,11 @@ export default function AdminDayBoard() {
   const myId = session?.user?.id;
   const rbac = useRbacAccess();
   const canApprove = rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
+  const canViewArchive = canViewHcRegistrationArchive({
+    role: session?.user?.role,
+    position: session?.user?.position,
+    currentPosition: session?.user?.currentPosition,
+  });
 
   const registrations = useHcRegistrations(week[0], week[6]);
   const regs = React.useMemo(() => registrations.data?.data ?? [], [registrations.data?.data]);
@@ -126,7 +132,10 @@ export default function AdminDayBoard() {
   const [activityOpen, setActivityOpen] = React.useState(false);
   const historyFrom = React.useMemo(() => hcRetentionStartInput(), []);
   const historyTo = React.useMemo(() => addDaysIso(todayIso, -1), [todayIso]);
-  const history = useHcRegistrations(historyFrom, historyTo);
+  const history = useHcRegistrations(historyFrom, historyTo, {
+    archive: true,
+    enabled: canViewArchive && archiveOpen,
+  });
   const activity = useHcActivity(selDate, canApprove && activityOpen);
 
   const regsByDate = React.useMemo(() => {
@@ -221,13 +230,15 @@ export default function AdminDayBoard() {
               <History className="h-4 w-4" /> Nhật ký
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setArchiveOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-          >
-            <Archive className="h-4 w-4" /> Kho lưu trữ
-          </button>
+          {canViewArchive && (
+            <button
+              type="button"
+              onClick={() => setArchiveOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            >
+              <Archive className="h-4 w-4" /> Kho lưu trữ
+            </button>
+          )}
         </PageHeader>
       </div>
 
@@ -470,14 +481,16 @@ export default function AdminDayBoard() {
         </div>
       </div>
 
-      <RegistrationArchiveDialog
-        open={archiveOpen}
-        onOpenChange={setArchiveOpen}
-        registrations={history.data?.data ?? []}
-        isLoading={history.isLoading}
-        from={historyFrom}
-        to={historyTo}
-      />
+      {canViewArchive && (
+        <RegistrationArchiveDialog
+          open={archiveOpen}
+          onOpenChange={setArchiveOpen}
+          registrations={history.data?.data ?? []}
+          isLoading={history.isLoading}
+          from={historyFrom}
+          to={historyTo}
+        />
+      )}
       <RegistrationActivityDrawer
         open={activityOpen}
         onOpenChange={setActivityOpen}
