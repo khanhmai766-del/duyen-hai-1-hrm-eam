@@ -256,14 +256,14 @@ export default function AdminDayBoard() {
               <div className={`text-xl font-extrabold leading-tight ${selected ? "text-white" : "text-ink"}`}>
                 {String(d.getDate()).padStart(2, "0")}
               </div>
-              <div className="mt-1.5 h-6 flex items-center justify-center">
+              <div className="mt-1 h-7 flex items-center justify-center">
                 {active.length > 0 ? (
-                  <div className="flex -space-x-1.5">
+                  <div className="flex -space-x-2">
                     {active.slice(0, 3).map((r) => (
-                      <Avatar key={r.id} reg={r} size="w-5 h-5 text-[8px]" ring={selected ? "border-blue-600" : "border-white"} />
+                      <Avatar key={r.id} reg={r} size="h-7 w-7 text-[9px]" ring={selected ? "border-blue-600" : "border-white"} />
                     ))}
                     {active.length > 3 && (
-                      <span className={`w-5 h-5 rounded-full border-2 ${selected ? "border-blue-600 bg-blue-500" : "border-white bg-slate-400"} text-white text-[8px] font-bold flex items-center justify-center`}>
+                      <span className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${selected ? "border-blue-600 bg-blue-500" : "border-white bg-slate-400"} text-[9px] font-bold text-white`}>
                         +{active.length - 3}
                       </span>
                     )}
@@ -273,7 +273,7 @@ export default function AdminDayBoard() {
                 )}
               </div>
               {locked && (
-                <span className={`absolute top-1.5 right-1.5 text-[9px] ${selected ? "text-blue-200" : "text-slate-300"}`} title={isWeekend(dIso) ? "Cuối tuần — không đăng ký đi hành chính" : "Đã quá hạn gửi đăng ký"}>
+                <span className={`absolute right-2 top-2 text-[13px] leading-none ${selected ? "text-blue-100" : "text-slate-400"}`} title={isWeekend(dIso) ? "Cuối tuần — không đăng ký đi hành chính" : "Đã quá hạn gửi đăng ký"}>
                   🔒
                 </span>
               )}
