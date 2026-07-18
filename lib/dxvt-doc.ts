@@ -26,7 +26,8 @@ export interface DxvtItem {
 
 export interface DxvtData {
   fileBaseName: string; // định danh kỹ thuật tháng + STT
-  soBBKT?: string | null; // lý do xuất vật tư = số biên bản kiểm tra
+  lyDo?: string | null; // lý do (proposalNote — nhập ở tạo phiếu / bước Xác nhận yêu cầu)
+  soBBKT?: string | null; // số biên bản kiểm tra
   quanDocName?: string | null;
   tenThongKe?: string | null; // người đề nghị (Thống kê đang thao tác)
   issuedAt?: Date; // mốc điền "Tháng" + tên file; mặc định: thời điểm xuất
@@ -64,6 +65,7 @@ export async function generateDxvtDoc(d: DxvtData): Promise<{ key: string; url: 
   const issuedAt = d.issuedAt ?? new Date();
   doc.render({
     thang: vnMonth(issuedAt),
+    Lydo: d.lyDo || "", // token do phân xưởng đặt trong file Word — giữ nguyên tên
     soBBKT: d.soBBKT || "……",
     quanDocName: d.quanDocName || "……………………………",
     tenThongKe: d.tenThongKe || "……………………………",

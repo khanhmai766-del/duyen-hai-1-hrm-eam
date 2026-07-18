@@ -205,6 +205,7 @@ async function buildProposalDocument(
   ]);
   return generateDxvtDoc({
     fileBaseName: materialTicketFileBase(t),
+    lyDo: t.proposalNote,
     soBBKT: t.bbktNumber,
     quanDocName: quanDoc?.name ?? null,
     tenThongKe: statsUserRow?.name ?? statsUser.name ?? null,
@@ -498,7 +499,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
-        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
+        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
         // Đổi số PCT/LCT → xuất lại BBTHVT để cột Ghi chú đồng bộ số mới.
         const recoveryDoc = t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
         up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url, ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}) }, include: ITEM_INCLUDE });
@@ -1004,7 +1005,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Thống kê xác nhận + BBNT D-Office.
       const documents = {
         bbkt: await generateBbntDoc({
-          fileBaseName: materialTicketFileBase(t), soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
+          fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,

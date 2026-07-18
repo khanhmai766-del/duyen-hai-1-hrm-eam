@@ -26,6 +26,7 @@ export interface BbntItem {
 
 export interface BbntData {
   fileBaseName: string;     // định danh kỹ thuật tháng + STT, chỉ dùng đặt tên file
+  lyDo?: string | null;     // lý do (proposalNote) — token {{Lydo}} trong mẫu
   soBBKT?: string | null;   // Ứng: có thể chưa có -> in "(bổ sung sau)"
   soPCT?: string | null;
   thoiGianBatDau?: Date | string | null;
@@ -81,6 +82,7 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
     tenChiHuy: d.tenChiHuy || "",
     tenTruongCa: d.tenTruongCa || "",
     // Bộ token của mẫu mới (bbnt-template.docx bản chỉnh tay) — điền song song với tên cũ
+    Lydo: d.lyDo || "",
     unit: d.unit || "",
     pctNumber: d.soPCT || "",
     deviceNameManual: joinUniq(d.items.map((i) => i.deviceName)),

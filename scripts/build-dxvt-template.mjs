@@ -120,7 +120,7 @@ const body = [
   p(run("Kính gửi", { b: true, u: true }) + run(": ", { b: true }) + run("Phòng Kế Hoạch và Vật tư", { b: true }), { align: "center", after: 120 }),
   p(run("Họ tên người nhận vật tư: {{tenThongKe}} – BPSD: PXVH1.")),
   p(run("Đề nghị Phòng Kế hoạch & Vật tư cho nhận một số vật tư dưới đây:")),
-  p(run("Lý do xuất vật tư: {{soBBKT}}.")),
+  p(run("Lý do xuất vật tư: {{Lydo}}. {{soBBKT}}.")),
   p(run("Thuộc công trình/nguồn vốn: SXKD DH1.")),
   table(cols, headerRow1 + headerRow2 + dataRow),
   p(run("Trân trọng./."), { before: 120, after: 120 }),
