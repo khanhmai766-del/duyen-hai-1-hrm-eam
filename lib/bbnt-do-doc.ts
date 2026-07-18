@@ -4,7 +4,7 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import ImageModule from "docxtemplater-image-module-free";
 import { uploadS3Object, s3ProxyUrl, getS3ObjectBuffer } from "@/lib/s3";
-import { bbntDoFileName, vietnamDocumentDate } from "@/lib/material-document-name";
+import { bbntDoFileName, vietnamDatePath, vietnamDocumentDate } from "@/lib/material-document-name";
 
 /* ============================================================
    lib/bbnt-do-doc.ts
@@ -154,8 +154,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = bbntDoFileName(d.items.map((item) => item.deviceName), issuedAt);
-  // Gom theo loại biên bản trong public/Thay The Vat Tu/ — xem chú thích ở lib/bbnt-doc.ts.
-  const key = `public/Thay The Vat Tu/BBNT D-Office/${d.fileBaseName} - ${fileName}`;
+  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbnt-doc.ts.
+  const key = `public/Thay The Vat Tu/BBNT D-Office/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };
 }

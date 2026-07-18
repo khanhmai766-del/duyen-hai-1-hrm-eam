@@ -4,7 +4,7 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import ImageModule from "docxtemplater-image-module-free";
 import { uploadS3Object, s3ProxyUrl } from "@/lib/s3";
-import { dxvtFileName } from "@/lib/material-document-name";
+import { dxvtFileName, vietnamDatePath } from "@/lib/material-document-name";
 
 /* ============================================================
    lib/dxvt-doc.ts
@@ -85,8 +85,8 @@ export async function generateDxvtDoc(d: DxvtData): Promise<{ key: string; url: 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = dxvtFileName(d.items.map((item) => item.deviceName), issuedAt);
-  // Gom theo loại biên bản trong public/Thay The Vat Tu/ — xem chú thích ở lib/bbnt-doc.ts.
-  const key = `public/Thay The Vat Tu/Phieu DXVT/${d.fileBaseName} - ${fileName}`;
+  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbnt-doc.ts.
+  const key = `public/Thay The Vat Tu/Phieu DXVT/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };
 }

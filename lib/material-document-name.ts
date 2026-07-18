@@ -49,3 +49,9 @@ export function vietnamDocumentDate(value: Date) {
   const { day, month, year } = vietnamDateParts(value);
   return `${day}/${month}/${year}`;
 }
+
+/** Đường dẫn thư mục theo ngày xuất (giờ VN) trên MinIO: "YYYY/MM/DD" — dùng cho cây Năm/Tháng/Ngày. */
+export function vietnamDatePath(value = new Date()) {
+  const { day, month, year } = vietnamDateParts(value);
+  return `${year}/${month}/${day}`;
+}

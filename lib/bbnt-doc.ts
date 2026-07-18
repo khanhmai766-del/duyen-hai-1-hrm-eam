@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { uploadS3Object, s3ProxyUrl } from "@/lib/s3";
-import { bbntHandwrittenFileName, vietnamDocumentDate } from "@/lib/material-document-name";
+import { bbntHandwrittenFileName, vietnamDatePath, vietnamDocumentDate } from "@/lib/material-document-name";
 
 /* ============================================================
    lib/bbnt-doc.ts
@@ -93,9 +93,9 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;
 
   const fileName = bbntHandwrittenFileName(d.items.map((item) => item.deviceName), today);
-  // Gom theo loại biên bản trong public/Thay The Vat Tu/ (duyệt MinIO dễ);
+  // Cây thư mục MinIO: <loại biên bản>/<Năm>/<Tháng>/<Ngày>/<file> (theo ngày xuất, giờ VN);
   // tiền tố định danh phiếu chống trùng tên, tên tải về vẫn là fileName gọn (originalName).
-  const key = `public/Thay The Vat Tu/BBNT ky tay/${d.fileBaseName} - ${fileName}`;
+  const key = `public/Thay The Vat Tu/BBNT ky tay/${vietnamDatePath(today)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({
     key,
     body: buf,

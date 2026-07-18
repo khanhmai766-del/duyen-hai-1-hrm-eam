@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { uploadS3Object, s3ProxyUrl } from "@/lib/s3";
-import { bbthvtFileName } from "@/lib/material-document-name";
+import { bbthvtFileName, vietnamDatePath } from "@/lib/material-document-name";
 import { normalizeText } from "@/lib/nav";
 
 /* ============================================================
@@ -78,8 +78,8 @@ export async function generateBbthvtDoc(d: BbthvtData): Promise<{ key: string; u
 
   const issuedAt = d.issuedAt ?? new Date();
   const fileName = bbthvtFileName(d.items.map((item) => item.deviceName), issuedAt);
-  // Gom theo loại biên bản trong public/Thay The Vat Tu/ — xem chú thích ở lib/bbnt-doc.ts.
-  const key = `public/Thay The Vat Tu/BBTHVT/${d.fileBaseName} - ${fileName}`;
+  // Cây thư mục Năm/Tháng/Ngày — xem chú thích ở lib/bbnt-doc.ts.
+  const key = `public/Thay The Vat Tu/BBTHVT/${vietnamDatePath(issuedAt)}/${d.fileBaseName} - ${fileName}`;
   await uploadS3Object({ key, body: buf, contentType: DOCX_MIME, originalName: fileName });
   return { key, url: s3ProxyUrl(key, fileName) };
 }
