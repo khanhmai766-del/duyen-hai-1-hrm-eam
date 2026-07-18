@@ -874,21 +874,13 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 ))}
               </select>
 
-              <div className="bbkt-grid">
-                <div className="field">
-                  <label>Ghi chú *</label>
-                  <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất..." />
-                </div>
-                <div className="field qty-field">
-                  <label>Số lượng đề xuất *</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={proposedQuantity}
-                    onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
-                  />
-                </div>
-              </div>
+              <label>Số lượng đề xuất *</label>
+              <input
+                type="number"
+                min={1}
+                value={proposedQuantity}
+                onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
+              />
 
               <label>Thiết bị thay thế *</label>
               <select value={replacementDeviceSeq} disabled={!selectedMaterialId} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
@@ -898,6 +890,11 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
               {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
+
+          {["DE_XUAT", "UNG"].includes(t.type) && <>
+            <label>Lý do *</label>
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nhập lý do thay thế vật tư" />
+          </>}
 
           <label>Số biên bản kiểm tra (nếu có)</label>
           <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
@@ -1110,6 +1107,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [chiHuyName, setChiHuyName] = useState(t.chiHuyName ?? "");
   const [completionNote, setCompletionNote] = useState(t.completionNote ?? "");
   const [bbktNumber, setBbktNumber] = useState(t.bbktNumber ?? "");
+  const [reason, setReason] = useState(t.proposalNote ?? "");
   const [recoveryRequired, setRecoveryRequired] = useState(t.recoveryRequired === true);
   const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? 1);
   const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
@@ -1118,7 +1116,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   async function save() {
     if (!editStep) return;
     const payload: Record<string, unknown> = { action: "editStep", step: editStep };
-    if (editStep === "confirm") payload.bbktNumber = bbktNumber;
+    if (editStep === "confirm") Object.assign(payload, { note: reason.trim(), bbktNumber });
     if (editStep === "stats") Object.assign(payload, { proposalNumber, proposalReceiverName: proposalReceiverNameReview });
     if (editStep === "receive") Object.assign(payload, { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource });
     if (editStep === "use") Object.assign(payload, {
@@ -1144,6 +1142,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
           <label>Mã vật tư ERP<input value={t.items[0]?.erpCode ?? "—"} disabled /></label>
           <label>Tên vật tư ERP<input value={t.items[0]?.erpName ?? t.items[0]?.material.name ?? "—"} disabled /></label>
           <label>Số lượng đã xác nhận<input value={`${t.items[0]?.quantity ?? 0} ${t.items[0]?.material.unit ?? ""}`} disabled /></label>
+          <label>Lý do *<input value={reason} disabled={!canEdit} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do thay thế vật tư" /></label>
           <label>Số biên bản kiểm tra (nếu có)<input value={bbktNumber} disabled={!canEdit} onChange={(e) => setBbktNumber(e.target.value)} placeholder="Chưa nhập số biên bản kiểm tra" /></label>
         </>}
         {editStep === "stats" && <>
@@ -1180,7 +1179,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         </>}
         {editStep === "accept" && <><label>Số PCT/LCT<input value={pctNumber} disabled={!canEdit} onChange={(e) => setPctNumber(e.target.value)} /></label><label>Chỉ huy trực tiếp<input value={chiHuyName} disabled={!canEdit} onChange={(e) => setChiHuyName(e.target.value)} /></label><label>Nội dung<textarea rows={3} value={completionNote} disabled={!canEdit} onChange={(e) => setCompletionNote(e.target.value)} /></label></>}
         {permission && !canEdit && <p className="hint">Bạn có thể xem lại nhưng chưa được phân quyền chỉnh sửa bước này.</p>}
-        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
+        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending || (editStep === "confirm" && !reason.trim())} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
       </div>
     </div>
   </>;
@@ -1751,7 +1750,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <div className="seg2"><button type="button" className={!recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(false)}>Không</button><button type="button" className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
 	          </label>
 	          <p className="hint use-quantity-hint">
-	            <span>{t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>} · Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.</span>
+	            <span className="use-quantity-received">
+	              {t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>}
+	            </span>
+	            <span className="use-quantity-after">
+	              Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
+	            </span>
 	          </p>
 	        </div>
 		        {recoveryRequired && <>
@@ -2163,8 +2167,10 @@ const CSS = `
 .use-field-grid .field input{height:42px;margin-top:6px;}
 .use-recovery-toggle-row{display:grid;grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr);gap:12px;align-items:stretch;min-width:0;}
 .use-recovery-toggle-row .recovery-toggle-field{min-width:0;margin:0!important;}
-.use-quantity-hint{display:flex;align-items:center;min-width:0;margin:0!important;padding-top:17px;font-size:10px;line-height:1.35;letter-spacing:-.012em;}
-.use-quantity-hint>span{display:block;min-width:0;white-space:nowrap;}
+.use-quantity-hint{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:3px;min-width:0;margin:0!important;padding-top:17px;font-size:10px;line-height:1.35;letter-spacing:-.012em;}
+.use-quantity-hint>span{display:block;max-width:100%;white-space:nowrap;}
+.use-quantity-received{color:${C.soft};}
+.use-quantity-after{color:${C.soft};}
 .recovery-toggle-field .seg2{height:42px;margin-top:6px;background:#fff;border-color:${C.line};}
 .recovery-toggle-field .seg2 button{min-height:38px;}
 .recovery-detail-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}

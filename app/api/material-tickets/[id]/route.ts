@@ -425,10 +425,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (step === "confirm") {
         if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
         const value = String(body.bbktNumber || "").trim();
-        before = `Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`; after = `Số biên bản kiểm tra: ${value || "—"}`;
+        const reason = String(body.note || "").trim();
+        if (!reason) return fail("Lý do không được để trống");
+        before = `Lý do: ${t.proposalNote || "—"}; Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`;
+        after = `Lý do: ${reason}; Số biên bản kiểm tra: ${value || "—"}`;
         up = await prisma.materialTicket.update({
           where: { id: t.id },
-          data: { bbktNumber: value || null },
+          data: { proposalNote: reason, bbktNumber: value || null },
           include: ITEM_INCLUDE,
         });
       } else if (step === "stats") {
