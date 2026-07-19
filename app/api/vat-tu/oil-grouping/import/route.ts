@@ -12,6 +12,7 @@ type ImportRow = {
   name?: unknown;
   unit?: unknown;
   category?: unknown;
+  warehouse?: unknown;
   erpStock?: unknown;
 };
 
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
       const name = cleanString(row.name);
       const unit = cleanString(row.unit);
       const category = cleanString(row.category);
+      const warehouse = cleanString(row.warehouse) || null;
       const erpStock = cleanStock(row.erpStock);
 
       if (!code || !name || !unit) {
@@ -72,12 +74,12 @@ export async function POST(req: NextRequest) {
       if (current) {
         await prisma.erpMaterial.update({
           where: { id: current.id },
-          data: { name, unit, category, erpStock },
+          data: { name, unit, category, erpStock, ...(warehouse !== null ? { warehouse } : {}) },
         });
         updated += 1;
       } else {
         await prisma.erpMaterial.create({
-          data: { code, name, unit, category, erpStock },
+          data: { code, name, unit, category, erpStock, warehouse },
         });
         created += 1;
       }

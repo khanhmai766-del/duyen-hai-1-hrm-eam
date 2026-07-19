@@ -44,6 +44,7 @@ export interface OilPendingItem {
   erpCode: string;
   name: string;
   unit: string;
+  warehouse: string | null; // Kho VTTB
   erpQty: number;
   mappingStatus: "SUGGESTED" | "UNMAPPED";
   suggestedOilTypeId: string | null;
@@ -77,6 +78,7 @@ export type GroupedErpMaterialInput = {
   name: string;
   unit: string;
   category: GroupingCategory;
+  warehouse?: string; // Kho VTTB
   erpStock?: number;
 };
 

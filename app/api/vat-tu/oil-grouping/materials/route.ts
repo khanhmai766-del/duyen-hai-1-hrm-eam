@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         name,
         unit,
         category,
+        warehouse: cleanString(body.warehouse) || null,
         erpStock: cleanStock(body.erpStock),
       },
     });

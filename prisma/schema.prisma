@@ -617,6 +617,7 @@ model ErpMaterial {
   unit      String
   erpStock  Int      @default(0)
   category  String?
+  warehouse String? // Kho VTTB — kho vật tư thiết bị theo ERP
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

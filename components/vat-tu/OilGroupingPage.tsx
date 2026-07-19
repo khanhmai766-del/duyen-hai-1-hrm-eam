@@ -842,6 +842,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                     </th>
                     <th className="text-left px-2 py-3">Mã vật tư</th>
                     <th className="text-left px-2 py-3">Tên vật tư</th>
+                    <th className="text-left px-3 py-3">Kho VTTB</th>
                     <th className="text-right px-3 py-3">Tồn</th>
                     <th className="text-left px-3 py-3">Gợi ý của hệ thống</th>
                     <th className="px-3 py-3"></th>
@@ -861,6 +862,9 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                           </span>
                         </td>
                         <td className="px-2 py-2.5 text-slate-800">{it.name}</td>
+                        <td className="px-3 py-2.5 text-slate-600">
+                          {it.warehouse || <span className="text-slate-300">—</span>}
+                        </td>
                         <td className="px-3 py-2.5 text-right text-slate-600">
                           {fmt(it.erpQty)} {it.unit}
                         </td>

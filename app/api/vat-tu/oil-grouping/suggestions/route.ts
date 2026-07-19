@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
           code: true,
           name: true,
           unit: true,
+          warehouse: true,
           erpStock: true,
           mappingStatus: true,
           suggestedOilTypeId: true,
