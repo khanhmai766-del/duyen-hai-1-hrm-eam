@@ -60,14 +60,14 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
-    { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "BBNT ký tay + BBNT thu hồi", who: "Theo phân quyền quy trình" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + BBNT DO", who: "Thống kê" },
   ],
   UNG: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "VHV_LANH_VAT_TU", label: "VHV lãnh vật tư", who: "VHV được giao thực hiện" },
-    { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + xuất biên bản", who: "Thống kê" },
@@ -75,8 +75,8 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
-    { key: "NHAN_TU_HIEN_CO", label: "Nhận vật tư hiện có", who: "Theo phân quyền quy trình" },
-    { key: "SU_DUNG_VAT_TU", label: "Xác nhận sử dụng vật tư", who: "Theo phân quyền quy trình" },
+    { key: "NHAN_TU_HIEN_CO", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
+    { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "BBNT ký tay + BBNT thu hồi", who: "Theo phân quyền quy trình" },
     { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận + BBNT D-Office", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
@@ -1326,7 +1326,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       VHV_LANH_VAT_TU: `Cương vị VHV được giao "${t.assignedPosition}"`,
       NHAN_TU_HIEN_CO: `Cương vị được giao "${t.assignedPosition}" nhận vật tư từ Hiện có`,
       NHAN_VAT_TU: "Người được phân quyền Xác nhận vật tư lãnh",
-      SU_DUNG_VAT_TU: "Người được phân quyền Xác nhận sử dụng vật tư",
+      SU_DUNG_VAT_TU: "Người được phân quyền Xác nhận vật tư sử dụng",
       CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
       CHO_NHAP_LIEU: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
       CHO_NHAP_LIEU_THAY_THE: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
@@ -1672,10 +1672,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const unit = t.items[0]?.material.unit ?? "";
     const stock = t.items[0]?.material.quantity ?? 0;
     return <div className="act">
-      <label className="lb">Nhận vật tư hiện có</label>
-      <p className="hint">Hiện có: <b>{stock} {unit}</b>. Bước này chỉ ghi nhận số lượng nhận, chưa trừ Hiện có.</p>
-      <label>Số lượng nhận{unit ? ` (${unit})` : ""} *</label>
-      <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+      <div className="receive-existing-row">
+        <div className="receive-existing-field">
+          <label>Số lượng nhận{unit ? ` (${unit})` : ""} *</label>
+          <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
+        </div>
+        <p className="hint receive-existing-hint">Hiện có: <b>{stock} {unit}</b>. Bước này chỉ ghi nhận số lượng nhận, chưa trừ Hiện có.</p>
+      </div>
       {qty > stock && <div className="warnbox"><AlertTriangle size={15} /> Số lượng nhận vượt quá Hiện có.</div>}
       <button className="btn primary big" disabled={qty <= 0 || qty > stock || act.isPending} onClick={() => run({ action: "receiveExisting", quantity: qty }, "Đã ghi nhận nhận vật tư từ Hiện có")}><Check size={15} /> Xác nhận</button>
     </div>;
@@ -2209,6 +2212,9 @@ const CSS = `
 .source-badge{display:inline-flex;align-items:center;border-radius:999px;background:#e0f2fe;color:#0369a1;padding:2px 8px;font-size:12px;line-height:1.3;}
 .act{border:1.5px dashed ${C.accent}66;background:linear-gradient(180deg,#f8fbff 0%,${C.accent}08 100%);border-radius:16px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .act label:not(.lb){display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:-4px;}
+.receive-existing-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:end;}
+.receive-existing-field{display:flex;min-width:0;flex-direction:column;gap:11px;}
+.receive-existing-hint{display:flex;min-height:42px;align-items:center;margin:0;padding:0 2px;line-height:1.45;}
 .act label.settlement-check{position:relative;display:flex;align-items:center;gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
 .act .settlement-check:hover{border-color:${C.accent}66;background:#fafdff;box-shadow:0 3px 10px rgba(15,35,64,.06);}
 .act .settlement-check.checked{border-color:${C.accent}80;background:${C.accent}08;}
@@ -2266,6 +2272,7 @@ const CSS = `
 .frm-items{display:flex;flex-direction:column;gap:7px;}
 .frm-item{display:grid;grid-template-columns:1.25fr 1.1fr 1.2fr 64px auto;gap:6px;}
 .hint{font-size:11px;color:${C.soft};margin:2px 0 0;}
+@media(max-width:700px){.receive-existing-row{grid-template-columns:1fr;}.receive-existing-hint{min-height:0;padding:0;}}
 .loglist{border-top:1px dashed ${C.line};padding-top:12px;}
 .p-top{display:grid;grid-template-columns:minmax(180px,.55fr) minmax(560px,2fr);gap:4px 20px;align-items:start;}
 .p-top .top-items{border-left:1px dashed ${C.line};padding:4px 0 4px 16px;margin-bottom:0;}
