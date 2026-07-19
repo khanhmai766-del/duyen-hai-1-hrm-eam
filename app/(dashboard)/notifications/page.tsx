@@ -3,8 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
+import { Megaphone, Plus, Pencil, Trash2, Pin, Loader2, Link2, FileText, ExternalLink, Upload, X, Check, Users, Clock, CheckCircle2, Search, Ban, RotateCcw, Archive, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ChevronUp, CalendarDays, Radio, SlidersHorizontal, ArrowUpRight } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -168,6 +167,11 @@ const PostCard = React.memo(function PostCard({
   onDelete,
   onShowReaders,
 }: PostCardProps) {
+  const [expanded, setExpanded] = React.useState(linkedAnnouncementId === a.id);
+  React.useEffect(() => {
+    if (linkedAnnouncementId === a.id) setExpanded(true);
+  }, [a.id, linkedAnnouncementId]);
+
   const { readCount, total, readByMe, allRead } = React.useMemo(() => {
     const targetUsers = activeUsers.filter((u) => isAnnouncementTargetForPosition(a.classification, effectiveUserPosition(u)));
     const targetUserIds = new Set(targetUsers.map((u) => u.id));
@@ -184,68 +188,59 @@ const PostCard = React.memo(function PostCard({
   const isInvalid = Boolean(a.invalidatedAt);
   const daysLeft = invalidArchiveDaysLeft(a.invalidatedAt);
   const archivedInvalid = isArchivedInvalidAnnouncement(a);
+  const detailId = `announcement-content-${a.id}`;
+  const statusLabel = archivedInvalid ? "Đã hết hiệu lực" : isInvalid ? `Chờ lưu · ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày` : a.pinned ? "Ưu tiên" : "Hiệu lực";
   return (
     <Card
       id={`announcement-${a.id}`}
       tabIndex={-1}
       className={cn(
-        "group overflow-hidden transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        "group overflow-hidden border-l-[3px] border-l-blue-600 bg-white shadow-[0_8px_24px_rgba(15,39,72,0.07)] transition-[border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
         linkedAnnouncementId === a.id && "ring-2 ring-accent ring-offset-2",
-        isInvalid
-          ? "border-red-300 bg-red-50/90 ring-1 ring-red-200"
-          : a.pinned && !allRead && "border-accent/50 ring-1 ring-accent/20",
-        !isInvalid && allRead &&
-          "border-amber-300 bg-gradient-to-br from-amber-100 via-yellow-100 to-amber-200 dark:border-amber-500/40 dark:from-amber-500/20 dark:via-yellow-500/10 dark:to-amber-600/20"
+        isInvalid && "border-l-amber-500",
+        a.pinned && !isInvalid && "border-l-orange-500"
       )}
     >
-      <CardContent className="p-3 sm:p-4">
-        <div className="relative">
-          <div className="min-w-0 w-full">
-            <div className={cn("flex min-w-0 flex-wrap items-start gap-1.5 sm:items-center", canManage && "pr-24")}>
-              {a.pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-accent" />}
-              {a.stt && (
-                <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-xs font-bold text-accent">
-                  {a.stt}
-                </span>
-              )}
-              <h3 className="min-w-0 max-w-full break-words font-semibold leading-snug text-ink">{a.title}</h3>
-              {isInvalid && (
-                <span className="shrink-0 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
-                  Không còn hiệu lực
-                </span>
-              )}
-              {a.classification && (
-                <span className="min-w-0 max-w-full basis-full whitespace-normal break-words rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium leading-snug text-muted-foreground sm:basis-auto">
-                  {announcementTargetLabel(a.classification)}
-                </span>
-              )}
+      <CardContent className="p-0">
+        <article>
+          <header className="px-4 pb-3 pt-4 sm:px-5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="min-w-0 break-words text-sm font-extrabold uppercase tracking-[-0.01em] text-[#102746] sm:text-[15px]">
+                {a.stt ? `${a.stt} · ` : ""}{a.title}
+              </h3>
+              <span className={cn(
+                "rounded-md border px-2 py-0.5 text-[10px] font-bold",
+                archivedInvalid ? "border-red-200 bg-red-50 text-red-700" :
+                isInvalid ? "border-amber-200 bg-amber-50 text-amber-700" :
+                a.pinned ? "border-orange-200 bg-orange-50 text-orange-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              )}>
+                {a.pinned && !isInvalid && <Pin className="mr-1 inline h-3 w-3" />}{statusLabel}
+              </span>
             </div>
-            <div className={cn("mt-1 text-sm font-semibold", isInvalid ? "text-red-700" : "text-ink")}>
-              Ngày ra mệnh lệnh: {formatDate(announcementDate(a))}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-medium text-slate-500">
+              <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-blue-600" /> Ban hành {formatDate(announcementDate(a))}</span>
+              <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-blue-600" /> {announcementTargetLabel(a.classification)}</span>
+              {a.orderedBy && <span className="inline-flex min-w-0 items-center gap-1.5"><Radio className="h-3.5 w-3.5 shrink-0 text-blue-600" /> Theo lệnh: <b className="truncate text-[#102746]">{a.orderedBy}</b></span>}
             </div>
-            <div
-              className={cn(
-                "mt-3 rounded-lg border px-4 py-3",
-                isInvalid
-                  ? "border-red-200 bg-white/75 text-red-900"
-                  : "border-slate-200 bg-slate-50/80 text-ink"
-              )}
-            >
-              <div className={cn("mb-1 text-[11px] font-bold uppercase tracking-normal", isInvalid ? "text-red-600" : "text-muted-foreground")}>
-                Nội dung mệnh lệnh
-              </div>
-              <div className="whitespace-pre-wrap text-justify text-[15px] font-bold leading-7 [text-justify:inter-word]">
-                {a.body}
-              </div>
-            </div>
-            {(a.linkUrl || a.fileUrl) && (
-              <div className="mt-2.5 flex flex-wrap gap-2">
+          </header>
+
+          <div className="border-y border-slate-200 bg-slate-50/45 px-4 py-3 sm:px-5">
+            <div className="mb-1 text-[10px] font-semibold text-slate-500">Thông báo</div>
+            <p className={cn("whitespace-pre-wrap text-[13px] font-medium leading-5 text-slate-700", !expanded && "line-clamp-2")}>
+              {a.body}
+            </p>
+          </div>
+
+          {expanded && (
+            <div id={detailId} className="space-y-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+              {(a.linkUrl || a.fileUrl) && (
+                <div className="flex flex-wrap gap-2">
                 {a.linkUrl && (
                   <a
                     href={normalizeUrl(a.linkUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/5"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     <Link2 className="h-3.5 w-3.5 shrink-0" />
                     <span className="max-w-[220px] truncate">{a.linkUrl.replace(/^https?:\/\//i, "")}</span>
@@ -257,58 +252,45 @@ const PostCard = React.memo(function PostCard({
                     href={a.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-muted"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     <FileText className="h-3.5 w-3.5 shrink-0 text-destructive" />
                     <span className="max-w-[220px] truncate">{a.fileName ?? "Tệp PDF"}</span>
                   </a>
                 )}
-              </div>
+                </div>
             )}
-            {a.orderedBy && (
-              <div className="mt-2 text-xs font-medium text-ink">
-                Theo lệnh: <span className="text-accent">{a.orderedBy}</span>
-              </div>
-            )}
-            <div className="mt-2 text-xs text-muted-foreground">
+            <div className="text-xs text-slate-500">
               Cập nhật bởi: <span className="font-medium text-ink">Quản trị viên</span> - {formatDate(a.updatedAt)}
             </div>
             {isInvalid && (
-              <div className="mt-2 rounded-md border border-red-200 bg-white/70 px-3 py-2 text-xs font-medium text-red-700">
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
                 Mệnh lệnh không còn hiệu lực từ {formatDate(a.invalidatedAt)}.
                 {archivedInvalid
                   ? " Đang nằm trong mục Mệnh lệnh hết hiệu lực."
                   : ` Sẽ chuyển vào mục Mệnh lệnh hết hiệu lực sau ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày.`}
               </div>
             )}
-          </div>
-          {canManage && (
-            <div className="absolute right-0 top-0 flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-              {isInvalid ? (
-                <button onClick={() => onRestore(a)} title="Khôi phục hiệu lực" className="rounded-md p-1.5 text-red-700 transition-colors hover:bg-red-100">
-                  <RotateCcw className="h-4 w-4" />
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => onEdit(a)} title="Sửa" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-ink">
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button onClick={() => onInvalidate(a)} title="Mệnh lệnh không còn hiệu lực" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-700">
-                    <Ban className="h-4 w-4" />
-                  </button>
-                </>
+              {canManage && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {isInvalid ? (
+                    <Button size="sm" variant="outline" onClick={() => onRestore(a)}><RotateCcw className="h-4 w-4" /> Khôi phục hiệu lực</Button>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => onEdit(a)}><Pencil className="h-4 w-4" /> Sửa</Button>
+                      <Button size="sm" variant="outline" onClick={() => onInvalidate(a)}><Ban className="h-4 w-4" /> Đánh dấu hết hiệu lực</Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="outline" className="text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => onDelete(a)}><Trash2 className="h-4 w-4" /> Xóa</Button>
+                </div>
               )}
-              <button onClick={() => onDelete(a)} title="Xoá" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </button>
             </div>
           )}
-        </div>
 
-        {/* Xác nhận đã đọc — cho tất cả user; quản lý xem được ai đã/chưa đọc */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+        <footer className="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           {allRead ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
               <CheckCircle2 className="h-4 w-4" /> Tất cả đã xác nhận đọc
             </span>
           ) : !mustReadByMe ? (
@@ -328,13 +310,24 @@ const PostCard = React.memo(function PostCard({
           {isManager && (
             <button
               onClick={() => onShowReaders(a)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title="Xem ai đã/chưa đọc"
             >
               <Users className="h-3.5 w-3.5" /> Đã đọc {readCount}/{total}
             </button>
           )}
-        </div>
+          </div>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={detailId}
+            onClick={() => setExpanded((value) => !value)}
+            className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            {expanded ? <><ChevronUp className="h-4 w-4" /> Thu gọn</> : <><ChevronDown className="h-4 w-4" /> Xem chi tiết</>}
+          </button>
+        </footer>
+        </article>
       </CardContent>
     </Card>
   );
@@ -345,7 +338,6 @@ export default function NotificationsPage() {
   const linkedAnnouncementId = searchParams.get("announcementId");
   const { data: session } = useSession();
   const myId = session?.user?.id;
-  const role = session?.user?.role;
   const rbac = useRbacAccess();
   const canManageAnnouncements = rbac.can("announcement-manage", ["manage", "full"]);
   const { position: currentPosition } = useCurrentPosition();
@@ -469,6 +461,11 @@ export default function NotificationsPage() {
       return new Date(announcementDate(b)).getTime() - new Date(announcementDate(a)).getTime();
     });
   }, [filtered, myId, currentPosition]);
+  const effectiveCount = React.useMemo(() => bulletins.filter((a) => !a.invalidatedAt).length, [bulletins]);
+  const pendingArchiveCount = React.useMemo(
+    () => bulletins.filter((a) => Boolean(a.invalidatedAt) && !isArchivedInvalidAnnouncement(a)).length,
+    [bulletins]
+  );
   const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / ORDERS_PER_PAGE));
   const firstShown = sortedFiltered.length ? (page - 1) * ORDERS_PER_PAGE + 1 : 0;
   const lastShown = Math.min(page * ORDERS_PER_PAGE, sortedFiltered.length);
@@ -651,31 +648,61 @@ export default function NotificationsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="MỆNH LỆNH SẢN XUẤT" description="Mệnh lệnh & thông tin vận hành cần chú ý" />
+    <div className="space-y-4 pb-8">
+      <section className="relative overflow-hidden rounded-2xl bg-[#102b4d] px-5 py-5 text-white shadow-[0_12px_28px_rgba(15,39,72,0.16)] sm:px-6">
+        <div className="pointer-events-none absolute -right-8 -top-20 h-52 w-52 rounded-full bg-white/[0.035]" />
+        <div className="pointer-events-none absolute right-24 top-0 h-full w-px bg-white/[0.05]" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-[0.22em] text-blue-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-orange-400" /> Trung tâm điều hành
+            </div>
+            <h1 className="text-2xl font-black tracking-[-0.035em] sm:text-[28px]">Mệnh lệnh sản xuất</h1>
+            <p className="mt-1 max-w-2xl text-xs font-medium leading-5 text-blue-100/90">
+              Theo dõi chỉ đạo vận hành, đối tượng thực hiện và tiến độ xác nhận trên một màn hình.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[340px]">
+            {[
+              ["Hiệu lực", effectiveCount],
+              ["Chờ lưu", pendingArchiveCount],
+              ["Đã lưu", archivedBulletins.length],
+              ["Đang hiển thị", sortedFiltered.length],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-100/75">{label}</div>
+                <div className={cn("mt-0.5 text-base font-extrabold tabular-nums", label === "Chờ lưu" && Number(value) > 0 && "text-orange-300")}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Mệnh lệnh sản xuất: người có quyền quản lý được đăng/sửa/xoá; mọi người đều xem. */}
       <section className="space-y-3">
         {/* Thanh tìm kiếm + bộ lọc (năm / phân loại) + đăng mệnh lệnh */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_4px_14px_rgba(15,39,72,0.05)]">
+          <span className="hidden items-center gap-1.5 border-r border-slate-200 px-1.5 text-[11px] font-semibold text-slate-500 sm:inline-flex">
+            <SlidersHorizontal className="h-3.5 w-3.5" /> Bộ lọc
+          </span>
           <div className="relative w-full sm:w-56">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm mệnh lệnh..."
-              className="h-9 pl-9"
+              className="h-9 border-slate-200 bg-slate-50/70 pl-9 shadow-none focus-visible:bg-white"
             />
           </div>
           <Select value={yearFilter} onValueChange={setYearFilter}>
-            <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-32 border-slate-200 bg-slate-50/70 shadow-none"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Tất cả năm</SelectItem>
               {years.map((y) => <SelectItem key={y} value={String(y)}>Năm {y}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={positionFilter} onValueChange={setPositionFilter}>
-            <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Cương vị" /></SelectTrigger>
+            <SelectTrigger className="h-9 w-56 border-slate-200 bg-slate-50/70 shadow-none"><SelectValue placeholder="Cương vị" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Tất cả cương vị</SelectItem>
               {positionOptions.map((position) => (
@@ -694,15 +721,16 @@ export default function NotificationsPage() {
             <Button
               size="sm"
               variant={showInvalidArchive ? "default" : "outline"}
-              className="shrink-0"
+              className="shrink-0 border-slate-200"
               onClick={() => setShowInvalidArchive((value) => !value)}
             >
               <Archive className="h-4 w-4" />
               {showInvalidArchive ? "Mệnh lệnh hiện hành" : "Mệnh lệnh hết hiệu lực"}
+              <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{archivedBulletins.length}</span>
             </Button>
             {canManageAnnouncements && (
-              <Button size="sm" className="shrink-0" onClick={() => openCreate("BULLETIN")}>
-                <Plus className="h-4 w-4" /> Đăng mệnh lệnh
+              <Button size="sm" className="shrink-0 bg-gradient-to-r from-[#135596] to-cyan-600 shadow-[0_5px_14px_rgba(19,85,150,0.2)] hover:from-[#0f477f] hover:to-cyan-700" onClick={() => openCreate("BULLETIN")}>
+                <Plus className="h-4 w-4" /> Đăng mệnh lệnh <ArrowUpRight className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
