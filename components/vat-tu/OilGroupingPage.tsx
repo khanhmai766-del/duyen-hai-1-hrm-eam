@@ -6,11 +6,11 @@
 // Loại vật tư chọn qua menu con trên sidebar (?loai=...), không có tab trong trang.
 // Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Ban, CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Unlink, Upload, X, type LucideIcon } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Unlink, Upload, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -108,6 +108,7 @@ export default function OilGroupingPage() {
 }
 
 function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; canManage: boolean }) {
+  const pageSize = 30;
   const { data, isLoading } = useAllGroupedErpMaterials(category);
   const updateMaterial = useUpdateGroupedErpStock();
   const deleteMaterials = useDeletePendingGroupedErpMaterials();
@@ -117,6 +118,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
   const [deleting, setDeleting] = useState<ErpMaterialItem | null>(null);
   const [changingStatus, setChangingStatus] = useState<ErpMaterialItem | null>(null);
   const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     const query = normalizeText(search.trim());
@@ -126,6 +128,15 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
       return !query || normalizeText([item.code, item.name, item.unit, item.warehouse, item.oilType?.code, item.oilType?.name].filter(Boolean).join(" ")).includes(query);
     });
   }, [items, search, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page]);
+  const firstItem = filtered.length ? (page - 1) * pageSize + 1 : 0;
+  const lastItem = Math.min(page * pageSize, filtered.length);
+
+  useEffect(() => setPage(1), [search, statusFilter]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const save = async () => {
     if (!edit) return;
@@ -184,7 +195,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
           <th className="px-3 py-3 text-right">Tồn ERP</th><th className="px-3 py-3 text-left">Nhóm hiện tại</th><th className="px-3 py-3 text-center">Trạng thái</th>
           {canManage && <th className="px-3 py-3 text-center">Thao tác</th>}
         </tr></thead>
-        <tbody>{filtered.map((item) => <tr key={item.id} className="border-t border-slate-100 hover:bg-blue-50/30">
+        <tbody>{paginated.map((item) => <tr key={item.id} className="border-t border-slate-100 hover:bg-blue-50/30">
           <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{item.code}</td><td className="px-3 py-2.5">{item.name}</td>
           <td className="px-3 py-2.5 text-slate-600">{item.unit}</td><td className="px-3 py-2.5 text-slate-600">{item.warehouse || "—"}</td>
           <td className="px-3 py-2.5 text-right font-semibold">{fmt(item.erpStock)}</td>
@@ -198,6 +209,18 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
         </tr>)}</tbody>
       </table></div>
       {!filtered.length && <div className="py-12 text-center text-slate-400">Không có vật tư phù hợp.</div>}
+      {!!filtered.length && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-3">
+        <span className="text-xs text-slate-500">Hiển thị {firstItem}–{lastItem} trong {filtered.length} mã · 30 mã/trang</span>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+            <ChevronLeft className="h-4 w-4" /> Trang trước
+          </Button>
+          <span className="min-w-24 text-center text-sm font-semibold text-slate-700">Trang {page}/{totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+            Trang sau <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>}
     </div>
 
     <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}><DialogContent className="sm:max-w-xl">
