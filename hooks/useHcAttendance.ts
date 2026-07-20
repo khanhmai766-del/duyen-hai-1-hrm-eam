@@ -6,7 +6,6 @@ import type { HcPeriod } from "@/lib/hc-period";
 
 function invalidateHcAttendance(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ["hc-groups"] });
-  void qc.invalidateQueries({ queryKey: ["hc-activity"] });
   void qc.invalidateQueries({ queryKey: ["hc-registrations"] });
   void qc.invalidateQueries({ queryKey: ["me-dashboard"] });
 }
@@ -39,29 +38,10 @@ export interface HcGroup {
 export interface HcRegistration extends HcMember {
   group: Omit<HcGroup, "members">;
 }
-export interface HcActivityLog {
-  id: string;
-  action: string;
-  entity: string;
-  entityId: string | null;
-  detail: string | null;
-  createdAt: string;
-  user: { id: string; name: string };
-}
-
 export function useHcGroups(date: string) {
   return useQuery({
     queryKey: ["hc-groups", date],
     queryFn: () => apiGet<HcGroup[]>(`/api/hc-groups?date=${date}`),
-    refetchInterval: 30_000,
-  });
-}
-
-export function useHcActivity(date: string, enabled = true) {
-  return useQuery({
-    queryKey: ["hc-activity", date],
-    queryFn: () => apiGet<HcActivityLog[]>(`/api/hc-groups/activity?date=${date}`),
-    enabled,
     refetchInterval: 30_000,
   });
 }

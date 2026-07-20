@@ -10,14 +10,13 @@
 // =====================================================================
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Archive, CheckCircle2, Clock3, History, Loader2, Pencil, Search } from "lucide-react";
+import { Archive, CheckCircle2, Clock3, Loader2, Pencil, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHcRegistrations,
   useHcCheckIn,
   useHcApprove,
   useHcCancelRegistration,
-  useHcActivity,
   useHcUpdateRegistrationNote,
   type HcRegistration,
 } from "@/hooks/useHcAttendance";
@@ -32,7 +31,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { RegistrationActivityDrawer } from "@/components/hr/registration-activity-drawer";
 
 type RegistrationActionMode = "edit" | "reject" | "cancel";
 
@@ -129,14 +127,12 @@ export default function AdminDayBoard() {
   const [actionPanel, setActionPanel] = React.useState<{ id: string; mode: RegistrationActionMode } | null>(null);
   const [actionText, setActionText] = React.useState("");
   const [archiveOpen, setArchiveOpen] = React.useState(false);
-  const [activityOpen, setActivityOpen] = React.useState(false);
   const historyFrom = React.useMemo(() => hcRetentionStartInput(), []);
   const historyTo = React.useMemo(() => addDaysIso(todayIso, -1), [todayIso]);
   const history = useHcRegistrations(historyFrom, historyTo, {
     archive: true,
     enabled: canViewArchive && archiveOpen,
   });
-  const activity = useHcActivity(selDate, canApprove && activityOpen);
 
   const regsByDate = React.useMemo(() => {
     const m = new Map<string, HcRegistration[]>();
@@ -221,15 +217,6 @@ export default function AdminDayBoard() {
           title="ĐĂNG KÝ ĐI HÀNH CHÍNH"
           description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6), trước 16h30 · ${canApprove ? "Bạn đang có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
         >
-          {canApprove && (
-            <button
-              type="button"
-              onClick={() => setActivityOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-3.5 py-2 text-sm font-semibold text-ink shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-            >
-              <History className="h-4 w-4" /> Nhật ký
-            </button>
-          )}
           {canViewArchive && (
             <button
               type="button"
@@ -243,48 +230,66 @@ export default function AdminDayBoard() {
       </div>
 
       {/* ===== Dải tuần ===== */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-xs text-slate-600">
+        <span className="font-semibold text-slate-700">Trạng thái xử lý:</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
+          Xanh lá: đã duyệt, không duyệt hoặc đã hủy
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-100" />
+          Đỏ: còn đăng ký chờ xử lý
+        </span>
+      </div>
       <div className="grid grid-cols-7 gap-2 mb-6">
         {week.map((dIso) => {
           const d = new Date(dIso + "T00:00:00");
-          const active = (regsByDate.get(dIso) ?? []).filter((r) => !["CANCELLED", "REJECTED"].includes(r.registrationStatus));
+          const dayRegistrations = regsByDate.get(dIso) ?? [];
+          const hasPending = dayRegistrations.some((r) => r.registrationStatus === "PENDING");
+          const isHandled = dayRegistrations.length > 0 && !hasPending;
           const locked = !canRegister(dIso);
           const selected = dIso === selDate;
           const isToday = dIso === todayIso;
+          const cardTone = hasPending
+            ? "border-red-300 bg-red-50 hover:border-red-400 hover:bg-red-100/70"
+            : isHandled
+              ? "border-emerald-300 bg-emerald-50 hover:border-emerald-400 hover:bg-emerald-100/70"
+              : "border-border bg-card hover:border-blue-300 hover:shadow-sm";
+          const selectedTone = selected
+            ? "ring-2 ring-blue-500 ring-offset-2 shadow-md"
+            : "";
+          const accentText = hasPending ? "text-red-700" : isHandled ? "text-emerald-700" : isToday ? "text-blue-600" : "text-muted-foreground";
           return (
             <button
               key={dIso}
               onClick={() => setSelDate(dIso)}
-              className={`relative rounded-2xl border px-2 pt-3 pb-2.5 text-center transition-all ${
-                selected
-                  ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/25"
-                  : "bg-card border-border hover:border-blue-300 hover:shadow-sm"
-              }`}
+              className={`relative rounded-2xl border px-2 pt-3 pb-2.5 text-center transition-all ${cardTone} ${selectedTone}`}
             >
-              <div className={`text-[11px] font-bold tracking-widest ${selected ? "text-blue-100" : isToday ? "text-blue-600" : "text-muted-foreground"}`}>
+              <div className={`text-[11px] font-bold tracking-widest ${accentText}`}>
                 {DAY_NAMES[d.getDay()]}
                 {isToday ? " · NAY" : ""}
               </div>
-              <div className={`text-xl font-extrabold leading-tight ${selected ? "text-white" : "text-ink"}`}>
+              <div className="text-xl font-extrabold leading-tight text-ink">
                 {String(d.getDate()).padStart(2, "0")}
               </div>
               <div className="mt-1 h-7 flex items-center justify-center">
-                {active.length > 0 ? (
+                {dayRegistrations.length > 0 ? (
                   <div className="flex -space-x-2">
-                    {active.slice(0, 3).map((r) => (
-                      <Avatar key={r.id} reg={r} size="h-7 w-7 text-[9px]" ring={selected ? "border-blue-600" : "border-white"} />
+                    {dayRegistrations.slice(0, 3).map((r) => (
+                      <Avatar key={r.id} reg={r} size="h-7 w-7 text-[9px] shadow-sm" ring="border-white" />
                     ))}
-                    {active.length > 3 && (
-                      <span className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${selected ? "border-blue-600 bg-blue-500" : "border-white bg-slate-400"} text-[9px] font-bold text-white`}>
-                        +{active.length - 3}
+                    {dayRegistrations.length > 3 && (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-600 text-[9px] font-bold text-white shadow-sm">
+                        +{dayRegistrations.length - 3}
                       </span>
                     )}
                   </div>
                 ) : (
-                  <span className={`text-[10px] ${selected ? "text-blue-200" : "text-slate-300"}`}>—</span>
+                  <span className="text-[10px] text-slate-300">—</span>
                 )}
               </div>
               {locked && (
-                <span className={`absolute right-2 top-2 text-[13px] leading-none ${selected ? "text-blue-100" : "text-slate-400"}`} title={isWeekend(dIso) ? "Cuối tuần — không đăng ký đi hành chính" : "Đã quá hạn gửi đăng ký"}>
+                <span className="absolute right-2 top-2 text-[13px] leading-none text-slate-500" title={isWeekend(dIso) ? "Cuối tuần — không đăng ký đi hành chính" : "Đã quá hạn gửi đăng ký"}>
                   🔒
                 </span>
               )}
@@ -491,15 +496,6 @@ export default function AdminDayBoard() {
           to={historyTo}
         />
       )}
-      <RegistrationActivityDrawer
-        open={activityOpen}
-        onOpenChange={setActivityOpen}
-        date={selDate}
-        logs={activity.data?.data ?? []}
-        loading={activity.isLoading}
-        refreshing={activity.isFetching}
-        onRefresh={() => { void activity.refetch(); }}
-      />
     </div>
   );
 }
