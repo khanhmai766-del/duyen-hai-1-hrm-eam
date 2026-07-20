@@ -8,7 +8,7 @@ import {
 import { normalizeText } from "@/lib/nav";
 import { parseErpNumber } from "@/lib/parse-number";
 
-export const ERP_EXPORT_HEADERS = ["Mã", "Tên", "ĐVT", "Loại vật tư", "Kho VTTB", "Số liệu ERP"];
+export const ERP_EXPORT_HEADERS = ["Mã VT", "Tên VT", "Kho", "DVT", "Tồn kho", "Loại vật tư"];
 
 export function canonicalGroupedCategory(value?: string | null): GroupingCategory {
   const normalized = normalizeText(value || "");
@@ -32,12 +32,12 @@ export function parseErpImportRows(
   const header = normalizedRows[headerIndex];
   const findColumn = (candidates: string[]) => header.findIndex((label) => candidates.includes(label));
 
-  const codeIndex = findColumn(["ma", "ma vat tu", "code"]);
-  const nameIndex = findColumn(["ten", "ten vat tu", "name"]);
+  const codeIndex = findColumn(["ma", "ma vt", "ma vat tu", "code"]);
+  const nameIndex = findColumn(["ten", "ten vt", "ten vat tu", "name"]);
   const unitIndex = findColumn(["dvt", "don vi tinh", "unit"]);
   const categoryIndex = findColumn(["loai vat tu", "loai", "category"]);
   const warehouseIndex = findColumn(["kho vttb", "kho", "kho vat tu", "kho vat tu thiet bi", "warehouse"]);
-  const stockIndex = findColumn(["so lieu erp", "erp", "erp stock", "solieu erp"]);
+  const stockIndex = findColumn(["so lieu erp", "erp", "erp stock", "solieu erp", "ton kho", "ton erp"]);
   if (codeIndex < 0 || nameIndex < 0 || unitIndex < 0) return [];
 
   return rows
@@ -62,19 +62,21 @@ export function parseErpStockUpdateRows(
   const normalizedRows = rows.map((row) => row.map((cell) => normalizeText(String(cell ?? ""))));
   const stockHeaders = ["so lieu erp", "erp", "erp stock", "solieu erp", "ton kho", "ton erp"];
   const headerIndex = normalizedRows.findIndex((row) =>
-    row.some((cell) => ["ma", "ma vat tu", "code"].includes(cell)) && row.some((cell) => stockHeaders.includes(cell))
+    row.some((cell) => ["ma", "ma vt", "ma vat tu", "code"].includes(cell)) && row.some((cell) => stockHeaders.includes(cell))
   );
   if (headerIndex < 0) return [];
 
   const header = normalizedRows[headerIndex];
-  const codeIndex = header.findIndex((cell) => ["ma", "ma vat tu", "code"].includes(cell));
+  const codeIndex = header.findIndex((cell) => ["ma", "ma vt", "ma vat tu", "code"].includes(cell));
   const stockIndex = header.findIndex((cell) => stockHeaders.includes(cell));
+  const warehouseIndex = header.findIndex((cell) => ["kho", "kho vttb", "kho vat tu", "warehouse"].includes(cell));
 
   return rows
     .slice(headerIndex + 1)
     .map((row) => ({
       code: String(row[codeIndex] ?? "").trim(),
       erpStock: row[stockIndex] ?? null,
+      warehouse: warehouseIndex >= 0 ? String(row[warehouseIndex] ?? "").trim() : undefined,
     }))
     .filter((row) => row.code || String(row.erpStock ?? "").trim());
 }
@@ -85,10 +87,10 @@ export function downloadErpImportTemplate(sampleCategory: GroupingCategory = GRO
     [`Ngày xuất: ${new Intl.DateTimeFormat("vi-VN").format(new Date())}`, "Số bản ghi: 1"],
     [],
     ERP_EXPORT_HEADERS,
-    ["ERP-001", "Vật tư mẫu", "Cái", sampleCategory, "Kho Duyên Hải", 0],
+    ["ERP-001", "Vật tư mẫu", "YY1", "Cái", 0, sampleCategory],
   ];
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
-  sheet["!cols"] = [{ wch: 18 }, { wch: 34 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 14 }];
+  sheet["!cols"] = [{ wch: 24 }, { wch: 42 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 20 }];
   sheet["!rows"] = [{ hpt: 24 }, { hpt: 20 }, { hpt: 8 }, { hpt: 28 }, { hpt: 25 }];
   sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: ERP_EXPORT_HEADERS.length - 1 } }];
   const workbook = XLSX.utils.book_new();

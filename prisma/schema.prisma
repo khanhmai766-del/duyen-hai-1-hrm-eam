@@ -619,6 +619,7 @@ model ErpMaterial {
   category  String?
   warehouse String? // Kho VTTB — kho vật tư thiết bị theo ERP
   note      String?
+  isActive  Boolean  @default(true) // false = ngừng sử dụng; giữ lại để bảo toàn lịch sử phiếu
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

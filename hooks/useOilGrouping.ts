@@ -52,6 +52,19 @@ export interface OilPendingItem {
   suggestedReason: string | null;
 }
 
+export interface ErpMaterialItem {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+  warehouse: string | null;
+  erpStock: number;
+  category: GroupingCategory;
+  mappingStatus: "SUGGESTED" | "UNMAPPED" | "CONFIRMED" | "IGNORED";
+  isActive: boolean;
+  oilType: { id: string; code: string; name: string } | null;
+}
+
 export interface OilTypeOption {
   id: string;
   code: string;
@@ -92,12 +105,14 @@ export type GroupedErpImportResult = {
 export type ErpStockUpdateInput = {
   code: string;
   erpStock: number | string | null;
+  warehouse?: string;
 };
 
 export type ErpStockUpdateResult = {
   updated: number;
   notFound: number;
   skipped: number;
+  inactiveSkipped: number;
   errors: string[];
 };
 
@@ -112,6 +127,14 @@ export function useOilSuggestions(category: GroupingCategory, enabled = true) {
   return useQuery({
     queryKey: ["oil-suggestions", category],
     queryFn: () => apiGet<OilSuggestionsData>(`/api/vat-tu/oil-grouping/suggestions?category=${encodeURIComponent(category)}`),
+    enabled,
+  });
+}
+
+export function useAllGroupedErpMaterials(category: GroupingCategory, enabled = true) {
+  return useQuery({
+    queryKey: ["grouped-erp-materials", category],
+    queryFn: () => apiGet<ErpMaterialItem[]>(`/api/vat-tu/oil-grouping/materials?category=${encodeURIComponent(category)}`),
     enabled,
   });
 }
@@ -146,6 +169,7 @@ export function useCreateGroupedErpMaterial() {
   return useMutation({
     mutationFn: (body: GroupedErpMaterialInput) => apiMutate("/api/vat-tu/oil-grouping/materials", "POST", body),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
@@ -157,12 +181,13 @@ export function useCreateGroupedErpMaterial() {
 export function useUpdateGroupedErpStock() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { id: string; erpStock: number }) =>
+    mutationFn: (body: { id: string; code?: string; name?: string; unit?: string; warehouse?: string; category?: GroupingCategory; erpStock?: number; isActive?: boolean }) =>
       apiMutate("/api/vat-tu/oil-grouping/materials", "PUT", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
     },
   });
 }
@@ -173,6 +198,7 @@ export function useImportGroupedErpMaterials() {
     mutationFn: (rows: GroupedErpMaterialInput[]) =>
       apiMutate<GroupedErpImportResult>("/api/vat-tu/oil-grouping/import", "POST", { rows }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
@@ -188,6 +214,7 @@ export function useUpdateErpStocksFromFile() {
     mutationFn: (rows: ErpStockUpdateInput[]) =>
       apiMutate<ErpStockUpdateResult>("/api/vat-tu/oil-grouping/stock-import", "POST", { rows }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
@@ -204,6 +231,7 @@ export function useDeletePendingGroupedErpMaterials() {
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
     },
   });
 }
@@ -236,6 +264,22 @@ export function useDeleteOilGroup() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+    },
+  });
+}
+
+/** Tách một mã ERP khỏi nhóm, đưa riêng mã đó về "Chờ phân nhóm". */
+export function useUngroupErpMaterial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (materialId: string) =>
+      apiMutate<{ materialId: string; oilTypeId: string }>("/api/vat-tu/oil-grouping/groups", "PATCH", { materialId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oil-stock"] });
+      qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }

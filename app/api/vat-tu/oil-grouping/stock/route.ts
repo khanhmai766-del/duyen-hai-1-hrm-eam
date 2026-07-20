@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         orderBy: { code: "asc" },
         include: {
           materials: {
-            where: { mappingStatus: "CONFIRMED" },
+            where: { mappingStatus: "CONFIRMED", isActive: true },
             orderBy: { code: "asc" },
             select: {
               id: true,

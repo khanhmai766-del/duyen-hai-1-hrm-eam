@@ -10,7 +10,7 @@ import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RefreshCw, Search, Trash2, Upload, X, type LucideIcon } from "lucide-react";
+import { Ban, CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Unlink, Upload, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -22,6 +22,7 @@ import { canManageMaterialCatalog } from "@/lib/constants";
 import {
   useOilStock,
   useOilSuggestions,
+  useAllGroupedErpMaterials,
   useOilGroupingSync,
   useOilGroupingConfirm,
   useCreateGroupedErpMaterial,
@@ -31,10 +32,12 @@ import {
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
+  useUngroupErpMaterial,
   GROUPING_CATEGORIES,
   type GroupingCategory,
   type OilStockGroup,
   type OilPendingItem,
+  type ErpMaterialItem,
   type OilConfirmInput,
   type GroupedErpMaterialInput,
 } from "@/hooks/useOilGrouping";
@@ -68,7 +71,7 @@ export default function OilGroupingPage() {
   const { data: session } = useSession();
   const canManage = canManageMaterialCatalog({ role: session?.user?.role, position: session?.user?.position });
   const category: GroupingCategory = CATEGORY_BY_SLUG[params.get("loai") ?? ""] ?? "Dầu bôi trơn";
-  const [tab, setTab] = useState<"stock" | "pending">("stock");
+  const [tab, setTab] = useState<"stock" | "all" | "pending">("stock");
   const { data, isLoading, refetch } = useOilStock(category);
   const groups = data?.data.groups ?? [];
   const pendingCount = data?.data.pendingCount ?? 0;
@@ -85,6 +88,7 @@ export default function OilGroupingPage() {
       {/* Tabs tồn kho / chờ phân nhóm — loại vật tư chọn từ menu con sidebar */}
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200">
         <TabButton active={tab === "stock"} onClick={() => setTab("stock")} label="Tồn kho theo nhóm" />
+        <TabButton active={tab === "all"} onClick={() => setTab("all")} label="Tất cả" />
         <TabButton active={tab === "pending"} onClick={() => setTab("pending")} label="Chờ phân nhóm" badge={pendingCount} />
         <span className="ml-auto mb-1.5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
           <CategoryIcon category={category} className="h-4 w-4" />
@@ -94,11 +98,125 @@ export default function OilGroupingPage() {
 
       {tab === "stock" ? (
         <StockBoard groups={groups} loading={isLoading} onReload={() => refetch()} />
+      ) : tab === "all" ? (
+        <AllMaterialsTab key={category} category={category} canManage={canManage} />
       ) : (
         <PendingTab key={category} category={category} />
       )}
     </div>
   );
+}
+
+function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; canManage: boolean }) {
+  const { data, isLoading } = useAllGroupedErpMaterials(category);
+  const updateMaterial = useUpdateGroupedErpStock();
+  const deleteMaterials = useDeletePendingGroupedErpMaterials();
+  const items = data?.data ?? [];
+  const [search, setSearch] = useState("");
+  const [edit, setEdit] = useState<ErpMaterialItem | null>(null);
+  const [deleting, setDeleting] = useState<ErpMaterialItem | null>(null);
+  const [changingStatus, setChangingStatus] = useState<ErpMaterialItem | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+
+  const filtered = useMemo(() => {
+    const query = normalizeText(search.trim());
+    return items.filter((item) => {
+      if (statusFilter === "active" && !item.isActive) return false;
+      if (statusFilter === "inactive" && item.isActive) return false;
+      return !query || normalizeText([item.code, item.name, item.unit, item.warehouse, item.oilType?.code, item.oilType?.name].filter(Boolean).join(" ")).includes(query);
+    });
+  }, [items, search, statusFilter]);
+
+  const save = async () => {
+    if (!edit) return;
+    if (!edit.code.trim() || !edit.name.trim() || !edit.unit.trim()) return void toast.error("Vui lòng nhập đủ mã, tên vật tư và ĐVT");
+    try {
+      await updateMaterial.mutateAsync({
+        id: edit.id,
+        code: edit.code.trim(),
+        name: edit.name.trim(),
+        unit: edit.unit.trim(),
+        warehouse: edit.warehouse?.trim() ?? "",
+        category: edit.category,
+        erpStock: Math.max(0, Math.round(Number(edit.erpStock) || 0)),
+      });
+      toast.success("Đã cập nhật vật tư ERP");
+      setEdit(null);
+    } catch (error) { toast.error((error as Error).message); }
+  };
+
+  const remove = async () => {
+    if (!deleting) return;
+    try {
+      await deleteMaterials.mutateAsync([deleting.id]);
+      toast.success(`Đã xoá mã vật tư ${deleting.code}`);
+      setDeleting(null);
+    } catch (error) { toast.error((error as Error).message); }
+  };
+
+  const changeStatus = async () => {
+    if (!changingStatus) return;
+    const nextActive = !changingStatus.isActive;
+    try {
+      await updateMaterial.mutateAsync({ id: changingStatus.id, isActive: nextActive });
+      toast.success(nextActive ? `Đã khôi phục mã ${changingStatus.code}` : `Đã ngừng sử dụng mã ${changingStatus.code}`);
+      setChangingStatus(null);
+    } catch (error) { toast.error((error as Error).message); }
+  };
+
+  if (isLoading) return <div className="py-12 text-center text-slate-400">Đang tải…</div>;
+  return <div className="space-y-3">
+    <div className="flex items-center gap-3">
+      <div className="relative w-full max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm mã, tên, kho hoặc nhóm vật tư..." className="pl-9" />
+      </div>
+      <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className="h-10 rounded-md border border-input bg-white px-3 text-sm">
+        <option value="active">Đang sử dụng</option><option value="inactive">Ngừng sử dụng</option><option value="all">Tất cả trạng thái</option>
+      </select>
+      <span className="whitespace-nowrap text-sm text-slate-500">{filtered.length}/{items.length} mã</span>
+    </div>
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto"><table className="w-full text-sm">
+        <thead><tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <th className="px-4 py-3 text-left">Mã vật tư</th><th className="px-3 py-3 text-left">Tên vật tư</th>
+          <th className="px-3 py-3 text-left">ĐVT</th><th className="px-3 py-3 text-left">Kho</th>
+          <th className="px-3 py-3 text-right">Tồn ERP</th><th className="px-3 py-3 text-left">Nhóm hiện tại</th><th className="px-3 py-3 text-center">Trạng thái</th>
+          {canManage && <th className="px-3 py-3 text-center">Thao tác</th>}
+        </tr></thead>
+        <tbody>{filtered.map((item) => <tr key={item.id} className="border-t border-slate-100 hover:bg-blue-50/30">
+          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{item.code}</td><td className="px-3 py-2.5">{item.name}</td>
+          <td className="px-3 py-2.5 text-slate-600">{item.unit}</td><td className="px-3 py-2.5 text-slate-600">{item.warehouse || "—"}</td>
+          <td className="px-3 py-2.5 text-right font-semibold">{fmt(item.erpStock)}</td>
+          <td className="px-3 py-2.5 text-slate-600">{item.oilType ? `${item.oilType.code.startsWith(STANDALONE_GROUP_PREFIX) ? "Nhóm riêng" : item.oilType.code} · ${item.oilType.name}` : "Chưa phân nhóm"}</td>
+          <td className="px-3 py-2.5 text-center">{item.isActive ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">Đang sử dụng</span> : <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Ngừng sử dụng</span>}</td>
+          {canManage && <td className="px-3 py-2.5"><div className="flex justify-center gap-1">
+            <Button variant="ghost" size="icon" title="Sửa vật tư" onClick={() => setEdit({ ...item })}><Pencil className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" title={item.isActive ? "Ngừng sử dụng" : "Khôi phục sử dụng"} className={item.isActive ? "text-amber-700 hover:bg-amber-50" : "text-emerald-700 hover:bg-emerald-50"} onClick={() => setChangingStatus(item)}>{item.isActive ? <Ban className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}</Button>
+            <Button variant="ghost" size="icon" title="Xoá vật tư" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDeleting(item)}><Trash2 className="h-4 w-4" /></Button>
+          </div></td>}
+        </tr>)}</tbody>
+      </table></div>
+      {!filtered.length && <div className="py-12 text-center text-slate-400">Không có vật tư phù hợp.</div>}
+    </div>
+
+    <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}><DialogContent className="sm:max-w-xl">
+      <DialogHeader><DialogTitle>Sửa vật tư ERP</DialogTitle></DialogHeader>
+      {edit && <div className="grid grid-cols-2 gap-3">
+        <div><Label className="mb-1.5 block">Mã vật tư *</Label><Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></div>
+        <div><Label className="mb-1.5 block">ĐVT *</Label><Input value={edit.unit} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} /></div>
+        <div className="col-span-2"><Label className="mb-1.5 block">Tên vật tư *</Label><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
+        <div><Label className="mb-1.5 block">Kho</Label><Input value={edit.warehouse ?? ""} onChange={(e) => setEdit({ ...edit, warehouse: e.target.value })} /></div>
+        <div><Label className="mb-1.5 block">Tồn ERP</Label><Input type="number" min={0} value={edit.erpStock} onChange={(e) => setEdit({ ...edit, erpStock: Number(e.target.value) })} /></div>
+        <div className="col-span-2"><Label className="mb-1.5 block">Loại vật tư</Label><select value={edit.category} disabled={!!edit.oilType} onChange={(e) => setEdit({ ...edit, category: e.target.value as GroupingCategory })} className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
+          {GROUPING_CATEGORIES.map((value) => <option key={value}>{value}</option>)}
+        </select>{edit.oilType && <p className="mt-1 text-xs text-slate-500">Mã đã gom nhóm nên không thể đổi loại vật tư.</p>}</div>
+      </div>}
+      <DialogFooter><Button variant="outline" onClick={() => setEdit(null)}>Huỷ</Button><Button onClick={save} disabled={updateMaterial.isPending}>{updateMaterial.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lưu</Button></DialogFooter>
+    </DialogContent></Dialog>
+    <ConfirmDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)} title={`Xoá mã vật tư ${deleting?.code ?? ""}?`} description="Mã sẽ bị xoá khỏi danh sách ERP và khỏi nhóm hiện tại. Hành động này không thể hoàn tác." confirmLabel="Xoá" loading={deleteMaterials.isPending} onConfirm={remove} />
+    <ConfirmDialog open={!!changingStatus} onOpenChange={(open) => !open && setChangingStatus(null)} title={changingStatus?.isActive ? `Ngừng sử dụng mã ${changingStatus.code}?` : `Khôi phục mã ${changingStatus?.code ?? ""}?`} description={changingStatus?.isActive ? "Mã sẽ rời nhóm hiện tại, không xuất hiện trong danh sách chọn cho phiếu mới và bị bỏ qua khi cập nhật tồn kho. Lịch sử phiếu cũ vẫn được giữ nguyên." : "Mã sẽ trở lại danh sách Chờ phân nhóm và tiếp tục được cập nhật tồn kho."} confirmLabel={changingStatus?.isActive ? "Ngừng sử dụng" : "Khôi phục"} loading={updateMaterial.isPending} onConfirm={changeStatus} />
+  </div>;
 }
 
 function CategoryIcon({ category, className }: { category: GroupingCategory; className?: string }) {
@@ -162,11 +280,11 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
     try {
       const rows = await readErpStockUpdateFile(file);
       if (!rows.length) {
-        toast.error("Không tìm thấy dữ liệu. File cần có cột Mã và Số liệu ERP.");
+        toast.error("Không tìm thấy dữ liệu. File cần có cột Mã VT và Tồn kho.");
         return;
       }
       const result = await updateStocks.mutateAsync(rows);
-      toast.success(`Đã cập nhật tồn kho ${result.updated} mã; bỏ qua ${result.notFound} mã không có trong hệ thống${result.skipped ? ` và ${result.skipped} dòng không hợp lệ` : ""}.`);
+      toast.success(`Đã cập nhật tồn kho ${result.updated} mã; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng, ${result.notFound} mã không có trong hệ thống${result.skipped ? ` và ${result.skipped} dòng không hợp lệ` : ""}.`);
       if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
     } catch (error) {
       toast.error((error as Error).message || "Không cập nhật được tồn kho ERP");
@@ -492,6 +610,19 @@ function GroupRows({
   onDelete: () => void;
 }) {
   const updateErpStock = useUpdateGroupedErpStock();
+  const ungroupMaterial = useUngroupErpMaterial();
+  const [ungrouping, setUngrouping] = useState<OilStockGroup["materials"][number] | null>(null);
+
+  const confirmUngroup = async () => {
+    if (!ungrouping) return;
+    try {
+      await ungroupMaterial.mutateAsync(ungrouping.id);
+      toast.success(`Đã tách ${ungrouping.erpCode} khỏi nhóm và đưa về Chờ phân nhóm`);
+      setUngrouping(null);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  };
   return (
     <>
       <tr className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer" onClick={() => toggle(g.id)}>
@@ -571,9 +702,31 @@ function GroupRows({
               />
               {m.conversionFactor !== 1 && <span className="ml-2 text-slate-400">= {fmt(m.qtyInBase)} {g.baseUnit}</span>}
             </td>
-            <td colSpan={canManage ? 4 : 3}></td>
+            <td colSpan={canManage ? 3 : 3}></td>
+            {canManage && (
+              <td className="px-4 py-2 text-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title="Tách mã khỏi nhóm"
+                  className="text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                  onClick={() => setUngrouping(m)}
+                >
+                  <Unlink className="h-4 w-4" /> Tách nhóm
+                </Button>
+              </td>
+            )}
           </tr>
         ))}
+      <ConfirmDialog
+        open={!!ungrouping}
+        onOpenChange={(open) => !open && setUngrouping(null)}
+        title={ungrouping ? `Tách mã ${ungrouping.erpCode} khỏi nhóm?` : "Tách mã khỏi nhóm"}
+        description={`Mã vật tư sẽ được đưa về tab "Chờ phân nhóm". Nhóm ${g.code.startsWith(STANDALONE_GROUP_PREFIX) ? g.name : `${g.code} · ${g.name}`} và các mã còn lại vẫn được giữ nguyên.`}
+        confirmLabel="Tách khỏi nhóm"
+        loading={ungroupMaterial.isPending}
+        onConfirm={confirmUngroup}
+      />
     </>
   );
 }
@@ -842,7 +995,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                     </th>
                     <th className="text-left px-2 py-3">Mã vật tư</th>
                     <th className="text-left px-2 py-3">Tên vật tư</th>
-                    <th className="text-left px-3 py-3">Kho VTTB</th>
+                    <th className="text-left px-3 py-3">Kho</th>
                     <th className="text-right px-3 py-3">Tồn</th>
                     <th className="text-left px-3 py-3">Gợi ý của hệ thống</th>
                     <th className="px-3 py-3"></th>

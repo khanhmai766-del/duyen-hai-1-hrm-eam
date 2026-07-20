@@ -46,12 +46,13 @@ export async function GET() {
       ? await prisma.$queryRaw<Array<{ code: string; name: string; erpStock: number }>>`
           SELECT "code", "name", "erpStock"
           FROM "ErpMaterial"
-          WHERE "code" = ANY(${erpCodes}::text[])
+          WHERE "isActive" = TRUE AND "code" = ANY(${erpCodes}::text[])
             AND "mappingStatus" = 'CONFIRMED'
         `
       : [];
     const erpStockByCode = new Map(erpRows.map((row) => [row.code, row.erpStock]));
     const erpNameByCode = new Map(erpRows.map((row) => [row.code, row.name]));
+    const activeErpCodes = new Set(erpRows.map((row) => row.code));
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
       const positions = new Set<string>();
@@ -63,7 +64,7 @@ export async function GET() {
         seen.add(seq);
         mdevices.push({ seq, label: r.location || r.device?.name || r.system || seq });
       }
-      const codes = (m.erpCodes?.length ? m.erpCodes : [m.code]).filter(Boolean);
+      const codes = (m.erpCodes?.length ? m.erpCodes : [m.code]).filter((code) => Boolean(code) && activeErpCodes.has(code));
       return {
         id: m.id,
         code: m.code,
@@ -76,7 +77,7 @@ export async function GET() {
         managingPositions: [...positions],
         devices: mdevices,
       };
-    });
+    }).filter((material) => material.erpCodes.length > 0);
 
     // Dùng cùng nguồn cương vị cố định với Mệnh lệnh/Forum. Không trộn dữ liệu
     // user để tránh sinh bản sao chỉ khác kiểu viết hoa (Lò phó / Lò Phó...).

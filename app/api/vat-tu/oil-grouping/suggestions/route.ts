@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const [rows, oilTypes] = await Promise.all([
       prisma.erpMaterial.findMany({
-        where: { mappingStatus: { in: ["SUGGESTED", "UNMAPPED"] }, ...categoryScanFilter(category) },
+        where: { mappingStatus: { in: ["SUGGESTED", "UNMAPPED"] }, isActive: true, ...categoryScanFilter(category) },
         orderBy: [{ mappingStatus: "asc" }, { suggestedScore: "desc" }],
         select: {
           id: true,

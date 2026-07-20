@@ -81,6 +81,58 @@ export async function PUT(req: NextRequest) {
   });
 }
 
+// PATCH body: { materialId } — tách riêng một mã khỏi nhóm hiện tại và đưa
+// về danh sách "Chờ phân nhóm"; nhóm cùng các mã còn lại được giữ nguyên.
+export async function PATCH(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    if (!canManageMaterialCatalog(user)) {
+      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được tách mã khỏi nhóm", 403);
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const materialId = String(body?.materialId ?? "").trim();
+    if (!materialId) return fail("Thiếu id vật tư ERP");
+
+    const material = await prisma.erpMaterial.findUnique({
+      where: { id: materialId },
+      select: { id: true, code: true, name: true, oilTypeId: true, mappingStatus: true, oilType: { select: { code: true, name: true } } },
+    });
+    if (!material) return fail("Không tìm thấy vật tư ERP", 404);
+    if (!material.oilTypeId || material.mappingStatus !== "CONFIRMED") {
+      return fail("Mã vật tư chưa được gom nhóm");
+    }
+
+    const oldGroupId = material.oilTypeId;
+    const oldGroupLabel = material.oilType ? `${material.oilType.code} · ${material.oilType.name}` : oldGroupId;
+    await prisma.$transaction(async (tx) => {
+      await tx.erpMaterial.update({
+        where: { id: materialId },
+        data: {
+          oilTypeId: null,
+          mappingStatus: "UNMAPPED",
+          conversionFactor: 1,
+          suggestedOilTypeId: null,
+          suggestedScore: null,
+          suggestedReason: null,
+        },
+      });
+      await tx.oilTypeMappingLog.create({
+        data: {
+          materialId,
+          oilTypeId: oldGroupId,
+          action: "REMOVED",
+          reason: `Tách mã khỏi nhóm ${oldGroupLabel}`,
+          userId: user.id,
+        },
+      });
+    });
+
+    await audit(user.id, "OIL_GROUP_MEMBER_REMOVE", "ErpMaterial", materialId, `Tách ${material.code} · ${material.name} khỏi nhóm ${oldGroupLabel}`);
+    return ok({ materialId, oilTypeId: oldGroupId });
+  });
+}
+
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();

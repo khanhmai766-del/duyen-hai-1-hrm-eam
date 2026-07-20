@@ -70,8 +70,13 @@ export async function POST(req: NextRequest) {
       seen.add(code);
       touchedCategories.add(category);
 
-      const current = await prisma.erpMaterial.findUnique({ where: { code }, select: { id: true } });
+      const current = await prisma.erpMaterial.findUnique({ where: { code }, select: { id: true, isActive: true } });
       if (current) {
+        if (!current.isActive) {
+          skipped += 1;
+          errors.push(`Dòng ${line}: mã ${code} đã ngừng sử dụng`);
+          continue;
+        }
         await prisma.erpMaterial.update({
           where: { id: current.id },
           data: { name, unit, category, erpStock, ...(warehouse !== null ? { warehouse } : {}) },

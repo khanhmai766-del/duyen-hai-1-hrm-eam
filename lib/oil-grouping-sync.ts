@@ -14,7 +14,7 @@ export function isGroupableCategory(value: unknown): value is GroupableCategory 
 // Điều kiện lọc mã ERP theo loại. Mã chưa phân loại (category null — dữ liệu cũ)
 // được tính vào "Dầu bôi trơn" vì import Excel cũng mặc định về loại này.
 export function categoryScanFilter(category: GroupableCategory): Prisma.ErpMaterialWhereInput {
-  return category === "Dầu bôi trơn" ? { OR: [{ category }, { category: null }] } : { category };
+  return category === "Dầu bôi trơn" ? { isActive: true, OR: [{ category }, { category: null }] } : { category, isActive: true };
 }
 
 export interface OilGroupingSyncResult {
@@ -40,7 +40,7 @@ export async function runOilGroupingSync(only?: GroupableCategory): Promise<OilG
       where: { category, NOT: { code: { startsWith: STANDALONE_GROUP_PREFIX } } },
       include: {
         materials: {
-          where: { mappingStatus: "CONFIRMED" },
+          where: { mappingStatus: "CONFIRMED", isActive: true },
           select: { id: true, code: true, name: true },
         },
       },
@@ -113,7 +113,7 @@ export async function runOilGroupingSync(only?: GroupableCategory): Promise<OilG
 export async function pendingCountByCategory(): Promise<Record<GroupableCategory, number>> {
   const rows = await prisma.erpMaterial.groupBy({
     by: ["category"],
-    where: { mappingStatus: { in: ["SUGGESTED", "UNMAPPED"] } },
+    where: { mappingStatus: { in: ["SUGGESTED", "UNMAPPED"] }, isActive: true },
     _count: { _all: true },
   });
   const out = Object.fromEntries(GROUPABLE_CATEGORIES.map((c) => [c, 0])) as Record<GroupableCategory, number>;
