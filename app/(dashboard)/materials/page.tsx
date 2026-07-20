@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -504,25 +503,6 @@ function MaterialsPageContent() {
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && (
           <>
-            <ExportButton rows={materials.flatMap((m) => {
-              const codes = materialErpCodes(m);
-              const points = materialPointLabels(m);
-              const exportCodes = codes.length ? codes : [""];
-              const exportPoints = points.length ? points : [""];
-
-              return exportCodes.flatMap((code) =>
-                exportPoints.map((point) => ({
-                  code,
-                  name: m.name,
-                  dvt: m.unit,
-                  hienCo: m.quantity,
-                  soLieuERP: code ? (erpByCode(code)?.erpStock ?? 0) : m.minStock,
-                  diemDung: point,
-                  tongNhuCau: m.totalNeed ?? 0,
-                  deXuatThem: m.shortfall ?? 0,
-                }))
-              );
-            })} filename={`vat-tu-${machineTab.toLowerCase()}`} />
             <Button variant="outline" onClick={() => setImportLinksOpen(true)}>
               <Upload className="h-4 w-4" /> Nhập link thiết bị
             </Button>

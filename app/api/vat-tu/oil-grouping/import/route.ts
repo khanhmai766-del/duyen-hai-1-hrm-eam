@@ -21,7 +21,7 @@ function cleanString(value: unknown) {
 }
 
 function cleanStock(value: unknown) {
-  const stock = Math.round(parseErpNumber(value));
+  const stock = parseErpNumber(value);
   return Number.isFinite(stock) && stock > 0 ? stock : 0;
 }
 

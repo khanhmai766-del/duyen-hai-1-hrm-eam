@@ -110,6 +110,8 @@ export type ErpStockUpdateInput = {
 
 export type ErpStockUpdateResult = {
   updated: number;
+  changed: number;
+  warehouseChanged: number;
   notFound: number;
   skipped: number;
   inactiveSkipped: number;
@@ -207,8 +209,8 @@ export function useImportGroupedErpMaterials() {
   });
 }
 
-/** Chỉ cập nhật tồn ERP theo mã đã có; API không tạo mã vật tư mới. */
-export function useUpdateErpStocksFromFile() {
+/** Đồng bộ tồn ERP từ QLVT theo mã đã có; API không tạo mã vật tư mới. */
+export function useSyncErpStocksFromQlvt() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (rows: ErpStockUpdateInput[]) =>

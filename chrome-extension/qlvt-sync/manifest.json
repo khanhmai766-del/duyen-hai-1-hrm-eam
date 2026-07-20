@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Đồng bộ tồn kho QLVT - PXVH1",
+  "version": "1.0.1",
+  "description": "Cầu nối an toàn giữa QLVT Duyên Hải và hệ thống quản lý vật tư PXVH1.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://qlvt.tpcduyenhai.com.vn/*",
+    "https://duyenhai1.vn/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://duyenhai1.vn/*", "http://localhost:3000/*"],
+      "js": ["bridge-app.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://qlvt.tpcduyenhai.com.vn/*"],
+      "js": ["bridge-qlvt.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

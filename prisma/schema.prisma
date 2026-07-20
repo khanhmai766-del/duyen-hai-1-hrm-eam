@@ -615,7 +615,7 @@ model ErpMaterial {
   code      String   @unique
   name      String
   unit      String
-  erpStock  Int      @default(0)
+  erpStock  Float    @default(0)
   category  String?
   warehouse String? // Kho VTTB — kho vật tư thiết bị theo ERP
   note      String?

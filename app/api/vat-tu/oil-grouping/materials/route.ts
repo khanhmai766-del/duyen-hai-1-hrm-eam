@@ -11,7 +11,7 @@ function cleanString(value: unknown) {
 }
 
 function cleanStock(value: unknown) {
-  const next = Math.round(Number(value));
+  const next = Number(value);
   return Number.isFinite(next) && next > 0 ? next : 0;
 }
 
@@ -79,7 +79,7 @@ export async function PUT(req: NextRequest) {
       data.category = category;
     }
     if (Object.prototype.hasOwnProperty.call(body, "erpStock")) {
-      const erpStock = Math.round(Number(body.erpStock));
+      const erpStock = Number(body.erpStock);
       if (!Number.isFinite(erpStock) || erpStock < 0) return fail("Số liệu ERP không hợp lệ");
       data.erpStock = erpStock;
     }

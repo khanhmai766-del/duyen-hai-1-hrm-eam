@@ -10,9 +10,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Ban, ChevronLeft, ChevronRight, CircleDot, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, Unlink, Upload, X, type LucideIcon } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, Upload, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { ExportButton } from "@/components/shared/export-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,7 +27,7 @@ import {
   useCreateGroupedErpMaterial,
   useUpdateGroupedErpStock,
   useImportGroupedErpMaterials,
-  useUpdateErpStocksFromFile,
+  useSyncErpStocksFromQlvt,
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
@@ -40,12 +39,13 @@ import {
   type ErpMaterialItem,
   type OilConfirmInput,
   type GroupedErpMaterialInput,
+  type ErpStockUpdateInput,
 } from "@/hooks/useOilGrouping";
-import { downloadErpImportTemplate, readErpImportFile, readErpStockUpdateFile } from "@/lib/erp-import";
+import { downloadErpImportTemplate, readErpImportFile } from "@/lib/erp-import";
 import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 import { normalizeText } from "@/lib/nav";
 
-const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
+const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 3 });
 
 // Icon + gợi ý mặc định khi tạo nhóm mới cho từng loại vật tư.
 const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: string; codeHint: string; nameHint: string }> = {
@@ -149,7 +149,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
         unit: edit.unit.trim(),
         warehouse: edit.warehouse?.trim() ?? "",
         category: edit.category,
-        erpStock: Math.max(0, Math.round(Number(edit.erpStock) || 0)),
+        erpStock: Math.max(0, Number(edit.erpStock) || 0),
       });
       toast.success("Đã cập nhật vật tư ERP");
       setEdit(null);
@@ -230,7 +230,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
         <div><Label className="mb-1.5 block">ĐVT *</Label><Input value={edit.unit} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} /></div>
         <div className="col-span-2"><Label className="mb-1.5 block">Tên vật tư *</Label><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
         <div><Label className="mb-1.5 block">Kho</Label><Input value={edit.warehouse ?? ""} onChange={(e) => setEdit({ ...edit, warehouse: e.target.value })} /></div>
-        <div><Label className="mb-1.5 block">Tồn ERP</Label><Input type="number" min={0} value={edit.erpStock} onChange={(e) => setEdit({ ...edit, erpStock: Number(e.target.value) })} /></div>
+        <div><Label className="mb-1.5 block">Tồn ERP</Label><Input type="number" min={0} step="any" value={edit.erpStock} onChange={(e) => setEdit({ ...edit, erpStock: Number(e.target.value) })} /></div>
         <div className="col-span-2"><Label className="mb-1.5 block">Loại vật tư</Label><select value={edit.category} disabled={!!edit.oilType} onChange={(e) => setEdit({ ...edit, category: e.target.value as GroupingCategory })} className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
           {GROUPING_CATEGORIES.map((value) => <option key={value}>{value}</option>)}
         </select>{edit.oilType && <p className="mt-1 text-xs text-slate-500">Mã đã gom nhóm nên không thể đổi loại vật tư.</p>}</div>
@@ -249,23 +249,56 @@ function CategoryIcon({ category, className }: { category: GroupingCategory; cla
 
 function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; category: GroupingCategory }) {
   const importInputRef = useRef<HTMLInputElement>(null);
-  const stockInputRef = useRef<HTMLInputElement>(null);
   const importErp = useImportGroupedErpMaterials();
-  const updateStocks = useUpdateErpStocksFromFile();
+  const syncStocks = useSyncErpStocksFromQlvt();
   const createErp = useCreateGroupedErpMaterial();
   const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
   const [formError, setFormError] = useState("");
+  const [syncingQlvt, setSyncingQlvt] = useState(false);
 
-  const exportRows = groups.map((g) => ({
-    maNhom: g.code.startsWith(STANDALONE_GROUP_PREFIX) ? "" : g.code,
-    tenNhom: g.name,
-    hienCo: g.onHandQty,
-    tongTonERP: g.totalQty,
-    dvt: g.baseUnit,
-    nguongToiThieu: g.minStock ?? "",
-    soMa: g.materialCount,
-    trangThai: g.belowMin ? "Dưới ngưỡng" : "Đủ tồn",
-  }));
+  async function syncFromQlvt() {
+    if (syncingQlvt) return;
+    setSyncingQlvt(true);
+    const requestId = crypto.randomUUID();
+    try {
+      const extensionResult = await new Promise<{
+        ok: boolean;
+        message?: string;
+        code?: string;
+        qlvtUrl?: string;
+        sourceCount?: number;
+        rows?: ErpStockUpdateInput[];
+      }>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          reject(new Error("Không tìm thấy tiện ích Đồng bộ QLVT. Hãy cài hoặc tải lại tiện ích Chrome."));
+        }, 45_000);
+        function onMessage(event: MessageEvent) {
+          if (event.source !== window || event.data?.source !== "DUYENHAI1_EXTENSION" || event.data?.type !== "QLVT_SYNC_RESPONSE" || event.data?.requestId !== requestId) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMessage);
+          resolve(event.data.result);
+        }
+        window.addEventListener("message", onMessage);
+        window.postMessage({ source: "DUYENHAI1_WEB", type: "QLVT_SYNC_REQUEST", requestId }, window.location.origin);
+      });
+
+      if (!extensionResult?.ok) {
+        if (extensionResult?.code === "QLVT_TAB_MISSING" && extensionResult.qlvtUrl) window.open(extensionResult.qlvtUrl, "_blank", "noopener,noreferrer");
+        throw new Error(extensionResult?.message || "Không lấy được dữ liệu từ QLVT");
+      }
+      const rows = extensionResult.rows ?? [];
+      if (!rows.length) throw new Error("QLVT không trả về dòng tồn kho hợp lệ");
+
+      const result = await syncStocks.mutateAsync(rows);
+      toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho, ${result.warehouseChanged} mã đổi Kho; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
+      if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
+    } catch (error) {
+      toast.error((error as Error).message || "Không đồng bộ được tồn kho QLVT");
+    } finally {
+      setSyncingQlvt(false);
+    }
+  }
 
   async function importExcel(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -291,29 +324,6 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
     }
   }
 
-  async function updateStockFromExcel(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
-      toast.error("Chỉ chấp nhận file Excel .xlsx, .xls hoặc .csv");
-      return;
-    }
-
-    try {
-      const rows = await readErpStockUpdateFile(file);
-      if (!rows.length) {
-        toast.error("Không tìm thấy dữ liệu. File cần có cột Mã VT và Tồn kho.");
-        return;
-      }
-      const result = await updateStocks.mutateAsync(rows);
-      toast.success(`Đã cập nhật tồn kho ${result.updated} mã; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng, ${result.notFound} mã không có trong hệ thống${result.skipped ? ` và ${result.skipped} dòng không hợp lệ` : ""}.`);
-      if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
-    } catch (error) {
-      toast.error((error as Error).message || "Không cập nhật được tồn kho ERP");
-    }
-  }
-
   async function saveNew() {
     if (!form) return;
     setFormError("");
@@ -330,7 +340,7 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
         code,
         name,
         unit,
-        erpStock: Math.max(0, Math.round(Number(form.erpStock) || 0)),
+        erpStock: Math.max(0, Number(form.erpStock) || 0),
       });
       toast.success("Đã thêm vật tư ERP");
       setForm(null);
@@ -343,7 +353,6 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
 
   return (
     <>
-      <ExportButton rows={exportRows} filename="ton-kho-vat-tu-theo-nhom" title={`Tồn kho theo nhóm — ${category}`} />
       <Button
         type="button"
         variant="outline"
@@ -359,10 +368,9 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
         {importErp.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Nhập Excel
       </Button>
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importExcel} />
-      <Button type="button" variant="outline" size="sm" onClick={() => stockInputRef.current?.click()} disabled={updateStocks.isPending}>
-        {updateStocks.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Cập nhật tồn kho
+      <Button type="button" variant="outline" size="sm" onClick={syncFromQlvt} disabled={syncingQlvt || syncStocks.isPending} className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:text-cyan-900">
+        {syncingQlvt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} Đồng bộ từ QLVT
       </Button>
-      <input ref={stockInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={updateStockFromExcel} />
       <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
         <Plus className="h-4 w-4" /> Thêm vật tư ERP
       </Button>
@@ -398,7 +406,7 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
               </div>
               <div className="col-span-2">
                 <Label className="mb-1.5 block">Số liệu ERP</Label>
-                <Input type="number" min={0} value={form.erpStock ?? 0} onChange={(e) => setForm({ ...form, erpStock: Number(e.target.value) })} />
+                <Input type="number" min={0} step="any" value={form.erpStock ?? 0} onChange={(e) => setForm({ ...form, erpStock: Number(e.target.value) })} />
               </div>
               {formError && (
                 <div className="col-span-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
@@ -795,7 +803,7 @@ function InlineQtyCell({
       autoFocus
       type="number"
       min={0}
-      step={1}
+      step="any"
       aria-label={ariaLabel}
       value={draft}
       disabled={saving}
@@ -805,7 +813,7 @@ function InlineQtyCell({
         if (e.key === "Escape") return setEditing(false);
         if (e.key !== "Enter") return;
         const next = Number(draft);
-        if (!Number.isInteger(next) || next < 0) return void toast.error("Số liệu ERP phải là số nguyên không âm");
+        if (!Number.isFinite(next) || next < 0) return void toast.error("Số liệu ERP phải là số không âm");
         if (next === value) return setEditing(false);
         setSaving(true);
         try {
