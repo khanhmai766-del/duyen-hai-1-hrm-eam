@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Đồng bộ tồn kho QLVT - PXVH1",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Cầu nối an toàn giữa QLVT Duyên Hải và hệ thống quản lý vật tư PXVH1.",
   "homepage_url": "https://duyenhai1.vn/public/qlvt-sync-privacy",
   "icons": {
@@ -10,7 +10,6 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "permissions": ["tabs"],
   "host_permissions": [
     "https://qlvt.tpcduyenhai.com.vn/*",
     "https://duyenhai1.vn/*",

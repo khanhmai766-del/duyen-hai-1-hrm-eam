@@ -4,12 +4,12 @@
 - [ ] Xác minh email liên hệ của nhà phát hành.
 - [ ] Có xác nhận nội bộ cho phép phát hành tiện ích truy cập QLVT.
 - [ ] Triển khai URL chính sách quyền riêng tư và kiểm tra không yêu cầu đăng nhập.
-- [ ] Upload `qlvt-sync-store-v1.0.1.zip`.
+- [ ] Upload `qlvt-sync-store-v1.0.2.zip`.
 - [ ] Upload icon 128×128 và ảnh chụp 1280×800 trong thư mục `store-assets`.
 - [ ] Điền nội dung trong `vi.md`.
 - [ ] Điền khai báo quyền/dữ liệu theo `privacy-declarations.md`.
 - [ ] Chọn Visibility: Unlisted.
-- [ ] Dán nội dung `review-notes.md` và cung cấp tài khoản kiểm thử qua kênh bảo mật nếu Google yêu cầu.
+- [ ] Dán nội dung `review-notes.md`; không cung cấp tài khoản hoặc VPN nội bộ khi chưa có phê duyệt của đơn vị.
 - [ ] Gửi xét duyệt.
 
 ## Khi cập nhật phiên bản

@@ -4,17 +4,11 @@
 
 Đồng bộ mã vật tư, mã kho và số lượng tồn kho từ trang QLVT đã đăng nhập sang hệ thống quản lý vật tư PXVH1 khi người dùng chủ động yêu cầu.
 
-## Lý do sử dụng quyền `tabs`
+## Lý do yêu cầu Quyền từ phía máy chủ
 
-Tiện ích cần tìm tab QLVT mà người dùng đã mở để gửi yêu cầu lấy dữ liệu tồn kho. Tiện ích không đọc lịch sử duyệt web và không theo dõi các tab khác.
+Tiện ích chỉ yêu cầu quyền trên hai tên miền phục vụ chức năng duy nhất. Trên `qlvt.tpcduyenhai.com.vn`, tiện ích chạy content script trong trang tồn kho đã đăng nhập, gọi API QLVT và chỉ đọc mã vật tư, mã kho, số lượng tồn. Trên `duyenhai1.vn`, tiện ích nhận thao tác “Đồng bộ từ QLVT” do người dùng chủ động thực hiện và chuyển kết quả cho hệ thống quản lý vật tư PXVH1. Tiện ích không truy cập tên miền khác, không đọc mật khẩu, cookie, token hoặc lịch sử duyệt web.
 
-## Lý do truy cập `qlvt.tpcduyenhai.com.vn`
-
-Đây là nguồn dữ liệu tồn kho. Content script chạy trong đúng tên miền này, gọi API tồn kho bằng phiên đăng nhập sẵn có và chỉ trả về mã vật tư, mã kho, số lượng tồn.
-
-## Lý do truy cập `duyenhai1.vn`
-
-Đây là hệ thống đích. Content script nhận thao tác “Đồng bộ từ QLVT” của người dùng và chuyển kết quả đồng bộ cho ứng dụng.
+Tiện ích không yêu cầu quyền `tabs`. Host permission QLVT đã đủ để tìm đúng tab QLVT phù hợp; tiện ích không có quyền đọc URL hoặc thông tin nhạy cảm của các tab thuộc tên miền khác.
 
 ## Dữ liệu cần khai báo
 
