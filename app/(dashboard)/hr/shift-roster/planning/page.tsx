@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { printHtmlReport } from "@/lib/print-report";
 import { apiDownload, apiGet } from "@/lib/fetcher";
+import { cn } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
   ScheduleEntry,
@@ -304,11 +305,28 @@ function ScheduleCrewMatrix({ version, entries, positionName, positionOptions, s
     ),
   );
   const showSeparateStations = hasTwoStations && !stationsHaveSameSchedule;
+  const changeDate = new Date(`${version.generatedFromDate.slice(0, 10)}T00:00:00.000Z`);
+  const contextStart = new Date(changeDate);
+  contextStart.setUTCDate(contextStart.getUTCDate() - 2);
+  const dayTone = (day: number) => {
+    const value = new Date(Date.UTC(version.year, version.month - 1, day));
+    if (value < contextStart) return "history" as const;
+    if (value >= changeDate) return "changed" as const;
+    return "context" as const;
+  };
+  const dayCellClass = (day: number, header = false) => cn(
+    "border border-slate-900 py-1.5 text-center font-bold",
+    dayTone(day) === "history" && "bg-slate-100 text-slate-400",
+    dayTone(day) === "changed" && (header ? "bg-amber-300" : "bg-amber-50"),
+    weekend(day) && (header ? "bg-amber-400 text-slate-950" : "bg-amber-50 text-slate-950"),
+    dayTone(day) === "changed" && day === changeDate.getUTCDate() && "border-l-4 border-l-blue-600",
+  );
   const currentMonthKey = `${version.year}-${String(version.month).padStart(2, "0")}`;
   const [printFrom, setPrintFrom] = React.useState(currentMonthKey);
   const [printTo, setPrintTo] = React.useState(currentMonthKey);
   const [printMode, setPrintMode] = React.useState<"POSITION" | "ROTATION">("ROTATION");
   const [isExporting, setIsExporting] = React.useState(false);
+  const [isExportingMatrix, setIsExportingMatrix] = React.useState(false);
   React.useEffect(() => { setPrintFrom(currentMonthKey); setPrintTo(currentMonthKey); }, [currentMonthKey]);
   const exportExcel = async () => {
     const range = monthsInRange(printFrom, printTo);
@@ -322,6 +340,32 @@ function ScheduleCrewMatrix({ version, entries, positionName, positionOptions, s
       toast.success("Đã xuất Excel lịch đã công bố");
     } catch (error) { toast.error((error as Error).message); }
     finally { setIsExporting(false); }
+  };
+  const exportCrewMatrix = async () => {
+    const range = monthsInRange(printFrom, printTo);
+    if (!range.length) return toast.error("Khoảng xuất phải từ 1 đến tối đa 3 tháng liên tiếp");
+    setIsExportingMatrix(true);
+    try {
+      const query = new URLSearchParams({
+        from: printFrom,
+        count: String(range.length),
+        versionId: version.id,
+        positionId: selectedPositionId,
+        mode: printMode,
+        matrixOnly: "1",
+      });
+      const { blob, filename } = await apiDownload(`/api/shift-schedule-versions/export-quarter?${query}`);
+      const url = URL.createObjectURL(blob), anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Đã xuất Excel bảng kíp để chỉnh sửa");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setIsExportingMatrix(false);
+    }
   };
   const print = async () => {
     const range = monthsInRange(printFrom, printTo);
@@ -384,7 +428,9 @@ function ScheduleCrewMatrix({ version, entries, positionName, positionOptions, s
         </select>
         <Input type="month" value={printFrom} onChange={(event) => setPrintFrom(event.target.value)} aria-label="In từ tháng" className="h-9 w-[150px]" />
         <Input type="month" value={printTo} onChange={(event) => setPrintTo(event.target.value)} aria-label="In đến tháng" className="h-9 w-[150px]" />
-        <Button size="sm" variant="outline" onClick={print}><Printer className="h-4 w-4" /> In bảng kíp</Button>
+        <Button size="sm" variant="outline" onClick={exportCrewMatrix} disabled={isExportingMatrix}>
+          {isExportingMatrix ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Xuất Excel bảng kíp
+        </Button>
         <Button size="sm" className="bg-emerald-700 hover:bg-emerald-600" onClick={exportExcel} disabled={isExporting}>
           {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Xuất Excel lịch công bố
         </Button>
@@ -392,12 +438,17 @@ function ScheduleCrewMatrix({ version, entries, positionName, positionOptions, s
     </div>
     <div className="overflow-x-auto rounded-md border-2 border-slate-900 bg-white shadow-sm">
       <table className="w-full min-w-[1180px] table-fixed border-collapse font-serif text-xs text-slate-950">
-        <thead><tr className="bg-yellow-300">{showSeparateStations && <th className="w-12 border border-slate-900 px-1 py-1.5 text-sm">MÁY</th>}<th className="w-24 border border-slate-900 px-2 py-1.5 text-sm">NGÀY</th>{days.map((day) => <th key={day} className={weekend(day) ? "border border-slate-900 bg-amber-400 py-1.5" : "border border-slate-900 py-1.5"}>{day}</th>)}</tr></thead>
+        <thead><tr className="bg-yellow-300">{showSeparateStations && <th className="w-12 border border-slate-900 px-1 py-1.5 text-sm">MÁY</th>}<th className="w-24 border border-slate-900 px-2 py-1.5 text-sm">NGÀY</th>{days.map((day) => <th key={day} className={dayCellClass(day, true)} title={dayTone(day) === "history" ? "Lịch cũ trước vùng đối chiếu" : dayTone(day) === "changed" ? "Lịch từ ngày thay đổi" : "Hai ngày đối chiếu trước thay đổi"}>{day}</th>)}</tr></thead>
         <tbody>{showSeparateStations ? (["S1", "S2"] as const).flatMap((station) => [
-          ...MATRIX_SHIFTS.map((shift, index) => <tr key={`${station}-${shift.key}`}>{index === 0 && <th rowSpan={4} className="border border-slate-900 text-sm">{station}</th>}<th className="border border-slate-900 px-1 py-1.5 text-sm">{shift.label}</th>{days.map((day) => <td key={day} className={weekend(day) ? "border border-slate-900 bg-amber-50 py-1.5 text-center font-bold" : "border border-slate-900 py-1.5 text-center font-bold"}>{matrixCrew(entries, day, shift.key, station) || ""}</td>)}</tr>),
-          <tr key={`${station}-HC`}><th className="border border-slate-900 py-1.5 text-sm">HC</th>{days.map((day) => <td key={day} className="border border-slate-900 py-1.5" />)}</tr>,
-        ]) : <>{MATRIX_SHIFTS.map((shift) => <tr key={shift.key}><th className="border border-slate-900 px-1 py-1.5 text-sm">{shift.label}</th>{days.map((day) => <td key={day} className={weekend(day) ? "border border-slate-900 bg-amber-50 py-1.5 text-center font-bold" : "border border-slate-900 py-1.5 text-center font-bold"}>{matrixCrew(entries, day, shift.key) || ""}</td>)}</tr>)}<tr><th className="border border-slate-900 py-1.5 text-sm">HC</th>{days.map((day) => <td key={day} className="border border-slate-900 py-1.5" />)}</tr></>}</tbody>
+          ...MATRIX_SHIFTS.map((shift, index) => <tr key={`${station}-${shift.key}`}>{index === 0 && <th rowSpan={4} className="border border-slate-900 text-sm">{station}</th>}<th className="border border-slate-900 px-1 py-1.5 text-sm">{shift.label}</th>{days.map((day) => <td key={day} className={dayCellClass(day)}>{matrixCrew(entries, day, shift.key, station) || ""}</td>)}</tr>),
+          <tr key={`${station}-HC`}><th className="border border-slate-900 py-1.5 text-sm">HC</th>{days.map((day) => <td key={day} className={dayCellClass(day)} />)}</tr>,
+        ]) : <>{MATRIX_SHIFTS.map((shift) => <tr key={shift.key}><th className="border border-slate-900 px-1 py-1.5 text-sm">{shift.label}</th>{days.map((day) => <td key={day} className={dayCellClass(day)}>{matrixCrew(entries, day, shift.key) || ""}</td>)}</tr>)}<tr><th className="border border-slate-900 py-1.5 text-sm">HC</th>{days.map((day) => <td key={day} className={dayCellClass(day)} />)}</tr></>}</tbody>
       </table>
+    </div>
+    <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+      <span><i className="mr-1 inline-block h-3 w-3 rounded-sm border bg-slate-100 align-[-2px]" />Lịch cũ trước vùng đối chiếu</span>
+      <span><i className="mr-1 inline-block h-3 w-3 rounded-sm border bg-white align-[-2px]" />2 ngày đối chiếu trước thay đổi</span>
+      <span><i className="mr-1 inline-block h-3 w-3 rounded-sm border bg-amber-100 align-[-2px]" />Lịch từ ngày thay đổi</span>
     </div>
   </div>;
 }

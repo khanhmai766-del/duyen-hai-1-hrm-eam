@@ -87,6 +87,26 @@ const inputSchema = z.discriminatedUnion("action", [
     reason: optionalReason,
   }),
   z.object({
+    action: z.literal("CREATE_ABSENCE"),
+    assignmentId: z.string().min(1),
+    startDate: day,
+    endDate: day,
+    reason,
+    note: z.string().trim().max(500).nullable().optional(),
+  }),
+  z.object({
+    action: z.literal("CANCEL_ABSENCE"),
+    absenceId: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal("SWAP_ASSIGNMENTS"),
+    firstAssignmentId: z.string().min(1),
+    secondAssignmentId: z.string().min(1),
+    effectiveDate: day,
+    reason,
+    swapStations: z.boolean().default(false),
+  }),
+  z.object({
     action: z.literal("AUTO_ALIGN_CYCLES"),
     anchorAssignmentId: z.string().min(1),
     effectiveDate: day,
@@ -205,7 +225,7 @@ async function ensureValidAssignment(
         `Bước chu kỳ phải nằm trong ${rotation.rotationTemplate.cycleLength} bước của mẫu đang áp dụng`,
       );
   }
-  if (data.assignmentType === "OFFICIAL") {
+  if (!data.isTrainingRow) {
     const overlapRange = {
       startDate: { lte: endDate ?? new Date("9999-12-31T00:00:00.000Z") },
       OR: [{ endDate: null }, { endDate: { gte: startDate } }],
@@ -213,7 +233,7 @@ async function ensureValidAssignment(
     const overlap = await tx.shiftStaffingAssignment.findFirst({
       where: {
         userId: data.userId,
-        assignmentType: "OFFICIAL",
+        isTrainingRow: false,
         ...(excludeId ? { id: { not: excludeId } } : {}),
         ...overlapRange,
       },
@@ -226,7 +246,7 @@ async function ensureValidAssignment(
       const samePhases = await tx.shiftStaffingAssignment.findMany({
         where: {
           positionId: data.positionId,
-          assignmentType: "OFFICIAL",
+          isTrainingRow: false,
           phaseIndex: resolvedPhaseIndex,
           ...(excludeId ? { id: { not: excludeId } } : {}),
           ...overlapRange,
@@ -251,7 +271,7 @@ async function syncCrewRotation(
   data: z.infer<typeof baseAssignment>,
   actorId: string,
 ) {
-  if (!data.crewCode || !data.cycleStartDate) return;
+  if (data.isTrainingRow || !data.crewCode || !data.cycleStartDate) return;
   const at = date(data.effectiveDate);
   const rotation = await activeRotation(tx, data.positionId, at);
   if (!rotation) return;
@@ -291,7 +311,7 @@ async function alignPositionCycles(
   input: z.infer<typeof baseAssignment>,
   actorId: string,
 ) {
-  if (input.assignmentType !== "OFFICIAL" || !input.crewCode || !input.cycleStartDate) return 0;
+  if (input.isTrainingRow || !input.crewCode || !input.cycleStartDate) return 0;
   const at = date(input.effectiveDate);
   const rotation = await activeRotation(tx, input.positionId, at);
   if (!rotation) return 0;
@@ -301,7 +321,7 @@ async function alignPositionCycles(
   const assignments = await tx.shiftStaffingAssignment.findMany({
     where: {
       positionId: input.positionId,
-      assignmentType: "OFFICIAL",
+      isTrainingRow: false,
       status: "ACTIVE",
       startDate: { lte: at },
       OR: [{ endDate: null }, { endDate: { gte: at } }],
@@ -405,6 +425,7 @@ export async function GET() {
           position: { select: { id: true, name: true, positionType: true } },
           createdBy: { select: { name: true } },
           updatedBy: { select: { name: true } },
+          absences: { orderBy: { startDate: "desc" } },
         },
         orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
       }),
@@ -630,14 +651,182 @@ export async function POST(req: Request) {
       ["manage", "full"],
       "Không đủ quyền thay đổi biên chế trực ca",
     );
+    if (input.action === "CREATE_ABSENCE") {
+      const startDate = date(input.startDate);
+      const endDate = date(input.endDate);
+      if (startDate > endDate)
+        throw fail("Ngày bắt đầu tạm vắng không được sau ngày kết thúc");
+      const assignment = await prisma.shiftStaffingAssignment.findUnique({
+        where: { id: input.assignmentId },
+      });
+      if (!assignment) throw fail("Không tìm thấy phân công của nhân sự");
+      if (
+        startDate < assignment.startDate ||
+        (assignment.endDate && endDate > assignment.endDate)
+      )
+        throw fail("Thời gian tạm vắng phải nằm trong thời gian phân công");
+      const overlap = await prisma.shiftStaffingAbsence.findFirst({
+        where: {
+          assignmentId: input.assignmentId,
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        },
+      });
+      if (overlap)
+        throw fail("Khoảng tạm vắng bị trùng với một đăng ký đã có");
+      const created = await prisma.shiftStaffingAbsence.create({
+        data: {
+          assignmentId: input.assignmentId,
+          startDate,
+          endDate,
+          reason: input.reason,
+          note: input.note ?? null,
+          createdById: actor.id,
+          updatedById: actor.id,
+        },
+      });
+      await audit(
+        actor.id,
+        "CREATE_SHIFT_STAFFING_ABSENCE",
+        "ShiftStaffingAbsence",
+        created.id,
+        detail(input.reason, input.startDate),
+        {
+          actorName: actor.name,
+          afterData: snapshot(created),
+          saveToAuditLog: true,
+        },
+      );
+      return ok(created);
+    }
+    if (input.action === "CANCEL_ABSENCE") {
+      const before = await prisma.shiftStaffingAbsence.findUnique({
+        where: { id: input.absenceId },
+      });
+      if (!before) throw fail("Không tìm thấy đăng ký tạm vắng");
+      await prisma.shiftStaffingAbsence.delete({
+        where: { id: input.absenceId },
+      });
+      await audit(
+        actor.id,
+        "CANCEL_SHIFT_STAFFING_ABSENCE",
+        "ShiftStaffingAbsence",
+        before.id,
+        detail(before.reason),
+        {
+          actorName: actor.name,
+          beforeData: snapshot(before),
+          saveToAuditLog: true,
+        },
+      );
+      return ok(before);
+    }
+    if (input.action === "SWAP_ASSIGNMENTS") {
+      if (input.firstAssignmentId === input.secondAssignmentId)
+        throw fail("Hãy chọn hai nhân sự khác nhau để hoán đổi");
+      const effectiveDate = date(input.effectiveDate);
+      const [first, second] = await Promise.all([
+        prisma.shiftStaffingAssignment.findUnique({ where: { id: input.firstAssignmentId } }),
+        prisma.shiftStaffingAssignment.findUnique({ where: { id: input.secondAssignmentId } }),
+      ]);
+      if (!first || !second) throw fail("Không tìm thấy một trong hai phân công");
+      if (first.positionId !== second.positionId)
+        throw fail("Chỉ có thể hoán đổi hai nhân sự trong cùng cương vị");
+      if (first.isTrainingRow !== second.isTrainingRow)
+        throw fail("Không thể hoán đổi giữa hàng biên chế chính và hàng đào tạo");
+      if (
+        effectiveDate <= first.startDate ||
+        effectiveDate <= second.startDate ||
+        (first.endDate && effectiveDate > first.endDate) ||
+        (second.endDate && effectiveDate > second.endDate)
+      )
+        throw fail("Ngày hiệu lực phải nằm sau ngày bắt đầu và trong thời gian của cả hai phân công");
+      const activeAbsence = await prisma.shiftStaffingAbsence.findFirst({
+        where: {
+          assignmentId: { in: [first.id, second.id] },
+          startDate: { lte: effectiveDate },
+          endDate: { gte: effectiveDate },
+        },
+      });
+      if (activeAbsence)
+        throw fail("Không thể đổi kíp khi một trong hai nhân sự đang tạm vắng");
+      const result = await prisma.$transaction(async (tx) => {
+        await tx.shiftStaffingAssignment.updateMany({
+          where: { id: { in: [first.id, second.id] } },
+          data: { endDate: previousDay(input.effectiveDate), status: "ENDED", changeReason: input.reason, updatedById: actor.id },
+        });
+        const createSwapped = (
+          person: typeof first,
+          target: typeof second,
+        ) => tx.shiftStaffingAssignment.create({
+          data: {
+            userId: person!.userId,
+            positionId: person!.positionId,
+            rosterColumn: target!.rosterColumn,
+            isTrainingRow: person!.isTrainingRow,
+            crewCode: target!.crewCode,
+            phaseIndex: target!.phaseIndex,
+            cycleStartDate: target!.cycleStartDate,
+            rosterStation: input.swapStations ? target!.rosterStation : person!.rosterStation,
+            stationCode: input.swapStations ? target!.stationCode : person!.stationCode,
+            assignmentType: person!.assignmentType,
+            startDate: effectiveDate,
+            endDate: person!.endDate,
+            status: "ACTIVE",
+            changeReason: input.reason,
+            note: person!.note,
+            createdById: actor.id,
+            updatedById: actor.id,
+          },
+        });
+        const [newFirst, newSecond] = await Promise.all([
+          createSwapped(first, second),
+          createSwapped(second, first),
+        ]);
+        await Promise.all([
+          tx.shiftStaffingAbsence.updateMany({
+            where: { assignmentId: first.id, startDate: { gte: effectiveDate } },
+            data: { assignmentId: newFirst.id, updatedById: actor.id },
+          }),
+          tx.shiftStaffingAbsence.updateMany({
+            where: { assignmentId: second.id, startDate: { gte: effectiveDate } },
+            data: { assignmentId: newSecond.id, updatedById: actor.id },
+          }),
+        ]);
+        const employees = await tx.user.findMany({
+          where: { id: { in: [first.userId, second.userId] } },
+          select: { id: true, employeeId: true },
+        });
+        await tx.staffingChangeEvent.createMany({
+          data: employees.map((employee) => ({
+            employeeId: employee.employeeId,
+            changeType: "CHANGE_CREW" as const,
+            sourcePositionId: first.positionId,
+            targetPositionId: first.positionId,
+            effectiveDate,
+            reason: input.reason,
+            createdById: actor.id,
+          })),
+        });
+        return { first: newFirst, second: newSecond };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      await audit(actor.id, "SWAP_SHIFT_ASSIGNMENTS", "ShiftStaffingAssignment", result.first.id,
+        detail(input.reason, input.effectiveDate), {
+          actorName: actor.name,
+          beforeData: snapshot({ first, second }),
+          afterData: snapshot(result),
+          saveToAuditLog: true,
+        });
+      return ok(result);
+    }
     if (input.action === "AUTO_ALIGN_CYCLES") {
       const anchor = await prisma.shiftStaffingAssignment.findUnique({
         where: { id: input.anchorAssignmentId },
       });
       if (!anchor || !anchor.crewCode)
         throw fail("Nhân sự mốc chưa có mã kíp xếp lịch");
-      if (anchor.assignmentType !== "OFFICIAL")
-        throw fail("Chỉ tự động xếp chu kỳ cho nhân sự chính thức");
+      if (anchor.isTrainingRow)
+        throw fail("Không thể tự động xếp chu kỳ từ nhân sự ở hàng đào tạo");
       const aligned = await prisma.$transaction((tx) => alignPositionCycles(tx, {
         userId: anchor.userId,
         positionId: anchor.positionId,
@@ -648,7 +837,7 @@ export async function POST(req: Request) {
         cycleStartDate: input.cycleStartDate,
         rosterStation: anchor.rosterStation,
         stationCode: anchor.stationCode,
-        assignmentType: "OFFICIAL",
+        assignmentType: anchor.assignmentType as "OFFICIAL" | "TRAINING" | "ADMINISTRATIVE",
         effectiveDate: input.effectiveDate,
         endDate: anchor.endDate?.toISOString().slice(0, 10) ?? null,
         reason: "Tự động điền ngày bắt đầu chu kỳ",

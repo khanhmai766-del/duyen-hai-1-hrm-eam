@@ -8,6 +8,7 @@ import {
   ArrowRightLeft,
   BriefcaseBusiness,
   CalendarClock,
+  CalendarMinus,
   Check,
   Clock3,
   GripVertical,
@@ -16,6 +17,7 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Pencil,
   Plus,
   Settings2,
   ShieldCheck,
@@ -75,6 +77,10 @@ const SHIFT_NAME = {
   NIGHT: "Ca đêm",
   OFF: "Nghỉ",
 } as const;
+type RotationStep = keyof typeof SHIFT_LABEL;
+const ROTATION_STEP_OPTIONS = Object.entries(SHIFT_NAME) as Array<
+  [RotationStep, string]
+>;
 const QUICK_CREWS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
 const today = () => new Date().toISOString().slice(0, 10);
 const viDate = (value?: string | null) =>
@@ -151,16 +157,19 @@ function metrics(
   const current = assignments.filter(
     (item) =>
       item.positionId === position.id &&
-      item.assignmentType === "OFFICIAL" &&
+      !item.isTrainingRow &&
       effective(item),
   );
+  // TS ở ô biên chế chính vẫn tham gia vòng xoay ca, nhưng không được cộng
+  // vào quân số định biên. Hàng đào tạo đã được loại khỏi `current` ở trên.
+  const staffed = current.filter((item) => item.assignmentType !== "TRAINING");
   const rotation = currentRotation(position, rotations);
   const rotationHistory = rotations.filter(
     (item) => item.positionConfigId === position.id,
   );
   const uniform = uniformCoverage(position);
   const required = uniform ? position.requiredMorningStaff : null;
-  const equivalent = required ? current.length / required : null;
+  const equivalent = required ? staffed.length / required : null;
   const warnings: string[] = [];
   if (position.requiredMorningStaff === null)
     warnings.push("Chưa cấu hình nhu cầu từng ca");
@@ -227,13 +236,13 @@ function metrics(
   if (position.positionType === "S1_S2") {
     if (current.some((item) => !item.stationCode))
       warnings.push("Có nhân sự chưa được phân S1/S2/FLEX");
-    const s1 = current.filter((x) => x.stationCode === "S1").length,
-      s2 = current.filter((x) => x.stationCode === "S2").length;
+    const s1 = staffed.filter((x) => x.stationCode === "S1").length,
+      s2 = staffed.filter((x) => x.stationCode === "S2").length;
     if (Math.abs(s1 - s2) > 1) warnings.push("Phân bổ S1/S2 chưa cân bằng");
     for (const crew of new Set(
-      current.map((x) => x.crewCode).filter(Boolean),
+      staffed.map((x) => x.crewCode).filter(Boolean),
     )) {
-      const crewItems = current.filter((x) => x.crewCode === crew);
+      const crewItems = staffed.filter((x) => x.crewCode === crew);
       if (
         !crewItems.some(
           (x) => x.stationCode === "S1" || x.stationCode === "FLEX",
@@ -254,10 +263,10 @@ function metrics(
     uniform,
     equivalent,
     warnings,
-    s1: current.filter((x) => x.stationCode === "S1").length,
-    s2: current.filter((x) => x.stationCode === "S2").length,
-    flex: current.filter((x) => x.stationCode === "FLEX").length,
-    unstationed: current.filter((x) => !x.stationCode).length,
+    s1: staffed.filter((x) => x.stationCode === "S1").length,
+    s2: staffed.filter((x) => x.stationCode === "S2").length,
+    flex: staffed.filter((x) => x.stationCode === "FLEX").length,
+    unstationed: staffed.filter((x) => !x.stationCode).length,
   };
 }
 
@@ -348,6 +357,36 @@ export default function ShiftStaffingPage() {
     effectiveFrom: today(),
     effectiveTo: "",
     reason: "",
+  });
+  const [templateOpen, setTemplateOpen] = React.useState(false);
+  const [editingTemplate, setEditingTemplate] =
+    React.useState<RotationTemplate | null>(null);
+  const [templateForm, setTemplateForm] = React.useState({
+    code: "",
+    name: "",
+    cyclePattern: ["MORNING", "AFTERNOON", "NIGHT", "OFF"] as RotationStep[],
+    description: "",
+    isActive: true,
+    reason: "",
+  });
+  const [absenceOpen, setAbsenceOpen] = React.useState(false);
+  const [absenceAssignment, setAbsenceAssignment] =
+    React.useState<StaffingAssignment | null>(null);
+  const [absenceForm, setAbsenceForm] = React.useState({
+    startDate: today(),
+    endDate: today(),
+    reason: "",
+    note: "",
+  });
+  const [swapOpen, setSwapOpen] = React.useState(false);
+  const [swapPair, setSwapPair] = React.useState<{
+    first: StaffingAssignment;
+    second: StaffingAssignment;
+  } | null>(null);
+  const [swapForm, setSwapForm] = React.useState({
+    effectiveDate: today(),
+    reason: "",
+    swapStations: false,
   });
   const [mode, setMode] = React.useState<FormMode | null>(null),
     [editing, setEditing] = React.useState<StaffingAssignment | null>(null),
@@ -542,6 +581,120 @@ export default function ShiftStaffingPage() {
     });
     setRotationOpen(true);
   }
+  function openTemplate(template?: RotationTemplate) {
+    setEditingTemplate(template ?? null);
+    setTemplateForm(
+      template
+        ? {
+            code: template.code,
+            name: template.name,
+            cyclePattern: [...template.cyclePattern],
+            description: template.description ?? "",
+            isActive: template.isActive,
+            reason: "",
+          }
+        : {
+            code: "",
+            name: "",
+            cyclePattern: ["MORNING", "AFTERNOON", "NIGHT", "OFF"],
+            description: "",
+            isActive: true,
+            reason: "",
+          },
+    );
+    setTemplateOpen(true);
+  }
+  function openAbsence(item: StaffingAssignment) {
+    setAbsenceAssignment(item);
+    setAbsenceForm({ startDate: today(), endDate: today(), reason: "", note: "" });
+    setAbsenceOpen(true);
+  }
+  async function saveAbsence() {
+    if (!absenceAssignment) return;
+    if (absenceForm.startDate > absenceForm.endDate)
+      return toast.error("Ngày bắt đầu không được sau ngày kết thúc");
+    if (absenceForm.reason.trim().length < 3)
+      return toast.error("Vui lòng nhập lý do tạm vắng (ít nhất 3 ký tự)");
+    try {
+      await mutation.mutateAsync({
+        action: "CREATE_ABSENCE",
+        assignmentId: absenceAssignment.id,
+        startDate: absenceForm.startDate,
+        endDate: absenceForm.endDate,
+        reason: absenceForm.reason,
+        note: absenceForm.note.trim() || null,
+      });
+      toast.success("Đã đăng ký thời gian tạm vắng");
+      setAbsenceOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  async function cancelAbsence(absenceId: string) {
+    try {
+      await mutation.mutateAsync({ action: "CANCEL_ABSENCE", absenceId });
+      toast.success("Đã hủy thời gian tạm vắng");
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  function openSwap(first: StaffingAssignment, second: StaffingAssignment) {
+    if (first.id === second.id) return;
+    if (first.positionId !== second.positionId)
+      return toast.error("Chỉ có thể đổi kíp trong cùng một cương vị");
+    if (first.isTrainingRow !== second.isTrainingRow)
+      return toast.error("Không thể đổi giữa hàng chính và hàng đào tạo");
+    setSwapPair({ first, second });
+    setSwapForm({ effectiveDate: today(), reason: "", swapStations: false });
+    setSwapOpen(true);
+  }
+  async function saveSwap() {
+    if (!swapPair) return;
+    if (swapForm.reason.trim().length < 3)
+      return toast.error("Vui lòng nhập lý do đổi kíp (ít nhất 3 ký tự)");
+    try {
+      await mutation.mutateAsync({
+        action: "SWAP_ASSIGNMENTS",
+        firstAssignmentId: swapPair.first.id,
+        secondAssignmentId: swapPair.second.id,
+        effectiveDate: swapForm.effectiveDate,
+        reason: swapForm.reason,
+        swapStations: swapForm.swapStations,
+      });
+      toast.success("Đã hoán đổi kíp cho hai nhân sự");
+      setLastEffectiveChange({ date: swapForm.effectiveDate, positionId: swapPair.first.positionId });
+      setSwapOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+  async function saveTemplate() {
+    if (!templateForm.code.trim() || !templateForm.name.trim())
+      return toast.error("Vui lòng nhập mã và tên mẫu xoay ca");
+    if (!templateForm.cyclePattern.length)
+      return toast.error("Chu kỳ phải có ít nhất một ngày");
+    if (templateForm.reason.trim().length < 3)
+      return toast.error("Vui lòng nhập lý do thay đổi (ít nhất 3 ký tự)");
+    try {
+      await mutation.mutateAsync({
+        action: editingTemplate
+          ? "UPDATE_ROTATION_TEMPLATE"
+          : "CREATE_ROTATION_TEMPLATE",
+        ...(editingTemplate ? { templateId: editingTemplate.id } : {}),
+        code: templateForm.code.trim().toUpperCase(),
+        name: templateForm.name.trim(),
+        cycleLength: templateForm.cyclePattern.length,
+        cyclePattern: templateForm.cyclePattern,
+        description: templateForm.description.trim() || null,
+        isActive: templateForm.isActive,
+        reason: templateForm.reason,
+      });
+      toast.success(editingTemplate ? "Đã cập nhật mẫu xoay ca" : "Đã thêm mẫu xoay ca");
+      setTemplateOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
   async function saveConfig() {
     if (!selected) return;
     if (selected.id && coverage.reason.trim().length < 3) {
@@ -658,8 +811,8 @@ export default function ShiftStaffingPage() {
     }
   }
   async function autoFillCycles() {
-    if (!editing || form.assignmentType !== "OFFICIAL")
-      return toast.error("Hãy chọn một nhân sự chính thức làm mốc");
+    if (!editing || form.isTrainingRow)
+      return toast.error("Hãy chọn một nhân sự ở hàng biên chế chính làm mốc");
     if (!form.cycleStartDate)
       return toast.error("Hãy nhập ngày bắt đầu chu kỳ của nhân sự mốc");
     try {
@@ -679,7 +832,7 @@ export default function ShiftStaffingPage() {
     const anchor = assignments
       .filter((item) =>
         item.positionId === position.id &&
-        item.assignmentType === "OFFICIAL" &&
+        !item.isTrainingRow &&
         !!item.crewCode &&
         !!item.cycleStartDate &&
         effective(item),
@@ -750,6 +903,8 @@ export default function ShiftStaffingPage() {
         onOpenCell={openMatrixCell}
         onOpenAssignment={openChange}
         onDetachAssignment={openDetach}
+        onOpenAbsence={openAbsence}
+        onSwapAssignments={openSwap}
         onMoveAssignment={openMatrixMove}
         onUpdateTrainingRow={updateTrainingRow}
         onSelectRotation={openMatrixRotation}
@@ -1052,10 +1207,226 @@ export default function ShiftStaffingPage() {
               rotations={rotations}
               templates={templates}
               canConfigure={canConfigure}
+              onCreate={() => openTemplate()}
+              onEdit={openTemplate}
             />
           </div>
         )}
       </div>
+      <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTemplate ? "Chỉnh sửa mẫu xoay ca" : "Thêm mẫu xoay ca"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Mã mẫu">
+                <Input
+                  value={templateForm.code}
+                  onChange={(event) =>
+                    setTemplateForm((old) => ({
+                      ...old,
+                      code: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""),
+                    }))
+                  }
+                  placeholder="VD: 5K_STANDARD"
+                />
+              </Field>
+              <Field label="Tên mẫu">
+                <Input
+                  value={templateForm.name}
+                  onChange={(event) =>
+                    setTemplateForm((old) => ({ ...old, name: event.target.value }))
+                  }
+                  placeholder="VD: 5 kíp tiêu chuẩn"
+                />
+              </Field>
+            </div>
+            <Field label={`Chu kỳ (${templateForm.cyclePattern.length} ngày)`}>
+              <div className="space-y-2 rounded-lg border bg-slate-50 p-3">
+                <div className="flex flex-wrap gap-2">
+                  {templateForm.cyclePattern.map((step, index) => (
+                    <div key={`${index}-${step}`} className="flex items-center gap-1 rounded-md border bg-white p-1">
+                      <select
+                        className="h-8 rounded border-0 bg-transparent px-2 text-sm font-medium outline-none"
+                        value={step}
+                        aria-label={`Ngày ${index + 1} của chu kỳ`}
+                        onChange={(event) =>
+                          setTemplateForm((old) => ({
+                            ...old,
+                            cyclePattern: old.cyclePattern.map((item, itemIndex) =>
+                              itemIndex === index ? (event.target.value as RotationStep) : item,
+                            ),
+                          }))
+                        }
+                      >
+                        {ROTATION_STEP_OPTIONS.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-muted-foreground"
+                        disabled={templateForm.cyclePattern.length === 1}
+                        onClick={() =>
+                          setTemplateForm((old) => ({
+                            ...old,
+                            cyclePattern: old.cyclePattern.filter((_, itemIndex) => itemIndex !== index),
+                          }))
+                        }
+                        aria-label={`Xóa ngày ${index + 1}`}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setTemplateForm((old) => ({
+                      ...old,
+                      cyclePattern: [...old.cyclePattern, "OFF"],
+                    }))
+                  }
+                >
+                  <Plus className="h-4 w-4" /> Thêm ngày
+                </Button>
+              </div>
+            </Field>
+            <Field label="Mô tả">
+              <Textarea
+                value={templateForm.description}
+                onChange={(event) =>
+                  setTemplateForm((old) => ({ ...old, description: event.target.value }))
+                }
+                placeholder="Mô tả cách áp dụng mẫu (không bắt buộc)"
+              />
+            </Field>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={templateForm.isActive}
+                onChange={(event) =>
+                  setTemplateForm((old) => ({ ...old, isActive: event.target.checked }))
+                }
+              />
+              Cho phép tiếp tục áp dụng mẫu này
+            </label>
+            <Field label="Lý do thay đổi">
+              <Textarea
+                value={templateForm.reason}
+                onChange={(event) =>
+                  setTemplateForm((old) => ({ ...old, reason: event.target.value }))
+                }
+                placeholder="Nhập ít nhất 3 ký tự để lưu nhật ký"
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateOpen(false)}>Hủy</Button>
+            <Button onClick={saveTemplate} disabled={mutation.isPending}>
+              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingTemplate ? "Lưu thay đổi" : "Thêm mẫu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={absenceOpen} onOpenChange={setAbsenceOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Tạm vắng — {absenceAssignment?.user.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              Nhân sự vẫn giữ nguyên cương vị nhưng không được xếp lịch trong khoảng tạm vắng. Hết thời gian, vòng xoay ca tự tiếp tục theo chu kỳ gốc.
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Từ ngày">
+                <Input type="date" value={absenceForm.startDate} onChange={(event) => setAbsenceForm((old) => ({ ...old, startDate: event.target.value }))} />
+              </Field>
+              <Field label="Đến ngày">
+                <Input type="date" min={absenceForm.startDate} value={absenceForm.endDate} onChange={(event) => setAbsenceForm((old) => ({ ...old, endDate: event.target.value }))} />
+              </Field>
+            </div>
+            <Field label="Lý do tạm vắng">
+              <Input value={absenceForm.reason} onChange={(event) => setAbsenceForm((old) => ({ ...old, reason: event.target.value }))} placeholder="VD: Đi công tác, nghỉ phép, nghỉ ốm…" />
+            </Field>
+            <Field label="Ghi chú">
+              <Textarea value={absenceForm.note} onChange={(event) => setAbsenceForm((old) => ({ ...old, note: event.target.value }))} placeholder="Thông tin bổ sung (không bắt buộc)" />
+            </Field>
+            {!!absenceAssignment?.absences.length && (
+              <div className="space-y-2 border-t pt-4">
+                <div className="text-sm font-semibold">Các đợt tạm vắng đã đăng ký</div>
+                {absenceAssignment.absences.map((absence) => (
+                  <div key={absence.id} className="flex items-center justify-between gap-3 rounded-lg border bg-slate-50 p-3 text-sm">
+                    <div>
+                      <div className="font-medium">{absence.reason}</div>
+                      <div className="text-xs text-muted-foreground">{viDate(absence.startDate)} → {viDate(absence.endDate)}</div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => cancelAbsence(absence.id)}>Hủy đợt</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbsenceOpen(false)}>Đóng</Button>
+            <Button onClick={saveAbsence} disabled={mutation.isPending}>
+              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Lưu tạm vắng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Hoán đổi kíp</DialogTitle>
+          </DialogHeader>
+          {swapPair && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                <div>
+                  <div className="font-semibold text-blue-950">{swapPair.first.user.name}</div>
+                  <div className="text-sm text-blue-800">Kíp {swapPair.first.crewCode ?? "—"}</div>
+                </div>
+                <ArrowRightLeft className="h-5 w-5 text-blue-600" />
+                <div className="text-right">
+                  <div className="font-semibold text-blue-950">{swapPair.second.user.name}</div>
+                  <div className="text-sm text-blue-800">Kíp {swapPair.second.crewCode ?? "—"}</div>
+                </div>
+              </div>
+              <Field label="Ngày hiệu lực">
+                <Input type="date" value={swapForm.effectiveDate} onChange={(event) => setSwapForm((old) => ({ ...old, effectiveDate: event.target.value }))} />
+              </Field>
+              <Field label="Lý do đổi kíp">
+                <Textarea value={swapForm.reason} onChange={(event) => setSwapForm((old) => ({ ...old, reason: event.target.value }))} placeholder="Nhập lý do hoán đổi hai nhân sự" />
+              </Field>
+              <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                <input type="checkbox" className="mt-0.5" checked={swapForm.swapStations} onChange={(event) => setSwapForm((old) => ({ ...old, swapStations: event.target.checked }))} />
+                <span>
+                  <b>Hoán đổi cả tổ máy</b>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">Bỏ chọn để mỗi người giữ nguyên S1/S2/FLEX hiện tại.</span>
+                </span>
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSwapOpen(false)}>Hủy</Button>
+            <Button onClick={saveSwap} disabled={mutation.isPending || !swapForm.effectiveDate}>
+              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Xác nhận hoán đổi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1372,7 +1743,8 @@ export default function ShiftStaffingPage() {
                 </select>
                 <p className="mt-1 text-xs text-muted-foreground">Chỉ quyết định vị trí hiển thị; không dùng để tính ca.</p>
               </Field>
-              {positions.find((p) => p.id === form.positionId)?.positionType ===
+              {!form.isTrainingRow &&
+                positions.find((p) => p.id === form.positionId)?.positionType ===
                 "S1_S2" && (
                 <Field label="Tổ máy xếp lịch">
                   <select
@@ -1391,7 +1763,8 @@ export default function ShiftStaffingPage() {
                   </select>
                 </Field>
               )}
-              {positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && (
+              {!form.isTrainingRow &&
+                positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && (
                 <Field label="Hàng hiển thị trên bảng">
                   <select
                     value={form.rosterStation}
@@ -1411,7 +1784,9 @@ export default function ShiftStaffingPage() {
                   onChange={(e) => setField("assignmentType", e.target.value)}
                   className="h-10 w-full rounded-md border bg-white px-3"
                 >
-                  {ASSIGNMENT_OPTIONS.map(([k, v]) => (
+                  {ASSIGNMENT_OPTIONS.filter(([key]) =>
+                    !form.isTrainingRow || key !== "OFFICIAL"
+                  ).map(([k, v]) => (
                     <option key={k} value={k}>
                       {v}
                     </option>
@@ -1425,14 +1800,14 @@ export default function ShiftStaffingPage() {
                   onChange={(e) => setField("effectiveDate", e.target.value)}
                 />
               </Field>
-              {form.assignmentType === "OFFICIAL" && <Field label="Ngày bắt đầu chu kỳ (có thể bổ sung sau)">
+              {!form.isTrainingRow && <Field label="Ngày bắt đầu chu kỳ (có thể bổ sung sau)">
                 <Input
                   type="date"
                   max={form.effectiveDate}
                   value={form.cycleStartDate}
                   onChange={(e) => setField("cycleStartDate", e.target.value)}
                 />
-                {mode === "change" && editing?.assignmentType === "OFFICIAL" && (
+                {mode === "change" && !editing?.isTrainingRow && (
                   <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3">
                     <p className="text-xs leading-4 text-emerald-900">
                       <b>Điền tự động:</b> lấy ngày của người này làm mốc và sắp ngày cho toàn bộ kíp còn lại trong cùng cương vị.
@@ -1450,9 +1825,9 @@ export default function ShiftStaffingPage() {
                   </div>
                 )}
               </Field>}
-              {form.assignmentType !== "OFFICIAL" ? (
+              {form.isTrainingRow ? (
                 <div className="sm:col-span-2 rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-950">
-                  Nhân sự đào tạo chỉ hiển thị ở hàng đào tạo, không tham gia định biên chính thức và vòng xoay ca.
+                  Nhân sự ở hàng đào tạo không tham gia định biên và vòng xoay ca, dù mang nhãn TS hay HC.
                 </div>
               ) : formTemplate ? (
                 <div className="sm:col-span-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
@@ -1526,7 +1901,9 @@ export default function ShiftStaffingPage() {
                 (mode !== "detach" &&
                   (!form.positionId ||
                     !form.rosterColumn ||
-                    (positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" && !form.rosterStation) ||
+                    (!form.isTrainingRow &&
+                      positions.find((p) => p.id === form.positionId)?.positionType === "S1_S2" &&
+                      !form.rosterStation) ||
                     (mode === "assign" ? selectedUserIds.length === 0 : !form.userId)))
               }
             >
@@ -1553,6 +1930,8 @@ function StaffingMatrix({
   onOpenCell,
   onOpenAssignment,
   onDetachAssignment,
+  onOpenAbsence,
+  onSwapAssignments,
   onMoveAssignment,
   onUpdateTrainingRow,
   onSelectRotation,
@@ -1573,6 +1952,8 @@ function StaffingMatrix({
   ) => void;
   onOpenAssignment: (item: StaffingAssignment) => void;
   onDetachAssignment: (item: StaffingAssignment) => void;
+  onOpenAbsence: (item: StaffingAssignment) => void;
+  onSwapAssignments: (first: StaffingAssignment, second: StaffingAssignment) => void;
   onMoveAssignment: (
     item: StaffingAssignment,
     position: StaffingPosition,
@@ -1728,15 +2109,56 @@ function StaffingMatrix({
                             <div
                               key={item.id}
                               draggable={canManage}
+                              onDragOver={(event) => {
+                                if (!canManage) return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                              onDrop={(event) => {
+                                if (!canManage) return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                const sourceId = event.dataTransfer.getData("application/x-shift-assignment");
+                                const source = assignments.find((assignment) => assignment.id === sourceId);
+                                if (source && source.id !== item.id) onSwapAssignments(source, item);
+                              }}
                               onDragStart={(event) => {
                                 event.stopPropagation();
                                 event.dataTransfer.effectAllowed = "move";
                                 event.dataTransfer.setData("application/x-shift-assignment", item.id);
                               }}
-                              className="group/person flex w-full cursor-grab items-start gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md active:cursor-grabbing"
+                              className="group/person flex w-full cursor-grab flex-col gap-0.5 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md active:cursor-grabbing"
                               title={`${item.user.employeeId} · Bắt đầu chu kỳ ${item.cycleStartDate ? viDate(item.cycleStartDate) : "chưa cấu hình"}`}
                             >
-                              {canManage && <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 group-hover/person:text-blue-500" />}
+                              <div className="flex min-h-7 w-full items-center gap-1">
+                                {canManage && <GripVertical className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover/person:text-blue-500" />}
+                                {canManage && (
+                                  <div className="ml-auto flex shrink-0 gap-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => { event.stopPropagation(); onOpenAbsence(item); }}
+                                      onPointerDown={(event) => event.stopPropagation()}
+                                      draggable={false}
+                                      aria-label={`Đăng ký tạm vắng cho ${item.user.name}`}
+                                      title="Tạm vắng"
+                                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                                    >
+                                      <CalendarMinus className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => { event.stopPropagation(); onDetachAssignment(item); }}
+                                      onPointerDown={(event) => event.stopPropagation()}
+                                      draggable={false}
+                                      aria-label={`Xóa ${item.user.name} khỏi bảng biên chế`}
+                                      title="Xóa khỏi cương vị"
+                                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                    >
+                                      <UserMinus className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -1744,16 +2166,12 @@ function StaffingMatrix({
                                   onSelectPosition(position.name);
                                   if (canManage) onOpenAssignment(item);
                                 }}
-                                className="min-w-0 flex-1 text-left"
+                                className="w-full min-w-0 text-left"
                               >
-                                <span className="flex flex-wrap items-center gap-1 leading-snug font-semibold text-slate-900">
-                                  <span>
-                                    {item.user.name}{item.crewCode ? ` (${item.crewCode})` : ""}
-                                  </span>
+                                <span className="flex flex-wrap items-center gap-1 text-sm font-semibold leading-snug text-slate-900">
+                                  <span>{item.user.name}{item.crewCode ? ` (${item.crewCode})` : ""}</span>
                                   {item.stationCode === "FLEX" && (
-                                    <span className="inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">
-                                      FLEX
-                                    </span>
+                                    <span className="inline-flex rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">FLEX</span>
                                   )}
                                   {item.assignmentType === "TRAINING" && (
                                     <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">TS</span>
@@ -1763,23 +2181,15 @@ function StaffingMatrix({
                                   )}
                                 </span>
                                 <span className="mt-0.5 block font-mono text-[10px] text-slate-500">{item.user.employeeId}</span>
+                                {(() => {
+                                  const absence = item.absences.find((entry) => effective(entry));
+                                  return absence ? (
+                                    <span className="mt-1 inline-flex rounded bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-800" title={absence.reason}>
+                                      Tạm vắng đến {viDate(absence.endDate)}
+                                    </span>
+                                  ) : null;
+                                })()}
                               </button>
-                              {canManage && (
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    onDetachAssignment(item);
-                                  }}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                  draggable={false}
-                                  aria-label={`Xóa ${item.user.name} khỏi bảng biên chế`}
-                                  title="Xóa khỏi cương vị"
-                                  className="-mr-0.5 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                                >
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                </button>
-                              )}
                             </div>
                           ))}
                           {canManage && (
@@ -1858,25 +2268,36 @@ function RotationSection({
   rotations,
   templates,
   canConfigure,
+  onCreate,
+  onEdit,
 }: {
   position: StaffingPosition;
   rotations: PositionRotation[];
   templates: RotationTemplate[];
   canConfigure: boolean;
+  onCreate: () => void;
+  onEdit: (template: RotationTemplate) => void;
 }) {
   const history = rotations.filter((x) => x.positionConfigId === position.id);
   return (
     <Card className="overflow-hidden">
-      <div className="border-b bg-slate-50 px-4 py-3">
-        <div className="font-semibold">Mẫu xoay ca</div>
-        <div className="text-xs text-muted-foreground">
-          Chu kỳ chuẩn và lịch sử áp dụng theo thời gian
+      <div className="flex items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
+        <div>
+          <div className="font-semibold">Mẫu xoay ca</div>
+          <div className="text-xs text-muted-foreground">
+            Chu kỳ chuẩn và lịch sử áp dụng theo thời gian
+          </div>
         </div>
+        {canConfigure && (
+          <Button size="sm" onClick={onCreate}>
+            <Plus className="h-4 w-4" /> Thêm mẫu
+          </Button>
+        )}
       </div>
       <div className="grid gap-4 p-4 lg:grid-cols-[1.2fr_1fr]">
         <div className="grid gap-2 sm:grid-cols-2">
           {templates.map((template) => (
-            <div key={template.id} className="rounded-lg border p-3">
+            <div key={template.id} className="group rounded-lg border p-3 transition-colors hover:border-blue-300">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="font-mono text-xs font-bold text-blue-700">
@@ -1886,9 +2307,20 @@ function RotationSection({
                     {template.name}
                   </div>
                 </div>
-                {template.isActive && (
-                  <Check className="h-4 w-4 text-emerald-600" />
-                )}
+                <div className="flex items-center gap-1">
+                  {template.isActive && <Check className="h-4 w-4 text-emerald-600" />}
+                  {canConfigure && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => onEdit(template)}
+                      title={`Chỉnh sửa ${template.name}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="mt-3">
                 <Pattern template={template} />

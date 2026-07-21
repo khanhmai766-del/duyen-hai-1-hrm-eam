@@ -47,6 +47,15 @@ export type StaffingAssignment = {
   };
   createdBy: { name: string };
   updatedBy: { name: string };
+  absences: StaffingAbsence[];
+};
+export type StaffingAbsence = {
+  id: string;
+  assignmentId: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  note: string | null;
 };
 export type RotationTemplate = {
   id: string;

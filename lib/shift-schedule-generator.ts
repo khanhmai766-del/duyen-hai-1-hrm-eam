@@ -33,6 +33,46 @@ function cycleIndex(at: Date, start: Date, length: number) {
   return (raw + length) % length;
 }
 
+const SHIFT_VI: Record<ShiftType, string> = {
+  MORNING: "ca sáng",
+  AFTERNOON: "ca chiều",
+  NIGHT: "ca đêm",
+};
+
+function appendShiftTransitionWarnings(
+  entries: Array<{ date: Date | string; shiftType: ShiftType; employeeId: string; positionConfigId: string }>,
+  previousEntries: Array<{ date: Date | string; shiftType: ShiftType; employeeId: string; positionConfigId: string }>,
+  warnings: Warning[],
+  generatedFrom: Date,
+) {
+  const byEmployee = new Map<string, Map<string, (typeof entries)[number]>>();
+  for (const entry of [...previousEntries, ...entries]) {
+    const days = byEmployee.get(entry.employeeId) ?? new Map();
+    days.set(isoDay(new Date(entry.date)), entry);
+    byEmployee.set(entry.employeeId, days);
+  }
+  for (const [employeeId, days] of byEmployee) {
+    const ordered = Array.from(days.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      const current = ordered[index];
+      const currentDate = new Date(current.date);
+      const previousDate = new Date(previous.date);
+      if (currentDate < generatedFrom || currentDate.getTime() - previousDate.getTime() !== DAY_MS) continue;
+      const invalid =
+        (previous.shiftType === ShiftType.AFTERNOON && current.shiftType === ShiftType.MORNING) ||
+        (previous.shiftType === ShiftType.NIGHT && current.shiftType !== ShiftType.NIGHT);
+      if (!invalid) continue;
+      warnings.push({
+        date: isoDay(currentDate),
+        positionId: current.positionConfigId,
+        shiftType: current.shiftType,
+        message: `An toàn chuyển ca — ${employeeId}: sau ${SHIFT_VI[previous.shiftType]} ngày trước không được đi ${SHIFT_VI[current.shiftType]}`,
+      });
+    }
+  }
+}
+
 export async function generateShiftSchedule(input: GenerateInput) {
   const firstDay = new Date(Date.UTC(input.year, input.month - 1, 1));
   const lastDay = new Date(Date.UTC(input.year, input.month, 0));
@@ -42,18 +82,23 @@ export async function generateShiftSchedule(input: GenerateInput) {
   if (generatedFrom > lastDay) throw new Error("Ngày bắt đầu tính lại nằm ngoài tháng cần tạo");
 
   return prisma.$transaction(async (tx) => {
-    const [positions, assignments, crewRotations, positionRotations, baseVersion, latest] = await Promise.all([
+    const [positions, assignments, crewRotations, positionRotations, baseVersion, latest, previousEntries] = await Promise.all([
       tx.shiftPositionConfig.findMany({
         where: { isActive: true, ...(input.positionIds?.length ? { id: { in: input.positionIds } } : {}) },
       }),
       tx.shiftStaffingAssignment.findMany({
         where: {
-          assignmentType: "OFFICIAL",
+          isTrainingRow: false,
           startDate: { lte: lastDay },
           OR: [{ endDate: null }, { endDate: { gte: firstDay } }],
           ...(input.positionIds?.length ? { positionId: { in: input.positionIds } } : {}),
         },
-        include: { user: { select: { employeeId: true } } },
+        include: {
+          user: { select: { employeeId: true } },
+          absences: {
+            where: { startDate: { lte: lastDay }, endDate: { gte: firstDay } },
+          },
+        },
       }),
       tx.crewRotationConfig.findMany({
         where: {
@@ -78,6 +123,13 @@ export async function generateShiftSchedule(input: GenerateInput) {
         where: { unit: UNIT, year: input.year, month: input.month },
         orderBy: { versionNumber: "desc" },
         select: { versionNumber: true },
+      }),
+      tx.shiftScheduleEntry.findMany({
+        where: {
+          date: new Date(generatedFrom.getTime() - DAY_MS),
+          scheduleVersion: { status: "PUBLISHED" },
+        },
+        select: { date: true, shiftType: true, employeeId: true, positionConfigId: true },
       }),
     ]);
     if (!positions.length) throw new Error("Không có cương vị phù hợp để phát sinh lịch");
@@ -112,7 +164,10 @@ export async function generateShiftSchedule(input: GenerateInput) {
     for (const day of eachDay(generatedFrom, lastDay)) {
       for (const position of positions) {
         const activePeople = assignments.filter(
-          (item) => item.positionId === position.id && overlaps(item.startDate, item.endDate, day),
+          (item) =>
+            item.positionId === position.id &&
+            overlaps(item.startDate, item.endDate, day) &&
+            !item.absences.some((absence) => overlaps(absence.startDate, absence.endDate, day)),
         );
         const scheduled: Array<{ employeeId: string; stationCode: ShiftSlot | null; shiftType: ShiftType }> = [];
         for (const assignment of activePeople) {
@@ -199,6 +254,8 @@ export async function generateShiftSchedule(input: GenerateInput) {
         }
       }
     }
+
+    appendShiftTransitionWarnings(entries, previousEntries, warnings, generatedFrom);
 
     const version = await tx.shiftScheduleVersion.create({
       data: {

@@ -335,6 +335,7 @@ model ShiftStaffingAssignment {
   position  ShiftPositionConfig @relation(fields: [positionId], references: [id])
   createdBy User                @relation("ShiftStaffingCreatedBy", fields: [createdById], references: [id])
   updatedBy User                @relation("ShiftStaffingUpdatedBy", fields: [updatedById], references: [id])
+  absences ShiftStaffingAbsence[]
 
   @@index([positionId, startDate, endDate])
   @@index([positionId, rosterColumn])
@@ -342,6 +343,24 @@ model ShiftStaffingAssignment {
   @@index([cycleStartDate])
   @@index([userId, assignmentType, startDate, endDate])
   @@index([status])
+}
+
+model ShiftStaffingAbsence {
+  id           String   @id @default(cuid())
+  assignmentId String
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  reason       String
+  note         String?
+  createdById  String
+  updatedById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignment ShiftStaffingAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId, startDate, endDate])
+  @@index([startDate, endDate])
 }
 
 model RotationTemplate {

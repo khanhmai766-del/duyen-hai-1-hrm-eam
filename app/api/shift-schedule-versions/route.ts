@@ -152,6 +152,14 @@ export async function POST(req: Request) {
         return fail("Phiên bản phải ở trạng thái đang xem xét trước khi duyệt");
       if (input.action === "PUBLISH" && current.status !== "APPROVED")
         return fail("Chỉ phiên bản đã duyệt mới có thể công bố chính thức");
+      if (
+        input.action === "PUBLISH" &&
+        Array.isArray(current.generationWarnings) &&
+        (current.generationWarnings as Array<{ message?: string }>).some((warning) =>
+          warning.message?.startsWith("An toàn chuyển ca"),
+        )
+      )
+        return fail("Không thể công bố: lịch còn vi phạm quy tắc nghỉ giữa các ca");
       const updated = await prisma.$transaction(async (tx) => {
         if (input.action === "PUBLISH") {
           await tx.shiftScheduleVersion.updateMany({

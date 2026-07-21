@@ -76,17 +76,24 @@ export async function GET(req: Request) {
     await requirePermissionLevel(user, "shift-schedule-export", ["read", "manage", "full"], "Không đủ quyền xuất lịch");
     const params = new URL(req.url).searchParams;
     const from = params.get("from") ?? "", count = Number(params.get("count") ?? 3);
+    const requestedVersionId = params.get("versionId");
+    const selectedPositionId = params.get("positionId");
+    const exportMode = params.get("mode") === "POSITION" ? "POSITION" : "ROTATION";
+    const matrixOnly = params.get("matrixOnly") === "1";
     const months = monthRange(from, count);
     if (!months) return fail("Khoảng xuất phải từ 1 đến tối đa 3 tháng");
 
     const versions = [];
-    for (const target of months) {
+    for (let monthIndex = 0; monthIndex < months.length; monthIndex += 1) {
+      const target = months[monthIndex];
       const version = await prisma.shiftScheduleVersion.findFirst({
-        where: { unit: "Vận hành 1", year: target.year, month: target.month, status: "PUBLISHED" },
+        where: monthIndex === 0 && requestedVersionId
+          ? { id: requestedVersionId, unit: "Vận hành 1", year: target.year, month: target.month }
+          : { unit: "Vận hành 1", year: target.year, month: target.month, ...(matrixOnly ? {} : { status: "PUBLISHED" }) },
         include: { entries: { include: { positionConfig: { select: { id: true, name: true, positionType: true, trainingRowName: true } } } } },
         orderBy: { versionNumber: "desc" },
       });
-      if (!version) return fail(`Tháng ${target.month}/${target.year} chưa có lịch đã công bố`, 409);
+      if (!version) return fail(`Tháng ${target.month}/${target.year} chưa có lịch để xuất`, 409);
       versions.push(version);
     }
 
@@ -106,6 +113,7 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    const positionById = new Map(versions.flatMap((version) => version.entries.map((entry) => [entry.positionConfigId, entry.positionConfig] as const)));
     const groups = new Map<string, { code: string; name: string; positions: Map<string, string> }>();
     for (const positionId of positionIds) {
       const rotation = rotations.find((item) => item.positionConfigId === positionId);
@@ -115,6 +123,23 @@ export async function GET(req: Request) {
       groups.set(rotation.rotationTemplate.id, group);
     }
     if (!groups.size) return fail("Không tìm thấy mẫu xoay ca để xuất", 409);
+    if (matrixOnly && selectedPositionId) {
+      const selectedPosition = positionById.get(selectedPositionId);
+      const selectedRotation = rotations.find((item) => item.positionConfigId === selectedPositionId);
+      if (!selectedPosition || !selectedRotation)
+        return fail("Không tìm thấy cương vị hoặc mẫu xoay ca đã chọn", 409);
+      if (exportMode === "POSITION") {
+        groups.clear();
+        groups.set(`POSITION:${selectedPositionId}`, {
+          code: `CV_${selectedPosition.name}`,
+          name: selectedPosition.name,
+          positions: new Map([[selectedPositionId, selectedPosition.name]]),
+        });
+      } else {
+        for (const key of Array.from(groups.keys()))
+          if (key !== selectedRotation.rotationTemplate.id) groups.delete(key);
+      }
+    }
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = user.name ?? "PXVH1";
@@ -123,7 +148,6 @@ export async function GET(req: Request) {
     const thin = { style: "thin" as const, color: { argb: "FF000000" } };
     const border = { top: thin, left: thin, bottom: thin, right: thin };
 
-    const positionById = new Map(versions.flatMap((version) => version.entries.map((entry) => [entry.positionConfigId, entry.positionConfig] as const)));
     const rosterSnapshots = months.map((target) => {
       const snapshot = new Date(Date.UTC(target.year, target.month - 1, 1));
       const rows: Array<{ positionId: string; label: string; station: "S1" | "S2" | null; crews: Record<string, string[]>; type: string }> = [];
@@ -190,7 +214,7 @@ export async function GET(req: Request) {
       else rosterGroups.push({ from: snapshot.target, to: snapshot.target, rows: snapshot.rows, signature: snapshot.signature });
     }
 
-    for (const roster of rosterGroups) {
+    if (!matrixOnly) for (const roster of rosterGroups) {
       const sameMonth = roster.from.year === roster.to.year && roster.from.month === roster.to.month;
       const periodLabel = sameMonth
         ? `THÁNG ${String(roster.from.month).padStart(2, "0")} NĂM ${roster.from.year}`
@@ -252,6 +276,9 @@ export async function GET(req: Request) {
       versions.forEach((version, monthIndex) => {
         const startRow = 3 + monthIndex * 8;
         const days = new Date(Date.UTC(version.year, version.month, 0)).getUTCDate();
+        const changeDate = new Date(version.generatedFromDate);
+        const contextStart = new Date(changeDate);
+        contextStart.setUTCDate(contextStart.getUTCDate() - 2);
         const representativeId = Array.from(group.positions.keys()).find((id) => version.entries.some((entry) => entry.positionConfigId === id));
         const representativeEntries = representativeId ? version.entries.filter((entry) => entry.positionConfigId === representativeId) : [];
         sheet.mergeCells(startRow, 1, startRow, 32);
@@ -285,7 +312,7 @@ export async function GET(req: Request) {
         sheet.getCell(startRow + 6, 1).value = "HC";
         sheet.getCell(startRow + 7, 1).value = "GHI CHÚ";
         sheet.mergeCells(startRow + 7, 2, startRow + 7, 32);
-        sheet.getCell(startRow + 7, 2).value = NOTE;
+        sheet.getCell(startRow + 7, 2).value = `${NOTE}\nMàu xám: lịch cũ trước vùng đối chiếu · Hai ngày liền trước giữ nguyên màu · Màu vàng nhạt: lịch từ ngày thay đổi.`;
         sheet.getCell(startRow + 7, 2).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
         sheet.getRow(startRow + 7).height = 34;
         for (let row = startRow + 1; row <= startRow + 7; row += 1) {
@@ -296,6 +323,28 @@ export async function GET(req: Request) {
             if (!(row === startRow + 7 && column > 1)) cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
           }
           if (row !== startRow + 7) sheet.getRow(row).height = 24;
+        }
+        for (let day = 1; day <= days; day += 1) {
+          const dayDate = new Date(Date.UTC(version.year, version.month - 1, day));
+          const isHistory = dayDate < contextStart;
+          const isChanged = dayDate >= changeDate;
+          const isWeekend = dayDate.getUTCDay() === 0 || dayDate.getUTCDay() === 6;
+          for (let row = startRow + 1; row <= startRow + 6; row += 1) {
+            const cell = sheet.getCell(row, day + 1);
+            if (isHistory) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F2F2" } };
+              cell.font = { ...cell.font, color: { argb: "FF8A8A8A" } };
+            } else if (isChanged) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: row === startRow + 1 ? "FFFFD966" : "FFFFF2CC" } };
+            }
+            if (isWeekend) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: row === startRow + 1 ? "FFF9CB9C" : "FFFFFFFF" } };
+              cell.font = { ...cell.font, color: { argb: "FF000000" } };
+            }
+            if (dayDate.getTime() === changeDate.getTime()) {
+              cell.border = { ...cell.border, left: { style: "medium", color: { argb: "FF2563EB" } } };
+            }
+          }
         }
       });
       sheet.pageSetup.printArea = `A1:AF${2 + versions.length * 8}`;
