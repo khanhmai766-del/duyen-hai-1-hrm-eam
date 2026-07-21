@@ -247,7 +247,7 @@ function DevicesPageContent() {
       </div>
 
       {view === "tree" ? (
-        <EquipmentTreeView />
+        <EquipmentTreeView canDelete={canDeleteDevices} />
       ) : view === "detail" ? (
         <QrCardsSection canManage={canManageDevices} q={debouncedQ} onQr={setQrDevice} />
       ) : view === "form" ? (

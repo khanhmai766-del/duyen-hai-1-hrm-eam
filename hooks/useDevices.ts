@@ -151,6 +151,18 @@ export function useDeleteDevice() {
   });
 }
 
+export function useDeleteDevices() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiMutate<{ ids: string[]; count: number }>("/api/devices/bulk-delete", "DELETE", { ids }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["devices"] });
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+    },
+  });
+}
+
 export interface ImportResult {
   created: number;
   updated: number;

@@ -14,6 +14,8 @@ import {
   Layers,
   ChevronsDownUp,
   ChevronsUpDown,
+  Trash2,
+  ListChecks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,6 +23,11 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentNode, useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
+import { useDeleteDevice, useDeleteDevices } from "@/hooks/useDevices";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { toast } from "sonner";
+
+const MAX_BULK_DELETE = 500;
 
 /** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
 function compareSeq(a: string, b: string) {
@@ -48,6 +55,11 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   isSelected,
   onSelect,
   onToggle,
+  canDelete,
+  onDelete,
+  bulkMode,
+  isChecked,
+  onToggleChecked,
 }: {
   node: EquipmentNode;
   depth: number;
@@ -57,13 +69,25 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   isSelected: boolean;
   onSelect: (seq: string) => void;
   onToggle: (seq: string) => void;
+  canDelete: boolean;
+  onDelete: (node: EquipmentNode) => void;
+  bulkMode: boolean;
+  isChecked: boolean;
+  onToggleChecked: (seq: string) => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(node.seq)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(node.seq);
+        }
+      }}
       className={cn(
-        "group flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
+        "group flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
         isSelected ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted"
       )}
       style={{ paddingLeft: depth * 16 + 4 }}
@@ -84,6 +108,16 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       ) : (
         <span className="h-5 w-5 shrink-0" />
       )}
+      {bulkMode && !hasKids && (
+        <input
+          type="checkbox"
+          checked={isChecked}
+          onChange={() => onToggleChecked(node.seq)}
+          onClick={(event) => event.stopPropagation()}
+          className="h-4 w-4 shrink-0 cursor-pointer rounded border-border text-accent focus:ring-2 focus:ring-accent/40"
+          aria-label={`Chọn thiết bị ${node.name}`}
+        />
+      )}
       {hasKids ? (
         isOpen ? (
           <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
@@ -98,11 +132,25 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       </span>
       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kidsCount}</span>}
       <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{node.seq}</span>
-    </button>
+      {canDelete && !bulkMode && !hasKids && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(node);
+          }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-red-50 hover:text-destructive focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-destructive/40 group-hover:opacity-100"
+          title={`Xóa thiết bị ${node.name}`}
+          aria-label={`Xóa thiết bị ${node.name}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
   );
 });
 
-export function EquipmentTreeView() {
+export function EquipmentTreeView({ canDelete = false }: { canDelete?: boolean }) {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
   const { data, isLoading } = useEquipmentTree();
@@ -152,6 +200,12 @@ export function EquipmentTreeView() {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [selected, setSelected] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
+  const [deleteTarget, setDeleteTarget] = React.useState<EquipmentNode | null>(null);
+  const [bulkMode, setBulkMode] = React.useState(false);
+  const [checkedSeqs, setCheckedSeqs] = React.useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false);
+  const deleteDevice = useDeleteDevice();
+  const deleteDevices = useDeleteDevices();
   const q = normalizeText(search.trim());
 
   // Tìm kiếm: hiện các node khớp + tổ tiên (để thấy đường dẫn), tự bung tổ tiên.
@@ -186,6 +240,15 @@ export function EquipmentTreeView() {
     });
   }, []);
   const onSelect = React.useCallback((seq: string) => setSelected(seq), []);
+  const onToggleChecked = React.useCallback((seq: string) => {
+    setCheckedSeqs((current) => {
+      const next = new Set(current);
+      if (next.has(seq)) next.delete(seq);
+      else if (next.size < MAX_BULK_DELETE) next.add(seq);
+      else toast.error(`Chỉ được chọn tối đa ${MAX_BULK_DELETE} thiết bị mỗi lần`);
+      return next;
+    });
+  }, []);
 
   const selectedNode = selected ? bySeq.get(selected) ?? null : null;
   React.useEffect(() => {
@@ -230,6 +293,13 @@ export function EquipmentTreeView() {
     walk(roots, 0);
     return rows;
   }, [roots, childrenOf, visible, searchExpanded, expanded, q]);
+
+  const selectableSeqs = React.useMemo(
+    () => flatRows.filter((row) => !row.hasKids).map((row) => row.node.seq),
+    [flatRows]
+  );
+  const selectableBatch = React.useMemo(() => selectableSeqs.slice(0, MAX_BULK_DELETE), [selectableSeqs]);
+  const allVisibleChecked = selectableBatch.length > 0 && selectableBatch.every((seq) => checkedSeqs.has(seq));
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -290,7 +360,56 @@ export function EquipmentTreeView() {
               </button>
             </div>
           )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                setBulkMode((active) => !active);
+                setCheckedSeqs(new Set());
+              }}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+                bulkMode ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:border-accent hover:text-accent"
+              )}
+              aria-pressed={bulkMode}
+            >
+              <ListChecks className="h-4 w-4" /> {bulkMode ? "Hủy chọn" : "Chọn nhiều"}
+            </button>
+          )}
         </div>
+
+        {bulkMode && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 px-3 py-2 text-xs">
+            <button
+              type="button"
+              disabled={selectableSeqs.length === 0}
+              onClick={() => setCheckedSeqs((current) => {
+                const next = new Set(current);
+                if (allVisibleChecked) selectableBatch.forEach((seq) => next.delete(seq));
+                else selectableBatch.forEach((seq) => {
+                  if (next.size < MAX_BULK_DELETE) next.add(seq);
+                });
+                return next;
+              })}
+              className="rounded-md border border-border bg-white px-2.5 py-1.5 font-medium text-ink transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {allVisibleChecked
+                ? "Bỏ chọn mục đang hiển thị"
+                : `Chọn ${Math.min(selectableSeqs.length, MAX_BULK_DELETE).toLocaleString("vi-VN")} mục đang hiển thị`}
+            </button>
+            <span className="font-semibold text-ink">Đã chọn {checkedSeqs.size.toLocaleString("vi-VN")} thiết bị</span>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="ml-auto h-8"
+              disabled={checkedSeqs.size === 0 || deleteDevices.isPending}
+              onClick={() => setBulkConfirmOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Xóa mục đã chọn
+            </Button>
+          </div>
+        )}
 
         <div ref={scrollRef} className="max-h-[68vh] min-h-[340px] overflow-y-auto p-2">
           {isLoading ? (
@@ -322,6 +441,11 @@ export function EquipmentTreeView() {
                       isSelected={selected === row.node.seq}
                       onSelect={onSelect}
                       onToggle={onToggle}
+                      canDelete={canDelete}
+                      onDelete={setDeleteTarget}
+                      bulkMode={bulkMode}
+                      isChecked={checkedSeqs.has(row.node.seq)}
+                      onToggleChecked={onToggleChecked}
                     />
                   </div>
                 );
@@ -352,6 +476,48 @@ export function EquipmentTreeView() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Xóa thiết bị khỏi cây?"
+        description={deleteTarget ? `Bạn chắc chắn muốn xóa “${deleteTarget.seq} — ${deleteTarget.name}”? Dữ liệu liên quan của thiết bị cũng có thể bị xóa và thao tác này không thể hoàn tác.` : undefined}
+        confirmLabel="Xóa thiết bị"
+        loading={deleteDevice.isPending}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          try {
+            await deleteDevice.mutateAsync(deleteTarget.seq);
+            if (selected === deleteTarget.seq) setSelected(null);
+            toast.success(`Đã xóa thiết bị ${deleteTarget.seq} — ${deleteTarget.name}`);
+            setDeleteTarget(null);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Không thể xóa thiết bị");
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        title={`Xóa ${checkedSeqs.size.toLocaleString("vi-VN")} thiết bị đã chọn?`}
+        description="Các thiết bị và dữ liệu liên quan sẽ bị xóa khỏi cây. Thao tác này không thể hoàn tác."
+        confirmLabel={`Xóa ${checkedSeqs.size.toLocaleString("vi-VN")} thiết bị`}
+        loading={deleteDevices.isPending}
+        onConfirm={async () => {
+          const ids = [...checkedSeqs];
+          if (ids.length === 0) return;
+          try {
+            const result = await deleteDevices.mutateAsync(ids);
+            if (selected && checkedSeqs.has(selected)) setSelected(null);
+            setCheckedSeqs(new Set());
+            setBulkConfirmOpen(false);
+            setBulkMode(false);
+            toast.success(`Đã xóa ${result.count.toLocaleString("vi-VN")} thiết bị`);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Không thể xóa các thiết bị đã chọn");
+          }
+        }}
+      />
     </div>
   );
 }
