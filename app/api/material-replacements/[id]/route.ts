@@ -66,8 +66,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body.deviceId) await assertSeqEditable(user, String(body.deviceId));
 
     const intervalMonths = body.intervalMonths != null ? Number(body.intervalMonths) : undefined;
-    if (intervalMonths != null && (!Number.isFinite(intervalMonths) || intervalMonths < 1)) {
-      return fail("Chu kỳ phải là số tháng hợp lệ (>= 1)");
+    if (intervalMonths != null && (!Number.isFinite(intervalMonths) || intervalMonths < 0)) {
+      return fail("Chu kỳ phải là số tháng hợp lệ (>= 0; 0 = không theo dõi lịch)");
     }
     if (body.deviceId !== undefined && !body.deviceId) return fail("Chọn thiết bị");
 
@@ -82,7 +82,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : undefined,
         nextDueAt: body.nextDueAt ? parseDateInput(body.nextDueAt) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
-        isActive: body.isActive,
+        isActive: intervalMonths === 0 ? false : body.isActive,
       },
       include: SUMMARY_INCLUDE,
     });

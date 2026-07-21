@@ -83,10 +83,11 @@ export function ReplacementPointsEditor({
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ (tháng)</label>
               <Input
                 type="number"
-                min={1}
+                min={0}
                 value={row.intervalMonths ?? 6}
                 onChange={(e) => update(i, { intervalMonths: Number(e.target.value) })}
               />
+              <p className="mt-1 text-[10px] text-muted-foreground">Nhập 0 để không theo dõi lịch</p>
             </div>
             <div>
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Chu kỳ O&M</label>

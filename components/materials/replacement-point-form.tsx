@@ -141,7 +141,7 @@ export function ReplacementPointForm({
     if (!form.managingPosition) return toast.error("Vui lòng chọn cương vị");
     if (!form.system) return toast.error("Vui lòng chọn hệ thống");
     if (!form.deviceId) return toast.error("Vui lòng chọn thiết bị");
-    if (!form.nextDueAt) return toast.error("Vui lòng nhập ngày đến hạn");
+    if (Number(form.intervalMonths) > 0 && !form.nextDueAt) return toast.error("Vui lòng nhập ngày đến hạn");
 
     const payload = {
       materialId,
@@ -151,7 +151,7 @@ export function ReplacementPointForm({
       intervalMonths: Number(form.intervalMonths),
       intervalNote: form.intervalNote,
       lastReplacedAt: form.lastReplacedAt || null,
-      nextDueAt: form.nextDueAt,
+      nextDueAt: form.nextDueAt || null,
       note: form.note,
     };
     try {
@@ -207,7 +207,8 @@ export function ReplacementPointForm({
       </div>
 
       <Field label="Chu kỳ thay thế (tháng) *">
-        <Input type="number" min={1} value={form.intervalMonths} onChange={(e) => onIntervalChange(e.target.value)} />
+        <Input type="number" min={0} value={form.intervalMonths} onChange={(e) => onIntervalChange(e.target.value)} />
+        <p className="mt-1 text-xs text-muted-foreground">Nhập 0 để không theo dõi lịch thay thế</p>
       </Field>
       <Field label="Ghi chú chu kỳ">
         <Input value={form.intervalNote} onChange={(e) => set("intervalNote", e.target.value)} placeholder="VD: 2500h" />
@@ -216,8 +217,8 @@ export function ReplacementPointForm({
       <Field label="Lần thay gần nhất">
         <Input type="date" value={form.lastReplacedAt} onChange={(e) => onLastChange(e.target.value)} />
       </Field>
-      <Field label="Đến hạn kế tiếp *">
-        <Input type="date" value={form.nextDueAt} onChange={(e) => set("nextDueAt", e.target.value)} required />
+      <Field label={Number(form.intervalMonths) > 0 ? "Đến hạn kế tiếp *" : "Đến hạn kế tiếp"}>
+        <Input type="date" value={form.nextDueAt} onChange={(e) => set("nextDueAt", e.target.value)} required={Number(form.intervalMonths) > 0} disabled={Number(form.intervalMonths) === 0} />
       </Field>
 
       <Field label="Ghi chú" className="sm:col-span-2">

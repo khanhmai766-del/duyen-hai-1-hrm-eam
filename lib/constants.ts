@@ -366,7 +366,7 @@ export function replacementDueStatus(nextDueAt: Date | string, now: Date = new D
 
 /** Nhãn chu kỳ thay thế: "12 tháng" kèm ghi chú tuỳ chọn ("· 2500h"). */
 export function replacementIntervalLabel(months: number, note?: string | null): string {
-  const base = `${months} tháng`;
+  const base = months === 0 ? "Không theo dõi lịch" : `${months} tháng`;
   return note ? `${base} · ${note}` : base;
 }
 

@@ -193,7 +193,7 @@ function DeviceDetailPageContent() {
                       {item.location || item.system || "Chưa ghi rõ vị trí"}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Cần thay: {item.quantity * item.deviceCount} {item.material.unit} · Chu kỳ {item.intervalNote || `${item.intervalMonths} tháng`}
+                      Cần thay: {item.quantity * item.deviceCount} {item.material.unit} · Chu kỳ {item.intervalNote || (item.intervalMonths === 0 ? "Không theo dõi lịch" : `${item.intervalMonths} tháng`)}
                     </div>
                   </div>
                 ))

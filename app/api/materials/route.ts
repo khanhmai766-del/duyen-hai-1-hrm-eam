@@ -130,7 +130,8 @@ type ReplacementInput = {
 
 /** Dựng dữ liệu tạo một điểm thay thế từ payload form (kèm tính ngày đến hạn). */
 function buildReplacementCreate(entry: ReplacementInput, userId: string, defaultSystem: string | null) {
-  const intervalMonths = Math.max(1, Math.round(Number(entry.intervalMonths)) || 12);
+  const parsedInterval = Math.round(Number(entry.intervalMonths));
+  const intervalMonths = Number.isFinite(parsedInterval) ? Math.max(0, parsedInterval) : 12;
   const quantity = Math.max(0, Math.round(Number(entry.quantity)) || 0);
   const lastReplacedAt = entry.lastReplacedAt ? new Date(entry.lastReplacedAt) : null;
   return {
@@ -141,7 +142,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     managingPosition: entry.managingPosition?.trim() || null,
     // Thêm thiết bị theo dõi từ form KHÔNG tự kích hoạt đếm thời gian;
     // chỉ giữ trạng thái true khi dòng cũ đã được bật theo dõi trước đó.
-    isActive: entry.isActive === true,
+    isActive: entry.isActive === true && intervalMonths > 0,
     quantity,
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,

@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       const intervalMonths = Math.round(Number(row.intervalMonths));
       const quantity = Number(row.quantity);
       const deviceCount = Math.round(Number(row.deviceCount) || 1);
-      if (!Number.isFinite(intervalMonths) || intervalMonths < 1) return errors.push({ rowNumber, message: "Chu kỳ thay thế phải từ 1 tháng" });
+      if (!Number.isFinite(intervalMonths) || intervalMonths < 0) return errors.push({ rowNumber, message: "Chu kỳ thay thế phải từ 0 tháng (0 = không theo dõi lịch)" });
       if (!Number.isFinite(quantity) || quantity < 0) return errors.push({ rowNumber, message: "Số lượng cần thay không hợp lệ" });
       if (deviceCount < 1) return errors.push({ rowNumber, message: "Số lượng thiết bị phải từ 1" });
       const key = `${machine}|${group.id}|${deviceSeq}`;

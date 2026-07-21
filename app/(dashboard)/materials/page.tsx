@@ -482,7 +482,7 @@ function MaterialsPageContent() {
         managingPosition: row.managingPosition ?? null,
         quantity: Math.max(0, Number(row.quantity) || 0),
         deviceCount: Math.max(1, Number(row.deviceCount) || 1),
-        intervalMonths: Math.max(1, Number(row.intervalMonths) || 6),
+        intervalMonths: Number.isFinite(Number(row.intervalMonths)) ? Math.max(0, Number(row.intervalMonths)) : 6,
         intervalNote: row.intervalNote ?? null,
         lastReplacedAt: row.lastReplacedAt ?? null,
       }));
@@ -1078,7 +1078,7 @@ function MaterialsPageContent() {
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-semibold uppercase text-ink">{row.device?.name || row.system || "Chưa chọn hệ thống"}</span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {[row.location, row.managingPosition, `${row.intervalMonths} tháng`].filter(Boolean).join(" · ")}
+                            {[row.location, row.managingPosition, row.intervalMonths === 0 ? "Không theo dõi lịch" : `${row.intervalMonths} tháng`].filter(Boolean).join(" · ")}
                           </span>
                         </span>
                       </label>
@@ -1383,14 +1383,15 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
 
   function openTracking(p: PanelPoint) {
     setTrackDate(formatDateInput(new Date()));
-    setTrackMonths(p.intervalMonths || 12);
+    setTrackMonths(p.intervalMonths);
     setTracking(p);
   }
 
   async function confirmTracking() {
     if (!tracking) return;
     try {
-      const months = Math.max(1, Math.round(trackMonths) || 12);
+      const months = Math.max(0, Math.round(trackMonths));
+      if (months === 0) return toast.error("Chu kỳ 0 không theo dõi lịch thay thế");
       const due = new Date(trackDate ? `${trackDate}T08:00:00` : Date.now());
       due.setMonth(due.getMonth() + months);
       await createPoint.mutateAsync({
@@ -1451,17 +1452,17 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 <td className="px-4 py-2.5 text-ink">{p.managingPosition || "—"}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalNote || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths} tháng</td>
+                <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
                 <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                 <td className="px-4 py-2.5 text-center">
                   <button
                     type="button"
-                    disabled={createPoint.isPending}
+                    disabled={createPoint.isPending || p.intervalMonths === 0}
                     onClick={() => openTracking(p)}
-                    title="Thêm điểm theo dõi thời gian thay thế cho thiết bị này"
+                    title={p.intervalMonths === 0 ? "Chu kỳ 0 không theo dõi lịch thay thế" : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này"}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Thêm điểm
+                    <Plus className="h-3.5 w-3.5" /> {p.intervalMonths === 0 ? "Không theo dõi" : "Thêm điểm"}
                   </button>
                 </td>
               </tr>
@@ -1485,7 +1486,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
               </Field>
               <Field label="Chu kỳ thay thế (tháng)">
-                <Input type="number" min={1} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
+                <Input type="number" min={0} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
               </Field>
               <p className="text-xs text-muted-foreground">
                 Điểm theo dõi chỉ được tạo từ thao tác này và sẽ xuất hiện trong tab Theo dõi thay thế vật tư.

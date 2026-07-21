@@ -68,7 +68,9 @@ function parseRows(sheet: XLSX.WorkSheet): ParsedRow[] {
       materialName,
       managingPosition: positionKey ? String(row[positionKey] ?? "").trim() : "",
       intervalNote: omKey ? String(row[omKey] ?? "").trim() : "",
-      intervalMonths: Number(intervalKey ? row[intervalKey] : 6),
+      intervalMonths: intervalKey
+        ? (String(row[intervalKey] ?? "").trim() === "" ? 0 : Number(row[intervalKey]))
+        : 0,
       quantity: Number(quantityKey ? row[quantityKey] : 1),
       deviceCount: Number(countKey ? row[countKey] : 1),
     }];
@@ -240,7 +242,7 @@ export function MaterialDeviceImportDialog({
                 <div className="max-h-64 overflow-auto">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-white text-muted-foreground"><tr><th className="px-3 py-2 text-left">Dòng</th><th className="px-3 py-2 text-left">Tổ máy</th><th className="px-3 py-2 text-left">Vật tư</th><th className="px-3 py-2 text-left">Số thứ tự</th><th className="px-3 py-2 text-left">Thiết bị cây</th><th className="px-3 py-2 text-left">Thiết bị nhập tay</th><th className="px-3 py-2 text-right">SL</th><th className="px-3 py-2 text-right">Chu kỳ</th></tr></thead>
-                    <tbody>{result.preview.map((row) => <tr key={row.rowNumber} className="border-t"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-semibold">{row.machine}</td><td className="px-3 py-2"><div className="font-medium">{row.materialName}</div><div className="text-[10px] text-muted-foreground">{row.materialStatus}</div></td><td className="px-3 py-2 font-mono">{row.deviceSeq}</td><td className="px-3 py-2">{row.deviceName}</td><td className="px-3 py-2 font-medium">{row.manualDeviceName || "—"}</td><td className="px-3 py-2 text-right">{row.quantity}</td><td className="px-3 py-2 text-right">{row.intervalMonths} tháng</td></tr>)}</tbody>
+                    <tbody>{result.preview.map((row) => <tr key={row.rowNumber} className="border-t"><td className="px-3 py-2">{row.rowNumber}</td><td className="px-3 py-2 font-semibold">{row.machine}</td><td className="px-3 py-2"><div className="font-medium">{row.materialName}</div><div className="text-[10px] text-muted-foreground">{row.materialStatus}</div></td><td className="px-3 py-2 font-mono">{row.deviceSeq}</td><td className="px-3 py-2">{row.deviceName}</td><td className="px-3 py-2 font-medium">{row.manualDeviceName || "—"}</td><td className="px-3 py-2 text-right">{row.quantity}</td><td className="px-3 py-2 text-right">{row.intervalMonths === 0 ? "Không theo dõi" : `${row.intervalMonths} tháng`}</td></tr>)}</tbody>
                   </table>
                 </div>
               )}

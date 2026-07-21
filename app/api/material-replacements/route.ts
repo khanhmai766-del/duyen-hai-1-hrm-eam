@@ -58,7 +58,9 @@ export async function GET(req: NextRequest) {
     const materialId = sp.get("materialId");
     const due = sp.get("due");
 
-    const where: Prisma.MaterialReplacementWhereInput = { isActive: true };
+    // Chu kỳ 0 chỉ dùng để khai báo liên kết vật tư - thiết bị, không xuất hiện
+    // trong lịch hoặc cảnh báo thay thế.
+    const where: Prisma.MaterialReplacementWhereInput = { isActive: true, intervalMonths: { gt: 0 } };
     if (materialId) where.materialId = materialId;
     if (q) {
       where.OR = [
@@ -119,7 +121,8 @@ export async function POST(req: NextRequest) {
       return fail("Cương vị của bạn không có quyền thao tác trên hệ thống/thiết bị này", 403);
     }
 
-    const intervalMonths = Math.max(1, Math.round(Number(body.intervalMonths)) || 12);
+    const parsedInterval = Math.round(Number(body.intervalMonths));
+    const intervalMonths = Number.isFinite(parsedInterval) ? Math.max(0, parsedInterval) : 12;
     const lastReplacedAt = body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : new Date();
     let nextDueAt: Date;
     if (body.nextDueAt) {
@@ -143,7 +146,7 @@ export async function POST(req: NextRequest) {
         lastReplacedAt,
         nextDueAt,
         note: String(body.note ?? "").trim() || null,
-        isActive: true,
+        isActive: intervalMonths > 0,
         createdById: user.id,
       },
       include: INCLUDE,
