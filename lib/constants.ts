@@ -389,3 +389,45 @@ export function can(role: string | undefined, capability: keyof typeof CAN): boo
   if (!role) return false;
   return (CAN[capability] as readonly string[]).includes(role);
 }
+
+// Thứ tự chuẩn dùng chung cho bảng biên chế và các file Excel lịch trực ca.
+export const SHIFT_POSITION_DISPLAY_ORDER = [
+  "Trưởng ca",
+  "TK Lò máy",
+  "Lò Trưởng",
+  "Lò phó",
+  "Máy trưởng",
+  "Trợ thủ",
+  "Máy nghiền",
+  "Máy phó",
+  "Trạm bơm tuần hoàn",
+  "Trạm bơm nước thô",
+  "Trưởng kíp điện",
+  "Trực chính Điện",
+  "Trực phụ điện",
+  "Thải xỉ",
+  "ESP",
+  "FGD",
+  "Khí Nén – Nhà Dầu",
+  "XLN hỗn hợp",
+  "XLNT",
+  "NH3 - Lò hơi phụ",
+  "Thiết bị đo lường điều khiển",
+] as const;
+
+function positionOrderKey(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi");
+}
+
+export function compareShiftPositionNames(a: string, b: string) {
+  const rank = (name: string) => {
+    const key = positionOrderKey(name);
+    const index = SHIFT_POSITION_DISPLAY_ORDER.findIndex((item) => {
+      const standard = positionOrderKey(item);
+      return key === standard || key.endsWith(standard) || key.includes(standard);
+    });
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  const difference = rank(a) - rank(b);
+  return difference || a.localeCompare(b, "vi");
+}

@@ -44,6 +44,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { compareShiftPositionNames } from "@/lib/constants";
 import {
   PositionRotation,
   RotationTemplate,
@@ -317,6 +318,8 @@ export default function ShiftStaffingPage() {
         position,
       );
     }
+    shift.sort((a, b) => compareShiftPositionNames(a.name, b.name));
+    administrative.sort((a, b) => compareShiftPositionNames(a.name, b.name));
     return [
       {
         key: "shift",

@@ -3,6 +3,7 @@ import { ShiftType } from "@prisma/client";
 import { fail, handle, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { compareShiftPositionNames } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,29 +14,6 @@ const SHIFT_ROWS: Array<[ShiftType, string]> = [
   [ShiftType.NIGHT, "CA ĐÊM"],
 ];
 const NOTE = "Lịch đi HC áp dụng cho CBCNV theo sự sắp xếp của Lãnh đạo Phân xưởng. Các điều chỉnh đặc biệt thực hiện theo lịch đã được công bố.";
-const POSITION_EXPORT_ORDER = [
-  "Trưởng ca",
-  "TK Lò máy",
-  "Lò Trưởng",
-  "Lò phó",
-  "Máy trưởng",
-  "Trợ thủ",
-  "Máy nghiền",
-  "Máy phó",
-  "Trạm bơm tuần hoàn",
-  "Trạm bơm nước thô",
-  "Trưởng kíp điện",
-  "Trực chính Điện",
-  "Trực phụ điện",
-  "Thải xỉ",
-  "ESP",
-  "FGD",
-  "Khí Nén – Nhà Dầu",
-  "XLN hỗn hợp",
-  "XLNT",
-  "NH3 - Lò hơi phụ",
-  "Thiết bị đo lường điều khiển",
-];
 
 function monthRange(from: string, count: number) {
   const match = /^(\d{4})-(\d{2})$/.exec(from);
@@ -151,14 +129,9 @@ export async function GET(req: Request) {
     const rosterSnapshots = months.map((target) => {
       const snapshot = new Date(Date.UTC(target.year, target.month - 1, 1));
       const rows: Array<{ positionId: string; label: string; station: "S1" | "S2" | null; crews: Record<string, string[]>; type: string }> = [];
-      const sortedPositions = Array.from(positionById.values()).sort((a, b) => {
-        const aIndex = POSITION_EXPORT_ORDER.indexOf(a.name);
-        const bIndex = POSITION_EXPORT_ORDER.indexOf(b.name);
-        if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name, "vi");
-        if (aIndex === -1) return 1;
-        if (bIndex === -1) return -1;
-        return aIndex - bIndex;
-      });
+      const sortedPositions = Array.from(positionById.values()).sort((a, b) =>
+        compareShiftPositionNames(a.name, b.name),
+      );
       for (const position of sortedPositions) {
         const stations: Array<"S1" | "S2" | null> = position.positionType === "S1_S2" ? ["S1", "S2"] : [null];
         const rotation = rotations.find((item) => item.positionConfigId === position.id && item.effectiveFrom <= snapshot && (!item.effectiveTo || item.effectiveTo >= snapshot));
