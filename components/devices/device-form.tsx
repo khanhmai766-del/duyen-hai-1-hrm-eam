@@ -4,7 +4,6 @@ import * as React from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,6 +57,38 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
   // Seq đang chọn cho ô cây: ưu tiên systemSeq; nếu (sửa) chỉ có tên thì dò seq theo tên.
   const systemSeqValue =
     form.systemSeq || (form.system ? equipmentNodes.find((n) => n.name === form.system)?.seq ?? "" : "");
+  const currentLevel = form.code.trim() ? form.code.trim().split(".").length : null;
+
+  function selectParent(node: (typeof equipmentNodes)[number] | null) {
+    setForm((current) => {
+      if (isEdit) {
+        return { ...current, system: node?.name ?? "", systemSeq: node?.seq ?? "" };
+      }
+
+      let code = current.code;
+      if (!node) {
+        // Chỉ xoá tiền tố tự điền khi người dùng chưa nhập mã con.
+        if (current.systemSeq && code === `${current.systemSeq}.`) code = "";
+      } else {
+        const oldParent = current.systemSeq;
+        const oldPrefix = oldParent ? `${oldParent}.` : "";
+        const previousChildPart = oldPrefix && code.startsWith(oldPrefix)
+          ? code.slice(oldPrefix.length)
+          : "";
+        const childPart = /^\d+$/.test(previousChildPart) ? previousChildPart : "";
+        // Thư mục cha là nguồn chuẩn của tiền tố. Khi đổi cha, chỉ giữ lại đúng
+        // một đoạn mã con đã nhập; mã không cùng nhánh sẽ được thay bằng tiền tố mới.
+        code = `${node.seq}.${childPart}`;
+      }
+
+      return {
+        ...current,
+        code,
+        system: node?.name ?? "",
+        systemSeq: node?.seq ?? "",
+      };
+    });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +114,10 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
       <CardContent>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Số thứ tự *">
-            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="VD: 1.4.11.2.2" />
+            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="VD cấp 7: 1.4.11.2.2.1.1" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {currentLevel ? `Thiết bị đang ở cấp ${currentLevel}/7.` : "Hỗ trợ cây thiết bị từ cấp gốc đến cấp 7."}
+            </p>
           </Field>
           <Field label="Tên thiết bị *">
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} required />
@@ -92,8 +126,14 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
             <EquipmentTreePicker
               value={systemSeqValue}
               position={form.managingPosition || null}
-              onChange={(node) => setForm((f) => ({ ...f, system: node?.name ?? "", systemSeq: node?.seq ?? "" }))}
+              includeLeaves
+              maxSelectableDepth={6}
+              placeholder="Chọn thư mục hoặc thiết bị cha (tối đa cấp 6)"
+              onChange={selectParent}
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Có thể chọn thiết bị hiện tại làm thư mục cha. Số thứ tự phía trên sẽ tự điền mã cha; chỉ cần nhập thêm số cấp con.
+            </p>
           </Field>
           <Field label="Cương vị quản lý">
             <Select value={form.managingPosition || NONE} onValueChange={(v) => set("managingPosition", v === NONE ? "" : v)}>
@@ -117,16 +157,6 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
           </Field>
           <Field label="Tài liệu đính kèm (link)" className="md:col-span-2">
             <Input value={form.documentUrl} onChange={(e) => set("documentUrl", e.target.value)} placeholder="https://… (PDF / Google Drive)" />
-          </Field>
-          <Field label="Mã QR (sinh từ mã thiết bị)" className="md:col-span-2">
-            <div className="flex items-center gap-4 rounded-lg border border-border p-3">
-              <div className="rounded-md border border-border bg-white p-2">
-                <QRCodeSVG value={form.code || "—"} size={96} level="M" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Mã QR tự sinh theo Số thứ tự. Sau khi lưu, QR sẽ liên kết tới trang chi tiết thiết bị.
-              </p>
-            </div>
           </Field>
           <div className="md:col-span-2 flex justify-end gap-2 pt-2">
             <Button type="submit" disabled={pending}>

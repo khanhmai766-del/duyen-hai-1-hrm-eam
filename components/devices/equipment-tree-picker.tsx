@@ -35,6 +35,7 @@ export function EquipmentTreePicker({
   rootSeq,
   accessFilter,
   includeLeaves = false,
+  maxSelectableDepth,
   placeholder = "Chọn thư mục hệ thống",
   disabled = false,
 }: {
@@ -44,6 +45,7 @@ export function EquipmentTreePicker({
   rootSeq?: string | null; // chỉ duyệt trong nhánh con của node này (vd lọc thiết bị theo hệ thống)
   accessFilter?: "edit"; // chỉ hiện hệ thống cương vị có quyền Sửa (mọi cấp); chưa cấu hình → hiện tất cả
   includeLeaves?: boolean; // hiện cả thiết bị cấp cuối (node lá) và cho chọn — mặc định chỉ hiện thư mục
+  maxSelectableDepth?: number; // giới hạn cấp được chọn; các node sâu hơn vẫn hiện để người dùng hiểu cấu trúc
   placeholder?: string;
   disabled?: boolean;
 }) {
@@ -227,6 +229,7 @@ export function EquipmentTreePicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <span className={cn("truncate", !selectedNode && "text-muted-foreground")}>
@@ -291,6 +294,8 @@ export function EquipmentTreePicker({
                 const n = row.node;
                 const hasKids = row.kidsCount > 0;
                 const isOpen = row.open;
+                const nodeDepth = n.seq.split(".").length;
+                const canSelect = maxSelectableDepth === undefined || nodeDepth <= maxSelectableDepth;
                 return (
                   <div
                     key={vi.key}
@@ -301,14 +306,20 @@ export function EquipmentTreePicker({
                     <button
                       type="button"
                       onClick={() => {
+                        if (!canSelect) {
+                          if (hasKids) toggle(n.seq);
+                          return;
+                        }
                         onChange(n);
                         if (hasKids) toggle(n.seq);
                         else pick(n); // node lá: chọn xong đóng popup luôn
                       }}
                       className={cn(
                         "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
-                        value === n.seq ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted"
+                        value === n.seq ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted",
+                        !canSelect && "cursor-not-allowed opacity-50"
                       )}
+                      title={!canSelect ? `Không thể tạo thiết bị con dưới cấp ${nodeDepth}` : undefined}
                       style={{ paddingLeft: row.depth * 16 + 4 }}
                     >
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
@@ -328,6 +339,7 @@ export function EquipmentTreePicker({
                       </span>
                       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{row.kidsCount}</span>}
                       <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{n.seq}</span>
+                      {!canSelect && <span className="shrink-0 text-[10px] text-muted-foreground">Cấp cuối</span>}
                     </button>
                   </div>
                 );

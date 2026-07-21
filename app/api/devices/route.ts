@@ -23,6 +23,15 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
+const MAX_EQUIPMENT_DEPTH = 7;
+
+function validateEquipmentSeq(seq: string) {
+  if (!/^\d+(?:\.\d+)*$/.test(seq)) return "Số thứ tự chỉ gồm các số nguyên dương, phân cách bằng dấu chấm";
+  if (seq.split(".").some((part) => Number(part) < 1)) return "Mỗi cấp trong số thứ tự phải lớn hơn 0";
+  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa cấp ${MAX_EQUIPMENT_DEPTH}`;
+  return null;
+}
+
 function publicEquipmentUrl(seq: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
   return `${base}/public/equipment/${encodeURIComponent(seq)}`;
@@ -220,11 +229,23 @@ export async function POST(req: NextRequest) {
     const seq = String(body.code ?? body.seq ?? "").trim();
     const name = String(body.name ?? "").trim();
     if (!seq || !name) return fail("Thiếu số thứ tự hoặc tên thiết bị");
+    const seqError = validateEquipmentSeq(seq);
+    if (seqError) return fail(seqError);
 
     const existing = await prisma.equipmentNode.findUnique({ where: { seq } });
     if (existing) return fail("Số thứ tự thiết bị đã tồn tại");
 
     const parentSeq = String(body.systemSeq ?? "").trim() || parentSeqOf(seq);
+    if (parentSeq) {
+      // Xác thực theo cùng cây đã chuẩn hoá mà giao diện đang hiển thị. Cây này có
+      // một số node hệ thống tổng hợp (vd. 1.0), nên không phải node nào cũng có
+      // một dòng vật lý tương ứng trong EquipmentNode.
+      const normalizedNodes = await getNormalizedEquipmentNodes(prisma);
+      const parent = normalizedNodes.find((item) => item.seq === parentSeq);
+      if (!parent) return fail("Không tìm thấy thư mục hoặc thiết bị cha đã chọn");
+      if (parent.seq.split(".").length >= MAX_EQUIPMENT_DEPTH) return fail(`Không thể tạo thiết bị con dưới cấp ${MAX_EQUIPMENT_DEPTH}`);
+      if (parentSeqOf(seq) !== parentSeq) return fail(`Số thứ tự thiết bị con phải nằm ngay dưới thư mục cha ${parentSeq}`);
+    }
     const maxSort = await prisma.equipmentNode.aggregate({ _max: { sort: true } });
     const rawImageUrl = Array.isArray(body.images) ? body.images.filter(Boolean)[0] ?? null : null;
     const imageUrl = await maybeUploadDataUrl({ value: rawImageUrl, folder: "equipment/images", preset: "image" });

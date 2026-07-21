@@ -21,6 +21,15 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
+const MAX_EQUIPMENT_DEPTH = 7;
+
+function validateEquipmentSeq(seq: string) {
+  if (!/^\d+(?:\.\d+)*$/.test(seq)) return "Số thứ tự chỉ gồm các số nguyên dương, phân cách bằng dấu chấm";
+  if (seq.split(".").some((part) => Number(part) < 1)) return "Mỗi cấp trong số thứ tự phải lớn hơn 0";
+  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa cấp ${MAX_EQUIPMENT_DEPTH}`;
+  return null;
+}
+
 function publicEquipmentUrl(seq: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
   return `${base}/public/equipment/${encodeURIComponent(seq)}`;
@@ -160,6 +169,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const nextSeq = typeof body.code === "string" ? body.code.trim() : currentSeq;
     const name = typeof body.name === "string" ? body.name.trim() : current.name;
     if (!nextSeq || !name) return fail("Số thứ tự và tên thiết bị không được để trống");
+    const seqError = validateEquipmentSeq(nextSeq);
+    if (seqError) return fail(seqError);
     if (nextSeq !== currentSeq && !(await hasPermissionLevel(user, "device-code", ["full"]))) {
       return fail("Chỉ Quản trị viên được chỉnh sửa số thứ tự thiết bị", 403);
     }
@@ -176,6 +187,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const parentSeq = typeof body.systemSeq === "string" && body.systemSeq.trim()
       ? body.systemSeq.trim()
       : parentSeqOf(nextSeq);
+    if (parentSeq) {
+      // Dùng cây chuẩn hoá giống API cây thiết bị; một số thư mục hệ thống tổng
+      // hợp có trên giao diện nhưng không có dòng vật lý riêng trong DB.
+      const normalizedNodes = await getCachedEquipmentNodeFull();
+      const parent = normalizedNodes.find((item) => item.seq === parentSeq);
+      if (!parent) return fail("Không tìm thấy thư mục hoặc thiết bị cha đã chọn");
+      if (parent.seq === currentSeq) return fail("Thiết bị không thể là thư mục cha của chính nó");
+      if (parent.seq.split(".").length >= MAX_EQUIPMENT_DEPTH) return fail(`Không thể đặt thiết bị con dưới cấp ${MAX_EQUIPMENT_DEPTH}`);
+      if (parentSeqOf(nextSeq) !== parentSeq) return fail(`Số thứ tự thiết bị phải nằm ngay dưới thư mục cha ${parentSeq}`);
+    }
     const node = await prisma.equipmentNode.update({
       where: { seq: currentSeq },
       data: {
