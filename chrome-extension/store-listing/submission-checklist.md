@@ -4,7 +4,7 @@
 - [ ] Xác minh email liên hệ của nhà phát hành.
 - [ ] Có xác nhận nội bộ cho phép phát hành tiện ích truy cập QLVT.
 - [ ] Triển khai URL chính sách quyền riêng tư và kiểm tra không yêu cầu đăng nhập.
-- [ ] Upload `qlvt-sync-store-v1.0.2.zip`.
+- [ ] Upload `qlvt-sync-store-v1.0.3.zip`.
 - [ ] Upload icon 128×128 và ảnh chụp 1280×800 trong thư mục `store-assets`.
 - [ ] Điền nội dung trong `vi.md`.
 - [ ] Điền khai báo quyền/dữ liệu theo `privacy-declarations.md`.

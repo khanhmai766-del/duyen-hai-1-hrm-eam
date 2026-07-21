@@ -192,7 +192,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
         <thead><tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <th className="px-4 py-3 text-left">Mã vật tư</th><th className="px-3 py-3 text-left">Tên vật tư</th>
           <th className="px-3 py-3 text-left">ĐVT</th><th className="px-3 py-3 text-left">Kho</th>
-          <th className="px-3 py-3 text-right">Tồn ERP</th><th className="px-3 py-3 text-left">Nhóm hiện tại</th><th className="px-3 py-3 text-center">Trạng thái</th>
+          <th className="px-3 py-3 text-right" title="Định dạng Việt Nam: dấu chấm ngăn hàng nghìn, dấu phẩy ngăn phần thập phân">Tồn ERP</th><th className="px-3 py-3 text-left">Nhóm hiện tại</th><th className="px-3 py-3 text-center">Trạng thái</th>
           {canManage && <th className="px-3 py-3 text-center">Thao tác</th>}
         </tr></thead>
         <tbody>{paginated.map((item) => <tr key={item.id} className="border-t border-slate-100 hover:bg-blue-50/30">
@@ -306,7 +306,7 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
       if (!rows.length) throw new Error("QLVT không trả về dòng tồn kho hợp lệ");
 
       const result = await syncStocks.mutateAsync(rows);
-      toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho, ${result.warehouseChanged} mã đổi Kho; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
+      toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho, ${result.warehouseChanged} mã đổi Kho, ${result.unitChanged} mã đổi ĐVT; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
       if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
     } catch (error) {
       toast.error((error as Error).message || "Không đồng bộ được tồn kho QLVT");
@@ -443,7 +443,7 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Xác nhận đồng bộ dữ liệu QLVT</DialogTitle></DialogHeader>
           <div className="space-y-3 text-sm leading-6 text-slate-600">
-            <p>Tiện ích sẽ đọc và chuyển sang hệ thống này ba trường: <strong>mã vật tư, mã kho và số lượng tồn kho</strong>.</p>
+            <p>Tiện ích sẽ đọc và chuyển sang hệ thống này bốn trường: <strong>mã vật tư, mã kho, đơn vị tính và số lượng tồn kho</strong>.</p>
             <p>Tiện ích không chuyển mật khẩu, cookie hoặc token đăng nhập QLVT. Dữ liệu chỉ được xử lý khi bạn chủ động bấm đồng bộ.</p>
             <a href="/public/qlvt-sync-privacy" target="_blank" rel="noreferrer" className="inline-flex font-semibold text-cyan-700 underline underline-offset-4 hover:text-cyan-900">Xem chính sách quyền riêng tư</a>
           </div>
@@ -566,7 +566,7 @@ function StockBoard({
               <th className="text-left px-4 py-3 w-10"></th>
               <th className="text-left px-2 py-3">Nhóm vật tư</th>
               <th className="text-right px-4 py-3">Hiện có</th>
-              <th className="text-right px-4 py-3">Tổng tồn ERP</th>
+              <th className="text-right px-4 py-3" title="Định dạng Việt Nam: dấu chấm ngăn hàng nghìn, dấu phẩy ngăn phần thập phân">Tổng tồn ERP</th>
               <th className="text-right px-4 py-3">Ngưỡng tối thiểu</th>
               <th className="text-center px-4 py-3">Số mã</th>
               <th className="text-center px-4 py-3">Trạng thái</th>

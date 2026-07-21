@@ -106,12 +106,14 @@ export type ErpStockUpdateInput = {
   code: string;
   erpStock: number | string | null;
   warehouse?: string;
+  unit?: string;
 };
 
 export type ErpStockUpdateResult = {
   updated: number;
   changed: number;
   warehouseChanged: number;
+  unitChanged: number;
   notFound: number;
   skipped: number;
   inactiveSkipped: number;

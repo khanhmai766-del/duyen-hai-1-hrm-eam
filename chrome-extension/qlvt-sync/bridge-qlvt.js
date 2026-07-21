@@ -22,22 +22,34 @@ function readField(row, candidates) {
   return undefined;
 }
 
+// QLVT hiển thị theo quy ước Anh-Mỹ: dấu phẩy ngăn hàng nghìn và dấu
+// chấm ngăn phần thập phân (7,435 = 7435; 34.015 = 34,015 theo kiểu Việt Nam).
+function parseQlvtQuantity(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : Number.NaN;
+  const raw = String(value ?? "").trim().replace(/\s+/g, "");
+  if (!/^-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?$/.test(raw)) return Number.NaN;
+  return Number(raw.replace(/,/g, ""));
+}
+
 function normalizeRows(source) {
   const grouped = new Map();
   for (const row of source) {
     const code = String(readField(row, ["MAVT", "MAVATTU", "ITEMCODE", "ITEMNUMBER"]) ?? "").trim();
     const stock = readField(row, ["TRANSACTIONQUANTITY", "PRIMARYTRANSACTIONQUANTITY", "TONKHO", "SLTON", "SOLUONGTON", "ONHAND", "ONHANDQUANTITY"]);
-    const quantity = typeof stock === "number" ? stock : Number(String(stock ?? "").trim().replace(/,/g, ""));
+    const quantity = parseQlvtQuantity(stock);
     if (!code || !Number.isFinite(quantity)) continue;
     const warehouse = String(readField(row, ["KHO", "MAKHO", "KHOCHINH", "SUBINVENTORYCODE", "ORGANIZATIONCODE"]) ?? "").trim();
-    const current = grouped.get(code) ?? { code, erpStock: 0, warehouses: new Set() };
+    const unit = String(readField(row, ["DVT", "DONVITINH", "UNIT", "UOM", "PRIMARYUOMCODE", "PRIMARYUNITOFMEASURE"]) ?? "").trim();
+    const current = grouped.get(code) ?? { code, erpStock: 0, warehouses: new Set(), units: new Set() };
     current.erpStock += quantity;
     if (warehouse) current.warehouses.add(warehouse);
+    if (unit) current.units.add(unit);
     grouped.set(code, current);
   }
   return [...grouped.values()].map((item) => ({
     code: item.code,
     warehouse: [...item.warehouses].sort().join(", "),
+    unit: item.units.size === 1 ? [...item.units][0] : "",
     erpStock: item.erpStock
   }));
 }

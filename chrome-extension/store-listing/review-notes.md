@@ -12,7 +12,7 @@ Tiện ích không cung cấp chức năng đăng nhập và không thu thập t
 2. Người dùng mở trang Vật tư theo ERP tại `duyenhai1.vn`.
 3. Người dùng bấm “Đồng bộ từ QLVT”.
 4. Ở lần đầu, người dùng đọc thông báo dữ liệu và bấm “Đồng ý và đồng bộ”.
-5. Tiện ích chỉ chuyển mã vật tư, mã kho và số lượng tồn kho sang PXVH1.
+5. Tiện ích chỉ chuyển mã vật tư, mã kho, đơn vị tính và số lượng tồn kho sang PXVH1.
 6. Ứng dụng hiển thị số mã thay đổi, số mã chưa có và số mã ngừng sử dụng.
 
 Không có tài khoản kiểm thử công khai vì QLVT là hệ thống nội bộ được bảo vệ. Ảnh chụp màn hình, mô tả Store và mã nguồn trong gói thể hiện đầy đủ luồng chức năng.
@@ -21,5 +21,5 @@ Không có tài khoản kiểm thử công khai vì QLVT là hệ thống nội 
 
 - `bridge-app.js` chỉ nhận thao tác đồng bộ từ duyenhai1.vn.
 - `background.js` chỉ tìm tab thuộc host QLVT đã được khai báo và chuyển thông điệp theo thao tác đó; manifest không yêu cầu quyền `tabs`.
-- `bridge-qlvt.js` gọi API QLVT trong phiên đăng nhập hiện tại, chuẩn hóa dữ liệu và chỉ trả về `code`, `warehouse`, `erpStock`.
+- `bridge-qlvt.js` gọi API QLVT trong phiên đăng nhập hiện tại, chuẩn hóa dữ liệu và chỉ trả về `code`, `warehouse`, `unit`, `erpStock`.
 - Không có mã tải từ xa, mã làm rối, analytics, quảng cáo hoặc lưu trữ cục bộ.

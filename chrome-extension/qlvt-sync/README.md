@@ -15,7 +15,7 @@
 3. Mở mục **Vật tư theo ERP** trên `https://duyenhai1.vn`.
 4. Nhấn **Đồng bộ từ QLVT**.
 
-Tiện ích không đọc hoặc chuyển cookie, mật khẩu hay token sang PXVH1. Nó chỉ gọi API tồn kho ngay trong tab QLVT đã đăng nhập và trả về mã vật tư, kho, tồn kho.
+Tiện ích không đọc hoặc chuyển cookie, mật khẩu hay token sang PXVH1. Nó chỉ gọi API tồn kho ngay trong tab QLVT đã đăng nhập và trả về mã vật tư, kho, đơn vị tính, tồn kho.
 
 ## Tạo gói Chrome Web Store
 

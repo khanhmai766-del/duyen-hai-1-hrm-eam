@@ -8,7 +8,7 @@
   <circle cx="1110" cy="90" r="250" fill="#42E8D0" opacity=".05"/><circle cx="90" cy="730" r="280" fill="#13A7E7" opacity=".07"/>
   <text x="80" y="105" fill="#42E8D0" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="4">PXVH1 · QLVT SYNC</text>
   <text x="80" y="165" fill="white" font-family="Arial, sans-serif" font-size="48" font-weight="800">Đồng bộ tồn kho trong một thao tác</text>
-  <text x="80" y="205" fill="#B8C9D9" font-family="Arial, sans-serif" font-size="20">Chỉ chuyển mã vật tư, mã kho và số lượng tồn khi người dùng chủ động yêu cầu.</text>
+  <text x="80" y="205" fill="#B8C9D9" font-family="Arial, sans-serif" font-size="20">Chỉ chuyển mã vật tư, mã kho, đơn vị tính và số lượng tồn khi người dùng chủ động yêu cầu.</text>
   <g filter="url(#shadow)">
     <rect x="80" y="280" width="330" height="330" rx="30" fill="#0D2948" stroke="#275170"/>
     <rect x="475" y="280" width="330" height="330" rx="30" fill="#0D2948" stroke="#275170"/>

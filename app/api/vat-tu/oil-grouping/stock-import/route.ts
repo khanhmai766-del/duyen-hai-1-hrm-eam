@@ -7,7 +7,7 @@ import { parseErpNumber } from "@/lib/parse-number";
 
 export const dynamic = "force-dynamic";
 
-type StockRow = { code?: unknown; erpStock?: unknown; warehouse?: unknown };
+type StockRow = { code?: unknown; erpStock?: unknown; warehouse?: unknown; unit?: unknown };
 
 export async function POST(req: NextRequest) {
   return handle(async () => {
@@ -20,10 +20,10 @@ export async function POST(req: NextRequest) {
     const rows = Array.isArray(body?.rows) ? (body.rows as StockRow[]) : [];
     if (!rows.length) return fail("QLVT chưa trả về dòng vật tư hợp lệ");
 
-    const existing = await prisma.erpMaterial.findMany({ select: { id: true, code: true, erpStock: true, warehouse: true, isActive: true } });
+    const existing = await prisma.erpMaterial.findMany({ select: { id: true, code: true, unit: true, erpStock: true, warehouse: true, isActive: true } });
     const existingByCode = new Map(existing.map((item) => [item.code, item]));
     const seen = new Set<string>();
-    const updates: Array<{ id: string; code: string; before: number; after: number; warehouseBefore: string | null; warehouse?: string }> = [];
+    const updates: Array<{ id: string; code: string; before: number; after: number; warehouseBefore: string | null; warehouse?: string; unitBefore: string; unit?: string }> = [];
     const errors: string[] = [];
     let notFound = 0;
     let skipped = 0;
@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
         continue;
       }
       const warehouse = typeof row.warehouse === "string" ? row.warehouse.trim() : undefined;
-      updates.push({ id: current.id, code, before: current.erpStock, after: parsedStock, warehouseBefore: current.warehouse, warehouse });
+      const unit = typeof row.unit === "string" ? row.unit.trim() : undefined;
+      updates.push({ id: current.id, code, before: current.erpStock, after: parsedStock, warehouseBefore: current.warehouse, warehouse, unitBefore: current.unit, unit });
     }
 
     if (updates.length) {
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
           UPDATE "ErpMaterial"
           SET "erpStock" = CAST(${item.after} AS DOUBLE PRECISION),
               "warehouse" = COALESCE(CAST(${item.warehouse || null} AS TEXT), "warehouse"),
+              "unit" = COALESCE(CAST(${item.unit || null} AS TEXT), "unit"),
               "updatedAt" = NOW()
           WHERE "id" = ${item.id}
         `))
@@ -76,14 +78,15 @@ export async function POST(req: NextRequest) {
 
     const changed = updates.filter((item) => item.before !== item.after).length;
     const warehouseChanged = updates.filter((item) => item.warehouse && item.warehouseBefore !== item.warehouse).length;
+    const unitChanged = updates.filter((item) => item.unit && item.unitBefore !== item.unit).length;
     await audit(
       user.id,
       "UPDATE_ERP_STOCK_FROM_QLVT",
       "ErpMaterial",
       undefined,
-      `Cập nhật ${updates.length} mã (${changed} mã thay đổi), bỏ qua ${inactiveSkipped} mã ngừng sử dụng, ${notFound} mã không có trong hệ thống và ${skipped} dòng không hợp lệ`
+      `Cập nhật ${updates.length} mã (${changed} mã đổi tồn, ${warehouseChanged} mã đổi kho, ${unitChanged} mã đổi ĐVT), bỏ qua ${inactiveSkipped} mã ngừng sử dụng, ${notFound} mã không có trong hệ thống và ${skipped} dòng không hợp lệ`
     );
 
-    return ok({ updated: updates.length, changed, warehouseChanged, notFound, skipped, inactiveSkipped, errors });
+    return ok({ updated: updates.length, changed, warehouseChanged, unitChanged, notFound, skipped, inactiveSkipped, errors });
   });
 }

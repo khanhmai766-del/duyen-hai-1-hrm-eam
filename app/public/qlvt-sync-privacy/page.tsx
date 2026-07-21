@@ -31,10 +31,11 @@ export default function QlvtSyncPrivacyPage() {
             <p className="mt-3 leading-7 text-slate-300">Tiện ích hỗ trợ người dùng đã đăng nhập QLVT chủ động đồng bộ dữ liệu tồn kho vật tư sang hệ thống quản lý vật tư PXVH1 tại duyenhai1.vn. Tiện ích không quảng cáo, không theo dõi hành vi duyệt web và không hoạt động cho mục đích khác.</p>
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-3">
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ["Mã vật tư", "Mã nhận diện vật tư trong QLVT."],
               ["Kho", "Mã kho gắn với vật tư."],
+              ["Đơn vị tính", "ĐVT được khai báo trong QLVT."],
               ["Tồn kho", "Số lượng tồn hiện tại theo QLVT."],
             ].map(([title, detail]) => (
               <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.035] p-5">
@@ -47,7 +48,7 @@ export default function QlvtSyncPrivacyPage() {
 
           <section>
             <h2 className="text-xl font-bold text-white">2. Dữ liệu được xử lý</h2>
-            <p className="mt-3 leading-7 text-slate-300">Chỉ ba trường nêu trên được chuyển từ tab QLVT sang duyenhai1.vn khi người dùng bấm “Đồng bộ từ QLVT”. Tiện ích không thu thập hoặc chuyển mật khẩu, cookie đăng nhập, token xác thực, lịch sử duyệt web, dữ liệu cá nhân hay nội dung từ các trang khác.</p>
+            <p className="mt-3 leading-7 text-slate-300">Chỉ bốn trường nêu trên được chuyển từ tab QLVT sang duyenhai1.vn khi người dùng bấm “Đồng bộ từ QLVT”. Tiện ích không thu thập hoặc chuyển mật khẩu, cookie đăng nhập, token xác thực, lịch sử duyệt web, dữ liệu cá nhân hay nội dung từ các trang khác.</p>
           </section>
 
           <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.06] p-6">
