@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="800" gradientUnits="userSpaceOnUse"><stop stop-color="#071B35"/><stop offset="1" stop-color="#123A63"/></linearGradient>
+    <linearGradient id="accent" x1="320" y1="180" x2="990" y2="650" gradientUnits="userSpaceOnUse"><stop stop-color="#42E8D0"/><stop offset="1" stop-color="#13A7E7"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="22" flood-opacity=".26"/></filter>
+  </defs>
+  <rect width="1280" height="800" fill="url(#bg)"/>
+  <circle cx="1110" cy="90" r="250" fill="#42E8D0" opacity=".05"/><circle cx="90" cy="730" r="280" fill="#13A7E7" opacity=".07"/>
+  <text x="80" y="105" fill="#42E8D0" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="4">PXVH1 · QLVT SYNC</text>
+  <text x="80" y="165" fill="white" font-family="Arial, sans-serif" font-size="48" font-weight="800">Đồng bộ tồn kho trong một thao tác</text>
+  <text x="80" y="205" fill="#B8C9D9" font-family="Arial, sans-serif" font-size="20">Chỉ chuyển mã vật tư, mã kho và số lượng tồn khi người dùng chủ động yêu cầu.</text>
+  <g filter="url(#shadow)">
+    <rect x="80" y="280" width="330" height="330" rx="30" fill="#0D2948" stroke="#275170"/>
+    <rect x="475" y="280" width="330" height="330" rx="30" fill="#0D2948" stroke="#275170"/>
+    <rect x="870" y="280" width="330" height="330" rx="30" fill="#0D2948" stroke="#275170"/>
+  </g>
+  <circle cx="145" cy="345" r="30" fill="#42E8D0" opacity=".15"/><text x="135" y="355" fill="#42E8D0" font-family="Arial" font-size="28" font-weight="800">1</text>
+  <text x="120" y="420" fill="white" font-family="Arial" font-size="27" font-weight="700">Đăng nhập QLVT</text><text x="120" y="458" fill="#B8C9D9" font-family="Arial" font-size="17">Giữ tab tồn kho đang mở.</text>
+  <rect x="120" y="500" width="250" height="58" rx="14" fill="#122F50" stroke="#2A5B7C"/><circle cx="151" cy="529" r="9" fill="#43D5A1"/><text x="172" y="535" fill="#DCEAF5" font-family="Arial" font-size="16">Phiên đăng nhập an toàn</text>
+  <circle cx="540" cy="345" r="30" fill="#42E8D0" opacity=".15"/><text x="530" y="355" fill="#42E8D0" font-family="Arial" font-size="28" font-weight="800">2</text>
+  <text x="515" y="420" fill="white" font-family="Arial" font-size="27" font-weight="700">Bấm đồng bộ</text><text x="515" y="458" fill="#B8C9D9" font-family="Arial" font-size="17">Người dùng kiểm soát thao tác.</text>
+  <rect x="515" y="500" width="250" height="58" rx="14" fill="url(#accent)"/><text x="558" y="535" fill="#071B35" font-family="Arial" font-size="17" font-weight="800">Đồng bộ từ QLVT</text>
+  <circle cx="935" cy="345" r="30" fill="#42E8D0" opacity=".15"/><text x="925" y="355" fill="#42E8D0" font-family="Arial" font-size="28" font-weight="800">3</text>
+  <text x="910" y="420" fill="white" font-family="Arial" font-size="27" font-weight="700">Nhận kết quả</text><text x="910" y="458" fill="#B8C9D9" font-family="Arial" font-size="17">Tồn kho PXVH1 được cập nhật.</text>
+  <rect x="910" y="500" width="250" height="58" rx="14" fill="#0D3E42" stroke="#2A8C76"/><text x="947" y="535" fill="#78E6BE" font-family="Arial" font-size="17" font-weight="700">✓ Cập nhật thành công</text>
+  <path d="M425 445h34M444 430l15 15-15 15M820 445h34M839 430l15 15-15 15" stroke="#42E8D0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="80" y="705" fill="#DCEAF5" font-family="Arial" font-size="18" font-weight="700">Không chuyển mật khẩu · Không theo dõi lịch sử · Không quảng cáo</text>
+  <text x="80" y="745" fill="#7FA1BA" font-family="Arial" font-size="15">Dành cho người dùng nội bộ hệ thống quản lý vật tư PXVH1 tại Duyên Hải 1</text>
+</svg>

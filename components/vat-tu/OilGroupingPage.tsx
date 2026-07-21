@@ -255,6 +255,21 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
   const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
   const [formError, setFormError] = useState("");
   const [syncingQlvt, setSyncingQlvt] = useState(false);
+  const [showQlvtDisclosure, setShowQlvtDisclosure] = useState(false);
+
+  function requestQlvtSync() {
+    if (window.localStorage.getItem("qlvt-sync-disclosure-v1") === "accepted") {
+      void syncFromQlvt();
+      return;
+    }
+    setShowQlvtDisclosure(true);
+  }
+
+  function acceptQlvtDisclosure() {
+    window.localStorage.setItem("qlvt-sync-disclosure-v1", "accepted");
+    setShowQlvtDisclosure(false);
+    void syncFromQlvt();
+  }
 
   async function syncFromQlvt() {
     if (syncingQlvt) return;
@@ -368,7 +383,7 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
         {importErp.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Nhập Excel
       </Button>
       <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importExcel} />
-      <Button type="button" variant="outline" size="sm" onClick={syncFromQlvt} disabled={syncingQlvt || syncStocks.isPending} className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:text-cyan-900">
+      <Button type="button" variant="outline" size="sm" onClick={requestQlvtSync} disabled={syncingQlvt || syncStocks.isPending} className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:text-cyan-900">
         {syncingQlvt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} Đồng bộ từ QLVT
       </Button>
       <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
@@ -420,6 +435,21 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
             <Button onClick={saveNew} disabled={createErp.isPending}>
               {createErp.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lưu
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showQlvtDisclosure} onOpenChange={setShowQlvtDisclosure}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Xác nhận đồng bộ dữ liệu QLVT</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm leading-6 text-slate-600">
+            <p>Tiện ích sẽ đọc và chuyển sang hệ thống này ba trường: <strong>mã vật tư, mã kho và số lượng tồn kho</strong>.</p>
+            <p>Tiện ích không chuyển mật khẩu, cookie hoặc token đăng nhập QLVT. Dữ liệu chỉ được xử lý khi bạn chủ động bấm đồng bộ.</p>
+            <a href="/public/qlvt-sync-privacy" target="_blank" rel="noreferrer" className="inline-flex font-semibold text-cyan-700 underline underline-offset-4 hover:text-cyan-900">Xem chính sách quyền riêng tư</a>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowQlvtDisclosure(false)}>Hủy</Button>
+            <Button type="button" onClick={acceptQlvtDisclosure}>Đồng ý và đồng bộ</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

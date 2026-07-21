@@ -3,6 +3,13 @@
   "name": "Đồng bộ tồn kho QLVT - PXVH1",
   "version": "1.0.1",
   "description": "Cầu nối an toàn giữa QLVT Duyên Hải và hệ thống quản lý vật tư PXVH1.",
+  "homepage_url": "https://duyenhai1.vn/public/qlvt-sync-privacy",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": ["tabs"],
   "host_permissions": [
     "https://qlvt.tpcduyenhai.com.vn/*",
@@ -14,12 +21,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://duyenhai1.vn/*", "http://localhost:3000/*"],
+      "matches": ["https://duyenhai1.vn/vat-tu/*", "http://localhost:3000/vat-tu/*"],
       "js": ["bridge-app.js"],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://qlvt.tpcduyenhai.com.vn/*"],
+      "matches": ["https://qlvt.tpcduyenhai.com.vn/webapp/erp/page/EVN_INV_TONKHO/*"],
       "js": ["bridge-qlvt.js"],
       "run_at": "document_idle"
     }
