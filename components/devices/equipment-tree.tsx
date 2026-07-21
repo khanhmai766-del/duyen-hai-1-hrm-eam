@@ -16,6 +16,7 @@ import {
   ChevronsUpDown,
   Trash2,
   ListChecks,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,9 +24,18 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 import { useEquipmentNode, useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
-import { useDeleteDevice, useDeleteDevices } from "@/hooks/useDevices";
+import { useDeleteDevice, useDeleteDevices, useUpdateDevice } from "@/hooks/useDevices";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const MAX_BULK_DELETE = 500;
 
@@ -60,6 +70,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   bulkMode,
   isChecked,
   onToggleChecked,
+  canEdit,
+  onEdit,
 }: {
   node: EquipmentNode;
   depth: number;
@@ -74,6 +86,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   bulkMode: boolean;
   isChecked: boolean;
   onToggleChecked: (seq: string) => void;
+  canEdit: boolean;
+  onEdit: (node: EquipmentNode) => void;
 }) {
   return (
     <div
@@ -132,6 +146,20 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       </span>
       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kidsCount}</span>}
       <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{node.seq}</span>
+      {canEdit && !bulkMode && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit(node);
+          }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-blue-50 hover:text-accent focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent/40 group-hover:opacity-100"
+          title={`Chỉnh sửa tên ${node.name}`}
+          aria-label={`Chỉnh sửa tên ${node.name}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
       {canDelete && !bulkMode && !hasKids && (
         <button
           type="button"
@@ -150,7 +178,7 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   );
 });
 
-export function EquipmentTreeView({ canDelete = false }: { canDelete?: boolean }) {
+export function EquipmentTreeView({ canDelete = false, canEdit = false }: { canDelete?: boolean; canEdit?: boolean }) {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
   const { data, isLoading } = useEquipmentTree();
@@ -204,8 +232,11 @@ export function EquipmentTreeView({ canDelete = false }: { canDelete?: boolean }
   const [bulkMode, setBulkMode] = React.useState(false);
   const [checkedSeqs, setCheckedSeqs] = React.useState<Set<string>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<EquipmentNode | null>(null);
+  const [editName, setEditName] = React.useState("");
   const deleteDevice = useDeleteDevice();
   const deleteDevices = useDeleteDevices();
+  const updateDevice = useUpdateDevice();
   const q = normalizeText(search.trim());
 
   // Tìm kiếm: hiện các node khớp + tổ tiên (để thấy đường dẫn), tự bung tổ tiên.
@@ -446,6 +477,11 @@ export function EquipmentTreeView({ canDelete = false }: { canDelete?: boolean }
                       bulkMode={bulkMode}
                       isChecked={checkedSeqs.has(row.node.seq)}
                       onToggleChecked={onToggleChecked}
+                      canEdit={canEdit}
+                      onEdit={(node) => {
+                        setEditTarget(node);
+                        setEditName(node.name);
+                      }}
                     />
                   </div>
                 );
@@ -496,6 +532,78 @@ export function EquipmentTreeView({ canDelete = false }: { canDelete?: boolean }
           }
         }}
       />
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={(open) => {
+          if (!open && !updateDevice.isPending) {
+            setEditTarget(null);
+            setEditName("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa tên thiết bị</DialogTitle>
+            <DialogDescription>
+              Số thứ tự <span className="font-mono font-semibold text-ink">{editTarget?.seq}</span> được giữ nguyên.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!editTarget) return;
+              const name = editName.trim();
+              if (!name) return toast.error("Tên thiết bị không được để trống");
+              if (name.length > 200) return toast.error("Tên thiết bị không được vượt quá 200 ký tự");
+              if (name === editTarget.name) {
+                setEditTarget(null);
+                setEditName("");
+                return;
+              }
+              try {
+                await updateDevice.mutateAsync({ id: editTarget.seq, name });
+                toast.success(`Đã cập nhật tên thiết bị ${editTarget.seq}`);
+                setEditTarget(null);
+                setEditName("");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Không thể cập nhật tên thiết bị");
+              }
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="equipment-name">Tên thiết bị</Label>
+              <Input
+                id="equipment-name"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                maxLength={200}
+                autoFocus
+                disabled={updateDevice.isPending}
+                placeholder="Nhập tên thiết bị"
+              />
+              <div className="text-right text-xs text-muted-foreground">{editName.length}/200 ký tự</div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={updateDevice.isPending}
+                onClick={() => {
+                  setEditTarget(null);
+                  setEditName("");
+                }}
+              >
+                Hủy
+              </Button>
+              <Button type="submit" disabled={updateDevice.isPending || !editName.trim()}>
+                {updateDevice.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Lưu tên
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={bulkConfirmOpen}
         onOpenChange={setBulkConfirmOpen}

@@ -114,6 +114,7 @@ function DevicesPageContent() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManageDevices = rbac.can("device-manage", ["create", "manage", "full"]);
+  const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
   const canImportDevices = rbac.can("device-manage", ["manage", "full"]);
   const canDeleteDevices = rbac.can("device-delete", ["full"]);
   const view = (params.get("view") as ViewMode) || "tree";
@@ -247,7 +248,7 @@ function DevicesPageContent() {
       </div>
 
       {view === "tree" ? (
-        <EquipmentTreeView canDelete={canDeleteDevices} />
+        <EquipmentTreeView canDelete={canDeleteDevices} canEdit={canEditDevices} />
       ) : view === "detail" ? (
         <QrCardsSection canManage={canManageDevices} q={debouncedQ} onQr={setQrDevice} />
       ) : view === "form" ? (

@@ -169,6 +169,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const nextSeq = typeof body.code === "string" ? body.code.trim() : currentSeq;
     const name = typeof body.name === "string" ? body.name.trim() : current.name;
     if (!nextSeq || !name) return fail("Số thứ tự và tên thiết bị không được để trống");
+    if (name.length > 200) return fail("Tên thiết bị không được vượt quá 200 ký tự");
     const seqError = validateEquipmentSeq(nextSeq);
     if (seqError) return fail(seqError);
     if (nextSeq !== currentSeq && !(await hasPermissionLevel(user, "device-code", ["full"]))) {
