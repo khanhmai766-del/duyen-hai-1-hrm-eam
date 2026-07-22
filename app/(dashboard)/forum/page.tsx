@@ -8,13 +8,16 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  Activity,
   BookOpenText,
   Bold,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   FileText,
   Heart,
   Archive,
+  Layers3,
   Italic,
   MessageCircle,
   Link2,
@@ -28,12 +31,12 @@ import {
   Reply,
   Search,
   Send,
+  SlidersHorizontal,
   Trash2,
   Underline,
   Workflow,
   X,
 } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card } from "@/components/ui/card";
@@ -68,12 +71,12 @@ import { announcementPositionLabel, announcementShiftRosterPositionOptions } fro
 import { cn, formatDateTime, initials } from "@/lib/utils";
 
 const CATEGORIES = [
-  { value: "ALL", label: "Tất cả", icon: MessageSquareText, tone: "bg-slate-100 text-slate-700" },
-  { value: "DISCUSSION", label: "Trao đổi kỹ thuật", icon: MessageSquareText, tone: "bg-blue-50 text-blue-700" },
-  { value: "DOCUMENT", label: "Tài liệu", icon: FileText, tone: "bg-emerald-50 text-emerald-700" },
-  { value: "OPERATION_HANDBOOK", label: "Cẩm nang vận hành", icon: BookOpenText, tone: "bg-cyan-50 text-cyan-700" },
-  { value: "PROCEDURE", label: "Quy trình", icon: BookOpenText, tone: "bg-amber-50 text-amber-700" },
-  { value: "DRAWING", label: "Sơ đồ / bản vẽ", icon: Workflow, tone: "bg-violet-50 text-violet-700" },
+  { value: "ALL", label: "Tất cả", icon: MessageSquareText, tone: "bg-slate-100 text-slate-700", signal: "bg-slate-500", rail: "border-slate-400" },
+  { value: "DISCUSSION", label: "Trao đổi kỹ thuật", icon: MessageSquareText, tone: "bg-blue-50 text-blue-700", signal: "bg-blue-500", rail: "border-blue-500" },
+  { value: "DOCUMENT", label: "Tài liệu", icon: FileText, tone: "bg-emerald-50 text-emerald-700", signal: "bg-emerald-500", rail: "border-emerald-500" },
+  { value: "OPERATION_HANDBOOK", label: "Cẩm nang vận hành", icon: BookOpenText, tone: "bg-cyan-50 text-cyan-700", signal: "bg-cyan-500", rail: "border-cyan-500" },
+  { value: "PROCEDURE", label: "Quy trình", icon: BookOpenText, tone: "bg-amber-50 text-amber-700", signal: "bg-amber-500", rail: "border-amber-500" },
+  { value: "DRAWING", label: "Sơ đồ / bản vẽ", icon: Workflow, tone: "bg-violet-50 text-violet-700", signal: "bg-violet-500", rail: "border-violet-500" },
 ] as const;
 
 const DEFAULT_FORM = {
@@ -119,7 +122,8 @@ export default function ForumPage() {
   const composeRef = React.useRef<HTMLDivElement>(null);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
 
-  const posts = useForumPosts({ category, q, status: showClosedBox ? "CLOSED" : "OPEN" });
+  const debouncedQ = useDebouncedValue(q, 300);
+  const posts = useForumPosts({ category, q: debouncedQ, status: showClosedBox ? "CLOSED" : "OPEN" });
   const closedPosts = useForumPosts({ status: "CLOSED" });
   const createPost = useCreateForumPost();
   const updatePost = useUpdateForumPost();
@@ -282,61 +286,103 @@ export default function ForumPage() {
     return canModerateForum || (!!currentUserId && authorId === currentUserId);
   }
 
-  return (
-    <div className="space-y-6">
-      <PageHeader title="FORUM KỸ THUẬT" description="Trao đổi kinh nghiệm, chia sẻ tài liệu, quy trình, sơ đồ và bản vẽ vận hành">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant={showClosedBox ? "default" : "outline"} onClick={() => { setShowClosedBox((v) => !v); setComposeOpen(false); setEditingPost(null); }}>
-            <Archive className="h-4 w-4" /> Chủ đề đã kết thúc{closedCount ? ` (${closedCount})` : ""}
-          </Button>
-          {canWriteForum && (
-            <Button onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
-              <Plus className="h-4 w-4" /> Chủ đề mới
-            </Button>
-          )}
-        </div>
-      </PageHeader>
+  const visibleReplyCount = rows.reduce((sum, post) => sum + (post.replyCount ?? 0), 0);
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <Card className="p-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-            <div className="grid gap-3 sm:grid-cols-[220px_1fr] xl:min-w-[660px]">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Loại nội dung</label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+  return (
+    <div className="pb-8">
+      <div className="relative overflow-hidden rounded-[28px] border border-[#17283c] bg-[#07111f] p-3 shadow-[0_24px_70px_rgba(6,17,31,0.24)] sm:p-4">
+        <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_1px_1px,rgba(56,189,248,0.18)_1px,transparent_0)] [background-size:24px_24px]" />
+        <header className="relative mb-4 overflow-hidden rounded-[20px] border border-white/10 bg-[#0b1929]/95 px-4 py-4 text-white sm:px-5">
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-cyan-400/10 to-transparent" />
+          <div className="relative grid gap-4 2xl:grid-cols-[minmax(260px,0.8fr)_minmax(340px,1.25fr)_auto] 2xl:items-center">
+            <div>
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.28em] text-[#f59e0b]">
+                <span className="h-1.5 w-5 bg-[#f59e0b]" /> Technical intelligence
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Tìm kiếm</label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm chủ đề, nội dung, tag..." className="pl-9" />
-                </div>
+              <div className="mt-1.5 flex items-baseline gap-3">
+                <h1 className="text-2xl font-black tracking-[-0.04em] sm:text-[28px]">Forum kỹ thuật</h1>
+                <span className="hidden text-[10px] font-bold uppercase tracking-widest text-slate-500 sm:inline">DH1 / Knowledge Ops</span>
               </div>
             </div>
-          </div>
-        </Card>
 
-        <Card className="p-4">
-          <div className="text-sm font-bold text-ink">Không gian chia sẻ</div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <Metric label="Chủ đề" value={rows.length} />
-            <Metric label="Phản hồi" value={rows.reduce((sum, p) => sum + (p.replyCount ?? 0), 0)} />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
+              <Input
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                placeholder="Truy vấn sự cố, thiết bị, quy trình, bản vẽ..."
+                className="h-12 border-white/10 bg-white/[0.06] pl-11 pr-20 text-white placeholder:text-slate-500 focus-visible:border-cyan-400/50 focus-visible:ring-cyan-400/20"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-wider text-slate-400">SEARCH</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
+              <Button
+                variant="outline"
+                className={cn(
+                  "h-10 border-white/10 bg-white/5 text-slate-200 hover:border-amber-300/40 hover:bg-white/10 hover:text-white",
+                  showClosedBox && "border-amber-400/50 bg-amber-400/10 text-amber-200"
+                )}
+                onClick={() => { setShowClosedBox((value) => !value); setComposeOpen(false); setEditingPost(null); }}
+              >
+                <Archive className="h-4 w-4" /> {showClosedBox ? "Luồng hiện hành" : `Kho lưu trữ ${closedCount ? `· ${closedCount}` : ""}`}
+              </Button>
+              {canWriteForum && (
+                <Button className="h-10 bg-[#f59e0b] font-black text-[#15100a] hover:bg-[#fbbf24]" onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
+                  {composeOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {composeOpen ? "Đóng" : "Tạo chủ đề"}
+                </Button>
+              )}
+            </div>
           </div>
-        </Card>
-      </div>
+        </header>
+
+        <div className="relative grid gap-4 xl:grid-cols-[210px_minmax(0,1fr)_250px]">
+          <aside className="h-fit rounded-[18px] border border-white/10 bg-[#0b1929]/90 p-3 xl:sticky xl:top-4">
+            <div className="flex items-center gap-2 px-2 pb-3 text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">
+              <Layers3 className="h-3.5 w-3.5 text-cyan-400" /> Kênh tri thức
+            </div>
+            <nav className="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-1 xl:overflow-visible" aria-label="Phân loại chủ đề Forum">
+              {CATEGORIES.map((item) => {
+                const CategoryIcon = item.icon;
+                const active = category === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setCategory(item.value)}
+                    className={cn(
+                      "group flex min-h-11 shrink-0 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 xl:w-full",
+                      active ? "bg-cyan-400 text-[#06111f]" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <CategoryIcon className={cn("h-4 w-4 shrink-0", active ? "text-[#06111f]" : "text-slate-500 group-hover:text-cyan-300")} />
+                    <span className="whitespace-nowrap xl:min-w-0 xl:truncate">{item.label}</span>
+                    {active && <ChevronRight className="ml-auto hidden h-3.5 w-3.5 xl:block" />}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="mt-4 hidden border-t border-white/10 pt-4 xl:block">
+              <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-slate-500">
+                <span className={cn("h-2 w-2 rounded-full", showClosedBox ? "bg-amber-400" : "bg-emerald-400")} />
+                {showClosedBox ? "Đang truy cập kho" : "Hệ thống trực tuyến"}
+              </div>
+            </div>
+          </aside>
+
+          <main className="min-w-0 space-y-4">
 
       {composeOpen && (
-        <Card ref={composeRef} className="p-4 scroll-mt-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-sm font-bold text-ink">{editingPost ? "Sửa chủ đề" : "Tạo chủ đề mới"}</div>
-            <Button variant="ghost" size="icon" onClick={() => { setComposeOpen(false); setEditingPost(null); }}><X className="h-4 w-4" /></Button>
+        <Card ref={composeRef} className="scroll-mt-4 overflow-hidden border-cyan-200 shadow-[0_14px_36px_rgba(8,145,178,0.10)]">
+          <div className="flex items-center justify-between bg-[#102d4d] px-4 py-3 text-white sm:px-5">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-black"><Plus className="h-4 w-4 text-cyan-300" /> {editingPost ? "Hiệu chỉnh chủ đề" : "Khởi tạo chủ đề kỹ thuật"}</div>
+              <div className="mt-0.5 text-xs text-slate-300">Nội dung sẽ được phân phối theo đúng cương vị nhận thông báo.</div>
+            </div>
+            <Button variant="ghost" size="icon" className="text-slate-300 hover:bg-white/10 hover:text-white" onClick={() => { setComposeOpen(false); setEditingPost(null); }}><X className="h-4 w-4" /></Button>
           </div>
-          <div className="grid gap-3 lg:grid-cols-[220px_1fr]">
+          <div className="grid gap-3 p-4 sm:p-5 lg:grid-cols-[220px_1fr]">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Loại bài viết</label>
               <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
@@ -398,7 +444,7 @@ export default function ForumPage() {
               <Input value={form.attachments} onChange={(e) => setForm((f) => ({ ...f, attachments: e.target.value }))} placeholder="Dán link PDF, Google Drive, sơ đồ..." />
             </div>
           </div>
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
             <Button variant="outline" onClick={() => { setComposeOpen(false); setEditingPost(null); }}>Hủy</Button>
             <Button onClick={submitPost} disabled={savingPost || !postValid}>
               <Send className="h-4 w-4" /> {editingPost ? "Lưu thay đổi" : "Đăng chủ đề"}
@@ -456,6 +502,42 @@ export default function ForumPage() {
           ))}
         </div>
       )}
+
+          </main>
+
+          <aside className="h-fit space-y-3 xl:sticky xl:top-4">
+            <section className="overflow-hidden rounded-[18px] border border-white/10 bg-[#0b1929]/90 text-white">
+              <div className="border-b border-white/10 px-4 py-3">
+                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-cyan-300">
+                  <Activity className="h-3.5 w-3.5" /> Network pulse
+                </div>
+                <div className="mt-1 text-sm font-black">Trạng thái tri thức</div>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-white/10 xl:grid-cols-1 xl:divide-x-0 xl:divide-y">
+                <WorkspaceStat label={showClosedBox ? "Trong kho" : "Đang hiển thị"} value={rows.length} accent="text-cyan-300" />
+                <WorkspaceStat label="Phản hồi" value={visibleReplyCount} accent="text-blue-300" />
+                <WorkspaceStat label="Đã kết thúc" value={closedCount} accent="text-amber-300" />
+              </div>
+            </section>
+
+            <section className="rounded-[18px] border border-white/10 bg-[#0b1929]/90 p-4 text-white">
+              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-amber-400" /> Quy ước vận hành
+              </div>
+              <div className="mt-4 space-y-3">
+                <GuideRow index="01" title="Đặt vấn đề rõ" description="Nêu thiết bị, hiện tượng và điều kiện vận hành." />
+                <GuideRow index="02" title="Bổ sung bằng chứng" description="Đính kèm quy trình, bản vẽ hoặc số liệu liên quan." />
+                <GuideRow index="03" title="Chốt kinh nghiệm" description="Tổng kết phương án sau khi hoàn tất trao đổi." />
+              </div>
+            </section>
+
+            <div className="rounded-[18px] border border-cyan-400/20 bg-cyan-400/[0.07] p-4 text-xs leading-5 text-slate-400">
+              <div className="mb-1 font-black text-cyan-300">Kết nối theo ca/kíp</div>
+              Chủ đề được phân phối đúng cương vị và đồng bộ trạng thái đọc theo tài khoản.
+            </div>
+          </aside>
+        </div>
+      </div>
 
       <ConfirmDialog
         open={!!deletePostTarget}
@@ -591,6 +673,7 @@ function ForumPostCard({
   const [editDraft, setEditDraft] = React.useState("");
   const [editLinks, setEditLinks] = React.useState("");
   const [collapsedReplyThreads, setCollapsedReplyThreads] = React.useState<Record<string, boolean>>({});
+  const [expandedReplyBodies, setExpandedReplyBodies] = React.useState<Record<string, boolean>>({});
   const replies = repliesQuery.data?.data ?? [];
   const replyTree = React.useMemo(() => buildReplyTree(replies), [replies]);
   const likeCount = post.likeCount ?? 0;
@@ -632,6 +715,9 @@ function ForumPostCard({
     const childReplies = replyTree.childrenByParent.get(r.id) ?? [];
     const childCount = countNestedReplies(r.id, replyTree.childrenByParent);
     const childrenCollapsed = collapsedReplyThreads[r.id] ?? false;
+    const replyPlainText = richTextPlainText(r.content);
+    const isLongReply = replyPlainText.length > 700 || replyPlainText.split(/\r?\n/).length > 10;
+    const replyBodyExpanded = expandedReplyBodies[r.id] ?? false;
 
     return (
       <div
@@ -639,27 +725,31 @@ function ForumPostCard({
         id={`forum-reply-${r.id}`}
         tabIndex={-1}
         className={cn(
-          "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
-          depth > 0 && "ml-4 border-l-2 border-blue-100 pl-3 sm:ml-8 sm:pl-4",
+          "relative min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+          depth > 0 && "ml-3 border-l border-dashed border-cyan-300 pl-3 sm:ml-8 sm:pl-5",
           targetReplyId === r.id && "ring-2 ring-blue-500 ring-offset-2"
         )}
       >
-        <div className={cn("rounded-xl border border-border bg-white p-3", depth > 0 && "bg-blue-50/20")}>
-          <div className="flex items-start justify-between gap-3">
+        <article className={cn(
+          "min-w-0 rounded-r-xl rounded-l-sm border border-slate-200 border-l-[3px] bg-white p-3.5 shadow-[0_8px_22px_rgba(15,39,72,0.05)] sm:p-4",
+          category.rail,
+          depth > 0 && "bg-white/80 shadow-none"
+        )}>
+          <header className="flex min-w-0 items-start justify-between gap-3">
             <AuthorInline author={r.author} date={r.createdAt} />
             {canManageReply(r.author.id) && editingReplyId !== r.id && (
-              <div className="flex items-center">
-                <Button variant="ghost" size="icon" title="Sửa phản hồi" className="text-muted-foreground hover:text-accent" onClick={() => startEditReply(r)}>
+              <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50/80 p-0.5">
+                <Button variant="ghost" size="icon" title="Sửa phản hồi" className="h-8 w-8 text-muted-foreground hover:bg-white hover:text-accent" onClick={() => startEditReply(r)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" title="Gỡ phản hồi" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => onDeleteReply(r)}>
+                <Button variant="ghost" size="icon" title="Gỡ phản hồi" className="h-8 w-8 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => onDeleteReply(r)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             )}
-          </div>
+          </header>
           {editingReplyId === r.id ? (
-            <div className="mt-2 grid gap-2">
+            <div className="mt-3 grid gap-2">
               <RichTextEditor value={editDraft} onChange={setEditDraft} compact placeholder="Cập nhật nội dung phản hồi..." />
               <Input value={editLinks} onChange={(e) => setEditLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
               <div className="flex justify-end gap-2">
@@ -676,9 +766,36 @@ function ForumPostCard({
                   content={r.parentReply.content}
                 />
               )}
-              <RichTextContent value={r.content} className="mt-2 text-sm leading-6 text-ink" />
+              <div
+                className={cn(
+                  "relative mt-3 min-w-0 overflow-hidden border-t border-slate-100 pt-3",
+                  isLongReply && !replyBodyExpanded && "max-h-64"
+                )}
+              >
+                <RichTextContent
+                  value={r.content}
+                  className={cn(
+                    "w-full text-sm leading-6 text-slate-800",
+                    isLongReply && replyBodyExpanded && "xl:columns-2 xl:gap-10 xl:[column-rule:1px_solid_#e2e8f0]"
+                  )}
+                />
+                {isLongReply && !replyBodyExpanded && (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white via-white/95 to-transparent" />
+                )}
+              </div>
+              {isLongReply && (
+                <button
+                  type="button"
+                  aria-expanded={replyBodyExpanded}
+                  onClick={() => setExpandedReplyBodies((state) => ({ ...state, [r.id]: !replyBodyExpanded }))}
+                  className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  {replyBodyExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  {replyBodyExpanded ? "Thu gọn nội dung" : "Xem toàn bộ phản hồi"}
+                </button>
+              )}
               {r.attachments.length > 0 && <AttachmentList links={r.attachments} compact />}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-slate-100 pt-2">
                 <Button
                   type="button"
                   size="sm"
@@ -686,7 +803,7 @@ function ForumPostCard({
                   onClick={() => toggleReplyLike.mutate(r.id)}
                   disabled={toggleReplyLike.isPending}
                   className={cn(
-                    "h-8 rounded-full px-3 text-xs font-bold transition-all duration-200",
+                    "h-8 rounded-md px-2.5 text-xs font-bold transition-colors duration-200",
                     r.likedByMe
                       ? "bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700"
                       : "text-slate-600 hover:bg-rose-50 hover:text-rose-600"
@@ -701,7 +818,7 @@ function ForumPostCard({
                     size="sm"
                     variant="ghost"
                     onClick={() => onReplyTo(r)}
-                    className="h-8 rounded-full px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                    className="h-8 rounded-md px-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                   >
                     <Reply className="h-3.5 w-3.5" />
                     Trả lời
@@ -713,7 +830,7 @@ function ForumPostCard({
                     size="sm"
                     variant="ghost"
                     onClick={() => toggleReplyThread(r.id)}
-                    className="h-8 rounded-full px-3 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                    className="h-8 rounded-md px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
                   >
                     {childrenCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     {childrenCollapsed ? `Hiện ${childCount} trả lời` : "Thu gọn trả lời"}
@@ -722,7 +839,7 @@ function ForumPostCard({
               </div>
             </>
           )}
-        </div>
+        </article>
         {childReplies.length > 0 && !childrenCollapsed && (
           <div className="mt-2 space-y-2">
             {childReplies.map((child) => renderReplyCard(child, depth + 1))}
@@ -737,86 +854,113 @@ function ForumPostCard({
       id={`forum-post-${post.id}`}
       tabIndex={-1}
       className={cn(
-        "overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-        post.isPinned && "ring-1 ring-amber-300",
+        "overflow-hidden border-slate-200/90 bg-white shadow-[0_14px_36px_rgba(15,39,72,0.08)] transition-shadow duration-200 hover:shadow-[0_18px_44px_rgba(15,39,72,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        post.isPinned && "ring-1 ring-amber-300/80",
         highlighted && "ring-2 ring-accent ring-offset-2"
       )}
     >
-      <div className="border-b border-border bg-white p-4">
-        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {post.isPinned && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
-                <Pin className="h-3.5 w-3.5" /> Đã ghim
-              </span>
-            )}
-            {isClosed && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
-                <Archive className="h-3.5 w-3.5" /> Đã kết thúc
-              </span>
-            )}
-            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold", category.tone)}>
-              <Icon className="h-3.5 w-3.5" /> {category.label}
-            </span>
-            {!!post.targetPositions?.length && <Badge variant="secondary">Cương vị: {forumTargetPositionsLabel(post.targetPositions)}</Badge>}
-            {post.tags.map((tag) => <Badge key={tag} variant="outline">#{tag}</Badge>)}
+      <div className={cn("h-1.5 w-full", category.signal)} />
+      <div className="grid lg:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="relative flex flex-col justify-between gap-5 overflow-hidden border-b border-slate-200 bg-[#f3f7fb] p-4 lg:border-b-0 lg:border-r lg:p-5">
+          <div className="pointer-events-none absolute -right-12 -top-10 h-32 w-32 rounded-full border-[24px] border-white/70" />
+          <div className="relative">
+            <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl shadow-sm", category.tone)}>
+              <Icon className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Phân khu nội dung</div>
+            <div className="mt-1 text-sm font-black text-[#102d4d]">{category.label}</div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {post.isPinned && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-800">
+                  <Pin className="h-3 w-3" /> Ưu tiên
+                </span>
+              )}
+              {isClosed ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-slate-200 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-700">
+                  <Archive className="h-3 w-3" /> Đã kết thúc
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-800">
+                  <Activity className="h-3 w-3" /> Đang trao đổi
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex shrink-0 items-start gap-2 md:justify-end">
-            <AuthorBlock author={post.author} date={post.createdAt} edited={post.updatedAt !== post.createdAt} />
-            <div className="flex items-center">
+
+          <div className="relative flex items-center gap-2.5 border-t border-slate-200 pt-4">
+            <Avatar author={post.author} />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-black text-[#102d4d]">{post.author.name}</div>
+              <div className="mt-0.5 text-[11px] leading-4 text-slate-500">
+                {formatDateTime(post.createdAt)}{post.updatedAt !== post.createdAt ? " · đã sửa" : ""}
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div className="min-w-0 p-4 sm:p-5 lg:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {!!post.targetPositions?.length && (
+                <Badge variant="secondary" className="rounded-md bg-slate-100 font-semibold text-slate-700">
+                  Cương vị: {forumTargetPositionsLabel(post.targetPositions)}
+                </Badge>
+              )}
+              {post.tags.map((tag) => <Badge key={tag} variant="outline" className="rounded-md border-slate-200 text-slate-500">#{tag}</Badge>)}
+            </div>
+            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 shadow-sm">
               {isAdmin && (
-                <Button variant="ghost" size="icon" title={post.isPinned ? "Bỏ ghim" : "Ghim chủ đề"} className="text-muted-foreground hover:text-amber-600" onClick={onTogglePin} disabled={pinning}>
+                <Button variant="ghost" size="icon" title={post.isPinned ? "Bỏ ghim" : "Ghim chủ đề"} className="h-8 w-8 text-slate-500 hover:bg-white hover:text-amber-600" onClick={onTogglePin} disabled={pinning}>
                   {post.isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                 </Button>
               )}
               {canManagePost && !isClosed && (
-                <Button variant="ghost" size="icon" title="Sửa chủ đề" className="text-muted-foreground hover:text-accent" onClick={onEditPost}>
+                <Button variant="ghost" size="icon" title="Sửa chủ đề" className="h-8 w-8 text-slate-500 hover:bg-white hover:text-blue-700" onClick={onEditPost}>
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
               {canManagePost && !isClosed && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   title="Đóng chủ đề"
-                  className="rounded-full border-amber-300 bg-amber-50 text-amber-700 shadow-sm shadow-amber-100 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-800"
+                  className="h-8 w-8 text-slate-500 hover:bg-amber-50 hover:text-amber-700"
                   onClick={onClosePost}
                 >
                   <Archive className="h-4 w-4" />
                 </Button>
               )}
               {canManagePost && (
-                <Button variant="ghost" size="icon" title="Gỡ chủ đề" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={onDeletePost}>
+                <Button variant="ghost" size="icon" title="Gỡ chủ đề" className="h-8 w-8 text-slate-500 hover:bg-red-50 hover:text-destructive" onClick={onDeletePost}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               )}
             </div>
           </div>
-        </div>
-        <h2 className="text-lg font-black text-ink">{post.title}</h2>
-        <RichTextContent value={post.content} className="mt-2 text-sm leading-6 text-muted-foreground" />
+
+          <h2 className="mt-4 max-w-5xl text-xl font-black leading-7 tracking-[-0.02em] text-[#0b2340] sm:text-[22px] sm:leading-8">{post.title}</h2>
+          <div className={cn("mt-4 border-l-2 pl-4", category.rail)}>
+            <RichTextContent value={post.content} className="max-w-5xl text-sm leading-7 text-slate-600" />
+          </div>
         {post.attachments.length > 0 && <AttachmentList links={post.attachments} />}
         {isClosed && post.closeSummary && (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-            <div className="text-xs font-bold uppercase tracking-wide text-emerald-700">Tổng kết chủ đề</div>
+            <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3">
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Biên bản tổng kết chủ đề</div>
             <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-950">{post.closeSummary}</p>
             <div className="mt-2 text-xs text-emerald-700">
               Đóng bởi {post.closedBy?.name ?? "—"} lúc {formatDateTime(post.closedAt)}
             </div>
           </div>
         )}
-        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white">
-                <Heart className="h-3 w-3 fill-current" />
-              </span>
-              {likeCount} lượt thích
+              <div className="inline-flex items-center gap-1.5 font-bold text-slate-600">
+                <Heart className="h-4 w-4 fill-rose-100 text-rose-500" /> {likeCount} lượt thích
             </div>
             <button
               type="button"
               onClick={onToggleReplies}
-              className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:text-blue-700 hover:ring-blue-200"
+                className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 font-bold text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <MessageCircle className="h-4 w-4 text-blue-600" />
               {replyCount} bình luận
@@ -830,9 +974,9 @@ function ForumPostCard({
               onClick={() => toggleLike.mutate(post.id)}
               disabled={toggleLike.isPending}
               className={cn(
-                "rounded-full px-4 font-bold transition-all duration-200",
+                  "rounded-lg px-4 font-bold transition-colors duration-200",
                 post.likedByMe
-                  ? "border-rose-200 bg-rose-50 text-rose-600 shadow-sm shadow-rose-200/60 hover:bg-rose-100 hover:text-rose-700"
+                    ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700"
                   : "bg-white text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
               )}
             >
@@ -845,7 +989,7 @@ function ForumPostCard({
               variant="outline"
               onClick={onToggleReplies}
               className={cn(
-                "rounded-full px-4 font-bold transition-all duration-200",
+                  "rounded-lg px-4 font-bold transition-colors duration-200",
                 repliesOpen ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800" : "bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
               )}
             >
@@ -855,13 +999,17 @@ function ForumPostCard({
           </div>
         </div>
       </div>
+      </div>
 
       {repliesOpen && (
-      <div className="space-y-3 bg-muted/20 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm font-bold text-ink">Phản hồi ({replyCount})</div>
-          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-ink" onClick={onToggleReplies}>
-            Thu gọn
+        <div className="space-y-4 border-t border-slate-200 bg-[#f5f8fb] p-4 sm:p-5 lg:p-6">
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-[#102d4d] px-4 py-3 text-white">
+          <div>
+              <div className="flex items-center gap-2 text-sm font-black"><MessageCircle className="h-4 w-4 text-cyan-300" /> Luồng phản hồi · {replyCount}</div>
+              <div className="mt-0.5 text-xs text-slate-300">Trao đổi theo mạch nội dung, phản hồi trực tiếp ngay tại điểm liên quan.</div>
+          </div>
+            <Button variant="ghost" size="sm" className="text-xs text-slate-300 hover:bg-white/10 hover:text-white" onClick={onToggleReplies}>
+              <ChevronUp className="h-3.5 w-3.5" /> Thu gọn
           </Button>
         </div>
         {repliesQuery.isLoading && (
@@ -878,7 +1026,10 @@ function ForumPostCard({
         )}
         {!repliesQuery.isLoading && replyTree.roots.map((r) => renderReplyCard(r))}
         {canWrite && !isClosed && !isClosedBox && (
-          <div className="grid gap-2 rounded-xl border border-dashed border-border bg-white p-3">
+            <div className="grid gap-3 rounded-xl border border-cyan-200 bg-white p-3 shadow-[0_8px_24px_rgba(8,145,178,0.06)] sm:p-4">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-800">
+                <Send className="h-3.5 w-3.5" /> Gửi tín hiệu phản hồi
+              </div>
             {replyTarget && (
               <ReplyContextBox
                 label={`Bạn đang trả lời ${replyTarget.author.name}`}
@@ -889,7 +1040,7 @@ function ForumPostCard({
             <RichTextEditor value={reply} onChange={setReply} compact placeholder="Viết phản hồi, kinh nghiệm xử lý hoặc góp ý kỹ thuật..." />
             <Input value={replyLinks} onChange={(e) => setReplyLinks(e.target.value)} placeholder="Link tài liệu kèm theo nếu có..." />
             <div className="flex justify-end">
-              <Button size="sm" onClick={onReply} disabled={replying || !richTextPlainText(reply)}>
+                <Button size="sm" className="bg-[#0d5ea6] hover:bg-[#0a4d89]" onClick={onReply} disabled={replying || !richTextPlainText(reply)}>
                 <Send className="h-4 w-4" /> Gửi phản hồi
               </Button>
             </div>
@@ -898,8 +1049,8 @@ function ForumPostCard({
       </div>
       )}
       {!repliesOpen && canWrite && !isClosed && !isClosedBox && (
-        <div className="border-t border-border bg-muted/20 px-4 py-3">
-          <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground hover:bg-white hover:text-blue-700" onClick={onOpenReplies}>
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5 lg:pl-[244px]">
+          <Button variant="ghost" size="sm" className="rounded-lg font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700" onClick={onOpenReplies}>
             <MessageCircle className="h-4 w-4" /> Viết phản hồi
           </Button>
         </div>
@@ -1151,13 +1302,42 @@ function Avatar({ author, small = false }: { author: ForumAuthor; small?: boolea
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function WorkspaceStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+}) {
   return (
-    <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
-      <div className="text-lg font-black text-ink">{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="min-w-0 px-4 py-3.5">
+      <div className={cn("text-2xl font-black leading-none", accent)}>{String(value).padStart(2, "0")}</div>
+      <div className="mt-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
     </div>
   );
+}
+
+function GuideRow({ index, title, description }: { index: string; title: string; description: string }) {
+  return (
+    <div className="grid grid-cols-[28px_1fr] gap-2.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[9px] font-black text-amber-300">{index}</span>
+      <div>
+        <div className="text-xs font-black text-slate-200">{title}</div>
+        <div className="mt-0.5 text-[10px] leading-4 text-slate-500">{description}</div>
+      </div>
+    </div>
+  );
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
 }
 
 function splitLines(value: string) {

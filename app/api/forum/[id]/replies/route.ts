@@ -88,16 +88,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     if (!content) return fail("Vui lòng nhập nội dung phản hồi");
 
-    const exists = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM "ForumPost" WHERE id = $1 LIMIT 1`,
-      params.id
-    );
-    if (!exists.length) return fail("Không tìm thấy chủ đề", 404);
-    const closed = await prisma.$queryRawUnsafe<Array<{ closed: boolean }>>(
+    // Một truy vấn: vừa xác nhận chủ đề tồn tại (rỗng = 404) vừa lấy trạng thái đóng.
+    const post = await prisma.$queryRawUnsafe<Array<{ closed: boolean }>>(
       `SELECT ("closedAt" IS NOT NULL) AS closed FROM "ForumPost" WHERE id = $1 LIMIT 1`,
       params.id
     );
-    if (closed[0]?.closed) return fail("Chủ đề đã kết thúc, không thể gửi phản hồi mới", 400);
+    if (!post.length) return fail("Không tìm thấy chủ đề", 404);
+    if (post[0].closed) return fail("Chủ đề đã kết thúc, không thể gửi phản hồi mới", 400);
     if (parentReplyId) {
       const parent = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
         `SELECT id FROM "ForumReply" WHERE id = $1 AND "postId" = $2 LIMIT 1`,

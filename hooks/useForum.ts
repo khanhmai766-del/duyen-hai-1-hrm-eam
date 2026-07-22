@@ -43,17 +43,22 @@ export interface ForumPost {
   createdAt: string;
   updatedAt: string;
   author: ForumAuthor;
-  replyAuthorIds: string[];
-  latestReply: ForumReply | null;
   replyCount: number;
   likeCount: number;
   likedByMe: boolean;
+  // Chỉ có khi gọi với { withReplyMeta: true } (feed chuông thông báo). Trang forum không dùng.
+  replyAuthorIds?: string[];
+  latestReply?: ForumReply | null;
 }
+
+type Envelope<T> = { data: T; meta: unknown };
 
 export interface ForumFilters {
   category?: string;
   q?: string;
   status?: "OPEN" | "CLOSED";
+  // Yêu cầu API tính thêm latestReply/replyAuthorIds (chỉ chuông thông báo cần).
+  withReplyMeta?: boolean;
 }
 
 export interface ForumPostInput {
@@ -70,11 +75,13 @@ export function useForumPosts(filters: ForumFilters) {
   if (filters.category && filters.category !== "ALL") params.set("category", filters.category);
   if (filters.q?.trim()) params.set("q", filters.q.trim());
   if (filters.status) params.set("status", filters.status);
+  if (filters.withReplyMeta) params.set("replyMeta", "1");
   const qs = params.toString();
   return useQuery({
     queryKey: ["forum-posts", filters],
     queryFn: () => apiGet<ForumPost[]>(`/api/forum${qs ? `?${qs}` : ""}`),
     refetchInterval: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -83,6 +90,7 @@ export function useForumReplies(postId: string, enabled: boolean) {
     queryKey: ["forum-replies", postId],
     queryFn: () => apiGet<ForumReply[]>(`/api/forum/${postId}/replies`),
     enabled: enabled && !!postId,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -140,7 +148,26 @@ export function useToggleForumLike() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (postId: string) => apiMutate<{ liked: boolean }>(`/api/forum/${postId}/likes`, "POST"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-posts"] }),
+    // Optimistic: đổi tim + đếm ngay trong cache, không refetch cả list nặng. Poll 60s tự đối soát.
+    onMutate: async (postId: string) => {
+      await qc.cancelQueries({ queryKey: ["forum-posts"] });
+      const snapshots = qc.getQueriesData<Envelope<ForumPost[]>>({ queryKey: ["forum-posts"] });
+      qc.setQueriesData<Envelope<ForumPost[]>>({ queryKey: ["forum-posts"] }, (old) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((p) =>
+            p.id === postId
+              ? { ...p, likedByMe: !p.likedByMe, likeCount: Math.max(0, p.likeCount + (p.likedByMe ? -1 : 1)) }
+              : p
+          ),
+        };
+      });
+      return { snapshots };
+    },
+    onError: (_err, _postId, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
   });
 }
 
@@ -148,7 +175,26 @@ export function useToggleForumReplyLike() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (replyId: string) => apiMutate<{ liked: boolean }>(`/api/forum/replies/${replyId}/likes`, "POST"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["forum-replies"] }),
+    // Chỉ biết replyId (không có postId) nên quét mọi cache ["forum-replies", *] và cập nhật đúng reply.
+    onMutate: async (replyId: string) => {
+      await qc.cancelQueries({ queryKey: ["forum-replies"] });
+      const snapshots = qc.getQueriesData<Envelope<ForumReply[]>>({ queryKey: ["forum-replies"] });
+      qc.setQueriesData<Envelope<ForumReply[]>>({ queryKey: ["forum-replies"] }, (old) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((r) =>
+            r.id === replyId
+              ? { ...r, likedByMe: !r.likedByMe, likeCount: Math.max(0, (r.likeCount ?? 0) + (r.likedByMe ? -1 : 1)) }
+              : r
+          ),
+        };
+      });
+      return { snapshots };
+    },
+    onError: (_err, _replyId, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
   });
 }
 

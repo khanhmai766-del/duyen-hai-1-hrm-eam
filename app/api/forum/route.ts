@@ -28,6 +28,8 @@ const REPLY_COUNT_SELECT = `
 
 const viTime = (column: string) => `to_char(${column}, 'YYYY-MM-DD"T"HH24:MI:SS.MS') || '+07:00'`;
 
+// Chỉ dùng cho feed chuông thông báo ("Bình luận mới"). Trang forum không đọc 2 trường này,
+// nên chỉ tính khi client yêu cầu (?replyMeta=1) để tránh subquery đắt trên query danh sách nặng.
 const REPLY_AUTHOR_IDS_SELECT = `
   COALESCE(
     (
@@ -87,6 +89,7 @@ export async function GET(req: NextRequest) {
     const category = sp.get("category")?.trim();
     const q = sp.get("q")?.trim();
     const status = sp.get("status")?.trim().toUpperCase();
+    const withReplyMeta = sp.get("replyMeta") === "1";
     const where: string[] = [];
     const params: unknown[] = [];
 
@@ -133,8 +136,7 @@ export async function GET(req: NextRequest) {
         ${viTime('p."updatedAt"')} AS "updatedAt",
         ${AUTHOR_SELECT} AS author,
         ${REPLY_COUNT_SELECT},
-        ${REPLY_AUTHOR_IDS_SELECT},
-        ${LATEST_REPLY_SELECT},
+        ${withReplyMeta ? `${REPLY_AUTHOR_IDS_SELECT},\n        ${LATEST_REPLY_SELECT},` : ""}
         ${likesSelect(currentUserParam)}
       FROM "ForumPost" p
       JOIN "User" u ON u.id = p."authorId"
@@ -208,7 +210,7 @@ type RawForumReply = {
 type RawForumPost = {
   author: RawForumAuthor;
   closedBy: RawForumAuthor | null;
-  latestReply: RawForumReply | null;
+  latestReply?: RawForumReply | null;
 };
 
 function publicForumPost<T extends RawForumPost>(post: T) {
@@ -216,11 +218,8 @@ function publicForumPost<T extends RawForumPost>(post: T) {
     ...post,
     author: publicUserRef(post.author),
     closedBy: post.closedBy ? publicUserRef(post.closedBy) : null,
-    latestReply: post.latestReply
-      ? {
-          ...post.latestReply,
-          author: publicUserRef(post.latestReply.author),
-        }
-      : null,
+    ...(post.latestReply
+      ? { latestReply: { ...post.latestReply, author: publicUserRef(post.latestReply.author) } }
+      : {}),
   };
 }

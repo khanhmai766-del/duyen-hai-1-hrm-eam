@@ -49,7 +49,7 @@ export function useNotifications() {
   const myId = session?.user?.id;
   const { position: myPosition } = useCurrentPosition();
   const announcements = useAnnouncements();
-  const forumPosts = useForumPosts({ category: "ALL" });
+  const forumPosts = useForumPosts({ category: "ALL", withReplyMeta: true });
   const [ackedForumIds, setAckedForumIds] = React.useState<Set<string>>(() => new Set());
 
   React.useEffect(() => {
@@ -113,7 +113,7 @@ export function useNotifications() {
     .filter((post) => post.latestReply?.author.id !== myId)
     .filter((post) => {
       const matchesTargetPosition = forumPostTargetsPosition(post.targetPositions, myPosition);
-      const participated = !!myId && (post.author.id === myId || post.replyAuthorIds.includes(myId));
+      const participated = !!myId && (post.author.id === myId || !!post.replyAuthorIds?.includes(myId));
       return matchesTargetPosition || participated;
     })
     .filter((post) => !ackedForumIds.has(`reply-${post.latestReply!.id}`))
