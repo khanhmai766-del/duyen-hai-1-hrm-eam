@@ -10,7 +10,7 @@
 // =====================================================================
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Archive, CheckCircle2, Clock3, Loader2, Pencil, Search } from "lucide-react";
+import { Archive, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Loader2, Pencil, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHcRegistrations,
@@ -101,7 +101,8 @@ function Avatar({ reg, size, ring }: { reg: HcRegistration; size: string; ring: 
 
 export default function AdminDayBoard() {
   const todayIso = isoDateVN(new Date());
-  const week = React.useMemo(() => [...Array(7)].map((_, i) => addDaysIso(todayIso, i)), [todayIso]);
+  const [rangeStart, setRangeStart] = React.useState(todayIso);
+  const week = React.useMemo(() => [...Array(7)].map((_, i) => addDaysIso(rangeStart, i)), [rangeStart]);
 
   const { data: session } = useSession();
   const myId = session?.user?.id;
@@ -165,6 +166,16 @@ export default function AdminDayBoard() {
     setSessionKey("CA_NGAY");
   }, [selDate, myDayReg?.id, rejectedMyReg?.id]);
 
+  const moveDateRange = (days: -1 | 1) => {
+    const nextStart = addDaysIso(rangeStart, days);
+    if (nextStart < todayIso) return;
+
+    const nextEnd = addDaysIso(nextStart, 6);
+    setRangeStart(nextStart);
+    if (selDate < nextStart) setSelDate(nextStart);
+    else if (selDate > nextEnd) setSelDate(nextEnd);
+  };
+
   const submit = async () => {
     try {
       await checkIn.mutateAsync({ date: selDate, period: SESSION_TO_PERIOD[sessionKey], note: note.trim() });
@@ -215,7 +226,7 @@ export default function AdminDayBoard() {
       <div className="mb-6">
         <PageHeader
           title="ĐĂNG KÝ ĐI HÀNH CHÍNH"
-          description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6), trước 16h30 · ${canApprove ? "Bạn đang có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
+          description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6); sau 16h30 khóa ngày cách hôm nay 2 ngày · ${canApprove ? "Bạn đang có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
         >
           {canViewArchive && (
             <button
@@ -240,6 +251,30 @@ export default function AdminDayBoard() {
           <span className="h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-100" />
           Đỏ: còn đăng ký chờ xử lý
         </span>
+      </div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => moveDateRange(-1)}
+          disabled={rangeStart <= todayIso}
+          aria-label="Xem lùi 1 ngày"
+          title="Xem lùi 1 ngày"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <span className="text-xs font-semibold text-slate-500">
+          {fmtVN(week[0])} – {fmtVN(week[6])}
+        </span>
+        <button
+          type="button"
+          onClick={() => moveDateRange(1)}
+          aria-label="Xem thêm 1 ngày"
+          title="Xem thêm 1 ngày"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
       <div className="grid grid-cols-7 gap-2 mb-6">
         {week.map((dIso) => {

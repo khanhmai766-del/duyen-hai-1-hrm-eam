@@ -189,7 +189,7 @@ const PostCard = React.memo(function PostCard({
   const daysLeft = invalidArchiveDaysLeft(a.invalidatedAt);
   const archivedInvalid = isArchivedInvalidAnnouncement(a);
   const detailId = `announcement-content-${a.id}`;
-  const statusLabel = archivedInvalid ? "Đã hết hiệu lực" : isInvalid ? `Chờ lưu · ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày` : a.pinned ? "Ưu tiên" : "Hiệu lực";
+  const statusLabel = archivedInvalid ? "Đã hết hiệu lực" : isInvalid ? `Hết hiệu lực · ${daysLeft ?? INVALID_ARCHIVE_DAYS} ngày` : a.pinned ? "Ưu tiên" : "Hiệu lực";
   return (
     <Card
       id={`announcement-${a.id}`}
@@ -665,13 +665,13 @@ export default function NotificationsPage() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[340px]">
             {[
               ["Hiệu lực", effectiveCount],
-              ["Chờ lưu", pendingArchiveCount],
+              ["Hết hiệu lực", pendingArchiveCount],
               ["Đã lưu", archivedBulletins.length],
               ["Đang hiển thị", sortedFiltered.length],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-100/75">{label}</div>
-                <div className={cn("mt-0.5 text-base font-extrabold tabular-nums", label === "Chờ lưu" && Number(value) > 0 && "text-orange-300")}>{value}</div>
+                <div className={cn("mt-0.5 text-base font-extrabold tabular-nums", label === "Hết hiệu lực" && Number(value) > 0 && "text-orange-300")}>{value}</div>
               </div>
             ))}
           </div>

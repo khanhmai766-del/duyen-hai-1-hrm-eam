@@ -11,8 +11,8 @@ import {
   type HcPeriod,
 } from "@/lib/hc-period";
 import { normalizeText } from "@/lib/nav";
-import { dateRange as localDateRange, vietnamNow, vietnamTodayUtcMidnight } from "@/lib/utils";
-import { isWeekend } from "@/lib/admin-day-rules";
+import { dateRange as localDateRange, vietnamTodayUtcMidnight } from "@/lib/utils";
+import { deadlineFor, isWeekend } from "@/lib/admin-day-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +52,14 @@ function canRegisterForDate(target: Date | string, now = new Date()) {
   return vietnamDateUtcMidnight(target).getTime() >= minAllowed.getTime();
 }
 
-function isBeforeRegistrationCutoff(now = new Date()) {
-  // Trước 16h30 GIỜ VIỆT NAM (server chạy UTC).
-  const vn = vietnamNow(now);
-  return vn.getUTCHours() * 60 + vn.getUTCMinutes() < 16 * 60 + 30;
+function isBeforeRegistrationCutoffForDate(target: string, now = new Date()) {
+  // Mốc 16h30 chỉ khóa ngày sớm nhất được phép đăng ký (hôm nay + 2 ngày).
+  // Các ngày từ hôm nay + 3 trở đi vẫn luôn còn hạn theo quy tắc này.
+  const minAllowed = vietnamTodayUtcMidnight(now);
+  minAllowed.setUTCDate(minAllowed.getUTCDate() + 2);
+  if (vietnamDateUtcMidnight(target).getTime() !== minAllowed.getTime()) return true;
+
+  return now.getTime() <= deadlineFor(target).getTime();
 }
 
 function vietnamDateInput(date = new Date()) {
@@ -127,11 +131,11 @@ export async function POST(req: NextRequest) {
         if (isWeekend(date)) {
           return fail("Không cho phép đăng ký đi hành chính vào ngày cuối tuần (Thứ 7, Chủ nhật) — chỉ được đăng ký các ngày từ Thứ 2 đến Thứ 6");
         }
-        if (!isBeforeRegistrationCutoff()) {
-          return fail("Chỉ được đăng ký đi hành chính trước 16h30");
-        }
-        if (!existingRegistration && !canRegisterForDate(date)) {
+        if (!canRegisterForDate(date)) {
           return fail("Phải đăng ký trước tối thiểu 2 ngày");
+        }
+        if (!isBeforeRegistrationCutoffForDate(date)) {
+          return fail("Đã quá 16h30, không thể đăng ký đi hành chính cho ngày cách hôm nay 2 ngày");
         }
         if (existingRegistration?.registrationStatus === "REJECTED" && existingRegistration.rejectionCount >= 2) {
           return fail("Đăng ký ngày này đã không được duyệt 2 lần nên không thể đăng ký lại");

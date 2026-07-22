@@ -2,7 +2,8 @@
 // LUẬT ĐĂNG KÝ ĐI HÀNH CHÍNH — lib/admin-day-rules.ts
 // Dùng cho client (hiển thị hạn chót, khóa nút). Server đã chặn thật bằng
 // luật tương đương trong app/api/hc-groups/checkin/route.ts (trước tối
-// thiểu 2 ngày + trước 16h30). Mọi tính toán neo giờ Việt Nam (+07:00)
+// thiểu 2 ngày; mốc 16h30 chỉ khóa ngày cách hôm nay đúng 2 ngày).
+// Mọi tính toán neo giờ Việt Nam (+07:00)
 // để không lệch khi server chạy UTC.
 // =====================================================================
 
