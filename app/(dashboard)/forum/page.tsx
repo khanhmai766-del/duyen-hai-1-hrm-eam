@@ -290,45 +290,44 @@ export default function ForumPage() {
 
   return (
     <div className="pb-8">
-      <div className="relative overflow-hidden rounded-[28px] border border-[#17283c] bg-[#07111f] p-3 shadow-[0_24px_70px_rgba(6,17,31,0.24)] sm:p-4">
-        <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_1px_1px,rgba(56,189,248,0.18)_1px,transparent_0)] [background-size:24px_24px]" />
-        <header className="relative mb-4 overflow-hidden rounded-[20px] border border-white/10 bg-[#0b1929]/95 px-4 py-4 text-white sm:px-5">
-          <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-cyan-400/10 to-transparent" />
+      <div>
+        <header className="relative mb-4 overflow-hidden rounded-[20px] border border-border bg-white px-4 py-4 shadow-sm sm:px-5">
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-50 to-transparent" />
           <div className="relative grid gap-4 2xl:grid-cols-[minmax(260px,0.8fr)_minmax(340px,1.25fr)_auto] 2xl:items-center">
             <div>
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.28em] text-[#f59e0b]">
                 <span className="h-1.5 w-5 bg-[#f59e0b]" /> Technical intelligence
               </div>
               <div className="mt-1.5 flex items-baseline gap-3">
-                <h1 className="text-2xl font-black tracking-[-0.04em] sm:text-[28px]">Forum kỹ thuật</h1>
-                <span className="hidden text-[10px] font-bold uppercase tracking-widest text-slate-500 sm:inline">DH1 / Knowledge Ops</span>
+                <h1 className="text-2xl font-black tracking-[-0.04em] text-[#0b2340] sm:text-[28px]">Forum kỹ thuật</h1>
+                <span className="hidden text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:inline">DH1 / Knowledge Ops</span>
               </div>
             </div>
 
             <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 value={q}
                 onChange={(event) => setQ(event.target.value)}
                 placeholder="Truy vấn sự cố, thiết bị, quy trình, bản vẽ..."
-                className="h-12 border-white/10 bg-white/[0.06] pl-11 pr-20 text-white placeholder:text-slate-500 focus-visible:border-cyan-400/50 focus-visible:ring-cyan-400/20"
+                className="h-12 border-border bg-slate-50 pl-11 pr-20 text-ink placeholder:text-muted-foreground focus-visible:border-accent focus-visible:ring-accent/15"
               />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-black tracking-wider text-slate-400">SEARCH</span>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-slate-100 px-2 py-1 text-[9px] font-black tracking-wider text-slate-400">SEARCH</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 2xl:justify-end">
               <Button
                 variant="outline"
                 className={cn(
-                  "h-10 border-white/10 bg-white/5 text-slate-200 hover:border-amber-300/40 hover:bg-white/10 hover:text-white",
-                  showClosedBox && "border-amber-400/50 bg-amber-400/10 text-amber-200"
+                  "h-10",
+                  showClosedBox && "border-amber-400/60 bg-amber-50 text-amber-700 hover:bg-amber-100"
                 )}
                 onClick={() => { setShowClosedBox((value) => !value); setComposeOpen(false); setEditingPost(null); }}
               >
                 <Archive className="h-4 w-4" /> {showClosedBox ? "Luồng hiện hành" : `Kho lưu trữ ${closedCount ? `· ${closedCount}` : ""}`}
               </Button>
               {canWriteForum && (
-                <Button className="h-10 bg-[#f59e0b] font-black text-[#15100a] hover:bg-[#fbbf24]" onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
+                <Button className="h-10" onClick={() => (composeOpen ? setComposeOpen(false) : openCreate())}>
                   {composeOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   {composeOpen ? "Đóng" : "Tạo chủ đề"}
                 </Button>
@@ -338,9 +337,9 @@ export default function ForumPage() {
         </header>
 
         <div className="relative grid gap-4 xl:grid-cols-[210px_minmax(0,1fr)_250px]">
-          <aside className="h-fit rounded-[18px] border border-white/10 bg-[#0b1929]/90 p-3 xl:sticky xl:top-4">
+          <aside className="h-fit rounded-[18px] border border-border bg-white p-3 shadow-sm xl:sticky xl:top-4">
             <div className="flex items-center gap-2 px-2 pb-3 text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">
-              <Layers3 className="h-3.5 w-3.5 text-cyan-400" /> Kênh tri thức
+              <Layers3 className="h-3.5 w-3.5 text-blue-500" /> Kênh trao đổi
             </div>
             <nav className="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-1 xl:overflow-visible" aria-label="Phân loại chủ đề Forum">
               {CATEGORIES.map((item) => {
@@ -352,20 +351,20 @@ export default function ForumPage() {
                     type="button"
                     onClick={() => setCategory(item.value)}
                     className={cn(
-                      "group flex min-h-11 shrink-0 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 xl:w-full",
-                      active ? "bg-cyan-400 text-[#06111f]" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                      "group flex min-h-11 shrink-0 cursor-pointer items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent xl:w-full",
+                      active ? "bg-[#102d4d] text-white" : "text-slate-600 hover:bg-slate-100 hover:text-[#0b2340]"
                     )}
                   >
-                    <CategoryIcon className={cn("h-4 w-4 shrink-0", active ? "text-[#06111f]" : "text-slate-500 group-hover:text-cyan-300")} />
+                    <CategoryIcon className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-slate-400 group-hover:text-blue-600")} />
                     <span className="whitespace-nowrap xl:min-w-0 xl:truncate">{item.label}</span>
                     {active && <ChevronRight className="ml-auto hidden h-3.5 w-3.5 xl:block" />}
                   </button>
                 );
               })}
             </nav>
-            <div className="mt-4 hidden border-t border-white/10 pt-4 xl:block">
+            <div className="mt-4 hidden border-t border-border pt-4 xl:block">
               <div className="flex items-center gap-2 px-2 text-[10px] font-bold text-slate-500">
-                <span className={cn("h-2 w-2 rounded-full", showClosedBox ? "bg-amber-400" : "bg-emerald-400")} />
+                <span className={cn("h-2 w-2 rounded-full", showClosedBox ? "bg-amber-400" : "bg-emerald-500")} />
                 {showClosedBox ? "Đang truy cập kho" : "Hệ thống trực tuyến"}
               </div>
             </div>
@@ -506,33 +505,33 @@ export default function ForumPage() {
           </main>
 
           <aside className="h-fit space-y-3 xl:sticky xl:top-4">
-            <section className="overflow-hidden rounded-[18px] border border-white/10 bg-[#0b1929]/90 text-white">
-              <div className="border-b border-white/10 px-4 py-3">
-                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-cyan-300">
+            <section className="overflow-hidden rounded-[18px] border border-border bg-white text-ink shadow-sm">
+              <div className="border-b border-border px-4 py-3">
+                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-blue-600">
                   <Activity className="h-3.5 w-3.5" /> Network pulse
                 </div>
-                <div className="mt-1 text-sm font-black">Trạng thái tri thức</div>
+                <div className="mt-1 text-sm font-black text-[#0b2340]">Trạng thái bài đăng</div>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-white/10 xl:grid-cols-1 xl:divide-x-0 xl:divide-y">
-                <WorkspaceStat label={showClosedBox ? "Trong kho" : "Đang hiển thị"} value={rows.length} accent="text-cyan-300" />
-                <WorkspaceStat label="Phản hồi" value={visibleReplyCount} accent="text-blue-300" />
-                <WorkspaceStat label="Đã kết thúc" value={closedCount} accent="text-amber-300" />
+              <div className="grid grid-cols-3 divide-x divide-border xl:grid-cols-1 xl:divide-x-0 xl:divide-y">
+                <WorkspaceStat label={showClosedBox ? "Trong kho" : "Đang hiển thị"} value={rows.length} accent="text-blue-600" />
+                <WorkspaceStat label="Phản hồi" value={visibleReplyCount} accent="text-sky-600" />
+                <WorkspaceStat label="Đã kết thúc" value={closedCount} accent="text-amber-600" />
               </div>
             </section>
 
-            <section className="rounded-[18px] border border-white/10 bg-[#0b1929]/90 p-4 text-white">
+            <section className="rounded-[18px] border border-border bg-white p-4 text-ink shadow-sm">
               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">
-                <SlidersHorizontal className="h-3.5 w-3.5 text-amber-400" /> Quy ước vận hành
+                <SlidersHorizontal className="h-3.5 w-3.5 text-amber-500" /> Quy ước vận hành
               </div>
               <div className="mt-4 space-y-3">
                 <GuideRow index="01" title="Đặt vấn đề rõ" description="Nêu thiết bị, hiện tượng và điều kiện vận hành." />
-                <GuideRow index="02" title="Bổ sung bằng chứng" description="Đính kèm quy trình, bản vẽ hoặc số liệu liên quan." />
-                <GuideRow index="03" title="Chốt kinh nghiệm" description="Tổng kết phương án sau khi hoàn tất trao đổi." />
+                <GuideRow index="02" title="Bổ sung tài liệu" description="Đính kèm quy trình, bản vẽ hoặc số liệu liên quan." />
+                <GuideRow index="03" title="Rút kết kinh nghiệm" description="Tổng kết phương án sau khi hoàn tất trao đổi." />
               </div>
             </section>
 
-            <div className="rounded-[18px] border border-cyan-400/20 bg-cyan-400/[0.07] p-4 text-xs leading-5 text-slate-400">
-              <div className="mb-1 font-black text-cyan-300">Kết nối theo ca/kíp</div>
+            <div className="rounded-[18px] border border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-slate-600">
+              <div className="mb-1 font-black text-blue-700">Kết nối theo ca/kíp</div>
               Chủ đề được phân phối đúng cương vị và đồng bộ trạng thái đọc theo tài khoản.
             </div>
           </aside>
@@ -867,7 +866,7 @@ function ForumPostCard({
             <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl shadow-sm", category.tone)}>
               <Icon className="h-5 w-5" />
             </div>
-            <div className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Phân khu nội dung</div>
+            <div className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Nội dung chia sẻ</div>
             <div className="mt-1 text-sm font-black text-[#102d4d]">{category.label}</div>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {post.isPinned && (
@@ -1322,9 +1321,9 @@ function WorkspaceStat({
 function GuideRow({ index, title, description }: { index: string; title: string; description: string }) {
   return (
     <div className="grid grid-cols-[28px_1fr] gap-2.5">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[9px] font-black text-amber-300">{index}</span>
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-[9px] font-black text-amber-600">{index}</span>
       <div>
-        <div className="text-xs font-black text-slate-200">{title}</div>
+        <div className="text-xs font-black text-[#0b2340]">{title}</div>
         <div className="mt-0.5 text-[10px] leading-4 text-slate-500">{description}</div>
       </div>
     </div>
