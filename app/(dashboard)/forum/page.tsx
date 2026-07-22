@@ -121,6 +121,12 @@ export default function ForumPage() {
   const [showClosedBox, setShowClosedBox] = React.useState(false);
   const composeRef = React.useRef<HTMLDivElement>(null);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
+  // Header forum dính (sticky) dưới topbar app (h-16 = 64px). Đo chiều cao header động
+  // để 2 sidebar dính ngay dưới header, không đè lên nhau — chỉ cột nội dung giữa cuộn.
+  const headerRef = React.useRef<HTMLElement>(null);
+  const [headerH, setHeaderH] = React.useState(96);
+  const TOPBAR_H = 64;
+  const sidebarStickyTop = TOPBAR_H + headerH + 8;
 
   const debouncedQ = useDebouncedValue(q, 300);
   const posts = useForumPosts({ category, q: debouncedQ, status: showClosedBox ? "CLOSED" : "OPEN" });
@@ -137,6 +143,16 @@ export default function ForumPage() {
 
   const postValid = form.title.trim().length > 0 && richTextPlainText(form.content).length > 0;
   const savingPost = createPost.isPending || updatePost.isPending;
+
+  React.useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => setHeaderH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   React.useEffect(() => {
     if (!composeOpen || !editingPost) return;
@@ -291,7 +307,7 @@ export default function ForumPage() {
   return (
     <div className="pb-8">
       <div>
-        <header className="relative mb-4 overflow-hidden rounded-[20px] border border-border bg-white px-4 py-4 shadow-sm sm:px-5">
+        <header ref={headerRef} className="sticky top-16 z-20 mb-4 overflow-hidden rounded-[20px] border border-border bg-white px-4 py-4 shadow-sm sm:px-5">
           <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-50 to-transparent" />
           <div className="relative grid gap-4 2xl:grid-cols-[minmax(260px,0.8fr)_minmax(340px,1.25fr)_auto] 2xl:items-center">
             <div>
@@ -337,7 +353,7 @@ export default function ForumPage() {
         </header>
 
         <div className="relative grid gap-4 xl:grid-cols-[210px_minmax(0,1fr)_250px]">
-          <aside className="h-fit rounded-[18px] border border-border bg-white p-3 shadow-sm xl:sticky xl:top-4">
+          <aside className="h-fit rounded-[18px] border border-border bg-white p-3 shadow-sm xl:sticky" style={{ top: sidebarStickyTop }}>
             <div className="flex items-center gap-2 px-2 pb-3 text-[9px] font-black uppercase tracking-[0.22em] text-slate-500">
               <Layers3 className="h-3.5 w-3.5 text-blue-500" /> Kênh trao đổi
             </div>
@@ -373,7 +389,7 @@ export default function ForumPage() {
           <main className="min-w-0 space-y-4">
 
       {composeOpen && (
-        <Card ref={composeRef} className="scroll-mt-4 overflow-hidden border-cyan-200 shadow-[0_14px_36px_rgba(8,145,178,0.10)]">
+        <Card ref={composeRef} className="scroll-mt-40 overflow-hidden border-cyan-200 shadow-[0_14px_36px_rgba(8,145,178,0.10)]">
           <div className="flex items-center justify-between bg-[#102d4d] px-4 py-3 text-white sm:px-5">
             <div>
               <div className="flex items-center gap-2 text-sm font-black"><Plus className="h-4 w-4 text-cyan-300" /> {editingPost ? "Hiệu chỉnh chủ đề" : "Khởi tạo chủ đề kỹ thuật"}</div>
@@ -504,7 +520,7 @@ export default function ForumPage() {
 
           </main>
 
-          <aside className="h-fit space-y-3 xl:sticky xl:top-4">
+          <aside className="h-fit space-y-3 xl:sticky" style={{ top: sidebarStickyTop }}>
             <section className="overflow-hidden rounded-[18px] border border-border bg-white text-ink shadow-sm">
               <div className="border-b border-border px-4 py-3">
                 <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.22em] text-blue-600">
