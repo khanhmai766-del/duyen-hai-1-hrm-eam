@@ -59,7 +59,9 @@ export async function GET() {
       const mdevices: { seq: string; label: string }[] = [];
       for (const r of m.replacements) {
         if (r.managingPosition) positions.add(r.managingPosition);
-        const seq = r.device ? r.deviceSeq! : `manual:${r.id}`;
+        // Điểm có tên nhập tay cần một giá trị riêng, kể cả khi cùng trỏ tới
+        // một nút cây. Nếu dùng deviceSeq, dropdown sẽ gộp/mất các thiết bị này.
+        const seq = r.location ? `manual:${r.id}` : (r.device ? r.deviceSeq! : `manual:${r.id}`);
         if (seen.has(seq)) continue;
         seen.add(seq);
         mdevices.push({ seq, label: r.location || r.device?.name || r.system || seq });

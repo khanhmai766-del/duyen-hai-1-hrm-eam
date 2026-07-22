@@ -120,8 +120,11 @@ export async function POST(req: NextRequest) {
       if (!Number.isFinite(intervalMonths) || intervalMonths < 0) return errors.push({ rowNumber, message: "Chu kỳ thay thế phải từ 0 tháng (0 = không theo dõi lịch)" });
       if (!Number.isFinite(quantity) || quantity < 0) return errors.push({ rowNumber, message: "Số lượng cần thay không hợp lệ" });
       if (deviceCount < 1) return errors.push({ rowNumber, message: "Số lượng thiết bị phải từ 1" });
-      const key = `${machine}|${group.id}|${deviceSeq}`;
-      if (seen.has(key)) return errors.push({ rowNumber, message: "Vật tư và thiết bị bị lặp trong file" });
+      // Một nút cây có thể đại diện cho nhiều thiết bị thực tế (nhập tay).
+      // Chỉ coi là trùng khi cả tên thiết bị nhập tay cũng trùng; nếu không có
+      // tên nhập tay thì vẫn giữ quy tắc cũ: mỗi vật tư × nút cây chỉ có 1 dòng.
+      const key = `${machine}|${group.id}|${deviceSeq}|${normalizeText(manualDeviceName ?? "")}`;
+      if (seen.has(key)) return errors.push({ rowNumber, message: "Vật tư, mã thiết bị và tên thiết bị nhập tay bị lặp trong file" });
       seen.add(key);
       const parent = node.parentSeq ? nodeBySeq.get(node.parentSeq) : null;
       normalized.push({
@@ -179,10 +182,13 @@ export async function POST(req: NextRequest) {
           materialIdByGroup.set(materialKey, materialId);
           materialsCreated += 1;
         }
-        const existing = await tx.materialReplacement.findFirst({
+        const candidates = await tx.materialReplacement.findMany({
           where: { materialId, deviceSeq: row.deviceSeq, isActive: false },
-          select: { id: true },
+          select: { id: true, location: true },
         });
+        const existing = candidates.find(
+          (candidate) => normalizeText(candidate.location ?? "") === normalizeText(row.manualDeviceName ?? "")
+        );
         const data = {
           system: row.system,
           location: row.manualDeviceName,

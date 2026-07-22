@@ -191,14 +191,19 @@ export async function POST(req: NextRequest) {
     const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
     if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
+    const manualDeviceId = replacementDeviceSeq.startsWith("manual:")
+      ? replacementDeviceSeq.slice("manual:".length)
+      : "";
     const replacementPoint = await prisma.materialReplacement.findFirst({
-      where: { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq, isActive: false },
+      where: manualDeviceId
+        ? { id: manualDeviceId, materialId: selectedMaterial.id, isActive: false }
+        : { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq, isActive: false },
       select: { deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
     });
-    if (!replacementPoint?.deviceSeq || !replacementPoint.device) {
+    if (!replacementPoint || (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device))) {
       return fail("Thiết bị chưa được khai báo trong Chi tiết điểm thay thế của vật tư");
     }
-    const replacementDeviceLabel = replacementPoint.location || replacementPoint.device.name || replacementPoint.system || replacementPoint.deviceSeq;
+    const replacementDeviceLabel = replacementPoint.location || replacementPoint.device?.name || replacementPoint.system || replacementPoint.deviceSeq || "Thiết bị nhập tay";
 
     const sequenceMonth = materialTicketMonthKey();
     const ticket = await prisma.$transaction(async (tx) => {
@@ -227,7 +232,7 @@ export async function POST(req: NextRequest) {
               materialId: selectedMaterial!.id,
               erpCode: null,
               quantity: proposedQuantity,
-              deviceSeq: replacementPoint.deviceSeq,
+              deviceSeq: manualDeviceId ? null : replacementPoint.deviceSeq,
               deviceNameManual: replacementDeviceLabel,
             }],
           },
