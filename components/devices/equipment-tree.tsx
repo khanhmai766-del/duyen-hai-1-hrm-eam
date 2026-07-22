@@ -17,6 +17,7 @@ import {
   Trash2,
   ListChecks,
   Pencil,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -178,7 +179,17 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   );
 });
 
-export function EquipmentTreeView({ canDelete = false, canEdit = false }: { canDelete?: boolean; canEdit?: boolean }) {
+export function EquipmentTreeView({
+  canDelete = false,
+  canEdit = false,
+  canCreate = false,
+  onCreateChild,
+}: {
+  canDelete?: boolean;
+  canEdit?: boolean;
+  canCreate?: boolean;
+  onCreateChild?: (node: EquipmentNode) => void;
+}) {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
   const { data, isLoading } = useEquipmentTree();
@@ -504,6 +515,8 @@ export function EquipmentTreeView({ canDelete = false, canEdit = false }: { canD
             ancestors={ancestors}
             childCount={(childrenOf.get(selectedNode.seq) ?? []).length}
             onSelect={setSelected}
+            canCreate={canCreate}
+            onCreateChild={onCreateChild}
           />
         ) : (
           <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
@@ -635,11 +648,15 @@ function DetailPanel({
   ancestors,
   childCount,
   onSelect,
+  canCreate,
+  onCreateChild,
 }: {
   node: EquipmentNode;
   ancestors: EquipmentNode[];
   childCount: number;
   onSelect: (seq: string) => void;
+  canCreate: boolean;
+  onCreateChild?: (node: EquipmentNode) => void;
 }) {
   const router = useRouter();
   const isGroup = childCount > 0;
@@ -690,6 +707,18 @@ function DetailPanel({
         <DetailRow label="Bản vẽ liên quan" value={node.drawing || "—"} />
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${childCount} thiết bị con` : "Thiết bị"} />
       </div>
+
+      {canCreate && node.depth < 7 && onCreateChild && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-accent/40 text-accent hover:border-accent hover:bg-accent/5 hover:text-accent"
+          onClick={() => onCreateChild(node)}
+        >
+          <Plus className="h-4 w-4" />
+          Thêm mới trong hệ thống này
+        </Button>
+      )}
 
       {!isGroup && detailQuery.isLoading && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">

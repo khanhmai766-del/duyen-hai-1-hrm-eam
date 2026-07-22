@@ -20,7 +20,15 @@ import { announcementShiftRosterPositionOptions } from "@/lib/positions";
 
 const NONE = "__none__";
 
-export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; onDone?: (d: DeviceRecord) => void }) {
+export function DeviceForm({
+  device,
+  initialParentSeq,
+  onDone,
+}: {
+  device?: DeviceRecord | null;
+  initialParentSeq?: string;
+  onDone?: (d: DeviceRecord) => void;
+}) {
   const { data: session } = useSession();
   const create = useCreateDevice();
   const update = useUpdateDevice();
@@ -35,15 +43,23 @@ export function DeviceForm({ device, onDone }: { device?: DeviceRecord | null; o
   const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
 
   const [form, setForm] = React.useState({
-    code: device?.code ?? "",
+    code: device?.code ?? (initialParentSeq ? `${initialParentSeq}.` : ""),
     name: device?.name ?? "",
     system: device?.system ?? "",
-    systemSeq: "",
+    systemSeq: initialParentSeq ?? "",
     managingPosition: device?.managingPosition ?? "",
     images: device?.images ?? [],
     attachedInfo: device?.attachedInfo ?? "",
     documentUrl: device?.documentUrl ?? "",
   });
+
+  // Khi đi từ cây thiết bị sang tab Thêm mới, dữ liệu cây có thể về sau lần render
+  // đầu tiên. Đồng bộ tên hệ thống mà không ghi đè các trường người dùng đang nhập.
+  React.useEffect(() => {
+    if (isEdit || !initialParentSeq || form.system) return;
+    const parent = equipmentNodes.find((node) => node.seq === initialParentSeq);
+    if (parent) setForm((current) => ({ ...current, system: parent.name }));
+  }, [equipmentNodes, form.system, initialParentSeq, isEdit]);
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));

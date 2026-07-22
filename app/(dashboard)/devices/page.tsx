@@ -120,6 +120,7 @@ function DevicesPageContent() {
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
+  const parentSeq = params.get("parentSeq") ?? "";
 
   const [q, setQ] = React.useState(urlQ);
   const [debouncedQ, setDebouncedQ] = React.useState(urlQ);
@@ -166,6 +167,14 @@ function DevicesPageContent() {
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
     sp.set("view", v);
+    if (v !== "form") sp.delete("parentSeq");
+    router.push(`/devices?${sp.toString()}`);
+  }
+
+  function openCreateForSystem(node: EquipmentNode) {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("view", "form");
+    sp.set("parentSeq", node.seq);
     router.push(`/devices?${sp.toString()}`);
   }
 
@@ -248,16 +257,23 @@ function DevicesPageContent() {
       </div>
 
       {view === "tree" ? (
-        <EquipmentTreeView canDelete={canDeleteDevices} canEdit={canEditDevices} />
+        <EquipmentTreeView
+          canDelete={canDeleteDevices}
+          canEdit={canEditDevices}
+          canCreate={canManageDevices}
+          onCreateChild={openCreateForSystem}
+        />
       ) : view === "detail" ? (
         <QrCardsSection canManage={canManageDevices} q={debouncedQ} onQr={setQrDevice} />
       ) : view === "form" ? (
         canManageDevices ? (
           <DeviceForm
+            initialParentSeq={parentSeq || undefined}
             onDone={(device) => {
               const sp = new URLSearchParams(params.toString());
               sp.set("view", "tree");
               sp.set("focusSeq", device.code);
+              sp.delete("parentSeq");
               router.push(`/devices?${sp.toString()}`);
             }}
           />
