@@ -877,6 +877,9 @@ model HcCheckIn {
   registrationStatus String   @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
   cancellationReason String?
   rejectionCount     Int      @default(0)
+  handledById        String?
+  handledByName      String?
+  handledAt          DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
 

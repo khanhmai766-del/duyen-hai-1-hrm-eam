@@ -29,6 +29,9 @@ async function ensureHcCheckInUpdatedAtColumn() {
     ALTER TABLE "HcCheckIn"
     ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   `);
+  await prisma.$executeRawUnsafe('ALTER TABLE "HcCheckIn" ADD COLUMN IF NOT EXISTS "handledById" TEXT');
+  await prisma.$executeRawUnsafe('ALTER TABLE "HcCheckIn" ADD COLUMN IF NOT EXISTS "handledByName" TEXT');
+  await prisma.$executeRawUnsafe('ALTER TABLE "HcCheckIn" ADD COLUMN IF NOT EXISTS "handledAt" TIMESTAMP(3)');
   hcCheckInUpdatedAtReady = true;
 }
 
@@ -174,6 +177,9 @@ export async function POST(req: NextRequest) {
             isApproved: false,
             registrationStatus: "PENDING",
             cancellationReason: null,
+            handledById: null,
+            handledByName: null,
+            handledAt: null,
           },
         });
         await audit(
@@ -205,7 +211,15 @@ export async function POST(req: NextRequest) {
           hours: option.hours,
           isApproved: autoApproveSelfCheckIn,
           ...(hasNote
-            ? { note: registerNote, isRegistered: true, registrationStatus: autoApproveSelfCheckIn ? "APPROVED" : "PENDING", cancellationReason: null }
+            ? {
+                note: registerNote,
+                isRegistered: true,
+                registrationStatus: autoApproveSelfCheckIn ? "APPROVED" : "PENDING",
+                cancellationReason: null,
+                handledById: autoApproveSelfCheckIn ? user.id : null,
+                handledByName: autoApproveSelfCheckIn ? user.name : null,
+                handledAt: autoApproveSelfCheckIn ? new Date() : null,
+              }
             : { note: cleanWorkNote, isRegistered: false }),
         },
         create: {
@@ -215,6 +229,9 @@ export async function POST(req: NextRequest) {
           isApproved: autoApproveSelfCheckIn,
           isRegistered: hasNote,
           registrationStatus: hasNote && autoApproveSelfCheckIn ? "APPROVED" : "PENDING",
+          handledById: hasNote && autoApproveSelfCheckIn ? user.id : null,
+          handledByName: hasNote && autoApproveSelfCheckIn ? user.name : null,
+          handledAt: hasNote && autoApproveSelfCheckIn ? new Date() : null,
           note: hasNote ? registerNote : cleanWorkNote,
         },
       });
@@ -246,6 +263,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureHcCheckInUpdatedAtColumn();
     if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
     const body = await req.json();
     const checkInId = String(body.checkInId ?? "").trim();
@@ -271,6 +289,9 @@ export async function PATCH(req: NextRequest) {
         isApproved: false,
         registrationStatus,
         cancellationReason: action === "CANCEL" ? reason || null : null,
+        handledById: user.id,
+        handledByName: user.name,
+        handledAt: new Date(),
         ...(action === "REJECT" ? { note: note || null, rejectionCount: { increment: 1 } } : {}),
       },
     });
@@ -327,6 +348,7 @@ export async function DELETE(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureHcCheckInUpdatedAtColumn();
     const body = await req.json();
     const { groupId, ids, note, action } = body as { groupId: string; ids?: string[]; note?: string; action?: "APPROVE" | "NOTE" };
     if (!groupId) return fail("Thiếu nhóm");
@@ -356,7 +378,15 @@ export async function PUT(req: NextRequest) {
     });
     const res = await prisma.hcCheckIn.updateMany({
       where: actionableWhere,
-      data: { isApproved: true, registrationStatus: "APPROVED", cancellationReason: null, ...(note !== undefined ? { note: cleanNote || null } : {}) },
+      data: {
+        isApproved: true,
+        registrationStatus: "APPROVED",
+        cancellationReason: null,
+        handledById: user.id,
+        handledByName: user.name,
+        handledAt: new Date(),
+        ...(note !== undefined ? { note: cleanNote || null } : {}),
+      },
     });
     const registeredNames = approvedMembers.filter((member) => member.isRegistered).map((member) => member.user.name);
     const checkInNames = approvedMembers.filter((member) => !member.isRegistered).map((member) => member.user.name);

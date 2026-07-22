@@ -20,6 +20,9 @@ export interface HcMember {
   registrationStatus: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
   cancellationReason: string | null;
   rejectionCount: number;
+  handledById: string | null;
+  handledByName: string | null;
+  handledAt: string | null;
   createdAt: string;
   updatedAt: string;
   user: { id: string; name: string; position: string | null; avatarUrl: string | null; phone: string | null };

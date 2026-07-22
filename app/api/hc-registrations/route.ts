@@ -9,6 +9,16 @@ import { HC_REGISTRATION_CONTENTS } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
 
+let hcHandlingColumnsReady = false;
+
+async function ensureHcHandlingColumns() {
+  if (hcHandlingColumnsReady) return;
+  await prisma.$executeRawUnsafe('ALTER TABLE "HcCheckIn" ADD COLUMN IF NOT EXISTS "handledById" TEXT');
+  await prisma.$executeRawUnsafe('ALTER TABLE "HcCheckIn" ADD COLUMN IF NOT EXISTS "handledByName" TEXT');
+  await prisma.$executeRawUnsafe('ALTER TABLE "HcCheckIn" ADD COLUMN IF NOT EXISTS "handledAt" TIMESTAMP(3)');
+  hcHandlingColumnsReady = true;
+}
+
 function dayStart(date: string | null) {
   const d = parseDateInput(date);
   d.setHours(0, 0, 0, 0);
@@ -25,6 +35,7 @@ function dayEnd(date: string | null) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await ensureHcHandlingColumns();
     const isArchiveRequest = req.nextUrl.searchParams.get("scope") === "archive";
     if (isArchiveRequest && !canViewHcRegistrationArchive(user)) {
       throw fail("Không đủ quyền xem kho lưu trữ đăng ký đi hành chính", 403);

@@ -74,6 +74,27 @@ const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((w) =>
 const hashColor = (s: string) => AVATAR_COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 const fmtVN = (dateIso: string) => new Date(dateIso + "T00:00:00").toLocaleDateString("vi-VN");
 
+function handlingLine(registration: HcRegistration) {
+  if (!registration.handledByName || !registration.handledAt) return null;
+  const action = registration.registrationStatus === "APPROVED"
+    ? "đã duyệt"
+    : registration.registrationStatus === "REJECTED"
+      ? "không duyệt"
+      : registration.registrationStatus === "CANCELLED"
+        ? "đã hủy"
+        : null;
+  if (!action) return null;
+  const at = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(registration.handledAt));
+  return `${registration.handledByName} ${action} lúc ${at}`;
+}
+
 function archiveGroups(registrations: HcRegistration[]) {
   const groups = new Map<string, HcRegistration[]>();
   for (const registration of registrations) {
@@ -435,6 +456,7 @@ export default function AdminDayBoard() {
             <div className="space-y-3">
               {dayRegs.map((r) => {
                 const st = STATUS_UI[r.registrationStatus];
+                const handled = handlingLine(r);
                 const panelOpen = actionPanel?.id === r.id;
                 const canEdit = r.registrationStatus === "PENDING" && (canApprove || r.userId === myId);
                 return (
@@ -448,6 +470,12 @@ export default function AdminDayBoard() {
                           <span className="text-[11px] font-semibold bg-muted text-muted-foreground rounded px-2 py-0.5">{sessionLabelOf(r)}</span>
                           <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                         </div>
+                        {handled && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] leading-4 text-slate-500">
+                            <Clock3 className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            <span>{handled}</span>
+                          </div>
+                        )}
                         {r.note && <div className="text-sm text-slate-600 mt-1.5">{r.note}</div>}
                         {r.registrationStatus === "CANCELLED" && r.cancellationReason && (
                           <div className="text-xs text-red-500 mt-1.5">Lý do hủy: {r.cancellationReason}</div>
@@ -623,12 +651,19 @@ function RegistrationArchiveDialog({
                       {group.registrations.map((registration) => {
                         const status = registration.registrationStatus || (registration.isApproved ? "APPROVED" : "PENDING");
                         const statusUi = STATUS_UI[status as keyof typeof STATUS_UI] ?? STATUS_UI.PENDING;
+                        const handled = handlingLine(registration);
                         return (
                           <article key={registration.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                             <div className="flex min-w-0 items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="truncate font-semibold text-ink">{registration.user.name}</div>
                                 <div className="truncate text-xs text-muted-foreground">{registration.user.position ?? "—"}</div>
+                                {handled && (
+                                  <div className="mt-1 flex items-center gap-1 text-[11px] leading-4 text-slate-500">
+                                    <Clock3 className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                    <span>{handled}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex shrink-0 flex-col items-end gap-1">
                                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
