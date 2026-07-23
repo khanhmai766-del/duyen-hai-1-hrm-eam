@@ -367,7 +367,7 @@ function LoginInner() {
                       <ScanFace className="h-4 w-4" />
                     </span>
                   )}
-                  Đăng nhập bằng Passkey
+                  Đăng nhập
                 </Button>
                 <Button
                   type="button"
