@@ -243,6 +243,29 @@ export async function filterEquipmentNodesForUser(user: SessionUser, nodes: Norm
   return access.nodes;
 }
 
+/**
+ * Dành cho API cây LAZY: trả bộ lọc SQL theo seq + danh sách seq gốc hiển thị.
+ * - Fast-path (ADMIN / cương vị không cấu hình scope): trả { kind: "all", rootSeqs: null }
+ *   → KHÔNG nạp toàn bộ node; endpoint chỉ cần truy vấn parentSeq = null.
+ * - Cương vị có scope riêng: dùng access-context (đã cache) để lấy branchFilter + gốc
+ *   hiển thị (node hiển thị mà cha không hiển thị).
+ */
+export async function resolveEquipmentTreeAccess(
+  user: SessionUser
+): Promise<{ filter: EquipmentBranchFilter; rootSeqs: string[] | null }> {
+  if (user.role === "ADMIN") return { filter: { kind: "all" }, rootSeqs: null };
+  const position = user.position ?? "";
+  if (!position) return { filter: { kind: "all" }, rootSeqs: null };
+  const scopes = await loadPositionSystemScopeRows();
+  if (!hasExplicitScopes(scopes, position)) return { filter: { kind: "all" }, rootSeqs: null };
+
+  const access = await resolveEquipmentAccessForUser(user);
+  const rootSeqs = access.nodes
+    .filter((node) => !node.parentSeq || !access.visibleSeqs.has(node.parentSeq))
+    .map((node) => node.seq);
+  return { filter: access.branchFilter, rootSeqs };
+}
+
 // Kiểm tra quyền XEM một seq mà KHÔNG cần nạp/normalize toàn bộ 9k node: chỉ đọc
 // scopes của cương vị rồi leo cây theo tổ tiên của seq (tổ tiên hiệu lực luôn là
 // tiền tố chuỗi seq). Fail-safe: chỉ nới quyền khi cương vị chưa cấu hình riêng.

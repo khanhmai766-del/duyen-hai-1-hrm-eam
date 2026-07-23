@@ -8,7 +8,7 @@ import {
 import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
-import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
@@ -21,12 +21,14 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
-const MAX_EQUIPMENT_DEPTH = 7;
+const MAX_EQUIPMENT_DEPTH = 16; // số đoạn của mã đầy đủ (gồm DH1.S1) — giới hạn kỹ thuật
 
+// Mã thiết bị đầy đủ (fullCode) sau re-key: DH1.S1 + các cấp số nguyên dương.
 function validateEquipmentSeq(seq: string) {
-  if (!/^\d+(?:\.\d+)*$/.test(seq)) return "Số thứ tự chỉ gồm các số nguyên dương, phân cách bằng dấu chấm";
-  if (seq.split(".").some((part) => Number(part) < 1)) return "Mỗi cấp trong số thứ tự phải lớn hơn 0";
-  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa cấp ${MAX_EQUIPMENT_DEPTH}`;
+  if (!/^DH1\.S1(?:\.[1-9]\d*)*$/.test(seq)) {
+    return "Mã thiết bị phải bắt đầu bằng DH1.S1, các cấp sau là số nguyên dương phân cách bằng dấu chấm (vd DH1.S1.1.2.3)";
+  }
+  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa ${MAX_EQUIPMENT_DEPTH} cấp`;
   return null;
 }
 
@@ -58,7 +60,7 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
 async function findEquipmentRecord(seq: string) {
   await Promise.all([ensureRepairMachineColumn(), ensureDeviceQrCardTable()]);
   const nodes = await getCachedEquipmentNodeFull();
-  const index = buildEquipmentTreeIndex(nodes);
+  const index = getEquipmentTreeIndexFor(nodes);
   const node = index.bySeq.get(seq);
   if (!node) return null;
   const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
@@ -97,7 +99,7 @@ async function findEquipmentRecord(seq: string) {
         },
       },
     }),
-    prisma.deviceQrCard.findUnique({ where: { deviceSeq: node.seq }, select: { id: true, createdAt: true } }),
+    prisma.deviceQrCard.findFirst({ where: { deviceSeq: node.seq }, select: { id: true, createdAt: true } }),
     prisma.defect.findMany({
       where: { deviceSeq: node.seq, status: { not: "DA_XU_LY" } },
       orderBy: [{ severity: "asc" }, { detectedAt: "desc" }, { createdAt: "desc" }],

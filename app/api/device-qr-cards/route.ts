@@ -6,7 +6,7 @@ import {
   compareEquipmentSeq,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
-import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeFull,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { filterEquipmentNodesForUser } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
@@ -56,7 +56,7 @@ export async function GET() {
     const nodes = await getCachedEquipmentNodeFull();
     const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
     const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
-    const index = buildEquipmentTreeIndex(nodes);
+    const index = getEquipmentTreeIndexFor(nodes);
 
     const seqs = [...cardSeqs].filter((seq) => visibleSeqs.has(seq) && index.bySeq.has(seq));
     const repairStats = seqs.length
@@ -94,13 +94,13 @@ export async function POST(req: NextRequest) {
     if (!deviceSeq) return fail("Chưa chọn thiết bị");
 
     const nodes = await getCachedEquipmentNodeFull();
-    const index = buildEquipmentTreeIndex(nodes);
+    const index = getEquipmentTreeIndexFor(nodes);
     const node = index.bySeq.get(deviceSeq);
     if (!node) return fail("Không tìm thấy thiết bị trong cây thư mục", 404);
     if ((index.childrenOf.get(deviceSeq) ?? []).length > 0) {
       return fail("Chỉ tạo thẻ QR cho thiết bị ở thư mục con cuối cùng (node lá)");
     }
-    const exists = await prisma.deviceQrCard.findUnique({ where: { deviceSeq } });
+    const exists = await prisma.deviceQrCard.findFirst({ where: { deviceSeq } });
     if (exists) return fail("Thiết bị này đã có thẻ QR");
 
     const card = await prisma.deviceQrCard.create({ data: { deviceSeq, createdById: user.id } });

@@ -15,7 +15,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
-import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { useSeqAccess } from "@/hooks/useSystemAccess";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { formatDate } from "@/lib/utils";
@@ -35,7 +35,7 @@ function DeviceDetailPageContent() {
   const { data: session } = useSession();
   const { data, isLoading } = useDevice(id);
   const del = useDeleteDevice();
-  const access = useSystemAccess();
+  const access = useSeqAccess(data?.data?.code);
   const rbac = useRbacAccess();
   const addQrCard = useAddDeviceQrCard();
   const removeQrCard = useRemoveDeviceQrCard();
@@ -48,7 +48,7 @@ function DeviceDetailPageContent() {
 
   const device = data?.data;
   const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
-  const canManageQr = Boolean(device && rbac.can("device-manage", ["create", "manage", "full"]) && access.canEditDevice(device));
+  const canManageQr = Boolean(device && rbac.can("device-manage", ["create", "manage", "full"]) && access.canEdit);
 
   async function createQrCard() {
     try {
@@ -90,7 +90,7 @@ function DeviceDetailPageContent() {
           <Button variant="outline" onClick={() => setQrOpen(true)}>
             <QrCode className="h-4 w-4" /> Mã QR
           </Button>
-          {rbac.can("device-manage", ["manage", "full"]) && access.canEditDevice(device) && (
+          {rbac.can("device-manage", ["manage", "full"]) && access.canEdit && (
             <Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Sửa</Button>
           )}
           {rbac.can("device-delete", ["full"]) && (

@@ -1,5 +1,5 @@
 import type { NormalizedEquipmentNode } from "@/lib/equipment-tree";
-import { getNormalizedEquipmentNodeList, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
+import { buildEquipmentTreeIndex, getNormalizedEquipmentNodeList, getNormalizedEquipmentNodes } from "@/lib/equipment-tree";
 import { prisma } from "@/lib/prisma";
 
 // Cây danh mục thiết bị (~9k node) gần như tĩnh giữa các lần sửa, và sau khi normalize
@@ -59,4 +59,19 @@ export function invalidateEquipmentNodeCache() {
   generation++;
   lightCache.clear();
   fullCache.clear();
+}
+
+// Chỉ mục cây (bySeq/parentOf/childrenOf) dựng từ 22k node tốn ~10-20ms CPU mỗi lần.
+// Memo theo CHÍNH mảng node đã cache (WeakMap): cùng một bản cache → dựng index đúng 1 lần;
+// cache refresh → mảng mới → index tự dựng lại, entry cũ được GC.
+const indexByNodes = new WeakMap<NormalizedEquipmentNode[], ReturnType<typeof buildEquipmentTreeIndex>>();
+
+/** Trả index cây cho một mảng node (ưu tiên truyền mảng lấy từ getCachedEquipmentNode*). */
+export function getEquipmentTreeIndexFor(nodes: NormalizedEquipmentNode[]) {
+  let index = indexByNodes.get(nodes);
+  if (!index) {
+    index = buildEquipmentTreeIndex(nodes);
+    indexByNodes.set(nodes, index);
+  }
+  return index;
 }

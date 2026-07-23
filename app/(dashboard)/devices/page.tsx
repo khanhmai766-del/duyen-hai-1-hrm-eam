@@ -72,7 +72,8 @@ import {
 import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
 import { useDeviceQrCards, useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
-import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
+import { type EquipmentNode, type TreeNode } from "@/hooks/useEquipment";
+import { apiGet } from "@/lib/fetcher";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
@@ -171,7 +172,7 @@ function DevicesPageContent() {
     router.push(`/devices?${sp.toString()}`);
   }
 
-  function openCreateForSystem(node: EquipmentNode) {
+  function openCreateForSystem(node: TreeNode) {
     const sp = new URLSearchParams(params.toString());
     sp.set("view", "form");
     sp.set("parentSeq", node.seq);
@@ -192,16 +193,18 @@ function DevicesPageContent() {
 
   const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
 
-  // Toàn bộ cây thiết bị để xuất báo cáo ở tab "Cây thiết bị" (dedupe với EquipmentTreeView).
-  const { data: treeData } = useEquipmentTree();
-  const treeExportRows = React.useMemo(() => buildTreeExportRows(treeData?.data ?? []), [treeData]);
+  // Xuất báo cáo cây thiết bị: tải toàn bộ node NGAY KHI bấm xuất (lazy) — không tải khi mở trang.
+  const getTreeExportRows = React.useCallback(
+    async () => buildTreeExportRows((await apiGet<EquipmentNode[]>("/api/equipment-tree")).data),
+    []
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
         {view === "tree" && (
           <ExportButton
-            rows={treeExportRows}
+            getRows={getTreeExportRows}
             filename="cay-thiet-bi"
             title="Danh mục cây thiết bị"
             widths={{ seq: 12, level: 6, name: 40, parentName: 32, classification: 20, drawing: 16, hasProfile: 10 }}

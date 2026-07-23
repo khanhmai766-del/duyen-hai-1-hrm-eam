@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
 import { buildEquipmentTreeIndex } from "@/lib/equipment-tree";
-import { getCachedEquipmentNodeList } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeList,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
@@ -11,7 +11,7 @@ import { dateRange, vietnamTodayUtcMidnight } from "@/lib/utils";
 async function getLeafEquipmentCount() {
   // Chỉ cần seq/parent để đếm node lá → dùng bản nhẹ đã cache, khỏi đọc DB mỗi lần.
   const nodes = await getCachedEquipmentNodeList();
-  const index = buildEquipmentTreeIndex(nodes);
+  const index = getEquipmentTreeIndexFor(nodes);
   return nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0).length;
 }
 

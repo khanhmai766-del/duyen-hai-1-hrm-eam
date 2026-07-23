@@ -129,10 +129,10 @@ export function DeviceForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Số thứ tự *">
-            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="VD cấp 7: 1.4.11.2.2.1.1" />
+          <Field label="Mã thiết bị *">
+            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="VD: DH1.S1.1.4.11.2.2" />
             <p className="mt-1 text-xs text-muted-foreground">
-              {currentLevel ? `Thiết bị đang ở cấp ${currentLevel}/7.` : "Hỗ trợ cây thiết bị từ cấp gốc đến cấp 7."}
+              {currentLevel ? `Thiết bị đang ở cấp ${currentLevel}/16.` : "Mã bắt đầu bằng DH1.S1, các cấp sau là số — hỗ trợ tối đa 16 cấp."}
             </p>
           </Field>
           <Field label="Tên thiết bị *">
@@ -143,8 +143,8 @@ export function DeviceForm({
               value={systemSeqValue}
               position={form.managingPosition || null}
               includeLeaves
-              maxSelectableDepth={6}
-              placeholder="Chọn thư mục hoặc thiết bị cha (tối đa cấp 6)"
+              maxSelectableDepth={15}
+              placeholder="Chọn thư mục hoặc thiết bị cha (tối đa cấp 15)"
               onChange={selectParent}
             />
             <p className="mt-1 text-xs text-muted-foreground">

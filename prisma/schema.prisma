@@ -670,6 +670,7 @@ model MaterialReplacement {
   id               String    @id @default(cuid())
   materialId       String
   deviceSeq        String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
+  machine          String    @default("COMMON") // Tổ máy: S1 | S2 | COMMON — lịch thay thế theo hồ sơ tổ máy
   location         String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
   system           String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
   quantity         Int       @default(1) // dung tích/số lượng cần thay CHO MỖI thiết bị (theo ĐVT của vật tư)
@@ -721,6 +722,7 @@ model MaterialReplacementLog {
 model EquipmentMaterial {
   id         String   @id @default(cuid())
   deviceSeq  String
+  machine    String   @default("COMMON") // Tổ máy: S1 | S2 | COMMON — vật tư dùng theo hồ sơ tổ máy trên cây chung
   materialId String
   quantity   Int
   usedAt     DateTime @default(now())
@@ -957,14 +959,20 @@ model SafeOperationSetting {
 // khóa duy nhất là `seq` (mã thiết bị `code` có thể trùng giữa các node).
 model EquipmentNode {
   id           String   @id @default(cuid())
-  seq          String   @unique // số thứ tự, vd "1.1.1.2"
-  parentSeq    String? // seq cha (bỏ đoạn cuối); null nếu là gốc
-  code         String // mã thiết bị (KHÔNG duy nhất)
+  // seq = MÃ THIẾT BỊ đầy đủ (fullCode), vd "DH1.S1.5.1.1" — nguồn chuẩn ổn định để dựng
+  // cây (materialized path) và là khóa nghiệp vụ (repair/defect/vật tư/QR tham chiếu qua đây).
+  // KHÔNG dùng "Số thứ tự" (số vị trí, không ổn định khi đánh lại).
+  seq          String   @unique
+  externalId   String?  @unique // Assetid (ERP) — khóa ĐỐI SOÁT khi đồng bộ/nhập lại; ổn định tuyệt đối
+  parentSeq    String? // Mã thiết bị của cha (tổ tiên gần nhất trong phạm vi); null nếu là gốc
+  code         String // = seq (Mã thiết bị đầy đủ) — giữ bất biến code==seq mà nghiệp vụ đang dựa vào
   name         String // tên thiết bị
   kks          String? // mã KKS
   drawing      String? // bản vẽ liên quan
   depth        Int // số đoạn của seq (1..n)
   sort         Int // thứ tự ổn định theo file nguồn
+  childCount   Int      @default(0) // số con trực tiếp (denormalize) — cây lazy biết hasChildren mà không cần query
+  searchText   String   @default("") // name + kks + code đã bỏ dấu/lowercase — tìm kiếm không dấu phía server
   // Người dùng tự bổ sung khi sửa thẻ thiết bị (tách khỏi dữ liệu nhập từ Excel).
   attachedInfo String? // thông tin thêm
   documentUrl  String? // tài liệu đính kèm (link)
@@ -981,22 +989,53 @@ model EquipmentNode {
   defectHistories      DefectHistory[]
   ticketItems          MaterialTicketItem[]
   qrCards              DeviceQrCard[]
+  profiles             EquipmentProfile[]
 
   @@index([parentSeq])
   @@index([parentSeq, sort])
   @@index([code])
   @@index([depth])
+  @@index([kks])
+  @@index([name])
+}
+
+// Hồ sơ theo TỔ MÁY trên cây thiết bị dùng chung (phương án S2): một nút có thể có hồ sơ
+// S1 / S2 / COMMON. Bảng THƯA — chỉ tạo dòng khi bấm "Tạo hồ sơ S2 từ S1" hoặc khi một
+// tổ máy cần override thông tin riêng. Mã S2 (DH1.S1→DH1.S2) và KKS S2 (tiền tố 10→20)
+// là DẪN XUẤT từ node (lib/equipment-units.ts) — chỉ lưu tại đây khi người dùng sửa khác đi.
+// Dữ liệu nghiệp vụ KHÔNG nằm ở đây: repair/defect/vật tư/QR phân tổ máy bằng cột
+// machine/unit trên chính bảng nghiệp vụ (deviceSeq vẫn trỏ node → giữ lọc quyền theo nhánh).
+model EquipmentProfile {
+  id           String   @id @default(cuid())
+  nodeSeq      String // EquipmentNode.seq
+  machine      String // "S1" | "S2" | "COMMON"
+  kks          String? // override KKS (mặc định dẫn xuất: S2 = tiền tố 10→20)
+  name         String? // override tên nếu tổ máy đặt khác
+  attachedInfo String?
+  documentUrl  String?
+  imageUrl     String?
+  createdById  String? // id người tạo (không FK — đã có audit log)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  node EquipmentNode @relation(fields: [nodeSeq], references: [seq], onDelete: Cascade)
+
+  @@unique([nodeSeq, machine])
+  @@index([machine])
 }
 
 // Thiết bị được CHỌN tạo thẻ QR ở tab "Thẻ" (chỉ thiết bị quan trọng — không sinh
 // thẻ cho toàn bộ ~6500 node lá). Xoá node thiết bị thì thẻ tự mất theo (cascade).
 model DeviceQrCard {
   id          String   @id @default(cuid())
-  deviceSeq   String   @unique // EquipmentNode.seq của thiết bị (node lá)
+  deviceSeq   String // EquipmentNode.seq của thiết bị (node lá)
+  machine     String   @default("COMMON") // Tổ máy sở hữu thẻ: S1 | S2 | COMMON — mỗi tổ máy 1 thẻ QR riêng trên cùng nút
   createdById String? // id người tạo (không FK — giữ nhẹ, đã có audit log)
   createdAt   DateTime @default(now())
 
   device EquipmentNode @relation(fields: [deviceSeq], references: [seq], onDelete: Cascade)
+
+  @@unique([deviceSeq, machine])
 }
 
 // Phạm vi hệ thống thiết bị được gán cho từng cương vị quản lý.

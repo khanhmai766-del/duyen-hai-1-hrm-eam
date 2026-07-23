@@ -92,7 +92,7 @@ export function MaterialDeviceImportDialog({
   erpGroups: ErpMaterialGroupFromGroupedStock[];
   onImported: () => void;
 }) {
-  const tree = useEquipmentTree();
+  const tree = useEquipmentTree({ enabled: open }); // chỉ tải cây khi mở dialog (không tải theo trang)
   const positions = usePositions().filter(isSelectableManagingPosition);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [rows, setRows] = React.useState<ParsedRow[]>([]);

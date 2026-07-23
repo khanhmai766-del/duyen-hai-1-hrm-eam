@@ -41,13 +41,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { useDefects } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
-import { useEquipmentTree } from "@/hooks/useEquipment";
 import { useMaterials } from "@/hooks/useMaterials";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { useReplacements } from "@/hooks/useReplacements";
 import { usePositions } from "@/hooks/useUsers";
 import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
-import { buildEquipmentTreeIndex } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
 import { normalizePositionScopeKey, normalizeScopeAccess, positionScopeOptions, scopesForPosition } from "@/lib/position-system-scopes";
 import { cn, dateRange, formatDate } from "@/lib/utils";
@@ -92,7 +90,6 @@ function ReportsPageContent() {
   // Reports cần cả lịch sử tiêu hao theo thiết bị (deviceMaterials) — opt-in để
   // trang Danh mục vật tư (không cần) nhận payload nhẹ hơn.
   const materialsQuery = useMaterials({ includeUsage: true });
-  const equipmentTreeQuery = useEquipmentTree();
   const scopesQuery = usePositionSystemScopes();
   const allPositions = usePositions();
 
@@ -101,13 +98,11 @@ function ReportsPageContent() {
   const defectHistory = historyQuery.data?.data ?? [];
   const replacements = replacementsQuery.data?.data ?? [];
   const materials = materialsQuery.data?.data ?? [];
-  const equipmentNodes = equipmentTreeQuery.data?.data ?? [];
   const positionScopes = scopesQuery.data?.data ?? [];
   const dashboardPositionOptions = React.useMemo(
     () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
     [allPositions]
   );
-  const equipmentIndex = React.useMemo(() => buildEquipmentTreeIndex(equipmentNodes), [equipmentNodes]);
   const allowedDeviceCodesByPosition = React.useMemo(() => {
     const result = new Map<string, Set<string>>();
     for (const position of dashboardPositionOptions) {
@@ -133,13 +128,14 @@ function ReportsPageContent() {
             if (accessBySeq.get(current) !== "none") allowed.add(device.code);
             break;
           }
-          current = equipmentIndex.parentOf.get(current) ?? null;
+          const dot = current.lastIndexOf(".");
+          current = dot > 0 ? current.slice(0, dot) : null;
         }
       }
       result.set(position, allowed);
     }
     return result;
-  }, [dashboardPositionOptions, devices, equipmentIndex, positionScopes]);
+  }, [dashboardPositionOptions, devices, positionScopes]);
   const totalSystemDevices = Number(devicesQuery.data?.meta?.totalSystemDevices ?? devices.length);
   const isLoading =
     devicesQuery.isLoading ||
@@ -147,7 +143,6 @@ function ReportsPageContent() {
     historyQuery.isLoading ||
     replacementsQuery.isLoading ||
     materialsQuery.isLoading ||
-    equipmentTreeQuery.isLoading ||
     scopesQuery.isLoading;
 
   React.useEffect(() => {

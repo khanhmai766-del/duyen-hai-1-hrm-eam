@@ -1,67 +1,33 @@
 "use client";
 
-import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { useEquipmentTree } from "@/hooks/useEquipment";
-import { useCurrentPosition } from "@/hooks/useCurrentPosition";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
-import {
-  createPositionAccessResolver,
-  type NodeAccess,
-} from "@/lib/position-system-scopes";
-
-type DeviceLike = {
-  code: string;
-  system?: string | null;
-  systemSeq?: string | null;
-  managingPosition?: string | null;
-};
+import { apiGet } from "@/lib/fetcher";
+import type { NodeAccess } from "@/lib/position-system-scopes";
 
 /**
- * Quyền của NGƯỜI DÙNG hiện tại trên cây thiết bị (theo cương vị của họ).
- * Quản trị viên luôn "edit". Dùng để ẩn nút Sửa, chặn form khi chỉ có quyền Xem.
+ * Quyền của NGƯỜI DÙNG hiện tại trên MỘT seq của cây thiết bị (theo cương vị).
+ * Gọi API nhẹ /api/equipment-tree/access thay vì tải toàn bộ cây (3MB) về client
+ * chỉ để ẩn/hiện nút Sửa. Quản trị viên luôn "edit".
  */
-export function useSystemAccess() {
+export function useSeqAccess(seq: string | null | undefined) {
   const { data: session } = useSession();
-  const currentPosition = useCurrentPosition();
-  const treeQuery = useEquipmentTree();
-  const scopesQuery = usePositionSystemScopes();
-
   const isAdmin = session?.user?.role === "ADMIN";
-  const position = currentPosition.position;
-  const nodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
-  const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
-  const accessResolver = React.useMemo(
-    () => createPositionAccessResolver(position, nodes, scopes),
-    [position, nodes, scopes]
-  );
 
-  const accessForSeq = React.useCallback(
-    (seq: string | null | undefined): NodeAccess => {
-      if (isAdmin) return "edit";
-      if (!seq) return "edit";
-      return accessResolver.accessForSeq(seq);
-    },
-    [accessResolver, isAdmin]
-  );
+  const query = useQuery({
+    queryKey: ["equipment-access", seq],
+    queryFn: () => apiGet<{ access: NodeAccess }>(`/api/equipment-tree/access?seq=${encodeURIComponent(seq!)}`),
+    enabled: !!seq && !isAdmin,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
-  const accessForDevice = React.useCallback(
-    (device: DeviceLike | null | undefined): NodeAccess => {
-      if (isAdmin) return "edit";
-      if (!device) return "edit";
-      return accessResolver.accessForDevice(device);
-    },
-    [accessResolver, isAdmin]
-  );
-
+  const access: NodeAccess = isAdmin ? "edit" : query.data?.data?.access ?? "none";
   return {
     isAdmin,
-    position,
-    ready: !treeQuery.isLoading && !scopesQuery.isLoading,
-    accessForSeq,
-    accessForDevice,
-    canViewSeq: React.useCallback((seq?: string | null) => accessForSeq(seq) !== "none", [accessForSeq]),
-    canEditSeq: React.useCallback((seq?: string | null) => accessForSeq(seq) === "edit", [accessForSeq]),
-    canEditDevice: React.useCallback((device?: DeviceLike | null) => accessForDevice(device) === "edit", [accessForDevice]),
+    ready: isAdmin || !seq || !query.isLoading,
+    access,
+    canView: access !== "none",
+    canEdit: access === "edit",
   };
 }

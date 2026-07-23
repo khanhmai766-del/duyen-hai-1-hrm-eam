@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
   Folder,
@@ -23,8 +24,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { normalizeText } from "@/lib/nav";
-import { useEquipmentNode, useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
+import {
+  useEquipmentNode,
+  useTreeRoots,
+  useTreeSearch,
+  fetchTreeChildren,
+  treeChildrenKey,
+  useNodeProfiles,
+  useCreateS2Profile,
+  type TreeNode,
+} from "@/hooks/useEquipment";
+import { machinesOf, type EquipmentMachine } from "@/lib/equipment-units";
 import { useDeleteDevice, useDeleteDevices, useUpdateDevice } from "@/hooks/useDevices";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { toast } from "sonner";
@@ -40,29 +50,38 @@ import { Label } from "@/components/ui/label";
 
 const MAX_BULK_DELETE = 500;
 
-/** So sánh "số thứ tự" theo từng đoạn số (1.1.10 sau 1.1.2). */
-function compareSeq(a: string, b: string) {
-  const pa = a.split(".");
-  const pb = b.split(".");
-  const n = Math.max(pa.length, pb.length);
-  for (let i = 0; i < n; i++) {
-    const x = i < pa.length ? Number(pa[i]) : -1;
-    const y = i < pb.length ? Number(pb[i]) : -1;
-    if (x !== y) return x - y;
-  }
-  return 0;
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(t);
+  }, [value, delayMs]);
+  return debounced;
 }
 
+/** Chuỗi tổ tiên (seq) của một seq — cắt dần đuôi. Dùng để bung nhánh khi deep-link. */
+function ancestorSeqs(seq: string) {
+  const chain: string[] = [];
+  const parts = seq.split(".");
+  parts.pop();
+  while (parts.length) {
+    chain.unshift(parts.join("."));
+    parts.pop();
+  }
+  return chain;
+}
+
+type FlatRow = { node: TreeNode; depth: number; open: boolean; loading: boolean };
+
 /**
- * Một dòng trong cây thiết bị. Memo hóa để khi chọn/mở một node, chỉ những dòng
- * thực sự đổi trạng thái mới vẽ lại — không kéo theo cả cây (hàng nghìn node).
+ * Một dòng trong cây thiết bị. Memo hóa để khi chọn/mở một node, chỉ dòng đổi trạng
+ * thái mới vẽ lại — không kéo theo cả cây.
  */
 const TreeNodeRow = React.memo(function TreeNodeRow({
   node,
   depth,
-  hasKids,
-  kidsCount,
   isOpen,
+  isLoading,
   isSelected,
   onSelect,
   onToggle,
@@ -74,22 +93,22 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   canEdit,
   onEdit,
 }: {
-  node: EquipmentNode;
+  node: TreeNode;
   depth: number;
-  hasKids: boolean;
-  kidsCount: number;
   isOpen: boolean;
+  isLoading: boolean;
   isSelected: boolean;
   onSelect: (seq: string) => void;
   onToggle: (seq: string) => void;
   canDelete: boolean;
-  onDelete: (node: EquipmentNode) => void;
+  onDelete: (node: TreeNode) => void;
   bulkMode: boolean;
   isChecked: boolean;
   onToggleChecked: (seq: string) => void;
   canEdit: boolean;
-  onEdit: (node: EquipmentNode) => void;
+  onEdit: (node: TreeNode) => void;
 }) {
+  const hasKids = node.hasChildren;
   return (
     <div
       role="button"
@@ -118,7 +137,11 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted-foreground/10"
           title={isOpen ? "Thu gọn" : "Mở rộng"}
         >
-          <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />
+          {isLoading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} />
+          )}
         </span>
       ) : (
         <span className="h-5 w-5 shrink-0" />
@@ -145,8 +168,11 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       <span className={cn("min-w-0 flex-1 truncate", hasKids && "uppercase")} title={node.name}>
         {node.name}
       </span>
-      {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{kidsCount}</span>}
-      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{node.seq}</span>
+      {machinesOf(node.seq)[0] === "COMMON" && (
+        <span className="shrink-0 rounded bg-teal-50 px-1.5 text-[9px] font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-200">Common</span>
+      )}
+      {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{node.childCount}</span>}
+      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground" title={node.seq}>{node.code}</span>
       {canEdit && !bulkMode && (
         <button
           type="button"
@@ -188,99 +214,75 @@ export function EquipmentTreeView({
   canDelete?: boolean;
   canEdit?: boolean;
   canCreate?: boolean;
-  onCreateChild?: (node: EquipmentNode) => void;
+  onCreateChild?: (node: TreeNode) => void;
 }) {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
-  const { data, isLoading } = useEquipmentTree();
-  const allNodes = React.useMemo(() => data?.data ?? [], [data]);
+  const qc = useQueryClient();
 
-  // Lọc theo quyền Xem của cương vị người dùng: chỉ hiện hệ thống được cấp (Xem trở lên)
-  // cùng tổ tiên của chúng. Quản trị viên / chưa cấu hình riêng → thấy toàn bộ.
-  const nodes = allNodes;
+  const rootsQuery = useTreeRoots();
+  const roots = React.useMemo(() => rootsQuery.data?.data ?? [], [rootsQuery.data]);
 
-  // Chỉ mục: seq -> node, parentSeq -> các con (đã sắp xếp), danh sách gốc.
-  const { bySeq, childrenOf, roots, effParentOf } = React.useMemo(() => {
-    const bySeq = new Map<string, EquipmentNode>();
-    nodes.forEach((n) => bySeq.set(n.seq, n));
-    // Cha hiệu lực = tổ tiên GẦN NHẤT có thật trong dữ liệu — file nguồn có thể
-    // thiếu node trung gian (vd có "1.6.4.4.1" nhưng thiếu "1.6.4.4"/"1.6.4").
-    const effParentOf = new Map<string, string | null>();
-    const childrenOf = new Map<string, EquipmentNode[]>();
-    const roots: EquipmentNode[] = [];
-    for (const n of nodes) {
-      let parent: string | null = n.parentSeq && bySeq.has(n.parentSeq) ? n.parentSeq : null;
-      if (!parent) {
-        const parts = n.seq.split(".");
-        parts.pop();
-        while (parts.length) {
-          const p = parts.join(".");
-          if (bySeq.has(p)) {
-            parent = p;
-            break;
-          }
-          parts.pop();
-        }
-      }
-      effParentOf.set(n.seq, parent);
-      if (parent) {
-        const arr = childrenOf.get(parent) ?? [];
-        arr.push(n);
-        childrenOf.set(parent, arr);
-      } else {
-        roots.push(n);
-      }
-    }
-    for (const arr of childrenOf.values()) arr.sort((a, b) => compareSeq(a.seq, b.seq));
-    roots.sort((a, b) => compareSeq(a.seq, b.seq));
-    return { bySeq, childrenOf, roots, effParentOf };
-  }, [nodes]);
-
+  // Cây LAZY: con của từng nhánh chỉ tải khi bung. childrenBySeq tích lũy nhánh đã tải.
+  const [childrenBySeq, setChildrenBySeq] = React.useState<Map<string, TreeNode[]>>(new Map());
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  const [loadingSeqs, setLoadingSeqs] = React.useState<Set<string>>(new Set());
   const [selected, setSelected] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
-  const [deleteTarget, setDeleteTarget] = React.useState<EquipmentNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<TreeNode | null>(null);
   const [bulkMode, setBulkMode] = React.useState(false);
   const [checkedSeqs, setCheckedSeqs] = React.useState<Set<string>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false);
-  const [editTarget, setEditTarget] = React.useState<EquipmentNode | null>(null);
+  const [editTarget, setEditTarget] = React.useState<TreeNode | null>(null);
   const [editName, setEditName] = React.useState("");
   const deleteDevice = useDeleteDevice();
   const deleteDevices = useDeleteDevices();
   const updateDevice = useUpdateDevice();
-  const q = normalizeText(search.trim());
 
-  // Tìm kiếm: hiện các node khớp + tổ tiên (để thấy đường dẫn), tự bung tổ tiên.
-  const { visible, searchExpanded, matchCount } = React.useMemo(() => {
-    if (!q) return { visible: null as Set<string> | null, searchExpanded: null as Set<string> | null, matchCount: 0 };
-    const visible = new Set<string>();
-    const searchExpanded = new Set<string>();
-    let matchCount = 0;
-    for (const n of nodes) {
-      const hay = normalizeText([n.seq, n.name].filter(Boolean).join(" "));
-      if (hay.includes(q)) {
-        matchCount++;
-        visible.add(n.seq);
-        let p = effParentOf.get(n.seq) ?? null;
-        while (p && bySeq.has(p)) {
-          visible.add(p);
-          searchExpanded.add(p);
-          p = effParentOf.get(p) ?? null;
-        }
+  const debouncedSearch = useDebouncedValue(search, 350);
+  const q = debouncedSearch.trim();
+  const searchActive = q.length >= 2;
+  const searchQuery = useTreeSearch(q);
+  const searchResults = React.useMemo(
+    () => (searchQuery.data?.pages ?? []).flatMap((p) => p.data),
+    [searchQuery.data]
+  );
+
+  // Tải con của 1 nút nếu chưa có (cache lại ở query + state cục bộ).
+  const ensureChildren = React.useCallback(
+    async (seq: string) => {
+      if (childrenBySeq.has(seq)) return;
+      setLoadingSeqs((s) => new Set(s).add(seq));
+      try {
+        const res = await fetchTreeChildren(qc, seq);
+        setChildrenBySeq((prev) => new Map(prev).set(seq, res.data));
+      } catch {
+        toast.error("Không tải được danh mục con");
+      } finally {
+        setLoadingSeqs((s) => {
+          const n = new Set(s);
+          n.delete(seq);
+          return n;
+        });
       }
-    }
-    return { visible, searchExpanded, matchCount };
-  }, [q, nodes, bySeq, effParentOf]);
+    },
+    [qc, childrenBySeq]
+  );
 
-  // Callback ổn định để TreeNodeRow (React.memo) không re-render khi cây vẽ lại.
-  const onToggle = React.useCallback((seq: string) => {
-    setExpanded((s) => {
-      const next = new Set(s);
-      if (next.has(seq)) next.delete(seq);
-      else next.add(seq);
-      return next;
-    });
-  }, []);
+  const onToggle = React.useCallback(
+    (seq: string) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(seq)) next.delete(seq);
+        else {
+          next.add(seq);
+          void ensureChildren(seq);
+        }
+        return next;
+      });
+    },
+    [ensureChildren]
+  );
   const onSelect = React.useCallback((seq: string) => setSelected(seq), []);
   const onToggleChecked = React.useCallback((seq: string) => {
     setCheckedSeqs((current) => {
@@ -292,52 +294,93 @@ export function EquipmentTreeView({
     });
   }, []);
 
-  const selectedNode = selected ? bySeq.get(selected) ?? null : null;
-  React.useEffect(() => {
-    if (!focusSeq || !bySeq.has(focusSeq)) return;
-    setSelected(focusSeq);
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      let parent = effParentOf.get(focusSeq) ?? null;
-      while (parent && bySeq.has(parent)) {
-        next.add(parent);
-        parent = effParentOf.get(parent) ?? null;
-      }
-      return next;
-    });
-  }, [focusSeq, bySeq, effParentOf]);
+  // Toàn bộ node đã tải (roots + con đã bung + kết quả tìm) — để tra selected/tổ tiên.
+  const nodesBySeq = React.useMemo(() => {
+    const m = new Map<string, TreeNode>();
+    for (const r of roots) m.set(r.seq, r);
+    for (const arr of childrenBySeq.values()) for (const n of arr) m.set(n.seq, n);
+    for (const n of searchResults) if (!m.has(n.seq)) m.set(n.seq, n);
+    return m;
+  }, [roots, childrenBySeq, searchResults]);
 
+  const selectedNode = selected ? nodesBySeq.get(selected) ?? null : null;
   const ancestors = React.useMemo(() => {
     if (!selectedNode) return [];
-    const path: EquipmentNode[] = [];
-    let p = effParentOf.get(selectedNode.seq) ?? null;
-    while (p && bySeq.has(p)) {
-      path.unshift(bySeq.get(p)!);
-      p = effParentOf.get(p) ?? null;
+    const path: TreeNode[] = [];
+    let p = selectedNode.parentSeq;
+    while (p && nodesBySeq.has(p)) {
+      const n = nodesBySeq.get(p)!;
+      path.unshift(n);
+      p = n.parentSeq;
     }
     return path;
-  }, [selectedNode, bySeq, effParentOf]);
+  }, [selectedNode, nodesBySeq]);
 
-  // Làm phẳng cây đang mở thành mảng tuyến tính để virtualize (chỉ render các dòng
-  // trong khung nhìn). Duyệt DFS, chỉ đi xuống node đang mở & tôn trọng bộ lọc tìm kiếm.
-  const flatRows = React.useMemo(() => {
-    const rows: { node: EquipmentNode; depth: number; hasKids: boolean; kidsCount: number; open: boolean }[] = [];
-    const walk = (list: EquipmentNode[], depth: number) => {
+  // Deep-link (?focusSeq=…): bung tất cả tổ tiên rồi chọn + cuộn tới.
+  React.useEffect(() => {
+    if (!focusSeq) return;
+    let cancelled = false;
+    (async () => {
+      for (const anc of ancestorSeqs(focusSeq)) {
+        if (cancelled) return;
+        setExpanded((e) => new Set(e).add(anc));
+        await ensureChildren(anc);
+      }
+      if (!cancelled) setSelected(focusSeq);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSeq]);
+
+  // Sau khi bung 1 nhánh gốc → tải con của nó.
+  const expandAllRoots = React.useCallback(() => {
+    setExpanded(new Set(roots.map((r) => r.seq)));
+    for (const r of roots) if (r.hasChildren) void ensureChildren(r.seq);
+  }, [roots, ensureChildren]);
+
+  // Làm mới 1 nhánh sau khi sửa/xóa (con của parentSeq đổi).
+  const refreshBranch = React.useCallback(
+    async (parentSeq: string | null) => {
+      qc.invalidateQueries({ queryKey: ["equipment-tree", "roots"] });
+      qc.invalidateQueries({ queryKey: ["equipment-tree", "search"] });
+      if (!parentSeq) return;
+      qc.removeQueries({ queryKey: treeChildrenKey(parentSeq) });
+      if (childrenBySeq.has(parentSeq)) {
+        try {
+          const res = await fetchTreeChildren(qc, parentSeq);
+          setChildrenBySeq((prev) => new Map(prev).set(parentSeq, res.data));
+        } catch {
+          /* bỏ qua */
+        }
+      }
+    },
+    [qc, childrenBySeq]
+  );
+
+  // Danh sách dòng hiển thị: chế độ tìm kiếm = kết quả phẳng; ngược lại = cây đang bung.
+  const flatRows = React.useMemo<FlatRow[]>(() => {
+    if (searchActive) {
+      return searchResults.map((node) => ({ node, depth: 0, open: false, loading: false }));
+    }
+    const rows: FlatRow[] = [];
+    const walk = (list: TreeNode[], depth: number) => {
       for (const n of list) {
-        if (visible && !visible.has(n.seq)) continue;
-        const kids = childrenOf.get(n.seq) ?? [];
-        const hasKids = kids.length > 0;
-        const open = q ? !!searchExpanded?.has(n.seq) : expanded.has(n.seq);
-        rows.push({ node: n, depth, hasKids, kidsCount: kids.length, open });
-        if (hasKids && open) walk(kids, depth + 1);
+        const open = expanded.has(n.seq);
+        rows.push({ node: n, depth, open, loading: loadingSeqs.has(n.seq) });
+        if (n.hasChildren && open) {
+          const kids = childrenBySeq.get(n.seq);
+          if (kids) walk(kids, depth + 1);
+        }
       }
     };
     walk(roots, 0);
     return rows;
-  }, [roots, childrenOf, visible, searchExpanded, expanded, q]);
+  }, [searchActive, searchResults, roots, expanded, childrenBySeq, loadingSeqs]);
 
   const selectableSeqs = React.useMemo(
-    () => flatRows.filter((row) => !row.hasKids).map((row) => row.node.seq),
+    () => flatRows.filter((row) => !row.node.hasChildren).map((row) => row.node.seq),
     [flatRows]
   );
   const selectableBatch = React.useMemo(() => selectableSeqs.slice(0, MAX_BULK_DELETE), [selectableSeqs]);
@@ -352,12 +395,14 @@ export function EquipmentTreeView({
     getItemKey: (index) => flatRows[index]?.node.seq ?? index,
   });
 
-  // Cuộn tới node được focus (vd đến từ QR/liên kết "Trong cây") sau khi tổ tiên đã bung.
   React.useEffect(() => {
-    if (!focusSeq) return;
+    if (!focusSeq || searchActive) return;
     const idx = flatRows.findIndex((r) => r.node.seq === focusSeq);
     if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: "center" });
-  }, [focusSeq, flatRows, rowVirtualizer]);
+  }, [focusSeq, flatRows, rowVirtualizer, searchActive]);
+
+  const isLoading = rootsQuery.isLoading;
+  const showSearchLoading = searchActive && searchQuery.isLoading;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
@@ -368,7 +413,7 @@ export function EquipmentTreeView({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm theo tên, số thứ tự…"
+              placeholder="Tìm theo tên, số thứ tự, KKS…"
               className="h-9 pl-9 pr-8"
             />
             {search && (
@@ -382,11 +427,11 @@ export function EquipmentTreeView({
               </button>
             )}
           </div>
-          {!q && (
+          {!searchActive && (
             <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                onClick={() => setExpanded(new Set(roots.map((r) => r.seq)))}
+                onClick={expandAllRoots}
                 title="Mở nhóm gốc"
                 className="flex h-9 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
               >
@@ -454,14 +499,14 @@ export function EquipmentTreeView({
         )}
 
         <div ref={scrollRef} className="max-h-[68vh] min-h-[340px] overflow-y-auto p-2">
-          {isLoading ? (
+          {isLoading || showSearchLoading ? (
             <div className="flex items-center justify-center py-20 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
-          ) : nodes.length === 0 ? (
-            <div className="py-20 text-center text-sm text-muted-foreground">Chưa có dữ liệu cây thiết bị.</div>
-          ) : q && matchCount === 0 ? (
+          ) : searchActive && flatRows.length === 0 ? (
             <div className="py-20 text-center text-sm text-muted-foreground">Không tìm thấy thiết bị phù hợp.</div>
+          ) : !searchActive && roots.length === 0 ? (
+            <div className="py-20 text-center text-sm text-muted-foreground">Chưa có dữ liệu cây thiết bị.</div>
           ) : (
             <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative", width: "100%" }}>
               {rowVirtualizer.getVirtualItems().map((vi) => {
@@ -477,9 +522,8 @@ export function EquipmentTreeView({
                     <TreeNodeRow
                       node={row.node}
                       depth={row.depth}
-                      hasKids={row.hasKids}
-                      kidsCount={row.kidsCount}
                       isOpen={row.open}
+                      isLoading={row.loading}
                       isSelected={selected === row.node.seq}
                       onSelect={onSelect}
                       onToggle={onToggle}
@@ -499,12 +543,26 @@ export function EquipmentTreeView({
               })}
             </div>
           )}
+          {searchActive && searchQuery.hasNextPage && (
+            <div className="flex justify-center py-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={searchQuery.isFetchingNextPage}
+                onClick={() => searchQuery.fetchNextPage()}
+              >
+                {searchQuery.isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" />}
+                Tải thêm kết quả
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-          {q
-            ? `${matchCount.toLocaleString("vi-VN")} kết quả`
-            : `${nodes.length.toLocaleString("vi-VN")} thiết bị · ${roots.length} nhóm gốc`}
+          {searchActive
+            ? `${searchResults.length.toLocaleString("vi-VN")} kết quả${searchQuery.hasNextPage ? "+" : ""}`
+            : `${roots.length.toLocaleString("vi-VN")} nhóm gốc · tải theo nhánh`}
         </div>
       </Card>
 
@@ -513,7 +571,6 @@ export function EquipmentTreeView({
           <DetailPanel
             node={selectedNode}
             ancestors={ancestors}
-            childCount={(childrenOf.get(selectedNode.seq) ?? []).length}
             onSelect={setSelected}
             canCreate={canCreate}
             onCreateChild={onCreateChild}
@@ -536,10 +593,12 @@ export function EquipmentTreeView({
         onConfirm={async () => {
           if (!deleteTarget) return;
           try {
+            const parentSeq = deleteTarget.parentSeq;
             await deleteDevice.mutateAsync(deleteTarget.seq);
             if (selected === deleteTarget.seq) setSelected(null);
             toast.success(`Đã xóa thiết bị ${deleteTarget.seq} — ${deleteTarget.name}`);
             setDeleteTarget(null);
+            await refreshBranch(parentSeq);
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "Không thể xóa thiết bị");
           }
@@ -575,10 +634,12 @@ export function EquipmentTreeView({
                 return;
               }
               try {
+                const parentSeq = editTarget.parentSeq;
                 await updateDevice.mutateAsync({ id: editTarget.seq, name });
                 toast.success(`Đã cập nhật tên thiết bị ${editTarget.seq}`);
                 setEditTarget(null);
                 setEditName("");
+                await refreshBranch(parentSeq);
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Không thể cập nhật tên thiết bị");
               }
@@ -628,12 +689,14 @@ export function EquipmentTreeView({
           const ids = [...checkedSeqs];
           if (ids.length === 0) return;
           try {
+            const parentSeqs = new Set(ids.map((seq) => nodesBySeq.get(seq)?.parentSeq ?? null));
             const result = await deleteDevices.mutateAsync(ids);
             if (selected && checkedSeqs.has(selected)) setSelected(null);
             setCheckedSeqs(new Set());
             setBulkConfirmOpen(false);
             setBulkMode(false);
             toast.success(`Đã xóa ${result.count.toLocaleString("vi-VN")} thiết bị`);
+            for (const p of parentSeqs) await refreshBranch(p);
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "Không thể xóa các thiết bị đã chọn");
           }
@@ -646,27 +709,31 @@ export function EquipmentTreeView({
 function DetailPanel({
   node,
   ancestors,
-  childCount,
   onSelect,
   canCreate,
   onCreateChild,
 }: {
-  node: EquipmentNode;
-  ancestors: EquipmentNode[];
-  childCount: number;
+  node: TreeNode;
+  ancestors: TreeNode[];
   onSelect: (seq: string) => void;
   canCreate: boolean;
-  onCreateChild?: (node: EquipmentNode) => void;
+  onCreateChild?: (node: TreeNode) => void;
 }) {
   const router = useRouter();
-  const isGroup = childCount > 0;
-  const detailQuery = useEquipmentNode(isGroup ? null : node.seq);
+  const isGroup = node.hasChildren;
+  const detailQuery = useEquipmentNode(node.seq);
   const detail = detailQuery.data?.data ?? null;
-
-  // Mở lý lịch của node lá trực tiếp theo số thứ tự cây thiết bị.
-  async function openRecord() {
-    router.push(`/devices/${encodeURIComponent(node.seq)}`);
-  }
+  // Hồ sơ theo tổ máy trên cây dùng chung: COMMON (nhánh 5,6) hoặc S1/S2 (nhánh còn lại).
+  const machines = machinesOf(node.seq);
+  const profilesQuery = useNodeProfiles(node.seq);
+  const profiles = React.useMemo(() => profilesQuery.data?.data ?? [], [profilesQuery.data]);
+  const createS2 = useCreateS2Profile();
+  const [activeMachine, setActiveMachine] = React.useState<EquipmentMachine>(machines[0]);
+  React.useEffect(() => {
+    setActiveMachine(machinesOf(node.seq)[0]);
+  }, [node.seq]);
+  const active = profiles.find((p) => p.machine === activeMachine) ?? null;
+  const s2Missing = activeMachine === "S2" && active !== null && !active.exists;
 
   return (
     <div className="space-y-4">
@@ -699,16 +766,71 @@ function DetailPanel({
         </span>
         <div className="min-w-0">
           <div className="text-lg font-bold leading-tight text-ink">{node.name}</div>
-          <div className="mt-0.5 font-mono text-xs text-muted-foreground">Số thứ tự: {node.seq}</div>
+          <div className="mt-0.5 font-mono text-xs text-muted-foreground">Mã: {node.code}</div>
         </div>
       </div>
 
+      {machines.length > 1 ? (
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1" role="tablist" aria-label="Hồ sơ theo tổ máy">
+          {machines.map((m) => {
+            const p = profiles.find((x) => x.machine === m);
+            const selected = activeMachine === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveMachine(m)}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition-colors",
+                  selected ? "bg-white text-accent shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-ink"
+                )}
+              >
+                {m}
+                {m === "S2" && p && !p.exists && <span className="ml-1 font-medium text-muted-foreground">· chưa có</span>}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <span className="inline-flex w-fit items-center rounded-md bg-teal-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-200">
+          Common — dùng chung 2 tổ máy
+        </span>
+      )}
+
+      {s2Missing && (
+        <div className="space-y-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+          <div>Chưa có hồ sơ S2 cho vị trí này. Tạo hồ sơ S2 sẽ dùng mã <span className="font-mono font-semibold text-ink">{active?.code}</span>{active?.kks ? <> · KKS <span className="font-mono font-semibold text-ink">{active.kks}</span></> : null} (dẫn xuất từ S1) và KHÔNG sao chép lịch sử/QR/khiếm khuyết/vật tư của S1.</div>
+          {canCreate && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={createS2.isPending}
+              onClick={async () => {
+                try {
+                  await createS2.mutateAsync(node.seq);
+                  toast.success(`Đã tạo hồ sơ S2 — ${active?.code}`);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Không thể tạo hồ sơ S2");
+                }
+              }}
+            >
+              {createS2.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Tạo hồ sơ S2 từ S1
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2">
-        <DetailRow label="Bản vẽ liên quan" value={node.drawing || "—"} />
-        <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${childCount} thiết bị con` : "Thiết bị"} />
+        <DetailRow label="Mã thiết bị" value={active?.code ?? node.seq} mono />
+        {(active?.kks ?? node.kks) && <DetailRow label="Mã KKS" value={(active?.kks ?? node.kks)!} />}
+        <DetailRow label="Bản vẽ liên quan" value={detail?.drawing || "—"} />
+        <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${node.childCount} thiết bị con` : "Thiết bị"} />
       </div>
 
-      {canCreate && node.depth < 7 && onCreateChild && (
+      {canCreate && node.depth < 16 && onCreateChild && (
         <Button
           type="button"
           variant="outline"
@@ -720,32 +842,30 @@ function DetailPanel({
         </Button>
       )}
 
-      {!isGroup && detailQuery.isLoading && (
+      {detailQuery.isLoading && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Äang táº£i thÃ´ng tin chi tiáº¿t...
+          <Loader2 className="h-4 w-4 animate-spin" /> Đang tải thông tin chi tiết...
         </div>
       )}
 
-      {!isGroup && detail && (
+      {active && !s2Missing && (
         <div className="space-y-3">
-          {detail.imageUrl && (
+          {active.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={detail.imageUrl} alt={detail.name} className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
+            <img src={active.imageUrl} alt={active.name} className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
           )}
-          {detail.attachedInfo && <DetailRow label="ThÃ´ng tin thÃªm" value={detail.attachedInfo} />}
-          {detail.documentUrl && (
-            <a href={detail.documentUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-accent hover:underline">
-              Má»Ÿ tÃ i liá»‡u Ä‘Ã­nh kÃ¨m
+          {active.attachedInfo && <DetailRow label="Thông tin thêm" value={active.attachedInfo} />}
+          {active.documentUrl && (
+            <a href={active.documentUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-accent hover:underline">
+              Mở tài liệu đính kèm
             </a>
           )}
         </div>
       )}
 
-      {!isGroup && (
-        <Button className="w-full" onClick={openRecord}>
-          Xem lý lịch thiết bị
-        </Button>
-      )}
+      <Button className="w-full" onClick={() => router.push(`/devices/${encodeURIComponent(node.seq)}`)}>
+        Xem lý lịch thiết bị
+      </Button>
     </div>
   );
 }

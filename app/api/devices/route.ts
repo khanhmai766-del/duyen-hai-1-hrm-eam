@@ -12,7 +12,7 @@ import { normalizeText } from "@/lib/nav";
 import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
-import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
+import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
@@ -23,12 +23,14 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
-const MAX_EQUIPMENT_DEPTH = 7;
+const MAX_EQUIPMENT_DEPTH = 16; // số đoạn của mã đầy đủ (gồm DH1.S1) — giới hạn kỹ thuật
 
+// Mã thiết bị đầy đủ (fullCode) sau re-key: DH1.S1 + các cấp số nguyên dương.
 function validateEquipmentSeq(seq: string) {
-  if (!/^\d+(?:\.\d+)*$/.test(seq)) return "Số thứ tự chỉ gồm các số nguyên dương, phân cách bằng dấu chấm";
-  if (seq.split(".").some((part) => Number(part) < 1)) return "Mỗi cấp trong số thứ tự phải lớn hơn 0";
-  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa cấp ${MAX_EQUIPMENT_DEPTH}`;
+  if (!/^DH1\.S1(?:\.[1-9]\d*)*$/.test(seq)) {
+    return "Mã thiết bị phải bắt đầu bằng DH1.S1, các cấp sau là số nguyên dương phân cách bằng dấu chấm (vd DH1.S1.1.2.3)";
+  }
+  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa ${MAX_EQUIPMENT_DEPTH} cấp`;
   return null;
 }
 
@@ -106,7 +108,7 @@ async function getDeviceLikeRecords() {
   // Bản đầy đủ từ cache 60s — trước đây mỗi cache-miss của danh sách thiết bị
   // (mỗi tổ hợp scope × từ khoá) lại đọc + normalize ~6.6k dòng từ DB.
   const nodes = await getCachedEquipmentNodeFull();
-  const index = buildEquipmentTreeIndex(nodes);
+  const index = getEquipmentTreeIndexFor(nodes);
   const leafNodes = nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0);
   const leafSeqs = leafNodes.map((node) => node.seq);
   const repairStats = leafSeqs.length
@@ -178,7 +180,7 @@ export async function GET(req: NextRequest) {
       const totalSystemDevices = nodes.length;
       const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
       const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
-      const visibleIndex = buildEquipmentTreeIndex(visibleNodes);
+      const visibleIndex = getEquipmentTreeIndexFor(visibleNodes);
       const allowedSeqs = systemSeq
         ? visibleSeqs.has(systemSeq)
           ? getEquipmentDescendantSeqs(visibleNodes, systemSeq)
@@ -271,7 +273,7 @@ export async function POST(req: NextRequest) {
     });
 
     const nodes = await getNormalizedEquipmentNodes(prisma);
-    const index = buildEquipmentTreeIndex(nodes);
+    const index = getEquipmentTreeIndexFor(nodes);
     const effectiveParentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
     const parent = effectiveParentSeq ? index.bySeq.get(effectiveParentSeq) ?? null : null;
     invalidateEquipmentNodeCache();

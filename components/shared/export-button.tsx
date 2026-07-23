@@ -13,7 +13,9 @@ import { toast } from "sonner";
 import { printHtmlReport } from "@/lib/print-report";
 
 interface ExportButtonProps {
-  rows: Record<string, unknown>[];
+  rows?: Record<string, unknown>[];
+  /** Nếu có: tải dữ liệu NGAY KHI bấm xuất (lazy) thay vì giữ sẵn — tránh tải nặng khi mở trang. */
+  getRows?: () => Promise<Record<string, unknown>[]>;
   filename?: string;
   title?: string;
   /** Gợi ý độ rộng cột PDF theo đơn vị ch (số ký tự). Cột không khai báo sẽ tự chia phần còn lại. */
@@ -111,17 +113,29 @@ function escapeHtml(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-export function ExportButton({ rows, filename = "bao-cao", title, widths }: ExportButtonProps) {
-  function assertRows() {
-    if (!rows.length) {
-      toast.error("Không có dữ liệu để xuất");
-      return false;
+export function ExportButton({ rows = [], getRows, filename = "bao-cao", title, widths }: ExportButtonProps) {
+  async function resolveRows(): Promise<Record<string, unknown>[] | null> {
+    let data = rows;
+    if (getRows) {
+      const toastId = toast.loading("Đang chuẩn bị dữ liệu xuất…");
+      try {
+        data = await getRows();
+      } catch {
+        toast.error("Không tải được dữ liệu để xuất", { id: toastId });
+        return null;
+      }
+      toast.dismiss(toastId);
     }
-    return true;
+    if (!data.length) {
+      toast.error("Không có dữ liệu để xuất");
+      return null;
+    }
+    return data;
   }
 
-  function exportExcel() {
-    if (!assertRows()) return;
+  async function exportExcel() {
+    const rows = await resolveRows();
+    if (!rows) return;
     const keys = keysOf(rows);
     const heading = reportTitle(filename, title);
     const aoa = [
@@ -141,8 +155,9 @@ export function ExportButton({ rows, filename = "bao-cao", title, widths }: Expo
     toast.success("Đã xuất Excel");
   }
 
-  function exportPdf() {
-    if (!assertRows()) return;
+  async function exportPdf() {
+    const rows = await resolveRows();
+    if (!rows) return;
     const keys = keysOf(rows);
     const heading = reportTitle(filename, title);
     const colgroup = keys
