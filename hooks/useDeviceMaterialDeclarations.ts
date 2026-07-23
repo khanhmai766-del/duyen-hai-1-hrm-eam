@@ -21,7 +21,9 @@ export function useDeviceMaterialOptions(deviceSeq: string, machine: string, ena
         `/api/device-material-declarations?deviceSeq=${encodeURIComponent(deviceSeq)}&machine=${encodeURIComponent(machine)}`
       ),
     enabled: enabled && Boolean(deviceSeq && machine),
-    staleTime: 5 * 60 * 1000,
+    // Luôn tải mới khi mở dialog — danh mục có thể vừa được bổ sung (kể cả từ máy khác),
+    // payload chỉ vài chục dòng nên không đáng kể.
+    staleTime: 0,
   });
 }
 

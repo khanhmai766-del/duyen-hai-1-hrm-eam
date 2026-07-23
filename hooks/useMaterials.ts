@@ -78,12 +78,19 @@ export type MaterialInput = Partial<Material> & {
   machines?: string[];
 };
 
+// Danh mục đổi thì dropdown "Vật tư trong danh mục" của khai báo vật tư thiết bị
+// (["device-material-options"]) cũng phải làm mới, không thì dialog dùng cache cũ 5 phút.
+function invalidateMaterialCatalog(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["materials"] });
+  qc.invalidateQueries({ queryKey: ["device-material-options"] });
+}
+
 export function useUpsertMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: MaterialInput) =>
       apiMutate<Material>("/api/materials", body.id ? "PUT" : "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["materials"] }),
+    onSuccess: () => invalidateMaterialCatalog(qc),
   });
 }
 
@@ -91,7 +98,7 @@ export function useDeleteMaterial() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiMutate(`/api/materials?id=${id}`, "DELETE"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["materials"] }),
+    onSuccess: () => invalidateMaterialCatalog(qc),
   });
 }
 
@@ -100,6 +107,6 @@ export function useDeleteMaterials() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ids: string[]) => apiMutate<{ ids: string[]; count: number }>("/api/materials", "DELETE", { ids }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["materials"] }),
+    onSuccess: () => invalidateMaterialCatalog(qc),
   });
 }
