@@ -13,28 +13,6 @@ export interface NormalizedEquipmentNode {
   imageUrl?: string | null;
 }
 
-const WATER_TREATMENT_ROOT = {
-  seq: "1.1",
-  parentSeq: "1.0",
-  name: "HỆ THỐNG XỬ LÝ NƯỚC",
-  drawing: "F4281Z",
-  depth: 2,
-} satisfies NormalizedEquipmentNode;
-
-const COMMON_ROOT = {
-  seq: "1.0",
-  parentSeq: null,
-  name: "HỆ THỐNG COMMON",
-  drawing: null,
-  depth: 2,
-} satisfies NormalizedEquipmentNode;
-
-const RENAMED_ROOTS = new Map<string, string>([
-  ["1.3", "HỆ THỐNG PHỤ TRỢ"],
-]);
-
-const COMMON_CHILD_SEQS = new Set(["1.1", "1.3"]);
-
 export function compareEquipmentSeq(a: string, b: string) {
   const pa = a.split(".");
   const pb = b.split(".");
@@ -103,27 +81,13 @@ export function normalizeEquipmentNodeName(seq: string, name: string) {
   return name;
 }
 
+// Cây mới (fullCode DH1.S1.x) đọc THẲNG từ danh mục — không còn chèn node ảo/đổi tên
+// của cây cũ ("1.0 HỆ THỐNG COMMON", "1.1", "1.3"...). COMMON giờ là nhánh DH1.S1.5/6
+// (xem lib/equipment-units.ts).
 export function normalizeEquipmentNodes(nodes: NormalizedEquipmentNode[]) {
-  const normalizedNodes = nodes.map((node) => {
-    const renamed = RENAMED_ROOTS.get(node.seq);
-    const name = normalizeEquipmentNodeName(node.seq, renamed ?? node.name);
-    const baseNode = {
-      ...node,
-      name,
-      ...(COMMON_CHILD_SEQS.has(node.seq) ? { parentSeq: COMMON_ROOT.seq } : {}),
-    };
-    return node.seq === WATER_TREATMENT_ROOT.seq ? { ...baseNode, ...WATER_TREATMENT_ROOT } : baseNode;
-  });
-
-  if (!normalizedNodes.some((node) => node.seq === COMMON_ROOT.seq)) {
-    normalizedNodes.push(COMMON_ROOT);
-  }
-
-  if (!normalizedNodes.some((node) => node.seq === WATER_TREATMENT_ROOT.seq)) {
-    normalizedNodes.push(WATER_TREATMENT_ROOT);
-  }
-
-  return normalizedNodes.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+  return nodes
+    .map((node) => ({ ...node, name: normalizeEquipmentNodeName(node.seq, node.name) }))
+    .sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
 }
 
 export async function getNormalizedEquipmentNodes(prisma: PrismaClient) {
