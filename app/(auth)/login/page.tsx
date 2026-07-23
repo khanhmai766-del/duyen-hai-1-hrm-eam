@@ -150,7 +150,7 @@ function LoginInner() {
       const optionsRes = await fetch("/api/webauthn/authenticate/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({}),
       });
       const options = await optionsRes.json();
       if (!optionsRes.ok) throw new Error(options.error || "Không tạo được phiên đăng nhập Passkey");
@@ -367,7 +367,7 @@ function LoginInner() {
                       <ScanFace className="h-4 w-4" />
                     </span>
                   )}
-                  Đăng nhập
+                  Đăng nhập bằng Passkey
                 </Button>
                 <Button
                   type="button"

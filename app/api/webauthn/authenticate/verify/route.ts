@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  base64url,
   createLoginToken,
   originFromRequest,
   readChallengeCookie,
+  rpIdFromRequest,
   verifyAuthenticationResponse,
   verifyClientData,
 } from "@/lib/webauthn";
 
 export async function POST(req: NextRequest) {
   const payload = readChallengeCookie(req.cookies.get("webauthn_authenticate")?.value, "authenticate");
-  if (!payload?.userId) return NextResponse.json({ error: "Phiên đăng nhập Passkey đã hết hạn" }, { status: 400 });
+  if (!payload) return NextResponse.json({ error: "Phiên đăng nhập Passkey đã hết hạn" }, { status: 400 });
 
   const { credential } = await req.json();
   if (!credential?.id || !credential?.response?.clientDataJSON || !credential?.response?.authenticatorData || !credential?.response?.signature) {
@@ -21,8 +23,12 @@ export async function POST(req: NextRequest) {
     where: { credentialId: credential.id },
     include: { user: true },
   });
-  if (!stored || stored.userId !== payload.userId || !stored.user?.isActive) {
+  if (!stored || (payload.userId && stored.userId !== payload.userId) || !stored.user?.isActive) {
     return NextResponse.json({ error: "Thiết bị chưa được đồng bộ" }, { status: 401 });
+  }
+  const expectedUserHandle = base64url(Buffer.from(stored.userId));
+  if (credential.response.userHandle && credential.response.userHandle !== expectedUserHandle) {
+    return NextResponse.json({ error: "Passkey không khớp tài khoản" }, { status: 401 });
   }
 
   const okClient = verifyClientData({
@@ -38,6 +44,7 @@ export async function POST(req: NextRequest) {
     clientDataJSON: credential.response.clientDataJSON,
     signature: credential.response.signature,
     publicKey: stored.publicKey,
+    expectedRpId: rpIdFromRequest(req),
   });
   if (!result.ok) return NextResponse.json({ error: "Xác thực Passkey thất bại" }, { status: 401 });
 

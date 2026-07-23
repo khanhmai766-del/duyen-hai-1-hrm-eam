@@ -6,7 +6,7 @@ const LOGIN_TOKEN_TTL_MS = 60 * 1000;
 
 export interface ChallengePayload {
   challenge: string;
-  email: string;
+  email?: string;
   userId?: string;
   credentialId?: string;
   exp: number;
@@ -88,9 +88,10 @@ export function verifyClientData({
   );
 }
 
-export function parseRegistrationResponse(attestationObject: string) {
+export function parseRegistrationResponse(attestationObject: string, expectedRpId: string) {
   const decoded = decodeCbor(fromBase64url(attestationObject));
   const authData = Buffer.from(decoded.authData as Uint8Array);
+  verifyAuthenticatorData(authData, expectedRpId);
   const flags = authData[32];
   if ((flags & 0x40) === 0) throw new Error("Authenticator data missing credential data");
   const credentialIdLength = authData.readUInt16BE(53);
@@ -110,13 +111,16 @@ export function verifyAuthenticationResponse({
   clientDataJSON,
   signature,
   publicKey,
+  expectedRpId,
 }: {
   authenticatorData: string;
   clientDataJSON: string;
   signature: string;
   publicKey: string;
+  expectedRpId: string;
 }) {
   const authData = fromBase64url(authenticatorData);
+  verifyAuthenticatorData(authData, expectedRpId);
   const clientDataHash = crypto.createHash("sha256").update(fromBase64url(clientDataJSON)).digest();
   const signedData = Buffer.concat([authData, clientDataHash]);
   const verify = crypto.createVerify("SHA256");
@@ -124,6 +128,19 @@ export function verifyAuthenticationResponse({
   verify.end();
   const ok = verify.verify({ key: JSON.parse(publicKey), format: "jwk" }, fromBase64url(signature));
   return { ok, counter: authData.readUInt32BE(33) };
+}
+
+function verifyAuthenticatorData(authData: Buffer, expectedRpId: string) {
+  if (authData.length < 37) throw new Error("Authenticator data không hợp lệ");
+
+  const expectedRpIdHash = crypto.createHash("sha256").update(expectedRpId).digest();
+  if (!crypto.timingSafeEqual(authData.subarray(0, 32), expectedRpIdHash)) {
+    throw new Error("Passkey không thuộc hệ thống này");
+  }
+
+  const flags = authData[32];
+  if ((flags & 0x01) === 0) throw new Error("Thiết bị chưa xác nhận người dùng");
+  if ((flags & 0x04) === 0) throw new Error("Thiết bị chưa xác minh sinh trắc học hoặc mã PIN");
 }
 
 function signPayload(payload: object) {

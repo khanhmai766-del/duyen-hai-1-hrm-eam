@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
     attestation: "none",
     authenticatorSelection: {
       authenticatorAttachment: "platform",
-      residentKey: "preferred",
+      residentKey: "required",
+      requireResidentKey: true,
       userVerification: "required",
     },
   });

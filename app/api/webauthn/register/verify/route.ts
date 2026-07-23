@@ -4,6 +4,7 @@ import {
   originFromRequest,
   parseRegistrationResponse,
   readChallengeCookie,
+  rpIdFromRequest,
   verifyClientData,
 } from "@/lib/webauthn";
 
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
   });
   if (!okClient) return NextResponse.json({ error: "Không xác thực được thiết bị" }, { status: 400 });
 
-  const parsed = parseRegistrationResponse(credential.response.attestationObject);
+  const parsed = parseRegistrationResponse(credential.response.attestationObject, rpIdFromRequest(req));
   if (credential.id && credential.id !== parsed.credentialId) {
     return NextResponse.json({ error: "Credential ID không khớp" }, { status: 400 });
   }
