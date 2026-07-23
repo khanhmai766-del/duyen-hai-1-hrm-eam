@@ -44,7 +44,7 @@ export function ReplacementPointsEditor({
       )}
       {rows.map((row, i) => (
         <div key={i} className="space-y-2 rounded-lg border border-border bg-muted/20 p-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="min-w-0">
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Hệ thống / thiết bị</label>
               <EquipmentTreePicker
@@ -52,14 +52,6 @@ export function ReplacementPointsEditor({
                 onChange={(node) => update(i, { deviceSeq: node?.seq ?? null, system: node?.name ?? null })}
                 includeLeaves
                 placeholder="Chọn hệ thống / thiết bị"
-              />
-            </div>
-            <div className="min-w-0">
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Thiết bị (nhập tay)</label>
-              <Input
-                value={row.location ?? ""}
-                onChange={(e) => update(i, { location: e.target.value })}
-                placeholder="VD: Bơm dầu bôi trơn máy nghiền A"
               />
             </div>
             <div className="min-w-0">
