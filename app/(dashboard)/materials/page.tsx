@@ -1414,11 +1414,11 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
             <tr className="border-b border-border text-muted-foreground">
               <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
               <th className="px-4 py-2 text-left font-semibold">Thiết bị</th>
-              <th className="px-4 py-2 text-left font-semibold">Cương vị quản lý</th>
-              <th className="w-[120px] px-4 py-2 text-center font-semibold">SL thiết bị</th>
-              <th className="w-[130px] px-4 py-2 text-center font-semibold">Chu kỳ O&M</th>
-              <th className="w-[150px] px-4 py-2 text-center font-semibold">Chu kỳ thay thế</th>
-              <th className="w-[160px] px-4 py-2 text-center font-semibold">Số lượng cần thay</th>
+              <th className="w-[120px] px-4 py-2 text-left font-semibold">Cương vị quản lý</th>
+              <th className="w-[80px] px-2 py-2 text-center font-semibold">SL thiết bị</th>
+              <th className="w-[230px] px-4 py-2 text-center font-semibold">Chu kỳ O&M</th>
+              <th className="w-[110px] px-2 py-2 text-center font-semibold">Chu kỳ thay thế</th>
+              <th className="w-[120px] px-2 py-2 text-center font-semibold">Số lượng cần thay</th>
               <th className="w-[150px] px-4 py-2 text-center font-semibold">Theo dõi</th>
             </tr>
           </thead>
@@ -1430,10 +1430,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
                 <td className="px-4 py-2.5 text-ink">{p.device?.name || p.location || "—"}</td>
                 <td className="px-4 py-2.5 text-ink">{p.managingPosition || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
+                <td className="px-2 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalNote || "—"}</td>
-                <td className="px-4 py-2.5 text-center text-ink">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
-                <td className="px-4 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                <td className="px-2 py-2.5 text-center text-ink">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
+                <td className="px-2 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                 <td className="px-4 py-2.5 text-center">
                   <button
                     type="button"
