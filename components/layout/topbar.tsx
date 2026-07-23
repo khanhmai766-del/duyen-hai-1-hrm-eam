@@ -133,6 +133,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     () => ({
       position: currentPosition.position || session?.user?.position || profile?.position,
       secondaryPosition: session?.user?.secondaryPosition || profile?.secondaryPosition,
+      secondaryPosition2: session?.user?.secondaryPosition2 || profile?.secondaryPosition2,
       currentPosition: currentPosition.position || session?.user?.currentPosition || profile?.currentPosition,
     }),
     [
@@ -140,9 +141,11 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
       profile?.currentPosition,
       profile?.position,
       profile?.secondaryPosition,
+      profile?.secondaryPosition2,
       session?.user?.currentPosition,
       session?.user?.position,
       session?.user?.secondaryPosition,
+      session?.user?.secondaryPosition2,
     ]
   );
   const navSections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);

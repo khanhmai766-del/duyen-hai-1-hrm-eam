@@ -3,17 +3,18 @@ import { prisma } from "@/lib/prisma";
 import { createChallengeCookie, rpIdFromRequest } from "@/lib/webauthn";
 
 export async function POST(req: NextRequest) {
-  const { email } = await req.json();
-  if (!email) return NextResponse.json({ error: "Nhập email để đăng nhập bằng vân tay" }, { status: 400 });
+  const { email: rawLogin } = await req.json();
+  const login = typeof rawLogin === "string" ? rawLogin.trim() : "";
+  if (!login) return NextResponse.json({ error: "Nhập email hoặc user để đăng nhập bằng Passkey" }, { status: 400 });
 
-  const user = await prisma.user.findUnique({
-    where: { email },
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
     include: { webAuthnCredentials: true } as any,
   } as any);
   if (!user || !user.isActive) return NextResponse.json({ error: "Tài khoản không hợp lệ" }, { status: 401 });
   const credentials = (user as any).webAuthnCredentials ?? [];
   if (!credentials.length) {
-    return NextResponse.json({ error: "Tài khoản này chưa đồng bộ vân tay trên thiết bị" }, { status: 404 });
+    return NextResponse.json({ error: "Tài khoản này chưa đăng ký Passkey" }, { status: 404 });
   }
 
   const { payload, value } = createChallengeCookie({ purpose: "authenticate", email: user.email, userId: user.id });

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       },
       include: INCLUDE,
     });
-    await audit(user.id, "CREATE_DEFECT_HISTORY", "DefectHistory", history.id);
+    await audit(user.id, "CREATE_DEFECT_HISTORY", "DefectHistory", history.id, auditDetailWithPosition(user));
     return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }

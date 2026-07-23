@@ -1,6 +1,7 @@
 export type PositionCarrier = {
   position?: string | null;
   secondaryPosition?: string | null;
+  secondaryPosition2?: string | null;
   currentPosition?: string | null;
 };
 
@@ -9,7 +10,11 @@ function cleanPosition(value?: string | null) {
 }
 
 export function availableUserPositions(user?: PositionCarrier | null) {
-  const values = [cleanPosition(user?.position), cleanPosition(user?.secondaryPosition)];
+  const values = [
+    cleanPosition(user?.position),
+    cleanPosition(user?.secondaryPosition),
+    cleanPosition(user?.secondaryPosition2),
+  ];
   return values.filter((value, index): value is string => Boolean(value) && values.indexOf(value) === index);
 }
 

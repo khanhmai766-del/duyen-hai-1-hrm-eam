@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
+import { deleteFromS3, maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 
@@ -34,6 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       "defect-history/images",
       "image"
     );
+    // Ảnh ghi nhận ban đầu chỉ tồn tại trong vòng đời phiếu đang xử lý.
+    // Ảnh kết quả ở DefectHistory là một nhóm độc lập và tiếp tục được lưu.
+    const originalImages = defect.images.length > 0 ? defect.images : defect.imageUrl ? [defect.imageUrl] : [];
+    await Promise.all(originalImages.map((url) => deleteFromS3(url)));
 
     const [history] = await prisma.$transaction([
       prisma.defectHistory.create({
@@ -56,11 +60,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }),
       prisma.defect.update({
         where: { id: defect.id },
-        data: { status: "DA_XU_LY", completedAt: performedAt },
+        data: { status: "DA_XU_LY", completedAt: performedAt, images: [], imageUrl: null },
       }),
     ]);
 
-    await audit(user.id, "COMPLETE_DEFECT", "Defect", defect.id, defect.requestNumber ?? undefined);
+    await audit(user.id, "COMPLETE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user, defect.requestNumber));
     return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }

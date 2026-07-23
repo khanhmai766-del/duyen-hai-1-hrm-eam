@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMonths, canManageMaterialCatalog, DEFECT_UNITS } from "@/lib/constants";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
@@ -204,14 +204,20 @@ export async function POST(req: NextRequest) {
           updated += 1;
         } else {
           await tx.materialReplacement.create({
-            data: { ...data, materialId, deviceSeq: row.deviceSeq, isActive: false, createdById: user.id },
+            data: {
+              ...data,
+              materialId,
+              deviceSeq: row.deviceSeq,
+              isActive: false,
+              createdById: user.id,
+            },
           });
           created += 1;
         }
       }
       return { materialsCreated, created, updated };
     }, { timeout: 120_000 });
-    await audit(user.id, "IMPORT_MATERIAL_DEVICE_LINKS", "MaterialReplacement", undefined, `${result.materialsCreated} vật tư, ${result.created} liên kết mới, ${result.updated} cập nhật`);
+    await audit(user.id, "IMPORT_MATERIAL_DEVICE_LINKS", "MaterialReplacement", undefined, auditDetailWithPosition(user, `${result.materialsCreated} vật tư, ${result.created} liên kết mới, ${result.updated} cập nhật`));
     return ok({ validCount: normalized.length, errors: [], preview: normalized.slice(0, 50), ...result });
   });
 }

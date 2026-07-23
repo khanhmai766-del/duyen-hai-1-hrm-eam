@@ -14,6 +14,7 @@ import { useDevices } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
+import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import {
   DEFECT_UNITS,
   DEFECT_SEVERITY_ORDER,
@@ -71,7 +72,7 @@ export function DefectForm({
   const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
   const shiftLeaders = React.useMemo(
     () => (usersQuery.data?.data ?? [])
-      .filter((user) => user.isActive && [user.position, user.secondaryPosition, user.currentPosition].some((value) => normalizeText(value ?? "") === "truong ca"))
+      .filter((user) => user.isActive && [user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition].some((value) => normalizeText(value ?? "") === "truong ca"))
       .sort((a, b) => a.name.localeCompare(b.name, "vi")),
     [usersQuery.data]
   );
@@ -101,6 +102,7 @@ export function DefectForm({
     detectedAt: toDateInput(defect?.detectedAt),
     shiftLeaderId: defect?.shiftLeaderId ?? "",
     note: defect?.note ?? "",
+    images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
   });
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -110,6 +112,7 @@ export function DefectForm({
       ...current,
       severity,
       severityCriteria: current.severity === severity ? current.severityCriteria : [],
+      images: ["1", "2"].includes(severity) ? current.images : [],
     }));
   }
   function toggleSeverityCriterion(id: string) {
@@ -502,6 +505,19 @@ export function DefectForm({
               <StackField label="Ghi Chú">
                 <Textarea className="min-h-[88px] resize-y" value={form.note} onChange={(e) => set("note", e.target.value)} />
               </StackField>
+              {["1", "2"].includes(form.severity) && (
+                <StackField label="Hình ảnh khiếm khuyết (tối đa 3)">
+                  <MultiImagePicker
+                    value={form.images}
+                    onChange={(images) => set("images", images)}
+                    max={3}
+                    maxFileSizeMb={15}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ảnh được lưu tại S3 trong thư mục defects/images và tự động xoá khi khiếm khuyết hoàn thành.
+                  </p>
+                </StackField>
+              )}
             </div>
           </div>
         </div>

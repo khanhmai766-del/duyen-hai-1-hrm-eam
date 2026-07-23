@@ -12,6 +12,7 @@ async function ensureUserCurrentPositionColumn() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
     ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "secondaryPosition2" TEXT,
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT
   `);
 }
@@ -38,7 +39,7 @@ export async function PUT(req: NextRequest) {
     const isAdmin = user.role === "ADMIN";
     const existing = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { position: true, secondaryPosition: true, currentPosition: true },
+      select: { position: true, secondaryPosition: true, secondaryPosition2: true, currentPosition: true },
     });
     if (!existing) return fail("Tài khoản không hợp lệ", 401);
 
@@ -56,6 +57,7 @@ export async function PUT(req: NextRequest) {
       if (body.name) data.name = body.name;
       if (body.position !== undefined) data.position = body.position || null;
       if (body.secondaryPosition !== undefined) data.secondaryPosition = body.secondaryPosition || null;
+      if (body.secondaryPosition2 !== undefined) data.secondaryPosition2 = body.secondaryPosition2 || null;
       if (body.department !== undefined) data.department = body.department || null;
       if (body.role) data.role = body.role;
     }

@@ -10,11 +10,11 @@ import {
 
 export async function POST(req: NextRequest) {
   const payload = readChallengeCookie(req.cookies.get("webauthn_authenticate")?.value, "authenticate");
-  if (!payload?.userId) return NextResponse.json({ error: "Phiên đăng nhập vân tay đã hết hạn" }, { status: 400 });
+  if (!payload?.userId) return NextResponse.json({ error: "Phiên đăng nhập Passkey đã hết hạn" }, { status: 400 });
 
   const { credential } = await req.json();
   if (!credential?.id || !credential?.response?.clientDataJSON || !credential?.response?.authenticatorData || !credential?.response?.signature) {
-    return NextResponse.json({ error: "Dữ liệu vân tay không hợp lệ" }, { status: 400 });
+    return NextResponse.json({ error: "Dữ liệu Passkey không hợp lệ" }, { status: 400 });
   }
 
   const stored = await (prisma as any).webAuthnCredential.findUnique({
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     signature: credential.response.signature,
     publicKey: stored.publicKey,
   });
-  if (!result.ok) return NextResponse.json({ error: "Xác thực vân tay thất bại" }, { status: 401 });
+  if (!result.ok) return NextResponse.json({ error: "Xác thực Passkey thất bại" }, { status: 401 });
 
   if (result.counter > stored.counter) {
     await (prisma as any).webAuthnCredential.update({

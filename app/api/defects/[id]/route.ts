@@ -1,13 +1,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
-import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
+import { deleteFromS3, maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { normalizeDefectSeverityCriteria } from "@/lib/constants";
+import { validateDefectImages } from "@/lib/defect-images";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
@@ -31,10 +32,24 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ? await resolveDefectShiftLeader(body.shiftLeaderId)
       : undefined;
     if (body.shiftLeaderId && !shiftLeader) return fail("Nhân viên được chọn không có cương vị Trưởng ca hoặc đã ngừng hoạt động");
-    const imageUrl =
-      body.imageUrl !== undefined
-        ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" })
-        : undefined;
+    const nextSeverity = body.severity !== undefined ? String(body.severity || "") : existing.severity;
+    const rawImages = body.images !== undefined
+      ? (Array.isArray(body.images) ? body.images.filter(Boolean) : [])
+      : undefined;
+    const imageError = rawImages ? validateDefectImages(rawImages) : null;
+    if (imageError) return fail(imageError);
+    const existingImages = existing.images.length > 0
+      ? existing.images
+      : existing.imageUrl
+        ? [existing.imageUrl]
+        : [];
+    const nextImageCount = rawImages !== undefined ? rawImages.length : existingImages.length;
+    if (nextImageCount > 0 && !["1", "2"].includes(nextSeverity ?? "")) {
+      return fail("Chỉ khiếm khuyết Mức 1 hoặc Mức 2 mới được thêm ảnh");
+    }
+    const images = rawImages !== undefined
+      ? await maybeUploadDataUrlList(rawImages, "defects/images", "image")
+      : undefined;
     // Đồng bộ khóa chuẩn deviceSeq khi client gửi trường device (chỉ gán seq có thật trong cây).
     const deviceSeq =
       body.device !== undefined
@@ -63,7 +78,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         shiftLeaderId: body.shiftLeaderId !== undefined ? shiftLeader?.id ?? null : undefined,
         shiftLeaderName: body.shiftLeaderId !== undefined ? shiftLeader?.name ?? null : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
-        imageUrl,
+        images,
         // Khi gửi 1 trong 2 trường ảnh hưởng thì cập nhật cả hai (giữ nguyên hành vi cũ);
         // không gửi gì thì để undefined → Prisma bỏ qua, không đổi giá trị.
         fireSafetyImpact:
@@ -77,7 +92,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       },
       include: INCLUDE,
     });
-    await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id);
+    if (images) {
+      const retained = new Set(images);
+      await Promise.all(existingImages.filter((url) => !retained.has(url)).map((url) => deleteFromS3(url)));
+    }
+    await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user));
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }
@@ -93,7 +112,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
     }
     await prisma.defect.delete({ where: { id: params.id } });
-    await audit(user.id, "DELETE_DEFECT", "Defect", params.id);
+    const storedImages = existing.images.length > 0 ? existing.images : existing.imageUrl ? [existing.imageUrl] : [];
+    await Promise.all(storedImages.map((url) => deleteFromS3(url)));
+    await audit(user.id, "DELETE_DEFECT", "Defect", params.id, auditDetailWithPosition(user));
     return ok({ id: params.id });
   });
 }

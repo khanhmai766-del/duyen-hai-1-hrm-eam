@@ -9,11 +9,11 @@ import {
 
 export async function POST(req: NextRequest) {
   const payload = readChallengeCookie(req.cookies.get("webauthn_register")?.value, "register");
-  if (!payload?.userId) return NextResponse.json({ error: "Phiên đồng bộ vân tay đã hết hạn" }, { status: 400 });
+  if (!payload?.userId) return NextResponse.json({ error: "Phiên đăng ký Passkey đã hết hạn" }, { status: 400 });
 
   const { credential, deviceName } = await req.json();
   if (!credential?.response?.clientDataJSON || !credential?.response?.attestationObject) {
-    return NextResponse.json({ error: "Dữ liệu vân tay không hợp lệ" }, { status: 400 });
+    return NextResponse.json({ error: "Dữ liệu Passkey không hợp lệ" }, { status: 400 });
   }
 
   const okClient = verifyClientData({

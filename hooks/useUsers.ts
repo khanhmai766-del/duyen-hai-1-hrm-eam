@@ -90,7 +90,7 @@ export function usePositions(options: { enabled?: boolean } = {}): string[] {
   return React.useMemo(() => {
     const values: Array<string | null | undefined> = [];
     for (const u of data?.data ?? []) {
-      for (const value of [u.position, u.secondaryPosition]) {
+      for (const value of [u.position, u.secondaryPosition, u.secondaryPosition2]) {
         values.push(value);
       }
     }

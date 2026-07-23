@@ -65,7 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (mustChangePassword && !user.mustChangePassword) {
             await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
           }
-          await auditLogin(user, "WEBAUTHN_LOGIN", "Đăng nhập bằng vân tay/passkey");
+          await auditLogin(user, "WEBAUTHN_LOGIN", "Đăng nhập bằng Passkey");
           return {
             id: user.id,
             name: user.name,
@@ -73,6 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             role: user.role,
             position: user.position ?? undefined,
             secondaryPosition: user.secondaryPosition ?? undefined,
+            secondaryPosition2: user.secondaryPosition2 ?? undefined,
             currentPosition: effectiveUserPosition(user) ?? undefined,
             employeeId: user.employeeId,
             mustChangePassword,
@@ -120,6 +121,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           position: user.position ?? undefined,
           secondaryPosition: user.secondaryPosition ?? undefined,
+          secondaryPosition2: user.secondaryPosition2 ?? undefined,
           currentPosition: effectiveUserPosition(user) ?? undefined,
           employeeId: user.employeeId,
           mustChangePassword,
@@ -134,6 +136,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as any).role;
         token.position = (user as any).position;
         token.secondaryPosition = (user as any).secondaryPosition;
+        token.secondaryPosition2 = (user as any).secondaryPosition2;
         token.currentPosition = (user as any).currentPosition;
         token.employeeId = (user as any).employeeId;
         token.mustChangePassword = (user as any).mustChangePassword;
@@ -154,6 +157,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   role: true,
                   position: true,
                   secondaryPosition: true,
+                  secondaryPosition2: true,
                   currentPosition: true,
                   employeeId: true,
                   isActive: true,
@@ -171,6 +175,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.role = dbUser.role;
           session.user.position = dbUser.position ?? undefined;
           session.user.secondaryPosition = dbUser.secondaryPosition ?? undefined;
+          session.user.secondaryPosition2 = dbUser.secondaryPosition2 ?? undefined;
           session.user.currentPosition = effectiveUserPosition(dbUser) ?? undefined;
           session.user.employeeId = dbUser.employeeId;
           session.user.mustChangePassword = Boolean(dbUser.mustChangePassword);
@@ -179,6 +184,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.role = token.role as string;
           session.user.position = token.position as string | undefined;
           session.user.secondaryPosition = token.secondaryPosition as string | undefined;
+          session.user.secondaryPosition2 = token.secondaryPosition2 as string | undefined;
           session.user.currentPosition = token.currentPosition as string | undefined;
           session.user.employeeId = token.employeeId as string;
           session.user.mustChangePassword = Boolean(token.mustChangePassword);

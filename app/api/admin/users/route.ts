@@ -18,6 +18,7 @@ const ADMIN_USER_LIST_SELECT = {
   role: true,
   position: true,
   secondaryPosition: true,
+  secondaryPosition2: true,
   currentPosition: true,
   department: true,
   isActive: true,
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     if (position && position !== "ALL") {
       where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-        { OR: [{ position }, { secondaryPosition: position }] },
+        { OR: [{ position }, { secondaryPosition: position }, { secondaryPosition2: position }] },
       ];
     }
 

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { parseDateInput } from "@/lib/utils";
@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         note: body.note?.trim() || null,
       },
     });
-    await audit(user.id, "UPDATE_REPLACEMENT_LOG", "MaterialReplacementLog", log.id);
+    await audit(user.id, "UPDATE_REPLACEMENT_LOG", "MaterialReplacementLog", log.id, auditDetailWithPosition(user));
     return ok(log);
   });
 }
@@ -63,7 +63,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     await assertCanEditLog(user, params.id, ["full"]);
 
     await prisma.materialReplacementLog.delete({ where: { id: params.id } });
-    await audit(user.id, "DELETE_REPLACEMENT_LOG", "MaterialReplacementLog", params.id);
+    await audit(user.id, "DELETE_REPLACEMENT_LOG", "MaterialReplacementLog", params.id, auditDetailWithPosition(user));
     return ok({ id: params.id });
   });
 }

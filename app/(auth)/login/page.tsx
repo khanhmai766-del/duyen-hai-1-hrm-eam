@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Cpu, Fingerprint, Loader2, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
+import { Cpu, ExternalLink, Fingerprint, Loader2, Network, ScanFace, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -98,7 +99,7 @@ function LoginInner() {
 
   async function syncBiometric() {
     if (!biometricSupported) {
-      toast.error("Thiết bị chưa hỗ trợ đăng nhập vân tay/passkey.");
+      toast.error("Thiết bị chưa hỗ trợ Passkey.");
       return;
     }
     setBiometricLoading(true);
@@ -109,7 +110,7 @@ function LoginInner() {
         body: JSON.stringify({ email, password }),
       });
       const options = await optionsRes.json();
-      if (!optionsRes.ok) throw new Error(options.error || "Không tạo được phiên đồng bộ vân tay");
+      if (!optionsRes.ok) throw new Error(options.error || "Không tạo được phiên đăng ký Passkey");
 
       const credential = await navigator.credentials.create({
         publicKey: {
@@ -122,7 +123,7 @@ function LoginInner() {
           })),
         },
       });
-      if (!credential) throw new Error("Người dùng đã huỷ đồng bộ vân tay");
+      if (!credential) throw new Error("Người dùng đã huỷ đăng ký thiết bị");
 
       const verifyRes = await fetch("/api/webauthn/register/verify", {
         method: "POST",
@@ -130,10 +131,10 @@ function LoginInner() {
         body: JSON.stringify({ credential: publicKeyCredentialToJSON(credential), deviceName: navigator.userAgent }),
       });
       const verify = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(verify.error || "Đồng bộ vân tay thất bại");
-      toast.success("Đã đồng bộ vân tay cho thiết bị này");
+      if (!verifyRes.ok) throw new Error(verify.error || "Đăng ký Passkey thất bại");
+      toast.success("Đã đăng ký Passkey cho thiết bị này");
     } catch (error) {
-      toast.error("Không thể đồng bộ vân tay", { description: readableWebAuthnError(error) });
+      toast.error("Không thể đăng ký thiết bị", { description: readableWebAuthnError(error) });
     } finally {
       setBiometricLoading(false);
     }
@@ -141,7 +142,7 @@ function LoginInner() {
 
   async function loginWithBiometric() {
     if (!biometricSupported) {
-      toast.error("Thiết bị chưa hỗ trợ đăng nhập vân tay/passkey.");
+      toast.error("Thiết bị chưa hỗ trợ Passkey.");
       return;
     }
     setBiometricLoading(true);
@@ -152,7 +153,7 @@ function LoginInner() {
         body: JSON.stringify({ email }),
       });
       const options = await optionsRes.json();
-      if (!optionsRes.ok) throw new Error(options.error || "Không tạo được phiên đăng nhập vân tay");
+      if (!optionsRes.ok) throw new Error(options.error || "Không tạo được phiên đăng nhập Passkey");
 
       const credential = await navigator.credentials.get({
         publicKey: {
@@ -164,7 +165,7 @@ function LoginInner() {
           })),
         },
       });
-      if (!credential) throw new Error("Người dùng đã huỷ xác thực vân tay");
+      if (!credential) throw new Error("Người dùng đã huỷ xác thực Passkey");
 
       const verifyRes = await fetch("/api/webauthn/authenticate/verify", {
         method: "POST",
@@ -172,7 +173,7 @@ function LoginInner() {
         body: JSON.stringify({ credential: publicKeyCredentialToJSON(credential) }),
       });
       const verify = await verifyRes.json();
-      if (!verifyRes.ok) throw new Error(verify.error || "Xác thực vân tay thất bại");
+      if (!verifyRes.ok) throw new Error(verify.error || "Xác thực Passkey thất bại");
 
       const res = await signIn("credentials", {
         email: verify.email,
@@ -181,7 +182,7 @@ function LoginInner() {
         redirect: false,
       });
       if (res?.error) throw new Error("Không tạo được phiên đăng nhập");
-      toast.success("Đăng nhập vân tay thành công");
+      toast.success("Đăng nhập bằng Passkey thành công");
       try {
         localStorage.setItem("pp:last-activity", String(Date.now()));
       } catch {
@@ -190,7 +191,7 @@ function LoginInner() {
       router.push(callbackUrl);
       router.refresh();
     } catch (error) {
-      toast.error("Không thể đăng nhập bằng vân tay", { description: readableWebAuthnError(error) });
+      toast.error("Không thể đăng nhập bằng Passkey", { description: readableWebAuthnError(error) });
     } finally {
       setBiometricLoading(false);
     }
@@ -358,8 +359,15 @@ function LoginInner() {
                   disabled={biometricLoading || !biometricSupported}
                   onClick={loginWithBiometric}
                 >
-                  {biometricLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4" />}
-                  Đăng nhập vân tay
+                  {biometricLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span className="flex items-center gap-1" aria-hidden="true">
+                      <Fingerprint className="h-4 w-4" />
+                      <ScanFace className="h-4 w-4" />
+                    </span>
+                  )}
+                  Đăng nhập
                 </Button>
                 <Button
                   type="button"
@@ -369,14 +377,38 @@ function LoginInner() {
                   onClick={syncBiometric}
                 >
                   <Smartphone className="h-4 w-4" />
-                  Đồng bộ thiết bị
+                  Đăng ký thiết bị này
                 </Button>
               </div>
               {!biometricSupported && (
                 <p className="text-xs text-muted-foreground">
-                  Trình duyệt hiện tại chưa hỗ trợ vân tay/passkey. Hãy dùng Safari/Chrome/Edge mới trên smartphone hoặc iPad.
+                  Trình duyệt hiện tại chưa hỗ trợ Passkey. Hãy dùng Safari/Chrome/Edge mới trên smartphone hoặc iPad.
                 </p>
               )}
+
+              <div className="border-t border-slate-200/80 pt-4">
+                <Button
+                  asChild
+                  type="button"
+                  variant="outline"
+                  className="h-auto w-full justify-between gap-3 border-emerald-200 bg-emerald-50/70 px-4 py-3 text-left text-emerald-950 shadow-sm transition-all hover:border-emerald-300 hover:bg-emerald-100/80 hover:text-emerald-950"
+                >
+                  <Link href="/public/org-chart">
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-700 text-white shadow-sm">
+                        <Network className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold">Xem sơ đồ ca vận hành</span>
+                        <span className="block text-xs font-normal text-emerald-800">
+                          Danh sách công khai · Không cần đăng nhập
+                        </span>
+                      </span>
+                    </span>
+                    <ExternalLink className="h-4 w-4 shrink-0 text-emerald-700" />
+                  </Link>
+                </Button>
+              </div>
 
             </div>
           </div>
@@ -438,6 +470,6 @@ function publicKeyCredentialToJSON(credential: Credential) {
 function readableWebAuthnError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("NotAllowedError")) return "Thiết bị đã huỷ hoặc chưa xác nhận sinh trắc học.";
-  if (message.includes("NotSupportedError")) return "Trình duyệt hoặc thiết bị chưa hỗ trợ passkey/vân tay.";
+  if (message.includes("NotSupportedError")) return "Trình duyệt hoặc thiết bị chưa hỗ trợ Passkey.";
   return message;
 }

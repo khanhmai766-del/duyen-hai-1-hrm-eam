@@ -7,6 +7,7 @@ declare module "next-auth" {
       role: string;
       position?: string;
       secondaryPosition?: string;
+      secondaryPosition2?: string;
       currentPosition?: string;
       employeeId: string;
       avatarUrl?: string;
@@ -18,6 +19,7 @@ declare module "next-auth" {
     role: string;
     position?: string;
     secondaryPosition?: string;
+    secondaryPosition2?: string;
     currentPosition?: string;
     employeeId: string;
     avatarUrl?: string;
@@ -31,6 +33,7 @@ declare module "next-auth/jwt" {
     role: string;
     position?: string;
     secondaryPosition?: string;
+    secondaryPosition2?: string;
     currentPosition?: string;
     employeeId: string;
     avatarUrl?: string;

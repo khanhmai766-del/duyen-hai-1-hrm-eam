@@ -86,9 +86,9 @@ export function PublicOrgChartClient() {
       return `${year}-${month}-${day}`;
     };
     const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    return { min: formatLocalDate(yesterday), max: formatLocalDate(today) };
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    return { min: formatLocalDate(sevenDaysAgo), max: formatLocalDate(today) };
   }, []);
 
   return (
@@ -137,7 +137,7 @@ export function PublicOrgChartClient() {
       <section className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
         {isLoading ? <ChartSkeleton /> : error ? (
           <Card className="border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">{error}</Card>
-        ) : !data?.shift ? <EmptyState title="Chưa có dữ liệu ca đã chọn" description="Hãy chọn ngày hoặc ca khác trong phạm vi hôm nay và 1 ngày trước." /> : (
+        ) : !data?.shift ? <EmptyState title="Chưa có dữ liệu ca đã chọn" description="Hãy chọn ngày hoặc ca khác trong phạm vi hôm nay và 7 ngày lịch sử." /> : (
           <PublicTemplateChart assignments={assignments} />
         )}
       </section>

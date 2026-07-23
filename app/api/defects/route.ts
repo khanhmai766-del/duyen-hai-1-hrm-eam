@@ -1,13 +1,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
-import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
+import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { normalizeDefectSeverityCriteria } from "@/lib/constants";
+import { validateDefectImages } from "@/lib/defect-images";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,13 @@ export async function POST(req: NextRequest) {
     if (body.device) await assertSeqEditable(user, String(body.device));
     const shiftLeader = await resolveDefectShiftLeader(body.shiftLeaderId);
     if (!shiftLeader) return fail("Nhân viên được chọn không có cương vị Trưởng ca hoặc đã ngừng hoạt động");
-    const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" });
+    const rawImages = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
+    const imageError = validateDefectImages(rawImages);
+    if (imageError) return fail(imageError);
+    if (rawImages.length > 0 && !["1", "2"].includes(String(body.severity ?? ""))) {
+      return fail("Chỉ khiếm khuyết Mức 1 hoặc Mức 2 mới được thêm ảnh");
+    }
+    const images = await maybeUploadDataUrlList(rawImages, "defects/images", "image");
 
     // Khóa liên kết chuẩn với cây: chỉ gán khi "device" là seq có thật (FK không chặn giá trị lạ).
     const deviceSeq = body.device
@@ -80,14 +87,14 @@ export async function POST(req: NextRequest) {
         shiftLeaderId: shiftLeader?.id ?? null,
         shiftLeaderName: shiftLeader?.name ?? null,
         note: body.note?.trim() || null,
-        imageUrl,
+        images,
         fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
         environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
         createdById: user.id,
       },
       include: INCLUDE,
     });
-    await audit(user.id, "CREATE_DEFECT", "Defect", defect.id);
+    await audit(user.id, "CREATE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user));
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }

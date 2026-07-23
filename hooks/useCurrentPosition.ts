@@ -15,6 +15,7 @@ export function useCurrentPosition() {
   const fallback = {
     position: session?.user?.position,
     secondaryPosition: session?.user?.secondaryPosition,
+    secondaryPosition2: session?.user?.secondaryPosition2,
     currentPosition: session?.user?.currentPosition,
   };
   const source = profile ?? fallback;

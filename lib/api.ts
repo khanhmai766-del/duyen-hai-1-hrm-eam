@@ -11,6 +11,7 @@ async function ensureUserPositionColumns() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
     ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "secondaryPosition2" TEXT,
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
     ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
@@ -39,6 +40,7 @@ export async function requireUser() {
       role: true,
       position: true,
       secondaryPosition: true,
+      secondaryPosition2: true,
       currentPosition: true,
       employeeId: true,
       name: true,
@@ -56,6 +58,7 @@ export async function requireUser() {
     position: currentPosition,
     primaryPosition: dbUser.position ?? undefined,
     secondaryPosition: dbUser.secondaryPosition ?? undefined,
+    secondaryPosition2: dbUser.secondaryPosition2 ?? undefined,
     currentPosition,
   };
 }
@@ -64,6 +67,17 @@ export function requireRole(user: { role: string }, roles: string[]) {
   if (!roles.includes(user.role)) {
     throw fail("Không đủ quyền truy cập", 403);
   }
+}
+
+/** Chỉ bổ sung cương vị đang làm việc vào nhật ký audit, không lưu vào dữ liệu nghiệp vụ. */
+export function auditDetailWithPosition(
+  user: { currentPosition?: string | null; position?: string | null },
+  detail?: string | null
+) {
+  const position = user.currentPosition ?? user.position;
+  return [detail?.trim(), position ? `Cương vị thao tác: ${position}` : null]
+    .filter(Boolean)
+    .join(" · ") || undefined;
 }
 
 /** Wraps a handler so thrown NextResponses become the response. */

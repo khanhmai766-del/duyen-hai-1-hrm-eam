@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, requireRole, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, requireRole, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
@@ -310,7 +310,7 @@ export async function POST(req: NextRequest) {
       });
       await updateMaterialErpCodes(m.id, erpCodes);
       await updateMaterialDocument(m.id, document);
-      await audit(user.id, "CREATE_MATERIAL", "Material", m.id, `${m.code} (${machine})`);
+      await audit(user.id, "CREATE_MATERIAL", "Material", m.id, auditDetailWithPosition(user, `${m.code} (${machine})`));
       if (!firstMaterial) firstMaterial = m;
     }
     return ok(mapMaterial(firstMaterial, { ...document, erpCodes }));
@@ -370,7 +370,12 @@ export async function PUT(req: NextRequest) {
       const replacements = parseReplacements(body, user.id, defaultSystem ?? current?.system ?? null);
       await prisma.materialReplacement.deleteMany({ where: { materialId: body.id, isActive: false } });
       for (const data of replacements) {
-        await prisma.materialReplacement.create({ data: { ...data, materialId: body.id } });
+        await prisma.materialReplacement.create({
+          data: {
+            ...data,
+            materialId: body.id,
+          },
+        });
       }
     }
     // Đồng bộ quantity sang các bản ghi sibling (cùng code, khác machine).
@@ -384,7 +389,7 @@ export async function PUT(req: NextRequest) {
       }
     }
     const m = await prisma.material.findUnique({ where: { id: body.id }, include: MATERIAL_INCLUDE });
-    await audit(user.id, "UPDATE_MATERIAL", "Material", body.id, m?.code ?? "");
+    await audit(user.id, "UPDATE_MATERIAL", "Material", body.id, auditDetailWithPosition(user, m?.code));
     return ok(m ? mapMaterial(m, document ?? (await materialDocumentMap()).get(body.id)) : null);
   });
 }
@@ -415,7 +420,7 @@ export async function DELETE(req: NextRequest) {
     // Gỡ liên kết tiêu hao (lịch sử dùng cho thiết bị) trước khi xoá vật tư.
     await prisma.equipmentMaterial.deleteMany({ where: { materialId: { in: foundIds } } });
     const { count } = await prisma.material.deleteMany({ where: { id: { in: foundIds } } });
-    await audit(user.id, "DELETE_MATERIAL", "Material", foundIds.join(","), materials.map((m) => m.code).join(", "));
+    await audit(user.id, "DELETE_MATERIAL", "Material", foundIds.join(","), auditDetailWithPosition(user, materials.map((m) => m.code).join(", ")));
     return ok({ ids: foundIds, count });
   });
 }

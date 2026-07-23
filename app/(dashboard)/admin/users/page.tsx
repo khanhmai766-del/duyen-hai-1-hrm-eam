@@ -140,7 +140,7 @@ export default function AdminUsersPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [newUserRoleProfile, setNewUserRoleProfile] = React.useState("");
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
@@ -237,7 +237,7 @@ export default function AdminUsersPage() {
       }
       toast.success("Đã tạo người dùng");
       setOpen(false);
-      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
       setNewUserRoleProfile("");
     } catch (e) {
       toast.error((e as Error).message);
@@ -367,7 +367,12 @@ export default function AdminUsersPage() {
                     <div className="text-xs text-muted-foreground">{u.position || "—"}</div>
                     {u.secondaryPosition && (
                       <div className="mt-0.5 inline-flex max-w-[220px] items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                        Phụ: <span className="ml-1 truncate">{u.secondaryPosition}</span>
+                        Phụ 1: <span className="ml-1 truncate">{u.secondaryPosition}</span>
+                      </div>
+                    )}
+                    {u.secondaryPosition2 && (
+                      <div className="ml-1 mt-0.5 inline-flex max-w-[220px] items-center rounded bg-fuchsia-50 px-1.5 py-0.5 text-[11px] font-medium text-fuchsia-700">
+                        Phụ 2: <span className="ml-1 truncate">{u.secondaryPosition2}</span>
                       </div>
                     )}
                   </TableCell>
@@ -623,8 +628,9 @@ export default function AdminUsersPage() {
             <Field label="Email làm việc"><Input type="email" value={form.workEmail} onChange={(e) => setForm({ ...form, workEmail: e.target.value })} /></Field>
             <Field label="User *"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV *"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
-            <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
-            <Field label="Chức vụ phụ"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
+            <Field label="Chức vụ chính"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
+            <Field label="Chức vụ phụ 1"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
+            <Field label="Chức vụ phụ 2"><PositionSelect value={form.secondaryPosition2} onChange={(v) => setForm({ ...form, secondaryPosition2: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="Vai trò">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
@@ -1157,6 +1163,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         phone: activeTarget.phone ?? "",
         position: activeTarget.position ?? "",
         secondaryPosition: activeTarget.secondaryPosition ?? "",
+        secondaryPosition2: activeTarget.secondaryPosition2 ?? "",
         department: activeTarget.department ?? "",
         avatarUrl: activeTarget.avatarUrl ?? "",
         signatureUrl: activeTarget.signatureUrl ?? "",
@@ -1199,8 +1206,9 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
             <Field label="User"><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Mã NV"><Input value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} /></Field>
             <Field label="SĐT"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-            <Field label="Chức vụ"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
-            <Field label="Chức vụ phụ"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
+            <Field label="Chức vụ chính"><PositionSelect value={form.position} onChange={(v) => setForm({ ...form, position: v })} /></Field>
+            <Field label="Chức vụ phụ 1"><PositionSelect value={form.secondaryPosition} onChange={(v) => setForm({ ...form, secondaryPosition: v })} /></Field>
+            <Field label="Chức vụ phụ 2"><PositionSelect value={form.secondaryPosition2} onChange={(v) => setForm({ ...form, secondaryPosition2: v })} /></Field>
             <Field label="Bộ phận"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="Vai trò">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>

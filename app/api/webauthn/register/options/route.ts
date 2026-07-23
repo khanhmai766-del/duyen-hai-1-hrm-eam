@@ -4,10 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { createChallengeCookie, rpIdFromRequest } from "@/lib/webauthn";
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
-  if (!email || !password) return NextResponse.json({ error: "Thiếu email hoặc mật khẩu" }, { status: 400 });
+  const { email: rawLogin, password } = await req.json();
+  const login = typeof rawLogin === "string" ? rawLogin.trim() : "";
+  if (!login || !password) return NextResponse.json({ error: "Thiếu email/user hoặc mật khẩu" }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
+  });
   if (!user || !user.isActive) return NextResponse.json({ error: "Tài khoản không hợp lệ" }, { status: 401 });
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return NextResponse.json({ error: "Mật khẩu không đúng" }, { status: 401 });

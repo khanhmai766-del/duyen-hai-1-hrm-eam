@@ -27,7 +27,8 @@ model User {
   lockedAt            DateTime? @map("locked_at")
   role                Role      @default(VIEWER)
   position            String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
-  secondaryPosition   String? // chức vụ phụ khi nhân sự trực luân phiên 2 vị trí
+  secondaryPosition   String? // chức vụ phụ 1
+  secondaryPosition2  String? // chức vụ phụ 2
   currentPosition     String? // chức vụ hiện tại người dùng đang chọn để nhận thông báo/quyền theo cương vị
   department          String?
   isActive            Boolean   @default(true)
@@ -758,7 +759,8 @@ model Defect {
   shiftLeaderName         String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt             DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
   note                    String? // Ghi chú
-  imageUrl                String? // Hình ảnh
+  imageUrl                String? // Ảnh cũ (giữ để tương thích dữ liệu trước khi hỗ trợ nhiều ảnh)
+  images                  String[] @default([]) // Ảnh ghi nhận ban đầu, tối đa 3; chỉ áp dụng mức 1, 2
   createdById             String
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -1054,6 +1056,20 @@ model PositionSystemScope {
   @@unique([position, systemSeq])
   @@index([position])
   @@index([systemSeq])
+}
+
+// Metadata phân loại nhánh thiết bị. Không tham gia tính quyền xem/sửa.
+// Quyền thiết bị chỉ lấy từ PositionSystemScope (ma trận phân quyền).
+model EquipmentBranchClassification {
+  id               String   @id @default(cuid())
+  systemSeq        String   @unique
+  block            String?
+  managingPosition String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([block])
+  @@index([managingPosition])
 }
 
 // Ghi đè công trực ca theo từng dòng trong ngày (do người có quyền duyệt/chỉnh công đặt).

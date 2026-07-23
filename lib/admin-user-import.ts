@@ -18,6 +18,7 @@ type ParsedUserRow = {
   phone: string | null;
   position: string | null;
   secondaryPosition: string | null;
+  secondaryPosition2: string | null;
   department: string | null;
   role: Role;
   password: string;
@@ -64,10 +65,17 @@ const USER_IMPORT_HEADERS: Record<string, keyof ParsedUserRow | "ignored"> = {
   "so dien thoai": "phone",
   position: "position",
   chucvu: "position",
+  chucvuchinh: "position",
   "chuc vu": "position",
+  "chuc vu chinh": "position",
   secondaryposition: "secondaryPosition",
   chucvuphu: "secondaryPosition",
+  chucvuphu1: "secondaryPosition",
   "chuc vu phu": "secondaryPosition",
+  "chuc vu phu 1": "secondaryPosition",
+  secondaryposition2: "secondaryPosition2",
+  chucvuphu2: "secondaryPosition2",
+  "chuc vu phu 2": "secondaryPosition2",
   department: "department",
   phongban: "department",
   "phong ban": "department",
@@ -132,6 +140,7 @@ function readRows(buffer: Buffer, fileName: string): ParsedUserRow[] {
       phone: String(mapped.phone ?? "").trim() || null,
       position: String(mapped.position ?? "").trim() || null,
       secondaryPosition: String(mapped.secondaryPosition ?? "").trim() || null,
+      secondaryPosition2: String(mapped.secondaryPosition2 ?? "").trim() || null,
       department: String(mapped.department ?? "").trim() || null,
       role: roleValue(mapped.role),
       password: String(mapped.password ?? "").trim() || "password123",
@@ -167,8 +176,9 @@ export function createUserImportTemplate(format: "xlsx" | "csv") {
       "Email công ty": "nguyenvana@evngenco1.vn",
       "Email làm việc": "nva@duyenhai1.vn",
       "Số điện thoại": "0900000000",
-      "Chức vụ": "Kỹ thuật viên",
-      "Chức vụ phụ": "Trưởng ca",
+      "Chức vụ chính": "Kỹ thuật viên",
+      "Chức vụ phụ 1": "Trưởng ca",
+      "Chức vụ phụ 2": "Máy trưởng",
       "Bộ phận": "Vận hành 1",
       "Vai trò": "TECHNICIAN",
       "User": "nva",
@@ -270,6 +280,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
           phone: row.phone,
           position: row.position,
           secondaryPosition: row.secondaryPosition,
+          secondaryPosition2: row.secondaryPosition2,
           department: row.department,
           role: row.role,
           ...(row.isActive !== undefined ? { isActive: row.isActive } : {}),
@@ -287,6 +298,7 @@ export async function importUsersFromForm(form: FormData, actorId: string) {
           phone: row.phone,
           position: row.position,
           secondaryPosition: row.secondaryPosition,
+          secondaryPosition2: row.secondaryPosition2,
           department: row.department,
           role: row.role,
           passwordHash: await bcrypt.hash(row.password, 10),

@@ -568,6 +568,19 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         <DetailLine label="Ngày phát hiện" value={formatDate(defect.detectedAt)} />
         <DetailLine label="Ghi chú" value={defect.note || "—"} multiline />
         <DetailLine label="Người ghi nhận" value={defect.createdBy?.name || "—"} />
+        {defect.images.length > 0 && (
+          <div className="pt-1">
+            <div className="mb-2 font-semibold text-ink">Hình ảnh:</div>
+            <div className="flex flex-wrap gap-2">
+              {defect.images.map((src, index) => (
+                <a key={src} href={src} target="_blank" rel="noreferrer" className="block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={`Ảnh khiếm khuyết ${index + 1}`} className="h-20 w-20 rounded-lg border border-border object-cover" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ export async function exportUsersWorkbook() {
       workEmail: true,
       position: true,
       secondaryPosition: true,
+      secondaryPosition2: true,
     },
   });
 
@@ -19,8 +20,9 @@ export async function exportUsersWorkbook() {
     "Nhân viên": user.name,
     "Mã NV": user.employeeId,
     "Số điện thoại": user.phone ?? "",
-    "Chức vụ": user.position ?? "",
-    "Chức vụ phụ": user.secondaryPosition ?? "",
+    "Chức vụ chính": user.position ?? "",
+    "Chức vụ phụ 1": user.secondaryPosition ?? "",
+    "Chức vụ phụ 2": user.secondaryPosition2 ?? "",
     "Email công ty": user.email,
     "Email làm việc": user.workEmail ?? "",
   }));
@@ -30,6 +32,7 @@ export async function exportUsersWorkbook() {
     { wch: 28 },
     { wch: 14 },
     { wch: 16 },
+    { wch: 24 },
     { wch: 24 },
     { wch: 24 },
     { wch: 30 },

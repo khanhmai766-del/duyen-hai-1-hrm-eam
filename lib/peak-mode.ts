@@ -26,6 +26,7 @@ type PeakModeUser = {
   currentPosition?: string | null;
   primaryPosition?: string | null;
   secondaryPosition?: string | null;
+  secondaryPosition2?: string | null;
 };
 
 function normalizeVietnameseText(value: string) {
@@ -66,7 +67,7 @@ export function isPeakModeBypassUser(user?: PeakModeUser | null) {
   if (!user) return false;
   if (user.role && PEAK_BYPASS_ROLES.has(user.role)) return true;
 
-  const positions = [user.currentPosition, user.position, user.primaryPosition, user.secondaryPosition]
+  const positions = [user.currentPosition, user.position, user.primaryPosition, user.secondaryPosition, user.secondaryPosition2]
     .map((value) => normalizeVietnameseText(value ?? ""))
     .filter(Boolean);
 

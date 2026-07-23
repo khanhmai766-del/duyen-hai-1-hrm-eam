@@ -341,7 +341,7 @@ export default function OrgChartPage() {
           <DialogHeader>
             <DialogTitle>Link công khai sơ đồ ca</DialogTitle>
             <DialogDescription>
-              Người ngoài không cần tài khoản có thể mở link cố định này để xem danh sách nhân sự ca hiện tại hoặc xem lại tối đa 1 ngày trước, bao gồm số điện thoại.
+              Người ngoài không cần tài khoản có thể mở link cố định này để xem danh sách nhân sự ca hiện tại hoặc 7 ngày lịch sử. Số điện thoại chỉ hiển thị ở ngày hiện tại.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4">

@@ -40,9 +40,10 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     () => ({
       position: session?.user?.position,
       secondaryPosition: session?.user?.secondaryPosition,
+      secondaryPosition2: session?.user?.secondaryPosition2,
       currentPosition: session?.user?.currentPosition,
     }),
-    [session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition]
+    [session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition, session?.user?.secondaryPosition2]
   );
   const sections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
 

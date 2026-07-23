@@ -15,7 +15,7 @@ import {
   type PositionSystemScope,
 } from "@/lib/position-system-scopes";
 
-type SessionUser = { role?: string | null; position?: string | null };
+type SessionUser = { role?: string | null; position?: string | null; currentPosition?: string | null };
 
 /**
  * Bộ lọc phạm vi thiết bị của một cương vị, dạng biểu diễn được trong SQL:
@@ -116,7 +116,10 @@ export async function managingPositionsForEquipmentSeq(
 }
 
 function hasExplicitScopes(scopes: PositionSystemScope[], position: string) {
-  return scopesForPosition(scopes, position).length > 0;
+  const configurationActive = scopes.some(
+    (scope) => normalizeScopeAccess(scope.access) === "edit" || scope.position.startsWith("__BLOCK__:")
+  );
+  return configurationActive || scopesForPosition(scopes, position).length > 0;
 }
 
 // Cache access-context: theo (mảng node, cương vị) với TTL. Chỉ ~10-20 cương vị và
@@ -137,10 +140,11 @@ export async function resolveEquipmentAccessForUser(
   inputNodes?: NormalizedEquipmentNode[]
 ): Promise<EquipmentAccessContext> {
   const allNodes = inputNodes ?? (await getCachedEquipmentNodeList());
+  const activePosition = user.currentPosition ?? user.position;
   const cacheKey =
-    user.role === "ADMIN" || !(user.position ?? "")
+    user.role === "ADMIN" || !activePosition
       ? "__unrestricted__"
-      : `pos:${normalizePositionScopeKey(user.position)}`;
+      : `pos:${normalizePositionScopeKey(activePosition)}`;
 
   let byPosition = accessCacheByNodes.get(allNodes);
   if (!byPosition) {
@@ -184,7 +188,7 @@ async function buildEquipmentAccessContext(
   } satisfies EquipmentAccessContext;
 
   if (user.role === "ADMIN") return unrestricted;
-  const position = user.position ?? "";
+  const position = user.currentPosition ?? user.position ?? "";
   if (!position) return unrestricted;
 
   const scopes = await loadPositionSystemScopeRows();
@@ -280,7 +284,7 @@ export async function resolveEquipmentTreeAccess(
   user: SessionUser
 ): Promise<{ filter: EquipmentBranchFilter; rootSeqs: string[] | null }> {
   if (user.role === "ADMIN") return { filter: { kind: "all" }, rootSeqs: null };
-  const position = user.position ?? "";
+  const position = user.currentPosition ?? user.position ?? "";
   if (!position) return { filter: { kind: "all" }, rootSeqs: null };
   const scopes = await loadPositionSystemScopeRows();
   if (!hasExplicitScopes(scopes, position)) return { filter: { kind: "all" }, rootSeqs: null };
@@ -292,29 +296,13 @@ export async function resolveEquipmentTreeAccess(
   return { filter: access.branchFilter, rootSeqs };
 }
 
-// Kiểm tra quyền XEM một seq mà KHÔNG cần nạp/normalize toàn bộ 9k node: chỉ đọc
-// scopes của cương vị rồi leo cây theo tổ tiên của seq (tổ tiên hiệu lực luôn là
-// tiền tố chuỗi seq). Fail-safe: chỉ nới quyền khi cương vị chưa cấu hình riêng.
+// Kiểm tra quyền xem bằng cùng resolver dùng cho cây/danh sách để ma trận khối,
+// quyền kế thừa và cương vị quản lý luôn cho cùng một kết quả.
 export async function assertSeqViewable(user: SessionUser, seq: string) {
-  if (user.role === "ADMIN") return;
-  const position = user.position ?? "";
-  if (!position) return;
-
-  const scopes = await loadPositionSystemScopeRows();
-  const explicit = scopesForPosition(scopes, position);
-  if (!explicit.length) return; // cương vị chưa cấu hình riêng → xem tất cả (giữ rule cũ)
-
-  const accessBySeq = new Map(
-    explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const)
-  );
-  let current: string | null = seq;
-  while (current) {
-    const access = accessBySeq.get(current);
-    if (access && access !== "none") return; // seq hoặc tổ tiên được cấp quyền
-    const idx = current.lastIndexOf(".");
-    current = idx > 0 ? current.slice(0, idx) : null;
+  const access = await resolveEquipmentAccessForUser(user);
+  if (!access.canViewSeq(seq)) {
+    throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
   }
-  throw fail("Cương vị của bạn không có quyền xem hệ thống thiết bị này", 403);
 }
 
 // Chặn cứng server: dữ liệu vòi đốt / vòi thổi bụi chỉ cho ADMIN hoặc chức vụ
@@ -326,9 +314,9 @@ export async function assertOilSootAccess(user: { id?: string; role?: string | n
   if (user.id) {
     const dbUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { position: true, secondaryPosition: true },
+      select: { position: true, secondaryPosition: true, secondaryPosition2: true },
     });
-    positions.push(dbUser?.position, dbUser?.secondaryPosition);
+    positions.push(dbUser?.position, dbUser?.secondaryPosition, dbUser?.secondaryPosition2);
   }
   if (positionAllowsOilSoot(positions)) return;
   throw fail("Cương vị của bạn không có quyền xem dữ liệu vòi đốt / vòi thổi bụi", 403);

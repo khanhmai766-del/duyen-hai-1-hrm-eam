@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     await prisma.$transaction(ops);
-    await audit(user.id, "RECORD_REPLACEMENT", "MaterialReplacement", point.id, point.material.code);
+    await audit(user.id, "RECORD_REPLACEMENT", "MaterialReplacement", point.id, auditDetailWithPosition(user, point.material.code));
     return ok({ id: point.id, archived: true });
   });
 }

@@ -80,7 +80,12 @@ export default function AccountPage() {
                 <p className="mt-0.5 text-muted-foreground">{profile?.position ?? "—"}</p>
                 {profile?.secondaryPosition && (
                   <p className="mt-1 text-sm font-medium text-muted-foreground">
-                    Chức vụ phụ: {profile.secondaryPosition}
+                    Chức vụ phụ 1: {profile.secondaryPosition}
+                  </p>
+                )}
+                {profile?.secondaryPosition2 && (
+                  <p className="mt-1 text-sm font-medium text-muted-foreground">
+                    Chức vụ phụ 2: {profile.secondaryPosition2}
                   </p>
                 )}
                 {profile && (
@@ -124,8 +129,9 @@ export default function AccountPage() {
               <Field icon="mail" tint="from-cyan-100 to-cyan-200" label="Email làm việc" value={profile?.workEmail ?? undefined} />
               <Field icon="phone" tint="from-emerald-100 to-emerald-200" label="Số điện thoại" value={profile?.phone ?? undefined} />
               <Field icon="briefcase" tint="from-lime-100 to-lime-200" label="Chức vụ hiện tại" value={currentPosition ?? undefined} />
-              <Field icon="briefcase" tint="from-amber-100 to-amber-200" label="Chức vụ" value={profile?.position ?? undefined} />
-              <Field icon="briefcase" tint="from-orange-100 to-orange-200" label="Chức vụ phụ" value={profile?.secondaryPosition ?? undefined} />
+              <Field icon="briefcase" tint="from-amber-100 to-amber-200" label="Chức vụ chính" value={profile?.position ?? undefined} />
+              <Field icon="briefcase" tint="from-orange-100 to-orange-200" label="Chức vụ phụ 1" value={profile?.secondaryPosition ?? undefined} />
+              <Field icon="briefcase" tint="from-fuchsia-100 to-fuchsia-200" label="Chức vụ phụ 2" value={profile?.secondaryPosition2 ?? undefined} />
               <Field icon="building" tint="from-rose-100 to-rose-200" label="Bộ phận" value={profile?.department ?? undefined} />
               <Field icon="shield" tint="from-indigo-100 to-indigo-200" label="Phân quyền" value={u?.role} />
             </div>
@@ -167,11 +173,13 @@ function EditProfileDialog({
     (usersData?.data ?? []).forEach((u) => {
       add(u.position);
       add(u.secondaryPosition);
+      add(u.secondaryPosition2);
     });
     add(profile.position);
     add(profile.secondaryPosition);
+    add(profile.secondaryPosition2);
     return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, "vi"));
-  }, [usersData, profile.position, profile.secondaryPosition]);
+  }, [usersData, profile.position, profile.secondaryPosition, profile.secondaryPosition2]);
 
   const [form, setForm] = React.useState({
     avatarUrl: profile.avatarUrl ?? "",
@@ -183,6 +191,7 @@ function EditProfileDialog({
     name: profile.name,
     position: profile.position ?? "",
     secondaryPosition: profile.secondaryPosition ?? "",
+    secondaryPosition2: profile.secondaryPosition2 ?? "",
     department: profile.department ?? "",
     role: profile.role,
   });
@@ -205,6 +214,7 @@ function EditProfileDialog({
       payload.name = form.name;
       payload.position = form.position;
       payload.secondaryPosition = form.secondaryPosition;
+      payload.secondaryPosition2 = form.secondaryPosition2;
       payload.department = form.department;
       payload.role = form.role;
     }
@@ -267,7 +277,7 @@ function EditProfileDialog({
               <EditField label="Họ tên" className="sm:col-span-2">
                 <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
               </EditField>
-              <EditField label="Chức vụ">
+              <EditField label="Chức vụ chính">
                 <Select value={form.position} onValueChange={(v) => set("position", v)}>
                   <SelectTrigger><SelectValue placeholder="Chọn chức vụ" /></SelectTrigger>
                   <SelectContent className="max-h-72">
@@ -277,9 +287,20 @@ function EditProfileDialog({
                   </SelectContent>
                 </Select>
               </EditField>
-              <EditField label="Chức vụ phụ">
+              <EditField label="Chức vụ phụ 1">
                 <Select value={form.secondaryPosition || "__none__"} onValueChange={(v) => set("secondaryPosition", v === "__none__" ? "" : v)}>
                   <SelectTrigger><SelectValue placeholder="Chọn chức vụ phụ" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="__none__">Không chọn</SelectItem>
+                    {positionOptions.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </EditField>
+              <EditField label="Chức vụ phụ 2">
+                <Select value={form.secondaryPosition2 || "__none__"} onValueChange={(v) => set("secondaryPosition2", v === "__none__" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Chọn chức vụ phụ 2" /></SelectTrigger>
                   <SelectContent className="max-h-72">
                     <SelectItem value="__none__">Không chọn</SelectItem>
                     {positionOptions.map((p) => (

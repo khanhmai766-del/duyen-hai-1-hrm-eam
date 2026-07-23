@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
@@ -97,7 +97,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         });
       }
     }
-    await audit(user.id, "UPDATE_REPLACEMENT", "MaterialReplacement", point.id);
+    await audit(user.id, "UPDATE_REPLACEMENT", "MaterialReplacement", point.id, auditDetailWithPosition(user));
     return ok(mapPoint(point));
   });
 }
@@ -116,7 +116,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       return fail("Cương vị của bạn không có quyền thao tác trên điểm thay thế này", 403);
     }
     await prisma.materialReplacement.delete({ where: { id: params.id } });
-    await audit(user.id, "DELETE_REPLACEMENT", "MaterialReplacement", params.id);
+    await audit(user.id, "DELETE_REPLACEMENT", "MaterialReplacement", params.id, auditDetailWithPosition(user));
     return ok({ id: params.id });
   });
 }

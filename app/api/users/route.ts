@@ -30,6 +30,7 @@ const SUMMARY_SELECT = {
   role: true,
   position: true,
   secondaryPosition: true,
+  secondaryPosition2: true,
   currentPosition: true,
   department: true,
   isActive: true,
@@ -44,6 +45,7 @@ async function ensureUserSecondaryPositionColumn() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
     ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
+    ADD COLUMN IF NOT EXISTS "secondaryPosition2" TEXT,
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
     ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
@@ -106,6 +108,7 @@ export async function POST(req: NextRequest) {
     const initialPositions = {
       position: body.position || null,
       secondaryPosition: body.secondaryPosition || null,
+      secondaryPosition2: body.secondaryPosition2 || null,
       currentPosition: body.currentPosition || body.position || null,
     };
     const initialCurrentPosition = isValidCurrentPosition(initialPositions, initialPositions.currentPosition)
@@ -122,6 +125,7 @@ export async function POST(req: NextRequest) {
         role: body.role || "VIEWER",
         position: body.position || null,
         secondaryPosition: body.secondaryPosition || null,
+        secondaryPosition2: body.secondaryPosition2 || null,
         currentPosition: initialCurrentPosition,
         department: body.department || null,
         avatarUrl: null,
@@ -191,6 +195,7 @@ export async function PUT(req: NextRequest) {
     if (body.name) data.name = body.name;
     if (body.position !== undefined) data.position = body.position;
     if (body.secondaryPosition !== undefined) data.secondaryPosition = body.secondaryPosition || null;
+    if (body.secondaryPosition2 !== undefined) data.secondaryPosition2 = body.secondaryPosition2 || null;
     if (body.currentPosition !== undefined) data.currentPosition = body.currentPosition || null;
     if (body.department !== undefined) data.department = body.department;
     if (body.phone !== undefined) data.phone = body.phone;
@@ -214,6 +219,7 @@ export async function PUT(req: NextRequest) {
     const nextPositions = {
       position: (data.position as string | null | undefined) ?? before?.position ?? null,
       secondaryPosition: (data.secondaryPosition as string | null | undefined) ?? before?.secondaryPosition ?? null,
+      secondaryPosition2: (data.secondaryPosition2 as string | null | undefined) ?? before?.secondaryPosition2 ?? null,
       currentPosition: (data.currentPosition as string | null | undefined) ?? before?.currentPosition ?? null,
     };
     if (!isValidCurrentPosition(nextPositions, nextPositions.currentPosition)) {

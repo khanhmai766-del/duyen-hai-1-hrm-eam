@@ -13,12 +13,14 @@ export function MultiImagePicker({
   onChange,
   max = 3,
   maxWidth = 1280,
+  maxFileSizeMb = 8,
   allowUrl = false,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   max?: number;
   maxWidth?: number;
+  maxFileSizeMb?: number;
   /** Hiện thêm ô dán URL (vd link Google Photos) ngoài tải file. */
   allowUrl?: boolean;
 }) {
@@ -70,7 +72,10 @@ export function MultiImagePicker({
     const next: string[] = [];
     for (const f of accepted) {
       if (!f.type.startsWith("image/")) { toast.error("Vui lòng chọn tệp ảnh"); continue; }
-      if (f.size > 8 * 1024 * 1024) { toast.error("Ảnh tối đa 8MB"); continue; }
+      if (f.size > maxFileSizeMb * 1024 * 1024) {
+        toast.error(`Ảnh tối đa ${maxFileSizeMb}MB`);
+        continue;
+      }
       next.push(await downscale(f));
     }
     if (next.length) onChange([...value, ...next]);

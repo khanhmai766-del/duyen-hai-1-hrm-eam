@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { assertSeqEditable } from "@/lib/server-access";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { DEFECT_UNITS, MATERIAL_CATEGORIES, addMonths } from "@/lib/constants";
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       include: { material: { select: { id: true, name: true, unit: true, machine: true, category: true } } },
     });
 
-    await audit(user.id, "DECLARE_DEVICE_MATERIAL", "MaterialReplacement", point.id, `${deviceSeq} · ${material.code}`);
+    await audit(user.id, "DECLARE_DEVICE_MATERIAL", "MaterialReplacement", point.id, auditDetailWithPosition(user, `${deviceSeq} · ${material.code}`));
     return ok(point);
   });
 }

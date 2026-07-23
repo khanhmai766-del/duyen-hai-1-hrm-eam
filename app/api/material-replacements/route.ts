@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
       },
       include: INCLUDE,
     });
-    await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, material.code);
+    await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, auditDetailWithPosition(user, material.code));
     return ok(mapPoint(point));
   });
 }

@@ -30,7 +30,7 @@ function isShiftType(value: string | null): value is ShiftTypeKey {
 function publicDateBounds(now = new Date()) {
   const vn = vietnamNow(now);
   const max = localDateFromVietnamClock(vn);
-  vn.setUTCDate(vn.getUTCDate() - 1);
+  vn.setUTCDate(vn.getUTCDate() - 7);
   return { min: localDateFromVietnamClock(vn), max };
 }
 
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     const bounds = publicDateBounds();
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < bounds.min || date > bounds.max) {
-      return fail("Link công khai chỉ cho phép xem hôm nay và 1 ngày trước", 400);
+      return fail("Link công khai chỉ cho phép xem hôm nay và 7 ngày lịch sử", 400);
     }
     const { start, end } = dateRange(date);
 
@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
           ? `/api/public/avatar?key=${encodeURIComponent(assignment.user.avatarKey)}`
           : assignment.user.avatarUrl,
         avatarKey: undefined,
+        phone: date === bounds.max ? assignment.user.phone : null,
       },
     }));
 

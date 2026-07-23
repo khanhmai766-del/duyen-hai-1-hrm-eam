@@ -1,4 +1,5 @@
 import { normalizeText } from "@/lib/nav";
+import { EQUIPMENT_BLOCKS, blockForPosition } from "@/lib/constants";
 
 export type ScopeAccess = "none" | "view" | "edit";
 export type NodeAccess = ScopeAccess;
@@ -10,6 +11,53 @@ export type PositionSystemScope = {
   access: ScopeAccess;
   createdAt: string;
 };
+
+export type EquipmentBlock = (typeof EQUIPMENT_BLOCKS)[number];
+export const BLOCK_SCOPE_PREFIX = "__BLOCK__:";
+
+export function blockScopePosition(block: EquipmentBlock) {
+  return `${BLOCK_SCOPE_PREFIX}${block}`;
+}
+
+export function blockFromScopePosition(position?: string | null): EquipmentBlock | null {
+  const value = String(position ?? "");
+  if (!value.startsWith(BLOCK_SCOPE_PREFIX)) return null;
+  const block = value.slice(BLOCK_SCOPE_PREFIX.length);
+  return (EQUIPMENT_BLOCKS as readonly string[]).includes(block) ? block as EquipmentBlock : null;
+}
+
+export function isBlockScopePosition(position?: string | null) {
+  return Boolean(blockFromScopePosition(position));
+}
+
+/** Ma trận khối được xem theo cương vị đã thống nhất trong nghiệp vụ. */
+export function viewableBlocksForPosition(position?: string | null): EquipmentBlock[] {
+  const normalized = normalizeText(position ?? "");
+  if (!normalized) return [];
+  if (
+    normalized.includes("quan doc") ||
+    normalized.includes("pho quan doc") ||
+    normalized.includes("ky thuat vien") ||
+    normalized === "truong ca"
+  ) {
+    return [...EQUIPMENT_BLOCKS];
+  }
+  if (
+    normalized.includes("truong kip lo may") ||
+    normalized.includes("truong kip lo - may") ||
+    normalized.includes("tk lo may")
+  ) {
+    return ["Khối Lò Hơi", "Khối Turbine", "Khối BOP"];
+  }
+  if (normalized.includes("truong kip dien") || normalized === "tk dien") {
+    return ["Khối Điện", "Khối BOP"];
+  }
+  if (normalized.includes("lo truong")) return ["Khối Lò Hơi"];
+  if (normalized.includes("may truong")) return ["Khối Turbine"];
+  // Các cương vị dưới Lò trưởng/Máy trưởng không tự động được xem cả khối;
+  // họ chỉ thấy nhánh được gán trực tiếp đúng cương vị của mình.
+  return [];
+}
 
 type EquipmentNodeLike = {
   seq: string;
@@ -119,6 +167,9 @@ export function createPositionAccessResolver(
 ) {
   const normalizedPosition = normalizeText(position ?? "");
   const explicit = scopesForPosition(scopes, position);
+  const scopeConfigurationActive = scopes.some(
+    (scope) => normalizeScopeAccess(scope.access) === "edit"
+  );
   const { bySeq, parentOf } = nodeIndex(nodes);
   const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
   const byName = new Map<string, EquipmentNodeLike>();
@@ -138,14 +189,17 @@ export function createPositionAccessResolver(
 
   const accessForSeq = (seq: string | null | undefined): NodeAccess => {
     if (!normalizedPosition) return "edit";
-    if (!explicit.length) return "edit";
-    return scopedSeqAccess(seq);
+    const direct = scopedSeqAccess(seq);
+    if (direct === "edit") return "edit";
+    if (direct === "view") return "view";
+    if (!scopeConfigurationActive && !explicit.length) return "edit";
+    return "none";
   };
 
   const accessForDevice = (device: DeviceLike | null | undefined): NodeAccess => {
     if (!normalizedPosition) return "edit";
     if (!device) return "edit";
-    if (!explicit.length) {
+    if (!scopeConfigurationActive && !explicit.length) {
       const ok = !device.managingPosition || normalizePositionScopeKey(device.managingPosition) === normalizePositionScopeKey(position);
       return ok ? "edit" : "none";
     }
@@ -161,7 +215,7 @@ export function createPositionAccessResolver(
   };
 
   return {
-    hasExplicitScopes: explicit.length > 0,
+    hasExplicitScopes: scopeConfigurationActive || explicit.length > 0,
     accessForSeq,
     accessForDevice,
   };
@@ -188,36 +242,7 @@ export function deviceAccessForPosition(
   nodes: EquipmentNodeLike[],
   scopes: PositionSystemScope[]
 ): NodeAccess {
-  const normalizedPosition = normalizeText(position ?? "");
-  if (!normalizedPosition) return "edit";
-  const explicit = scopesForPosition(scopes, position);
-  if (!explicit.length) {
-    // Chưa cấu hình riêng: giữ rule cũ theo cương vị quản lý của thiết bị.
-    const ok = !device.managingPosition || normalizePositionScopeKey(device.managingPosition) === normalizePositionScopeKey(position);
-    return ok ? "edit" : "none";
-  }
-
-  const { bySeq, parentOf } = nodeIndex(nodes);
-  const accessBySeq = new Map(explicit.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
-  const seqAccess = (seq: string | null | undefined): NodeAccess => {
-    let current: string | null | undefined = seq;
-    while (current) {
-      if (accessBySeq.has(current)) return accessBySeq.get(current)!;
-      current = parentOf.get(current) ?? null;
-    }
-    return "none";
-  };
-
-  if (device.code && bySeq.has(device.code)) return seqAccess(device.code);
-
-  let best: NodeAccess = seqAccess(device.systemSeq);
-  if (device.system) {
-    const node = Array.from(bySeq.values()).find((item) => normalizeText(item.name) === normalizeText(device.system!));
-    if (node) best = seqAccess(node.seq);
-  }
-  // Nhánh COMMON luôn được xem.
-  // Thiết bị do chính cương vị quản lý → coi như được chỉnh sửa (giữ rule cũ).
-  return best;
+  return createPositionAccessResolver(position, nodes, scopes).accessForDevice(device);
 }
 
 /** Giữ tương thích: thiết bị có được hiển thị cho cương vị không (xem trở lên). */

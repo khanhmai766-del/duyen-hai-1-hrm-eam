@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const ext = ALLOWED[file.type];
     if (!ext) return fail("Chỉ chấp nhận ảnh JPG, PNG, WEBP hoặc GIF");
-    if (file.size > 5 * 1024 * 1024) return fail("Ảnh vượt quá 5MB");
+    if (file.size > 15 * 1024 * 1024) return fail("Ảnh vượt quá 15MB");
 
     const uploaded = await uploadImageBufferToS3({
       buffer: Buffer.from(await file.arrayBuffer()),

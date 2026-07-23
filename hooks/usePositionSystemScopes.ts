@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { PositionSystemScope, ScopeAccess } from "@/lib/position-system-scopes";
+import type { EquipmentBranchClassification } from "@/lib/equipment-classification";
 
 // Phân quyền hệ thống theo cương vị hầu như không đổi — cache lâu để tránh refetch
 // liên tục (hook này chạy trong useSystemAccess và mọi EquipmentTreePicker).
@@ -28,22 +29,27 @@ export function useUpdatePositionSystemScope() {
 
 export type BranchPositionAssignmentResult = {
   seq: string;
-  position: string;
+  assignmentType: "block" | "position";
+  value: string;
   affectedNodes: number;
-  clearedOverrides: number;
 };
 
-/**
- * Gán một cương vị quản lý cho toàn nhánh. Server xóa các điểm ghi đè cũ bên
- * dưới rồi tạo một điểm kế thừa mới tại node được chọn.
- */
+/** Metadata Khối/Cương vị của nhánh; hoàn toàn không tham gia phân quyền. */
+export function useEquipmentClassifications() {
+  return useQuery({
+    queryKey: ["equipment-classifications"],
+    queryFn: () => apiGet<EquipmentBranchClassification[]>("/api/equipment-classifications"),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 export function useAssignPositionToEquipmentBranch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: { seq: string; position: string }) =>
-      apiMutate<BranchPositionAssignmentResult>("/api/position-system-scopes/assign", "POST", body),
+    mutationFn: (body: { seq: string; assignmentType: "block" | "position"; value: string }) =>
+      apiMutate<BranchPositionAssignmentResult>("/api/equipment-classifications/assign", "POST", body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["position-system-scopes"] });
+      queryClient.invalidateQueries({ queryKey: ["equipment-classifications"] });
     },
   });
 }

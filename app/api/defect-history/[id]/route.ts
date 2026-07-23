@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -47,7 +47,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       },
       include: INCLUDE,
     });
-    await audit(user.id, "UPDATE_DEFECT_HISTORY", "DefectHistory", history.id);
+    await audit(user.id, "UPDATE_DEFECT_HISTORY", "DefectHistory", history.id, auditDetailWithPosition(user));
     return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }
@@ -63,7 +63,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       return fail("Cương vị của bạn không có quyền thao tác trên lịch sử khiếm khuyết này", 403);
     }
     await prisma.defectHistory.delete({ where: { id: params.id } });
-    await audit(user.id, "DELETE_DEFECT_HISTORY", "DefectHistory", params.id);
+    await audit(user.id, "DELETE_DEFECT_HISTORY", "DefectHistory", params.id, auditDetailWithPosition(user));
     return ok({ id: params.id });
   });
 }
