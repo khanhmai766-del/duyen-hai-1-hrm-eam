@@ -86,13 +86,15 @@ async function updateMaterialDocument(materialId: string, fields: MaterialDocume
 
 function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?: Array<any>; replacements?: Array<any> }>(
   material: T,
-  document?: MaterialDocumentFields
+  document?: MaterialDocumentFields,
+  parentNameBySeq?: Map<string, string>
 ) {
-  const replacements = (material.replacements ?? []).map((r) => ({
-    ...r,
-    deviceId: r.deviceSeq,
-    device: equipmentNodeToDevice(r.device),
-  }));
+  const replacements = (material.replacements ?? []).map((r) => {
+    const device = equipmentNodeToDevice(r.device);
+    // "Hệ thống" của thiết bị = tên node cha trong cây (giống trang lý lịch thiết bị).
+    if (device && r.device?.parentSeq) device.system = parentNameBySeq?.get(r.device.parentSeq) ?? null;
+    return { ...r, deviceId: r.deviceSeq, device };
+  });
   // Tổng nhu cầu 1 chu kỳ = Σ (dung tích × số thiết bị) các DÒNG KHAI BÁO (isActive=false);
   // điểm theo dõi thời gian (isActive=true) là bản sao nên không cộng lặp.
   const totalNeed = replacements
@@ -222,7 +224,19 @@ export async function GET(req: NextRequest) {
       }),
     ]);
     const documents = await materialDocumentMap(materials.map((material) => material.id));
-    const data = materials.map((material) => mapMaterial(material, documents.get(material.id)));
+    // Tra tên node cha 1 lần cho mọi thiết bị của các điểm thay thế → cột "Hệ thống".
+    const parentSeqs = Array.from(
+      new Set(
+        materials.flatMap((material) =>
+          (material.replacements ?? []).map((r) => r.device?.parentSeq).filter((seq): seq is string => Boolean(seq))
+        )
+      )
+    );
+    const parentNodes = parentSeqs.length
+      ? await prisma.equipmentNode.findMany({ where: { seq: { in: parentSeqs } }, select: { seq: true, name: true } })
+      : [];
+    const parentNameBySeq = new Map(parentNodes.map((node) => [node.seq, node.name]));
+    const data = materials.map((material) => mapMaterial(material, documents.get(material.id), parentNameBySeq));
     // Khi KHÔNG tải usage nhưng vẫn phải xét quyền hiển thị: tra bản nhẹ 2 cột
     // (materialId, deviceSeq) thay vì chở cả lịch sử tiêu hao về client.
     const usageMap = new Map<string, string[]>();

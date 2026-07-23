@@ -1425,7 +1425,8 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
           <tbody>
             {points.map((p) => (
               <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-2.5 font-medium uppercase text-ink">{p.device?.name || p.system || "—"}</td>
+                {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
+                <td className="px-4 py-2.5 font-medium uppercase text-ink">{p.device?.system || p.system || p.device?.name || "—"}</td>
                 <td className="px-4 py-2.5 text-ink">{p.location || "—"}</td>
                 <td className="px-4 py-2.5 text-ink">{p.managingPosition || "—"}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
