@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
-import { maybeUploadDataUrlList } from "@/lib/s3";
+import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { OIL_SOOT_GATED_CATEGORIES } from "@/lib/oil-soot-access";
@@ -169,13 +169,15 @@ export async function GET(req: NextRequest) {
             'id', cu.id,
             'name', cu.name,
             'position', cu.position,
-            'avatarUrl', cu."avatarUrl"
+            'avatarUrl', cu."avatarUrl",
+            'avatarKey', cu."avatar_key"
           ) AS "createdBy",
           json_build_object(
             'id', uu.id,
             'name', uu.name,
             'position', uu.position,
-            'avatarUrl', uu."avatarUrl"
+            'avatarUrl', uu."avatarUrl",
+            'avatarKey', uu."avatar_key"
           ) AS "updatedBy"
         FROM "DigitalDocument" d
         LEFT JOIN "User" cu ON cu.id = d."createdById"
@@ -186,7 +188,17 @@ export async function GET(req: NextRequest) {
       category
     );
 
-    return ok(items);
+    const data = (items as Array<Record<string, unknown>>).map((item) => ({
+      ...item,
+      createdBy: item.createdBy
+        ? publicUserRef(item.createdBy as { avatarUrl?: string | null; avatarKey?: string | null })
+        : null,
+      updatedBy: item.updatedBy
+        ? publicUserRef(item.updatedBy as { avatarUrl?: string | null; avatarKey?: string | null })
+        : null,
+    }));
+
+    return ok(data);
   });
 }
 

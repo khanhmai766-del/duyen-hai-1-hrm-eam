@@ -6,13 +6,14 @@ import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { publicUserRef } from "@/lib/s3";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
   device: { select: EQUIPMENT_DEVICE_SELECT },
   logs: {
     orderBy: { replacedAt: "desc" },
-    include: { doneBy: { select: { id: true, name: true, position: true, avatarUrl: true } } },
+    include: { doneBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } },
   },
 } as const;
 
@@ -27,6 +28,10 @@ function mapPoint(point: any) {
     ...point,
     deviceId: point.deviceSeq ?? null,
     device: equipmentNodeToDevice(point.device),
+    logs: point.logs?.map((log: any) => ({
+      ...log,
+      doneBy: log.doneBy ? publicUserRef(log.doneBy) : null,
+    })),
   };
 }
 
