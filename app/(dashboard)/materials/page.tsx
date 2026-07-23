@@ -1409,31 +1409,36 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Chi tiết điểm thay thế ({points.length})
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border text-muted-foreground">
-              <th className="px-4 py-2 text-left font-semibold">Hệ thống / thiết bị</th>
-              <th className="px-4 py-2 text-left font-semibold">Thiết bị</th>
-              <th className="w-[120px] px-4 py-2 text-left font-semibold">Cương vị quản lý</th>
-              <th className="w-[80px] px-2 py-2 text-center font-semibold">SL thiết bị</th>
-              <th className="w-[230px] px-4 py-2 text-center font-semibold">Chu kỳ O&M</th>
-              <th className="w-[110px] px-2 py-2 text-center font-semibold">Chu kỳ thay thế</th>
-              <th className="w-[120px] px-2 py-2 text-center font-semibold">Số lượng cần thay</th>
-              <th className="w-[150px] px-4 py-2 text-center font-semibold">Theo dõi</th>
+              {/* nowrap toàn bảng: mỗi ô nội dung nằm gọn 1 dòng, cột tự co giãn theo nội dung. */}
+              <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Hệ thống / thiết bị</th>
+              <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Thiết bị</th>
+              <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Cương vị quản lý</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">SL thiết bị</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ O&M</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ thay thế</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Số lượng cần thay</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Theo dõi</th>
             </tr>
           </thead>
           <tbody>
             {points.map((p) => (
               <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
                 {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
-                <td className="px-4 py-2.5 font-medium uppercase text-ink">{p.device?.system || p.system || p.device?.name || "—"}</td>
+                <td className="px-4 py-2.5 font-medium uppercase text-ink whitespace-nowrap">{p.device?.system || p.system || p.device?.name || "—"}</td>
                 {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
-                <td className="px-4 py-2.5 text-ink">{p.device?.name || p.location || "—"}</td>
-                <td className="px-4 py-2.5 text-ink">{p.managingPosition || "—"}</td>
-                <td className="px-2 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
-                <td className="px-4 py-2.5 text-center text-ink">{p.intervalNote || "—"}</td>
-                <td className="px-2 py-2.5 text-center text-ink">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
-                <td className="px-2 py-2.5 text-center font-semibold text-ink">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                <td className="px-4 py-2.5 text-ink whitespace-nowrap">{p.device?.name || p.location || "—"}</td>
+                <td className="px-3 py-2.5 text-ink whitespace-nowrap">{p.managingPosition || "—"}</td>
+                <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.deviceCount ?? 1}</td>
+                {/* Ghi chú O&M quá dài thì cắt bớt kèm tooltip, tránh 1 ô kéo vỡ cả bảng. */}
+                <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">
+                  <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
+                </td>
+                <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
+                <td className="px-3 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                 <td className="px-4 py-2.5 text-center">
                   <button
                     type="button"
@@ -1449,6 +1454,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Dialog open={!!tracking} onOpenChange={(open) => !open && setTracking(null)}>
