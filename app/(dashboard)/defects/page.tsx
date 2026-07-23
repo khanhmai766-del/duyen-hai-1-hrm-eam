@@ -49,7 +49,16 @@ export default function DefectsPage() {
 
   const { data, isLoading } = useDefects();
   const del = useDeleteDefect();
-  const allDefects = data?.data ?? [];
+  // Ưu tiên khiếm khuyết có ngày phát hiện gần nhất lên đầu (thiếu ngày → xuống cuối).
+  const allDefects = React.useMemo(
+    () =>
+      [...(data?.data ?? [])].sort((a, b) => {
+        const ta = a.detectedAt ? new Date(a.detectedAt).getTime() : -Infinity;
+        const tb = b.detectedAt ? new Date(b.detectedAt).getTime() : -Infinity;
+        return tb - ta;
+      }),
+    [data]
+  );
 
   // Tên thiết bị theo mã (để file xuất ghi rõ tên thay vì mã).
   const { data: devicesData } = useDevices({});
@@ -63,15 +72,16 @@ export default function DefectsPage() {
   const positions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
-  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">(
-    unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "ALL"
+  // Tổ máy không có "Tất cả" — mặc định S1.
+  const [unitFilter, setUnitFilter] = React.useState<"S1" | "S2" | "COMMON">(
+    unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
   );
   const [requestFilter, setRequestFilter] = React.useState("ALL");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const defects = allDefects.filter(
     (d) =>
       (!deviceSeqFilter || d.deviceSeq === deviceSeqFilter || (!d.deviceSeq && d.device === deviceSeqFilter)) &&
-      (unitFilter === "ALL" || d.unit === unitFilter) &&
+      d.unit === unitFilter &&
       (requestFilter === "ALL" || d.requestType === requestFilter) &&
       (positionFilter === "ALL" || d.system === positionFilter)
   );
@@ -105,10 +115,10 @@ export default function DefectsPage() {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "ALL" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace("/defects", { scroll: false });
-    setUnitFilter("ALL");
+    setUnitFilter("S1");
     setRequestFilter("ALL");
     setPositionFilter("ALL");
     setStatusFilter("ALL");
@@ -189,7 +199,7 @@ export default function DefectsPage() {
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
             <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
-              {(["ALL", "S1", "S2", "COMMON"] as const).map((u) => (
+              {(["S1", "S2", "COMMON"] as const).map((u) => (
                 <button
                   key={u}
                   type="button"
@@ -199,7 +209,7 @@ export default function DefectsPage() {
                     unitFilter === u ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
                   )}
                 >
-                  {u === "ALL" ? "Tất cả" : u}
+                  {u}
                 </button>
               ))}
             </div>
@@ -273,10 +283,11 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-          <Table className="min-w-[1100px] table-fixed">
+          <Table className="min-w-[1250px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[96px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
+                <TableHead className="w-[150px] text-center">Số yêu cầu</TableHead>
                 <TableHead className="w-[180px] text-center">Cương vị</TableHead>
                 <TableHead className="w-[240px] text-center">Nội dung</TableHead>
                 <TableHead className="w-[110px] text-center">
@@ -325,6 +336,9 @@ export default function DefectsPage() {
                           <span>{d.unit}</span>
                         </div>
                       </TableCell>
+                      <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
+                        <div className="truncate" title={d.requestNumber ?? undefined}>{d.requestNumber || "—"}</div>
+                      </TableCell>
                       <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
                       </TableCell>
@@ -357,7 +371,7 @@ export default function DefectsPage() {
                     </TableRow>
                     {expanded && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={8} className="px-6 py-4">
+                        <TableCell colSpan={9} className="px-6 py-4">
                           <DefectExpandedDetails defect={d} />
                         </TableCell>
                       </TableRow>

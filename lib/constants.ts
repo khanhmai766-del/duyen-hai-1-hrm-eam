@@ -322,10 +322,11 @@ export const DEFECT_STATUS = {
   CHUA_XU_LY: { label: "Chưa xử lý", badge: "bg-slate-100 text-slate-700", dot: "#64748B" },
   CO_PCT: { label: "Đang thực hiện", badge: "bg-blue-100 text-blue-800", dot: "#2563EB" },
   CHO_VAT_TU: { label: "Chờ vật tư", badge: "bg-amber-100 text-amber-800", dot: "#D97706" },
+  CHO_NGUNG_MAY: { label: "Chờ ngừng máy", badge: "bg-orange-100 text-orange-800", dot: "#EA580C" },
   DA_XU_LY: { label: "Đã xử lý", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
 } as const;
 export type DefectStatusKey = keyof typeof DEFECT_STATUS;
-export const DEFECT_STATUS_ORDER: DefectStatusKey[] = ["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "DA_XU_LY"];
+export const DEFECT_STATUS_ORDER: DefectStatusKey[] = ["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "CHO_NGUNG_MAY", "DA_XU_LY"];
 
 /** Loại vật tư — dùng cho tab phân loại trong Danh mục vật tư. */
 export const MATERIAL_CATEGORIES = [
