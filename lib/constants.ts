@@ -337,6 +337,16 @@ export const MATERIAL_CATEGORIES = [
   "Bi Nghiền Than",
 ] as const;
 
+/** So khớp loại vật tư với tab Danh mục — chấp nhận cả nhãn cũ còn trong dữ liệu
+ *  ("Hóa chất"/"Vật tư tiêu hao" → Hóa Chất; "Bi nghiền"/"Bi nghiền than" → Bi Nghiền Than). */
+export function materialCategoryMatches(value: string | null | undefined, target: string): boolean {
+  return (
+    value === target ||
+    (target === "Hóa Chất" && (value === "Vật tư tiêu hao" || value === "Hóa chất")) ||
+    (target === "Bi Nghiền Than" && (value === "Bi nghiền than" || value === "Bi nghiền"))
+  );
+}
+
 /** Ánh xạ loại vật tư của PHIẾU thay thế (materialCategory) → loại trong Danh mục
  *  vật tư (Material.category): dùng để lọc dropdown vật tư ở bước Đề xuất/Nhập liệu. */
 export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {

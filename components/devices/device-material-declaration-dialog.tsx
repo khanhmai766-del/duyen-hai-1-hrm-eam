@@ -14,7 +14,7 @@ import {
   useCreateDeviceMaterialDeclaration,
   useDeviceMaterialOptions,
 } from "@/hooks/useDeviceMaterialDeclarations";
-import { MATERIAL_CATEGORIES, isSelectableManagingPosition } from "@/lib/constants";
+import { MATERIAL_CATEGORIES, isSelectableManagingPosition, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 
 const NONE = "__none__";
@@ -34,11 +34,16 @@ export function DeviceMaterialDeclarationDialog({
   const optionsQuery = useDeviceMaterialOptions(device.code, machine, open);
   const create = useCreateDeviceMaterialDeclaration();
   const options = React.useMemo(() => optionsQuery.data?.data ?? [], [optionsQuery.data]);
+  // Đồng bộ với tab Danh mục vật tư PXVH1: luôn hiện đủ các loại chuẩn
+  // (Dầu bôi trơn, Lõi lọc dầu, Thiết bị C&I, Hóa Chất, Bi Nghiền Than),
+  // kèm loại lạ còn sót trong dữ liệu nhưng chưa quy về nhãn chuẩn.
   const categories = React.useMemo(() => {
     const available = new Set(options.map((item) => item.category).filter((value): value is string => Boolean(value)));
     return [
-      ...MATERIAL_CATEGORIES.filter((category) => available.has(category)),
-      ...Array.from(available).filter((category) => !(MATERIAL_CATEGORIES as readonly string[]).includes(category)),
+      ...MATERIAL_CATEGORIES,
+      ...Array.from(available).filter(
+        (category) => !MATERIAL_CATEGORIES.some((standard) => materialCategoryMatches(category, standard))
+      ),
     ];
   }, [options]);
 
@@ -75,7 +80,7 @@ export function DeviceMaterialDeclarationDialog({
   const filteredMaterials = React.useMemo(() => {
     const query = normalizeText(search);
     return options.filter((item) => {
-      if (category && item.category !== category) return false;
+      if (category && !materialCategoryMatches(item.category, category)) return false;
       if (!query) return true;
       return normalizeText(`${item.code} ${item.name}`).includes(query);
     });

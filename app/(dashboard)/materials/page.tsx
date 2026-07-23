@@ -25,7 +25,7 @@ import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { useCreateReplacement } from "@/hooks/useReplacements";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog } from "@/lib/constants";
+import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { cn, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
@@ -141,11 +141,7 @@ function MaterialsPageContent() {
   }
 
   function categoryMatches(value?: string | null, target = categoryFilter) {
-    return (
-      value === target ||
-      (target === "Hóa Chất" && (value === "Vật tư tiêu hao" || value === "Hóa chất")) ||
-      (target === "Bi Nghiền Than" && (value === "Bi nghiền than" || value === "Bi nghiền"))
-    );
+    return materialCategoryMatches(value, target);
   }
 
   function erpStockByGroupedCodes(codes: string[]) {
@@ -236,9 +232,7 @@ function MaterialsPageContent() {
     (m) =>
       (m.machine ?? "COMMON") === machineTab &&
       (!q || `${materialErpCodes(m).join(" ")} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
-      (m.category === categoryFilter ||
-        (categoryFilter === "Hóa Chất" && (m.category === "Vật tư tiêu hao" || m.category === "Hóa chất")) ||
-        (categoryFilter === "Bi Nghiền Than" && (m.category === "Bi nghiền than" || m.category === "Bi nghiền"))) &&
+      materialCategoryMatches(m.category, categoryFilter) &&
       (blockFilter === "ALL" || materialBlocks(m).has(blockFilter))
   );
   const isFiltered = q.trim() !== "" || blockFilter !== "ALL";
