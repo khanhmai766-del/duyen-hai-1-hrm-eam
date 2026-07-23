@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
           select: {
             deviceSeq: true,
             system: true,
+            managingPosition: true,
             intervalMonths: true,
             intervalNote: true,
             device: { select: EQUIPMENT_DEVICE_SELECT },

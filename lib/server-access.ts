@@ -89,6 +89,32 @@ export async function loadPositionSystemScopeRows(): Promise<PositionSystemScope
   }
 }
 
+/** Các cương vị có quyền chỉnh sửa hiệu lực trên thiết bị, ưu tiên cương vị được gán ở nhánh gần nhất. */
+export async function managingPositionsForEquipmentSeq(
+  seq: string,
+  nodes: NormalizedEquipmentNode[]
+): Promise<string[]> {
+  const scopes = await loadPositionSystemScopeRows();
+  const positions = Array.from(new Set(scopes.map((scope) => scope.position.trim()).filter(Boolean)));
+  const matching = positions.filter(
+    (position) => createPositionAccessResolver(position, nodes, scopes).accessForSeq(seq) === "edit"
+  );
+
+  const nearestScopeDepth = (position: string) => {
+    let best = -1;
+    for (const scope of scopesForPosition(scopes, position)) {
+      if (seq === scope.systemSeq || seq.startsWith(`${scope.systemSeq}.`)) {
+        best = Math.max(best, scope.systemSeq.split(".").length);
+      }
+    }
+    return best;
+  };
+
+  return matching.sort(
+    (a, b) => nearestScopeDepth(b) - nearestScopeDepth(a) || a.localeCompare(b, "vi")
+  );
+}
+
 function hasExplicitScopes(scopes: PositionSystemScope[], position: string) {
   return scopesForPosition(scopes, position).length > 0;
 }

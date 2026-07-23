@@ -745,6 +745,7 @@ model Defect {
   device                  String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
   system                  String? // Cương vị (chức vụ phụ trách)
   severity                String? // Mức độ: "1".."4"
+  severityCriteria        String[] @default([]) // Các ID tiêu chí chi tiết đã chọn theo mức độ
   condition               String? // Điều kiện thực hiện: A | B
   fireSafetyImpact        String? // Ảnh hưởng PCCC: Có | Không
   environmentSafetyImpact String? // Môi trường, ATVSLĐ: Có | Không
@@ -753,6 +754,8 @@ model Defect {
   content                 String? // Nội dung
   status                  String    @default("CHUA_XU_LY") // Tình trạng khiếm khuyết
   detectedAt              DateTime? // Ngày phát hiện
+  shiftLeaderId           String? // Người giữ cương vị Trưởng ca tại thời điểm lập phiếu (không FK để giữ snapshot)
+  shiftLeaderName         String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt             DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
   note                    String? // Ghi chú
   imageUrl                String? // Hình ảnh
@@ -773,6 +776,7 @@ model Defect {
   @@index([status])
   @@index([unit, status])
   @@index([detectedAt])
+  @@index([shiftLeaderId])
   @@index([createdAt])
   @@index([completedAt])
   @@index([createdById])

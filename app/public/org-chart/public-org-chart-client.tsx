@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Check, CheckCircle2, Clock, Phone, RefreshCw, UsersRound } from "lucide-react";
+import { CalendarDays, Check, CheckCircle2, Clock, Phone, RefreshCw, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SHIFT_TYPE, type ShiftTypeKey } from "@/lib/constants";
+import { SHIFT_TYPE, SHIFT_TYPE_ORDER, type ShiftTypeKey } from "@/lib/constants";
 import { ORG_CHIEF, ORG_LEADS, type OrgTone } from "@/lib/org-template";
 import { cn, formatDate, initials } from "@/lib/utils";
 
@@ -32,8 +32,12 @@ const TONE_STYLES: Record<OrgTone | "chief", { bar: string; cell: string; title:
   green: { bar: "border-green-200 bg-green-50", cell: "border-green-200 bg-green-50/50", title: "text-green-700", block: "bg-green-50/30", filled: "border-emerald-300 shadow-[0_10px_24px_-10px_rgba(16,185,129,0.5)]" },
 };
 
-async function loadOrgChart() {
-  const res = await fetch("/api/public/org-chart", { cache: "no-store" });
+async function loadOrgChart(date?: string, shiftType?: ShiftTypeKey) {
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  if (shiftType) params.set("shiftType", shiftType);
+  const query = params.size ? `?${params.toString()}` : "";
+  const res = await fetch(`/api/public/org-chart${query}`, { cache: "no-store" });
   const json = (await res.json()) as ApiResponse<PublicOrgChartPayload>;
   if (!res.ok || json.error || !json.data) throw new Error(json.error || "Không tải được sơ đồ tổ chức ca");
   return json.data;
@@ -45,12 +49,17 @@ export function PublicOrgChartClient() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [updatedAt, setUpdatedAt] = React.useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = React.useState("");
+  const [selectedShiftType, setSelectedShiftType] = React.useState<ShiftTypeKey | "">("");
 
   const refresh = React.useCallback(async (background = false) => {
     if (!background) setIsRefreshing(true);
     try {
       setError("");
-      setData(await loadOrgChart());
+      const next = await loadOrgChart(selectedDate || undefined, selectedShiftType || undefined);
+      setData(next);
+      setSelectedDate(next.date);
+      setSelectedShiftType(next.shiftType);
       setUpdatedAt(new Date());
     } catch (e) {
       setError((e as Error).message);
@@ -58,7 +67,7 @@ export function PublicOrgChartClient() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [selectedDate, selectedShiftType]);
 
   React.useEffect(() => {
     void refresh(true);
@@ -69,6 +78,18 @@ export function PublicOrgChartClient() {
   const assignments = data?.shift?.assignments ?? [];
   const approved = assignments.filter((item) => item.isApproved).length;
   const caLabel = data ? `${SHIFT_TYPE[data.shiftType]?.label ?? ""} · ${formatDate(data.date)}` : "Đang tải";
+  const dateBounds = React.useMemo(() => {
+    const formatLocalDate = (value: Date) => {
+      const year = value.getFullYear();
+      const month = String(value.getMonth() + 1).padStart(2, "0");
+      const day = String(value.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    return { min: formatLocalDate(yesterday), max: formatLocalDate(today) };
+  }, []);
 
   return (
     <main className="min-h-dvh bg-[#f4f7f3] text-slate-950">
@@ -83,6 +104,26 @@ export function PublicOrgChartClient() {
               <p className="text-sm font-medium text-slate-600">{caLabel}{data?.unit ? ` · ${data.unit}` : ""}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 shadow-sm">
+                <CalendarDays className="h-4 w-4 shrink-0 text-emerald-700" />
+                <input
+                  type="date"
+                  aria-label="Chọn ngày xem sơ đồ"
+                  min={dateBounds.min}
+                  max={dateBounds.max}
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="h-9 min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none"
+                />
+              </div>
+              <select
+                aria-label="Chọn ca vận hành"
+                value={selectedShiftType}
+                onChange={(event) => setSelectedShiftType(event.target.value as ShiftTypeKey)}
+                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              >
+                {SHIFT_TYPE_ORDER.map((type) => <option key={type} value={type}>{SHIFT_TYPE[type].label}</option>)}
+              </select>
               {data?.shift && <Badge variant={approved === assignments.length ? "accent" : "secondary"} className="gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" /> {approved}/{assignments.length} đã duyệt</Badge>}
               <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={isRefreshing} className="bg-white">
                 <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} /> Cập nhật
@@ -96,7 +137,7 @@ export function PublicOrgChartClient() {
       <section className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
         {isLoading ? <ChartSkeleton /> : error ? (
           <Card className="border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">{error}</Card>
-        ) : !data?.shift ? <EmptyState title="Chưa có dữ liệu ca hiện tại" description="Vui lòng quay lại sau khi ca vận hành được tạo và điểm danh." /> : (
+        ) : !data?.shift ? <EmptyState title="Chưa có dữ liệu ca đã chọn" description="Hãy chọn ngày hoặc ca khác trong phạm vi hôm nay và 1 ngày trước." /> : (
           <PublicTemplateChart assignments={assignments} />
         )}
       </section>

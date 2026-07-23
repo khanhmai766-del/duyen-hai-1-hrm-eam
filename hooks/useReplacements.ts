@@ -41,6 +41,7 @@ export interface ReplacementLogItem extends MaterialReplacementLog {
   doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
   replacement: {
     system: string | null;
+    managingPosition: string | null;
     intervalMonths: number;
     intervalNote: string | null;
     device: ReplacementDevice | null;

@@ -2,15 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus, X, PackagePlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeviceForm } from "@/components/devices/device-form";
+import { DeviceMaterialDeclarationDialog } from "@/components/devices/device-material-declaration-dialog";
+import { DefectForm } from "@/components/defects/defect-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
@@ -19,7 +21,8 @@ import { useSeqAccess } from "@/hooks/useSystemAccess";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { formatDate } from "@/lib/utils";
-import { DEFECT_SEVERITY, DEFECT_STATUS } from "@/lib/constants";
+import { DEFECT_SEVERITY, DEFECT_STATUS, defectSeverityCriteriaLabels } from "@/lib/constants";
+import { machinesOf } from "@/lib/equipment-units";
 
 export default function DeviceDetailPage() {
   return (
@@ -32,10 +35,12 @@ export default function DeviceDetailPage() {
 function DeviceDetailPageContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedMachine = searchParams.get("machine");
   const { data: session } = useSession();
-  const { data, isLoading } = useDevice(id);
+  const { data, isLoading } = useDevice(id, requestedMachine);
   const del = useDeleteDevice();
-  const access = useSeqAccess(data?.data?.code);
+  const access = useSeqAccess(data?.data?.id);
   const rbac = useRbacAccess();
   const addQrCard = useAddDeviceQrCard();
   const removeQrCard = useRemoveDeviceQrCard();
@@ -45,10 +50,18 @@ function DeviceDetailPageContent() {
   const [qrDeleteOpen, setQrDeleteOpen] = React.useState(false);
   const [showAllDeclarations, setShowAllDeclarations] = React.useState(false);
   const [showAllUsage, setShowAllUsage] = React.useState(false);
+  const [materialOpen, setMaterialOpen] = React.useState(false);
+  const [defectOpen, setDefectOpen] = React.useState(false);
 
   const device = data?.data;
   const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
   const canManageQr = Boolean(device && rbac.can("device-manage", ["create", "manage", "full"]) && access.canEdit);
+  const canDeclareMaterial = Boolean(device && rbac.can("replacement-manage", ["create", "manage", "full"]) && access.canEdit);
+  const canCreateDefect = Boolean(device && rbac.can("defect-manage", ["create", "manage", "full"]) && access.canEdit);
+  const deviceMachine = React.useMemo(() => {
+    if (!device) return "S1";
+    return device.machine ?? machinesOf(device.id)[0];
+  }, [device]);
 
   async function createQrCard() {
     try {
@@ -107,7 +120,9 @@ function DeviceDetailPageContent() {
           <Card>
             <CardHeader><CardTitle>Thông tin thiết bị</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
+              <Row label="Tổ máy" value={deviceMachine === "COMMON" ? "COMMON · Dùng chung" : deviceMachine} />
               <Row label="Hệ thống" value={device.system ?? "—"} />
+              <Row label="Mã KKS" value={device.kks ?? "—"} />
               <Row label="Cương vị quản lý" value={device.managingPosition ?? "—"} icon={UserCog} />
               {device.attachedInfo && (
                 <div className="pt-1">
@@ -145,7 +160,7 @@ function DeviceDetailPageContent() {
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Lịch sử sửa chữa</CardTitle>
               <Button asChild variant="link" size="sm">
-                <Link href={`/repair-history?device=${encodeURIComponent(device.code)}`}>Xem đầy đủ</Link>
+                <Link href={`/repair-history?device=${encodeURIComponent(device.id)}&unit=${deviceMachine}`}>Xem đầy đủ</Link>
               </Button>
             </CardHeader>
             <CardContent>
@@ -180,10 +195,17 @@ function DeviceDetailPageContent() {
         {/* Materials: a separate row keeps long names and usage details readable. */}
         <div className="grid gap-6 md:grid-cols-2 lg:col-span-12">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Vật tư được khai báo</CardTitle></CardHeader>
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Vật tư được khai báo</CardTitle>
+              {canDeclareMaterial && (
+                <Button size="sm" variant="outline" className="shrink-0 border-blue-200 text-accent hover:bg-blue-50" onClick={() => setMaterialOpen(true)}>
+                  <PackagePlus className="h-4 w-4" /> Khai báo vật tư
+                </Button>
+              )}
+            </CardHeader>
             <CardContent className="grid gap-3 xl:grid-cols-2">
               {device.materialDeclarations?.length ? (
-                device.materialDeclarations.slice(0, showAllDeclarations ? undefined : 3).map((item) => (
+                device.materialDeclarations.slice(0, showAllDeclarations ? undefined : 4).map((item) => (
                   <div key={item.id} className="rounded-lg border border-border p-3 text-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-medium text-ink">{item.material.name}</div>
@@ -200,9 +222,9 @@ function DeviceDetailPageContent() {
               ) : (
                 <p className="col-span-full text-sm text-muted-foreground">Chưa khai báo vật tư cho thiết bị.</p>
               )}
-              {device.materialDeclarations?.length > 3 && (
+              {device.materialDeclarations?.length > 4 && (
                 <Button variant="ghost" size="sm" className="col-span-full justify-center text-accent" onClick={() => setShowAllDeclarations((value) => !value)}>
-                  {showAllDeclarations ? "Thu gọn" : `Xem thêm ${device.materialDeclarations.length - 3} vật tư`}
+                  {showAllDeclarations ? "Thu gọn" : `Xem thêm ${device.materialDeclarations.length - 4} vật tư`}
                 </Button>
               )}
             </CardContent>
@@ -245,20 +267,47 @@ function DeviceDetailPageContent() {
             <AlertTriangle className="h-4 w-4 text-amber-600" /> Khiếm khuyết hiện tại
             {device.currentDefects?.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">{device.currentDefects.length}</span>}
           </CardTitle>
-          <Button asChild variant="link" size="sm">
-            <Link href={`/defects?deviceSeq=${encodeURIComponent(device.code)}`}>Xem danh sách</Link>
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {canCreateDefect && (
+              <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-700" onClick={() => setDefectOpen(true)}>
+                <Plus className="h-4 w-4" /> Thêm khiếm khuyết
+              </Button>
+            )}
+            <Button asChild variant="link" size="sm">
+              <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}`}>Xem danh sách</Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {device.currentDefects?.length ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {device.currentDefects.slice(0, 6).map((defect) => {
                 const status = DEFECT_STATUS[defect.status as keyof typeof DEFECT_STATUS];
+                const severityCriteria = defectSeverityCriteriaLabels(
+                  defect.severity,
+                  defect.severityCriteria
+                );
                 return (
                   <div key={defect.id} className="rounded-xl border border-border bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <MachineBadge machine={defect.unit} />
-                      {defect.severity && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Mức {defect.severity} · {DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY]}</span>}
+                      {defect.severity && (
+                        severityCriteria.length > 0 ? (
+                          severityCriteria.map((criterion) => (
+                            <span
+                              key={criterion}
+                              title={criterion}
+                              className="max-w-full rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700"
+                            >
+                              Mức {defect.severity} · {criterion}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                            Mức {defect.severity} · {DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY]}
+                          </span>
+                        )
+                      )}
                       <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: `${status?.dot ?? "#64748b"}18`, color: status?.dot ?? "#64748b" }}>{status?.label ?? defect.status}</span>
                     </div>
                     <p className="mt-2 line-clamp-3 text-sm font-medium text-ink">{defect.content || "Chưa nhập nội dung khiếm khuyết"}</p>
@@ -272,7 +321,7 @@ function DeviceDetailPageContent() {
               })}
               {device.currentDefects.length > 6 && (
                 <div className="col-span-full rounded-lg border border-dashed border-amber-200 bg-amber-50/60 px-4 py-3 text-center text-sm text-amber-800">
-                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={`/defects?deviceSeq=${encodeURIComponent(device.code)}`} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
+                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}`} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
                 </div>
               )}
             </div>
@@ -281,6 +330,44 @@ function DeviceDetailPageContent() {
           )}
         </CardContent>
       </Card>
+
+      <DeviceMaterialDeclarationDialog
+        open={materialOpen}
+        onOpenChange={setMaterialOpen}
+        device={{ ...device, code: device.id, displayCode: device.code }}
+        machine={deviceMachine}
+      />
+
+      {defectOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-ink/45 backdrop-blur-[1px]" onClick={() => setDefectOpen(false)} />
+          <div className="absolute inset-y-0 right-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-gradient-to-r from-amber-50/80 to-white p-4">
+              <div>
+                <h2 className="text-lg font-bold text-ink">Thêm khiếm khuyết thiết bị</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Thiết bị và hệ thống đã được điền sẵn từ lý lịch.</p>
+              </div>
+              <button type="button" onClick={() => setDefectOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white hover:text-ink" aria-label="Đóng">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <DefectForm
+              initialDevice={{
+                code: device.id,
+                displayCode: device.code,
+                name: device.name,
+                system: device.system,
+                systemSeq: device.systemSeq,
+                managingPosition: device.managingPosition,
+                unit: deviceMachine,
+              }}
+              lockDevice
+              onDone={() => setDefectOpen(false)}
+              onCancel={() => setDefectOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-sm overflow-hidden">

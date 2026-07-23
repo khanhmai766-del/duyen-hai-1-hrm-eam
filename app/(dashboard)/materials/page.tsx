@@ -24,7 +24,6 @@ import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials,
 import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
-import { MaterialDeviceImportDialog } from "@/components/materials/material-device-import-dialog";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
@@ -101,7 +100,6 @@ function MaterialsPageContent() {
   const [deletingDetails, setDeletingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [selectedDetailIds, setSelectedDetailIds] = React.useState<Set<string>>(new Set());
   const [erpSearch, setErpSearch] = React.useState("");
-  const [importLinksOpen, setImportLinksOpen] = React.useState(false);
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
   // (vd bấm cảnh báo thay thế trong chuông thông báo).
@@ -115,7 +113,7 @@ function MaterialsPageContent() {
   const trackId = params.get("track");
   // Lọc theo tổ máy NGAY TỪ SERVER (payload nhỏ hơn nhiều); riêng khi mở theo
   // ?track= (từ chuông thông báo) thì tải toàn bộ vì vật tư có thể ở tab khác.
-  const { data, isLoading, refetch: refetchMaterials } = useMaterials(trackId ? {} : { machine: machineTab });
+  const { data, isLoading } = useMaterials(trackId ? {} : { machine: machineTab });
   const erpMaterials = (erpMaterialsQuery.data?.data ?? []) as Array<{
     id: string;
     code: string;
@@ -502,25 +500,11 @@ function MaterialsPageContent() {
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && (
-          <>
-            <Button variant="outline" onClick={() => setImportLinksOpen(true)}>
-              <Upload className="h-4 w-4" /> Nhập link thiết bị
-            </Button>
-            <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
-              <Plus className="h-4 w-4" /> Thêm vật tư
-            </Button>
-          </>
+          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
+            <Plus className="h-4 w-4" /> Thêm vật tư
+          </Button>
         )}
       </PageHeader>
-
-      <MaterialDeviceImportDialog
-        open={importLinksOpen}
-        onOpenChange={setImportLinksOpen}
-        machine={machineTab}
-        category={categoryFilter}
-        erpGroups={erpGroups.filter((group) => categoryMatches(group.category))}
-        onImported={() => { void refetchMaterials(); }}
-      />
 
       {/* Lọc loại vật tư dạng dropdown; ô tìm kiếm cùng hàng bên phải */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">

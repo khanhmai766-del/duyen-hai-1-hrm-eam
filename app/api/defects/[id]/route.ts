@@ -6,6 +6,8 @@ import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
+import { normalizeDefectSeverityCriteria } from "@/lib/constants";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
@@ -19,6 +21,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
     if (existing.device) await assertSeqEditable(user, existing.device);
     if (body.device) await assertSeqEditable(user, String(body.device));
+    if (body.shiftLeaderId !== undefined && !String(body.shiftLeaderId ?? "").trim()) {
+      return fail("Vui lòng chọn Trưởng ca");
+    }
+    if (body.shiftLeaderId === undefined && !existing.shiftLeaderId) {
+      return fail("Vui lòng chọn Trưởng ca");
+    }
+    const shiftLeader = body.shiftLeaderId !== undefined
+      ? await resolveDefectShiftLeader(body.shiftLeaderId)
+      : undefined;
+    if (body.shiftLeaderId && !shiftLeader) return fail("Nhân viên được chọn không có cương vị Trưởng ca hoặc đã ngừng hoạt động");
     const imageUrl =
       body.imageUrl !== undefined
         ? await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" })
@@ -38,12 +50,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         deviceSeq,
         system: body.system !== undefined ? body.system || null : undefined,
         severity: body.severity !== undefined ? body.severity || null : undefined,
+        severityCriteria:
+          body.severity !== undefined || body.severityCriteria !== undefined
+            ? normalizeDefectSeverityCriteria(body.severity ?? existing.severity, body.severityCriteria ?? existing.severityCriteria)
+            : undefined,
         condition: body.condition !== undefined ? body.condition || null : undefined,
         requestType: body.requestType !== undefined ? body.requestType || null : undefined,
         requestNumber: body.requestNumber !== undefined ? body.requestNumber?.trim() || null : undefined,
         content: body.content !== undefined ? body.content?.trim() || null : undefined,
         status: body.status,
         detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? parseDateInput(body.detectedAt) : null) : undefined,
+        shiftLeaderId: body.shiftLeaderId !== undefined ? shiftLeader?.id ?? null : undefined,
+        shiftLeaderName: body.shiftLeaderId !== undefined ? shiftLeader?.name ?? null : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,
         imageUrl,
         // Khi gửi 1 trong 2 trường ảnh hưởng thì cập nhật cả hai (giữ nguyên hành vi cũ);

@@ -38,5 +38,6 @@ ALTER TABLE "MaterialReplacement" ADD COLUMN IF NOT EXISTS "machine" TEXT NOT NU
 ALTER TABLE "DeviceQrCard" ADD COLUMN IF NOT EXISTS "machine" TEXT NOT NULL DEFAULT 'COMMON';
 
 -- Thẻ QR: mỗi tổ máy 1 thẻ trên cùng nút (bỏ unique cũ theo deviceSeq)
+ALTER TABLE "DeviceQrCard" DROP CONSTRAINT IF EXISTS "DeviceQrCard_deviceSeq_key";
 DROP INDEX IF EXISTS "DeviceQrCard_deviceSeq_key";
 CREATE UNIQUE INDEX IF NOT EXISTS "DeviceQrCard_deviceSeq_machine_key" ON "DeviceQrCard"("deviceSeq","machine");

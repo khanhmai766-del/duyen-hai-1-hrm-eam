@@ -6,6 +6,8 @@ import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrl, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
+import { normalizeDefectSeverityCriteria } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +52,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
+    if (!String(body.shiftLeaderId ?? "").trim()) return fail("Vui lòng chọn Trưởng ca");
     if (body.device) await assertSeqEditable(user, String(body.device));
+    const shiftLeader = await resolveDefectShiftLeader(body.shiftLeaderId);
+    if (!shiftLeader) return fail("Nhân viên được chọn không có cương vị Trưởng ca hoặc đã ngừng hoạt động");
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "defects/images", preset: "image" });
 
     // Khóa liên kết chuẩn với cây: chỉ gán khi "device" là seq có thật (FK không chặn giá trị lạ).
@@ -65,12 +70,15 @@ export async function POST(req: NextRequest) {
         deviceSeq,
         system: body.system || null,
         severity: body.severity || null,
+        severityCriteria: normalizeDefectSeverityCriteria(body.severity, body.severityCriteria),
         condition: body.condition || null,
         requestType: body.requestType || null,
         requestNumber: body.requestNumber?.trim() || null,
         content: body.content?.trim() || null,
         status: body.status || "CHUA_XU_LY",
         detectedAt: body.detectedAt ? parseDateInput(body.detectedAt) : null,
+        shiftLeaderId: shiftLeader?.id ?? null,
+        shiftLeaderName: shiftLeader?.name ?? null,
         note: body.note?.trim() || null,
         imageUrl,
         fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),

@@ -199,6 +199,73 @@ export const DEFECT_SEVERITY = {
 } as const;
 export const DEFECT_SEVERITY_ORDER = ["1", "2", "3", "4"] as const;
 
+/** Tiêu chí chi tiết để phân loại mức độ khiếm khuyết. ID ổn định để lưu trên phiếu. */
+export const DEFECT_SEVERITY_CRITERIA = {
+  "1": {
+    title: "Mức ưu tiên cao nhất, xử lý khẩn cấp",
+    guidance: "Áp dụng đối với các khiếm khuyết có ảnh hưởng trực tiếp, nghiêm trọng đến vận hành tổ máy, an toàn, môi trường hoặc theo chỉ đạo của Ban Giám đốc.",
+    options: [
+      { id: "1a", label: "Ảnh hưởng đến hệ số đáp ứng hoặc trực tiếp đến công suất tổ máy." },
+      { id: "1b", label: "Ảnh hưởng trực tiếp đến các thông số môi trường (khí thải, nước thải) hoặc áp suất nước PCCC." },
+      { id: "1c", label: "Xỉ than, xỉ tro, rò rỉ hóa chất phát tán rộng; có nguy cơ mất an toàn vận hành hoặc ảnh hưởng môi trường." },
+      { id: "1d", label: "Hư hỏng gây bất khả dụng máy phát Diesel." },
+      { id: "1e", label: "Liên quan đến hệ thống bảo vệ, liên động, điều khiển chính quan trọng của tổ máy." },
+      { id: "1f", label: "Phiếu yêu cầu thực hiện theo chỉ đạo của Ban Giám đốc." },
+    ],
+  },
+  "2": {
+    title: "Mức ưu tiên cao, xử lý sớm không để kéo dài",
+    guidance: "Áp dụng đối với các khiếm khuyết ảnh hưởng đến công suất, độ khả dụng, độ tin cậy nhưng chưa gây ảnh hưởng trực tiếp, tức thời như Mức 1.",
+    options: [
+      { id: "2a", label: "Phiếu yêu cầu mức thấp bị nhắc lại từ 2 lần trở lên (từ 7–30 ngày kể từ ngày ra phiếu, tùy mức độ)." },
+      { id: "2b", label: "Suy giảm khả năng dự phòng của thiết bị hoặc hệ thống quan trọng." },
+      { id: "2c", label: "Có nguy cơ ảnh hưởng đến công suất hoặc độ khả dụng nếu không xử lý kịp thời." },
+      { id: "2d", label: "Thiết bị phụ trợ quan trọng vận hành không ổn định, thông số bất thường nhưng vẫn trong giới hạn cho phép." },
+      { id: "2e", label: "Xỉ than, xỉ tro, rò rỉ hóa chất ở mức cục bộ; ảnh hưởng vệ sinh công nghiệp và có nguy cơ ảnh hưởng thiết bị lân cận." },
+      { id: "2f", label: "Khiếm khuyết có xu hướng lặp lại, kéo dài hoặc phát triển xấu hơn." },
+      { id: "2g", label: "Ảnh hưởng trực tiếp suất hao nhiệt (SHN) hoặc các lỗi PCCC không thuộc Mức 1." },
+    ],
+  },
+  "3": {
+    title: "Mức ưu tiên trung bình, xử lý theo kế hoạch",
+    guidance: "Áp dụng đối với khiếm khuyết chưa ảnh hưởng trực tiếp đến công suất và độ khả dụng, nhưng có nguy cơ gây hư hỏng xếp chồng hoặc làm suy giảm tình trạng thiết bị.",
+    options: [
+      { id: "3a", label: "Có nguy cơ gây hư hỏng lan truyền hoặc xếp chồng." },
+      { id: "3b", label: "Hư hỏng nhỏ, rò rỉ nhỏ, bất thường cục bộ chưa ảnh hưởng ngay đến vận hành." },
+      { id: "3c", label: "Ảnh hưởng đến tuổi thọ, độ bền hoặc tình trạng kỹ thuật thiết bị." },
+      { id: "3d", label: "Tồn tại cần đưa vào kế hoạch xử lý trong các đợt dừng máy phù hợp." },
+    ],
+  },
+  "4": {
+    title: "Mức ưu tiên thấp, theo dõi cải tiến khi có điều kiện",
+    guidance: "Áp dụng đối với các tồn tại không ảnh hưởng và không có nguy cơ xếp chồng đến công suất, độ khả dụng.",
+    options: [
+      { id: "4a", label: "Mang tính hoàn thiện, chỉnh trang hoặc mỹ quan công nghiệp." },
+      { id: "4b", label: "Không ảnh hưởng đến an toàn, môi trường, công suất và độ tin cậy vận hành." },
+      { id: "4c", label: "Có thể theo dõi và xử lý khi có điều kiện phù hợp về vật tư, nhân lực hoặc lịch sửa chữa." },
+    ],
+  },
+} as const;
+
+export function normalizeDefectSeverityCriteria(severity: unknown, value: unknown): string[] {
+  const level = String(severity ?? "") as keyof typeof DEFECT_SEVERITY_CRITERIA;
+  const config = DEFECT_SEVERITY_CRITERIA[level];
+  if (!config || !Array.isArray(value)) return [];
+  const allowed = new Set<string>(config.options.map((option) => option.id));
+  return Array.from(new Set(value.map(String).filter((id) => allowed.has(id))));
+}
+
+/** Nhãn các tiêu chí chi tiết đã chọn; trả [] để giao diện dùng tên mức chung. */
+export function defectSeverityCriteriaLabels(severity: unknown, value: unknown): string[] {
+  const level = String(severity ?? "") as keyof typeof DEFECT_SEVERITY_CRITERIA;
+  const config = DEFECT_SEVERITY_CRITERIA[level];
+  if (!config) return [];
+  const selected = new Set(normalizeDefectSeverityCriteria(level, value));
+  return config.options
+    .filter((option) => selected.has(option.id))
+    .map((option) => option.label);
+}
+
 /** Điều kiện thực hiện. */
 export const DEFECT_CONDITION = {
   A: "A - Cần ngừng máy",

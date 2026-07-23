@@ -7,9 +7,12 @@ export interface DeviceRecord {
   id: string;
   code: string;
   name: string;
+  kks: string | null;
   system: string | null;
   systemSeq?: string | null;
   managingPosition: string | null;
+  managingPositions?: string[];
+  machine?: string;
   images: string[];
   attachedInfo: string | null;
   documentUrl: string | null;
@@ -72,6 +75,7 @@ export interface DeviceWithRelations extends DeviceRecord {
     id: string;
     unit: string;
     severity?: string | null;
+    severityCriteria?: string[];
     content?: string | null;
     status: string;
     requestType?: string | null;
@@ -105,10 +109,11 @@ export function useDevices(params: { q?: string; system?: string; systemSeq?: st
   });
 }
 
-export function useDevice(id: string | undefined) {
+export function useDevice(id: string | undefined, machine?: string | null) {
+  const machineParam = machine?.toUpperCase() ?? "";
   return useQuery({
-    queryKey: ["device", id],
-    queryFn: () => apiGet<DeviceWithRelations>(`/api/devices/${id}`),
+    queryKey: ["device", id, machineParam],
+    queryFn: () => apiGet<DeviceWithRelations>(`/api/devices/${id}${machineParam ? `?machine=${encodeURIComponent(machineParam)}` : ""}`),
     enabled: !!id,
   });
 }

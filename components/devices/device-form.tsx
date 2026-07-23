@@ -45,6 +45,7 @@ export function DeviceForm({
   const [form, setForm] = React.useState({
     code: device?.code ?? (initialParentSeq ? `${initialParentSeq}.` : ""),
     name: device?.name ?? "",
+    kks: device?.kks ?? "",
     system: device?.system ?? "",
     systemSeq: initialParentSeq ?? "",
     managingPosition: device?.managingPosition ?? "",
@@ -137,6 +138,9 @@ export function DeviceForm({
           </Field>
           <Field label="Tên thiết bị *">
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} required />
+          </Field>
+          <Field label="Mã KKS">
+            <Input value={form.kks} onChange={(e) => set("kks", e.target.value)} placeholder="VD: X0HFV11BB001" />
           </Field>
           <Field label="Hệ thống thiết bị">
             <EquipmentTreePicker

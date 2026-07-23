@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -142,24 +142,55 @@ function ReplacementsPageContent() {
 
   /* ---- Tab 2: Lịch sử thay thế (history) ---- */
   const [historyQ, setHistoryQ] = React.useState("");
+  const [historyFromMonth, setHistoryFromMonth] = React.useState(() => ym(new Date()));
+  const [historyToMonth, setHistoryToMonth] = React.useState(() => ym(new Date()));
+  const [historyPosition, setHistoryPosition] = React.useState("ALL");
   const history = useReplacementHistory();
   const logs = history.data?.data ?? [];
-  // Chỉ các lần ghi nhận trong tháng/năm đang chọn (theo NGÀY THAY).
-  const logsInMonth = logs.filter((l) => ym(l.replacedAt) === month);
+  const historyPositions = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          logs
+            .map((log) => log.replacement?.managingPosition?.trim())
+            .filter((position): position is string => Boolean(position))
+        )
+      ).sort((a, b) => a.localeCompare(b, "vi")),
+    [logs]
+  );
+  // Lọc theo khoảng tháng, bao gồm cả tháng bắt đầu và tháng kết thúc.
+  // Chuỗi YYYY-MM có thể so sánh trực tiếp theo thứ tự thời gian.
+  const logsInMonthRange = logs.filter((l) => {
+    const replacedMonth = ym(l.replacedAt);
+    const matchesPosition =
+      historyPosition === "ALL" ||
+      l.replacement?.managingPosition === historyPosition;
+    return (
+      replacedMonth >= historyFromMonth &&
+      replacedMonth <= historyToMonth &&
+      matchesPosition
+    );
+  });
   const filteredLogs = historyQ.trim()
-    ? logsInMonth.filter((l) => {
+    ? logsInMonthRange.filter((l) => {
         const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
         return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""}`.toLowerCase().includes(historyQ.toLowerCase());
       })
-    : logsInMonth;
+    : logsInMonthRange;
+  const historyRangeLabel = historyFromMonth === historyToMonth
+    ? `tháng ${ymLabel(historyFromMonth)}`
+    : `từ tháng ${ymLabel(historyFromMonth)} đến tháng ${ymLabel(historyToMonth)}`;
   const historyBackupRows = React.useMemo(() => {
     const qText = historyQ.trim().toLowerCase();
-    if (!qText) return logs;
-    return logs.filter((l) => {
+    const logsByPosition = historyPosition === "ALL"
+      ? logs
+      : logs.filter((log) => log.replacement?.managingPosition === historyPosition);
+    if (!qText) return logsByPosition;
+    return logsByPosition.filter((l) => {
       const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
       return `${l.replacement?.material.code ?? ""} ${l.replacement?.material.name ?? ""} ${device?.code ?? ""} ${device?.name ?? ""} ${device?.system ?? ""} ${l.note ?? ""} ${l.doneBy.name}`.toLowerCase().includes(qText);
     });
-  }, [historyQ, logs]);
+  }, [historyPosition, historyQ, logs]);
   const historyBackupColumns = React.useMemo(
     () => [
       { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: ReplacementLogItem, index: number) => index + 1 },
@@ -283,7 +314,29 @@ function ReplacementsPageContent() {
         ) : (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
             <SearchBar value={historyQ} onChange={setHistoryQ} placeholder="Tìm theo vật tư, thiết bị, ghi chú..." className="sm:w-72" />
-            <MonthFilter value={month} onChange={setMonth} />
+            <MonthRangeFilter
+              from={historyFromMonth}
+              to={historyToMonth}
+              onFromChange={(value) => {
+                setHistoryFromMonth(value);
+                if (value > historyToMonth) setHistoryToMonth(value);
+              }}
+              onToChange={(value) => {
+                setHistoryToMonth(value);
+                if (value < historyFromMonth) setHistoryFromMonth(value);
+              }}
+            />
+            <Select value={historyPosition} onValueChange={setHistoryPosition}>
+              <SelectTrigger className="h-11 w-[210px] rounded-xl bg-white" aria-label="Lọc theo cương vị">
+                <SelectValue placeholder="Chọn cương vị" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                {historyPositions.map((position) => (
+                  <SelectItem key={position} value={position}>{position}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
@@ -420,13 +473,16 @@ function ReplacementsPageContent() {
           ) : filteredLogs.length === 0 ? (
             <EmptyState
               icon={History}
-              title={`Không có ghi nhận thay thế trong tháng ${ymLabel(month)}`}
-              description="Chọn tháng/năm khác ở bộ lọc để xem lịch sử các tháng trước."
+              title={`Không có ghi nhận thay thế ${historyRangeLabel}`}
+              description="Chọn khoảng tháng khác để xem lịch sử thay thế."
             />
           ) : (
             <Card className="overflow-hidden">
               <div className="border-b border-border px-4 py-2.5 text-sm text-muted-foreground">
-                Tháng <span className="font-medium text-ink">{ymLabel(month)}</span> · <span className="font-semibold text-ink">{filteredLogs.length}</span> lần ghi nhận thay thế
+                <span className="capitalize">{historyRangeLabel}</span> · <span className="font-semibold text-ink">{filteredLogs.length}</span> lần ghi nhận thay thế
+                {historyPosition !== "ALL" && (
+                  <> · Cương vị <span className="font-medium text-ink">{historyPosition}</span></>
+                )}
               </div>
               <Table>
                 <TableHeader className="bg-muted/40">
@@ -626,28 +682,44 @@ function TabBtn({ active, onClick, icon: Icon, label, count }: { active: boolean
   );
 }
 
-/** Bộ lọc tháng/năm: nút lùi/tiến + ô chọn tháng (native month picker). */
-function MonthFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  function shift(delta: number) {
-    const [y, m] = value.split("-").map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
+/** Khoảng tháng lịch sử; hai đầu mút đều được tính vào kết quả. */
+function MonthRangeFilter({
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  from: string;
+  to: string;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+}) {
   return (
-    <div className="flex items-center gap-1">
-      <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => shift(-1)} aria-label="Tháng trước">
-        <ChevronLeft className="h-4 w-4" />
-      </Button>
-      <input
-        type="month"
-        value={value}
-        onChange={(e) => e.target.value && onChange(e.target.value)}
-        aria-label="Chọn tháng/năm"
-        className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-      />
-      <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => shift(1)} aria-label="Tháng sau">
-        <ChevronRight className="h-4 w-4" />
-      </Button>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/50 p-1.5">
+      <CalendarRange className="ml-1 hidden h-4 w-4 shrink-0 text-sky-700 sm:block" />
+      <label className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold text-muted-foreground">Từ tháng</span>
+        <input
+          type="month"
+          value={from}
+          max={to}
+          onChange={(event) => event.target.value && onFromChange(event.target.value)}
+          aria-label="Từ tháng"
+          className="h-9 w-[190px] min-w-[190px] rounded-md border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </label>
+      <span className="hidden text-muted-foreground sm:inline">–</span>
+      <label className="flex items-center gap-1.5">
+        <span className="text-xs font-semibold text-muted-foreground">Đến tháng</span>
+        <input
+          type="month"
+          value={to}
+          min={from}
+          onChange={(event) => event.target.value && onToChange(event.target.value)}
+          aria-label="Đến tháng"
+          className="h-9 w-[190px] min-w-[190px] rounded-md border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </label>
     </div>
   );
 }

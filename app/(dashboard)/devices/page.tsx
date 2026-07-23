@@ -20,7 +20,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  FileSpreadsheet,
   ShieldAlert,
   UserCog,
   Network,
@@ -48,7 +47,6 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DeviceForm } from "@/components/devices/device-form";
 import { EquipmentTreeView } from "@/components/devices/equipment-tree";
-import { ImportDialog } from "@/components/devices/import-dialog";
 import { QRModal } from "@/components/devices/qr-modal";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,8 +114,8 @@ function DevicesPageContent() {
   const rbac = useRbacAccess();
   const canManageDevices = rbac.can("device-manage", ["create", "manage", "full"]);
   const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
-  const canImportDevices = rbac.can("device-manage", ["manage", "full"]);
   const canDeleteDevices = rbac.can("device-delete", ["full"]);
+  const isAdmin = session?.user?.role === "ADMIN";
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
@@ -127,7 +125,6 @@ function DevicesPageContent() {
   const [debouncedQ, setDebouncedQ] = React.useState(urlQ);
   const [systemSeq, setSystemSeq] = React.useState(urlSystemSeq);
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
-  const [importOpen, setImportOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (view !== "table") return;
@@ -213,11 +210,6 @@ function DevicesPageContent() {
         {shouldLoadDevices && (
           <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
         )}
-        {canImportDevices && (
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <FileSpreadsheet className="h-4 w-4" /> Nhập CSV/Excel
-          </Button>
-        )}
       </PageHeader>
 
       {/* View tabs + (when listing) tìm kiếm & bộ lọc hệ thống căn phải */}
@@ -264,6 +256,7 @@ function DevicesPageContent() {
           canDelete={canDeleteDevices}
           canEdit={canEditDevices}
           canCreate={canManageDevices}
+          canAssignPosition={isAdmin}
           onCreateChild={openCreateForSystem}
         />
       ) : view === "detail" ? (
@@ -313,7 +306,6 @@ function DevicesPageContent() {
       {qrDevice && (
         <QRModal open={!!qrDevice} onOpenChange={(o) => !o && setQrDevice(null)} device={qrDevice} />
       )}
-      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }

@@ -5,13 +5,15 @@ import {
   buildEquipmentTreeIndex,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
-import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
+import { assertSeqEditable, assertSeqViewable, managingPositionsForEquipmentSeq } from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
+import { normalizeText } from "@/lib/nav";
+import { machinesOf, s2Code, s2Kks, type EquipmentMachine } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,7 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
     id: node.seq,
     code: node.seq,
     name: node.name,
+    kks: node.kks ?? null,
     system: parent?.name ?? null,
     systemSeq: parent?.seq ?? null,
     managingPosition: null,
@@ -57,17 +60,22 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
   };
 }
 
-async function findEquipmentRecord(seq: string) {
+async function findEquipmentRecord(seq: string, requestedMachine?: string | null) {
   await Promise.all([ensureRepairMachineColumn(), ensureDeviceQrCardTable()]);
   const nodes = await getCachedEquipmentNodeFull();
   const index = getEquipmentTreeIndexFor(nodes);
   const node = index.bySeq.get(seq);
   if (!node) return null;
+  const allowedMachines = machinesOf(node.seq);
+  const normalizedMachine = requestedMachine?.toUpperCase() as EquipmentMachine | undefined;
+  const machine = normalizedMachine && allowedMachines.includes(normalizedMachine)
+    ? normalizedMachine
+    : allowedMachines[0];
   const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
   const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-  const [repairLogs, materials, materialDeclarations, replacementUsage, qrCard, currentDefects, defectHistory] = await Promise.all([
+  const [repairLogs, materials, materialDeclarations, replacementUsage, qrCard, currentDefects, defectHistory, managingPositions, profile, parentProfile] = await Promise.all([
     prisma.repairLog.findMany({
-      where: { deviceSeq: node.seq },
+      where: { deviceSeq: node.seq, machine },
       orderBy: { startedAt: "desc" },
       include: {
         createdBy: { select: { id: true, name: true } },
@@ -75,19 +83,19 @@ async function findEquipmentRecord(seq: string) {
       },
     }),
     prisma.equipmentMaterial.findMany({
-      where: { deviceSeq: node.seq },
+      where: { deviceSeq: node.seq, material: { machine } },
       orderBy: { usedAt: "desc" },
       include: { material: true },
     }),
     prisma.materialReplacement.findMany({
-      where: { deviceSeq: node.seq, isActive: false },
+      where: { deviceSeq: node.seq, machine, isActive: false },
       orderBy: { createdAt: "desc" },
       include: {
         material: { select: { id: true, name: true, unit: true, machine: true, category: true } },
       },
     }),
     prisma.materialReplacementLog.findMany({
-      where: { replacement: { deviceSeq: node.seq } },
+      where: { replacement: { deviceSeq: node.seq, machine } },
       orderBy: { replacedAt: "desc" },
       include: {
         replacement: {
@@ -99,14 +107,15 @@ async function findEquipmentRecord(seq: string) {
         },
       },
     }),
-    prisma.deviceQrCard.findFirst({ where: { deviceSeq: node.seq }, select: { id: true, createdAt: true } }),
+    prisma.deviceQrCard.findFirst({ where: { deviceSeq: node.seq, machine }, select: { id: true, createdAt: true } }),
     prisma.defect.findMany({
-      where: { deviceSeq: node.seq, status: { not: "DA_XU_LY" } },
+      where: { deviceSeq: node.seq, unit: machine, status: { not: "DA_XU_LY" } },
       orderBy: [{ severity: "asc" }, { detectedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         unit: true,
         severity: true,
+        severityCriteria: true,
         content: true,
         status: true,
         requestType: true,
@@ -117,7 +126,7 @@ async function findEquipmentRecord(seq: string) {
       take: 50,
     }),
     prisma.defectHistory.findMany({
-      where: { deviceSeq: node.seq },
+      where: { deviceSeq: node.seq, unit: machine },
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
@@ -132,9 +141,29 @@ async function findEquipmentRecord(seq: string) {
       },
       take: 20,
     }),
+    managingPositionsForEquipmentSeq(node.seq, nodes),
+    prisma.equipmentProfile.findUnique({ where: { nodeSeq_machine: { nodeSeq: node.seq, machine } } }),
+    parent
+      ? prisma.equipmentProfile.findUnique({ where: { nodeSeq_machine: { nodeSeq: parent.seq, machine } } })
+      : Promise.resolve(null),
   ]);
+  const base = toDeviceRecord(node, parent);
+  const profileCode = machine === "S2" ? s2Code(node.seq) : node.seq;
+  const profileKks = profile?.kks ?? (machine === "S2" ? s2Kks(node.kks ?? null) : node.kks ?? null);
+  const isSecondary = machine === "S2";
   return {
-    ...toDeviceRecord(node, parent),
+    ...base,
+    machine,
+    code: profileCode,
+    name: profile?.name ?? node.name,
+    kks: profileKks,
+    system: parentProfile?.name ?? parent?.name ?? null,
+    images: profile?.imageUrl ? [profile.imageUrl] : (isSecondary ? [] : base.images),
+    attachedInfo: profile?.attachedInfo ?? (isSecondary ? null : base.attachedInfo),
+    documentUrl: profile?.documentUrl ?? (isSecondary ? null : base.documentUrl),
+    qrCodeData: publicEquipmentUrl(node.seq),
+    managingPosition: managingPositions[0] ?? null,
+    managingPositions,
     repairLogs,
     materials,
     materialDeclarations,
@@ -147,12 +176,12 @@ async function findEquipmentRecord(seq: string) {
   };
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
     const seq = decodeURIComponent(params.id);
     await assertSeqViewable(user, seq);
-    const device = await findEquipmentRecord(seq);
+    const device = await findEquipmentRecord(seq, req.nextUrl.searchParams.get("machine"));
     if (!device) return fail("Không tìm thấy thiết bị", 404);
     return ok(device);
   });
@@ -170,6 +199,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const nextSeq = typeof body.code === "string" ? body.code.trim() : currentSeq;
     const name = typeof body.name === "string" ? body.name.trim() : current.name;
+    const kks = body.kks !== undefined ? String(body.kks ?? "").trim() || null : current.kks;
     if (!nextSeq || !name) return fail("Số thứ tự và tên thiết bị không được để trống");
     if (name.length > 200) return fail("Tên thiết bị không được vượt quá 200 ký tự");
     const seqError = validateEquipmentSeq(nextSeq);
@@ -206,6 +236,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         seq: nextSeq,
         code: nextSeq,
         name,
+        kks,
+        searchText: normalizeText(`${name} ${kks ?? ""} ${nextSeq.replace(/^DH1\.S1\.?/, "")} ${nextSeq}`),
         parentSeq,
         depth: nextSeq.split(".").length,
         attachedInfo: body.attachedInfo !== undefined ? String(body.attachedInfo || "").trim() || null : undefined,

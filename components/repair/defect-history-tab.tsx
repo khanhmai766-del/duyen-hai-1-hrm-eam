@@ -49,6 +49,7 @@ const PAGE_SIZES = [10, 25, 50, 100];
 export function DefectHistoryTab({ role }: { role?: string }) {
   const searchParams = useSearchParams();
   const deviceFromUrl = searchParams.get("device")?.trim() ?? "";
+  const unitFromUrl = searchParams.get("unit")?.trim().toUpperCase() ?? "";
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
   const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
@@ -59,7 +60,10 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     () => new Map((devicesData?.data ?? []).map((d) => [d.code, d.name])),
     [devicesData]
   );
-  const [filters, setFilters] = React.useState<DefectHistoryFilters>(() => deviceFromUrl ? { device: deviceFromUrl } : {});
+  const [filters, setFilters] = React.useState<DefectHistoryFilters>(() => ({
+    ...(deviceFromUrl ? { device: deviceFromUrl } : {}),
+    ...(["S1", "S2", "COMMON"].includes(unitFromUrl) ? { unit: unitFromUrl } : {}),
+  }));
   const { data, isLoading } = useDefectHistory(filters);
   const del = useDeleteDefectHistory();
   const rows = data?.data ?? [];

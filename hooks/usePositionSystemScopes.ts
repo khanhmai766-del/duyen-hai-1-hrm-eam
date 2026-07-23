@@ -25,3 +25,25 @@ export function useUpdatePositionSystemScope() {
     },
   });
 }
+
+export type BranchPositionAssignmentResult = {
+  seq: string;
+  position: string;
+  affectedNodes: number;
+  clearedOverrides: number;
+};
+
+/**
+ * Gán một cương vị quản lý cho toàn nhánh. Server xóa các điểm ghi đè cũ bên
+ * dưới rồi tạo một điểm kế thừa mới tại node được chọn.
+ */
+export function useAssignPositionToEquipmentBranch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { seq: string; position: string }) =>
+      apiMutate<BranchPositionAssignmentResult>("/api/position-system-scopes/assign", "POST", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["position-system-scopes"] });
+    },
+  });
+}

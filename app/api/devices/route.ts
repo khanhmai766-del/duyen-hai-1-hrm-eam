@@ -44,6 +44,7 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
     id: node.seq,
     code: node.seq,
     name: node.name,
+    kks: node.kks ?? null,
     system: parent?.name ?? null,
     systemSeq: parent?.seq ?? null,
     managingPosition: null,
@@ -230,6 +231,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const seq = String(body.code ?? body.seq ?? "").trim();
     const name = String(body.name ?? "").trim();
+    const kks = String(body.kks ?? "").trim() || null;
     if (!seq || !name) return fail("Thiếu số thứ tự hoặc tên thiết bị");
     const seqError = validateEquipmentSeq(seq);
     if (seqError) return fail(seqError);
@@ -260,7 +262,8 @@ export async function POST(req: NextRequest) {
         depth: seq.split(".").length,
         sort: (maxSort._max.sort ?? 0) + 1,
         drawing: null,
-        kks: null,
+        kks,
+        searchText: normalizeText(`${name} ${kks ?? ""} ${seq.replace(/^DH1\.S1\.?/, "")} ${seq}`),
         attachedInfo: typeof body.attachedInfo === "string" ? body.attachedInfo.trim() || null : null,
         documentUrl: await maybeUploadDataUrl({
           value: typeof body.documentUrl === "string" ? body.documentUrl.trim() || null : null,

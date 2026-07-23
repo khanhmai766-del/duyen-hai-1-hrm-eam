@@ -4,6 +4,7 @@ export interface NormalizedEquipmentNode {
   seq: string;
   parentSeq: string | null;
   name: string;
+  kks?: string | null;
   drawing: string | null;
   depth: number;
   deviceId?: string | null;
@@ -128,7 +129,7 @@ export function normalizeEquipmentNodes(nodes: NormalizedEquipmentNode[]) {
 export async function getNormalizedEquipmentNodes(prisma: PrismaClient) {
   const nodes = await prisma.equipmentNode.findMany({
     orderBy: { sort: "asc" },
-    select: { seq: true, parentSeq: true, name: true, drawing: true, depth: true, attachedInfo: true, documentUrl: true, imageUrl: true },
+    select: { seq: true, parentSeq: true, name: true, kks: true, drawing: true, depth: true, attachedInfo: true, documentUrl: true, imageUrl: true },
   });
   return normalizeEquipmentNodes(nodes);
 }

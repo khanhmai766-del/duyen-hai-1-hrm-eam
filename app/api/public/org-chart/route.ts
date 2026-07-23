@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { ShiftType as PrismaShiftType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { ok, handle } from "@/lib/api";
+import { fail, ok, handle } from "@/lib/api";
 import { SHIFT_TYPE_ORDER, type ShiftTypeKey } from "@/lib/constants";
 import { dateRange, vietnamNow } from "@/lib/utils";
 import { ORG_SEAT_TITLES } from "@/lib/org-template";
@@ -27,6 +27,13 @@ function isShiftType(value: string | null): value is ShiftTypeKey {
   return Boolean(value && SHIFT_TYPE_ORDER.includes(value as ShiftTypeKey));
 }
 
+function publicDateBounds(now = new Date()) {
+  const vn = vietnamNow(now);
+  const max = localDateFromVietnamClock(vn);
+  vn.setUTCDate(vn.getUTCDate() - 1);
+  return { min: localDateFromVietnamClock(vn), max };
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const sp = req.nextUrl.searchParams;
@@ -34,6 +41,11 @@ export async function GET(req: NextRequest) {
     const date = sp.get("date") || current.date;
     const shiftType: PrismaShiftType = (isShiftType(sp.get("shiftType")) ? sp.get("shiftType")! : current.shiftType) as PrismaShiftType;
     const unit = sp.get("unit") || DEFAULT_UNIT;
+    const bounds = publicDateBounds();
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < bounds.min || date > bounds.max) {
+      return fail("Link công khai chỉ cho phép xem hôm nay và 1 ngày trước", 400);
+    }
     const { start, end } = dateRange(date);
 
     const shift = await prisma.shift.findFirst({

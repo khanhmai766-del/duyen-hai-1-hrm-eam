@@ -22,7 +22,15 @@ import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialo
 import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_STATUS, DEFECT_STATUS_ORDER, DEFECT_SEVERITY, DEFECT_SEVERITY_ORDER, DEFECT_REQUEST_TYPES, isSelectableManagingPosition } from "@/lib/constants";
+import {
+  DEFECT_STATUS,
+  DEFECT_STATUS_ORDER,
+  DEFECT_SEVERITY,
+  DEFECT_SEVERITY_ORDER,
+  DEFECT_REQUEST_TYPES,
+  defectSeverityCriteriaLabels,
+  isSelectableManagingPosition,
+} from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
@@ -33,6 +41,7 @@ export default function DefectsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
+  const unitFromUrl = searchParams.get("unit")?.toUpperCase();
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
@@ -54,7 +63,9 @@ export default function DefectsPage() {
   const positions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
-  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">("ALL");
+  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">(
+    unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "ALL"
+  );
   const [requestFilter, setRequestFilter] = React.useState("ALL");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const defects = allDefects.filter(
@@ -526,9 +537,15 @@ function ColumnFilter({
 }
 
 function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
-  const severity = defect.severity
-    ? DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] ?? defect.severity
-    : "—";
+  const severityCriteria = defectSeverityCriteriaLabels(
+    defect.severity,
+    defect.severityCriteria
+  );
+  const severity = severityCriteria.length > 0
+    ? severityCriteria.map((criterion) => `Mức ${defect.severity} · ${criterion}`).join("\n")
+    : defect.severity
+      ? DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] ?? defect.severity
+      : "—";
   const status = DEFECT_STATUS[defect.status as keyof typeof DEFECT_STATUS]?.label ?? defect.status;
   const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-3 shadow-sm";
 
@@ -539,11 +556,12 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         <DetailLine label="Yêu cầu" value={defect.requestType || "—"} />
         <DetailLine label="Tổ máy" value={defect.unit || "—"} />
         <DetailLine label="Cương vị" value={defect.system || "—"} />
+        <DetailLine label="Trưởng ca" value={defect.shiftLeaderName || "—"} />
         <DetailLine label="Thiết bị" value={defect.device || "—"} />
         <DetailLine label="Nội dung" value={defect.content || "—"} multiline />
       </div>
       <div className={detailCardClass}>
-        <DetailLine label="Mức độ" value={severity} />
+        <DetailLine label="Mức độ" value={severity} multiline={severityCriteria.length > 0} />
         <DetailLine label="Tình trạng" value={status} />
         <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
         <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />

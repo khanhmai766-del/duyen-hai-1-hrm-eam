@@ -19,6 +19,7 @@ import {
   ListChecks,
   Pencil,
   Plus,
+  UserRoundCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -47,6 +48,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  useAssignPositionToEquipmentBranch,
+  usePositionSystemScopes,
+} from "@/hooks/usePositionSystemScopes";
+import { usePositions } from "@/hooks/useUsers";
+import { selectableManagingPositionOptions } from "@/lib/positions";
+import {
+  normalizePositionScopeKey,
+  positionScopeOptions,
+  type PositionSystemScope,
+} from "@/lib/position-system-scopes";
 
 const MAX_BULK_DELETE = 500;
 
@@ -209,11 +222,13 @@ export function EquipmentTreeView({
   canDelete = false,
   canEdit = false,
   canCreate = false,
+  canAssignPosition = false,
   onCreateChild,
 }: {
   canDelete?: boolean;
   canEdit?: boolean;
   canCreate?: boolean;
+  canAssignPosition?: boolean;
   onCreateChild?: (node: TreeNode) => void;
 }) {
   const params = useSearchParams();
@@ -573,6 +588,7 @@ export function EquipmentTreeView({
             ancestors={ancestors}
             onSelect={setSelected}
             canCreate={canCreate}
+            canAssignPosition={canAssignPosition}
             onCreateChild={onCreateChild}
           />
         ) : (
@@ -711,12 +727,14 @@ function DetailPanel({
   ancestors,
   onSelect,
   canCreate,
+  canAssignPosition,
   onCreateChild,
 }: {
   node: TreeNode;
   ancestors: TreeNode[];
   onSelect: (seq: string) => void;
   canCreate: boolean;
+  canAssignPosition: boolean;
   onCreateChild?: (node: TreeNode) => void;
 }) {
   const router = useRouter();
@@ -830,6 +848,8 @@ function DetailPanel({
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${node.childCount} thiết bị con` : "Thiết bị"} />
       </div>
 
+      {canAssignPosition && <BranchPositionAssignment node={node} />}
+
       {canCreate && node.depth < 16 && onCreateChild && (
         <Button
           type="button"
@@ -863,9 +883,109 @@ function DetailPanel({
         </div>
       )}
 
-      <Button className="w-full" onClick={() => router.push(`/devices/${encodeURIComponent(node.seq)}`)}>
+      <Button className="w-full" onClick={() => router.push(`/devices/${encodeURIComponent(node.seq)}?machine=${activeMachine}`)}>
         Xem lý lịch thiết bị
       </Button>
+    </div>
+  );
+}
+
+function effectiveAssignedPosition(seq: string, scopes: PositionSystemScope[]) {
+  let current = seq;
+  while (current) {
+    const assigned = scopes.find(
+      (scope) => scope.systemSeq === current && scope.access === "edit"
+    );
+    if (assigned) return assigned.position;
+    const parts = current.split(".");
+    parts.pop();
+    current = parts.join(".");
+  }
+  return "";
+}
+
+function BranchPositionAssignment({ node }: { node: TreeNode }) {
+  const allPositions = usePositions();
+  const positions = React.useMemo(
+    () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
+    [allPositions]
+  );
+  const scopesQuery = usePositionSystemScopes();
+  const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
+  const currentPosition = React.useMemo(
+    () => effectiveAssignedPosition(node.seq, scopes),
+    [node.seq, scopes]
+  );
+  const [position, setPosition] = React.useState("");
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const assign = useAssignPositionToEquipmentBranch();
+
+  React.useEffect(() => {
+    const matching = positions.find(
+      (item) => normalizePositionScopeKey(item) === normalizePositionScopeKey(currentPosition)
+    );
+    setPosition(matching ?? "");
+  }, [currentPosition, node.seq, positions]);
+
+  return (
+    <div className="space-y-3 rounded-xl border border-cyan-200 bg-cyan-50/60 p-3">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700">
+          <UserRoundCog className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-ink">Gán cương vị quản lý</div>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Áp dụng cho nút này và toàn bộ thiết bị con. Có thể chọn một nút con để gán lại sau.
+          </p>
+        </div>
+      </div>
+      {currentPosition && (
+        <div className="rounded-lg bg-white px-3 py-2 text-xs text-muted-foreground ring-1 ring-cyan-100">
+          Cương vị hiện tại: <span className="font-semibold text-cyan-800">{currentPosition}</span>
+        </div>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Select value={position} onValueChange={setPosition}>
+          <SelectTrigger className="h-9 flex-1 bg-white">
+            <SelectValue placeholder="Chọn cương vị" />
+          </SelectTrigger>
+          <SelectContent>
+            {positions.map((item) => (
+              <SelectItem key={item} value={item}>{item}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          size="sm"
+          className="h-9 shrink-0"
+          disabled={!position || assign.isPending}
+          onClick={() => setConfirmOpen(true)}
+        >
+          {assign.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Gán cho toàn nhánh
+        </Button>
+      </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Gán “${position}” cho toàn nhánh?`}
+        description={`Nút “${node.name}” và tất cả thiết bị con sẽ nhận cương vị này. Các cương vị đã gán riêng bên trong nhánh sẽ được thay thế; bạn vẫn có thể gán lại từng nhánh con sau đó.`}
+        confirmLabel="Xác nhận gán"
+        loading={assign.isPending}
+        onConfirm={async () => {
+          try {
+            const result = await assign.mutateAsync({ seq: node.seq, position });
+            setConfirmOpen(false);
+            toast.success(
+              `Đã gán ${result.position} cho ${result.affectedNodes.toLocaleString("vi-VN")} thiết bị/nhóm`
+            );
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Không thể gán cương vị");
+          }
+        }}
+      />
     </div>
   );
 }

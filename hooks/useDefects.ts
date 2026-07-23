@@ -23,7 +23,12 @@ export function useCreateDefect() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: DefectInput) => apiMutate<DefectItem>("/api/defects", "POST", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["defects"] }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["defects"] });
+      if (typeof variables.device === "string" && variables.device) {
+        qc.invalidateQueries({ queryKey: ["device", variables.device] });
+      }
+    },
   });
 }
 
