@@ -38,6 +38,7 @@ export interface MaterialWithDevices extends Material {
   replacements?: MaterialReplacementPoint[];
   totalNeed?: number; // tổng nhu cầu 1 chu kỳ = Σ số lượng các điểm thay thế
   shortfall?: number; // đề xuất thêm = max(0, tổng nhu cầu − tồn kho)
+  machines?: string[]; // các tổ máy đang có vật tư này (cùng code) — form Cập nhật tick sẵn
 }
 
 /**

@@ -335,7 +335,7 @@ function MaterialsPageContent() {
       toast.error("Vui lòng nhập ĐVT");
       return;
     }
-    if (isNew && !(edit.machines ?? []).length) {
+    if (!(edit.machines ?? []).length) {
       toast.error("Vui lòng chọn ít nhất một tổ máy");
       return;
     }
@@ -351,7 +351,8 @@ function MaterialsPageContent() {
           category: edit.category || categoryFilter,
           ...(isNew
             ? { machines: edit.machines ?? [machineTab], machine: (edit.machines ?? [machineTab])[0] ?? machineTab }
-            : {}),
+            // Cập nhật: gửi danh sách tổ máy đã tick; KHÔNG gửi machine đơn để không dời dòng hiện tại.
+            : { machines: edit.machines, machine: undefined }),
         }
       );
       toast.success(isNew ? "Đã thêm vật tư" : "Đã cập nhật vật tư");
@@ -379,7 +380,7 @@ function MaterialsPageContent() {
 
   function materialForEdit(m: MaterialWithDevices): MaterialEdit {
     const { replacements: _replacements, ...material } = m;
-    return material;
+    return { ...material, machines: m.machines ?? [m.machine ?? "COMMON"] };
   }
 
   function openEditDetails(material: MaterialWithDevices) {
@@ -836,38 +837,22 @@ function MaterialsPageContent() {
           {edit && (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Tổ máy" className="col-span-2">
+                {/* Multi-select cho cả Thêm mới lẫn Cập nhật: vật tư tồn tại trên đúng các tổ máy được tick. */}
                 <div className="grid grid-cols-3 gap-2">
                   {MACHINE_TABS.map((t) => {
-                    if (isNew) {
-                      const selected = (edit.machines ?? []).includes(t.key);
-                      return (
-                        <button
-                          key={t.key}
-                          type="button"
-                          onClick={() => {
-                            const cur = edit.machines ?? [];
-                            const next = selected ? cur.filter((k) => k !== t.key) : [...cur, t.key];
-                            setEdit({ ...edit, machines: next });
-                          }}
-                          className={cn(
-                            "h-10 rounded-md border text-sm font-medium transition-colors",
-                            selected
-                              ? "border-navy bg-navy text-white"
-                              : "border-input bg-muted/40 text-ink hover:border-accent"
-                          )}
-                        >
-                          {t.label}
-                        </button>
-                      );
-                    }
+                    const selected = (edit.machines ?? []).includes(t.key);
                     return (
                       <button
                         key={t.key}
                         type="button"
-                        onClick={() => setEdit({ ...edit, machine: t.key })}
+                        onClick={() => {
+                          const cur = edit.machines ?? [];
+                          const next = selected ? cur.filter((k) => k !== t.key) : [...cur, t.key];
+                          setEdit({ ...edit, machines: next });
+                        }}
                         className={cn(
                           "h-10 rounded-md border text-sm font-medium transition-colors",
-                          (edit.machine ?? "COMMON") === t.key
+                          selected
                             ? "border-navy bg-navy text-white"
                             : "border-input bg-muted/40 text-ink hover:border-accent"
                         )}

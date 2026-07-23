@@ -236,7 +236,22 @@ export async function GET(req: NextRequest) {
       ? await prisma.equipmentNode.findMany({ where: { seq: { in: parentSeqs } }, select: { seq: true, name: true } })
       : [];
     const parentNameBySeq = new Map(parentNodes.map((node) => [node.seq, node.name]));
-    const data = materials.map((material) => mapMaterial(material, documents.get(material.id), parentNameBySeq));
+    // Danh sách tổ máy mà vật tư (cùng code) đang tồn tại — form Cập nhật dùng để tick sẵn.
+    const codes = Array.from(new Set(materials.map((material) => material.code)));
+    const siblingRows = codes.length
+      ? await prisma.material.findMany({ where: { code: { in: codes } }, select: { code: true, machine: true } })
+      : [];
+    const machinesByCode = new Map<string, string[]>();
+    for (const row of siblingRows) {
+      const list = machinesByCode.get(row.code);
+      if (list) {
+        if (!list.includes(row.machine)) list.push(row.machine);
+      } else machinesByCode.set(row.code, [row.machine]);
+    }
+    const data = materials.map((material) => ({
+      ...mapMaterial(material, documents.get(material.id), parentNameBySeq),
+      machines: machinesByCode.get(material.code) ?? [material.machine],
+    }));
     // Khi KHÔNG tải usage nhưng vẫn phải xét quyền hiển thị: tra bản nhẹ 2 cột
     // (materialId, deviceSeq) thay vì chở cả lịch sử tiêu hao về client.
     const usageMap = new Map<string, string[]>();
@@ -390,6 +405,65 @@ export async function PUT(req: NextRequest) {
             materialId: body.id,
           },
         });
+      }
+    }
+    // Đồng bộ danh sách TỔ MÁY được tick (multi-select ở form Cập nhật): vật tư
+    // tồn tại đúng trên các tổ máy đã chọn — tạo dòng sibling còn thiếu (copy thông
+    // tin chung + mã ERP + tài liệu); dòng bỏ tick chỉ xoá khi không còn điểm
+    // khai báo/theo dõi để tránh mất dữ liệu.
+    const requestedMachines: string[] | undefined = Array.isArray(body.machines)
+      ? Array.from(
+          new Set(
+            body.machines.filter(
+              (m: unknown): m is string => typeof m === "string" && (DEFECT_UNITS as readonly string[]).includes(m)
+            )
+          )
+        )
+      : undefined;
+    if (requestedMachines !== undefined) {
+      if (!requestedMachines.length) return fail("Vui lòng chọn ít nhất một tổ máy");
+      const main = await prisma.material.findUnique({ where: { id: body.id } });
+      if (main) {
+        const siblings = await prisma.material.findMany({ where: { code: main.code }, select: { id: true, machine: true } });
+        const existingMachines = new Set(siblings.map((s) => s.machine));
+        for (const machineKey of requestedMachines) {
+          if (existingMachines.has(machineKey)) continue;
+          const created = await prisma.material.create({
+            data: {
+              code: main.code,
+              name: main.name,
+              unit: main.unit,
+              quantity: main.quantity,
+              minStock: main.minStock,
+              location: main.location,
+              system: main.system,
+              category: main.category,
+              imageUrl: main.imageUrl,
+              unitPrice: main.unitPrice,
+              note: main.note,
+              machine: machineKey,
+            },
+          });
+          // Copy mã ERP + tài liệu (cột raw ngoài schema Prisma).
+          await ensureMaterialDocumentColumns();
+          await prisma.$executeRaw`
+            UPDATE "Material" SET "erpCodes" = src."erpCodes", "documentUrl" = src."documentUrl", "documentName" = src."documentName"
+            FROM "Material" src WHERE src."id" = ${main.id} AND "Material"."id" = ${created.id}
+          `;
+          await audit(user.id, "CREATE_MATERIAL", "Material", created.id, auditDetailWithPosition(user, `${main.code} (${machineKey})`));
+        }
+        for (const sibling of siblings) {
+          if (requestedMachines.includes(sibling.machine)) continue;
+          const points = await prisma.materialReplacement.count({ where: { materialId: sibling.id } });
+          if (points > 0) {
+            return fail(
+              `Không thể bỏ Tổ máy ${sibling.machine}: còn ${points} điểm khai báo/theo dõi ở tổ máy này — xoá các điểm trước khi bỏ chọn.`
+            );
+          }
+          await prisma.equipmentMaterial.deleteMany({ where: { materialId: sibling.id } });
+          await prisma.material.delete({ where: { id: sibling.id } });
+          await audit(user.id, "DELETE_MATERIAL", "Material", sibling.id, auditDetailWithPosition(user, `${main.code} (${sibling.machine})`));
+        }
       }
     }
     // Đồng bộ quantity sang các bản ghi sibling (cùng code, khác machine).
