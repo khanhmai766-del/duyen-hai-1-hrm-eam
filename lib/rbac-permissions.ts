@@ -50,7 +50,7 @@ function strongestPermission(values: Array<string | null | undefined>): Permissi
 }
 
 // Bảng RbacConfig được khai báo trong prisma/schema.prisma và tạo bằng db push.
-async function readRbacConfig(): Promise<RbacConfig | null> {
+async function loadRbacConfig(): Promise<RbacConfig | null> {
   const rows = await prisma.$queryRawUnsafe<{ value: string }[]>(
     `SELECT value FROM "RbacConfig" WHERE key = $1 LIMIT 1`,
     RBAC_CONFIG_KEY
@@ -62,6 +62,32 @@ async function readRbacConfig(): Promise<RbacConfig | null> {
   } catch {
     return null;
   }
+}
+
+// Cache config RBAC trong process (TTL ngắn) — hầu như mọi API đều check quyền
+// (nhiều lần mỗi request); đọc DB + JSON.parse toàn bộ config mỗi lần rất tốn CPU.
+// PUT /api/rbac gọi invalidateRbacConfigCache() ngay sau khi lưu.
+const RBAC_CONFIG_CACHE_TTL_MS = 30_000;
+let rbacConfigCache: { value: RbacConfig | null; expiresAt: number } | null = null;
+let rbacConfigInFlight: Promise<RbacConfig | null> | null = null;
+
+async function readRbacConfig(): Promise<RbacConfig | null> {
+  if (rbacConfigCache && rbacConfigCache.expiresAt > Date.now()) return rbacConfigCache.value;
+  if (rbacConfigInFlight) return rbacConfigInFlight;
+  rbacConfigInFlight = loadRbacConfig()
+    .then((value) => {
+      rbacConfigCache = { value, expiresAt: Date.now() + RBAC_CONFIG_CACHE_TTL_MS };
+      return value;
+    })
+    .finally(() => {
+      rbacConfigInFlight = null;
+    });
+  return rbacConfigInFlight;
+}
+
+export function invalidateRbacConfigCache() {
+  rbacConfigCache = null;
+  rbacConfigInFlight = null;
 }
 
 function allowsApprove(value: string | null | undefined) {

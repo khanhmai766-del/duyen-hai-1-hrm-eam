@@ -8,13 +8,18 @@ import { invalidateUserSummaryCache } from "@/lib/user-summary-cache";
 
 export const dynamic = "force-dynamic";
 
+// DDL chỉ chạy 1 lần mỗi process — ALTER TABLE (kể cả IF NOT EXISTS no-op) chiếm khóa
+// ACCESS EXCLUSIVE trên "User", chạy mỗi request sẽ tuần tự hóa mọi truy vấn user.
+let userColumnsReady = false;
 async function ensureUserCurrentPositionColumn() {
+  if (userColumnsReady) return;
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
     ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
     ADD COLUMN IF NOT EXISTS "secondaryPosition2" TEXT,
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT
   `);
+  userColumnsReady = true;
 }
 
 export async function GET() {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { requestAuditMeta } from "@/lib/activity-log";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { invalidateRbacConfigCache } from "@/lib/rbac-permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,6 +169,7 @@ export async function PUT(req: NextRequest) {
       JSON.stringify(payload),
       user.id
     );
+    invalidateRbacConfigCache();
 
     await audit(user.id, "UPDATE_RBAC_CONFIG", "RbacConfig", RBAC_CONFIG_KEY, "Cập nhật cấu hình phân quyền", {
       actorName: user.name,

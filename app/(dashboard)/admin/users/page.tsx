@@ -94,6 +94,16 @@ const CATEGORY_BADGE: Record<ActivityCategory, string> = {
   USER: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
+/** Trì hoãn giá trị tìm kiếm — tránh bắn 1 request API cho mỗi phím gõ. */
+function useDebouncedValue<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 function compactDetail(value: unknown, max = 90) {
   const text = typeof value === "string" ? value : value == null ? "" : JSON.stringify(value);
   if (!text) return "—";
@@ -137,6 +147,7 @@ export default function AdminUsersPage() {
 
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
@@ -150,7 +161,9 @@ export default function AdminUsersPage() {
   const [resetPasswordForm, setResetPasswordForm] = React.useState({ newPassword: "", confirmPassword: "" });
   const [auditTab, setAuditTab] = React.useState<"activity" | "system">("activity");
   const [auditSearch, setAuditSearch] = React.useState("");
+  const debouncedAuditSearch = useDebouncedValue(auditSearch);
   const [auditAction, setAuditAction] = React.useState("");
+  const debouncedAuditAction = useDebouncedValue(auditAction);
   const [auditFrom, setAuditFrom] = React.useState("");
   const [auditTo, setAuditTo] = React.useState("");
   const [auditPage, setAuditPage] = React.useState(1);
@@ -158,12 +171,12 @@ export default function AdminUsersPage() {
   const [systemAuditDetail, setSystemAuditDetail] = React.useState<SystemAuditLogRow | null>(null);
   const auditParams = React.useMemo(() => {
     const params = new URLSearchParams({ page: String(auditPage), pageSize: "25" });
-    if (auditSearch.trim()) params.set("q", auditSearch.trim());
-    if (auditAction.trim()) params.set("action", auditAction.trim());
+    if (debouncedAuditSearch.trim()) params.set("q", debouncedAuditSearch.trim());
+    if (debouncedAuditAction.trim()) params.set("action", debouncedAuditAction.trim());
     if (auditFrom) params.set("from", `${auditFrom}T00:00:00+07:00`);
     if (auditTo) params.set("to", `${auditTo}T23:59:59.999+07:00`);
     return params.toString();
-  }, [auditAction, auditFrom, auditPage, auditSearch, auditTo]);
+  }, [debouncedAuditAction, auditFrom, auditPage, debouncedAuditSearch, auditTo]);
   const audit = useQuery({
     queryKey: ["audit", auditParams],
     queryFn: () => apiGet<ActivityLogRow[]>(`/api/audit?${auditParams}`),
@@ -177,7 +190,7 @@ export default function AdminUsersPage() {
   const usersQuery = useAdminUsers({
     page,
     pageSize,
-    q: search,
+    q: debouncedSearch,
     position: positionFilter,
     enabled: canOpenPage && !rbac.isLoading,
   });
@@ -208,11 +221,11 @@ export default function AdminUsersPage() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [search, positionFilter, pageSize]);
+  }, [debouncedSearch, positionFilter, pageSize]);
 
   React.useEffect(() => {
     setAuditPage(1);
-  }, [auditSearch, auditAction, auditFrom, auditTo, auditTab]);
+  }, [debouncedAuditSearch, debouncedAuditAction, auditFrom, auditTo, auditTab]);
 
   React.useEffect(() => {
     setPage((current) => Math.min(Math.max(1, current), totalPages));

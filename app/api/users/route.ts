@@ -41,7 +41,11 @@ const SUMMARY_SELECT = {
   createdAt: true,
 } as const;
 
+// DDL chỉ chạy 1 lần mỗi process — ALTER TABLE (kể cả IF NOT EXISTS no-op) chiếm khóa
+// ACCESS EXCLUSIVE trên "User", chạy mỗi request sẽ tuần tự hóa mọi truy vấn user.
+let userColumnsReady = false;
 async function ensureUserSecondaryPositionColumn() {
+  if (userColumnsReady) return;
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
     ADD COLUMN IF NOT EXISTS "secondaryPosition" TEXT,
@@ -50,6 +54,7 @@ async function ensureUserSecondaryPositionColumn() {
     ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
   `);
+  userColumnsReady = true;
 }
 
 async function safe<T extends { passwordHash?: string; avatarUrl?: string | null; signatureUrl?: string | null; avatarKey?: string | null; signatureKey?: string | null }>(u: T) {
