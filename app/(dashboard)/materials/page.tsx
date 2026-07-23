@@ -1427,7 +1427,8 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
               <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
                 {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
                 <td className="px-4 py-2.5 font-medium uppercase text-ink">{p.device?.system || p.system || p.device?.name || "—"}</td>
-                <td className="px-4 py-2.5 text-ink">{p.location || "—"}</td>
+                {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
+                <td className="px-4 py-2.5 text-ink">{p.device?.name || p.location || "—"}</td>
                 <td className="px-4 py-2.5 text-ink">{p.managingPosition || "—"}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.deviceCount ?? 1}</td>
                 <td className="px-4 py-2.5 text-center text-ink">{p.intervalNote || "—"}</td>
@@ -1459,7 +1460,9 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
             <div className="space-y-3">
               <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
                 <div className="font-semibold uppercase text-ink">{tracking.device?.name || tracking.system || "—"}</div>
-                {tracking.location && <div className="text-muted-foreground">Thiết bị: {tracking.location}</div>}
+                {(tracking.device?.name || tracking.location) && (
+                  <div className="text-muted-foreground">Thiết bị: {tracking.device?.name || tracking.location}</div>
+                )}
               </div>
               <Field label="Lần thay gần nhất">
                 <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
