@@ -158,7 +158,8 @@ function DeviceDetailPageContent() {
               <Row label="Tổ máy" value={deviceMachine === "COMMON" ? "COMMON · Dùng chung" : deviceMachine} />
               <Row label="Hệ thống" value={device.system ?? "—"} />
               <Row label="Mã KKS" value={device.kks ?? "—"} />
-              <Row label="Cương vị quản lý" value={device.managingPosition ?? "—"} icon={UserCog} />
+              {/* Có thể nhiều cương vị cùng được cấp quyền Sửa trên một nhánh → hiện đủ, không chỉ cương vị gần nhất. */}
+              <ManagingPositionsRow positions={device.managingPositions ?? (device.managingPosition ? [device.managingPosition] : [])} />
               {device.attachedInfo && (
                 <div className="pt-1">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Thông tin đính kèm</div>
@@ -493,6 +494,33 @@ function DeviceDetailPageContent() {
           }
         }}
       />
+    </div>
+  );
+}
+
+/** Cương vị quản lý: liệt kê MỌI cương vị được cấp quyền Sửa trên thiết bị (kế thừa theo nhánh). */
+function ManagingPositionsRow({ positions }: { positions: string[] }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-border/60 pb-2 last:border-0">
+      <span className="shrink-0 text-muted-foreground">Cương vị quản lý</span>
+      {positions.length === 0 ? (
+        <span className="inline-flex items-center gap-1.5 text-right font-medium text-ink">
+          <UserCog className="h-3.5 w-3.5 text-muted-foreground" />—
+        </span>
+      ) : (
+        <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          <UserCog className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {positions.map((position) => (
+            <span
+              key={position}
+              className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-ink"
+              title={position}
+            >
+              {position}
+            </span>
+          ))}
+        </span>
+      )}
     </div>
   );
 }

@@ -1331,10 +1331,33 @@ function StockBadge({ quantity, minStock }: { quantity: number; minStock: number
   return null;
 }
 
+/**
+ * So sánh tên theo thứ tự TỰ NHIÊN tiếng Việt: chữ cái A→B→C và số 1→2→3 đúng giá trị
+ * ("Bơm #2" trước "Bơm #10", không phải sắp theo chuỗi). Bỏ qua hoa/thường & dấu.
+ */
+const naturalCollator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
+function compareNatural(a: string, b: string) {
+  return naturalCollator.compare(a ?? "", b ?? "");
+}
+
 /** Panel bung: liệt kê các thiết bị theo dõi đã khai báo cho vật tư. */
 function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m: MaterialWithDevices; blockFilter?: string; onOpenTracking?: () => void }) {
-  const points = (m.replacements ?? []).filter(
-    (r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter)
+  const points = React.useMemo(
+    () =>
+      (m.replacements ?? [])
+        .filter((r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter))
+        // Gom các điểm CÙNG HỆ THỐNG nằm liền kề; trong mỗi hệ thống sắp thiết bị theo thứ tự
+        // tự nhiên (Bơm A → B → C, Quạt 1 → 2 → 3, "#2" trước "#10").
+        .slice()
+        .sort((a, b) => {
+          const systemOf = (p: typeof a) => p.device?.system || p.system || p.device?.name || "";
+          const deviceOf = (p: typeof a) => p.device?.name || p.location || "";
+          return (
+            compareNatural(systemOf(a), systemOf(b)) ||
+            compareNatural(deviceOf(a), deviceOf(b))
+          );
+        }),
+    [m.replacements, blockFilter]
   );
   const createPoint = useCreateReplacement();
 
