@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
+import * as XLSX from "xlsx";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, Download, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -236,6 +237,64 @@ function MaterialsPageContent() {
       (blockFilter === "ALL" || materialBlocks(m).has(blockFilter))
   );
   const isFiltered = q.trim() !== "" || blockFilter !== "ALL";
+
+  /**
+   * Xuất CSV "Chi tiết điểm thay thế" của TẤT CẢ vật tư đang hiển thị (theo đúng bộ lọc
+   * tổ máy / loại vật tư / khối / từ khoá) — mỗi điểm thay thế là 1 dòng, kèm thông tin vật tư.
+   * Dùng đúng thứ tự sắp xếp như bảng: gom theo hệ thống, rồi thiết bị theo thứ tự tự nhiên.
+   */
+  function exportReplacementPointsCsv() {
+    const header = [
+      "Loại vật tư", "Tên vật tư", "Mã ERP", "ĐVT", "Tổ máy",
+      "Hệ thống / thiết bị", "Thiết bị", "Cương vị quản lý",
+      "SL thiết bị", "Chu kỳ O&M", "Chu kỳ thay thế", "Số lượng cần thay",
+    ];
+    const rows: (string | number)[][] = [];
+    const sortedMaterials = materials.slice().sort((a, b) => compareNatural(a.name, b.name));
+    for (const m of sortedMaterials) {
+      const points = (m.replacements ?? [])
+        .filter((r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter))
+        .slice()
+        .sort((a, b) => {
+          const systemOf = (p: typeof a) => p.device?.system || p.system || p.device?.name || "";
+          const deviceOf = (p: typeof a) => p.device?.name || p.location || "";
+          return compareNatural(systemOf(a), systemOf(b)) || compareNatural(deviceOf(a), deviceOf(b));
+        });
+      for (const p of points) {
+        rows.push([
+          m.category ?? "",
+          m.name,
+          materialErpCodes(m).join(" / "),
+          m.unit ?? "",
+          m.machine ?? "COMMON",
+          p.device?.system || p.system || p.device?.name || "",
+          p.device?.name || p.location || "",
+          p.managingPosition || "",
+          p.deviceCount ?? 1,
+          p.intervalNote || "",
+          p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`,
+          p.quantity * (p.deviceCount || 1),
+        ]);
+      }
+    }
+    if (!rows.length) {
+      toast.error("Không có điểm thay thế nào trong danh sách đang hiển thị");
+      return;
+    }
+    const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    // Dấu ; + BOM UTF-8: Excel tiếng Việt mở đúng cột và không lỗi font.
+    const csv = XLSX.utils.sheet_to_csv(sheet, { FS: ";" });
+    const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `diem-thay-the_${machineTab}_${categoryFilter}_${new Date().toISOString().slice(0, 10)}.csv`
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${rows.length} điểm thay thế của ${sortedMaterials.length} vật tư`);
+  }
 
   // Bỏ chọn những dòng không còn trong danh sách đang hiển thị (vd sau khi lọc/xoá).
   // Dùng chuỗi id ổn định làm dependency để effect chỉ chạy khi tập hiển thị đổi,
@@ -494,6 +553,9 @@ function MaterialsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
+        <Button variant="outline" onClick={exportReplacementPointsCsv} title="Xuất CSV chi tiết điểm thay thế của các vật tư đang hiển thị">
+          <Download className="h-4 w-4" /> Xuất điểm thay thế
+        </Button>
         {canManage && (
           <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
