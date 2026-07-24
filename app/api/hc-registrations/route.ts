@@ -6,9 +6,11 @@ import { canViewHcRegistrationArchive } from "@/lib/hc-registration-access";
 import { userWithSignedMedia } from "@/lib/s3";
 import { parseDateInput } from "@/lib/utils";
 import { HC_REGISTRATION_CONTENTS } from "@/lib/hc-period";
+import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
+const APPROVE_PERMISSION_ID = "hc-attendance-approve";
 let hcHandlingColumnsReady = false;
 
 async function ensureHcHandlingColumns() {
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureHcHandlingColumns();
+    const canApprove = await hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
     const isArchiveRequest = req.nextUrl.searchParams.get("scope") === "archive";
     if (isArchiveRequest && !canViewHcRegistrationArchive(user)) {
       throw fail("Không đủ quyền xem kho lưu trữ đăng ký đi hành chính", 403);
@@ -90,6 +93,13 @@ export async function GET(req: NextRequest) {
     const hydratedRegistrations = await Promise.all(
       registrations.map(async (registration) => ({
         ...registration,
+        ...(!canApprove
+          ? {
+              handledById: null,
+              handledByName: null,
+              handledAt: null,
+            }
+          : {}),
         user: await userWithSignedMedia(registration.user),
       }))
     );

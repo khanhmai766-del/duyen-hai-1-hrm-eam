@@ -470,7 +470,7 @@ export default function AdminDayBoard() {
                           <span className="text-[11px] font-semibold bg-muted text-muted-foreground rounded px-2 py-0.5">{sessionLabelOf(r)}</span>
                           <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                         </div>
-                        {handled && (
+                        {canApprove && handled && (
                           <div className="mt-1 flex items-center gap-1.5 text-[11px] leading-4 text-slate-500">
                             <Clock3 className="h-3 w-3 shrink-0" aria-hidden="true" />
                             <span>{handled}</span>
