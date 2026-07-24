@@ -49,12 +49,32 @@ export async function POST(req: NextRequest) {
 
     const [materials, nodes, access] = await Promise.all([
       prisma.material.findMany({ select: { id: true, code: true, erpCodes: true, name: true, machine: true, unit: true, system: true } }),
-      prisma.equipmentNode.findMany({ select: { seq: true, parentSeq: true, name: true } }),
+      prisma.equipmentNode.findMany({ select: { seq: true, parentSeq: true, name: true, kks: true, externalId: true } }),
       resolveEquipmentAccessForUser(user),
     ]);
 
     const nodeBySeq = new Map(nodes.map((node) => [node.seq, node]));
     const parentSeqs = new Set(nodes.map((node) => node.parentSeq).filter((seq): seq is string => Boolean(seq)));
+    // Tra thiết bị linh hoạt: theo mã KKS hoặc externalId (ngoài mã cây seq).
+    const nodeByKks = new Map<string, (typeof nodes)[number]>();
+    const nodeByExternalId = new Map<string, (typeof nodes)[number]>();
+    for (const node of nodes) {
+      if (node.kks) nodeByKks.set(normalizeText(node.kks), node);
+      if (node.externalId) nodeByExternalId.set(node.externalId.trim(), node);
+    }
+
+    // Nhận diện thiết bị từ ô "Mã thiết bị": mã cây đầy đủ (DH1.S1.1.1...), mã cây
+    // rút gọn (tự thêm tiền tố DH1.<tổ máy>.), mã KKS, hoặc externalId.
+    function resolveNode(raw: string, machine: string) {
+      const v = raw.trim();
+      if (!v) return null;
+      const exact = nodeBySeq.get(v);
+      if (exact) return exact;
+      const relative = v.replace(/^DH1\.S[12]\./i, "");
+      const prefixed = nodeBySeq.get(`DH1.${machine}.${relative}`);
+      if (prefixed) return prefixed;
+      return nodeByKks.get(normalizeText(v)) ?? nodeByExternalId.get(v) ?? null;
+    }
 
     // Chỉ số tra cứu vật tư theo mã ERP và theo tên (đã fold dấu) trong từng tổ máy.
     const materialByCode = new Map<string, typeof materials>();
@@ -120,13 +140,18 @@ export async function POST(req: NextRequest) {
       let resolvedLocation: string | null = null;
       let deviceLabel = "";
       if (deviceSeq) {
-        const node = nodeBySeq.get(deviceSeq);
-        if (!node) return errors.push({ rowNumber, message: `Không tìm thấy thiết bị có mã (seq) ${deviceSeq}` });
-        if (parentSeqs.has(deviceSeq)) return errors.push({ rowNumber, message: `Mã (seq) ${deviceSeq} là thư mục, không phải thiết bị` });
-        if (deviceName && normalizeText(deviceName) !== normalizeText(node.name)) {
-          return errors.push({ rowNumber, message: `Tên thiết bị không khớp mã ${deviceSeq}; tên đúng là “${node.name}”` });
+        const node = resolveNode(deviceSeq, machine);
+        if (!node) {
+          return errors.push({
+            rowNumber,
+            message: `Không tìm thấy thiết bị theo mã “${deviceSeq}”. Dùng mã cây (VD DH1.${machine}.1.1.1.1) hoặc mã KKS; nếu không có, để trống cột này và chỉ điền Hệ thống / Tên thiết bị.`,
+          });
         }
-        resolvedSeq = deviceSeq;
+        if (parentSeqs.has(node.seq)) return errors.push({ rowNumber, message: `Mã “${deviceSeq}” là thư mục/hệ thống, không phải thiết bị lá` });
+        if (deviceName && normalizeText(deviceName) !== normalizeText(node.name)) {
+          return errors.push({ rowNumber, message: `Tên thiết bị không khớp mã “${deviceSeq}”; tên đúng là “${node.name}”` });
+        }
+        resolvedSeq = node.seq;
         const parent = node.parentSeq ? nodeBySeq.get(node.parentSeq) : null;
         resolvedSystem = system || parent?.name || material.system || node.name;
         deviceLabel = node.name;
