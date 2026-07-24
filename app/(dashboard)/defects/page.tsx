@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -120,7 +120,9 @@ export default function DefectsPage() {
       (
         statusFilter === "ALL" ||
         (
-          statusFilter === "TON_DONG"
+          statusFilter === "SOURCE_MISSING"
+            ? d.sourceType === "GOOGLE_SHEETS" && d.syncState === "MISSING"
+            : statusFilter === "TON_DONG"
             ? d.postRepairAwaitingMaterial
             : statusFilter === "DA_XU_LY"
               ? d.status === "DA_XU_LY" && !d.postRepairAwaitingMaterial
@@ -211,7 +213,9 @@ export default function DefectsPage() {
             requestType: d.requestType ?? "",
             requestNumber: d.requestNumber ?? "",
             content: d.content ?? "",
-            status: DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
+            status: d.syncState === "MISSING"
+              ? "Không còn trên Google Sheet"
+              : DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
             detectedAt: formatDate(d.detectedAt),
             reminderCount: d.reminderCount,
             lastRemindedAt: formatDate(d.lastRemindedAt),
@@ -388,6 +392,7 @@ export default function DefectsPage() {
                     label="Tình trạng"
                     value={statusFilter}
                     options={[
+                      { value: "SOURCE_MISSING", label: "Không còn trên Google Sheet" },
                       { value: "TON_DONG", label: "Tồn đọng" },
                       ...DEFECT_STATUS_ORDER.map((s) => ({ value: s, label: DEFECT_STATUS[s].label })),
                     ]}
@@ -431,6 +436,11 @@ export default function DefectsPage() {
                         {d.sourceType === "GOOGLE_SHEETS" && (
                           <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Google Sheet</span>
+                            {d.syncState === "MISSING" && (
+                              <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-700 ring-1 ring-rose-200">
+                                Không còn nguồn
+                              </span>
+                            )}
                             <span
                               className={cn(
                                 "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
@@ -456,7 +466,15 @@ export default function DefectsPage() {
                         ) : "—"}
                       </TableCell>
                       <TableCell className="px-3 py-3 text-center">
-                        {d.postRepairAwaitingMaterial ? (
+                        {d.syncState === "MISSING" ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200"
+                            title="Dòng dữ liệu này không còn xuất hiện trong lần đồng bộ Google Sheet gần nhất"
+                          >
+                            <CloudOff className="h-3.5 w-3.5" />
+                            Không còn trên Google Sheet
+                          </span>
+                        ) : d.postRepairAwaitingMaterial ? (
                           <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
                             Tồn đọng · Chờ vật tư
                           </span>
@@ -770,6 +788,10 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
           <>
             <DetailLine label="Nội dung nhắc lại" value={defect.reminderRaw || "—"} multiline />
             <DetailLine label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} multiline />
+            <DetailLine
+              label="Trạng thái đồng bộ"
+              value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
+            />
             <DetailLine label="Trạng thái nguồn" value={defect.sourceStatusRaw || "—"} />
             <DetailLine
               label="Kết quả sửa chữa"
