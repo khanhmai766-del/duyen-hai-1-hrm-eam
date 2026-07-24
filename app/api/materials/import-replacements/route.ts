@@ -216,6 +216,7 @@ export async function POST(req: NextRequest) {
             : { materialId: row.materialId, deviceSeq: null, system: row.system, location: row.location, isActive: false };
           const existing = await tx.materialReplacement.findFirst({ where, select: { id: true } });
           const data = {
+            machine: row.machine, // Đồng bộ tổ máy để hiện đúng ở trang thiết bị (lọc theo machine).
             system: row.system,
             location: row.location,
             managingPosition: row.managingPosition,

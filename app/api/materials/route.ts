@@ -131,12 +131,14 @@ type ReplacementInput = {
 };
 
 /** Dựng dữ liệu tạo một điểm thay thế từ payload form (kèm tính ngày đến hạn). */
-function buildReplacementCreate(entry: ReplacementInput, userId: string, defaultSystem: string | null) {
+function buildReplacementCreate(entry: ReplacementInput, userId: string, defaultSystem: string | null, machine: string) {
   const parsedInterval = Math.round(Number(entry.intervalMonths));
   const intervalMonths = Number.isFinite(parsedInterval) ? Math.max(0, parsedInterval) : 12;
   const quantity = Math.max(0, Math.round(Number(entry.quantity)) || 0);
   const lastReplacedAt = entry.lastReplacedAt ? new Date(entry.lastReplacedAt) : null;
   return {
+    // Đồng bộ tổ máy của điểm thay thế với tổ máy của vật tư — trang thiết bị lọc theo machine.
+    machine,
     deviceSeq: entry.deviceSeq?.trim() || null,
     system: entry.system?.trim() || defaultSystem || null,
     location: entry.location?.trim() || null,
@@ -155,12 +157,12 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
 }
 
 /** Lọc các điểm hợp lệ (phải có thiết bị hoặc hệ thống) từ payload. */
-function parseReplacements(body: { replacements?: unknown }, userId: string, defaultSystem: string | null) {
+function parseReplacements(body: { replacements?: unknown }, userId: string, defaultSystem: string | null, machine: string) {
   if (!Array.isArray(body.replacements)) return [];
   return body.replacements
     .filter((r: ReplacementInput) =>
       r && (String(r.deviceSeq ?? "").trim() || String(r.system ?? "").trim() || String(r.location ?? "").trim()))
-    .map((r: ReplacementInput) => buildReplacementCreate(r, userId, defaultSystem));
+    .map((r: ReplacementInput) => buildReplacementCreate(r, userId, defaultSystem, machine));
 }
 
 function parseErpCodes(body: { code?: unknown; erpCodes?: unknown }) {
@@ -298,7 +300,9 @@ export async function POST(req: NextRequest) {
     const exists = await materialWithAnyErpCode(erpCodes);
     if (exists) return fail("Mã vật tư ERP đã được gom trong Danh mục vật tư PXVH1");
     const defaultSystem = body.system?.trim() || null;
-    const replacements = parseReplacements(body, user.id, defaultSystem);
+    // Điểm dùng/thay thế chỉ gắn vào tổ máy chính — đồng bộ machine của điểm với tổ máy đó.
+    const primaryMachineForReplacements = parseMachine(body.machine) ?? "COMMON";
+    const replacements = parseReplacements(body, user.id, defaultSystem, primaryMachineForReplacements);
     const imageUrl = await maybeUploadDataUrl({ value: body.imageUrl || null, folder: "materials/images", preset: "image" });
     const document = await normalizeMaterialDocument(body);
     const syncAll = body.syncAll === true;
@@ -396,7 +400,7 @@ export async function PUT(req: NextRequest) {
     // Các ĐIỂM THEO DÕI thời gian (isActive=true, tạo từ nút "Thêm điểm") GIỮ NGUYÊN.
     if (Array.isArray(body.replacements)) {
       const current = await prisma.material.findUnique({ where: { id: body.id }, select: { system: true } });
-      const replacements = parseReplacements(body, user.id, defaultSystem ?? current?.system ?? null);
+      const replacements = parseReplacements(body, user.id, defaultSystem ?? current?.system ?? null, currentMaterial.machine);
       await prisma.materialReplacement.deleteMany({ where: { materialId: body.id, isActive: false } });
       for (const data of replacements) {
         await prisma.materialReplacement.create({
