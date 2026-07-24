@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import * as XLSX from "xlsx";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, Download, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -98,6 +99,7 @@ function MaterialsPageContent() {
   const [trackingRows, setTrackingRows] = React.useState<MaterialReplacementInput[]>([]);
   const [editingDetails, setEditingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [detailRows, setDetailRows] = React.useState<MaterialReplacementInput[]>([]);
+  const [importOpen, setImportOpen] = React.useState(false);
   const [deletingDetails, setDeletingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [selectedDetailIds, setSelectedDetailIds] = React.useState<Set<string>>(new Set());
   const [erpSearch, setErpSearch] = React.useState("");
@@ -553,6 +555,11 @@ function MaterialsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
+        {canManage && (
+          <Button variant="outline" onClick={() => setImportOpen(true)} title="Nhập/đồng bộ chi tiết điểm thay thế từ file Excel">
+            <FileSpreadsheet className="h-4 w-4" /> Nhập điểm thay thế
+          </Button>
+        )}
         <Button variant="outline" onClick={exportReplacementPointsCsv} title="Xuất CSV chi tiết điểm thay thế của các vật tư đang hiển thị">
           <Download className="h-4 w-4" /> Xuất điểm thay thế
         </Button>
@@ -1134,12 +1141,388 @@ function MaterialsPageContent() {
       />
 
       <ReplacementDrawer material={replMaterial} role={role} onClose={() => setReplMaterial(null)} />
+
+      <ImportReplacementsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        materials={data?.data ?? []}
+        machineTab={machineTab}
+        machineLabel={machineLabel}
+      />
     </div>
   );
 }
 
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return <div className={className}><Label className="mb-1.5 block">{label}</Label>{children}</div>;
+}
+
+// ————————————————————————————————————————————————————————————————
+// Nhập / đồng bộ chi tiết điểm thay thế từ file Excel.
+// ————————————————————————————————————————————————————————————————
+type ImportParsedRow = {
+  rowNumber: number;
+  materialName?: string;
+  erpCode?: string;
+  machine?: string;
+  system?: string;
+  deviceSeq?: string;
+  deviceName?: string;
+  managingPosition?: string;
+  deviceCount?: number;
+  quantity?: number;
+  intervalNote?: string;
+  intervalMonths?: number;
+};
+
+type ImportResult = {
+  validCount: number;
+  errors: { rowNumber: number; message: string }[];
+  preview: Array<{ rowNumber: number; materialName: string; deviceLabel: string; system: string | null; deviceCount: number; quantity: number; unit: string; intervalMonths: number }>;
+  created: number;
+  updated: number;
+};
+
+// Thứ tự cột file mẫu — (*) = bắt buộc.
+const IMPORT_HEADERS = [
+  "Tên vật tư (*)",
+  "Mã ERP",
+  "Tổ máy (*)",
+  "Hệ thống / cây thư mục (*)",
+  "Mã thiết bị (seq)",
+  "Tên thiết bị",
+  "Cương vị quản lý",
+  "Số lượng thiết bị",
+  "Số lượng cần thay / thiết bị (*)",
+  "Chu kỳ O&M",
+  "Chu kỳ thay thế (tháng) (*)",
+];
+
+// Nhận diện cột theo tên tiêu đề (fold dấu) — bền với thứ tự/biến thể chữ.
+function detectImportColumn(header: unknown): keyof ImportParsedRow | null {
+  const h = normalizeText(String(header ?? "")).replace(/\s+/g, " ");
+  if (!h) return null;
+  if (h.includes("erp")) return "erpCode";
+  if (h.includes("ten vat tu") || h === "vat tu") return "materialName";
+  if (h.includes("to may")) return "machine";
+  if (h.includes("cay thu muc") || h.includes("he thong")) return "system";
+  if (h.includes("seq") || h.includes("ma thiet bi")) return "deviceSeq";
+  if (h.includes("ten thiet bi")) return "deviceName";
+  if (h.includes("cuong vi")) return "managingPosition";
+  if (h.includes("so luong thiet bi")) return "deviceCount";
+  if (h.includes("can thay")) return "quantity";
+  if (h.includes("chu ky thay the")) return "intervalMonths";
+  if (h.includes("chu ky")) return "intervalNote";
+  return null;
+}
+
+// "12 tháng" / 12 / "Không theo dõi lịch" → số tháng.
+function parseMonths(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : undefined;
+  const s = normalizeText(String(value ?? ""));
+  if (!s) return undefined;
+  if (s.includes("khong theo doi") || s === "0") return 0;
+  const digits = s.match(/-?\d+/);
+  return digits ? parseInt(digits[0], 10) : undefined;
+}
+
+function parseIntCell(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? Math.round(value) : undefined;
+  const s = String(value ?? "").replace(/[^\d.-]/g, "").trim();
+  if (!s) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n) : undefined;
+}
+
+function ImportReplacementsDialog({
+  open,
+  onOpenChange,
+  materials,
+  machineTab,
+  machineLabel,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  materials: MaterialWithDevices[];
+  machineTab: string;
+  machineLabel: string;
+}) {
+  const qc = useQueryClient();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = React.useState("");
+  const [rows, setRows] = React.useState<ImportParsedRow[]>([]);
+  const [result, setResult] = React.useState<ImportResult | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  function reset() {
+    setFileName("");
+    setRows([]);
+    setResult(null);
+    setBusy(false);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function close() {
+    onOpenChange(false);
+    reset();
+  }
+
+  const erpOf = (m: MaterialWithDevices) =>
+    Array.from(new Set([...(m.erpCodes ?? []), m.code].map((c) => String(c ?? "").trim()).filter(Boolean))).join(" / ");
+
+  function downloadTemplate() {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1 — form nhập (chỉ có dòng tiêu đề, người dùng điền tiếp).
+    const ws1 = XLSX.utils.aoa_to_sheet([IMPORT_HEADERS]);
+    ws1["!cols"] = [32, 16, 8, 28, 16, 26, 18, 12, 18, 14, 18].map((wch) => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, ws1, "Nhập điểm thay thế");
+
+    // Sheet 2 — danh mục vật tư đang theo dõi (tham chiếu để điền đúng tên).
+    const catHeader = ["Tên vật tư", "Mã ERP", "ĐVT", "Tổ máy", "Loại vật tư", "Hệ thống mặc định"];
+    const catRows = materials
+      .slice()
+      .sort((a, b) => (a.category ?? "").localeCompare(b.category ?? "", "vi") || compareNatural(a.name, b.name))
+      .map((m) => [m.name, erpOf(m), m.unit ?? "", m.machine ?? "COMMON", m.category ?? "", m.system ?? ""]);
+    const ws2 = XLSX.utils.aoa_to_sheet([catHeader, ...catRows]);
+    ws2["!cols"] = [34, 18, 8, 8, 16, 24].map((wch) => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, ws2, "Danh mục vật tư");
+
+    // Sheet 3 — hướng dẫn.
+    const guide: (string | number)[][] = [
+      ["HƯỚNG DẪN NHẬP CHI TIẾT ĐIỂM THAY THẾ", ""],
+      ["", ""],
+      ["• Nhập dữ liệu vào sheet “Nhập điểm thay thế”, mỗi điểm thay thế là 1 dòng.", ""],
+      ["• Tên vật tư phải khớp với sheet “Danh mục vật tư” (chép đúng tên hoặc điền Mã ERP).", ""],
+      ["• Cột có (*) là bắt buộc.", ""],
+      ["• Tải lại lên hệ thống: điểm đã có sẽ được CẬP NHẬT, điểm mới sẽ được THÊM.", ""],
+      ["", ""],
+      ["Cột", "Ý nghĩa"],
+      ["Tên vật tư (*)", "Tên vật tư trong danh mục (xem sheet Danh mục vật tư)."],
+      ["Mã ERP", "Điền khi tên vật tư bị trùng, để xác định đúng vật tư."],
+      ["Tổ máy (*)", "S1, S2 hoặc COMMON — phải trùng tổ máy của vật tư."],
+      ["Hệ thống / cây thư mục (*)", "Tên hệ thống/nhánh cây thiết bị. Bắt buộc nếu không điền Mã thiết bị (seq)."],
+      ["Mã thiết bị (seq)", "Tuỳ chọn — mã (seq) của thiết bị lá để liên kết đúng cây thiết bị."],
+      ["Tên thiết bị", "Tuỳ chọn — tên thiết bị. Nếu có Mã (seq) thì phải khớp; nếu không có seq sẽ lưu dạng tự do."],
+      ["Cương vị quản lý", "Cương vị quản lý điểm thay thế (đồng bộ danh sách với khiếm khuyết)."],
+      ["Số lượng thiết bị", "Số thiết bị tại điểm này (mặc định 1)."],
+      ["Số lượng cần thay / thiết bị (*)", "Dung tích/số lượng cần thay cho MỖI thiết bị (theo ĐVT của vật tư)."],
+      ["Chu kỳ O&M", "Ghi chú chu kỳ theo giờ vận hành, ví dụ 2500h (tuỳ chọn)."],
+      ["Chu kỳ thay thế (tháng) (*)", "Số tháng giữa 2 lần thay. 0 = chỉ khai báo, không theo dõi lịch."],
+      ["", ""],
+      ["VÍ DỤ", ""],
+      ["Dầu Shell Turbo T32 | (Mã ERP) | S1 | Hệ thống dầu điều khiển | (trống) | Bơm dầu chính | Trưởng ca VH | 2 | 40 | 8000h | 12", ""],
+    ];
+    const ws3 = XLSX.utils.aoa_to_sheet(guide);
+    ws3["!cols"] = [32, 78].map((wch) => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, ws3, "Hướng dẫn");
+
+    XLSX.writeFile(wb, `mau-nhap-diem-thay-the_${String(machineTab).toLowerCase()}.xlsx`);
+  }
+
+  async function runImport(parsed: ImportParsedRow[], dryRun: boolean): Promise<ImportResult> {
+    const res = await fetch("/api/materials/import-replacements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: parsed, dryRun }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.error) throw new Error(json.error || "Nhập điểm thay thế thất bại");
+    return json.data as ImportResult;
+  }
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setResult(null);
+    setRows([]);
+    setFileName(file.name);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheetName = wb.SheetNames.find((n) => normalizeText(n).includes("nhap diem")) ?? wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: "" });
+      if (aoa.length < 2) throw new Error("File chưa có dòng dữ liệu nào ở sheet “Nhập điểm thay thế”");
+
+      const headerRow = aoa[0] as unknown[];
+      const colMap: Partial<Record<keyof ImportParsedRow, number>> = {};
+      headerRow.forEach((h, i) => {
+        const key = detectImportColumn(h);
+        if (key && colMap[key] === undefined) colMap[key] = i;
+      });
+      if (colMap.materialName === undefined && colMap.erpCode === undefined) {
+        throw new Error("Không tìm thấy cột “Tên vật tư” / “Mã ERP” — hãy dùng đúng file mẫu");
+      }
+
+      const str = (row: unknown[], key: keyof ImportParsedRow) =>
+        colMap[key] !== undefined ? String(row[colMap[key]!] ?? "").trim() : "";
+      const num = (row: unknown[], key: keyof ImportParsedRow) =>
+        colMap[key] !== undefined ? row[colMap[key]!] : undefined;
+
+      const parsed: ImportParsedRow[] = [];
+      for (let r = 1; r < aoa.length; r++) {
+        const row = aoa[r] as unknown[];
+        const materialName = str(row, "materialName");
+        const erpCode = str(row, "erpCode");
+        const system = str(row, "system");
+        const deviceSeq = str(row, "deviceSeq");
+        const deviceName = str(row, "deviceName");
+        // Bỏ qua dòng trống hoàn toàn.
+        if (!materialName && !erpCode && !system && !deviceSeq && !deviceName) continue;
+        parsed.push({
+          rowNumber: r + 1,
+          materialName,
+          erpCode,
+          machine: str(row, "machine") || machineTab,
+          system,
+          deviceSeq,
+          deviceName,
+          managingPosition: str(row, "managingPosition"),
+          deviceCount: parseIntCell(num(row, "deviceCount")),
+          quantity: parseIntCell(num(row, "quantity")),
+          intervalNote: str(row, "intervalNote"),
+          intervalMonths: parseMonths(num(row, "intervalMonths")),
+        });
+      }
+      if (!parsed.length) throw new Error("Không có dòng dữ liệu hợp lệ trong file");
+      setRows(parsed);
+      const dry = await runImport(parsed, true);
+      setResult(dry);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không đọc được file Excel");
+      setFileName("");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function confirmImport() {
+    if (!rows.length || !result || result.errors.length) return;
+    setBusy(true);
+    try {
+      const res = await runImport(rows, false);
+      toast.success(`Đã nhập ${res.created} điểm mới, cập nhật ${res.updated} điểm thay thế`);
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["device-material-options"] });
+      close();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Nhập điểm thay thế thất bại");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasErrors = !!result && result.errors.length > 0;
+  const canConfirm = !!result && !hasErrors && result.validCount > 0 && !busy;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : close())}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5 text-navy" /> Nhập chi tiết điểm thay thế — {machineLabel}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-sm text-ink">
+            <p className="font-medium">Cách dùng</p>
+            <ol className="ml-4 mt-1 list-decimal space-y-0.5 text-muted-foreground">
+              <li>Tải file mẫu (đã kèm sheet <span className="font-medium text-ink">Danh mục vật tư</span> để tra đúng tên).</li>
+              <li>Điền các điểm thay thế vào sheet <span className="font-medium text-ink">Nhập điểm thay thế</span>.</li>
+              <li>Tải file lên — hệ thống kiểm tra rồi thêm/cập nhật điểm theo từng vật tư.</li>
+            </ol>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={downloadTemplate}>
+              <Download className="h-4 w-4" /> Tải file mẫu (.xlsx)
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
+            <Button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Chọn file để nhập
+            </Button>
+            {fileName && <span className="flex items-center text-sm text-muted-foreground">{fileName}</span>}
+          </div>
+
+          {result && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="flex items-center gap-1.5 font-medium text-ink">
+                  {hasErrors ? <AlertTriangle className="h-4 w-4 text-amber-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                  {rows.length} dòng đọc được · {result.validCount} hợp lệ
+                  {hasErrors && ` · ${result.errors.length} lỗi`}
+                </span>
+              </div>
+
+              {hasErrors ? (
+                <div className="max-h-56 overflow-auto rounded-lg border border-red-100">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-red-50 text-red-800">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium w-20">Dòng</th>
+                        <th className="px-3 py-2 text-left font-medium">Lỗi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.errors.map((err, i) => (
+                        <tr key={i} className="border-t border-red-100">
+                          <td className="px-3 py-1.5 text-ink">{err.rowNumber}</td>
+                          <td className="px-3 py-1.5 text-ink">{err.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="max-h-56 overflow-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-muted/60 text-ink">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Vật tư</th>
+                        <th className="px-3 py-2 text-left font-medium">Thiết bị / hệ thống</th>
+                        <th className="px-3 py-2 text-center font-medium">SL TB</th>
+                        <th className="px-3 py-2 text-center font-medium">Cần thay</th>
+                        <th className="px-3 py-2 text-center font-medium">Chu kỳ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.preview.map((p, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-3 py-1.5 text-ink">{p.materialName}</td>
+                          <td className="px-3 py-1.5 text-ink">{p.deviceLabel || p.system || "—"}</td>
+                          <td className="px-3 py-1.5 text-center text-ink">{p.deviceCount}</td>
+                          <td className="px-3 py-1.5 text-center text-ink">{p.quantity * p.deviceCount} {p.unit}</td>
+                          <td className="px-3 py-1.5 text-center text-ink">{p.intervalMonths === 0 ? "—" : `${p.intervalMonths} th`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {hasErrors && <p className="text-sm text-muted-foreground">Hãy sửa các lỗi trên trong file rồi tải lại. Chỉ nhập được khi không còn lỗi.</p>}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={close} disabled={busy}>Đóng</Button>
+          <Button type="button" onClick={confirmImport} disabled={!canConfirm}>
+            {busy && result ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Xác nhận nhập {result && !hasErrors ? result.validCount : ""} điểm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function InlineTrackingEditor({
