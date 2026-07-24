@@ -7,7 +7,13 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
+const INCLUDE = {
+  createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
+  relatedDevices: {
+    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {

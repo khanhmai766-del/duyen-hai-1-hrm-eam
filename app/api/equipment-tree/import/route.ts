@@ -94,7 +94,16 @@ export async function POST(req: NextRequest) {
 
 async function branchHasBusinessData(sysPrefix: string): Promise<boolean> {
   const like = `${sysPrefix}.%`;
-  const tables = ["RepairLog", "EquipmentMaterial", "DeviceQrCard", "MaterialReplacement", "Defect", "DefectHistory"];
+  const tables = [
+    "RepairLog",
+    "EquipmentMaterial",
+    "DeviceQrCard",
+    "MaterialReplacement",
+    "Defect",
+    "DefectRelatedDevice",
+    "DefectHistory",
+    "DefectHistoryRelatedDevice",
+  ];
   for (const tbl of tables) {
     const rows = await prisma
       .$queryRawUnsafe<Array<{ n: number }>>(

@@ -212,7 +212,7 @@ function DeviceDetailPageContent() {
                         </div>
                         {item.result && <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-ink">Kết quả:</span> {item.result}</p>}
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                          <span>Ngày thực hiện: {formatDate(item.performedAt)}</span>
+                          <span>Ngày kết thúc: {formatDate(item.performedAt)}</span>
                           {item.workOrderNumber && <span>PCT: {item.workOrderNumber}</span>}
                           {item.requestNumber && <span>Yêu cầu: {item.requestNumber}</span>}
                           {item.createdBy?.name && <span>Người cập nhật: {item.createdBy.name}</span>}

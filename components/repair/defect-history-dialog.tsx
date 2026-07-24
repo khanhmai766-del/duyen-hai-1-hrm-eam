@@ -92,7 +92,7 @@ export function DefectHistoryDialog({
 
   async function submit() {
     if (!form.unit) return toast.error("Vui lòng chọn tổ máy");
-    if (!form.performedAt) return toast.error("Vui lòng chọn ngày thực hiện");
+    if (!form.performedAt) return toast.error("Vui lòng chọn ngày kết thúc");
     try {
       if (isEdit) await update.mutateAsync({ id: record!.id, ...form });
       else await create.mutateAsync(form);
@@ -174,7 +174,7 @@ export function DefectHistoryDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Ngày thực hiện *">
+          <Field label="Ngày kết thúc *">
             <Input type="date" value={form.performedAt} onChange={(e) => set("performedAt", e.target.value)} />
           </Field>
           <Field label="Nội dung thực hiện">

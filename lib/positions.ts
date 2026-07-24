@@ -85,6 +85,8 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
       "Thiết bị đo lường điều khiển",
       "Thiết bị đo lường và điều khiển",
       "Thiết bị đo lường & điều khiển",
+      "VHV C&I",
+      "VHV Thiết bị đo lường điều khiển",
     ],
   },
   {
@@ -100,7 +102,22 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
   {
     // "XLNT" ≡ "XLNT - Nhà dầu 5000m3"
     canonical: "XLNT",
-    aliases: ["XLNT - Nhà dầu 5000m3", "XLNT"],
+    aliases: [
+      "XLNT - Nhà dầu 5000m3",
+      "XLNT",
+      "VHV XLNT-ND5.",
+      "VHV XLNT-ND5",
+      "VHV XLN thải - Nhà dầu 5000m3",
+      "VHV XLN thải – Nhà dầu 5000m3",
+    ],
+  },
+  {
+    canonical: "XLN hỗn hợp",
+    aliases: ["XLN hỗn hợp", "XLNHH", "VHV XLNHH", "VHV XLN hỗn hợp"],
+  },
+  {
+    canonical: "Trạm bơm tuần hoàn",
+    aliases: ["Trạm bơm tuần hoàn", "TBTH", "VHV TBTH"],
   },
   {
     // Các biến thể Nhà dầu/Khí nén đều quy về tên chức vụ trên server chính.
@@ -115,16 +132,26 @@ const ANNOUNCEMENT_POSITION_ALIASES: Array<{ canonical: string; aliases: string[
       "Nhà dầu - Khí nén",
       "Nhà Dầu - Khí Nén",
       "Nhà Dầu – Khí Nén",
+      "VHV MNK-ND3.",
+      "VHV MNK-ND3",
+      "VHV Trạm khí nén – Nhà dầu HFO 300m3",
     ],
   },
   {
     // Một số danh mục cũ gọi "Trạm nước thô" là "Trạm bơm nước thô".
     canonical: "Trạm bơm nước thô",
-    aliases: ["Trạm nước thô", "Trạm bơm nước thô"],
+    aliases: ["Trạm nước thô", "Trạm bơm nước thô", "VHV Trạm bơm nước thô"],
   },
   {
     canonical: "NH3 - Lò hơi phụ",
-    aliases: ["NH3 - Lò hơi phụ", "NH3- Lò hơi phụ", "NH3 - Lò phụ", "NH3- Lò phụ"],
+    aliases: [
+      "NH3 - Lò hơi phụ",
+      "NH3- Lò hơi phụ",
+      "NH3 - Lò phụ",
+      "NH3- Lò phụ",
+      "VHV NH3-LHP",
+      "VHV Trạm NH3 - Lò hơi phụ",
+    ],
   },
   {
     canonical: "Lò Trưởng",

@@ -109,7 +109,14 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     }),
     prisma.deviceQrCard.findFirst({ where: { deviceSeq: node.seq, machine }, select: { id: true, createdAt: true } }),
     prisma.defect.findMany({
-      where: { deviceSeq: node.seq, unit: machine, status: { not: "DA_XU_LY" } },
+      where: {
+        unit: machine,
+        status: { not: "DA_XU_LY" },
+        OR: [
+          { deviceSeq: node.seq },
+          { relatedDevices: { some: { deviceSeq: node.seq } } },
+        ],
+      },
       orderBy: [{ severity: "asc" }, { detectedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
@@ -126,7 +133,13 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
       take: 50,
     }),
     prisma.defectHistory.findMany({
-      where: { deviceSeq: node.seq, unit: machine },
+      where: {
+        unit: machine,
+        OR: [
+          { deviceSeq: node.seq },
+          { relatedDevices: { some: { deviceSeq: node.seq } } },
+        ],
+      },
       orderBy: [{ performedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,

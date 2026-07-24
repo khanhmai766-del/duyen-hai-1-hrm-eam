@@ -9,24 +9,41 @@ import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { normalizeDefectSeverityCriteria } from "@/lib/constants";
 import { validateDefectImages } from "@/lib/defect-images";
+import { parseReminderCount } from "@/lib/defect-reminder";
+import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 
 export const dynamic = "force-dynamic";
 
 // Tầng 4: avatar trong list đi qua publicUserRef (proxy theo key) — không chở base64.
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
+const INCLUDE = {
+  createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
+  relatedDevices: {
+    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
 
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
-    // Ẩn các phiếu đã xử lý quá 2 tuần khỏi danh sách (lịch sử vẫn giữ riêng).
-    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây (index text_pattern_ops);
     // phiếu chưa gắn thiết bị (deviceSeq null) vẫn lấy về, xét tiếp bằng rule text bên dưới.
     const scopeWhere = equipmentSeqWhere(access.branchFilter, "deviceSeq");
     const defects = await prisma.defect.findMany({
       where: {
-        NOT: { AND: [{ status: "DA_XU_LY" }, { completedAt: { lt: cutoff } }] },
+        // Ẩn ngay phiếu đã xác nhận/hoàn thành; lịch sử được lưu ở DefectHistory.
+        // Phiếu Google Sheet đã báo xử lý nhưng chưa được VHV xác nhận vẫn hiển thị.
+        OR: [
+          {
+            sourceType: "GOOGLE_SHEETS",
+            syncState: { not: "CONFIRMED" },
+          },
+          {
+            sourceType: { not: "GOOGLE_SHEETS" },
+            status: { not: "DA_XU_LY" },
+          },
+        ],
         ...(scopeWhere ? { AND: [{ OR: [scopeWhere, { deviceSeq: null }] }] } : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -53,8 +70,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
+    const reminderCount = body.reminderCount === undefined ? 0 : parseReminderCount(body.reminderCount);
+    if (reminderCount === null) return fail("Số lần nhắc lại phải là số nguyên không âm");
+    const relatedDeviceSeqs = normalizeRelatedDeviceSeqs(body.relatedDeviceSeqs, body.device);
+    if (relatedDeviceSeqs === null) {
+      return fail(`Danh sách thiết bị liên quan không hợp lệ hoặc vượt quá ${MAX_DEFECT_RELATED_DEVICES} thiết bị`);
+    }
     if (!String(body.shiftLeaderId ?? "").trim()) return fail("Vui lòng chọn Trưởng ca");
     if (body.device) await assertSeqEditable(user, String(body.device));
+    await Promise.all(relatedDeviceSeqs.map((seq) => assertSeqEditable(user, seq)));
+    if (relatedDeviceSeqs.length > 0) {
+      const existingRelatedCount = await prisma.equipmentNode.count({ where: { seq: { in: relatedDeviceSeqs } } });
+      if (existingRelatedCount !== relatedDeviceSeqs.length) return fail("Có thiết bị liên quan không tồn tại");
+    }
     const shiftLeader = await resolveDefectShiftLeader(body.shiftLeaderId);
     if (!shiftLeader) return fail("Nhân viên được chọn không có cương vị Trưởng ca hoặc đã ngừng hoạt động");
     const rawImages = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
@@ -84,6 +112,8 @@ export async function POST(req: NextRequest) {
         content: body.content?.trim() || null,
         status: body.status || "CHUA_XU_LY",
         detectedAt: body.detectedAt ? parseDateInput(body.detectedAt) : null,
+        reminderCount,
+        lastRemindedAt: reminderCount > 0 && body.lastRemindedAt ? parseDateInput(body.lastRemindedAt) : null,
         shiftLeaderId: shiftLeader?.id ?? null,
         shiftLeaderName: shiftLeader?.name ?? null,
         note: body.note?.trim() || null,
@@ -91,6 +121,9 @@ export async function POST(req: NextRequest) {
         fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
         environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
         createdById: user.id,
+        relatedDevices: {
+          create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
+        },
       },
       include: INCLUDE,
     });

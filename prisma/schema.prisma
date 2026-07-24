@@ -755,6 +755,31 @@ model Defect {
   content                 String? // Nội dung
   status                  String    @default("CHUA_XU_LY") // Tình trạng khiếm khuyết
   detectedAt              DateTime? // Ngày phát hiện
+  reminderCount           Int       @default(0) // Số lần nhắc lại
+  lastRemindedAt          DateTime? // Thời điểm nhắc lại gần nhất
+  reminderRaw             String? // Nội dung nhắc lại nguyên văn từ nguồn
+  repeatedRepairRaw       String? // Nội dung sửa chữa lặp lại nguyên văn từ nguồn
+  sourceType              String    @default("MANUAL") // MANUAL | GOOGLE_SHEETS
+  sourceKey               String?   @unique // Khóa chống trùng ổn định của dòng nguồn
+  sourceSpreadsheetId     String?
+  sourceSheetName         String?
+  sourceRow               Int?
+  sourceDeviceRaw         String? // Tên thiết bị nguyên văn trên Google Sheet
+  sourcePositionRaw       String? // Cương vị nguyên văn trên Google Sheet
+  sourceStatusRaw         String? // Trạng thái nguyên văn trên Google Sheet
+  repairResultRaw         String? // Kết quả thực hiện (21) do bộ phận sửa chữa cập nhật
+  sourceStatusMismatch    Boolean @default(false) // Kết quả sửa chữa khác tình trạng VH1
+  sourceCompletedAt       DateTime? // Ngày kết thúc theo Google Sheet
+  sourceHash              String? // Dấu kiểm tra nội dung nguồn
+  sourceSyncedAt          DateTime?
+  sourceLastSeenAt        DateTime?
+  sourceChangedAfterConfirm Boolean @default(false)
+  syncState               String    @default("ACTIVE") // ACTIVE | CONFIRMED | MISSING
+  postRepairAwaitingMaterial Boolean @default(false) // VHV giữ phiếu đã xử lý ở Tồn đọng do còn chờ vật tư
+  confirmedAt             DateTime?
+  confirmedById           String? // Snapshot ID người xác nhận, không FK
+  confirmedByName         String? // Snapshot tên người xác nhận
+  confirmedHistoryId      String? // ID lịch sử đã sinh
   shiftLeaderId           String? // Người giữ cương vị Trưởng ca tại thời điểm lập phiếu (không FK để giữ snapshot)
   shiftLeaderName         String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt             DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
@@ -767,6 +792,7 @@ model Defect {
 
   createdBy User           @relation("DefectCreatedBy", fields: [createdById], references: [id])
   node      EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
+  relatedDevices DefectRelatedDevice[]
 
   @@index([deviceSeq])
   // Lịch sử "khiếm khuyết của thiết bị X, mới nhất trước" đọc thẳng từ index.
@@ -782,6 +808,21 @@ model Defect {
   @@index([createdAt])
   @@index([completedAt])
   @@index([createdById])
+  @@index([sourceType, syncState])
+}
+
+// Danh sách thiết bị liên quan của một phiếu khiếm khuyết.
+// Thiết bị chính vẫn nằm ở Defect.deviceSeq để giữ nguyên phân quyền/cương vị phụ trách.
+model DefectRelatedDevice {
+  defectId  String
+  deviceSeq String
+  createdAt DateTime @default(now())
+
+  defect Defect        @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  device EquipmentNode @relation("DefectRelatedEquipment", fields: [deviceSeq], references: [seq], onDelete: Cascade)
+
+  @@id([defectId, deviceSeq])
+  @@index([deviceSeq])
 }
 
 // Lịch sử xử lý khiếm khuyết theo cương vị — sinh khi một khiếm khuyết được "Hoàn thành".
@@ -800,12 +841,18 @@ model DefectHistory {
   result          String? // Kết quả thực hiện
   content         String? // Nội dung khiếm khuyết (snapshot)
   requestNumber   String? // Số yêu cầu (snapshot)
+  reminderCount   Int      @default(0) // Số lần nhắc lại (snapshot)
+  lastRemindedAt  DateTime? // Thời điểm nhắc lại gần nhất (snapshot)
+  reminderRaw     String? // Nội dung nhắc lại nguyên văn tại lúc xác nhận
+  sourceKey       String? // Khóa dòng Google Sheet nguồn
+  sourceSnapshot  Json? // Bản chụp dữ liệu nguồn, không bị đồng bộ ghi đè
   images          String[] // Hình ảnh (tối đa 3)
   createdById     String
   createdAt       DateTime @default(now())
 
   createdBy User           @relation("DefectHistoryCreatedBy", fields: [createdById], references: [id])
   node      EquipmentNode? @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
+  relatedDevices DefectHistoryRelatedDevice[]
 
   @@index([deviceSeq])
   // Lịch sử "của thiết bị X, mới nhất trước" đọc thẳng từ index.
@@ -817,6 +864,39 @@ model DefectHistory {
   @@index([performedAt])
   @@index([unit, performedAt])
   @@index([createdById])
+}
+
+model DefectSyncRun {
+  id          String   @id @default(cuid())
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  status      String // RUNNING | SUCCESS | FAILED
+  trigger     String // MANUAL | CRON
+  readCount   Int      @default(0)
+  createdCount Int     @default(0)
+  updatedCount Int     @default(0)
+  unchangedCount Int   @default(0)
+  confirmedSkippedCount Int @default(0)
+  missingCount Int     @default(0)
+  error       String?
+  triggeredById String?
+  triggeredByName String?
+
+  @@index([startedAt])
+  @@index([status])
+}
+
+// Snapshot danh sách thiết bị liên quan khi phiếu được chuyển sang lịch sử.
+model DefectHistoryRelatedDevice {
+  historyId String
+  deviceSeq String
+  createdAt DateTime @default(now())
+
+  history DefectHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+  device  EquipmentNode @relation("DefectHistoryRelatedEquipment", fields: [deviceSeq], references: [seq], onDelete: Cascade)
+
+  @@id([historyId, deviceSeq])
+  @@index([deviceSeq])
 }
 
 model AuditLog {
@@ -993,6 +1073,8 @@ model EquipmentNode {
   materialReplacements MaterialReplacement[]
   defects              Defect[]
   defectHistories      DefectHistory[]
+  relatedDefects        DefectRelatedDevice[]        @relation("DefectRelatedEquipment")
+  relatedDefectHistories DefectHistoryRelatedDevice[] @relation("DefectHistoryRelatedEquipment")
   ticketItems          MaterialTicketItem[]
   qrCards              DeviceQrCard[]
   profiles             EquipmentProfile[]

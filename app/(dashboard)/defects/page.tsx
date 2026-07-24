@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DefectForm } from "@/components/defects/defect-form";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
-import { useDefects, useDeleteDefect, type DefectItem } from "@/hooks/useDefects";
+import { useDefects, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
 import {
@@ -34,6 +34,7 @@ import {
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import { announcementPositionLabel } from "@/lib/positions";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -49,10 +50,22 @@ export default function DefectsPage() {
 
   const { data, isLoading } = useDefects();
   const del = useDeleteDefect();
-  // Ưu tiên khiếm khuyết có ngày phát hiện gần nhất lên đầu (thiếu ngày → xuống cuối).
+  const remind = useRemindDefect();
+  const sync = useSyncDefects();
+  const canRunSync = rbac.can("defect-manage", ["full"]);
+  // Ưu tiên: kết quả sửa chữa khác tình trạng VH1 → chưa ánh xạ → đã ánh xạ;
+  // trong cùng một nhóm, ngày phát hiện gần nhất đứng trước.
   const allDefects = React.useMemo(
     () =>
       [...(data?.data ?? [])].sort((a, b) => {
+        const mismatchPriorityA = a.sourceStatusMismatch ? 0 : 1;
+        const mismatchPriorityB = b.sourceStatusMismatch ? 0 : 1;
+        if (mismatchPriorityA !== mismatchPriorityB) return mismatchPriorityA - mismatchPriorityB;
+
+        const mappingPriorityA = a.sourceType === "GOOGLE_SHEETS" && !a.deviceSeq ? 0 : 1;
+        const mappingPriorityB = b.sourceType === "GOOGLE_SHEETS" && !b.deviceSeq ? 0 : 1;
+        if (mappingPriorityA !== mappingPriorityB) return mappingPriorityA - mappingPriorityB;
+
         const ta = a.detectedAt ? new Date(a.detectedAt).getTime() : -Infinity;
         const tb = b.detectedAt ? new Date(b.detectedAt).getTime() : -Infinity;
         return tb - ta;
@@ -78,19 +91,42 @@ export default function DefectsPage() {
   );
   const [requestFilter, setRequestFilter] = React.useState("ALL");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
+  const [mappingFilter, setMappingFilter] = React.useState("ALL");
   const defects = allDefects.filter(
     (d) =>
-      (!deviceSeqFilter || d.deviceSeq === deviceSeqFilter || (!d.deviceSeq && d.device === deviceSeqFilter)) &&
+      (!deviceSeqFilter ||
+        d.deviceSeq === deviceSeqFilter ||
+        (!d.deviceSeq && d.device === deviceSeqFilter) ||
+        d.relatedDevices.some((item) => item.deviceSeq === deviceSeqFilter)) &&
       d.unit === unitFilter &&
       (requestFilter === "ALL" || d.requestType === requestFilter) &&
-      (positionFilter === "ALL" || d.system === positionFilter)
+      (
+        positionFilter === "ALL" ||
+        normalizeText(announcementPositionLabel(d.system)) === normalizeText(announcementPositionLabel(positionFilter))
+      ) &&
+      (
+        mappingFilter === "ALL" ||
+        (
+          d.sourceType === "GOOGLE_SHEETS" &&
+          (mappingFilter === "MAPPED" ? !!d.deviceSeq : !d.deviceSeq)
+        )
+      )
   );
   // Lọc theo tình trạng (card KPI hoặc bộ lọc trên cột) và mức độ (bộ lọc trên cột).
   const [statusFilter, setStatusFilter] = React.useState("ALL");
   const [severityFilter, setSeverityFilter] = React.useState("ALL");
   const displayedDefects = defects.filter(
     (d) =>
-      (statusFilter === "ALL" || d.status === statusFilter) &&
+      (
+        statusFilter === "ALL" ||
+        (
+          statusFilter === "TON_DONG"
+            ? d.postRepairAwaitingMaterial
+            : statusFilter === "DA_XU_LY"
+              ? d.status === "DA_XU_LY" && !d.postRepairAwaitingMaterial
+              : d.status === statusFilter
+        )
+      ) &&
       (severityFilter === "ALL" || d.severity === severityFilter)
   );
 
@@ -102,7 +138,18 @@ export default function DefectsPage() {
     const q = normalizeText(tableSearch.trim());
     if (!q) return displayedDefects;
     return displayedDefects.filter((d) =>
-      normalizeText([d.requestNumber, d.requestType, d.unit, d.system, d.device, d.content, d.note, d.createdBy?.name].filter(Boolean).join(" ")).includes(q)
+      normalizeText([
+        d.requestNumber,
+        d.requestType,
+        d.unit,
+        d.system,
+        d.device,
+        ...d.relatedDevices.flatMap((item) => [item.deviceSeq, item.device.name]),
+        d.content,
+        d.repairResultRaw,
+        d.note,
+        d.createdBy?.name,
+      ].filter(Boolean).join(" ")).includes(q)
     );
   }, [displayedDefects, tableSearch]);
 
@@ -115,12 +162,13 @@ export default function DefectsPage() {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "ALL" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "ALL" || positionFilter !== "ALL" || mappingFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace("/defects", { scroll: false });
     setUnitFilter("S1");
     setRequestFilter("ALL");
     setPositionFilter("ALL");
+    setMappingFilter("ALL");
     setStatusFilter("ALL");
     setSeverityFilter("ALL");
     setTableSearch("");
@@ -130,7 +178,8 @@ export default function DefectsPage() {
   const chuaXuLy = defects.filter((d) => d.status === "CHUA_XU_LY").length;
   const coPct = defects.filter((d) => d.status === "CO_PCT").length;
   const choVatTu = defects.filter((d) => d.status === "CHO_VAT_TU").length;
-  const tonDong = defects.filter((d) => d.status !== "DA_XU_LY").length;
+  const tonDong = defects.filter((d) => d.postRepairAwaitingMaterial).length;
+  const daXuLy = defects.filter((d) => d.status === "DA_XU_LY" && !d.postRepairAwaitingMaterial).length;
   function toggleStatus(s: string) {
     setStatusFilter((cur) => (cur === s ? "ALL" : s));
   }
@@ -139,6 +188,7 @@ export default function DefectsPage() {
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<DefectItem | null>(null);
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
+  const [remindTarget, setRemindTarget] = React.useState<DefectItem | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
   function openCreate() { setEditTarget(null); setFormOpen(true); }
@@ -146,7 +196,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, mappingFilter, statusFilter, severityFilter, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -155,6 +205,7 @@ export default function DefectsPage() {
           rows={searchedDefects.map((d) => ({
             unit: d.unit,
             device: deviceNameByCode.get(d.device ?? "") ?? d.device ?? "",
+            relatedDevices: d.relatedDevices.map((item) => item.device.name || item.deviceSeq).join("; "),
             cuongVi: d.system ?? "",
             severity: d.severity ? DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY] : "",
             requestType: d.requestType ?? "",
@@ -162,11 +213,32 @@ export default function DefectsPage() {
             content: d.content ?? "",
             status: DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
             detectedAt: formatDate(d.detectedAt),
+            reminderCount: d.reminderCount,
+            lastRemindedAt: formatDate(d.lastRemindedAt),
+            repairResult: d.repairResultRaw ?? "",
+            statusMismatch: d.sourceStatusMismatch ? "Khác tình trạng VH1" : "",
             note: d.note ?? "",
           }))}
           widths={{ unit: 8, cuongVi: 16, requestNumber: 12, status: 14 }}
           filename="khiem-khuyet-thiet-bi"
         />
+        {canRunSync && (
+          <Button
+            variant="outline"
+            disabled={sync.isPending}
+            onClick={async () => {
+              try {
+                const result = await sync.mutateAsync();
+                toast.success(`Đồng bộ xong: thêm ${result.createdCount}, cập nhật ${result.updatedCount}`);
+              } catch (error) {
+                toast.error((error as Error).message);
+              }
+            }}
+          >
+            {sync.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+            Đồng bộ Google Sheet
+          </Button>
+        )}
         {canManage && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Thêm mới
@@ -237,6 +309,18 @@ export default function DefectsPage() {
             </Select>
           </div>
 
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Ánh xạ:</span>
+            <Select value={mappingFilter} onValueChange={setMappingFilter}>
+              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                <SelectItem value="UNMAPPED">Chưa ánh xạ</SelectItem>
+                <SelectItem value="MAPPED">Đã ánh xạ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {isFiltered && (
             <button onClick={resetFilters} className="text-sm font-medium text-accent hover:underline">
               Xoá bộ lọc
@@ -255,11 +339,12 @@ export default function DefectsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <DefectKpi label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tone="rose" active={statusFilter === "CHUA_XU_LY"} onClick={() => toggleStatus("CHUA_XU_LY")} />
         <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
         <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
-        <DefectKpi label="Khiếm khuyết tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "ALL"} onClick={() => setStatusFilter("ALL")} />
+        <DefectKpi label="Tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
+        <DefectKpi label="Đã xử lý" value={daXuLy} icon={CheckCircle2} tone="green" active={statusFilter === "DA_XU_LY"} onClick={() => toggleStatus("DA_XU_LY")} />
       </div>
 
       {isLoading ? (
@@ -283,7 +368,7 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-          <Table className="min-w-[1250px] table-fixed">
+          <Table className="min-w-[1500px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[96px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
@@ -302,10 +387,15 @@ export default function DefectsPage() {
                   <ColumnFilter
                     label="Tình trạng"
                     value={statusFilter}
-                    options={DEFECT_STATUS_ORDER.map((s) => ({ value: s, label: DEFECT_STATUS[s].label }))}
+                    options={[
+                      { value: "TON_DONG", label: "Tồn đọng" },
+                      ...DEFECT_STATUS_ORDER.map((s) => ({ value: s, label: DEFECT_STATUS[s].label })),
+                    ]}
                     onChange={setStatusFilter}
                   />
                 </TableHead>
+                <TableHead className="w-[180px] text-center">Kết quả sửa chữa</TableHead>
+                <TableHead className="w-[100px] text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[120px] text-center">Phát hiện</TableHead>
                 <TableHead className="w-[110px] text-center">Người nhập</TableHead>
                 <TableHead className="w-[110px] text-center">Thao tác</TableHead>
@@ -338,6 +428,21 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
                         <div className="truncate" title={d.requestNumber ?? undefined}>{d.requestNumber || "—"}</div>
+                        {d.sourceType === "GOOGLE_SHEETS" && (
+                          <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Google Sheet</span>
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+                                d.deviceSeq
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-orange-100 text-orange-700"
+                              )}
+                            >
+                              {d.deviceSeq ? "Đã ánh xạ" : "Chưa ánh xạ"}
+                            </span>
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
@@ -350,20 +455,58 @@ export default function DefectsPage() {
                           <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
                         ) : "—"}
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center"><DefectStatusBadge status={d.status} /></TableCell>
+                      <TableCell className="px-3 py-3 text-center">
+                        {d.postRepairAwaitingMaterial ? (
+                          <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                            Tồn đọng · Chờ vật tư
+                          </span>
+                        ) : (
+                          <DefectStatusBadge status={d.status} />
+                        )}
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-center text-[12px]">
+                        {d.repairResultRaw ? (
+                          <span
+                            className={cn(
+                              "inline-flex max-w-full rounded-lg px-2 py-1 font-semibold leading-4",
+                              d.sourceStatusMismatch
+                                ? "bg-red-100 text-red-700 ring-1 ring-red-200"
+                                : "bg-emerald-50 text-emerald-700"
+                            )}
+                            title={d.sourceStatusMismatch
+                              ? `Kết quả sửa chữa không khớp tình trạng hiện tại: ${d.sourceStatusRaw || "—"}`
+                              : d.repairResultRaw}
+                          >
+                            <span className="line-clamp-2">{d.repairResultRaw}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-3 py-3 text-center text-[13px]">
+                        <span className={cn("font-semibold", d.reminderCount > 0 ? "text-amber-700" : "text-muted-foreground")}>
+                          {d.reminderCount} lần
+                        </span>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] text-muted-foreground">{formatDate(d.detectedAt)}</TableCell>
                       <TableCell className="px-3 py-3 text-center">
                         <DefectUserAvatar user={d.createdBy} />
                       </TableCell>
                       <TableCell className="px-2 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          {canManage && d.status !== "DA_XU_LY" && (
+                          {canManage && (
+                            (d.sourceType === "GOOGLE_SHEETS" && !!d.deviceSeq && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
+                            (d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY")
+                          ) && (
                             <Button variant="ghost" size="icon" title="Hoàn thành" className="text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); setCompleteTarget(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
                           )}
-                          {canManage && (
-                            <Button variant="ghost" size="icon" title="Sửa" onClick={(e) => { e.stopPropagation(); openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
+                          {canManage && d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY" && (
+                            <Button variant="ghost" size="icon" title="Nhắc lại" className="text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
-                          {canDelete && (
+                          {canManage && (
+                            <Button variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : "Sửa"} onClick={(e) => { e.stopPropagation(); openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
+                          )}
+                          {canDelete && d.sourceType !== "GOOGLE_SHEETS" && (
                             <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(d); }}><Trash2 className="h-4 w-4" /></Button>
                           )}
                         </div>
@@ -371,7 +514,7 @@ export default function DefectsPage() {
                     </TableRow>
                     {expanded && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={9} className="px-6 py-4">
+                        <TableCell colSpan={11} className="px-6 py-4">
                           <DefectExpandedDetails defect={d} />
                         </TableCell>
                       </TableRow>
@@ -421,11 +564,20 @@ export default function DefectsPage() {
           <div className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-xl animate-in slide-in-from-right">
             <div className="flex items-center gap-2 border-b border-border p-4">
               <button onClick={() => setFormOpen(false)} className="rounded-md p-1.5 hover:bg-muted" aria-label="Đóng"><X className="h-5 w-5" /></button>
-              <h2 className="text-lg font-bold text-ink">{editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}</h2>
+              <h2 className="text-lg font-bold text-ink">
+                {editTarget?.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}
+              </h2>
             </div>
             <DefectForm
               defect={editTarget}
               onDone={() => setFormOpen(false)}
+              onMappingSaved={(updated) => {
+                setFormOpen(false);
+                setEditTarget(null);
+                if (updated.status === "DA_XU_LY" && !updated.postRepairAwaitingMaterial && updated.syncState !== "CONFIRMED") {
+                  setCompleteTarget(updated);
+                }
+              }}
               onCancel={() => setFormOpen(false)}
             />
           </div>
@@ -433,6 +585,28 @@ export default function DefectsPage() {
       )}
 
       <CompleteDefectDialog defect={completeTarget} onClose={() => setCompleteTarget(null)} />
+
+      <ConfirmDialog
+        open={!!remindTarget}
+        onOpenChange={(open) => !open && setRemindTarget(null)}
+        title="Xác nhận nhắc lại?"
+        description={remindTarget
+          ? `Ghi nhận lần nhắc thứ ${remindTarget.reminderCount + 1}${remindTarget.requestNumber ? ` cho yêu cầu “${remindTarget.requestNumber}”` : ""}.`
+          : undefined}
+        confirmLabel="Nhắc lại"
+        destructive={false}
+        loading={remind.isPending}
+        onConfirm={async () => {
+          if (!remindTarget) return;
+          try {
+            const updated = await remind.mutateAsync(remindTarget.id);
+            toast.success(`Đã ghi nhận nhắc lại lần ${updated.reminderCount}`);
+            setRemindTarget(null);
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        }}
+      />
 
       <ConfirmDialog
         open={!!delTarget}
@@ -571,7 +745,17 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         <DetailLine label="Tổ máy" value={defect.unit || "—"} />
         <DetailLine label="Cương vị" value={defect.system || "—"} />
         <DetailLine label="Trưởng ca" value={defect.shiftLeaderName || "—"} />
-        <DetailLine label="Thiết bị" value={defect.device || "—"} />
+        {defect.sourceType === "GOOGLE_SHEETS" && (
+          <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
+        )}
+        <DetailLine label="Thiết bị đã ánh xạ" value={defect.device || "—"} />
+        <DetailLine
+          label="Thiết bị liên quan"
+          value={defect.relatedDevices.length > 0
+            ? defect.relatedDevices.map((item) => `${item.device.name} (${item.deviceSeq})`).join("\n")
+            : "—"}
+          multiline
+        />
         <DetailLine label="Nội dung" value={defect.content || "—"} multiline />
       </div>
       <div className={detailCardClass}>
@@ -580,6 +764,23 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
         <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
         <DetailLine label="Ngày phát hiện" value={formatDate(defect.detectedAt)} />
+        <DetailLine label="Số lần nhắc lại" value={`${defect.reminderCount} lần`} />
+        <DetailLine label="Ngày nhắc gần nhất" value={defect.lastRemindedAt ? formatDate(defect.lastRemindedAt) : "—"} />
+        {defect.sourceType === "GOOGLE_SHEETS" && (
+          <>
+            <DetailLine label="Nội dung nhắc lại" value={defect.reminderRaw || "—"} multiline />
+            <DetailLine label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} multiline />
+            <DetailLine label="Trạng thái nguồn" value={defect.sourceStatusRaw || "—"} />
+            <DetailLine
+              label="Kết quả sửa chữa"
+              value={defect.sourceStatusMismatch
+                ? `⚠ ${defect.repairResultRaw || "—"} (khác tình trạng VH1)`
+                : defect.repairResultRaw || "—"}
+              multiline
+            />
+            <DetailLine label="Đồng bộ gần nhất" value={formatDate(defect.sourceSyncedAt)} />
+          </>
+        )}
         <DetailLine label="Ghi chú" value={defect.note || "—"} multiline />
         <DetailLine label="Người ghi nhận" value={defect.createdBy?.name || "—"} />
         {defect.images.length > 0 && (
@@ -636,6 +837,7 @@ const KPI_TONES = {
   rose: { bg: "from-rose-50 to-rose-100", num: "text-rose-600", icon: "text-rose-400", shadow: "shadow-rose-500/25 hover:shadow-rose-500/40" },
   sky: { bg: "from-sky-50 to-sky-100", num: "text-sky-600", icon: "text-sky-400", shadow: "shadow-sky-500/25 hover:shadow-sky-500/40" },
   amber: { bg: "from-amber-50 to-amber-100", num: "text-amber-600", icon: "text-amber-400", shadow: "shadow-amber-500/25 hover:shadow-amber-500/40" },
+  green: { bg: "from-emerald-50 to-emerald-100", num: "text-emerald-700", icon: "text-emerald-500", shadow: "shadow-emerald-500/25 hover:shadow-emerald-500/40" },
   violet: { bg: "from-violet-50 to-violet-100", num: "text-violet-600", icon: "text-violet-400", shadow: "shadow-violet-500/25 hover:shadow-violet-500/40" },
 } as const;
 

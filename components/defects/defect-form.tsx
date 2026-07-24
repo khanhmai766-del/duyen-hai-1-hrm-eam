@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
+import { Check, Loader2, ChevronRight, ChevronLeft, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,7 @@ import {
   isPositionAllowedForDefectUnit,
   isSelectableManagingPosition,
 } from "@/lib/constants";
-import { cn, formatDateInput } from "@/lib/utils";
+import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import { createPositionAccessResolver } from "@/lib/position-system-scopes";
 import { dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
@@ -44,6 +44,7 @@ export function DefectForm({
   initialDevice,
   lockDevice = false,
   onDone,
+  onMappingSaved,
   onCancel,
 }: {
   defect?: DefectItem | null;
@@ -58,9 +59,11 @@ export function DefectForm({
   } | null;
   lockDevice?: boolean;
   onDone?: () => void;
+  onMappingSaved?: (defect: DefectItem) => void;
   onCancel?: () => void;
 }) {
   const isEdit = !!defect;
+  const isSynced = defect?.sourceType === "GOOGLE_SHEETS";
   const create = useCreateDefect();
   const update = useUpdateDefect();
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
@@ -87,6 +90,7 @@ export function DefectForm({
   const [form, setForm] = React.useState({
     unit: defect?.unit ?? initialDevice?.unit ?? "",
     device: defect?.device ?? initialDevice?.code ?? "",
+    relatedDeviceSeqs: defect?.relatedDevices?.map((item) => item.deviceSeq) ?? [],
     deviceSystem: initialDevice?.system ?? "",
     deviceSystemSeq: initialDevice?.systemSeq ?? "",
     system: defect?.system ?? initialDevice?.managingPosition ?? "",
@@ -100,6 +104,9 @@ export function DefectForm({
     content: defect?.content ?? "",
     status: defect?.status ?? "CHUA_XU_LY",
     detectedAt: toDateInput(defect?.detectedAt),
+    reminderCount: defect?.reminderCount ?? 0,
+    lastRemindedAt: toDateInput(defect?.lastRemindedAt),
+    postRepairAwaitingMaterial: defect?.postRepairAwaitingMaterial ?? false,
     shiftLeaderId: defect?.shiftLeaderId ?? "",
     note: defect?.note ?? "",
     images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
@@ -199,9 +206,12 @@ export function DefectForm({
   React.useEffect(() => {
     if (!form.device || form.deviceSystemSeq || form.deviceSystem) return;
     const selectedDevice = devices.find((d) => d.code === form.device);
-    if (!selectedDevice) return;
-    const systemSeq = systemSeqOfDevice(selectedDevice);
-    const systemName = systemSeq ? equipmentIndex.bySeq.get(systemSeq)?.name ?? selectedDevice.system ?? "" : selectedDevice.system ?? "";
+    const systemSeq = selectedDevice
+      ? systemSeqOfDevice(selectedDevice)
+      : equipmentIndex.parentOf.get(form.device) ?? "";
+    const systemName = systemSeq
+      ? equipmentIndex.bySeq.get(systemSeq)?.name ?? selectedDevice?.system ?? ""
+      : selectedDevice?.system ?? "";
     if (!systemName && !systemSeq) return;
     setForm((f) => (f.deviceSystemSeq || f.deviceSystem ? f : { ...f, deviceSystem: systemName, deviceSystemSeq: systemSeq }));
   }, [devices, form.device, form.deviceSystem, form.deviceSystemSeq, equipmentIndex]);
@@ -241,13 +251,37 @@ export function DefectForm({
       return {
         ...f,
         device: equipmentNode?.seq ?? device?.code ?? "",
-        system: device?.managingPosition ?? f.system,
+        system: isSynced ? f.system : device?.managingPosition ?? f.system,
+        relatedDeviceSeqs: f.relatedDeviceSeqs.filter((seq) => seq !== (equipmentNode?.seq ?? device?.code ?? "")),
       };
     });
+  }
+  const [relatedPickerValue, setRelatedPickerValue] = React.useState("");
+  function addRelatedDevice(node: { seq: string; name: string } | null) {
+    setRelatedPickerValue("");
+    if (!node) return;
+    if ((equipmentIndex.childrenOf.get(node.seq) ?? []).length > 0) {
+      toast.error("Vui lòng chọn thiết bị cấp cuối, không chọn thư mục hệ thống");
+      return;
+    }
+    if (node.seq === form.device) {
+      toast.error("Thiết bị này đang là thiết bị chính");
+      return;
+    }
+    if (form.relatedDeviceSeqs.includes(node.seq)) {
+      toast.error("Thiết bị này đã có trong danh sách liên quan");
+      return;
+    }
+    if (form.relatedDeviceSeqs.length >= 20) {
+      toast.error("Mỗi khiếm khuyết chỉ được chọn tối đa 20 thiết bị liên quan");
+      return;
+    }
+    set("relatedDeviceSeqs", [...form.relatedDeviceSeqs, node.seq]);
   }
 
   // Tab "Thông tin chung" bắt buộc chọn đủ; trả về tên thẻ còn thiếu (nếu có).
   function missingGeneral(): string | null {
+    if (isSynced) return null;
     if (!form.unit) return "Tổ máy";
     if (!form.system) return "Cương vị";
     if (!form.condition) return "Điều kiện thực hiện";
@@ -267,11 +301,44 @@ export function DefectForm({
   }
 
   async function submit() {
+    if (isSynced) {
+      if (!form.deviceSystemSeq) {
+        setStep(1);
+        return toast.error("Vui lòng chọn Hệ thống trước khi lưu ánh xạ");
+      }
+      if (!form.device) {
+        setStep(1);
+        return toast.error("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
+      }
+      try {
+        const syncedPayload: Record<string, unknown> = {
+          id: defect!.id,
+          deviceSystemSeq: form.deviceSystemSeq,
+          device: form.device || null,
+          relatedDeviceSeqs: form.relatedDeviceSeqs,
+          postRepairAwaitingMaterial: form.postRepairAwaitingMaterial,
+        };
+        // Chỉ gửi ảnh khi VHV chủ động lưu tại tab hình ảnh.
+        // Lưu ánh xạ không được kích hoạt kiểm tra/tải lại ảnh.
+        if (step === 3) syncedPayload.images = form.images;
+        const updated = await update.mutateAsync(syncedPayload as { id: string } & Record<string, unknown>);
+        toast.success(step === 3 ? "Đã lưu hình ảnh khiếm khuyết" : "Đã lưu ánh xạ thiết bị");
+        if (step === 1 && onMappingSaved) onMappingSaved(updated);
+        else onDone?.();
+      } catch (error) {
+        toast.error((error as Error).message);
+      }
+      return;
+    }
     const missing = missingGeneral();
     if (missing) { setStep(1); return toast.error(`Vui lòng chọn ${missing}`); }
     if (!form.severity) { setStep(2); return toast.error("Vui lòng chọn Mức độ"); }
     const { deviceSystem: _deviceSystem, deviceSystemSeq: _deviceSystemSeq, ...defectForm } = form;
-    const payload = { ...defectForm, detectedAt: form.detectedAt || null };
+    const payload = {
+      ...defectForm,
+      detectedAt: form.detectedAt || null,
+      lastRemindedAt: form.reminderCount > 0 ? form.lastRemindedAt || null : null,
+    };
     try {
       if (isEdit) await update.mutateAsync({ id: defect!.id, ...payload });
       else await create.mutateAsync(payload);
@@ -288,9 +355,21 @@ export function DefectForm({
     <div className="flex min-h-0 h-full flex-col">
       {/* Tabs */}
       <div className="flex shrink-0 justify-center gap-3 overflow-x-auto border-b border-border px-3 sm:gap-6">
-        <TabBtn active={step === 1} onClick={() => setStep(1)} label="Thông tin chung" />
-        <TabBtn active={step === 2} onClick={goToSeverity} label="Mức độ" />
-        <TabBtn active={step === 3} onClick={goToDefectInfo} label="Thông tin khiếm khuyết" />
+        {isSynced ? (
+          <>
+            <TabBtn active={step === 1} onClick={() => setStep(1)} label="Ánh xạ thiết bị" />
+            <TabBtn active={step === 2} onClick={() => setStep(2)} label="Nội dung sửa chữa" />
+            {["1", "2"].includes(form.severity) && (
+              <TabBtn active={step === 3} onClick={() => setStep(3)} label="Hình ảnh khiếm khuyết" />
+            )}
+          </>
+        ) : (
+          <>
+            <TabBtn active={step === 1} onClick={() => setStep(1)} label="Thông tin chung" />
+            <TabBtn active={step === 2} onClick={goToSeverity} label="Mức độ" />
+            <TabBtn active={step === 3} onClick={goToDefectInfo} label="Thông tin khiếm khuyết" />
+          </>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
@@ -308,10 +387,12 @@ export function DefectForm({
                     <button
                       key={u}
                       type="button"
+                      disabled={isSynced}
                       onClick={() => selectUnit(u)}
                       className={cn(
                         "h-10 rounded-md border text-sm font-medium transition-colors",
-                        form.unit === u ? "border-navy bg-navy text-white" : "border-input bg-muted/40 text-ink hover:border-accent"
+                        form.unit === u ? "border-navy bg-navy text-white" : "border-input bg-muted/40 text-ink hover:border-accent",
+                        isSynced && "cursor-not-allowed opacity-70"
                       )}
                     >
                       {u}
@@ -321,7 +402,7 @@ export function DefectForm({
               )}
             </Row>
             <Row label="Cương Vị *">
-              <Select value={form.system || NONE} onValueChange={setSystem}>
+              <Select value={form.system || NONE} onValueChange={setSystem} disabled={isSynced}>
                 <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
@@ -329,7 +410,7 @@ export function DefectForm({
                 </SelectContent>
               </Select>
             </Row>
-            <Row label="Hệ Thống">
+            <Row label={isSynced ? "Hệ Thống *" : "Hệ Thống"}>
               {lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.system || "Chưa xác định hệ thống"} secondary={initialDevice.systemSeq || undefined} />
               ) : (
@@ -342,7 +423,7 @@ export function DefectForm({
                 />
               )}
             </Row>
-            <Row label="Thiết Bị">
+            <Row label={isSynced ? "Thiết Bị *" : "Thiết Bị"}>
               {lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.name} secondary={initialDevice.displayCode ?? initialDevice.code} />
               ) : (
@@ -357,8 +438,81 @@ export function DefectForm({
                 </Select>
               )}
             </Row>
+            <Row label="Thiết Bị Liên Quan">
+              <div className="space-y-3">
+                <EquipmentTreePicker
+                  value={relatedPickerValue}
+                  position={form.system || null}
+                  accessFilter="edit"
+                  includeLeaves
+                  onChange={addRelatedDevice}
+                  placeholder="Chọn thêm thiết bị liên quan"
+                />
+                {form.relatedDeviceSeqs.length > 0 ? (
+                  <div className="space-y-2">
+                    {form.relatedDeviceSeqs.map((seq) => {
+                      const node = equipmentIndex.bySeq.get(seq);
+                      return (
+                        <div key={seq} className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                            <Plus className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-ink">{node?.name ?? seq}</div>
+                            <div className="truncate font-mono text-[11px] text-muted-foreground">{seq}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => set("relatedDeviceSeqs", form.relatedDeviceSeqs.filter((item) => item !== seq))}
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-white hover:text-destructive"
+                            aria-label={`Bỏ thiết bị ${node?.name ?? seq}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Không bắt buộc. Thiết bị chính vẫn quyết định cương vị và quyền xử lý phiếu.
+                  </p>
+                )}
+              </div>
+            </Row>
+            {isSynced && defect?.status === "DA_XU_LY" && (
+              <Row label="Tồn Đọng">
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={form.postRepairAwaitingMaterial}
+                  onClick={() => set("postRepairAwaitingMaterial", !form.postRepairAwaitingMaterial)}
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
+                    form.postRepairAwaitingMaterial
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-border bg-white hover:border-amber-200"
+                  )}
+                >
+                  <span className={cn(
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                    form.postRepairAwaitingMaterial
+                      ? "border-amber-600 bg-amber-600 text-white"
+                      : "border-slate-300 bg-white"
+                  )}>
+                    {form.postRepairAwaitingMaterial && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-ink">Đánh dấu chờ vật tư</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                      Giữ phiếu trong mục Tồn đọng và chưa đưa vào lịch sử dù Google Sheet đã báo xử lý.
+                    </span>
+                  </span>
+                </button>
+              </Row>
+            )}
             <Row label="Điều Kiện Thực Hiện *">
-              <Select value={form.condition || NONE} onValueChange={(v) => set("condition", v === NONE ? "" : v)}>
+              <Select value={form.condition || NONE} onValueChange={(v) => set("condition", v === NONE ? "" : v)} disabled={isSynced}>
                 <SelectTrigger><SelectValue placeholder="Chọn điều kiện" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
@@ -367,7 +521,7 @@ export function DefectForm({
               </Select>
             </Row>
             <Row label="Ảnh hưởng PCCC">
-              <Select value={form.fireSafetyImpact} onValueChange={(v) => set("fireSafetyImpact", v)}>
+              <Select value={form.fireSafetyImpact} onValueChange={(v) => set("fireSafetyImpact", v)} disabled={isSynced}>
                 <SelectTrigger><SelectValue placeholder="Chọn ảnh hưởng PCCC" /></SelectTrigger>
                 <SelectContent>
                   {YES_NO_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
@@ -375,7 +529,7 @@ export function DefectForm({
               </Select>
             </Row>
             <Row label="Môi trường, ATVSLĐ">
-              <Select value={form.environmentSafetyImpact} onValueChange={(v) => set("environmentSafetyImpact", v)}>
+              <Select value={form.environmentSafetyImpact} onValueChange={(v) => set("environmentSafetyImpact", v)} disabled={isSynced}>
                 <SelectTrigger><SelectValue placeholder="Chọn ảnh hưởng môi trường, ATVSLĐ" /></SelectTrigger>
                 <SelectContent>
                   {YES_NO_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
@@ -383,10 +537,10 @@ export function DefectForm({
               </Select>
             </Row>
             <Row label="Ngày Phát Hiện">
-              <Input type="date" value={form.detectedAt} onChange={(e) => set("detectedAt", e.target.value)} />
+              <Input type="date" value={form.detectedAt} disabled={isSynced} onChange={(e) => set("detectedAt", e.target.value)} />
             </Row>
             <Row label="Trưởng Ca *">
-              <Select value={form.shiftLeaderId || NONE} onValueChange={(value) => set("shiftLeaderId", value === NONE ? "" : value)}>
+              <Select value={form.shiftLeaderId || NONE} onValueChange={(value) => set("shiftLeaderId", value === NONE ? "" : value)} disabled={isSynced}>
                 <SelectTrigger><SelectValue placeholder="Chọn Trưởng ca" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
@@ -403,7 +557,57 @@ export function DefectForm({
             </Row>
           </div>
         </div>
-        <div className={cn(step === 2 ? "block" : "hidden")}>
+        {isSynced && defect && (
+          <div className={cn(step === 2 ? "block" : "hidden")}>
+            <div className="mx-auto max-w-2xl space-y-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                <h3 className="font-bold text-emerald-900">Nội dung sẽ ghi vào lịch sử</h3>
+                <p className="mt-1 text-sm text-emerald-800">
+                  Dữ liệu nguồn được giữ nguyên; các mục chưa có sẽ được VHV bổ sung khi bấm xác nhận hoàn thành.
+                </p>
+              </div>
+
+              <div className="grid gap-4 rounded-xl border border-border bg-white p-4 sm:grid-cols-2">
+                <SourcePreviewValue label="Tổ máy" value={defect.unit || "—"} />
+                <SourcePreviewValue label="Cương vị" value={defect.system || "—"} />
+                <SourcePreviewValue label="Loại yêu cầu (PCT)" value={defect.requestType || "—"} />
+                <SourcePreviewValue label="Số yêu cầu khiếm khuyết" value={defect.requestNumber || "—"} />
+                <SourcePreviewValue label="Số phiếu công tác" value="Chưa nhập – bổ sung khi xác nhận" pending />
+                <SourcePreviewValue
+                  label="Ngày kết thúc"
+                  value={defect.sourceCompletedAt ? formatDate(defect.sourceCompletedAt) : "Chưa có ngày kết thúc trên Google Sheet"}
+                  pending={!defect.sourceCompletedAt}
+                />
+                <SourcePreviewValue
+                  label="Thiết bị chính"
+                  value={defect.device || "Chưa ánh xạ thiết bị"}
+                  pending={!defect.device}
+                />
+                <SourcePreviewValue
+                  label="Thiết bị liên quan"
+                  value={defect.relatedDevices.length
+                    ? defect.relatedDevices.map((item) => item.device.name || item.deviceSeq).join(", ")
+                    : "Không có"}
+                />
+              </div>
+
+              <div className="space-y-4 rounded-xl border border-border bg-white p-4">
+                <SourcePreviewValue label="Nội dung thực hiện" value={defect.content || "—"} />
+                <SourcePreviewValue
+                  label="Kết quả thực hiện"
+                  value={defect.note || defect.sourceStatusRaw || "Chưa nhập – bổ sung khi xác nhận"}
+                  pending={!defect.note && !defect.sourceStatusRaw}
+                />
+                <SourcePreviewValue label="Trạng thái trên Google Sheet" value={defect.sourceStatusRaw || "—"} />
+                <SourcePreviewValue label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} />
+                <SourcePreviewValue label="Số lần nhắc lại" value={`${defect.reminderCount} lần`} />
+                <SourcePreviewValue label="Hình ảnh kết quả" value="Chưa có – bổ sung khi xác nhận (tối đa 3 ảnh)" pending />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={cn(!isSynced && step === 2 ? "block" : "hidden")}>
           <div className="mx-auto max-w-2xl">
             <div className="mb-4 text-center">
               <h3 className="text-base font-bold text-ink">Chọn mức độ khiếm khuyết</h3>
@@ -475,7 +679,31 @@ export function DefectForm({
             })()}
           </div>
         </div>
-        <div className={cn(step === 3 ? "block" : "hidden")}>
+        {isSynced && ["1", "2"].includes(form.severity) && (
+          <div className={cn(step === 3 ? "block" : "hidden")}>
+            <div className="mx-auto max-w-xl space-y-4">
+              <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                <h3 className="font-bold text-blue-900">Hình ảnh khiếm khuyết Mức {form.severity}</h3>
+                <p className="mt-1 text-sm text-blue-800">
+                  Ảnh do VHV bổ sung được lưu trên web, không ghi ngược lên Google Sheet và không bị lần đồng bộ sau ghi đè.
+                </p>
+              </div>
+              <StackField label="Hình ảnh khiếm khuyết (tối đa 3)">
+                <MultiImagePicker
+                  value={form.images}
+                  onChange={(images) => set("images", images)}
+                  max={3}
+                  maxFileSizeMb={15}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Hỗ trợ tối đa 3 ảnh, mỗi ảnh tối đa 15MB.
+                </p>
+              </StackField>
+            </div>
+          </div>
+        )}
+
+        <div className={cn(!isSynced && step === 3 ? "block" : "hidden")}>
           <div className="mx-auto w-full max-w-2xl rounded-xl border border-border/80 bg-white p-5 shadow-sm">
             <div className="grid gap-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -502,6 +730,37 @@ export function DefectForm({
                   </SelectContent>
                 </Select>
               </StackField>
+              <div className="grid gap-4 md:grid-cols-2">
+                <StackField label="Số Lần Nhắc Lại">
+                  <Input
+                    className="h-11"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={form.reminderCount}
+                    onChange={(e) => {
+                      const reminderCount = Math.max(0, Math.trunc(Number(e.target.value) || 0));
+                      setForm((current) => ({
+                        ...current,
+                        reminderCount,
+                        lastRemindedAt: reminderCount === 0 ? "" : current.lastRemindedAt,
+                      }));
+                    }}
+                  />
+                </StackField>
+                <StackField label="Ngày Nhắc Lại Gần Nhất">
+                  <Input
+                    className="h-11"
+                    type="date"
+                    value={form.lastRemindedAt}
+                    disabled={form.reminderCount === 0}
+                    onChange={(e) => set("lastRemindedAt", e.target.value)}
+                  />
+                </StackField>
+              </div>
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Nút “Nhắc lại” trên danh sách sẽ tự tăng số lần và cập nhật ngày gần nhất.
+              </p>
               <StackField label="Ghi Chú">
                 <Textarea className="min-h-[88px] resize-y" value={form.note} onChange={(e) => set("note", e.target.value)} />
               </StackField>
@@ -525,13 +784,22 @@ export function DefectForm({
 
       {/* Footer */}
       <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-white p-4">
-        {step > 1 && (
+        {!isSynced && step > 1 && (
           <Button type="button" variant="outline" onClick={() => setStep(step === 3 ? 2 : 1)}>
             <ChevronLeft className="h-4 w-4" /> Trước
           </Button>
         )}
         <Button type="button" variant="outline" onClick={() => onCancel?.()}>Hủy bỏ</Button>
-        {step < 3 ? (
+        {isSynced && (step === 1 || step === 3) ? (
+          <Button type="button" onClick={submit} disabled={pending}>
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {step === 3 ? "Lưu hình ảnh" : "Lưu ánh xạ"}
+          </Button>
+        ) : isSynced ? (
+          <Button type="button" onClick={() => setStep(1)}>
+            <ChevronLeft className="h-4 w-4" /> Quay lại ánh xạ
+          </Button>
+        ) : step < 3 ? (
           <Button type="button" onClick={step === 1 ? goToSeverity : goToDefectInfo}>
             Kế tiếp <ChevronRight className="h-4 w-4" />
           </Button>
@@ -574,6 +842,20 @@ function StackField({ label, children }: { label: string; children: React.ReactN
     <div className="grid gap-2">
       <Label className="text-sm font-semibold text-slate-600">{label}</Label>
       <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function SourcePreviewValue({ label, value, pending = false }: { label: string; value: string; pending?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className={cn(
+        "mt-1 whitespace-pre-wrap break-words text-sm",
+        pending ? "font-medium italic text-amber-700" : "text-ink"
+      )}>
+        {value}
+      </p>
     </div>
   );
 }

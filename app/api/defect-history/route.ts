@@ -9,7 +9,13 @@ import { dateRange, parseDateInput } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 // Tầng 4: avatar trong list đi qua publicUserRef (proxy theo key) — không chở base64.
-const INCLUDE = { createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } } };
+const INCLUDE = {
+  createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
+  relatedDevices: {
+    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
 // Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
 const HISTORY_TAKE = 300;
 

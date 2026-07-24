@@ -133,7 +133,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: DefectHistoryItem, index: number) => index + 1 },
       { key: "workOrderNumber", header: "Số phiếu công tác", width: 26, value: (r: DefectHistoryItem) => r.workOrderNumber },
       { key: "requestType", header: "PCT", width: 12, align: "center" as const, value: (r: DefectHistoryItem) => r.requestType },
-      { key: "performedAt", header: "Ngày thực hiện", width: 15, align: "center" as const, value: (r: DefectHistoryItem) => formatDate(r.performedAt) },
+      { key: "performedAt", header: "Ngày kết thúc", width: 15, align: "center" as const, value: (r: DefectHistoryItem) => formatDate(r.performedAt) },
       { key: "unit", header: "Tổ máy", width: 10, align: "center" as const, value: (r: DefectHistoryItem) => r.unit },
       { key: "system", header: "Cương vị", width: 22, value: (r: DefectHistoryItem) => r.system },
       { key: "deviceName", header: "Tên thiết bị", width: 28, value: (r: DefectHistoryItem) => deviceNameByCode.get(r.device ?? "") ?? r.device },
@@ -235,7 +235,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[110px] text-center"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[240px] text-center"><SortHeader label="Nội dung thực hiện" sortKey="content" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[130px] text-center"><SortHeader label="Ngày thực hiện" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[130px] text-center"><SortHeader label="Ngày kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[150px] text-center"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[190px] text-center"><SortHeader label="Tên thiết bị" sortKey="device" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[130px] text-center"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
@@ -478,6 +478,13 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
               .join("   ·   ")}
           />
         )}
+        <DetailLine
+          label="Thiết bị liên quan"
+          value={row.relatedDevices.length > 0
+            ? row.relatedDevices.map((item) => `${item.device.name} (${item.deviceSeq})`).join("\n")
+            : "—"}
+          multiline
+        />
         <DetailLine label="Nội dung thực hiện" value={row.content || "—"} multiline />
         <DetailLine label="Kết quả thực hiện" value={row.result || "—"} multiline />
       <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">

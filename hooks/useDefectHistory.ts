@@ -6,6 +6,10 @@ import type { DefectHistory } from "@prisma/client";
 
 export interface DefectHistoryItem extends DefectHistory {
   createdBy: { id: string; name: string; position: string | null; avatarUrl?: string | null };
+  relatedDevices: Array<{
+    deviceSeq: string;
+    device: { seq: string; name: string };
+  }>;
 }
 
 export interface DefectHistoryFilters {

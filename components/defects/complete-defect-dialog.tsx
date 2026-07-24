@@ -9,11 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
-import { formatDateInput } from "@/lib/utils";
+import { formatDate, formatDateInput } from "@/lib/utils";
 
 const NONE = "__none__";
 
@@ -40,17 +39,26 @@ export function CompleteDefectDialog({
     performedAt: todayInput(),
     content: "",
     result: "",
-    images: [] as string[],
   });
 
   // Reset mỗi khi mở cho một khiếm khuyết khác. PCT mặc định = "Yêu Cầu" của khiếm khuyết.
   React.useEffect(() => {
-    if (defect) setForm({ workOrderNumber: "", requestType: defect.requestType ?? "", performedAt: todayInput(), content: "", result: "", images: [] });
+    if (defect) setForm({
+      workOrderNumber: "",
+      requestType: defect.requestType ?? "",
+      performedAt: defect.sourceType === "GOOGLE_SHEETS" && defect.sourceCompletedAt
+        ? formatDateInput(defect.sourceCompletedAt)
+        : todayInput(),
+      content: defect.sourceType === "GOOGLE_SHEETS" ? defect.content ?? "" : "",
+      result: defect.sourceType === "GOOGLE_SHEETS"
+        ? defect.note?.trim() || defect.sourceStatusRaw?.trim() || ""
+        : "",
+    });
   }, [defect]);
 
   async function submit() {
     if (!defect) return;
-    if (!form.performedAt) return toast.error("Vui lòng chọn ngày thực hiện");
+    if (!form.performedAt) return toast.error("Vui lòng chọn ngày kết thúc");
     try {
       await complete.mutateAsync({
         id: defect.id,
@@ -59,9 +67,8 @@ export function CompleteDefectDialog({
         performedAt: form.performedAt,
         content: form.content,
         result: form.result,
-        images: form.images,
       });
-      toast.success("Đã hoàn thành & ghi lịch sử thiết bị");
+      toast.success(defect.sourceType === "GOOGLE_SHEETS" ? "Đã xác nhận và lưu vào lịch sử" : "Đã hoàn thành & ghi lịch sử thiết bị");
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
@@ -73,7 +80,8 @@ export function CompleteDefectDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-600" /> Hoàn thành khiếm khuyết
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            {defect?.sourceType === "GOOGLE_SHEETS" ? "Xác nhận đưa vào lịch sử" : "Hoàn thành khiếm khuyết"}
           </DialogTitle>
         </DialogHeader>
 
@@ -95,6 +103,9 @@ export function CompleteDefectDialog({
                 />
               </Field>
               <Field label="PCT">
+                {defect.sourceType === "GOOGLE_SHEETS" && defect.requestType && (
+                  <SourceValue value={defect.requestType} />
+                )}
                 <Select value={form.requestType || NONE} onValueChange={(v) => setForm((f) => ({ ...f, requestType: v === NONE ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Chọn PCT" /></SelectTrigger>
                   <SelectContent>
@@ -106,7 +117,10 @@ export function CompleteDefectDialog({
             </div>
             {/* Tên thiết bị — đồng bộ từ danh mục thiết bị theo mã thiết bị của khiếm khuyết. */}
             <ReadOnly label="Tên thiết bị" value={deviceNameByCode.get(defect.device ?? "") ?? defect.device ?? "—"} />
-            <Field label="Ngày thực hiện *">
+            <Field label="Ngày kết thúc *">
+              {defect.sourceType === "GOOGLE_SHEETS" && defect.sourceCompletedAt && (
+                <SourceValue value={formatDate(defect.sourceCompletedAt)} />
+              )}
               <Input
                 type="date"
                 value={form.performedAt}
@@ -114,6 +128,9 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Nội dung thực hiện">
+              {defect.sourceType === "GOOGLE_SHEETS" && defect.content && (
+                <SourceValue value={defect.content} multiline />
+              )}
               <Textarea
                 value={form.content}
                 onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
@@ -122,6 +139,9 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Kết quả thực hiện">
+              {defect.sourceType === "GOOGLE_SHEETS" && (defect.note || defect.sourceStatusRaw) && (
+                <SourceValue value={defect.note || defect.sourceStatusRaw || ""} multiline />
+              )}
               <Textarea
                 value={form.result}
                 onChange={(e) => setForm((f) => ({ ...f, result: e.target.value }))}
@@ -129,16 +149,14 @@ export function CompleteDefectDialog({
                 placeholder="Mô tả kết quả xử lý…"
               />
             </Field>
-            <Field label="Hình ảnh (tối đa 3)">
-              <MultiImagePicker value={form.images} onChange={(v) => setForm((f) => ({ ...f, images: v }))} max={3} />
-            </Field>
           </div>
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Huỷ</Button>
           <Button onClick={submit} disabled={complete.isPending}>
-            {complete.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Hoàn thành
+            {complete.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {defect?.sourceType === "GOOGLE_SHEETS" ? "Xác nhận" : "Hoàn thành"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -160,6 +178,17 @@ function ReadOnly({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg bg-muted/50 p-2.5">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-medium text-ink">{value}</div>
+    </div>
+  );
+}
+
+function SourceValue({ value, multiline = false }: { value: string; multiline?: boolean }) {
+  return (
+    <div className="mb-2 rounded-md border border-blue-100 bg-blue-50/70 px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Dữ liệu có sẵn từ Google Sheet</div>
+      <div className={multiline ? "mt-1 whitespace-pre-wrap text-sm text-ink" : "mt-0.5 text-sm font-medium text-ink"}>
+        {value}
+      </div>
     </div>
   );
 }
