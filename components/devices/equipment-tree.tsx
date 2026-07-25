@@ -36,7 +36,7 @@ import {
   type TreeNode,
 } from "@/hooks/useEquipment";
 import { machinesOf, type EquipmentMachine } from "@/lib/equipment-units";
-import { useDeleteDevice, useDeleteDevices, useUpdateDevice } from "@/hooks/useDevices";
+import { useCountBulkDelete, useDeleteDevice, useDeleteDevices, useUpdateDevice } from "@/hooks/useDevices";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { toast } from "sonner";
 import {
@@ -157,14 +157,15 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       ) : (
         <span className="h-5 w-5 shrink-0" />
       )}
-      {bulkMode && !hasKids && (
+      {bulkMode && (
         <input
           type="checkbox"
           checked={isChecked}
           onChange={() => onToggleChecked(node.seq)}
           onClick={(event) => event.stopPropagation()}
           className="h-4 w-4 shrink-0 cursor-pointer rounded border-border text-accent focus:ring-2 focus:ring-accent/40"
-          aria-label={`Chọn thiết bị ${node.name}`}
+          aria-label={hasKids ? `Chọn nhóm ${node.name} (gồm toàn bộ thiết bị con)` : `Chọn thiết bị ${node.name}`}
+          title={hasKids ? "Chọn cả nhóm — xóa sẽ gồm toàn bộ thiết bị con bên trong" : undefined}
         />
       )}
       {hasKids ? (
@@ -246,10 +247,12 @@ export function EquipmentTreeView({
   const [bulkMode, setBulkMode] = React.useState(false);
   const [checkedSeqs, setCheckedSeqs] = React.useState<Set<string>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false);
+  const [previewCount, setPreviewCount] = React.useState<number | null>(null);
   const [editTarget, setEditTarget] = React.useState<TreeNode | null>(null);
   const [editName, setEditName] = React.useState("");
   const deleteDevice = useDeleteDevice();
   const deleteDevices = useDeleteDevices();
+  const countBulkDelete = useCountBulkDelete();
   const updateDevice = useUpdateDevice();
 
   const debouncedSearch = useDebouncedValue(search, 350);
@@ -315,6 +318,35 @@ export function EquipmentTreeView({
     for (const n of searchResults) if (!m.has(n.seq)) m.set(n.seq, n);
     return m;
   }, [roots, childrenBySeq, searchResults]);
+
+  // Khi mở hộp thoại xác nhận xóa hàng loạt: nếu có chọn nhóm/thư mục thì đếm trước số thiết bị
+  // thực tế sẽ bị xóa (gồm cả thiết bị con) để hiển thị đúng; chọn toàn thiết bị lẻ thì số = số ô đã tick.
+  React.useEffect(() => {
+    if (!bulkConfirmOpen) {
+      setPreviewCount(null);
+      return;
+    }
+    const ids = [...checkedSeqs];
+    const hasFolder = ids.some((seq) => nodesBySeq.get(seq)?.hasChildren);
+    if (!hasFolder) {
+      setPreviewCount(ids.length);
+      return;
+    }
+    let cancelled = false;
+    setPreviewCount(null);
+    countBulkDelete
+      .mutateAsync(ids)
+      .then((res) => {
+        if (!cancelled) setPreviewCount(res.count);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewCount(ids.length);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkConfirmOpen]);
 
   const selectedNode = selected ? nodesBySeq.get(selected) ?? null : null;
   const ancestors = React.useMemo(() => {
@@ -398,6 +430,12 @@ export function EquipmentTreeView({
   );
   const selectableBatch = React.useMemo(() => selectableSeqs.slice(0, MAX_BULK_DELETE), [selectableSeqs]);
   const allVisibleChecked = selectableBatch.length > 0 && selectableBatch.every((seq) => checkedSeqs.has(seq));
+  const checkedHasFolder = React.useMemo(
+    () => [...checkedSeqs].some((seq) => nodesBySeq.get(seq)?.hasChildren),
+    [checkedSeqs, nodesBySeq]
+  );
+  const bulkCountPending = checkedHasFolder && previewCount === null;
+  const bulkDeleteCount = previewCount ?? checkedSeqs.size;
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -497,7 +535,12 @@ export function EquipmentTreeView({
                 ? "Bỏ chọn mục đang hiển thị"
                 : `Chọn ${Math.min(selectableSeqs.length, MAX_BULK_DELETE).toLocaleString("vi-VN")} mục đang hiển thị`}
             </button>
-            <span className="font-semibold text-ink">Đã chọn {checkedSeqs.size.toLocaleString("vi-VN")} thiết bị</span>
+            <span className="font-semibold text-ink">Đã chọn {checkedSeqs.size.toLocaleString("vi-VN")} mục</span>
+            {checkedHasFolder && (
+              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                Gồm nhóm — xóa cả thiết bị con
+              </span>
+            )}
             <Button
               type="button"
               variant="destructive"
@@ -695,17 +738,28 @@ export function EquipmentTreeView({
       <ConfirmDialog
         open={bulkConfirmOpen}
         onOpenChange={setBulkConfirmOpen}
-        title={`Xóa ${checkedSeqs.size.toLocaleString("vi-VN")} thiết bị đã chọn?`}
-        description="Các thiết bị và dữ liệu liên quan sẽ bị xóa khỏi cây. Thao tác này không thể hoàn tác."
-        confirmLabel={`Xóa ${checkedSeqs.size.toLocaleString("vi-VN")} thiết bị`}
-        loading={deleteDevices.isPending}
+        title={
+          bulkCountPending
+            ? "Đang tính số lượng thiết bị…"
+            : `Xóa ${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị đã chọn?`
+        }
+        description={
+          bulkCountPending
+            ? "Đang tính tổng số thiết bị sẽ bị xóa (gồm cả thiết bị con trong nhóm)…"
+            : checkedHasFolder
+              ? `Trong ${checkedSeqs.size.toLocaleString("vi-VN")} mục đã chọn có nhóm/thư mục — toàn bộ thiết bị con bên trong sẽ bị xóa cùng (${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị). Dữ liệu liên quan cũng bị xóa khỏi cây. Thao tác này không thể hoàn tác.`
+              : "Các thiết bị và dữ liệu liên quan sẽ bị xóa khỏi cây. Thao tác này không thể hoàn tác."
+        }
+        confirmLabel={bulkCountPending ? "Đang tính…" : `Xóa ${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị`}
+        loading={deleteDevices.isPending || bulkCountPending}
         onConfirm={async () => {
           const ids = [...checkedSeqs];
           if (ids.length === 0) return;
           try {
             const parentSeqs = new Set(ids.map((seq) => nodesBySeq.get(seq)?.parentSeq ?? null));
             const result = await deleteDevices.mutateAsync(ids);
-            if (selected && checkedSeqs.has(selected)) setSelected(null);
+            // result.ids = toàn bộ seq đã xóa (đã tính cả thiết bị con) → xóa lựa chọn chi tiết nếu nằm trong đó.
+            if (selected && result.ids.includes(selected)) setSelected(null);
             setCheckedSeqs(new Set());
             setBulkConfirmOpen(false);
             setBulkMode(false);

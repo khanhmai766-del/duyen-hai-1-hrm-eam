@@ -168,6 +168,17 @@ export function useDeleteDevices() {
   });
 }
 
+/**
+ * Đếm trước số thiết bị sẽ bị xóa (gồm cả thiết bị con khi chọn nhóm/thư mục) mà KHÔNG xóa —
+ * dùng để hiển thị số lượng thực tế trong hộp thoại xác nhận xóa hàng loạt.
+ */
+export function useCountBulkDelete() {
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiMutate<{ ids: string[]; count: number }>("/api/devices/bulk-delete", "DELETE", { ids, dryRun: true }),
+  });
+}
+
 export interface ImportResult {
   created: number;
   updated: number;
