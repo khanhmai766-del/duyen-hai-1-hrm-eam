@@ -16,7 +16,6 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Trash2,
-  ListChecks,
   Pencil,
   Plus,
   UserRoundCog,
@@ -98,7 +97,6 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onToggle,
   canDelete,
   onDelete,
-  bulkMode,
   isChecked,
   onToggleChecked,
   canEdit,
@@ -113,7 +111,6 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onToggle: (seq: string) => void;
   canDelete: boolean;
   onDelete: (node: TreeNode) => void;
-  bulkMode: boolean;
   isChecked: boolean;
   onToggleChecked: (seq: string) => void;
   canEdit: boolean;
@@ -157,13 +154,16 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       ) : (
         <span className="h-5 w-5 shrink-0" />
       )}
-      {bulkMode && (
+      {canDelete && (
         <input
           type="checkbox"
           checked={isChecked}
           onChange={() => onToggleChecked(node.seq)}
           onClick={(event) => event.stopPropagation()}
-          className="h-4 w-4 shrink-0 cursor-pointer rounded border-border text-accent focus:ring-2 focus:ring-accent/40"
+          className={cn(
+            "h-4 w-4 shrink-0 cursor-pointer rounded border-border text-accent focus:ring-2 focus:ring-accent/40",
+            isChecked ? "opacity-100" : "opacity-60 group-hover:opacity-100"
+          )}
           aria-label={hasKids ? `Chọn nhóm ${node.name} (gồm toàn bộ thiết bị con)` : `Chọn thiết bị ${node.name}`}
           title={hasKids ? "Chọn cả nhóm — xóa sẽ gồm toàn bộ thiết bị con bên trong" : undefined}
         />
@@ -185,7 +185,7 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       )}
       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{node.childCount}</span>}
       <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground" title={node.seq}>{node.code}</span>
-      {canEdit && !bulkMode && (
+      {canEdit && (
         <button
           type="button"
           onClick={(event) => {
@@ -199,7 +199,7 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
           <Pencil className="h-3.5 w-3.5" />
         </button>
       )}
-      {canDelete && !bulkMode && !hasKids && (
+      {canDelete && !hasKids && (
         <button
           type="button"
           onClick={(event) => {
@@ -244,7 +244,6 @@ export function EquipmentTreeView({
   const [selected, setSelected] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<TreeNode | null>(null);
-  const [bulkMode, setBulkMode] = React.useState(false);
   const [checkedSeqs, setCheckedSeqs] = React.useState<Set<string>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false);
   const [previewCount, setPreviewCount] = React.useState<number | null>(null);
@@ -498,25 +497,9 @@ export function EquipmentTreeView({
               </button>
             </div>
           )}
-          {canDelete && (
-            <button
-              type="button"
-              onClick={() => {
-                setBulkMode((active) => !active);
-                setCheckedSeqs(new Set());
-              }}
-              className={cn(
-                "flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                bulkMode ? "border-accent bg-accent/10 text-accent" : "border-border text-muted-foreground hover:border-accent hover:text-accent"
-              )}
-              aria-pressed={bulkMode}
-            >
-              <ListChecks className="h-4 w-4" /> {bulkMode ? "Hủy chọn" : "Chọn nhiều"}
-            </button>
-          )}
         </div>
 
-        {bulkMode && (
+        {canDelete && checkedSeqs.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 px-3 py-2 text-xs">
             <button
               type="button"
@@ -534,6 +517,13 @@ export function EquipmentTreeView({
               {allVisibleChecked
                 ? "Bỏ chọn mục đang hiển thị"
                 : `Chọn ${Math.min(selectableSeqs.length, MAX_BULK_DELETE).toLocaleString("vi-VN")} mục đang hiển thị`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCheckedSeqs(new Set())}
+              className="rounded-md border border-border bg-white px-2.5 py-1.5 font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+            >
+              Bỏ chọn tất cả
             </button>
             <span className="font-semibold text-ink">Đã chọn {checkedSeqs.size.toLocaleString("vi-VN")} mục</span>
             {checkedHasFolder && (
@@ -585,7 +575,6 @@ export function EquipmentTreeView({
                       onToggle={onToggle}
                       canDelete={canDelete}
                       onDelete={setDeleteTarget}
-                      bulkMode={bulkMode}
                       isChecked={checkedSeqs.has(row.node.seq)}
                       onToggleChecked={onToggleChecked}
                       canEdit={canEdit}
@@ -762,7 +751,6 @@ export function EquipmentTreeView({
             if (selected && result.ids.includes(selected)) setSelected(null);
             setCheckedSeqs(new Set());
             setBulkConfirmOpen(false);
-            setBulkMode(false);
             toast.success(`Đã xóa ${result.count.toLocaleString("vi-VN")} thiết bị`);
             for (const p of parentSeqs) await refreshBranch(p);
           } catch (error) {
