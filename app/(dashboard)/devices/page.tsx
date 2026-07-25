@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
 import {
@@ -110,12 +109,10 @@ export default function DevicesPage() {
 function DevicesPageContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManageDevices = rbac.can("device-manage", ["create", "manage", "full"]);
   const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
   const canDeleteDevices = rbac.can("device-delete", ["full"]);
-  const isAdmin = session?.user?.role === "ADMIN";
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
@@ -256,7 +253,6 @@ function DevicesPageContent() {
           canDelete={canDeleteDevices}
           canEdit={canEditDevices}
           canCreate={canManageDevices}
-          canAssignPosition={isAdmin}
           onCreateChild={openCreateForSystem}
         />
       ) : view === "detail" ? (

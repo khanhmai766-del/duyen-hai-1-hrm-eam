@@ -1140,20 +1140,6 @@ model PositionSystemScope {
   @@index([systemSeq])
 }
 
-// Metadata phân loại nhánh thiết bị. Không tham gia tính quyền xem/sửa.
-// Quyền thiết bị chỉ lấy từ PositionSystemScope (ma trận phân quyền).
-model EquipmentBranchClassification {
-  id               String   @id @default(cuid())
-  systemSeq        String   @unique
-  block            String?
-  managingPosition String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([block])
-  @@index([managingPosition])
-}
-
 // Ghi đè công trực ca theo từng dòng trong ngày (do người có quyền duyệt/chỉnh công đặt).
 // Khóa chính gồm (userId, date, line). CRUD chạy bằng raw SQL trong app/api/shifts/timesheet/route.ts;
 // khai báo ở đây để db push tạo bảng và không đề nghị xoá.

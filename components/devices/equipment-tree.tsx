@@ -18,7 +18,6 @@ import {
   Trash2,
   Pencil,
   Plus,
-  UserRoundCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -47,16 +46,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  useAssignPositionToEquipmentBranch,
-  useEquipmentClassifications,
-} from "@/hooks/usePositionSystemScopes";
-import { usePositions } from "@/hooks/useUsers";
-import { selectableManagingPositionOptions } from "@/lib/positions";
-import { EQUIPMENT_BLOCKS } from "@/lib/constants";
-import { normalizePositionScopeKey, positionScopeOptions } from "@/lib/position-system-scopes";
-import type { EquipmentBranchClassification } from "@/lib/equipment-classification";
 
 const MAX_BULK_DELETE = 500;
 
@@ -221,13 +210,11 @@ export function EquipmentTreeView({
   canDelete = false,
   canEdit = false,
   canCreate = false,
-  canAssignPosition = false,
   onCreateChild,
 }: {
   canDelete?: boolean;
   canEdit?: boolean;
   canCreate?: boolean;
-  canAssignPosition?: boolean;
   onCreateChild?: (node: TreeNode) => void;
 }) {
   const params = useSearchParams();
@@ -618,7 +605,6 @@ export function EquipmentTreeView({
             ancestors={ancestors}
             onSelect={setSelected}
             canCreate={canCreate}
-            canAssignPosition={canAssignPosition}
             onCreateChild={onCreateChild}
           />
         ) : (
@@ -767,14 +753,12 @@ function DetailPanel({
   ancestors,
   onSelect,
   canCreate,
-  canAssignPosition,
   onCreateChild,
 }: {
   node: TreeNode;
   ancestors: TreeNode[];
   onSelect: (seq: string) => void;
   canCreate: boolean;
-  canAssignPosition: boolean;
   onCreateChild?: (node: TreeNode) => void;
 }) {
   const router = useRouter();
@@ -893,8 +877,6 @@ function DetailPanel({
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${node.childCount} thiết bị con` : "Thiết bị"} />
       </div>
 
-      {canAssignPosition && <BranchPositionAssignment node={node} />}
-
       {canCreate && node.depth < 16 && onCreateChild && (
         <Button
           type="button"
@@ -934,142 +916,6 @@ function DetailPanel({
       >
         Xem lý lịch thiết bị
       </Button>
-    </div>
-  );
-}
-
-function nearestBranchAssignment(seq: string, classifications: EquipmentBranchClassification[]) {
-  let current = seq;
-  while (current) {
-    const row = classifications.find((item) => item.systemSeq === current);
-    if (row?.block || row?.managingPosition) {
-      return { block: row.block, manager: row.managingPosition, sourceSeq: current };
-    }
-    const parts = current.split(".");
-    parts.pop();
-    current = parts.join(".");
-  }
-  return { block: null, manager: null, sourceSeq: null };
-}
-
-function BranchPositionAssignment({ node }: { node: TreeNode }) {
-  const allPositions = usePositions();
-  const positions = React.useMemo(
-    () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
-    [allPositions]
-  );
-  const classificationsQuery = useEquipmentClassifications();
-  const classifications = React.useMemo(
-    () => classificationsQuery.data?.data ?? [],
-    [classificationsQuery.data]
-  );
-  const inherited = React.useMemo(
-    () => nearestBranchAssignment(node.seq, classifications),
-    [node.seq, classifications]
-  );
-  const direct = React.useMemo(
-    () => nearestBranchAssignment(node.seq, classifications.filter((item) => item.systemSeq === node.seq)),
-    [node.seq, classifications]
-  );
-  const [assignmentType, setAssignmentType] = React.useState<"block" | "position">("block");
-  const [value, setValue] = React.useState("");
-  const [confirmOpen, setConfirmOpen] = React.useState(false);
-  const assign = useAssignPositionToEquipmentBranch();
-
-  React.useEffect(() => {
-    if (direct.block) {
-      setAssignmentType("block");
-      setValue(direct.block);
-    } else if (direct.manager) {
-      setAssignmentType("position");
-      setValue(positions.find((item) => normalizePositionScopeKey(item) === normalizePositionScopeKey(direct.manager)) ?? direct.manager);
-    } else {
-      setAssignmentType("block");
-      setValue("");
-    }
-  }, [direct.block, direct.manager, node.seq, positions]);
-
-  const effectiveBlock = inherited.block ?? "";
-  const isInherited = Boolean(inherited.sourceSeq && inherited.sourceSeq !== node.seq);
-
-  return (
-    <div className="space-y-3 rounded-xl border border-cyan-200 bg-cyan-50/60 p-3">
-      <div className="flex items-start gap-2">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700">
-          <UserRoundCog className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-ink">Phân loại thiết bị</div>
-          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-            Chọn khối hoặc cương vị phụ trách để tra cứu. Thông tin này không cấp quyền xem hay chỉnh sửa.
-          </p>
-        </div>
-      </div>
-      {(effectiveBlock || inherited.manager) && (
-        <div className="space-y-1 rounded-lg bg-white px-3 py-2 text-xs text-muted-foreground ring-1 ring-cyan-100">
-          {effectiveBlock && <div>Khối thiết bị: <span className="font-semibold text-cyan-800">{effectiveBlock}</span>{isInherited ? " · kế thừa" : ""}</div>}
-          {inherited.manager && <div>Cương vị quản lý: <span className="font-semibold text-cyan-800">{inherited.manager}</span>{isInherited ? " · kế thừa" : ""}</div>}
-        </div>
-      )}
-      <div className="grid grid-cols-2 gap-2 rounded-lg bg-cyan-100/70 p-1">
-        <button
-          type="button"
-          onClick={() => { setAssignmentType("block"); setValue(""); }}
-          className={cn("rounded-md px-2 py-1.5 text-xs font-semibold transition-colors", assignmentType === "block" ? "bg-white text-cyan-800 shadow-sm" : "text-muted-foreground")}
-        >
-          Khối thiết bị
-        </button>
-        <button
-          type="button"
-          onClick={() => { setAssignmentType("position"); setValue(""); }}
-          className={cn("rounded-md px-2 py-1.5 text-xs font-semibold transition-colors", assignmentType === "position" ? "bg-white text-cyan-800 shadow-sm" : "text-muted-foreground")}
-        >
-          Cương vị quản lý
-        </button>
-      </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Select value={value} onValueChange={setValue}>
-          <SelectTrigger className="h-9 flex-1 bg-white">
-            <SelectValue placeholder={assignmentType === "block" ? "Chọn khối" : "Chọn một cương vị"} />
-          </SelectTrigger>
-          <SelectContent>
-            {(assignmentType === "block" ? [...EQUIPMENT_BLOCKS] : positions).map((item) => (
-              <SelectItem key={item} value={item}>{item}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          type="button"
-          size="sm"
-          className="h-9 shrink-0"
-          disabled={!value || assign.isPending}
-          onClick={() => setConfirmOpen(true)}
-        >
-          {assign.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Áp dụng cho toàn nhánh
-        </Button>
-      </div>
-      <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title={`Phân loại “${value}” cho toàn nhánh?`}
-        description={assignmentType === "block"
-          ? `Nút “${node.name}” và các thiết bị con sẽ được phân loại thuộc ${value}. Thao tác này không thay đổi quyền truy cập.`
-          : `“${value}” sẽ là cương vị phụ trách của nút “${node.name}” và được kế thừa khi hiển thị cho các thiết bị con. Thao tác này không thay đổi quyền truy cập.`}
-        confirmLabel="Xác nhận phân loại"
-        loading={assign.isPending}
-        onConfirm={async () => {
-          try {
-            const result = await assign.mutateAsync({ seq: node.seq, assignmentType, value });
-            setConfirmOpen(false);
-            toast.success(
-              `Đã phân loại ${result.value} cho ${result.affectedNodes.toLocaleString("vi-VN")} thiết bị/nhóm`
-            );
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Không thể lưu phân loại thiết bị");
-          }
-        }}
-      />
     </div>
   );
 }
