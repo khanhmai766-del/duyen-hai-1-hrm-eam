@@ -8,6 +8,7 @@ import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
+import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,9 @@ const receiptSourceLabel = (source: unknown) =>
 
 const sameTicketNumber = (left?: string | null, right?: string | null) =>
   !!left?.trim() && !!right?.trim() && left.trim().toLocaleLowerCase("vi") === right.trim().toLocaleLowerCase("vi");
+
+const managementPositionKey = (value?: string | null) =>
+  normalizeText(value ?? "").replace(/\s+/g, " ").trim();
 
 /** Sửa/Xoá phiếu: ADMIN, cương vị được cấu hình bước "manage"; khi CHƯA cấu hình → người tạo phiếu (mặc định cũ). */
 function samePosition(a?: string | null, b?: string | null) {
@@ -413,6 +417,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
       const assignedPosition = String(body.assignedPosition || "").trim();
       if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao");
+      if (!isPositionAllowedForDefectUnit(unit, assignedPosition)) {
+        return fail(`Cương vị "${assignedPosition}" không thuộc tổ máy ${unit}`);
+      }
       const totalScopeCount = await prisma.positionSystemScope.count();
       const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
       if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
@@ -447,20 +454,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!replacementDeviceSeq) return fail("Vui lòng chọn thiết bị thay thế");
         const material = await prisma.material.findUnique({
           where: { id: materialId },
-          select: { id: true, code: true, erpCodes: true, machine: true },
+          select: { id: true, code: true, erpCodes: true, category: true, machine: true },
         });
         if (!material) return fail("Không tìm thấy vật tư đề xuất", 404);
         if (material.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
+        const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
+        if (material.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
         const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
         if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         const manualDeviceId = replacementDeviceSeq.startsWith("manual:") ? replacementDeviceSeq.slice("manual:".length) : "";
-        const replacementPoint = await prisma.materialReplacement.findFirst({
+        const replacementPoints = await prisma.materialReplacement.findMany({
           where: manualDeviceId
             ? { id: manualDeviceId, materialId, isActive: false }
             : { materialId, deviceSeq: replacementDeviceSeq, isActive: false },
-          select: { id: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
+          select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
         });
-        if (!replacementPoint) return fail("Thiết bị chưa được khai báo trong Chi tiết điểm thay thế của vật tư");
+        const replacementPoint = replacementPoints.find(
+          (point) => managementPositionKey(point.managingPosition) === managementPositionKey(assignedPosition)
+        );
+        if (!replacementPoint) return fail("Vật tư hoặc thiết bị đã chọn không thuộc cương vị được giao quản lý");
         if (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device)) {
           return fail("Thiết bị đã chọn không còn tồn tại trong cây thiết bị");
         }
@@ -623,12 +635,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       const materials = await prisma.material.findMany({
         where: { id: { in: [...new Set(items.map((i) => i.materialId))] } },
-        select: { id: true, code: true, erpCodes: true, machine: true },
+        select: { id: true, code: true, erpCodes: true, category: true, machine: true },
       });
       const materialCodeMap = new Map(materials.map((material) => [material.id, material.erpCodes.length ? material.erpCodes : [material.code]]));
       const materialMachineMap = new Map(materials.map((material) => [material.id, material.machine]));
+      const materialCategoryMap = new Map(materials.map((material) => [material.id, material.category]));
+      const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[t!.materialCategory ?? ""] ?? t!.materialCategory;
       for (const it of items) {
         if (materialMachineMap.get(it.materialId) !== t!.unit) return "Vật tư không thuộc tổ máy của phiếu";
+        if (materialCategoryMap.get(it.materialId) !== expectedCategory) return "Vật tư không thuộc loại vật tư của phiếu";
         if (!materialCodeMap.get(it.materialId)?.includes(it.erpCode || "")) return "Mã vật tư không thuộc tên vật tư đã chọn";
       }
       // Mỗi cặp (vật tư, thiết bị) phải là điểm đã KHAI BÁO trong Danh mục vật tư
@@ -636,14 +651,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const matIds = [...new Set(items.map((i) => i.materialId))];
       const decls = await prisma.materialReplacement.findMany({
         where: { materialId: { in: matIds }, isActive: false, deviceSeq: { not: null } },
-        select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
+        select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
       });
-      const declSet = new Set(decls.map((d) => `${d.materialId}::${d.deviceSeq}`));
+      const assignedDecls = decls.filter(
+        (decl) => managementPositionKey(decl.managingPosition) === managementPositionKey(t!.assignedPosition)
+      );
+      const declSet = new Set(assignedDecls.map((d) => `${d.materialId}::${d.deviceSeq}`));
       const replacementLabelMap = new Map(
-        decls.map((d) => [`${d.materialId}::${d.deviceSeq}`, d.location || d.device?.name || d.system || d.deviceSeq || "Thiết bị thay thế"])
+        assignedDecls.map((d) => [`${d.materialId}::${d.deviceSeq}`, d.location || d.device?.name || d.system || d.deviceSeq || "Thiết bị thay thế"])
       );
       const manualDeclMap = new Map(
-        decls.map((d) => [`${d.materialId}::manual:${d.id}`, d.location || d.device?.name || d.system || "Thiết bị nhập tay"])
+        assignedDecls.map((d) => [`${d.materialId}::manual:${d.id}`, d.location || d.device?.name || d.system || "Thiết bị nhập tay"])
       );
       for (const it of items) {
         const key = `${it.materialId}::${it.deviceSeq}`;

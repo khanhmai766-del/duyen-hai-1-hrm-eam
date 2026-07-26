@@ -9,7 +9,8 @@ import {
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { normalizeText } from "@/lib/nav";
 import {
   isMaterialTicketMonthKey,
   materialTicketMonthKey,
@@ -17,6 +18,9 @@ import {
 } from "@/lib/material-ticket-sequence";
 
 export const dynamic = "force-dynamic";
+
+const positionKey = (value?: string | null) =>
+  normalizeText(value ?? "").replace(/\s+/g, " ").trim();
 
 const ITEM_INCLUDE = {
   items: {
@@ -165,6 +169,9 @@ export async function POST(req: NextRequest) {
     // Cương vị được giao: bắt buộc, và phải là cương vị có phân giao cây thiết bị
     const assignedPosition = String(body.assignedPosition || "").trim();
     if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao thực hiện");
+    if (!isPositionAllowedForDefectUnit(unit, assignedPosition)) {
+      return fail(`Cương vị "${assignedPosition}" không thuộc tổ máy ${unit}`);
+    }
     const totalScopeCount = await prisma.positionSystemScope.count();
     const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
     if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
@@ -194,13 +201,19 @@ export async function POST(req: NextRequest) {
     const manualDeviceId = replacementDeviceSeq.startsWith("manual:")
       ? replacementDeviceSeq.slice("manual:".length)
       : "";
-    const replacementPoint = await prisma.materialReplacement.findFirst({
+    const replacementPoints = await prisma.materialReplacement.findMany({
       where: manualDeviceId
         ? { id: manualDeviceId, materialId: selectedMaterial.id, isActive: false }
         : { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq, isActive: false },
-      select: { deviceSeq: true, location: true, system: true, device: { select: { name: true } } },
+      select: { deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
     });
-    if (!replacementPoint || (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device))) {
+    const replacementPoint = replacementPoints.find(
+      (point) => positionKey(point.managingPosition) === positionKey(assignedPosition)
+    );
+    if (!replacementPoint) {
+      return fail("Vật tư hoặc thiết bị đã chọn không thuộc cương vị được giao quản lý");
+    }
+    if (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device)) {
       return fail("Thiết bị chưa được khai báo trong Chi tiết điểm thay thế của vật tư");
     }
     const replacementDeviceLabel = replacementPoint.location || replacementPoint.device?.name || replacementPoint.system || replacementPoint.deviceSeq || "Thiết bị nhập tay";

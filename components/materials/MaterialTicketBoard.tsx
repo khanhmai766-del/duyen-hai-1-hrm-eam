@@ -428,7 +428,8 @@ export default function MaterialTicketBoard({
 /* ================= tạo phiếu ================= */
 const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
 const UNITS = ["S1", "S2", "COMMON"];
-const positionKey = (value?: string | null) => (value ?? "").trim().toLocaleLowerCase("vi");
+const positionKey = (value?: string | null) =>
+  normalizeText(value ?? "").replace(/\s+/g, " ").trim();
 
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>("DE_XUAT");
@@ -449,16 +450,20 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     [opts?.positions, unit]
   );
   const materialCards = useMemo(() => {
-    if (!materialCategoryLabel) return [];
+    if (!assignedKey || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
       const matchesCategory = m.category === materialCategoryLabel;
       const matchesUnit = m.machine === unit;
-      const matchesPosition = !assignedKey || m.managingPositions.length === 0 || m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      const matchesPosition = m.managingPositions.some((p) => positionKey(p) === assignedKey);
       return matchesCategory && matchesUnit && matchesPosition;
     });
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = false; // mã vật tư chỉ được chọn ở bước Trưởng ca/Trưởng kíp
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  const selectedDeviceOptions = useMemo(
+    () => (selectedMaterial?.devices ?? []).filter((device) => positionKey(device.managingPosition) === assignedKey),
+    [assignedKey, selectedMaterial]
+  );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -472,12 +477,14 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
+      if (replacementDeviceSeq) setReplacementDeviceSeq("");
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
+      setReplacementDeviceSeq("");
     }
-  }, [materialCards, selectedMaterialId, selectedErpCode]);
+  }, [materialCards, replacementDeviceSeq, selectedMaterialId, selectedErpCode]);
 
   React.useEffect(() => {
     if (!selectedErpOptions.length) {
@@ -488,6 +495,12 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
       setSelectedErpCode(selectedErpOptions[0].code);
     }
   }, [selectedErpCode, selectedErpOptions]);
+
+  React.useEffect(() => {
+    if (replacementDeviceSeq && !selectedDeviceOptions.some((device) => device.seq === replacementDeviceSeq)) {
+      setReplacementDeviceSeq("");
+    }
+  }, [replacementDeviceSeq, selectedDeviceOptions]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
@@ -539,7 +552,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             ))}</div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); }}>
+            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -547,7 +560,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); }}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>{c}</button>
               ))}
             </div>
 
@@ -555,7 +568,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               <>
                 <label>Tên vật tư</label>
                 <div className="material-cards">
-                  {!category ? (
+                  {!assigned ? (
+                    <div className="material-empty">Chọn cương vị để hiện danh sách vật tư được quản lý</div>
+                  ) : !category ? (
                     <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
                   ) : materialCards.length ? (
                     materialCards.map((m) => (
@@ -572,9 +587,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                     ))
                   ) : (
                     <div className="material-empty">
-                      {assigned
-                        ? "Chưa có mã vật tư đã link với cương vị này trong danh mục"
-                        : "Chưa có vật tư thuộc loại này trong danh mục"}
+                      Cương vị này chưa quản lý vật tư nào thuộc loại đã chọn
                     </div>
                   )}
                 </div>
@@ -603,11 +616,11 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                     <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
                   </div></div>
                 <label>Thiết bị thay thế *</label>
-                <select value={replacementDeviceSeq} disabled={!selectedMaterialId} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
-                  <option value="">{selectedMaterialId ? "— Chọn thiết bị từ Chi tiết điểm thay thế —" : "— Chọn tên vật tư trước —"}</option>
-                  {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
+                <select value={replacementDeviceSeq} disabled={!selectedMaterialId || !selectedDeviceOptions.length} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
+                  <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
+                  {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
                 </select>
-                {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
+                {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
                 <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số biên bản kiểm tra sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
               </>
             ) : (
@@ -733,15 +746,19 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     [opts?.positions, unit]
   );
   const materialCards = useMemo(() => {
-    if (!materialCategoryLabel) return [];
+    if (!assignedKey || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
       const matchesCategory = m.category === materialCategoryLabel;
       const matchesUnit = m.machine === unit;
-      const matchesPosition = !assignedKey || m.managingPositions.length === 0 || m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      const matchesPosition = m.managingPositions.some((p) => positionKey(p) === assignedKey);
       return matchesCategory && matchesUnit && matchesPosition;
     });
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
+  const selectedDeviceOptions = useMemo(
+    () => (selectedMaterial?.devices ?? []).filter((device) => positionKey(device.managingPosition) === assignedKey),
+    [assignedKey, selectedMaterial]
+  );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -782,10 +799,10 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
       if (replacementDeviceSeq) setReplacementDeviceSeq("");
       return;
     }
-    if (replacementDeviceSeq && !selectedMaterial.devices.some((device) => device.seq === replacementDeviceSeq)) {
+    if (replacementDeviceSeq && !selectedDeviceOptions.some((device) => device.seq === replacementDeviceSeq)) {
       setReplacementDeviceSeq("");
     }
-  }, [replacementDeviceSeq, selectedMaterial, t.type]);
+  }, [replacementDeviceSeq, selectedDeviceOptions, selectedMaterial, t.type]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
@@ -842,7 +859,9 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
             <>
               <label>Tên vật tư</label>
               <div className="material-cards">
-                {!category ? (
+                {!assigned ? (
+                  <div className="material-empty">Chọn cương vị để hiện danh sách vật tư được quản lý</div>
+                ) : !category ? (
                   <div className="material-empty">Chọn loại vật tư để hiện danh sách tên vật tư</div>
                 ) : materialCards.length ? (
                   materialCards.map((m) => (
@@ -859,9 +878,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                   ))
                 ) : (
                   <div className="material-empty">
-                    {assigned
-                      ? "Chưa có mã vật tư đã link với cương vị này trong danh mục"
-                      : "Chưa có vật tư thuộc loại này trong danh mục"}
+                    Cương vị này chưa quản lý vật tư nào thuộc loại đã chọn
                   </div>
                 )}
                 </div>
@@ -886,13 +903,13 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 </div>
                 <div className="field">
                   <label>Thiết bị thay thế *</label>
-                  <select value={replacementDeviceSeq} disabled={!selectedMaterialId} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
-                    <option value="">{selectedMaterialId ? "— Chọn thiết bị từ Chi tiết điểm thay thế —" : "— Chọn tên vật tư trước —"}</option>
-                    {(selectedMaterial?.devices ?? []).map((device) => <option key={device.seq} value={device.seq}>{device.label}</option>)}
+                  <select value={replacementDeviceSeq} disabled={!selectedMaterialId || !selectedDeviceOptions.length} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
+                    <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
+                    {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
                   </select>
                 </div>
               </div>
-              {selectedMaterialId && !(selectedMaterial?.devices?.length) && <p className="hint">Vật tư này chưa có thiết bị trong Chi tiết điểm thay thế. Vui lòng khai báo thiết bị tại Danh mục vận hành 1 trước.</p>}
+              {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
 
@@ -1355,7 +1372,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // Lọc vật tư theo LOẠI của phiếu: loại phiếu (Dầu bôi trơn/Lọc dầu/Hóa chất/Bi nghiền)
   // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
   const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
-  const materialOptions = (opts?.materials ?? []).filter((m) => (!wantCategory || m.category === wantCategory) && m.machine === t.unit);
+  const ticketAssignedKey = positionKey(t.assignedPosition);
+  const materialOptions = (opts?.materials ?? []).filter(
+    (m) =>
+      (!wantCategory || m.category === wantCategory) &&
+      m.machine === t.unit &&
+      m.managingPositions.some((position) => positionKey(position) === ticketAssignedKey)
+  );
   const replacementStockErrors = t.items.flatMap((item) => {
     const used = replacementRows.filter((row) => row.itemId === item.id).reduce((sum, row) => sum + row.quantity, 0);
     return used > item.material.quantity ? [{ material: item.material, requested: used }] : [];
@@ -1378,7 +1401,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       {items.map((it, i) => {
         const rowMat = materialOptions.find((m) => m.id === it.materialId);
         const erpOptions = rowMat?.erpCodes?.length ? rowMat.erpCodes : rowMat ? [{ code: rowMat.code, erpStock: 0 }] : [];
-        const deviceOptions = rowMat?.devices ?? [];
+        const deviceOptions = (rowMat?.devices ?? []).filter(
+          (device) => positionKey(device.managingPosition) === ticketAssignedKey
+        );
         return (
         <div key={i} className="frm-item">
           <select value={it.materialId}
@@ -1404,7 +1429,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             onChange={(e) => edit(i, "deviceSeq", e.target.value)}>
             <option value="">{it.materialId ? "— Thiết bị —" : "— Chọn vật tư trước —"}</option>
             {deviceOptions.map((d) => (
-              <option key={d.seq} value={d.seq}>{d.label}</option>
+              <option key={`${d.seq}:${d.managingPosition}`} value={d.seq}>{d.label}</option>
             ))}
           </select>
           <input type="number" min={1} value={it.quantity}

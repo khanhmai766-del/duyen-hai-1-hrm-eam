@@ -56,15 +56,20 @@ export async function GET() {
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
       const positions = new Set<string>();
-      const mdevices: { seq: string; label: string }[] = [];
+      const mdevices: { seq: string; label: string; managingPosition: string | null }[] = [];
       for (const r of m.replacements) {
         if (r.managingPosition) positions.add(r.managingPosition);
         // Điểm có tên nhập tay cần một giá trị riêng, kể cả khi cùng trỏ tới
         // một nút cây. Nếu dùng deviceSeq, dropdown sẽ gộp/mất các thiết bị này.
         const seq = r.location ? `manual:${r.id}` : (r.device ? r.deviceSeq! : `manual:${r.id}`);
-        if (seen.has(seq)) continue;
-        seen.add(seq);
-        mdevices.push({ seq, label: r.location || r.device?.name || r.system || seq });
+        const dedupeKey = `${seq}::${r.managingPosition?.trim().toLocaleLowerCase("vi") ?? ""}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+        mdevices.push({
+          seq,
+          label: r.location || r.device?.name || r.system || seq,
+          managingPosition: r.managingPosition,
+        });
       }
       const codes = (m.erpCodes?.length ? m.erpCodes : [m.code]).filter((code) => Boolean(code) && activeErpCodes.has(code));
       return {
