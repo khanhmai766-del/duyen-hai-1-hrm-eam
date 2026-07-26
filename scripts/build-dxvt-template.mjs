@@ -77,7 +77,7 @@ const dataRow = tr(
   cell(2, "{{tenVatTu}}") +
   cell(3, "{{donVi}}") +
   cell(4, "{{soLuong}}") +
-  cell(5, "") + cell(6, "") + cell(7, "") +
+  cell(5, "{{khoVTTB}}") + cell(6, "{{tonKho}}") + cell(7, "") +
   cell(8, "{{/items}}")
 );
 

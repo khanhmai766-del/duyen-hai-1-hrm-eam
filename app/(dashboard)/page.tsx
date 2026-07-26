@@ -208,27 +208,29 @@ function SupportLinksCard() {
           <SupportLinkTab active={tab === "personal"} onClick={() => setTab("personal")} label="Cá nhân" />
         </div>
       </CardHeader>
-      {/* Scroll area sized to ~8 entries; the rest scroll. */}
-      <CardContent className="max-h-[296px] space-y-1.5 overflow-y-auto pr-1">
-        {links.length === 0 ? (
-          <p className="px-1 py-8 text-center text-sm text-muted-foreground">Chưa có đường link nào trong nhóm này.</p>
-        ) : (
-          links.map((l, i) => (
-            <a
-              key={l.href + i}
-              href={l.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 transition-colors hover:border-accent hover:bg-accent/5"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent">
-                {i + 1}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium uppercase text-ink">{l.name}</span>
-              <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
-            </a>
-          ))
-        )}
+      <CardContent className="pr-5">
+        {/* 4 hàng × 50px + 3 khoảng cách × 6px; các link còn lại cuộn bên trong. */}
+        <div className="h-[218px] space-y-1.5 overflow-y-auto pr-1">
+          {links.length === 0 ? (
+            <p className="px-1 py-8 text-center text-sm text-muted-foreground">Chưa có đường link nào trong nhóm này.</p>
+          ) : (
+            links.map((l, i) => (
+              <a
+                key={l.href + i}
+                href={l.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex h-[50px] items-center gap-3 rounded-lg border border-border px-3 transition-colors hover:border-accent hover:bg-accent/5"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent">
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium uppercase text-ink">{l.name}</span>
+                <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-accent" />
+              </a>
+            ))
+          )}
+        </div>
       </CardContent>
     </Card>
   );

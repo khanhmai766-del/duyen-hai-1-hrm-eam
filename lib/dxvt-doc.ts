@@ -22,6 +22,8 @@ export interface DxvtItem {
   materialName: string;
   materialUnit: string;
   quantity: number;
+  warehouse?: string | null;
+  erpStock?: number | null;
 }
 
 export interface DxvtData {
@@ -75,6 +77,13 @@ export async function generateDxvtDoc(d: DxvtData): Promise<{ key: string; url: 
       tenVatTu: item.materialName,
       donVi: item.materialUnit,
       soLuong: String(item.quantity),
+      khoVTTB: item.warehouse || "",
+      tonKho:
+        item.erpStock === null || item.erpStock === undefined
+          ? ""
+          : item.erpStock.toLocaleString("vi-VN", {
+              maximumFractionDigits: 3,
+            }),
     })),
     coChuKyQuanDoc: Boolean(d.chuKyQuanDoc),
     chuKyQuanDoc: d.chuKyQuanDoc ? d.chuKyQuanDoc.toString("base64") : "",

@@ -39,6 +39,12 @@ export interface OilStockData {
   warningCount: number;
 }
 
+export interface OilGroupingSummary {
+  totalGroups: number;
+  categoryCount: number;
+  groupsByCategory: Record<GroupingCategory, number>;
+}
+
 export interface OilPendingItem {
   id: string;
   erpCode: string;
@@ -124,6 +130,14 @@ export function useOilStock(category: GroupingCategory) {
   return useQuery({
     queryKey: ["oil-stock", category],
     queryFn: () => apiGet<OilStockData>(`/api/vat-tu/oil-grouping/stock?category=${encodeURIComponent(category)}`),
+  });
+}
+
+export function useOilGroupingSummary() {
+  return useQuery({
+    queryKey: ["oil-grouping-summary"],
+    queryFn: () =>
+      apiGet<OilGroupingSummary>("/api/vat-tu/oil-grouping/summary"),
   });
 }
 

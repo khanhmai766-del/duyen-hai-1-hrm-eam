@@ -26,6 +26,7 @@ import {
   Factory,
   Gauge,
   Layers3,
+  MapPinned,
   PackageCheck,
   ShieldAlert,
   TimerReset,
@@ -41,7 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { useDefects } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
-import { useMaterials } from "@/hooks/useMaterials";
+import { useOilGroupingSummary } from "@/hooks/useOilGrouping";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { useReplacements } from "@/hooks/useReplacements";
 import { usePositions } from "@/hooks/useUsers";
@@ -53,6 +54,7 @@ import { cn, dateRange, formatDate } from "@/lib/utils";
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
 const DUYEN_HAI_3D_MODEL_URL =
   "https://sketchfab.com/models/bdc122add7754c989a976fdd5b01012d/embed";
+const DUYEN_HAI_VIRTUAL_TOUR_URL = "https://nddh.apptgs.vn/";
 
 type DeviceSignalRow = {
   code: string;
@@ -87,9 +89,7 @@ function ReportsPageContent() {
   const defectsQuery = useDefects();
   const historyQuery = useDefectHistory({ from: from || undefined, to: to || undefined });
   const replacementsQuery = useReplacements({});
-  // Reports cần cả lịch sử tiêu hao theo thiết bị (deviceMaterials) — opt-in để
-  // trang Danh mục vật tư (không cần) nhận payload nhẹ hơn.
-  const materialsQuery = useMaterials({ includeUsage: true });
+  const oilGroupingSummaryQuery = useOilGroupingSummary();
   const scopesQuery = usePositionSystemScopes();
   const allPositions = usePositions();
 
@@ -97,7 +97,7 @@ function ReportsPageContent() {
   const defects = defectsQuery.data?.data ?? [];
   const defectHistory = historyQuery.data?.data ?? [];
   const replacements = replacementsQuery.data?.data ?? [];
-  const materials = materialsQuery.data?.data ?? [];
+  const oilGroupingSummary = oilGroupingSummaryQuery.data?.data;
   const positionScopes = scopesQuery.data?.data ?? [];
   const dashboardPositionOptions = React.useMemo(
     () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
@@ -142,7 +142,7 @@ function ReportsPageContent() {
     defectsQuery.isLoading ||
     historyQuery.isLoading ||
     replacementsQuery.isLoading ||
-    materialsQuery.isLoading ||
+    oilGroupingSummaryQuery.isLoading ||
     scopesQuery.isLoading;
 
   React.useEffect(() => {
@@ -166,13 +166,6 @@ function ReportsPageContent() {
     const visibleDefects = defects.filter((defect) => inDateRange(defect.detectedAt ?? defect.createdAt, dateRange));
     const openDefects = defects.filter((defect) => defect.status !== "DA_XU_LY");
     const urgentDefects = openDefects.filter((defect) => defect.severity === "1" || defect.severity === "2");
-    const totalMaterialQuantity = materials.reduce((sum, material) => sum + Number(material.quantity || 0), 0);
-    // Số cương vị (chức vụ quản lý) xuất hiện trong danh mục vật tư — lấy từ thiết bị liên kết.
-    const materialPositions = unique(
-      materials
-        .flatMap((material) => (material.deviceMaterials ?? []).map((dm) => dm.device?.managingPosition))
-        .filter(Boolean) as string[]
-    );
 
     const dueGroups = replacements.reduce(
       (acc, item) => {
@@ -316,8 +309,6 @@ function ReportsPageContent() {
       positions,
       openDefects,
       urgentDefects,
-      totalMaterialQuantity,
-      materialPositionCount: materialPositions.length,
       dueGroups,
       systemRows,
       positionRows,
@@ -332,7 +323,7 @@ function ReportsPageContent() {
       repairYearOptions,
       yearlyTrend,
     };
-  }, [allowedDeviceCodesByPosition, dashboardPositionOptions, dateRange, defectHistory, defects, devices, materials, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
+  }, [allowedDeviceCodesByPosition, dashboardPositionOptions, dateRange, defectHistory, defects, devices, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
 
   return (
     <div className="space-y-5 print:space-y-4">
@@ -340,6 +331,19 @@ function ReportsPageContent() {
         title="DASHBOARD QUẢN LÝ THIẾT BỊ"
         description="Tổng quan tài sản, khiếm khuyết, lịch sửa chữa và cảnh báo vật tư thay thế"
       >
+        <Button
+          asChild
+          className="h-9 rounded-lg bg-[linear-gradient(135deg,#047857_0%,#0891b2_100%)] px-3 text-white shadow-[0_8px_18px_rgba(8,145,178,0.2)] hover:shadow-[0_10px_22px_rgba(8,145,178,0.28)]"
+        >
+          <a
+            href={DUYEN_HAI_VIRTUAL_TOUR_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <MapPinned className="h-4 w-4" />
+            Virtual Tour Công ty Nhiệt Điện Duyên Hải
+          </a>
+        </Button>
         <Button asChild className="h-9 rounded-lg px-3 text-white">
           <a href={DUYEN_HAI_3D_MODEL_URL} target="_blank" rel="noopener noreferrer">
             <Box className="h-4 w-4" />
@@ -405,11 +409,11 @@ function ReportsPageContent() {
         <MetricCard
           icon={PackageCheck}
           label="Số lượng vật tư"
-          value={materials.length}
-          detail={`${dashboard.materialPositionCount} cương vị quản lý`}
+          value={oilGroupingSummary?.totalGroups ?? 0}
+          detail={`${oilGroupingSummary?.categoryCount ?? 5} danh mục vật tư ERP`}
           tone="green"
           loading={isLoading}
-          href="/materials"
+          href="/vat-tu/loai-dau?loai=dau-boi-tron"
         />
       </div>
 

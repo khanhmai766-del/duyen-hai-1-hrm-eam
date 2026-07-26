@@ -203,18 +203,35 @@ async function buildProposalDocument(
     resolveSignatureBuffer(statsUserRow),
     resolveSignatureBuffer(quanDoc),
   ]);
+  const proposalItems = t.items.map((it, index) => ({
+    deviceName: it.deviceNameManual || it.device?.name || "",
+    materialCode: (index === 0 ? itemOverride.materialCode : undefined) || it.erpCode || it.material.code,
+    materialName: (index === 0 ? itemOverride.materialName : undefined) || it.erpName || it.material.name,
+    materialUnit: it.material.unit,
+    quantity: it.quantity,
+  }));
+  const erpMaterials = await prisma.erpMaterial.findMany({
+    where: {
+      code: {
+        in: [...new Set(proposalItems.map((item) => item.materialCode))],
+      },
+    },
+    select: { code: true, warehouse: true, erpStock: true },
+  });
+  const erpMaterialByCode = new Map(
+    erpMaterials.map((material) => [material.code, material])
+  );
+
   return generateDxvtDoc({
     fileBaseName: materialTicketFileBase(t),
     lyDo: t.proposalNote,
     soBBKT: t.bbktNumber,
     quanDocName: quanDoc?.name ?? null,
     tenThongKe: statsUserRow?.name ?? statsUser.name ?? null,
-    items: t.items.map((it, index) => ({
-      deviceName: it.deviceNameManual || it.device?.name || "",
-      materialCode: (index === 0 ? itemOverride.materialCode : undefined) || it.erpCode || it.material.code,
-      materialName: (index === 0 ? itemOverride.materialName : undefined) || it.erpName || it.material.name,
-      materialUnit: it.material.unit,
-      quantity: it.quantity,
+    items: proposalItems.map((item) => ({
+      ...item,
+      warehouse: erpMaterialByCode.get(item.materialCode)?.warehouse ?? "",
+      erpStock: erpMaterialByCode.get(item.materialCode)?.erpStock ?? null,
     })),
     chuKyQuanDoc,
     chuKyThongKe,
