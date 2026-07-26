@@ -72,6 +72,28 @@ const cleanKks = (v: unknown): string | null => {
   return t;
 };
 
+/** Chuẩn hóa các tiền tố KKS sai cho phần 1, phần 2 và phần 3. */
+export function normalizeImportedKks(fullCode: string, kks: string | null): string | null {
+  if (!kks) return null;
+  const electricalPrefix = `${S1_PREFIX}.3`;
+  const belongsToElectrical = fullCode === electricalPrefix || fullCode.startsWith(`${electricalPrefix}.`);
+  if (belongsToElectrical) {
+    const normalizedElectrical = kks.replace(/^X(?=[02])/i, "1");
+    return /^20/i.test(normalizedElectrical) ? `10${normalizedElectrical.slice(2)}` : normalizedElectrical;
+  }
+
+  const normalizedBranches = [`${S1_PREFIX}.1`, `${S1_PREFIX}.2`];
+  const belongsToNormalizedBranch = normalizedBranches.some(
+    (prefix) => fullCode === prefix || fullCode.startsWith(`${prefix}.`)
+  );
+  const turbinePrefix = `${S1_PREFIX}.2`;
+  const belongsToTurbine = fullCode === turbinePrefix || fullCode.startsWith(`${turbinePrefix}.`);
+  const normalizedUnit = belongsToTurbine ? kks.replace(/\bX(?=[12])/gi, "1") : kks;
+  return belongsToNormalizedBranch && /^(?:X0|XO|1O|20|2O)/i.test(normalizedUnit)
+    ? `10${normalizedUnit.slice(2)}`
+    : normalizedUnit;
+}
+
 export function displayCode(fullCode: string): string {
   return fullCode.replace(/^DH1\.S1\.?/, "") || fullCode;
 }
@@ -109,7 +131,7 @@ export function parseDanhmucRows(raw: Record<string, unknown>[]): RawImportRow[]
       assetParentId: kParent ? clean(r[kParent]) : "",
       fullCode: clean(r[kCode]),
       name: kName ? clean(r[kName]) : "",
-      kks: kKks ? cleanKks(r[kKks]) : null,
+      kks: kKks ? normalizeImportedKks(clean(r[kCode]), cleanKks(r[kKks])) : null,
       drawing: kDraw ? cleanNull(r[kDraw]) : null,
       dept: kDept ? clean(r[kDept]) : "",
     }))
