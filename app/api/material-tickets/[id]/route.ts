@@ -465,8 +465,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const manualDeviceId = replacementDeviceSeq.startsWith("manual:") ? replacementDeviceSeq.slice("manual:".length) : "";
         const replacementPoints = await prisma.materialReplacement.findMany({
           where: manualDeviceId
-            ? { id: manualDeviceId, materialId, isActive: false }
-            : { materialId, deviceSeq: replacementDeviceSeq, isActive: false },
+            ? { id: manualDeviceId, materialId }
+            : { materialId, deviceSeq: replacementDeviceSeq },
           select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
         });
         const replacementPoint = replacementPoints.find(
@@ -646,11 +646,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (materialCategoryMap.get(it.materialId) !== expectedCategory) return "Vật tư không thuộc loại vật tư của phiếu";
         if (!materialCodeMap.get(it.materialId)?.includes(it.erpCode || "")) return "Mã vật tư không thuộc tên vật tư đã chọn";
       }
-      // Mỗi cặp (vật tư, thiết bị) phải là điểm đã KHAI BÁO trong Danh mục vật tư
-      // (dropdown thiết bị lấy từ chính danh sách này).
+      // Mỗi cặp (vật tư, thiết bị) phải là điểm đã khai báo trong Danh mục vật tư.
+      // Không lọc isActive/chu kỳ: đề xuất bổ sung do hao hụt hoặc chất lượng dầu
+      // không đạt vẫn được phép chọn điểm không theo dõi lịch.
       const matIds = [...new Set(items.map((i) => i.materialId))];
       const decls = await prisma.materialReplacement.findMany({
-        where: { materialId: { in: matIds }, isActive: false, deviceSeq: { not: null } },
+        where: { materialId: { in: matIds } },
         select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
       });
       const assignedDecls = decls.filter(

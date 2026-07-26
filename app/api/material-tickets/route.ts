@@ -72,7 +72,6 @@ export async function GET(req: NextRequest) {
     const replacementLabels = itemPairs.length
       ? await prisma.materialReplacement.findMany({
           where: {
-            isActive: false,
             materialId: { in: [...new Set(itemPairs.map((item) => item.materialId))] },
             deviceSeq: { in: [...new Set(itemPairs.map((item) => item.deviceSeq))] },
           },
@@ -203,8 +202,8 @@ export async function POST(req: NextRequest) {
       : "";
     const replacementPoints = await prisma.materialReplacement.findMany({
       where: manualDeviceId
-        ? { id: manualDeviceId, materialId: selectedMaterial.id, isActive: false }
-        : { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq, isActive: false },
+        ? { id: manualDeviceId, materialId: selectedMaterial.id }
+        : { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq },
       select: { deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
     });
     const replacementPoint = replacementPoints.find(

@@ -28,15 +28,17 @@ export async function GET() {
           take: 2000,
         });
 
-    // Mỗi vật tư kèm danh sách THIẾT BỊ đã khai báo (điểm dùng trong Danh mục vật tư)
-    // để dropdown thiết bị ở bước Đề xuất lọc theo đúng vật tư được chọn.
+    // Danh sách điểm thay thế dùng để lập Đề xuất không phụ thuộc lịch theo dõi:
+    // điểm intervalMonths=0 / isActive=false vẫn phải chọn được khi dầu hao hụt
+    // hoặc kết quả phân tích không đạt. Trạng thái theo dõi chỉ dùng cho cảnh báo định kỳ.
     const materialsRaw = await prisma.material.findMany({
       select: {
         id: true, code: true, erpCodes: true, name: true, unit: true, quantity: true, category: true, machine: true,
         replacements: {
-          where: { isActive: false, deviceSeq: { not: null } },
           select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
-          orderBy: { createdAt: "asc" },
+          // Bản ghi khai báo (không theo dõi) đứng trước bản ghi lịch trùng điểm,
+          // để dropdown giữ định danh ổn định khi khử trùng.
+          orderBy: [{ isActive: "asc" }, { createdAt: "asc" }],
         },
       },
       orderBy: { name: "asc" },
@@ -62,7 +64,13 @@ export async function GET() {
         // Điểm có tên nhập tay cần một giá trị riêng, kể cả khi cùng trỏ tới
         // một nút cây. Nếu dùng deviceSeq, dropdown sẽ gộp/mất các thiết bị này.
         const seq = r.location ? `manual:${r.id}` : (r.device ? r.deviceSeq! : `manual:${r.id}`);
-        const dedupeKey = `${seq}::${r.managingPosition?.trim().toLocaleLowerCase("vi") ?? ""}`;
+        const positionKey = r.managingPosition?.trim().toLocaleLowerCase("vi") ?? "";
+        const pointKey = r.location
+          ? `location:${r.location.trim().toLocaleLowerCase("vi")}::${r.deviceSeq ?? r.system ?? ""}`
+          : r.deviceSeq
+            ? `device:${r.deviceSeq}`
+            : `system:${r.system?.trim().toLocaleLowerCase("vi") ?? r.id}`;
+        const dedupeKey = `${pointKey}::${positionKey}`;
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
         mdevices.push({

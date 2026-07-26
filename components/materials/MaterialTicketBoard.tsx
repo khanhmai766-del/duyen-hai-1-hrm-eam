@@ -610,7 +610,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               <>
                 <div className="bbkt-grid"><div className="field">
                     <label>Ghi chú lý do *</label>
-                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất…" />
+                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hao hụt / chất lượng dầu không đạt / thay định kỳ…" />
                   </div><div className="field qty-field">
                     <label>Số lượng đề xuất *</label>
                     <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
@@ -621,6 +621,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
                 </select>
                 {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
+                <p className="hint">Thiết bị không theo dõi chu kỳ vẫn được phép tạo đề xuất bổ sung do hao hụt hoặc chất lượng dầu phân tích không đạt.</p>
                 <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số biên bản kiểm tra sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
               </>
             ) : (
@@ -917,7 +918,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
             <div className="edit-field-grid">
               <div className="field">
                 <label>Lý do *</label>
-                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nhập lý do thay thế vật tư" />
+                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hao hụt / chất lượng dầu không đạt / thay định kỳ…" />
               </div>
               <div className="field">
                 <label>Số biên bản kiểm tra (nếu có)</label>
