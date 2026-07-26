@@ -4,6 +4,7 @@ import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
+import { recomputeChildCount } from "@/lib/equipment-child-count";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +57,7 @@ export async function DELETE(req: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       const del = await tx.equipmentNode.deleteMany({ where: { seq: { in: targetSeqs } } });
-      for (const parentSeq of parentSeqs) {
-        const childCount = await tx.equipmentNode.count({ where: { parentSeq } });
-        await tx.equipmentNode.updateMany({ where: { seq: parentSeq }, data: { childCount } });
-      }
+      await recomputeChildCount(tx, parentSeqs);
       return del;
     });
 

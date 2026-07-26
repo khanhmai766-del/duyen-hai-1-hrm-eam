@@ -13,6 +13,7 @@ import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
+import { recomputeChildCount } from "@/lib/equipment-child-count";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
@@ -274,6 +275,10 @@ export async function POST(req: NextRequest) {
         deviceSynced: true,
       },
     });
+
+    // Cập nhật lại childCount của thư mục cha để cây thiết bị (lazy) nhận ra nó là thư mục,
+    // hiện mũi tên bung + badge số con thay vì vẽ nhầm thành thiết bị lá.
+    await recomputeChildCount(prisma, [node.parentSeq]);
 
     const nodes = await getNormalizedEquipmentNodes(prisma);
     const index = getEquipmentTreeIndexFor(nodes);

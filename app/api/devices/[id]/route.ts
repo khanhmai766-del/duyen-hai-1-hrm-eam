@@ -9,6 +9,7 @@ import { assertSeqEditable, assertSeqViewable, managingPositionsForEquipmentSeq 
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
+import { recomputeChildCount } from "@/lib/equipment-child-count";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
@@ -284,6 +285,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const childCount = await prisma.equipmentNode.count({ where: { parentSeq: seq } });
     if (childCount > 0) return fail("Không thể xóa thư mục/hệ thống đang có thiết bị con", 400);
     await prisma.equipmentNode.delete({ where: { seq } });
+    // Cập nhật lại childCount của thư mục cha (nếu xóa hết con, cha sẽ tự về dạng lá).
+    await recomputeChildCount(prisma, [node.parentSeq]);
     await audit(user.id, "DELETE_EQUIPMENT_NODE", "EquipmentNode", node.id, node.seq);
     invalidateEquipmentNodeCache();
     invalidateDeviceListCache();
