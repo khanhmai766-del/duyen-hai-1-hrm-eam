@@ -6,6 +6,7 @@ import type { Defect } from "@prisma/client";
 
 export interface DefectItem extends Defect {
   createdBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
+  node: { seq: string; name: string } | null;
   fireSafetyImpact: string | null;
   environmentSafetyImpact: string | null;
   relatedDevices: Array<{
@@ -14,11 +15,59 @@ export interface DefectItem extends Defect {
   }>;
 }
 
-export function useDefects() {
-  return useQuery({
-    queryKey: ["defects"],
-    queryFn: () => apiGet<DefectItem[]>("/api/defects"),
+export interface DefectListParams {
+  page?: number;
+  limit?: number;
+  unit?: string;
+  requestType?: string;
+  position?: string;
+  mapping?: string;
+  status?: string;
+  severity?: string;
+  q?: string;
+  deviceSeq?: string;
+  export?: number;
+}
+
+export interface DefectListMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  scopeTotal: number;
+  kpi: {
+    chuaXuLy: number;
+    coPct: number;
+    choVatTu: number;
+    tonDong: number;
+    daXuLy: number;
+  };
+}
+
+function defectListUrl(params: DefectListParams) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "" && value !== "ALL") {
+      query.set(key, String(value));
+    }
   });
+  const suffix = query.toString();
+  return `/api/defects${suffix ? `?${suffix}` : ""}`;
+}
+
+export function useDefects(params: DefectListParams = {}) {
+  return useQuery({
+    queryKey: ["defects", params],
+    queryFn: () => apiGet<DefectItem[]>(defectListUrl(params)) as Promise<{ data: DefectItem[]; meta: DefectListMeta }>,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previous) => previous,
+  });
+}
+
+/** Chỉ tải toàn bộ dữ liệu khi người dùng chủ động bấm xuất báo cáo. */
+export async function getDefectsForExport(params: Omit<DefectListParams, "page" | "limit">) {
+  return apiGet<DefectItem[]>(defectListUrl({ ...params, page: 1, limit: 20_000, export: 1 }));
 }
 
 export type DefectInput = Record<string, unknown>;

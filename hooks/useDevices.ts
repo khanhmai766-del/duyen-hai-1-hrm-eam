@@ -106,6 +106,8 @@ export function useDevices(params: { q?: string; system?: string; systemSeq?: st
     queryKey: ["devices", queryParams],
     queryFn: () => apiGet<DeviceListItem[]>(`/api/devices?${qs.toString()}`) as Promise<{ data: DeviceListItem[]; meta: DeviceListMeta }>,
     enabled,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 

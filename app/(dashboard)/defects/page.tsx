@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -19,8 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DefectForm } from "@/components/defects/defect-form";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
-import { useDefects, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
-import { useDevices } from "@/hooks/useDevices";
+import { getDefectsForExport, useDefects, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
@@ -33,52 +31,23 @@ import {
 } from "@/lib/constants";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
-import { normalizeText } from "@/lib/nav";
-import { announcementPositionLabel } from "@/lib/positions";
 
 const PAGE_SIZES = [10, 25, 50, 100];
+const OTHER_REQUEST_TYPES = DEFECT_REQUEST_TYPES.filter((type) => type !== "Cơ" && type !== "Điện");
 
 export default function DefectsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.toUpperCase();
-  const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
   const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
 
-  const { data, isLoading } = useDefects();
   const del = useDeleteDefect();
   const remind = useRemindDefect();
   const sync = useSyncDefects();
   const canRunSync = rbac.can("defect-manage", ["full"]);
-  // Ưu tiên: kết quả sửa chữa khác tình trạng VH1 → chưa ánh xạ → đã ánh xạ;
-  // trong cùng một nhóm, ngày phát hiện gần nhất đứng trước.
-  const allDefects = React.useMemo(
-    () =>
-      [...(data?.data ?? [])].sort((a, b) => {
-        const mismatchPriorityA = a.sourceStatusMismatch ? 0 : 1;
-        const mismatchPriorityB = b.sourceStatusMismatch ? 0 : 1;
-        if (mismatchPriorityA !== mismatchPriorityB) return mismatchPriorityA - mismatchPriorityB;
-
-        const mappingPriorityA = a.sourceType === "GOOGLE_SHEETS" && !a.deviceSeq ? 0 : 1;
-        const mappingPriorityB = b.sourceType === "GOOGLE_SHEETS" && !b.deviceSeq ? 0 : 1;
-        if (mappingPriorityA !== mappingPriorityB) return mappingPriorityA - mappingPriorityB;
-
-        const ta = a.detectedAt ? new Date(a.detectedAt).getTime() : -Infinity;
-        const tb = b.detectedAt ? new Date(b.detectedAt).getTime() : -Infinity;
-        return tb - ta;
-      }),
-    [data]
-  );
-
-  // Tên thiết bị theo mã (để file xuất ghi rõ tên thay vì mã).
-  const { data: devicesData } = useDevices({});
-  const deviceNameByCode = React.useMemo(
-    () => new Map((devicesData?.data ?? []).map((dv) => [dv.code, dv.name])),
-    [devicesData]
-  );
 
   // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Kỹ thuật viên / Thống kê khỏi bộ lọc.
@@ -89,99 +58,53 @@ export default function DefectsPage() {
   const [unitFilter, setUnitFilter] = React.useState<"S1" | "S2" | "COMMON">(
     unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
   );
-  const [requestFilter, setRequestFilter] = React.useState("ALL");
+  const [requestFilter, setRequestFilter] = React.useState("Cơ");
   const [positionFilter, setPositionFilter] = React.useState("ALL");
-  const [mappingFilter, setMappingFilter] = React.useState("ALL");
-  const defects = allDefects.filter(
-    (d) =>
-      (!deviceSeqFilter ||
-        d.deviceSeq === deviceSeqFilter ||
-        (!d.deviceSeq && d.device === deviceSeqFilter) ||
-        d.relatedDevices.some((item) => item.deviceSeq === deviceSeqFilter)) &&
-      d.unit === unitFilter &&
-      (requestFilter === "ALL" || d.requestType === requestFilter) &&
-      (
-        positionFilter === "ALL" ||
-        normalizeText(announcementPositionLabel(d.system)) === normalizeText(announcementPositionLabel(positionFilter))
-      ) &&
-      (
-        mappingFilter === "ALL" ||
-        (
-          d.sourceType === "GOOGLE_SHEETS" &&
-          (mappingFilter === "MAPPED" ? !!d.deviceSeq : !d.deviceSeq)
-        )
-      )
-  );
-  // Lọc theo tình trạng (card KPI hoặc bộ lọc trên cột) và mức độ (bộ lọc trên cột).
   const [statusFilter, setStatusFilter] = React.useState("ALL");
   const [severityFilter, setSeverityFilter] = React.useState("ALL");
-  const displayedDefects = defects.filter(
-    (d) =>
-      (
-        statusFilter === "ALL" ||
-        (
-          statusFilter === "SOURCE_MISSING"
-            ? d.sourceType === "GOOGLE_SHEETS" && d.syncState === "MISSING"
-            : statusFilter === "TON_DONG"
-            ? d.postRepairAwaitingMaterial
-            : statusFilter === "DA_XU_LY"
-              ? d.status === "DA_XU_LY" && !d.postRepairAwaitingMaterial
-              : d.status === statusFilter
-        )
-      ) &&
-      (severityFilter === "ALL" || d.severity === severityFilter)
-  );
-
-  // Tìm nội dung trong bảng (không ảnh hưởng KPI) — so khớp không dấu.
   const [tableSearch, setTableSearch] = React.useState("");
   const [pageSize, setPageSize] = React.useState(25);
   const [page, setPage] = React.useState(1);
-  const searchedDefects = React.useMemo(() => {
-    const q = normalizeText(tableSearch.trim());
-    if (!q) return displayedDefects;
-    return displayedDefects.filter((d) =>
-      normalizeText([
-        d.requestNumber,
-        d.requestType,
-        d.unit,
-        d.system,
-        d.device,
-        ...d.relatedDevices.flatMap((item) => [item.deviceSeq, item.device.name]),
-        d.content,
-        d.repairResultRaw,
-        d.note,
-        d.createdBy?.name,
-      ].filter(Boolean).join(" ")).includes(q)
-    );
-  }, [displayedDefects, tableSearch]);
-
-  // Phân trang bảng.
-  const totalPages = Math.max(1, Math.ceil(searchedDefects.length / pageSize));
-  const pagedDefects = searchedDefects.slice((page - 1) * pageSize, page * pageSize);
-  const firstShown = searchedDefects.length ? (page - 1) * pageSize + 1 : 0;
-  const lastShown = Math.min(page * pageSize, searchedDefects.length);
+  const deferredSearch = React.useDeferredValue(tableSearch.trim());
+  const listParams = React.useMemo(() => ({
+    page,
+    limit: pageSize,
+    unit: unitFilter,
+    requestType: requestFilter,
+    position: positionFilter,
+    status: statusFilter,
+    severity: severityFilter,
+    q: deferredSearch,
+    deviceSeq: deviceSeqFilter,
+  }), [page, pageSize, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, deferredSearch, deviceSeqFilter]);
+  const { data, isLoading, isFetching } = useDefects(listParams);
+  const pagedDefects = data?.data ?? [];
+  const total = data?.meta?.total ?? 0;
+  const totalPages = data?.meta?.totalPages ?? 1;
+  const scopeTotal = data?.meta?.scopeTotal ?? 0;
+  const firstShown = total ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, total);
+  const deviceDisplayName = pagedDefects.find((item) => item.deviceSeq === deviceSeqFilter)?.node?.name;
   React.useEffect(() => {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "ALL" || positionFilter !== "ALL" || mappingFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace("/defects", { scroll: false });
     setUnitFilter("S1");
-    setRequestFilter("ALL");
+    setRequestFilter("Cơ");
     setPositionFilter("ALL");
-    setMappingFilter("ALL");
     setStatusFilter("ALL");
     setSeverityFilter("ALL");
     setTableSearch("");
   }
 
-  // KPI đếm theo bộ lọc (tổ máy/yêu cầu/cương vị), KHÔNG theo statusFilter.
-  const chuaXuLy = defects.filter((d) => d.status === "CHUA_XU_LY").length;
-  const coPct = defects.filter((d) => d.status === "CO_PCT").length;
-  const choVatTu = defects.filter((d) => d.status === "CHO_VAT_TU").length;
-  const tonDong = defects.filter((d) => d.postRepairAwaitingMaterial).length;
-  const daXuLy = defects.filter((d) => d.status === "DA_XU_LY" && !d.postRepairAwaitingMaterial).length;
+  const chuaXuLy = data?.meta?.kpi?.chuaXuLy ?? 0;
+  const coPct = data?.meta?.kpi?.coPct ?? 0;
+  const choVatTu = data?.meta?.kpi?.choVatTu ?? 0;
+  const tonDong = data?.meta?.kpi?.tonDong ?? 0;
+  const daXuLy = data?.meta?.kpi?.daXuLy ?? 0;
   function toggleStatus(s: string) {
     setStatusFilter((cur) => (cur === s ? "ALL" : s));
   }
@@ -198,31 +121,24 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, mappingFilter, statusFilter, severityFilter, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
       <PageHeader title="KHIẾM KHUYẾT THIẾT BỊ" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
         <ExportButton
-          rows={searchedDefects.map((d) => ({
-            unit: d.unit,
-            device: deviceNameByCode.get(d.device ?? "") ?? d.device ?? "",
-            relatedDevices: d.relatedDevices.map((item) => item.device.name || item.deviceSeq).join("; "),
-            cuongVi: d.system ?? "",
-            severity: d.severity ? DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY] : "",
-            requestType: d.requestType ?? "",
-            requestNumber: d.requestNumber ?? "",
-            content: d.content ?? "",
-            status: d.syncState === "MISSING"
-              ? "Không còn trên Google Sheet"
-              : DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
-            detectedAt: formatDate(d.detectedAt),
-            reminderCount: d.reminderCount,
-            lastRemindedAt: formatDate(d.lastRemindedAt),
-            repairResult: d.repairResultRaw ?? "",
-            statusMismatch: d.sourceStatusMismatch ? "Khác tình trạng VH1" : "",
-            note: d.note ?? "",
-          }))}
+          getRows={async () => {
+            const result = await getDefectsForExport({
+              unit: unitFilter,
+              requestType: requestFilter,
+              position: positionFilter,
+              status: statusFilter,
+              severity: severityFilter,
+              q: tableSearch.trim(),
+              deviceSeq: deviceSeqFilter,
+            });
+            return result.data.map(defectExportRow);
+          }}
           widths={{ unit: 8, cuongVi: 16, requestNumber: 12, status: 14 }}
           filename="khiem-khuyet-thiet-bi"
         />
@@ -255,7 +171,7 @@ export default function DefectsPage() {
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Đang lọc theo thiết bị</p>
             <p className="truncate font-semibold text-ink">
-              {deviceNameByCode.get(deviceSeqFilter) ?? "Thiết bị"}
+              {deviceDisplayName ?? "Thiết bị"}
               <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">{deviceSeqFilter}</span>
             </p>
           </div>
@@ -270,8 +186,8 @@ export default function DefectsPage() {
         </div>
       )}
 
-      {!isLoading && allDefects.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      {!isLoading && scopeTotal > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 xl:flex-nowrap">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
             <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
@@ -293,13 +209,42 @@ export default function DefectsPage() {
 
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Yêu cầu:</span>
-            <Select value={requestFilter} onValueChange={setRequestFilter}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
+              {(["Cơ", "Điện"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setRequestFilter(type)}
+                  className={cn(
+                    "h-8 rounded-md px-4 text-sm font-medium transition-colors",
+                    requestFilter === type ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
+                  )}
+                >
+                  {type}
+                </button>
+              ))}
+              <Select
+                value={OTHER_REQUEST_TYPES.includes(requestFilter as (typeof OTHER_REQUEST_TYPES)[number]) ? requestFilter : ""}
+                onValueChange={setRequestFilter}
+              >
+                <SelectTrigger
+                  className={cn(
+                    "h-8 w-auto min-w-[92px] rounded-md border-0 px-4 shadow-none focus:ring-0",
+                    OTHER_REQUEST_TYPES.includes(requestFilter as (typeof OTHER_REQUEST_TYPES)[number])
+                      ? "bg-navy text-white"
+                      : "text-muted-foreground hover:text-ink"
+                  )}
+                  aria-label="Chọn loại yêu cầu khác"
+                >
+                  <SelectValue placeholder="Khác" />
+                </SelectTrigger>
+                <SelectContent>
+                  {OTHER_REQUEST_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -313,25 +258,13 @@ export default function DefectsPage() {
             </Select>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Ánh xạ:</span>
-            <Select value={mappingFilter} onValueChange={setMappingFilter}>
-              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                <SelectItem value="UNMAPPED">Chưa ánh xạ</SelectItem>
-                <SelectItem value="MAPPED">Đã ánh xạ</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {isFiltered && (
             <button onClick={resetFilters} className="text-sm font-medium text-accent hover:underline">
               Xoá bộ lọc
             </button>
           )}
 
-          <div className="relative ml-auto w-full sm:w-72">
+          <div className="relative ml-auto w-full shrink-0 sm:w-64 xl:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={tableSearch}
@@ -353,8 +286,8 @@ export default function DefectsPage() {
 
       {isLoading ? (
         <TableSkeleton rows={6} />
-      ) : searchedDefects.length === 0 ? (
-        allDefects.length === 0 ? (
+      ) : total === 0 ? (
+        scopeTotal === 0 ? (
           <EmptyState
             icon={ShieldAlert}
             title="Chưa có khiếm khuyết"
@@ -458,7 +391,9 @@ export default function DefectsPage() {
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
-                        <div className="truncate" title={d.content ?? undefined}>{d.content || "—"}</div>
+                        <div className="whitespace-pre-wrap break-words text-left leading-6">
+                          {d.content || "—"}
+                        </div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-center">
                         {d.severity ? (
@@ -545,8 +480,9 @@ export default function DefectsPage() {
           </div>
           <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div>
-              Hiển thị {firstShown}-{lastShown} trong tổng số {searchedDefects.length} bản ghi
+              Hiển thị {firstShown}-{lastShown} trong tổng số {total} bản ghi
               {isFiltered && <span> sau lọc</span>}
+              {isFetching && <span className="ml-2 text-blue-600">· Đang cập nhật…</span>}
             </div>
             <div className="flex flex-wrap items-center gap-2 md:ml-auto">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -646,6 +582,28 @@ export default function DefectsPage() {
       />
     </div>
   );
+}
+
+function defectExportRow(d: DefectItem) {
+  return {
+    unit: d.unit,
+    device: d.node?.name ?? d.device ?? "",
+    relatedDevices: d.relatedDevices.map((item) => item.device.name || item.deviceSeq).join("; "),
+    cuongVi: d.system ?? "",
+    severity: d.severity ? DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY] : "",
+    requestType: d.requestType ?? "",
+    requestNumber: d.requestNumber ?? "",
+    content: d.content ?? "",
+    status: d.syncState === "MISSING"
+      ? "Không còn trên Google Sheet"
+      : DEFECT_STATUS[d.status as keyof typeof DEFECT_STATUS]?.label ?? d.status,
+    detectedAt: formatDate(d.detectedAt),
+    reminderCount: d.reminderCount,
+    lastRemindedAt: formatDate(d.lastRemindedAt),
+    repairResult: d.repairResultRaw ?? "",
+    statusMismatch: d.sourceStatusMismatch ? "Khác tình trạng VH1" : "",
+    note: d.note ?? "",
+  };
 }
 
 function PageButton({

@@ -1,0 +1,30 @@
+{
+  "source": "CO",
+  "batchNumber": 1,
+  "records": [
+    {
+      "sourceSpreadsheetId": "spreadsheet-id",
+      "sourceSheet": "CƠ_DH1",
+      "sourceTab": "DH1",
+      "sourceRow": 9,
+      "requestType": "Cơ",
+      "stt": "155",
+      "unit": "S1",
+      "deviceRaw": "BƠM DẦU BÔI TRƠN A",
+      "positionRaw": "Máy nghiền S1",
+      "content": "Nội dung khiếm khuyết mẫu",
+      "detectedAtRaw": "23/07/2023",
+      "shiftLeaderRaw": "Nguyễn Văn A",
+      "reminderRaw": "Nhắc lại lần 2 ngày 24/07/2023",
+      "repeatedRepairRaw": "",
+      "fireSafetyImpact": "Không",
+      "environmentSafetyImpact": "Không",
+      "severityRaw": "3",
+      "conditionRaw": "B",
+      "sourceStatusRaw": "Đã xử lý",
+      "repairResultRaw": "Đã thay phớt và chạy thử ổn định",
+      "completedAtRaw": "25/07/2023",
+      "noteRaw": ""
+    }
+  ]
+}

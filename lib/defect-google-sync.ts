@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 
-type SourceRecord = {
+export type DefectSourceRecord = {
   sourceSpreadsheetId: string;
   sourceSheet: string;
   sourceTab?: string;
@@ -28,6 +28,23 @@ type SourceRecord = {
   noteRaw: string;
 };
 
+export type PreparedDefectSourceRecord = {
+  record: DefectSourceRecord;
+  sourceKey: string;
+  detectedAt: Date;
+  reminder: { count: number; lastDate: Date | null };
+  hash: string;
+  requestNumber: string;
+};
+
+export type DefectUpsertStats = {
+  readCount: number;
+  createdCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  confirmedSkippedCount: number;
+};
+
 type SourceResponse = {
   success: boolean;
   schemaVersion?: number;
@@ -38,7 +55,7 @@ type SourceResponse = {
   hasMore?: boolean;
   rawRowCount?: number;
   totalDataRows?: number;
-  records?: SourceRecord[];
+  records?: DefectSourceRecord[];
   errorCode?: string;
   error?: string;
 };
@@ -122,14 +139,14 @@ function reminderOf(value: unknown) {
   return { count, lastDate };
 }
 
-function sourceHash(record: SourceRecord) {
+function sourceHash(record: DefectSourceRecord) {
   // Số dòng có thể thay đổi khi người dùng chèn/xóa dòng trên Sheet, không được
   // xem là thay đổi nghiệp vụ.
   const { sourceRow: _sourceRow, ...stableRecord } = record;
   return createHash("sha256").update(JSON.stringify(stableRecord)).digest("hex");
 }
 
-function sourceKeyOf(record: SourceRecord, detectedAt: Date | null) {
+function sourceKeyOf(record: DefectSourceRecord, detectedAt: Date | null) {
   const stt = text(record.stt).replace(/\.0$/, "");
   if (!stt || !detectedAt) return null;
   return [
@@ -200,12 +217,12 @@ async function postSourcePage(
   throw lastError;
 }
 
-async function fetchSource(): Promise<SourceRecord[]> {
+async function fetchSource(): Promise<DefectSourceRecord[]> {
   const endpoint = process.env.DEFECT_SYNC_URL?.trim();
   const token = process.env.DEFECT_SYNC_TOKEN?.trim();
   if (!endpoint || !token) throw new Error("Chưa cấu hình DEFECT_SYNC_URL hoặc DEFECT_SYNC_TOKEN");
 
-  const records: SourceRecord[] = [];
+  const records: DefectSourceRecord[] = [];
   for (const source of SOURCE_CODES) {
     let offset = 0;
     let finished = false;
@@ -227,6 +244,175 @@ async function fetchSource(): Promise<SourceRecord[]> {
     }
   }
   return records;
+}
+
+export function prepareDefectSourceRecords(records: DefectSourceRecord[]) {
+  const preparedRows = records.flatMap((record) => {
+    const detectedAt = parseSourceDate(record.detectedAtRaw);
+    const sourceKey = sourceKeyOf(record, detectedAt);
+    if (!sourceKey || !text(record.content)) return [];
+    const reminder = reminderOf(record.reminderRaw);
+    const stt = text(record.stt).replace(/\.0$/, "");
+    return [{
+      record,
+      sourceKey,
+      detectedAt: detectedAt!,
+      reminder,
+      hash: sourceHash(record),
+      requestNumber: `${stt}/${detectedAt!.getUTCFullYear()}`,
+    } satisfies PreparedDefectSourceRecord];
+  });
+
+  const preparedByKey = new Map<string, PreparedDefectSourceRecord>();
+  const conflictingKeys: string[] = [];
+  for (const item of preparedRows) {
+    const previous = preparedByKey.get(item.sourceKey);
+    if (!previous) {
+      preparedByKey.set(item.sourceKey, item);
+    } else if (previous.hash !== item.hash) {
+      conflictingKeys.push(item.sourceKey);
+    }
+  }
+  if (conflictingKeys.length > 0) {
+    throw new Error(`Nguồn có cùng STT/ngày/tổ máy nhưng nội dung khác nhau: ${conflictingKeys.slice(0, 5).join(", ")}`);
+  }
+  return Array.from(preparedByKey.values());
+}
+
+export async function upsertPreparedDefectRecords(params: {
+  prepared: PreparedDefectSourceRecord[];
+  creator: { id: string };
+  syncedAt?: Date;
+}): Promise<DefectUpsertStats> {
+  const { prepared, creator } = params;
+  const now = params.syncedAt ?? new Date();
+  const keys = prepared.map((item) => item.sourceKey);
+  const existingRows = keys.length > 0
+    ? await prisma.defect.findMany({
+        where: { sourceKey: { in: keys } },
+        select: {
+          id: true,
+          sourceKey: true,
+          sourceHash: true,
+          syncState: true,
+          postRepairAwaitingMaterial: true,
+          reminderCount: true,
+          lastRemindedAt: true,
+        },
+      })
+    : [];
+  const existingByKey = new Map(existingRows.filter((row) => row.sourceKey).map((row) => [row.sourceKey!, row]));
+  const creates: Prisma.DefectCreateManyInput[] = [];
+  const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
+  const unchangedIds: string[] = [];
+  let unchangedCount = 0;
+  let confirmedSkippedCount = 0;
+
+  for (const item of prepared) {
+    const existing = existingByKey.get(item.sourceKey);
+    const sourceStatus = statusOf(item.record.sourceStatusRaw);
+    const repairStatus = explicitStatusOf(item.record.repairResultRaw);
+    const sourceData = {
+      unit: unitOf(item.record.unit),
+      system: text(item.record.positionRaw).replace(/^\d+\.\s*/, "") || null,
+      severity: ["1", "2", "3", "4"].includes(text(item.record.severityRaw)) ? text(item.record.severityRaw) : null,
+      condition: ["A", "B"].includes(text(item.record.conditionRaw).toUpperCase()) ? text(item.record.conditionRaw).toUpperCase() : null,
+      fireSafetyImpact: text(item.record.fireSafetyImpact) || null,
+      environmentSafetyImpact: text(item.record.environmentSafetyImpact) || null,
+      requestType: text(item.record.requestType) || null,
+      requestNumber: item.requestNumber,
+      content: text(item.record.content),
+      status: sourceStatus,
+      detectedAt: item.detectedAt,
+      shiftLeaderName: text(item.record.shiftLeaderRaw) || null,
+      note: text(item.record.noteRaw) || null,
+      reminderRaw: text(item.record.reminderRaw) || null,
+      repeatedRepairRaw: text(item.record.repeatedRepairRaw) || null,
+      sourceSpreadsheetId: text(item.record.sourceSpreadsheetId),
+      sourceSheetName: text(item.record.sourceSheet),
+      sourceRow: Number(item.record.sourceRow) || null,
+      sourceDeviceRaw: text(item.record.deviceRaw) || null,
+      sourcePositionRaw: text(item.record.positionRaw) || null,
+      sourceStatusRaw: text(item.record.sourceStatusRaw) || null,
+      repairResultRaw: text(item.record.repairResultRaw) || null,
+      sourceStatusMismatch: repairStatus !== null && repairStatus !== sourceStatus,
+      sourceCompletedAt: parseSourceDate(item.record.completedAtRaw),
+      sourceHash: item.hash,
+      sourceSyncedAt: now,
+      sourceLastSeenAt: now,
+    };
+
+    if (!existing) {
+      creates.push({
+        ...sourceData,
+        sourceType: "GOOGLE_SHEETS",
+        sourceKey: item.sourceKey,
+        reminderCount: item.reminder.count,
+        lastRemindedAt: item.reminder.lastDate,
+        createdById: creator.id,
+      });
+      continue;
+    }
+
+    if (existing.syncState === "CONFIRMED") {
+      confirmedSkippedCount++;
+      updates.push({
+        id: existing.id,
+        data: {
+          sourceLastSeenAt: now,
+          sourceSyncedAt: now,
+          sourceChangedAfterConfirm: existing.sourceHash !== item.hash,
+        },
+      });
+      continue;
+    }
+
+    if (existing.sourceHash === item.hash && existing.syncState === "ACTIVE") {
+      unchangedCount++;
+      unchangedIds.push(existing.id);
+      continue;
+    }
+
+    updates.push({
+      id: existing.id,
+      data: {
+        ...sourceData,
+        syncState: "ACTIVE",
+        postRepairAwaitingMaterial:
+          sourceData.status === "DA_XU_LY" ? existing.postRepairAwaitingMaterial : false,
+        reminderCount: Math.max(existing.reminderCount, item.reminder.count),
+        lastRemindedAt:
+          !existing.lastRemindedAt || (item.reminder.lastDate && item.reminder.lastDate > existing.lastRemindedAt)
+            ? item.reminder.lastDate
+            : existing.lastRemindedAt,
+      },
+    });
+  }
+
+  for (let index = 0; index < creates.length; index += CHUNK) {
+    await prisma.defect.createMany({ data: creates.slice(index, index + CHUNK) });
+  }
+  for (let index = 0; index < updates.length; index += CHUNK) {
+    await prisma.$transaction(
+      updates.slice(index, index + CHUNK).map((item) =>
+        prisma.defect.update({ where: { id: item.id }, data: item.data })
+      )
+    );
+  }
+  for (let index = 0; index < unchangedIds.length; index += 1000) {
+    await prisma.defect.updateMany({
+      where: { id: { in: unchangedIds.slice(index, index + 1000) } },
+      data: { sourceLastSeenAt: now, sourceSyncedAt: now },
+    });
+  }
+
+  return {
+    readCount: prepared.length,
+    createdCount: creates.length,
+    updatedCount: updates.length - confirmedSkippedCount,
+    unchangedCount,
+    confirmedSkippedCount,
+  };
 }
 
 export async function runGoogleDefectSync(params: {
@@ -280,155 +466,19 @@ export async function runGoogleDefectSync(params: {
   try {
     const records = await fetchSource();
     const now = new Date();
-    const preparedRows = records.flatMap((record) => {
-      const detectedAt = parseSourceDate(record.detectedAtRaw);
-      const sourceKey = sourceKeyOf(record, detectedAt);
-      if (!sourceKey || !text(record.content)) return [];
-      const reminder = reminderOf(record.reminderRaw);
-      const stt = text(record.stt).replace(/\.0$/, "");
-      return [{
-        record,
-        sourceKey,
-        detectedAt,
-        reminder,
-        hash: sourceHash(record),
-        requestNumber: `${stt}/${detectedAt!.getUTCFullYear()}`,
-      }];
-    });
-    const preparedByKey = new Map<string, (typeof preparedRows)[number]>();
-    const conflictingKeys: string[] = [];
-    for (const item of preparedRows) {
-      const previous = preparedByKey.get(item.sourceKey);
-      if (!previous) {
-        preparedByKey.set(item.sourceKey, item);
-      } else if (previous.hash !== item.hash) {
-        conflictingKeys.push(item.sourceKey);
-      }
-    }
-    if (conflictingKeys.length > 0) {
-      throw new Error(`Nguồn có cùng STT/ngày/tổ máy nhưng nội dung khác nhau: ${conflictingKeys.slice(0, 5).join(", ")}`);
-    }
-    // Dòng lặp hoàn toàn giống nhau được gộp thành một bản phản chiếu.
-    const prepared = Array.from(preparedByKey.values());
+    const prepared = prepareDefectSourceRecords(records);
 
     const existingRows = await prisma.defect.findMany({
       where: { sourceType: "GOOGLE_SHEETS" },
       select: {
         id: true,
         sourceKey: true,
-        sourceHash: true,
         syncState: true,
-        postRepairAwaitingMaterial: true,
-        reminderCount: true,
-        lastRemindedAt: true,
       },
     });
-    const existingByKey = new Map(existingRows.filter((row) => row.sourceKey).map((row) => [row.sourceKey!, row]));
     const seen = new Set<string>();
-    const creates: Prisma.DefectCreateManyInput[] = [];
-    const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
-    const unchangedIds: string[] = [];
-    let unchangedCount = 0;
-    let confirmedSkippedCount = 0;
-
-    for (const item of prepared) {
-      seen.add(item.sourceKey);
-      const existing = existingByKey.get(item.sourceKey);
-      const sourceStatus = statusOf(item.record.sourceStatusRaw);
-      const repairStatus = explicitStatusOf(item.record.repairResultRaw);
-      const sourceData = {
-        unit: unitOf(item.record.unit),
-        system: text(item.record.positionRaw).replace(/^\d+\.\s*/, "") || null,
-        severity: ["1", "2", "3", "4"].includes(text(item.record.severityRaw)) ? text(item.record.severityRaw) : null,
-        condition: ["A", "B"].includes(text(item.record.conditionRaw).toUpperCase()) ? text(item.record.conditionRaw).toUpperCase() : null,
-        fireSafetyImpact: text(item.record.fireSafetyImpact) || null,
-        environmentSafetyImpact: text(item.record.environmentSafetyImpact) || null,
-        requestType: text(item.record.requestType) || null,
-        requestNumber: item.requestNumber,
-        content: text(item.record.content),
-        status: sourceStatus,
-        detectedAt: item.detectedAt,
-        shiftLeaderName: text(item.record.shiftLeaderRaw) || null,
-        note: text(item.record.noteRaw) || null,
-        reminderRaw: text(item.record.reminderRaw) || null,
-        repeatedRepairRaw: text(item.record.repeatedRepairRaw) || null,
-        sourceSpreadsheetId: text(item.record.sourceSpreadsheetId),
-        sourceSheetName: text(item.record.sourceSheet),
-        sourceRow: Number(item.record.sourceRow) || null,
-        sourceDeviceRaw: text(item.record.deviceRaw) || null,
-        sourcePositionRaw: text(item.record.positionRaw) || null,
-        sourceStatusRaw: text(item.record.sourceStatusRaw) || null,
-        repairResultRaw: text(item.record.repairResultRaw) || null,
-        sourceStatusMismatch: repairStatus !== null && repairStatus !== sourceStatus,
-        sourceCompletedAt: parseSourceDate(item.record.completedAtRaw),
-        sourceHash: item.hash,
-        sourceSyncedAt: now,
-        sourceLastSeenAt: now,
-      };
-
-      if (!existing) {
-        creates.push({
-          ...sourceData,
-          sourceType: "GOOGLE_SHEETS",
-          sourceKey: item.sourceKey,
-          reminderCount: item.reminder.count,
-          lastRemindedAt: item.reminder.lastDate,
-          createdById: creator.id,
-        });
-        continue;
-      }
-
-      if (existing.syncState === "CONFIRMED") {
-        confirmedSkippedCount++;
-        updates.push({
-          id: existing.id,
-          data: {
-            sourceLastSeenAt: now,
-            sourceSyncedAt: now,
-            sourceChangedAfterConfirm: existing.sourceHash !== item.hash,
-          },
-        });
-        continue;
-      }
-
-      if (existing.sourceHash === item.hash && existing.syncState === "ACTIVE") {
-        unchangedCount++;
-        unchangedIds.push(existing.id);
-        continue;
-      }
-
-      updates.push({
-        id: existing.id,
-        data: {
-          ...sourceData,
-          syncState: "ACTIVE",
-          postRepairAwaitingMaterial:
-            sourceData.status === "DA_XU_LY" ? existing.postRepairAwaitingMaterial : false,
-          reminderCount: Math.max(existing.reminderCount, item.reminder.count),
-          lastRemindedAt:
-            !existing.lastRemindedAt || (item.reminder.lastDate && item.reminder.lastDate > existing.lastRemindedAt)
-              ? item.reminder.lastDate
-              : existing.lastRemindedAt,
-        },
-      });
-    }
-
-    for (let index = 0; index < creates.length; index += CHUNK) {
-      await prisma.defect.createMany({ data: creates.slice(index, index + CHUNK) });
-    }
-    for (let index = 0; index < updates.length; index += CHUNK) {
-      await prisma.$transaction(
-        updates.slice(index, index + CHUNK).map((item) =>
-          prisma.defect.update({ where: { id: item.id }, data: item.data })
-        )
-      );
-    }
-    for (let index = 0; index < unchangedIds.length; index += 1000) {
-      await prisma.defect.updateMany({
-        where: { id: { in: unchangedIds.slice(index, index + 1000) } },
-        data: { sourceLastSeenAt: now, sourceSyncedAt: now },
-      });
-    }
+    prepared.forEach((item) => seen.add(item.sourceKey));
+    const stats = await upsertPreparedDefectRecords({ prepared, creator, syncedAt: now });
 
     const missing = existingRows.filter((row) => row.sourceKey && row.syncState !== "CONFIRMED" && !seen.has(row.sourceKey));
     for (let index = 0; index < missing.length; index += CHUNK) {
@@ -438,14 +488,13 @@ export async function runGoogleDefectSync(params: {
       });
     }
 
-    const updatedCount = updates.length - confirmedSkippedCount;
     const result = {
       runId: run.id,
       readCount: records.length,
-      createdCount: creates.length,
-      updatedCount,
-      unchangedCount,
-      confirmedSkippedCount,
+      createdCount: stats.createdCount,
+      updatedCount: stats.updatedCount,
+      unchangedCount: stats.unchangedCount,
+      confirmedSkippedCount: stats.confirmedSkippedCount,
       missingCount: missing.length,
     };
     await prisma.defectSyncRun.update({
