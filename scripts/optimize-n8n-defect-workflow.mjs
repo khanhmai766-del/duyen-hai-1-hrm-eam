@@ -49,7 +49,7 @@ if (!expectedSources.length) {
 
 return [{
   json: {
-    externalRunId: \`defects-\${new Date().toISOString()}\`,
+    externalRunId: \`defects-\${$execution.id}\`,
     expectedSources,
   },
 }];`;

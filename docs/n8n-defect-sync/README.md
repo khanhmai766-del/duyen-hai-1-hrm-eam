@@ -14,6 +14,8 @@ dùng bảng mirror và không `DELETE + INSERT`. Dữ liệu tiếp tục đư�
 - Chỉ khi tất cả nguồn khai báo trong lượt hoàn tất, backend mới đánh dấu khóa
   không còn xuất hiện thành `MISSING`, và chỉ trong đúng Sheet đã đồng bộ.
 - Nếu workflow dừng giữa chừng, dữ liệu hiện có vẫn được giữ nguyên.
+- Run n8n treo quá 30 phút được tự đóng và dọn khóa staging; lịch sử run/batch
+  đã kết thúc được giữ 90 ngày.
 
 ## Cài n8n cố định phiên bản
 
@@ -147,8 +149,8 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
 5. Chỉ đọc, chuẩn hóa và gửi batch cho các Sheet tương ứng.
 6. Finish với `completedSources` khớp chính xác `expectedSources`.
 7. Chỉ sau khi finish trả `SUCCESS` mới lưu các mốc `modifiedTime`.
-8. Error Workflow gọi endpoint `fail`, gửi cảnh báo và tuyệt đối không gọi
-   `finish`.
+8. Error Workflow dùng `execution.id` để gọi endpoint `by-external-id/fail`,
+   đóng run ngay, gửi cảnh báo và tuyệt đối không gọi `finish`.
 
 Trong giai đoạn kiểm thử có thể đặt `EXECUTIONS_DATA_SAVE_ON_SUCCESS=all` để xem
 output. Khi chạy ổn định, đổi lại `none` để database n8n không giữ thêm bản sao

@@ -17,7 +17,8 @@ export const N8N_DEFECT_SOURCE_SPREADSHEET_IDS: Record<N8nDefectSource, string> 
 
 const MAX_BATCH_SIZE = 500;
 const MAX_TEXT_LENGTH = 20_000;
-const RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const RUN_TIMEOUT_MS = 30 * 60 * 1000;
+const RUN_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const PROCESSING_BATCH_TIMEOUT_MS = 15 * 60 * 1000;
 
 function text(value: unknown, field: string, maxLength = MAX_TEXT_LENGTH) {
@@ -115,18 +116,38 @@ export async function startN8nDefectRun(params: {
   const externalRunId = text(params.externalRunId, "externalRunId", 200);
   if (!externalRunId) throw new Error("Thiếu externalRunId");
 
-  const existing = await prisma.defectSyncRun.findUnique({ where: { externalRunId } });
-  if (existing) return existing;
-
-  const staleBefore = new Date(Date.now() - RUN_TIMEOUT_MS);
-  await prisma.defectSyncRun.updateMany({
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - RUN_TIMEOUT_MS);
+  const staleRuns = await prisma.defectSyncRun.findMany({
     where: { trigger: "N8N", status: "RUNNING", startedAt: { lt: staleBefore } },
-    data: {
-      status: "FAILED",
-      finishedAt: new Date(),
-      error: "Lượt đồng bộ n8n quá thời gian và được hệ thống tự đóng",
+    select: { id: true },
+  });
+  const staleRunIds = staleRuns.map((run) => run.id);
+  if (staleRunIds.length > 0) {
+    await prisma.$transaction([
+      prisma.defectSyncRun.updateMany({
+        where: { id: { in: staleRunIds }, status: "RUNNING" },
+        data: {
+          status: "FAILED",
+          finishedAt: now,
+          error: "Lượt đồng bộ n8n quá thời gian và được hệ thống tự đóng",
+        },
+      }),
+      prisma.defectSyncSeen.deleteMany({
+        where: { runId: { in: staleRunIds } },
+      }),
+    ]);
+  }
+
+  await prisma.defectSyncRun.deleteMany({
+    where: {
+      status: { not: "RUNNING" },
+      finishedAt: { lt: new Date(now.getTime() - RUN_RETENTION_MS) },
     },
   });
+
+  const existing = await prisma.defectSyncRun.findUnique({ where: { externalRunId } });
+  if (existing) return existing;
 
   const running = await prisma.defectSyncRun.findFirst({
     where: { status: "RUNNING", startedAt: { gte: staleBefore } },
@@ -347,6 +368,25 @@ export async function failN8nDefectRun(params: { runId: string; message?: string
     });
     await tx.defectSyncSeen.deleteMany({ where: { runId: run.id } });
     return failed;
+  });
+}
+
+export async function failN8nDefectRunByExternalId(params: {
+  externalRunId: string;
+  message?: string;
+}) {
+  const externalRunId = text(params.externalRunId, "externalRunId", 200);
+  if (!externalRunId) throw new Error("Thiếu externalRunId");
+
+  const run = await prisma.defectSyncRun.findUnique({
+    where: { externalRunId },
+    select: { id: true },
+  });
+  if (!run) return null;
+
+  return failN8nDefectRun({
+    runId: run.id,
+    message: params.message,
   });
 }
 

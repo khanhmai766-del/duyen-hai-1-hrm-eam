@@ -14,7 +14,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const requestedSources = $input.first()?.json?.expectedSources;\nconst expectedSources = Array.isArray(requestedSources)\n  ? [...new Set(requestedSources.filter((source) => source === \"CO\" || source === \"DIEN\"))]\n  : [\"CO\", \"DIEN\"];\n\nif (!expectedSources.length) {\n  return [];\n}\n\nreturn [{\n  json: {\n    externalRunId: `defects-${new Date().toISOString()}`,\n    expectedSources,\n  },\n}];"
+        "jsCode": "const requestedSources = $input.first()?.json?.expectedSources;\nconst expectedSources = Array.isArray(requestedSources)\n  ? [...new Set(requestedSources.filter((source) => source === \"CO\" || source === \"DIEN\"))]\n  : [\"CO\", \"DIEN\"];\n\nif (!expectedSources.length) {\n  return [];\n}\n\nreturn [{\n  json: {\n    externalRunId: `defects-${$execution.id}`,\n    expectedSources,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -375,7 +375,7 @@
           },
           "conditions": [
             {
-              "id": "3158e928-9252-45f3-b9e5-3eb480ac541e",
+              "id": "4131c5a3-716e-43c1-8d63-a681d89b1a15",
               "leftValue": "={{ $('Bắt đầu run').first().json.data.expectedSources.includes('CO') }}",
               "rightValue": "",
               "operator": {
@@ -389,7 +389,7 @@
         },
         "options": {}
       },
-      "id": "f2bfa89e-dc9b-4fb7-865b-241e8b65f991",
+      "id": "c94ce0f4-7858-4b66-b9ef-71dca24cfcc5",
       "name": "Có đồng bộ Cơ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -409,7 +409,7 @@
           },
           "conditions": [
             {
-              "id": "dcd1bd78-97d8-4423-bdae-9c91f2b0f022",
+              "id": "a2dccb9e-6474-476c-8f15-afea90d9e1fa",
               "leftValue": "={{ $('Bắt đầu run').first().json.data.expectedSources.includes('DIEN') }}",
               "rightValue": "",
               "operator": {
@@ -423,7 +423,7 @@
         },
         "options": {}
       },
-      "id": "60d132a0-f993-4453-971c-6eb968ead888",
+      "id": "db25bdb3-d1ab-492e-913c-870cdb3bbc57",
       "name": "Có đồng bộ Điện?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,

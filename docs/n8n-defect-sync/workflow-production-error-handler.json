@@ -1,0 +1,65 @@
+{
+  "name": "Đồng bộ khiếm khuyết DH1 - Xử lý lỗi",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "36c9d481-f5dd-4cf6-9aae-a7a7938c07cb",
+      "name": "Khi workflow đồng bộ lỗi",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://duyenhai1.vn/api/integrations/n8n/defects/runs/by-external-id/fail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ externalRunId: `defects-${$json.execution?.id ?? ''}`, message: $json.execution?.error?.message ?? 'Workflow n8n thất bại' }) }}",
+        "options": {}
+      },
+      "id": "0478c4fc-a7c8-4afd-8ddf-cd6aef51bf6a",
+      "name": "Đóng run bị lỗi",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Khi workflow đồng bộ lỗi": {
+      "main": [
+        [
+          {
+            "node": "Đóng run bị lỗi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "53fbcdf1-f247-420f-90f2-696a188a13eb",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
