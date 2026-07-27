@@ -36,7 +36,10 @@
           "id": "aqtXWwXwpZ58pFi7",
           "name": "Header Auth account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     }
   ],
   "pinData": {},

@@ -38,6 +38,24 @@ if (missingNodes.length > 0) {
 
 workflow.name = "Đồng bộ khiếm khuyết DH1 - Tự động tối ưu";
 
+const retryableNetworkNodes = [
+  "Bắt đầu run",
+  "Đọc Sheet Cơ",
+  "Gửi batch Cơ",
+  "Đọc Sheet Điện",
+  "Gửi batch Điện",
+  "Hoàn tất run",
+  "Kiểm tra modifiedTime Cơ",
+  "Kiểm tra modifiedTime Điện",
+];
+
+for (const name of retryableNetworkNodes) {
+  const node = nodeByName.get(name);
+  node.retryOnFail = true;
+  node.maxTries = 3;
+  node.waitBetweenTries = 5000;
+}
+
 nodeByName.get("Chuẩn bị lượt đồng bộ").parameters.jsCode = `const input = $input.first()?.json || {};
 const requestedSources = input.expectedSources ?? input.body?.expectedSources;
 const expectedSources = Array.isArray(requestedSources)
