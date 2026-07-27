@@ -41,6 +41,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     const defect = await prisma.defect.update({
       where: { id: existing.id },
       data: {
+        createdById: user.id,
         reminderCount: { increment: 1 },
         lastRemindedAt: new Date(),
       },

@@ -96,6 +96,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const defect = await prisma.defect.update({
         where: { id: params.id },
         data: {
+          createdById: user.id,
           device: body.device !== undefined ? body.device || null : undefined,
           deviceSeq,
           postRepairAwaitingMaterial:
@@ -158,6 +159,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const defect = await prisma.defect.update({
       where: { id: params.id },
       data: {
+        createdById: user.id,
         unit: body.unit,
         device: body.device !== undefined ? body.device || null : undefined,
         deviceSeq,

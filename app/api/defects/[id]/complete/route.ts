@@ -103,6 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       prisma.defect.update({
         where: { id: defect.id },
         data: {
+          createdById: user.id,
           status: "DA_XU_LY",
           completedAt: performedAt,
           postRepairAwaitingMaterial: false,

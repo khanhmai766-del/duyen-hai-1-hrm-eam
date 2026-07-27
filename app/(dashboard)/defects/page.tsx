@@ -335,7 +335,7 @@ export default function DefectsPage() {
                 <TableHead className="w-[180px] text-center">Kết quả sửa chữa</TableHead>
                 <TableHead className="w-[100px] text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[120px] text-center">Phát hiện</TableHead>
-                <TableHead className="w-[110px] text-center">Người nhập</TableHead>
+                <TableHead className="w-[110px] text-center">Người cập nhật</TableHead>
                 <TableHead className="w-[110px] text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
@@ -762,7 +762,7 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
           </>
         )}
         <DetailLine label="Ghi chú" value={defect.note || "—"} multiline />
-        <DetailLine label="Người ghi nhận" value={defect.createdBy?.name || "—"} />
+        <DetailLine label="Người cập nhật cuối" value={defect.createdBy?.name || "—"} />
         {defect.images.length > 0 && (
           <div className="pt-1">
             <div className="mb-2 font-semibold text-ink">Hình ảnh:</div>
@@ -799,7 +799,7 @@ function DefectUserAvatar({ user }: { user?: DefectItem["createdBy"] | null }) {
     <div
       className="flex justify-center"
       title={`${user.name}${user.position ? ` · ${user.position}` : ""}`}
-      aria-label={`Người nhập khiếm khuyết: ${user.name}`}
+      aria-label={`Người cập nhật khiếm khuyết gần nhất: ${user.name}`}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[11px] font-bold text-white shadow-sm ring-1 ring-border">
         {user.avatarUrl ? (
