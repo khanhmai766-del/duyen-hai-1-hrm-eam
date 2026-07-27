@@ -7,7 +7,7 @@ import type { DefectSyncRun } from "@prisma/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -180,6 +180,7 @@ export default function DefectsPage() {
   const chuaXuLy = data?.meta?.kpi?.chuaXuLy ?? 0;
   const coPct = data?.meta?.kpi?.coPct ?? 0;
   const choVatTu = data?.meta?.kpi?.choVatTu ?? 0;
+  const choNgungMay = data?.meta?.kpi?.choNgungMay ?? 0;
   const tonDong = data?.meta?.kpi?.tonDong ?? 0;
   const daXuLy = data?.meta?.kpi?.daXuLy ?? 0;
   function toggleStatus(s: string) {
@@ -363,10 +364,11 @@ export default function DefectsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <DefectKpi label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tone="rose" active={statusFilter === "CHUA_XU_LY"} onClick={() => toggleStatus("CHUA_XU_LY")} />
         <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
         <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
+        <DefectKpi label="Chờ ngừng máy" value={choNgungMay} icon={CirclePause} tone="orange" active={statusFilter === "CHO_NGUNG_MAY"} onClick={() => toggleStatus("CHO_NGUNG_MAY")} />
         <DefectKpi label="Tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
         <DefectKpi label="Đã xử lý" value={daXuLy} icon={CheckCircle2} tone="green" active={statusFilter === "DA_XU_LY"} onClick={() => toggleStatus("DA_XU_LY")} />
       </div>
@@ -950,6 +952,7 @@ const KPI_TONES = {
   rose: { bg: "from-rose-50 to-rose-100", num: "text-rose-600", icon: "text-rose-400", shadow: "shadow-rose-500/25 hover:shadow-rose-500/40" },
   sky: { bg: "from-sky-50 to-sky-100", num: "text-sky-600", icon: "text-sky-400", shadow: "shadow-sky-500/25 hover:shadow-sky-500/40" },
   amber: { bg: "from-amber-50 to-amber-100", num: "text-amber-600", icon: "text-amber-400", shadow: "shadow-amber-500/25 hover:shadow-amber-500/40" },
+  orange: { bg: "from-orange-50 to-orange-100", num: "text-orange-700", icon: "text-orange-500", shadow: "shadow-orange-500/25 hover:shadow-orange-500/40" },
   green: { bg: "from-emerald-50 to-emerald-100", num: "text-emerald-700", icon: "text-emerald-500", shadow: "shadow-emerald-500/25 hover:shadow-emerald-500/40" },
   violet: { bg: "from-violet-50 to-violet-100", num: "text-violet-600", icon: "text-violet-400", shadow: "shadow-violet-500/25 hover:shadow-violet-500/40" },
 } as const;

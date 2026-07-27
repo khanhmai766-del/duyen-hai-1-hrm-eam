@@ -38,6 +38,7 @@ export interface DefectListMeta {
     chuaXuLy: number;
     coPct: number;
     choVatTu: number;
+    choNgungMay: number;
     tonDong: number;
     daXuLy: number;
   };

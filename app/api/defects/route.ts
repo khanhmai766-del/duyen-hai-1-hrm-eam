@@ -206,6 +206,7 @@ export async function GET(req: NextRequest) {
             chuaXuLy: statusCount.get("CHUA_XU_LY") ?? 0,
             coPct: statusCount.get("CO_PCT") ?? 0,
             choVatTu: statusCount.get("CHO_VAT_TU") ?? 0,
+            choNgungMay: statusCount.get("CHO_NGUNG_MAY") ?? 0,
             tonDong,
             daXuLy,
           },
@@ -251,6 +252,7 @@ export async function GET(req: NextRequest) {
       chuaXuLy: base.filter((item) => item.status === "CHUA_XU_LY").length,
       coPct: base.filter((item) => item.status === "CO_PCT").length,
       choVatTu: base.filter((item) => item.status === "CHO_VAT_TU").length,
+      choNgungMay: base.filter((item) => item.status === "CHO_NGUNG_MAY").length,
       tonDong: base.filter((item) => item.postRepairAwaitingMaterial).length,
       daXuLy: base.filter((item) => item.status === "DA_XU_LY" && !item.postRepairAwaitingMaterial).length,
     };
