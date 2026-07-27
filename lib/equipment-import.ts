@@ -72,26 +72,20 @@ const cleanKks = (v: unknown): string | null => {
   return t;
 };
 
-/** Chuẩn hóa các tiền tố KKS sai cho phần 1, phần 2 và phần 3. */
-export function normalizeImportedKks(fullCode: string, kks: string | null): string | null {
-  if (!kks) return null;
-  const electricalPrefix = `${S1_PREFIX}.3`;
-  const belongsToElectrical = fullCode === electricalPrefix || fullCode.startsWith(`${electricalPrefix}.`);
-  if (belongsToElectrical) {
-    const normalizedElectrical = kks.replace(/^X(?=[02])/i, "1");
-    return /^20/i.test(normalizedElectrical) ? `10${normalizedElectrical.slice(2)}` : normalizedElectrical;
-  }
+/**
+ * Chỉ chuẩn hóa hai ký tự ĐẦU toàn bộ chuỗi KKS:
+ * - X1/X2 → 11/12
+ * - 20, 1O, X0, XO, 2O → 10
+ * Ký tự tương tự nằm giữa chuỗi hoặc ở mã con phía sau được giữ nguyên.
+ */
+export function normalizeKksPrefix(kks: string): string {
+  const normalizedUnit = kks.replace(/^(?:20|1O|X0|XO|2O)/i, "10");
+  return normalizedUnit.replace(/^X(?=[12])/i, "1");
+}
 
-  const normalizedBranches = [`${S1_PREFIX}.1`, `${S1_PREFIX}.2`];
-  const belongsToNormalizedBranch = normalizedBranches.some(
-    (prefix) => fullCode === prefix || fullCode.startsWith(`${prefix}.`)
-  );
-  const turbinePrefix = `${S1_PREFIX}.2`;
-  const belongsToTurbine = fullCode === turbinePrefix || fullCode.startsWith(`${turbinePrefix}.`);
-  const normalizedUnit = belongsToTurbine ? kks.replace(/\bX(?=[12])/gi, "1") : kks;
-  return belongsToNormalizedBranch && /^(?:X0|XO|1O|20|2O)/i.test(normalizedUnit)
-    ? `10${normalizedUnit.slice(2)}`
-    : normalizedUnit;
+export function normalizeImportedKks(_fullCode: string, kks: string | null): string | null {
+  if (!kks) return null;
+  return normalizeKksPrefix(kks);
 }
 
 export function displayCode(fullCode: string): string {

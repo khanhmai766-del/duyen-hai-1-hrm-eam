@@ -40,20 +40,9 @@ const cleanKks = (v) => {
   return t;
 };
 
-// Phần 1, 2 và 3 dùng tiền tố KKS tổ máy S1; chuẩn hóa các lỗi nguồn thường gặp.
-const normalizeKksPrefix = (seq, kks) => {
-  if (!kks) return null;
-  if (/^DH1\.S1\.3(?:\.|$)/.test(seq)) {
-    const normalizedElectrical = kks.replace(/^X(?=[02])/i, "1");
-    return /^20/i.test(normalizedElectrical) ? `10${normalizedElectrical.slice(2)}` : normalizedElectrical;
-  }
-
-  const belongsToNormalizedBranch = /^DH1\.S1\.(?:1|2)(?:\.|$)/.test(seq);
-  const normalizedUnit = /^DH1\.S1\.2(?:\.|$)/.test(seq) ? kks.replace(/\bX(?=[12])/gi, "1") : kks;
-  return belongsToNormalizedBranch && /^(?:X0|XO|1O|20|2O)/i.test(normalizedUnit)
-    ? `10${normalizedUnit.slice(2)}`
-    : normalizedUnit;
-};
+// Chỉ chuẩn hóa hai ký tự đầu toàn bộ chuỗi; không thay các mã con hoặc X nằm giữa chuỗi.
+const normalizeKksPrefix = (kks) =>
+  kks.replace(/^(?:20|1O|X0|XO|2O)/i, "10").replace(/^X(?=[12])/i, "1");
 
 // Bỏ dấu + đ→d + lowercase (đồng bộ với normalizeText ở lib/nav.ts) để tìm kiếm không dấu.
 const normalize = (s) =>
@@ -134,7 +123,8 @@ async function main() {
 
   const nodes = dept.map((r, i) => {
     const seq = maOf(r); // Mã thiết bị đầy đủ = fullCode = khóa
-    const kks = normalizeKksPrefix(seq, cleanKks(r["Mã KKS"]));
+    const sourceKks = cleanKks(r["Mã KKS"]);
+    const kks = sourceKks ? normalizeKksPrefix(sourceKks) : null;
     const name = clean(r["Tên thiết bị"]) ?? seq;
     const strippedCode = seq.replace(/^DH1\.S1\.?/, "") || seq;
     return {
