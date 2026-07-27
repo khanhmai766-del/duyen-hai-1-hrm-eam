@@ -3,6 +3,7 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import type { DefectSyncRun } from "@prisma/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -57,17 +58,20 @@ type FloatingScrollbarGeometry = {
   left: number;
   width: number;
   contentWidth: number;
+  viewportWidth: number;
 };
 
 function PersistentHorizontalScroll({ children }: { children: React.ReactNode }) {
   const tableScrollRef = React.useRef<HTMLDivElement>(null);
-  const floatingScrollRef = React.useRef<HTMLDivElement>(null);
   const frameRef = React.useRef<number | null>(null);
+  const dragRef = React.useRef<{ startX: number; startScrollLeft: number } | null>(null);
+  const [scrollLeft, setScrollLeft] = React.useState(0);
   const [geometry, setGeometry] = React.useState<FloatingScrollbarGeometry>({
     visible: false,
     left: 0,
     width: 0,
     contentWidth: 0,
+    viewportWidth: 0,
   });
 
   const updateGeometry = React.useCallback(() => {
@@ -82,20 +86,20 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
       const right = Math.min(window.innerWidth, rect.right);
       const width = Math.max(0, right - left);
       const hasHorizontalOverflow = tableScroll.scrollWidth > tableScroll.clientWidth + 1;
-      const tableIsVisible = rect.top < window.innerHeight && rect.bottom > 0;
-      const nativeScrollbarIsBelowViewport = rect.bottom > window.innerHeight;
 
       setGeometry((current) => {
         const next = {
-          visible: hasHorizontalOverflow && tableIsVisible && nativeScrollbarIsBelowViewport && width > 0,
+          visible: hasHorizontalOverflow && width > 0,
           left,
           width,
           contentWidth: tableScroll.scrollWidth,
+          viewportWidth: tableScroll.clientWidth,
         };
         return current.visible === next.visible &&
           current.left === next.left &&
           current.width === next.width &&
-          current.contentWidth === next.contentWidth
+          current.contentWidth === next.contentWidth &&
+          current.viewportWidth === next.viewportWidth
           ? current
           : next;
       });
@@ -122,12 +126,25 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
     };
   }, [updateGeometry]);
 
-  React.useEffect(() => {
-    if (!geometry.visible) return;
+  const setHorizontalPosition = React.useCallback((nextScrollLeft: number) => {
     const tableScroll = tableScrollRef.current;
-    const floatingScroll = floatingScrollRef.current;
-    if (tableScroll && floatingScroll) floatingScroll.scrollLeft = tableScroll.scrollLeft;
-  }, [geometry.visible, geometry.contentWidth]);
+    if (!tableScroll) return;
+    const maximum = Math.max(0, tableScroll.scrollWidth - tableScroll.clientWidth);
+    const clamped = Math.min(maximum, Math.max(0, nextScrollLeft));
+    tableScroll.scrollLeft = clamped;
+    setScrollLeft(clamped);
+  }, []);
+
+  const maximumScrollLeft = Math.max(0, geometry.contentWidth - geometry.viewportWidth);
+  const trackInset = 44;
+  const trackWidth = Math.max(0, geometry.width - trackInset * 2);
+  const thumbWidth = geometry.contentWidth > 0
+    ? Math.min(trackWidth, Math.max(88, trackWidth * (geometry.viewportWidth / geometry.contentWidth)))
+    : trackWidth;
+  const thumbTravel = Math.max(0, trackWidth - thumbWidth);
+  const thumbOffset = maximumScrollLeft > 0
+    ? (scrollLeft / maximumScrollLeft) * thumbTravel
+    : 0;
 
   return (
     <>
@@ -135,32 +152,111 @@ function PersistentHorizontalScroll({ children }: { children: React.ReactNode })
         ref={tableScrollRef}
         className="overflow-x-auto"
         onScroll={(event) => {
-          const floatingScroll = floatingScrollRef.current;
-          if (floatingScroll && floatingScroll.scrollLeft !== event.currentTarget.scrollLeft) {
-            floatingScroll.scrollLeft = event.currentTarget.scrollLeft;
-          }
+          setScrollLeft(event.currentTarget.scrollLeft);
         }}
       >
         {children}
       </div>
-      {geometry.visible && (
+      {geometry.visible && typeof document !== "undefined" && createPortal(
         <div
-          ref={floatingScrollRef}
-          role="region"
+          role="scrollbar"
           aria-label="Thanh cuộn ngang của danh sách khiếm khuyết"
+          aria-orientation="horizontal"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(maximumScrollLeft)}
+          aria-valuenow={Math.round(scrollLeft)}
           tabIndex={0}
-          className="fixed bottom-0 z-40 h-[14px] overflow-x-scroll overflow-y-hidden border-x border-t border-border bg-background/95 shadow-[0_-2px_8px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+          className="fixed bottom-5 z-[70] h-10 rounded-full border border-slate-300 bg-white/95 shadow-[0_6px_24px_rgba(15,23,42,0.28)] outline-none backdrop-blur-md focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-600 dark:bg-slate-900/95"
           style={{ left: geometry.left, width: geometry.width }}
-          onScroll={(event) => {
-            const tableScroll = tableScrollRef.current;
-            if (tableScroll && tableScroll.scrollLeft !== event.currentTarget.scrollLeft) {
-              tableScroll.scrollLeft = event.currentTarget.scrollLeft;
+          title="Kéo hoặc bấm nút để xem các cột bên trái và bên phải"
+          onKeyDown={(event) => {
+            const step = event.key === "PageUp" || event.key === "PageDown"
+              ? geometry.viewportWidth * 0.8
+              : 80;
+            if (event.key === "ArrowLeft" || event.key === "PageUp") {
+              event.preventDefault();
+              setHorizontalPosition(scrollLeft - step);
+            } else if (event.key === "ArrowRight" || event.key === "PageDown") {
+              event.preventDefault();
+              setHorizontalPosition(scrollLeft + step);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              setHorizontalPosition(0);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              setHorizontalPosition(maximumScrollLeft);
             }
           }}
+          onWheel={(event) => {
+            event.preventDefault();
+            setHorizontalPosition(scrollLeft + event.deltaX + event.deltaY);
+          }}
+          onPointerDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            const track = event.currentTarget.getBoundingClientRect();
+            const nextThumbOffset = Math.min(
+              thumbTravel,
+              Math.max(0, event.clientX - track.left - trackInset - thumbWidth / 2)
+            );
+            const nextScrollLeft = thumbTravel > 0
+              ? (nextThumbOffset / thumbTravel) * maximumScrollLeft
+              : 0;
+            setHorizontalPosition(nextScrollLeft);
+          }}
         >
-          <div aria-hidden="true" className="h-px" style={{ width: geometry.contentWidth }} />
+          <button
+            type="button"
+            className="absolute left-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 disabled:opacity-35 dark:text-slate-200 dark:hover:bg-slate-700"
+            aria-label="Cuộn bảng sang trái"
+            disabled={scrollLeft <= 0}
+            onClick={() => setHorizontalPosition(scrollLeft - Math.max(240, geometry.viewportWidth * 0.6))}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div
+            className="pointer-events-none absolute top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-200 ring-1 ring-inset ring-slate-300 dark:bg-slate-700 dark:ring-slate-600"
+            style={{ left: trackInset, width: trackWidth }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute top-1/2 h-4 -translate-y-1/2 cursor-grab touch-none rounded-full bg-blue-600 shadow-[0_1px_4px_rgba(37,99,235,0.45)] transition-colors hover:bg-blue-700 active:cursor-grabbing active:bg-blue-800 dark:bg-blue-400 dark:hover:bg-blue-300"
+            style={{
+              left: trackInset + thumbOffset,
+              width: thumbWidth,
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              dragRef.current = { startX: event.clientX, startScrollLeft: scrollLeft };
+            }}
+            onPointerMove={(event) => {
+              if (!dragRef.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              const scrollPerPixel = thumbTravel > 0 ? maximumScrollLeft / thumbTravel : 0;
+              setHorizontalPosition(
+                dragRef.current.startScrollLeft + (event.clientX - dragRef.current.startX) * scrollPerPixel
+              );
+            }}
+            onPointerUp={(event) => {
+              dragRef.current = null;
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }
+            }}
+            onPointerCancel={() => {
+              dragRef.current = null;
+            }}
+          />
+          <button
+            type="button"
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 disabled:opacity-35 dark:text-slate-200 dark:hover:bg-slate-700"
+            aria-label="Cuộn bảng sang phải"
+            disabled={scrollLeft >= maximumScrollLeft - 1}
+            onClick={() => setHorizontalPosition(scrollLeft + Math.max(240, geometry.viewportWidth * 0.6))}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }
