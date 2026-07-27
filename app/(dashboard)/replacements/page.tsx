@@ -95,21 +95,22 @@ function ReplacementsPageContent() {
   const [tab, setTab] = React.useState<TabKey>("schedule");
   // Bộ lọc tháng/năm dùng chung cho cả 2 tab (mặc định tháng hiện tại).
   const [month, setMonth] = React.useState(() => ym(new Date()));
+  // Một thanh tìm kiếm dùng chung cho Lịch thay thế và Lịch sử thay thế.
+  const [searchQ, setSearchQ] = React.useState("");
+  const [debouncedSearchQ, setDebouncedSearchQ] = React.useState("");
 
   /* ---- Tab 1: Lịch thay thế (schedule) ---- */
-  const [q, setQ] = React.useState("");
-  const [debouncedQ, setDebouncedQ] = React.useState("");
   const [due, setDue] = React.useState("ALL");
   const [machineFilter, setMachineFilter] = React.useState("ALL");
   const [categoryFilter, setCategoryFilter] = React.useState("ALL");
   // Ngày đang chọn trên lịch ("YYYY-MM-DD") — lọc panel danh sách bên phải.
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
   React.useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), 300);
+    const t = setTimeout(() => setDebouncedSearchQ(searchQ), 300);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [searchQ]);
 
-  const { data, isLoading } = useReplacements({ q: debouncedQ });
+  const { data, isLoading } = useReplacements({ q: debouncedSearchQ });
   const del = useDeleteReplacement();
   const delLog = useDeleteReplacementLog();
   const all = data?.data ?? [];
@@ -141,7 +142,6 @@ function ReplacementsPageContent() {
   const [delLogTarget, setDelLogTarget] = React.useState<ReplacementLogItem | null>(null);
 
   /* ---- Tab 2: Lịch sử thay thế (history) ---- */
-  const [historyQ, setHistoryQ] = React.useState("");
   const [historyFromMonth, setHistoryFromMonth] = React.useState(() => ym(new Date()));
   const [historyToMonth, setHistoryToMonth] = React.useState(() => ym(new Date()));
   const [historyPosition, setHistoryPosition] = React.useState("ALL");
@@ -171,17 +171,17 @@ function ReplacementsPageContent() {
       matchesPosition
     );
   });
-  const filteredLogs = historyQ.trim()
+  const filteredLogs = searchQ.trim()
     ? logsInMonthRange.filter((l) => {
         const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
-        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""}`.toLowerCase().includes(historyQ.toLowerCase());
+        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
       })
     : logsInMonthRange;
   const historyRangeLabel = historyFromMonth === historyToMonth
     ? `tháng ${ymLabel(historyFromMonth)}`
     : `từ tháng ${ymLabel(historyFromMonth)} đến tháng ${ymLabel(historyToMonth)}`;
   const historyBackupRows = React.useMemo(() => {
-    const qText = historyQ.trim().toLowerCase();
+    const qText = searchQ.trim().toLowerCase();
     const logsByPosition = historyPosition === "ALL"
       ? logs
       : logs.filter((log) => log.replacement?.managingPosition === historyPosition);
@@ -190,7 +190,7 @@ function ReplacementsPageContent() {
       const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
       return `${l.replacement?.material.code ?? ""} ${l.replacement?.material.name ?? ""} ${device?.code ?? ""} ${device?.name ?? ""} ${device?.system ?? ""} ${l.note ?? ""} ${l.doneBy.name}`.toLowerCase().includes(qText);
     });
-  }, [historyPosition, historyQ, logs]);
+  }, [historyPosition, searchQ, logs]);
   const historyBackupColumns = React.useMemo(
     () => [
       { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: ReplacementLogItem, index: number) => index + 1 },
@@ -254,6 +254,13 @@ function ReplacementsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="LỊCH THAY THẾ VẬT TƯ" description="Tổng hợp lịch thay thế & lịch sử ghi nhận thay thế vật tư">
+        <SearchBar
+          value={searchQ}
+          onChange={setSearchQ}
+          placeholder="Tìm theo vật tư, thiết bị, ghi chú..."
+          className="w-full sm:w-72 lg:w-80"
+          shortcut
+        />
         {tab === "schedule" && (
           <>
             <Select value={horizon} onValueChange={setHorizon}>
@@ -292,7 +299,6 @@ function ReplacementsPageContent() {
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
         {tab === "schedule" ? (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
-            <SearchBar value={q} onChange={setQ} placeholder="Tìm theo vật tư, thiết bị..." className="sm:w-64" />
             <Select value={machineFilter} onValueChange={setMachineFilter}>
               <SelectTrigger className="sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -313,7 +319,6 @@ function ReplacementsPageContent() {
           </div>
         ) : (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
-            <SearchBar value={historyQ} onChange={setHistoryQ} placeholder="Tìm theo vật tư, thiết bị, ghi chú..." className="sm:w-72" />
             <MonthRangeFilter
               from={historyFromMonth}
               to={historyToMonth}
@@ -695,8 +700,8 @@ function MonthRangeFilter({
   onToChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/50 p-1.5">
-      <CalendarRange className="ml-1 hidden h-4 w-4 shrink-0 text-sky-700 sm:block" />
+    <div className="flex flex-wrap items-center gap-2">
+      <CalendarRange className="hidden h-4 w-4 shrink-0 text-sky-700 sm:block" />
       <label className="flex items-center gap-1.5">
         <span className="text-xs font-semibold text-muted-foreground">Từ tháng</span>
         <input

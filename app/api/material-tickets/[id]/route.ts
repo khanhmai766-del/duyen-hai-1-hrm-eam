@@ -1191,22 +1191,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
-      const sccnRepresentativeName = String(body.sccnRepresentative || "").trim();
-      const sccnRepresentativePosition = String(body.sccnPosition || "").trim();
-      const sccnRepresentative = t.type === "DE_XUAT"
-        ? { name: sccnRepresentativeName, position: sccnRepresentativePosition }
-        : undefined;
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
-      if (t.type === "DE_XUAT" && !SCCN_REPRESENTATIVES.includes(sccnRepresentativeName as typeof SCCN_REPRESENTATIVES[number])) {
-        return fail("Vui lòng chọn đại diện SCCN hợp lệ");
-      }
-      if (t.type === "DE_XUAT" && !SCCN_POSITIONS.includes(sccnRepresentativePosition as typeof SCCN_POSITIONS[number])) {
-        return fail("Vui lòng chọn chức vụ đại diện SCCN hợp lệ");
-      }
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -1221,8 +1210,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ? { ...bbntItem, materialCode: erpCode, materialName: erpMaterial.name }
         : bbntItem);
 
-      // Một mã/tên ERP duy nhất được áp dụng cho các biên bản. Riêng luồng Ứng,
-      // BBNT D-Office được chuyển sang xuất cùng Phiếu ĐXVT ở bước kế tiếp.
+      // Một mã/tên ERP duy nhất được áp dụng cho các biên bản.
+      // Luồng Đề xuất tách thành hai tác vụ trong bước Nghiệm thu:
+      // (1) cương vị được phân quyền chỉ xuất BBNT ký tay tại đây;
+      // (2) Thống kê chọn đại diện SCCN rồi xuất BBNT D-Office + BB thu hồi ở bước kế tiếp.
+      // Luồng Ứng tiếp tục xuất BBNT D-Office cùng Phiếu ĐXVT.
       const documents = {
         bbkt: await generateBbntDoc({
           fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
@@ -1232,17 +1224,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
           items: bbntItems,
         }),
-        bbntDo: t.type === "UNG" ? null : await buildBbntDoDocument(t, {
+        bbntDo: t.type === "UNG" || t.type === "DE_XUAT" ? null : await buildBbntDoDocument(t, {
             pctNumber: pct,
             workStartedAt,
             workEndedAt,
             receivedQuantity: t.receivedQuantity ?? t.vhvReceivedQuantity ?? undefined,
             deliveryNoteNumber: t.deliveryNoteNumber ?? t.receivedMethod ?? undefined,
             itemOverride,
-            sccnRepresentative,
           }),
-        // BBTHVT được tạo cùng hai BBNT tại đây để Ghi chú có số PCT/LCT.
-        recovery: t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride }) : null,
+        // Luồng Đề xuất hoãn BBTHVT sang tác vụ Thống kê cùng BBNT D-Office.
+        recovery: t.type !== "DE_XUAT" && t.recoveryRequired
+          ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride })
+          : null,
       };
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.update({
@@ -1252,7 +1245,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: t.type === "UNG" ? "NHAN_VAT_TU" : t.type === "SU_DUNG_HIEN_CO" ? "CHO_THONG_KE_XUAT_BIEN_BAN" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+            status: t.type === "UNG"
+              ? "NHAN_VAT_TU"
+              : ["DE_XUAT", "SU_DUNG_HIEN_CO"].includes(t.type)
+                ? "CHO_THONG_KE_XUAT_BIEN_BAN"
+                : "CHO_QUYET_TOAN",
+            completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
             bbktDocUrl: documents.bbkt.url,
             ...(documents.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
             ...(documents.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
@@ -1264,14 +1262,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu với mã ERP ${erpCode}, xuất BBNT ký tay${documents.bbntDo ? " và BBNT D-Office" : ""}${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu với mã ERP ${erpCode}, xuất BBNT ký tay${documents.bbntDo ? " và BBNT D-Office" : ""}${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "DE_XUAT" ? "chuyển Thống kê xuất BBNT D-Office" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
       return ok(up);
     }
 
     if (action === "statsExportDocuments") {
-      if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "CHO_THONG_KE_XUAT_BIEN_BAN") return fail("Phiếu không ở bước Thống kê xác nhận mã vật tư");
+      if (!["DE_XUAT", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_THONG_KE_XUAT_BIEN_BAN") {
+        return fail("Phiếu không ở bước Thống kê xuất biên bản");
+      }
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
-        return fail("Bạn không có quyền Thống kê xác nhận mã vật tư", 403);
+        return fail("Bạn không có quyền Thống kê xuất biên bản", 403);
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const erpCode = String(body.erpCode || "").trim();
@@ -1284,25 +1284,65 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.docUrl && item.erpCode && erpCode !== item.erpCode)
         return fail("Mã vật tư đã được khóa khi xuất BBNT D-Office ở bước Nghiệm thu");
 
-      // Cả ba biên bản đã xuất ở bước Nghiệm thu; Thống kê chỉ xác nhận mã ERP.
+      const itemOverride = { materialCode: erpCode, materialName: erpMaterial.name };
+      const sccnRepresentativeName = String(body.sccnRepresentative || "").trim();
+      const sccnRepresentativePosition = String(body.sccnPosition || "").trim();
+      const isProposalDocumentExport = t.type === "DE_XUAT";
+      if (isProposalDocumentExport && !t.bbktDocUrl) {
+        return fail("Chưa xuất BBNT ký tay ở tác vụ nghiệm thu trước đó");
+      }
+      if (isProposalDocumentExport && !SCCN_REPRESENTATIVES.includes(sccnRepresentativeName as typeof SCCN_REPRESENTATIVES[number])) {
+        return fail("Vui lòng chọn đại diện SCCN hợp lệ");
+      }
+      if (isProposalDocumentExport && !SCCN_POSITIONS.includes(sccnRepresentativePosition as typeof SCCN_POSITIONS[number])) {
+        return fail("Vui lòng chọn chức vụ đại diện SCCN hợp lệ");
+      }
+
+      const documents = isProposalDocumentExport
+        ? {
+            bbntDo: await buildBbntDoDocument(t, {
+              itemOverride,
+              sccnRepresentative: {
+                name: sccnRepresentativeName,
+                position: sccnRepresentativePosition,
+              },
+            }),
+            recovery: t.recoveryRequired
+              ? await buildRecoveryDocument(t, { pctNumber: t.pctNumber ?? undefined, itemOverride })
+              : null,
+          }
+        : null;
+
+      // Đề xuất: Thống kê xuất BBNT D-Office và BB thu hồi sau BBNT ký tay.
+      // Sử dụng hiện có: giữ nguyên hành vi chỉ xác nhận mã ERP.
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
             status: "CHO_QUYET_TOAN",
+            ...(documents?.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
+            ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
           },
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_STATS_EXPORT", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận mã ${erpCode}, chuyển Quyết toán`);
+      await audit(
+        user.id,
+        "MT_STATS_EXPORT",
+        "MaterialTicket",
+        t.id,
+        isProposalDocumentExport
+          ? `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất BBNT D-Office${documents?.recovery ? " và Biên bản vật tư thu hồi" : ""}, chuyển Quyết toán`
+          : `${materialTicketReference(t)}: xác nhận mã ${erpCode}, chuyển Quyết toán`,
+      );
       return ok(up);
     }
 
     if (action === "settle") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
-      // Cả ba biên bản đã được xuất ở bước Nghiệm thu; bước này chỉ xác nhận quyết toán.
+      // Các biên bản đã được xuất qua các tác vụ Nghiệm thu; bước này chỉ xác nhận quyết toán.
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {

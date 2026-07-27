@@ -88,8 +88,9 @@ const ORDER: Record<string, string[]> = {
   UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", "HOAN_TAT"],
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
 };
-const flowStatusKey = (status: string) =>
-  status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
+const flowStatusKey = (status: string, type: string) =>
+  type === "DE_XUAT" && status === "CHO_THONG_KE_XUAT_BIEN_BAN" ? "CHO_NGHIEM_THU"
+  : status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_XAC_NHAN_PHAT" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_PHIEU_YCSC" ? "NHAN_VAT_TU"
   : status;
@@ -297,6 +298,8 @@ export default function MaterialTicketBoard({
 		            ? { label: "Chưa xác nhận trả phiếu", c: C.warn }
 		            : t.type === "UNG" && t.status === "NHAN_VAT_TU"
 		            ? { label: "Chờ xác nhận ĐXVT", c: "#0891b2" }
+		            : t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN"
+		            ? { label: "Chờ Thống kê xuất BBNT", c: "#0f766e" }
 		            : STATUS[t.status] ?? { label: t.status, c: C.soft };
 		          const recoveryPending = t.recoveryRequired && !t.recoveryReturnedAt;
 	          const mine = actionsFor(t, viewer).length > 0;
@@ -1000,7 +1003,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   const [reviewStep, setReviewStep] = useState<string | null>(null);
   const flow = FLOW[t.type];
   const order = ORDER[t.type];
-  const flowStatus = flowStatusKey(t.status);
+  const flowStatus = flowStatusKey(t.status, t.type);
   const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
   const currentReceiptSourceLabel = receiptSourceLabel(t.receiptSource);
   const replacementDeviceName = Array.from(new Set(t.items
@@ -1047,7 +1050,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const cur = s.key === flowStatus;
 	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && !t.recoveryReturnedAt;
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
-	            const caption = s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
+	            const caption = t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
+	              ? "Thống kê · Chờ xuất BBNT D-Office"
+	              : s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
 	              ? "Xem lại"
 	              : `${s.who}${reviewable ? " · Xem lại" : ""}`;
 	            return (
@@ -2013,26 +2018,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} />
               </label>
             </div>
-            {t.type === "DE_XUAT" && (
-              <div className="accept-two-grid">
-                <label className="field">Đại diện SCCN *
-                  <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
-                    <option value="">— Chọn đại diện SCCN —</option>
-                    {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
-                  </select>
-                </label>
-                <label className="field">Chức vụ *
-                  <select value={sccnPosition} onChange={(e) => setSccnPosition(e.target.value)}>
-                    <option value="">— Chọn chức vụ —</option>
-                    {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
-                  </select>
-                </label>
-              </div>
-            )}
           </>
-        <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt || (t.type === "DE_XUAT" && (!sccnRepresentative || !sccnPosition))}
-          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt, sccnRepresentative: t.type === "DE_XUAT" ? sccnRepresentative : undefined, sccnPosition: t.type === "DE_XUAT" ? sccnPosition : undefined }, "Đã nghiệm thu và xuất các biên bản")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu và xuất biên bản
+        <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
+          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "DE_XUAT" ? "Đã xuất BBNT ký tay, chuyển Thống kê xuất BBNT D-Office" : "Đã nghiệm thu và xuất các biên bản")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "DE_XUAT" ? "Xác nhận và xuất BBNT ký tay" : "Nghiệm thu và xuất biên bản"}
         </button>
       </div>
     );
@@ -2046,9 +2035,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
     const selectedErp = codeOptions.find((option) => option.code === erpCode);
+    const isProposalDocumentExport = t.type === "DE_XUAT";
     return (
       <div className="act">
-        <label className="lb">Thống kê xác nhận mã vật tư</label>
+        <label className="lb">{isProposalDocumentExport ? "Thống kê xuất BBNT D-Office và biên bản thu hồi" : "Thống kê xác nhận mã vật tư"}</label>
         <label className="field">Mã vật tư *
           <select value={erpCode} disabled>
             <option value="">— Chọn mã vật tư ERP —</option>
@@ -2063,10 +2053,38 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </div>
           </div>
         )}
-        <p className="hint">BBNT D-Office đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán.</p>
-        <button className="btn primary big" disabled={!erpCode || act.isPending}
-          onClick={() => run({ action: "statsExportDocuments", erpCode }, "Đã xác nhận mã vật tư")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận mã vật tư
+        {isProposalDocumentExport && (
+          <div className="accept-two-grid">
+            <label className="field">Đại diện SCCN *
+              <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
+                <option value="">— Chọn đại diện SCCN —</option>
+                {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label className="field">Chức vụ *
+              <select value={sccnPosition} onChange={(e) => setSccnPosition(e.target.value)}>
+                <option value="">— Chọn chức vụ —</option>
+                {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
+        <p className="hint">
+          {isProposalDocumentExport
+            ? `BBNT ký tay đã được xuất. Xác nhận để xuất BBNT D-Office${t.recoveryRequired ? " và Biên bản vật tư thu hồi" : ""}, sau đó chuyển sang bước Quyết toán.`
+            : "BBNT D-Office đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán."}
+        </p>
+        <button className="btn primary big" disabled={!erpCode || act.isPending || (isProposalDocumentExport && (!sccnRepresentative || !sccnPosition))}
+          onClick={() => run(
+            {
+              action: "statsExportDocuments",
+              erpCode,
+              sccnRepresentative: isProposalDocumentExport ? sccnRepresentative : undefined,
+              sccnPosition: isProposalDocumentExport ? sccnPosition : undefined,
+            },
+            isProposalDocumentExport ? "Đã xuất BBNT D-Office và chuyển bước Quyết toán" : "Đã xác nhận mã vật tư",
+          )}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {isProposalDocumentExport ? "Xác nhận và xuất biên bản" : "Xác nhận mã vật tư"}
         </button>
       </div>
     );
