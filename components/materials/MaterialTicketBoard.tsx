@@ -428,6 +428,8 @@ export default function MaterialTicketBoard({
 /* ================= tạo phiếu ================= */
 const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
 const UNITS = ["S1", "S2", "COMMON"];
+const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
+const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
 const positionKey = (value?: string | null) =>
   normalizeText(value ?? "").replace(/\s+/g, " ").trim();
 
@@ -1125,7 +1127,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                         <em>đã cộng vào số lượng hiện có</em>
                       </div>
                     )}
-                    {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
+                    {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b></div>}
                     {t.usedQuantity != null && (
                       <div className="meta-line">
                         {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
@@ -1307,10 +1309,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [reason, setReason] = useState("");
   const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
-  const [manualMaterialCode, setManualMaterialCode] = useState(t.vhvMaterialCode ?? "");
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
   const [workflowType, setWorkflowType] = useState<"DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO">("DE_XUAT");
   const [erpCode, setErpCode] = useState(t.items[0]?.erpCode ?? "");
+  const [sccnRepresentative, setSccnRepresentative] = useState("");
+  const [sccnPosition, setSccnPosition] = useState("");
   const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [recoveryReturned, setRecoveryReturned] = useState(false);
   const [recoveryQuantityInput, setRecoveryQuantityInput] = useState("1");
@@ -1797,11 +1800,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const isAdvance = t.type === "UNG";
     const advanceProposalExported = Boolean(t.proposalDocUrl);
     const advanceDocumentLocked = isAdvance && !advanceProposalExported;
+    const advanceMaterialCodeLocked = isAdvance && Boolean(t.items[0]?.erpCode);
     const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
     const receiveCodeOptions = selectedMaterialOption?.erpCodes?.length
       ? selectedMaterialOption.erpCodes
       : (t.items[0]?.material.erpCodes ?? []).map((code) => ({ code, name: "", erpStock: 0 }));
-    const selectedReceiveErp = receiveCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
         {isAdvance && <div className="act-title-row receive-title-row">
@@ -1817,7 +1820,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         <div className={`receive-field-grid ${isAdvance ? "advance-receive-fields" : ""}`}>
           {isAdvance && (
             <label className="field">Mã vật tư *
-              <select value={erpCode} disabled={advanceProposalExported} onChange={(e) => setErpCode(e.target.value)}>
+              <select value={erpCode} disabled={advanceMaterialCodeLocked || advanceProposalExported} onChange={(e) => setErpCode(e.target.value)}>
                 <option value="">— Chọn mã vật tư ERP —</option>
                 {receiveCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock} {unit}</option>)}
               </select>
@@ -1850,9 +1853,21 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </label>
           )}
         </div>
-        {isAdvance && selectedReceiveErp && <div className="note"><b>Tên vật tư ERP:</b> {selectedReceiveErp.name}<br/><b>Số lượng ERP:</b> {selectedReceiveErp.erpStock} {unit}</div>}
         {advanceDocumentLocked && (
-          <div className="note"><FileText size={15} /><span>Chọn mã vật tư rồi xác nhận xuất <b>Phiếu Đề Xuất Vật Tư</b>. Sau khi xuất thành công, ô số phiếu ĐXVT và số phiếu giao hàng sẽ được mở khóa.</span></div>
+          <div className="accept-two-grid">
+            <label className="field">Đại diện SCCN *
+              <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
+                <option value="">— Chọn đại diện SCCN —</option>
+                {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label className="field">Chức vụ *
+              <select value={sccnPosition} onChange={(e) => setSccnPosition(e.target.value)}>
+                <option value="">— Chọn chức vụ —</option>
+                {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
+              </select>
+            </label>
+          </div>
         )}
         {isAdvance && advanceProposalExported && (
           <div className="note"><FileText size={15} /><span>Đã xuất Phiếu Đề Xuất Vật Tư — <a className="pdf-inline" href={t.proposalDocUrl!} target="_blank" rel="noreferrer">tải xuống</a>. Mã vật tư đã được khóa; có thể nhập số phiếu để tiếp tục.</span></div>
@@ -1863,8 +1878,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {advanceDocumentLocked ? (
           <button
             className="btn primary big"
-            disabled={!erpCode || act.isPending}
-            onClick={() => run({ action: "statsExportProposal", erpCode }, "Đã xác nhận và xuất Phiếu Đề Xuất Vật Tư")}
+            disabled={!erpCode || !sccnRepresentative || !sccnPosition || act.isPending}
+            onClick={() => run(
+              { action: "statsExportProposal", erpCode, sccnRepresentative, sccnPosition },
+              "Đã xác nhận và xuất Phiếu Đề Xuất Vật Tư"
+            )}
           >
             {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Phiếu Đề Xuất Vật Tư
           </button>
@@ -1961,13 +1979,23 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     return (
       <div className="act">
           <>
-            <label className="field">Mã vật tư dùng xuất biên bản *
-              <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
-                <option value="">— Chọn mã vật tư ERP —</option>
-                {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
-              </select>
-            </label>
-            {selectedErp && <p className="hint">BBNT D-Office sẽ sử dụng mã <b>{selectedErp.code}</b> và tên <b>{selectedErp.name || t.items[0]?.material.name}</b>.</p>}
+            <div className="accept-two-grid">
+              <label className="field">Mã vật tư dùng xuất biên bản *
+                <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+                  <option value="">— Chọn mã vật tư ERP —</option>
+                  {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
+                </select>
+              </label>
+              <label className="field">Số BBNT ký tay
+                <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Nhập số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+              </label>
+            </div>
+            {selectedErp && (
+              <p className="hint">
+                Tất cả biên bản Word sẽ sử dụng mã <b>{selectedErp.code}</b> và tên <b>{selectedErp.name || t.items[0]?.material.name}</b>.
+                {t.type === "UNG" && " BBNT D-Office sẽ được xuất cùng Phiếu ĐXVT ở bước Xác nhận ĐXVT."}
+              </p>
+            )}
             <div className="accept-two-grid">
               <label className="field">Số PCT/LCT *
                 <input placeholder="Nhập số PCT/LCT" value={pct} onChange={(e) => setPct(e.target.value)} />
@@ -1986,20 +2014,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               </label>
             </div>
           </>
-        {t.type === "UNG" ? (
-          <div className="accept-two-grid">
-            <label className="field">Số BBNT ký tay
-              <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Nhập số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
-            </label>
-            <label className="field">Mã vật tư nhập tay (nếu có)
-              <input name={`manual-material-code-${t.id}`} autoComplete="off" placeholder="Nhập tay mã vật tư hoặc để trống" value={manualMaterialCode} onChange={(e) => setManualMaterialCode(e.target.value)} />
-            </label>
-          </div>
-        ) : (
-          <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
-        )}
         <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
-          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, ...(t.type === "UNG" ? { materialCode: manualMaterialCode.trim() || undefined } : {}), workStartedAt: startedAt, workEndedAt: endedAt }, "Đã nghiệm thu và xuất các biên bản")}>
+          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, "Đã nghiệm thu và xuất các biên bản")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu và xuất biên bản
         </button>
       </div>

@@ -86,7 +86,7 @@ const signTable = table(
   [3245, 3245, 3247],
   tr(
     tc(3245, p(run("KT. TRƯỞNG PHÒNG KHVT", { b: true }), { align: "center", after: 0 }) + p(run("PHÓ TRƯỞNG PHÒNG", { b: true }), { align: "center", after: 0 }), { extra: NO_BORDER, valign: "top" }) +
-    tc(3245, p(run("QUẢN ĐỐC PXVH 1", { b: true }), { align: "center", after: 0 }), { extra: NO_BORDER, valign: "top" }) +
+    tc(3245, p(run("{{quanDocPosition}} PXVH 1", { b: true }), { align: "center", after: 0 }), { extra: NO_BORDER, valign: "top" }) +
     tc(3247, p(run("NGƯỜI ĐỀ NGHỊ", { b: true }), { align: "center", after: 0 }), { extra: NO_BORDER, valign: "top" })
   ) +
   // Tag ảnh {%...} phải nằm MỘT MÌNH trong paragraph riêng (ràng buộc image module);

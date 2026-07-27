@@ -630,10 +630,10 @@ export default function DefectsPage() {
                     onChange={setStatusFilter}
                   />
                 </TableHead>
-                <TableHead className="w-[120px] px-1.5 text-center">Kết quả sửa chữa</TableHead>
+                <TableHead className="w-[120px] px-1.5 text-center">Kết quả</TableHead>
                 <TableHead className="w-[64px] px-1 text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[84px] px-1 text-center">Phát hiện</TableHead>
-                <TableHead className="w-[72px] px-1 text-center">Người cập nhật</TableHead>
+                <TableHead className="w-[72px] px-1 text-center">Cập nhật</TableHead>
                 <TableHead className="w-[112px] px-1 text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>

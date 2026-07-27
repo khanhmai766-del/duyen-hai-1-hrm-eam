@@ -68,7 +68,7 @@ const body1 = [
   p(run("2.2.", { b: true, i: true }) + tabR() + run("Đại diện đơn vị sửa chữa: Phân xưởng Sửa chữa cơ nhiệt:", { b: true, i: true }), { ind: 567 }),
   p(run("Ông: ……………………………") + tabR() + run("Chức vụ: ……………………"), { ind: 900 }),
   p(run("2.3.", { b: true, i: true }) + tabR() + run("Đại diện đơn vị chủ quản thiết bị: Phân xưởng Vận hành 1:", { b: true, i: true }), { ind: 567 }),
-  p(run("Ông: {{quanDocName}}") + tabR() + run("Chức vụ: Quản đốc"), { ind: 900 }),
+  p(run("Ông: {{quanDocName}}") + tabR() + run("Chức vụ: {{quanDocPosition}}"), { ind: 900 }),
   p(run("Ông: {{usedByName}}") + tabR() + run("Chức vụ: {{usedByPosition}}"), { ind: 900 }),
 
   p(run("3.", { b: true }) + tabR() + run("Thời gian và địa điểm nghiệm thu:", { b: true })),

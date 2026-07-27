@@ -31,6 +31,7 @@ export interface DxvtData {
   lyDo?: string | null; // lý do (proposalNote — nhập ở tạo phiếu / bước Xác nhận yêu cầu)
   soBBKT?: string | null; // số biên bản kiểm tra
   quanDocName?: string | null;
+  quanDocPosition?: string | null;
   tenThongKe?: string | null; // người đề nghị (Thống kê đang thao tác)
   issuedAt?: Date; // mốc điền "Tháng" + tên file; mặc định: thời điểm xuất
   items: DxvtItem[];
@@ -46,10 +47,55 @@ function vnMonth(value: Date) {
   return `${get("month")}/${get("year")}`;
 }
 
+function replaceTemplateParagraph(documentXml: string, marker: string, replacement: string) {
+  const markerIndex = documentXml.indexOf(marker);
+  if (markerIndex < 0) return documentXml;
+  const paragraphStart = Math.max(
+    documentXml.lastIndexOf("<w:p ", markerIndex),
+    documentXml.lastIndexOf("<w:p>", markerIndex)
+  );
+  const paragraphEnd = documentXml.indexOf("</w:p>", markerIndex);
+  const openingTagEnd = documentXml.indexOf(">", paragraphStart);
+  if (paragraphStart < 0 || paragraphEnd < 0 || openingTagEnd < 0) return documentXml;
+
+  const paragraph = documentXml.slice(paragraphStart, paragraphEnd + 6);
+  const paragraphProperties = paragraph.match(/<w:pPr>[\s\S]*?<\/w:pPr>/)?.[0] ?? "";
+  const dynamicParagraph =
+    `${documentXml.slice(paragraphStart, openingTagEnd + 1)}${paragraphProperties}` +
+    "<w:r><w:rPr><w:b/><w:sz w:val=\"26\"/></w:rPr>" +
+    `<w:t>${replacement}</w:t></w:r></w:p>`;
+  return (
+    documentXml.slice(0, paragraphStart) +
+    dynamicParagraph +
+    documentXml.slice(paragraphEnd + 6)
+  );
+}
+
 /** Sinh file Word Phiếu ĐXVT đã điền dữ liệu, upload MinIO, trả về { key, url }. */
 export async function generateDxvtDoc(d: DxvtData): Promise<{ key: string; url: string }> {
   const tplPath = path.join(process.cwd(), "templates", "dxvt-template.docx");
   const zip = new PizZip(readFileSync(tplPath));
+  // Mẫu nghiệp vụ hiện hành ghi cố định chức vụ và tên Quản đốc.
+  // Chuyển hai vị trí đó thành token ngay trong OOXML để giữ nguyên toàn bộ
+  // bố cục/tài nguyên của mẫu gốc nhưng vẫn dùng đại diện SCCN được chọn.
+  let documentXml = zip.file("word/document.xml")?.asText();
+  if (documentXml) {
+    if (!documentXml.includes("{{quanDocName}}")) {
+      documentXml = replaceTemplateParagraph(
+        documentXml,
+        "<w:t>Trương</w:t>",
+        "{{quanDocName}}"
+      );
+    }
+    if (!documentXml.includes("{{quanDocPosition}}")) {
+      documentXml = replaceTemplateParagraph(
+        documentXml,
+        "<w:t>QUẢN</w:t>",
+        "{{quanDocPosition}} PXVH 1"
+      );
+    }
+    zip.file("word/document.xml", documentXml);
+  }
   // Giá trị tag ảnh là CHUỖI base64 (Buffer sẽ bị module hiểu nhầm) — getImage decode lại.
   const imageModule = new ImageModule({
     centered: true,
@@ -70,6 +116,7 @@ export async function generateDxvtDoc(d: DxvtData): Promise<{ key: string; url: 
     Lydo: d.lyDo || "", // token do phân xưởng đặt trong file Word — giữ nguyên tên
     soBBKT: d.soBBKT || "……",
     quanDocName: d.quanDocName || "……………………………",
+    quanDocPosition: (d.quanDocPosition || "QUẢN ĐỐC").toLocaleUpperCase("vi-VN"),
     tenThongKe: d.tenThongKe || "……………………………",
     items: d.items.map((item, index) => ({
       stt: index + 1,

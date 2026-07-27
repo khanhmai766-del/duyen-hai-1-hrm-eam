@@ -29,11 +29,14 @@ export interface BbntDoItem {
 export interface BbntDoData {
   fileBaseName: string; // định danh kỹ thuật tháng + STT, dùng làm thư mục lưu file
   unit: string; // tổ máy S1 | S2 | COMMON
+  materialCategory?: string | null; // loại vật tư trên phiếu, dùng chọn mẫu nội dung công tác
   heThongThietBi?: string | null; // tên hệ thống/thiết bị theo Chi tiết điểm thay thế (EquipmentNode.name)
+  bbktNumber?: string | null; // số biên bản kiểm tra
   pctNumber?: string | null;
   proposalNumber?: string | null;
   deliveryNoteNumber?: string | null; // số phiếu giao hàng
   quanDocName?: string | null; // tên Quản đốc (đại diện đơn vị chủ quản)
+  quanDocPosition?: string | null; // chức vụ đại diện đơn vị chủ quản
   usedByName?: string | null; // người sử dụng vật tư = Người lập
   usedByPosition?: string | null;
   workStartedAt?: Date | string | null;
@@ -95,10 +98,31 @@ function vnDate(value?: Date | string | null) {
 
 const qty = (value?: number | null) => (value === null || value === undefined ? "" : String(value));
 
+function bbntDoTemplateFileName(materialCategory?: string | null) {
+  if (materialCategory === "Dầu bôi trơn") return "bbnt-do-template-dau.docx";
+  if (materialCategory === "Lọc dầu" || materialCategory === "Lõi lọc dầu") {
+    return "bbnt-do-template-loi.docx";
+  }
+  return "bbnt-do-template-bi.docx";
+}
+
 /** Sinh file Word BBNT DO đã điền dữ liệu, upload MinIO, trả về { key, url }. */
 export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; url: string }> {
-  const tplPath = path.join(process.cwd(), "templates", "bbnt-do-template.docx");
+  const tplPath = path.join(
+    process.cwd(),
+    "templates",
+    bbntDoTemplateFileName(d.materialCategory)
+  );
   const zip = new PizZip(readFileSync(tplPath));
+  // Tương thích với mẫu đang được mở/khóa hoặc bản mẫu cũ đã deploy:
+  // thay chức vụ cố định bằng token ngay trong OOXML trước khi render.
+  const documentXml = zip.file("word/document.xml")?.asText();
+  if (documentXml && !documentXml.includes("{{quanDocPosition}}")) {
+    zip.file(
+      "word/document.xml",
+      documentXml.replace("Chức vụ: Quản đốc", "Chức vụ: {{quanDocPosition}}")
+    );
+  }
   // Giá trị tag ảnh phải là CHUỖI base64 (Buffer là object sẽ bị module hiểu nhầm
   // thành dữ liệu đã resolve và crash) — getImage decode lại thành Buffer.
   const imageModule = new ImageModule({
@@ -119,10 +143,12 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     unit: d.unit,
     heThongThietBi: d.heThongThietBi || joinUniq(d.items.map((item) => item.deviceSeq)),
     deviceNameManual: joinUniq(d.items.map((item) => item.deviceName)),
+    soBBKT: d.bbktNumber || "",
     pctNumber: d.pctNumber || "",
     proposalNumber: d.proposalNumber ? `Phiếu đề xuất vật tư số ${d.proposalNumber}` : "Phiếu đề xuất vật tư: (không)",
     deliveryNote: d.deliveryNoteNumber ? `Phiếu giao hàng số ${d.deliveryNoteNumber}` : "",
     quanDocName: d.quanDocName || "……………………………",
+    quanDocPosition: d.quanDocPosition || "Quản Đốc",
     usedByName: d.usedByName || "……………………………",
     usedByPosition: d.usedByPosition || "……………………",
     workStartedAt: vnDateTime(d.workStartedAt),
