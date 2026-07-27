@@ -8,11 +8,11 @@ dùng bảng mirror và không `DELETE + INSERT`. Dữ liệu tiếp tục đư�
 
 - Google Sheet vẫn là nguồn chính cho các trường nguồn.
 - Thiết bị VHV đã ánh xạ, trạng thái xác nhận và lịch sử không bị n8n ghi đè.
-- Mỗi lượt full snapshot gồm đủ hai nguồn `CO` và `DIEN`.
+- Mỗi lượt snapshot gồm một nguồn `CO`, một nguồn `DIEN`, hoặc cả hai.
 - Dữ liệu được gửi theo batch tối đa 500 dòng.
 - Retry cùng `runId/source/batchNumber` không ghi trùng.
-- Chỉ khi cả hai nguồn hoàn tất, backend mới đánh dấu khóa không còn xuất hiện
-  thành `MISSING`.
+- Chỉ khi tất cả nguồn khai báo trong lượt hoàn tất, backend mới đánh dấu khóa
+  không còn xuất hiện thành `MISSING`, và chỉ trong đúng Sheet đã đồng bộ.
 - Nếu workflow dừng giữa chừng, dữ liệu hiện có vẫn được giữ nguyên.
 
 ## Cài n8n cố định phiên bản
@@ -60,6 +60,9 @@ Không dùng lại `DEFECT_SYNC_TOKEN` hoặc `CRON_SECRET`.
 npx prisma db execute \
   --file prisma/manual/add-n8n-defect-sync.sql \
   --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/optimize-n8n-defect-source-sync.sql \
+  --schema prisma/schema.prisma
 npx prisma generate
 ```
 
@@ -72,7 +75,7 @@ Authorization: Bearer N8N_DEFECT_SYNC_TOKEN
 Content-Type: application/json
 ```
 
-### 1. Bắt đầu full snapshot
+### 1. Bắt đầu snapshot
 
 ```http
 POST /api/integrations/n8n/defects/runs
@@ -81,9 +84,12 @@ POST /api/integrations/n8n/defects/runs
 ```json
 {
   "externalRunId": "defects-2026-07-27T06:00:00+07:00",
-  "expectedSources": ["CO", "DIEN"]
+  "expectedSources": ["CO"]
 }
 ```
+
+`expectedSources` nhận `["CO"]`, `["DIEN"]` hoặc `["CO", "DIEN"]`. Chỉ khai
+báo những nguồn có `modifiedTime` thay đổi.
 
 Response trả `data.runId`. n8n phải giữ giá trị này cho các node tiếp theo.
 
@@ -98,7 +104,7 @@ Body mẫu nằm ở `sample-batch.json`. Một batch nhận tối đa 500 dòng
 
 ### 3. Kết thúc
 
-Chỉ gọi sau khi tất cả batch của cả hai nguồn thành công:
+Chỉ gọi sau khi tất cả batch của các nguồn đã khai báo thành công:
 
 ```http
 POST /api/integrations/n8n/defects/runs/{runId}/finish
@@ -106,9 +112,11 @@ POST /api/integrations/n8n/defects/runs/{runId}/finish
 
 ```json
 {
-  "completedSources": ["CO", "DIEN"]
+  "completedSources": ["CO"]
 }
 ```
+
+`completedSources` phải khớp chính xác `expectedSources` của lượt chạy.
 
 Không đặt node `finish` trong nhánh luôn chạy sau lỗi.
 
@@ -128,19 +136,18 @@ POST /api/integrations/n8n/defects/runs/{runId}/fail
 
 Endpoint chỉ đóng lượt chạy và dọn khóa staging. Những batch đã upsert vẫn an
 toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đánh dấu
-`MISSING`. Lượt full snapshot kế tiếp sẽ đối chiếu lại toàn bộ.
+`MISSING`. Lượt snapshot kế tiếp của nguồn đó sẽ đối chiếu lại toàn bộ.
 
-## Workflow n8n sẽ cấu hình khi có email
+## Workflow n8n
 
-1. Schedule Trigger: 06:00, 14:00, 22:00.
-2. HTTP Request: bắt đầu run.
-3. Google Sheets: đọc `CƠ_DH1`.
-4. Code/Edit Fields: đổi tên cột về contract trong `sample-batch.json`.
-5. Chia batch tối đa 500, POST với `source=CO`.
-6. Google Sheets: đọc `ĐIỆN_DH1`.
-7. Chuẩn hóa và POST các batch với `source=DIEN`.
-8. HTTP Request: finish.
-9. Error Workflow: gọi endpoint `fail`, gửi cảnh báo và tuyệt đối không gọi
+1. Schedule Trigger kiểm tra định kỳ.
+2. Đọc `modifiedTime` của hai file bằng Google Drive API.
+3. Dừng ngay nếu cả hai mốc không đổi.
+4. Bắt đầu run với `expectedSources` chỉ gồm những nguồn đã đổi.
+5. Chỉ đọc, chuẩn hóa và gửi batch cho các Sheet tương ứng.
+6. Finish với `completedSources` khớp chính xác `expectedSources`.
+7. Chỉ sau khi finish trả `SUCCESS` mới lưu các mốc `modifiedTime`.
+8. Error Workflow gọi endpoint `fail`, gửi cảnh báo và tuyệt đối không gọi
    `finish`.
 
 Trong giai đoạn kiểm thử có thể đặt `EXECUTIONS_DATA_SAVE_ON_SUCCESS=all` để xem

@@ -1,0 +1,678 @@
+{
+  "name": "Đồng bộ khiếm khuyết DH1 - Tự động tối ưu",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -32
+      ],
+      "id": "e02e3e0a-2380-44a6-9330-31469d61aca9",
+      "name": "Chạy thủ công"
+    },
+    {
+      "parameters": {
+        "jsCode": "const requestedSources = $input.first()?.json?.expectedSources;\nconst expectedSources = Array.isArray(requestedSources)\n  ? [...new Set(requestedSources.filter((source) => source === \"CO\" || source === \"DIEN\"))]\n  : [\"CO\", \"DIEN\"];\n\nif (!expectedSources.length) {\n  return [];\n}\n\nreturn [{\n  json: {\n    externalRunId: `defects-${new Date().toISOString()}`,\n    expectedSources,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        -32
+      ],
+      "id": "d5b70eb0-d410-41f4-92ac-771773eda518",
+      "name": "Chuẩn bị lượt đồng bộ"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://duyenhai1.vn/api/integrations/n8n/defects/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        512,
+        -32
+      ],
+      "id": "5d173448-5cc5-4af2-a320-edd3373f7c2b",
+      "name": "Bắt đầu run",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 428426440,
+          "mode": "list",
+          "cachedResultName": "DH1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA/edit#gid=428426440"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A6:Z"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        896,
+        -160
+      ],
+      "id": "4c4fe6c1-5752-4882-ba14-c5eb2e8ec79d",
+      "name": "Đọc Sheet Cơ",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const SOURCE = {\n  code: \"CO\",\n  spreadsheetId: \"1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA\",\n  sheet: \"CƠ_DH1\",\n  tab: \"DH1\",\n  requestType: \"Cơ\",\n};\n\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/đ/g, \"d\")\n  .replace(/Đ/g, \"D\")\n  .toLowerCase()\n  .replace(/\\s+/g, \" \")\n  .trim();\n\nconst text = (value) => String(value ?? \"\").trim();\n\nfunction valueOf(row, aliases) {\n  const entries = Object.entries(row).map(([key, value]) => [normalize(key), value]);\n  for (const alias of aliases) {\n    const exact = entries.find(([key]) => key === alias);\n    if (exact) return text(exact[1]);\n  }\n  for (const alias of aliases) {\n    const partial = entries.find(([key]) => key.includes(alias));\n    if (partial) return text(partial[1]);\n  }\n  return \"\";\n}\n\nfunction sourceDate(value) {\n  const match = text(value).match(/(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{2,4})/);\n  if (!match) return null;\n  const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);\n  const date = new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[1])));\n  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);\n}\n\nfunction sourceKey(record) {\n  const unit = text(record.unit).toUpperCase().replace(/\\s+/g, \" \");\n  return [\n    record.sourceSpreadsheetId,\n    record.sourceSheet,\n    record.requestType,\n    text(record.stt).replace(/\\.0$/, \"\"),\n    sourceDate(record.detectedAtRaw),\n    unit === \"S1\" || unit === \"S2\" ? unit : \"COMMON\",\n    normalize(record.positionRaw),\n    normalize(record.deviceRaw),\n  ].join(\"|\");\n}\n\nconst rawRecords = $input.all().map(({ json: row }) => {\n  const stt = valueOf(row, [\"stt (vh1)\", \"stt\"]);\n  const content = valueOf(row, [\"ton tai/khuyet diem (vh1)\", \"ton tai/kiem khuyet (vh1)\", \"ton tai/kiem khuyet\", \"ton tai\", \"khiem khuyet\"]);\n  const detectedAtRaw = valueOf(row, [\"ngay phat hien (vh1)\", \"ngay phat hien\"]);\n  if (!stt || stt.startsWith(\"(\") || !content || !sourceDate(detectedAtRaw)) return null;\n\n  return {\n    sourceSpreadsheetId: SOURCE.spreadsheetId,\n    sourceSheet: SOURCE.sheet,\n    sourceTab: SOURCE.tab,\n    sourceRow: Number(row.row_number || 0) + 5,\n    requestType: SOURCE.requestType,\n    stt,\n    unit: valueOf(row, [\"to may (vh1)\", \"to may\"]),\n    deviceRaw: valueOf(row, [\"thiet bi (vh1)\", \"thiet bi\"]),\n    positionRaw: valueOf(row, [\"cuong vi (vh1)\", \"cuong vi\"]),\n    content,\n    detectedAtRaw,\n    shiftLeaderRaw: valueOf(row, [\"truong ca (vh1)\", \"truong ca\"]),\n    reminderRaw: valueOf(row, [\"nhac lai (vh1)\", \"nhac lai\"]),\n    repeatedRepairRaw: valueOf(row, [\"sua chua lap lai (vh1)\", \"sua chua lap lai\"]),\n    fireSafetyImpact: valueOf(row, [\"anh huong pccc (vh1)\", \"anh huong pccc\"]),\n    environmentSafetyImpact: valueOf(row, [\"moi truong, atvsld (vh1)\", \"moi truong, atvsld\", \"moi truong\", \"atvsld\"]),\n    severityRaw: valueOf(row, [\"phan loai anh huong (vh1)\", \"phan loai anh huong\", \"phan loai\"]),\n    conditionRaw: valueOf(row, [\"dk thuc hien (vh1)\", \"dieu kien thuc hien\", \"dk thuc hien\"]),\n    sourceStatusRaw: valueOf(row, [\"ghi chu kq sua chua (vh1)\", \"ghi chu kq\", \"tinh trang khiem khuyet\", \"tinh trang\"]),\n    repairResultRaw: valueOf(row, [\"ket qua thuc hien (sccn)\", \"ket qua thuc hien\"]),\n    completedAtRaw: valueOf(row, [\"ngay ket thuc (sccn)\", \"ngay ket thuc\"]),\n    noteRaw: valueOf(row, [\"ghi chu (vh1)\", \"ghi chu vh1\", \"ghi chu\"]),\n  };\n}).filter(Boolean);\n\nconst byKey = new Map();\nfor (const record of rawRecords) {\n  const key = sourceKey(record);\n  const { sourceRow, ...stableRecord } = record;\n  const stable = JSON.stringify(stableRecord);\n  const previous = byKey.get(key);\n  if (!previous) byKey.set(key, { record, stable });\n  else if (previous.stable !== stable) throw new Error(`Sheet Cơ có khóa trùng nhưng nội dung khác: ${key}`);\n}\nconst records = Array.from(byKey.values(), ({ record }) => record);\n\nif (!records.length) throw new Error(\"Sheet Cơ không có dòng hợp lệ để đồng bộ\");\n\nconst batches = [];\nfor (let index = 0; index < records.length; index += 500) {\n  batches.push({\n    json: {\n      source: SOURCE.code,\n      batchNumber: batches.length + 1,\n      records: records.slice(index, index + 500),\n    },\n  });\n}\nreturn batches;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -160
+      ],
+      "id": "e2ebf05a-a6ac-43ac-996e-d6618ebb2471",
+      "name": "Chuẩn hóa và chia batch Cơ"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://duyenhai1.vn/api/integrations/n8n/defects/runs/{{ $('Bắt đầu run').first().json.data.runId }}/batches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1312,
+        -160
+      ],
+      "id": "98673d7c-a84c-4301-a97e-8d8a4e3dff40",
+      "name": "Gửi batch Cơ",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { source: \"CO\", successfulBatches: $input.all().length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        -160
+      ],
+      "id": "9f55e82a-4ba8-428a-b1d3-5eaa8538101e",
+      "name": "Xác nhận xong nguồn Cơ"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1906730067,
+          "mode": "list",
+          "cachedResultName": "DH1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ/edit#gid=1906730067"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A6:Z"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1728,
+        -160
+      ],
+      "id": "650cc740-a41b-4a67-b8f3-e14dbf9eef08",
+      "name": "Đọc Sheet Điện",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const SOURCE = {\n  code: \"DIEN\",\n  spreadsheetId: \"1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ\",\n  sheet: \"ĐIỆN_DH1\",\n  tab: \"DH1\",\n  requestType: \"Điện\",\n};\n\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/đ/g, \"d\")\n  .replace(/Đ/g, \"D\")\n  .toLowerCase()\n  .replace(/\\s+/g, \" \")\n  .trim();\n\nconst text = (value) => String(value ?? \"\").trim();\n\nfunction valueOf(row, aliases) {\n  const entries = Object.entries(row).map(([key, value]) => [normalize(key), value]);\n  for (const alias of aliases) {\n    const exact = entries.find(([key]) => key === alias);\n    if (exact) return text(exact[1]);\n  }\n  for (const alias of aliases) {\n    const partial = entries.find(([key]) => key.includes(alias));\n    if (partial) return text(partial[1]);\n  }\n  return \"\";\n}\n\nfunction sourceDate(value) {\n  const match = text(value).match(/(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{2,4})/);\n  if (!match) return null;\n  const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);\n  const date = new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[1])));\n  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);\n}\n\nfunction sourceKey(record) {\n  const unit = text(record.unit).toUpperCase().replace(/\\s+/g, \" \");\n  return [\n    record.sourceSpreadsheetId,\n    record.sourceSheet,\n    record.requestType,\n    text(record.stt).replace(/\\.0$/, \"\"),\n    sourceDate(record.detectedAtRaw),\n    unit === \"S1\" || unit === \"S2\" ? unit : \"COMMON\",\n    normalize(record.positionRaw),\n    normalize(record.deviceRaw),\n  ].join(\"|\");\n}\n\nconst rawRecords = $input.all().map(({ json: row }) => {\n  const stt = valueOf(row, [\"stt (vh1)\", \"stt\"]);\n  const content = valueOf(row, [\"ton tai/khuyet diem (vh1)\", \"ton tai/kiem khuyet (vh1)\", \"ton tai/kiem khuyet\", \"ton tai\", \"khiem khuyet\"]);\n  const detectedAtRaw = valueOf(row, [\"ngay phat hien (vh1)\", \"ngay phat hien\"]);\n  if (!stt || stt.startsWith(\"(\") || !content || !sourceDate(detectedAtRaw)) return null;\n\n  return {\n    sourceSpreadsheetId: SOURCE.spreadsheetId,\n    sourceSheet: SOURCE.sheet,\n    sourceTab: SOURCE.tab,\n    sourceRow: Number(row.row_number || 0) + 5,\n    requestType: SOURCE.requestType,\n    stt,\n    unit: valueOf(row, [\"to may (vh1)\", \"to may\"]),\n    deviceRaw: valueOf(row, [\"thiet bi (vh1)\", \"thiet bi\"]),\n    positionRaw: valueOf(row, [\"cuong vi (vh1)\", \"cuong vi\"]),\n    content,\n    detectedAtRaw,\n    shiftLeaderRaw: valueOf(row, [\"truong ca (vh1)\", \"truong ca\"]),\n    reminderRaw: valueOf(row, [\"nhac lai (vh1)\", \"nhac lai\"]),\n    repeatedRepairRaw: valueOf(row, [\"sua chua lap lai (vh1)\", \"sua chua lap lai\"]),\n    fireSafetyImpact: valueOf(row, [\"anh huong pccc (vh1)\", \"anh huong pccc\"]),\n    environmentSafetyImpact: valueOf(row, [\"moi truong, atvsld (vh1)\", \"moi truong, atvsld\", \"moi truong\", \"atvsld\"]),\n    severityRaw: valueOf(row, [\"phan loai anh huong (vh1)\", \"phan loai anh huong\", \"phan loai\"]),\n    conditionRaw: valueOf(row, [\"dk thuc hien (vh1)\", \"dieu kien thuc hien\", \"dk thuc hien\"]),\n    sourceStatusRaw: valueOf(row, [\"ghi chu kq sua chua (vh1)\", \"ghi chu kq\", \"tinh trang khiem khuyet\", \"tinh trang\"]),\n    repairResultRaw: valueOf(row, [\"ket qua thuc hien (dtd)\", \"ket qua thuc hien\"]),\n    completedAtRaw: valueOf(row, [\"ngay ket thuc (dtd)\", \"ngay ket thuc\"]),\n    noteRaw: valueOf(row, [\"ghi chu (vh1)\", \"ghi chu vh1\", \"ghi chu\"]),\n  };\n}).filter(Boolean);\n\nconst byKey = new Map();\nfor (const record of rawRecords) {\n  const key = sourceKey(record);\n  const { sourceRow, ...stableRecord } = record;\n  const stable = JSON.stringify(stableRecord);\n  const previous = byKey.get(key);\n  if (!previous) byKey.set(key, { record, stable });\n  else if (previous.stable !== stable) throw new Error(`Sheet Điện có khóa trùng nhưng nội dung khác: ${key}`);\n}\nconst records = Array.from(byKey.values(), ({ record }) => record);\n\nif (!records.length) throw new Error(\"Sheet Điện không có dòng hợp lệ để đồng bộ\");\n\nconst batches = [];\nfor (let index = 0; index < records.length; index += 500) {\n  batches.push({\n    json: {\n      source: SOURCE.code,\n      batchNumber: batches.length + 1,\n      records: records.slice(index, index + 500),\n    },\n  });\n}\nreturn batches;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        -160
+      ],
+      "id": "fd2a09d9-6e13-4468-a74e-86c451786c51",
+      "name": "Chuẩn hóa và chia batch Điện"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://duyenhai1.vn/api/integrations/n8n/defects/runs/{{ $('Bắt đầu run').first().json.data.runId }}/batches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2144,
+        -160
+      ],
+      "id": "270223df-f468-4be5-99f0-581429c8bd9d",
+      "name": "Gửi batch Điện",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { source: \"DIEN\", successfulBatches: $input.all().length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        -160
+      ],
+      "id": "214a93b1-4491-44ea-a6e9-a488f1491dba",
+      "name": "Xác nhận xong nguồn Điện"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://duyenhai1.vn/api/integrations/n8n/defects/runs/{{ $('Bắt đầu run').first().json.data.runId }}/finish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ completedSources: $('Bắt đầu run').first().json.data.expectedSources }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2560,
+        -32
+      ],
+      "id": "247491fe-5d98-4080-87a9-4690f353257b",
+      "name": "Hoàn tất run",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files/1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA?fields=id%2CmodifiedTime",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        544,
+        144
+      ],
+      "id": "41326940-1945-4238-a386-68589224fbcf",
+      "name": "Kiểm tra modifiedTime Cơ",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files/1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ?fields=id%2CmodifiedTime",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        560,
+        288
+      ],
+      "id": "519fc060-a63c-45d6-adbf-604db3c8af09",
+      "name": "Kiểm tra modifiedTime Điện",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        288,
+        160
+      ],
+      "id": "5cd41a62-06eb-431e-81b7-f5fb46fa1ffc",
+      "name": "Thời gian kiểm tra SHEET"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        752,
+        288
+      ],
+      "id": "3367ec39-1598-4ba9-8dac-a19ecb4189bf",
+      "name": "Gộp modifiedTime"
+    },
+    {
+      "parameters": {
+        "jsCode": "const CO_ID = \"1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA\";\nconst DIEN_ID = \"1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ\";\n\nconst times = {};\nfor (const item of $input.all()) {\n  if (item.json.id === CO_ID) times.co = item.json.modifiedTime;\n  if (item.json.id === DIEN_ID) times.dien = item.json.modifiedTime;\n}\n\nif (!times.co || !times.dien) {\n  throw new Error(\"Không lấy đủ modifiedTime của Sheet Cơ và Điện\");\n}\n\nconst state = $getWorkflowStaticData(\"global\");\nconst previous = state.lastSuccessfulModifiedTime || {};\nconst expectedSources = [];\n\nif (previous.co !== times.co) expectedSources.push(\"CO\");\nif (previous.dien !== times.dien) expectedSources.push(\"DIEN\");\n\nif (!expectedSources.length) {\n  return [];\n}\n\n// Chỉ lưu tạm; mốc này chỉ được xác nhận sau khi API finish trả SUCCESS.\nstate.pendingModifiedTime = {\n  times,\n  sources: expectedSources,\n};\n\nreturn [{\n  json: {\n    expectedSources,\n    modifiedTime: times,\n    previousModifiedTime: previous,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        128
+      ],
+      "id": "d4b77a60-d234-4fca-b926-368ca0b8c1b2",
+      "name": "Chỉ chạy khi Sheet thay đổi"
+    },
+    {
+      "parameters": {
+        "jsCode": "const status = $json.data?.status ?? $json.status;\nif (status !== \"SUCCESS\") {\n  throw new Error(`Không lưu modifiedTime vì trạng thái run là: ${status}`);\n}\n\nconst state = $getWorkflowStaticData(\"global\");\nconst pending = state.pendingModifiedTime;\n\nif (pending?.times && Array.isArray(pending.sources)) {\n  const lastSuccessful = { ...(state.lastSuccessfulModifiedTime || {}) };\n\n  if (pending.sources.includes(\"CO\")) {\n    lastSuccessful.co = pending.times.co;\n  }\n  if (pending.sources.includes(\"DIEN\")) {\n    lastSuccessful.dien = pending.times.dien;\n  }\n\n  state.lastSuccessfulModifiedTime = lastSuccessful;\n  delete state.pendingModifiedTime;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2784,
+        -32
+      ],
+      "id": "2d791894-d379-4dc0-be8c-6b9512e083b3",
+      "name": "Ghi nhớ modifiedTime thành công"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3158e928-9252-45f3-b9e5-3eb480ac541e",
+              "leftValue": "={{ $('Bắt đầu run').first().json.data.expectedSources.includes('CO') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f2bfa89e-dc9b-4fb7-865b-241e8b65f991",
+      "name": "Có đồng bộ Cơ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        704,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dcd1bd78-97d8-4423-bdae-9c91f2b0f022",
+              "leftValue": "={{ $('Bắt đầu run').first().json.data.expectedSources.includes('DIEN') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "60d132a0-f993-4453-971c-6eb968ead888",
+      "name": "Có đồng bộ Điện?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1536,
+        -32
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chạy thủ công": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn bị lượt đồng bộ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Thời gian kiểm tra SHEET": {
+      "main": [
+        [
+          {
+            "node": "Kiểm tra modifiedTime Cơ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Kiểm tra modifiedTime Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kiểm tra modifiedTime Cơ": {
+      "main": [
+        [
+          {
+            "node": "Gộp modifiedTime",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kiểm tra modifiedTime Điện": {
+      "main": [
+        [
+          {
+            "node": "Gộp modifiedTime",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Gộp modifiedTime": {
+      "main": [
+        [
+          {
+            "node": "Chỉ chạy khi Sheet thay đổi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chỉ chạy khi Sheet thay đổi": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn bị lượt đồng bộ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn bị lượt đồng bộ": {
+      "main": [
+        [
+          {
+            "node": "Bắt đầu run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bắt đầu run": {
+      "main": [
+        [
+          {
+            "node": "Có đồng bộ Cơ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Có đồng bộ Cơ?": {
+      "main": [
+        [
+          {
+            "node": "Đọc Sheet Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Có đồng bộ Điện?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc Sheet Cơ": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn hóa và chia batch Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn hóa và chia batch Cơ": {
+      "main": [
+        [
+          {
+            "node": "Gửi batch Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi batch Cơ": {
+      "main": [
+        [
+          {
+            "node": "Xác nhận xong nguồn Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xác nhận xong nguồn Cơ": {
+      "main": [
+        [
+          {
+            "node": "Có đồng bộ Điện?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Có đồng bộ Điện?": {
+      "main": [
+        [
+          {
+            "node": "Đọc Sheet Điện",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hoàn tất run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc Sheet Điện": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn hóa và chia batch Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn hóa và chia batch Điện": {
+      "main": [
+        [
+          {
+            "node": "Gửi batch Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi batch Điện": {
+      "main": [
+        [
+          {
+            "node": "Xác nhận xong nguồn Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xác nhận xong nguồn Điện": {
+      "main": [
+        [
+          {
+            "node": "Hoàn tất run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hoàn tất run": {
+      "main": [
+        [
+          {
+            "node": "Ghi nhớ modifiedTime thành công",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "instanceId": "f05fdebd4acd7b3923c2579073dd18925fa22302dcbb82ff8fa83ebea7ad3e23"
+  },
+  "nodeGroups": [],
+  "id": "R6NTcoirCNnXb0f6",
+  "tags": []
+}

@@ -10,6 +10,11 @@ import {
 export const N8N_DEFECT_SOURCES = ["CO", "DIEN"] as const;
 export type N8nDefectSource = (typeof N8N_DEFECT_SOURCES)[number];
 
+export const N8N_DEFECT_SOURCE_SPREADSHEET_IDS: Record<N8nDefectSource, string> = {
+  CO: "1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA",
+  DIEN: "1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ",
+};
+
 const MAX_BATCH_SIZE = 500;
 const MAX_TEXT_LENGTH = 20_000;
 const RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
@@ -44,8 +49,8 @@ export function verifyN8nDefectToken(authorization: string | null) {
 export function parseN8nSources(value: unknown) {
   if (!Array.isArray(value)) throw new Error("expectedSources phải là một mảng");
   const sources = Array.from(new Set(value.map((item) => text(item, "source", 20).toUpperCase())));
-  if (sources.length !== N8N_DEFECT_SOURCES.length || !N8N_DEFECT_SOURCES.every((source) => sources.includes(source))) {
-    throw new Error("Full snapshot phải bao gồm đủ hai nguồn CO và DIEN");
+  if (sources.length === 0 || sources.some((source) => !isSource(source))) {
+    throw new Error("Nguồn đồng bộ phải gồm CO, DIEN hoặc cả hai");
   }
   return sources as N8nDefectSource[];
 }
@@ -59,6 +64,14 @@ export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
       throw new Error(`Dòng ${index + 1} không phải object hợp lệ`);
     }
     const row = input as Record<string, unknown>;
+    const sourceSpreadsheetId = text(
+      row.sourceSpreadsheetId,
+      `records[${index}].sourceSpreadsheetId`,
+      300
+    );
+    if (sourceSpreadsheetId !== N8N_DEFECT_SOURCE_SPREADSHEET_IDS[source]) {
+      throw new Error(`Dòng ${index + 1} không thuộc đúng Sheet nguồn ${source}`);
+    }
     const stt = text(row.stt, `records[${index}].stt`, 200);
     const content = text(row.content, `records[${index}].content`);
     const detectedAtRaw = text(row.detectedAtRaw, `records[${index}].detectedAtRaw`, 100);
@@ -69,7 +82,7 @@ export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
     const requestType = text(row.requestType, `records[${index}].requestType`, 100)
       || (source === "CO" ? "Cơ" : "Điện");
     return {
-      sourceSpreadsheetId: text(row.sourceSpreadsheetId, `records[${index}].sourceSpreadsheetId`, 300),
+      sourceSpreadsheetId,
       sourceSheet: text(row.sourceSheet, `records[${index}].sourceSheet`, 300),
       sourceTab: text(row.sourceTab, `records[${index}].sourceTab`, 300),
       sourceRow: optionalInteger(row.sourceRow, `records[${index}].sourceRow`),
@@ -268,7 +281,7 @@ export async function finishN8nDefectRun(params: {
     run.expectedSources.length !== params.completedSources.length
     || !run.expectedSources.every((source) => params.completedSources.includes(source as N8nDefectSource))
   ) {
-    throw new Error("Chỉ được finish khi đủ hai nguồn CO và DIEN");
+    throw new Error("Chỉ được finish khi hoàn tất đúng các nguồn của lượt đồng bộ");
   }
 
   const batchCounts = await prisma.defectSyncBatch.groupBy({
@@ -280,6 +293,10 @@ export async function finishN8nDefectRun(params: {
     throw new Error("Mỗi nguồn phải có ít nhất một batch thành công");
   }
 
+  const completedSpreadsheetIds = params.completedSources.map(
+    (source) => N8N_DEFECT_SOURCE_SPREADSHEET_IDS[source]
+  );
+
   return prisma.$transaction(async (tx) => {
     const missingCount = await tx.$executeRaw(Prisma.sql`
       UPDATE "Defect" AS defect
@@ -289,6 +306,7 @@ export async function finishN8nDefectRun(params: {
         "updatedAt" = NOW()
       WHERE defect."sourceType" = 'GOOGLE_SHEETS'
         AND defect."sourceKey" IS NOT NULL
+        AND defect."sourceSpreadsheetId" IN (${Prisma.join(completedSpreadsheetIds)})
         AND defect."syncState" <> 'CONFIRMED'
         AND NOT EXISTS (
           SELECT 1

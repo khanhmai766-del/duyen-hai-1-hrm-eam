@@ -536,6 +536,8 @@ model Defect {
   @@index([completedAt])
   @@index([createdById])
   @@index([sourceType, syncState])
+  // Snapshot từng nguồn chỉ quét và đánh dấu thiếu trong đúng Google Sheet vừa đồng bộ.
+  @@index([sourceSpreadsheetId, syncState])
   // Trang khiếm khuyết: lọc tổ máy/trạng thái nguồn và ưu tiên đối chiếu + ngày phát hiện.
   @@index([unit, sourceType, syncState])
   @@index([unit, status, severity])
