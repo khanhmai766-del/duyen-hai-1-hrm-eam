@@ -191,7 +191,7 @@ export function useTicketOptions(enabled: boolean) {
           machine: string;
           erpCodes: { code: string; name: string; erpStock: number }[];
           managingPositions: string[];
-          devices: { seq: string; label: string; managingPosition: string | null }[];
+          devices: { seq: string; label: string; system: string | null; managingPosition: string | null }[];
         }[];
         positions: string[];
       }>("/api/material-tickets/options");

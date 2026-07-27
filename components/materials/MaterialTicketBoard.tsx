@@ -441,6 +441,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [selectedErpCode, setSelectedErpCode] = useState("");
   const [proposedQuantity, setProposedQuantity] = useState(1);
   const [replacementDeviceSeq, setReplacementDeviceSeq] = useState("");
+  const [replacementSystem, setReplacementSystem] = useState("");
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
@@ -460,9 +461,19 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = false; // mã vật tư chỉ được chọn ở bước Trưởng ca/Trưởng kíp
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
-  const selectedDeviceOptions = useMemo(
+  const availableDeviceOptions = useMemo(
     () => (selectedMaterial?.devices ?? []).filter((device) => positionKey(device.managingPosition) === assignedKey),
     [assignedKey, selectedMaterial]
+  );
+  const replacementSystemOptions = useMemo(
+    () => Array.from(new Set(availableDeviceOptions.map((device) => device.system?.trim()).filter(Boolean) as string[])),
+    [availableDeviceOptions]
+  );
+  const selectedDeviceOptions = useMemo(
+    () => replacementSystem
+      ? availableDeviceOptions.filter((device) => device.system?.trim() === replacementSystem)
+      : availableDeviceOptions,
+    [availableDeviceOptions, replacementSystem]
   );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
@@ -478,13 +489,15 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
       if (replacementDeviceSeq) setReplacementDeviceSeq("");
+      if (replacementSystem) setReplacementSystem("");
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
       setReplacementDeviceSeq("");
+      setReplacementSystem("");
     }
-  }, [materialCards, replacementDeviceSeq, selectedMaterialId, selectedErpCode]);
+  }, [materialCards, replacementDeviceSeq, replacementSystem, selectedMaterialId, selectedErpCode]);
 
   React.useEffect(() => {
     if (!selectedErpOptions.length) {
@@ -507,6 +520,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     setSelectedMaterialId("");
     setSelectedErpCode("");
     setReplacementDeviceSeq("");
+    setReplacementSystem("");
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
@@ -552,7 +566,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             ))}</div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>
+            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -560,7 +574,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}>{c}</button>
               ))}
             </div>
 
@@ -578,7 +592,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                         key={m.id}
                         type="button"
                         className={selectedMaterialId === m.id ? "on" : ""}
-                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}
+                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}
                         title={`${m.code} - ${m.name}`}
                       >
                         <span>{m.name}</span>
@@ -611,18 +625,45 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                 <div className="bbkt-grid"><div className="field">
                     <label>Ghi chú lý do *</label>
                     <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hao hụt / chất lượng dầu không đạt / thay định kỳ…" />
-                  </div><div className="field qty-field">
+                </div><div className="field qty-field">
                     <label>Số lượng đề xuất *</label>
                     <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
                   </div></div>
                 <label>Thiết bị thay thế *</label>
-                <select value={replacementDeviceSeq} disabled={!selectedMaterialId || !selectedDeviceOptions.length} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
+                <select
+                  value={replacementDeviceSeq}
+                  disabled={!selectedMaterialId || !selectedDeviceOptions.length}
+                  onChange={(e) => {
+                    const deviceSeq = e.target.value;
+                    setReplacementDeviceSeq(deviceSeq);
+                    const device = availableDeviceOptions.find((option) => option.seq === deviceSeq);
+                    setReplacementSystem(device?.system?.trim() ?? "");
+                  }}
+                >
                   <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
                   {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
                 </select>
+                <label>Thuộc hệ thống</label>
+                <select
+                  value={replacementSystem}
+                  disabled={!selectedMaterialId || !replacementSystemOptions.length}
+                  onChange={(e) => {
+                    const system = e.target.value;
+                    setReplacementSystem(system);
+                    const currentDevice = availableDeviceOptions.find((option) => option.seq === replacementDeviceSeq);
+                    if (currentDevice?.system?.trim() !== system) setReplacementDeviceSeq("");
+                  }}
+                >
+                  <option value="">
+                    {!selectedMaterialId
+                      ? "— Chọn tên vật tư trước —"
+                      : replacementSystemOptions.length
+                        ? "— Chọn hệ thống / thiết bị —"
+                        : "— Chưa khai báo hệ thống / thiết bị —"}
+                  </option>
+                  {replacementSystemOptions.map((system) => <option key={system} value={system}>{system}</option>)}
+                </select>
                 {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
-                <p className="hint">Thiết bị không theo dõi chu kỳ vẫn được phép tạo đề xuất bổ sung do hao hụt hoặc chất lượng dầu phân tích không đạt.</p>
-                <p className="hint">Luồng Đề xuất/Ứng, mã vật tư và số biên bản kiểm tra sẽ do Trưởng ca/Trưởng kíp xác nhận ở bước tiếp theo.</p>
               </>
             ) : (
               <p className="note ung"><Zap size={13} /> Luồng Ứng: số biên bản kiểm tra sẽ bổ sung sau bước xác nhận xuất file.</p>
@@ -968,6 +1009,14 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   // Không hiển thị biên bản thu hồi cũ từng sinh sớm trước khi bước Nghiệm thu hoàn thành.
   const recoveryDocumentUrl = t.completedAt ? t.recoveryDocUrl : null;
   const exportedDocumentCount = [t.proposalDocUrl, t.docUrl, handwrittenBbntUrl, recoveryDocumentUrl].filter(Boolean).length;
+  const hasCompletionSummary = Boolean(
+    (t.type !== "UNG" && t.pctNumber)
+    || t.repairRequestNumber
+    || t.completionNote
+    || t.receivedQuantity != null
+    || t.vhvReceivedQuantity != null
+    || t.usedQuantity != null,
+  );
   const activityLogs = [
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -1060,25 +1109,29 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           <div className="step-workspace">
             <div className={`completion-overview ${exportedDocumentCount > 0 ? "with-documents" : ""}`}>
               <div className="completion-details">
-                {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber) && (
-                  <div className="ticket-note-row">
-                    {t.type !== "UNG" && t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
-                    {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
-                  </div>
-                )}
-                {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
-                {t.receivedQuantity != null && (
-                  <div className="meta-line received-summary">
-                    <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
-                    <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
-                    <em>đã cộng vào số lượng hiện có</em>
-                  </div>
-                )}
-                {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
-                {t.usedQuantity != null && (
-                  <div className="meta-line">
-                    {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
-                    {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
+                {hasCompletionSummary && (
+                  <div className="completion-summary-card">
+                    {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber) && (
+                      <div className="ticket-note-row">
+                        {t.type !== "UNG" && t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
+                        {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
+                      </div>
+                    )}
+                    {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
+                    {t.receivedQuantity != null && (
+                      <div className="meta-line received-summary">
+                        <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
+                        <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
+                        <em>đã cộng vào số lượng hiện có</em>
+                      </div>
+                    )}
+                    {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Mã vật tư nhập tay: <b>{t.vhvMaterialCode || "Không có"}</b></div>}
+                    {t.usedQuantity != null && (
+                      <div className="meta-line">
+                        {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
+                        {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
+                      </div>
+                    )}
                   </div>
                 )}
                 <ActionArea t={t} viewer={viewer} />
@@ -1189,7 +1242,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
         </>}
         {editStep === "stats" && <>
           <label>Số phiếu ĐXVT<input value={proposalNumber} disabled={!canEdit} onChange={(e) => setProposalNumber(e.target.value)} /></label>
-          {t.type !== "UNG" && <label>Tên VHV nhận phiếu ĐXVT (không bắt buộc)<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
+          {t.type !== "UNG" && <label>Tên VHV nhận phiếu ĐXVT<input value={proposalReceiverNameReview} disabled={!canEdit} onChange={(e) => setProposalReceiverNameReview(e.target.value)} /></label>}
         </>}
         {editStep === "receive" && <>
           <label>Khối lượng lãnh<input type="number" min={1} value={receivedQuantity} disabled={!canEdit} onChange={(e) => setReceivedQuantity(Number(e.target.value))} /></label>
@@ -1604,10 +1657,16 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const proposalExported = Boolean(t.proposalDocUrl);
     const proposalLocked = asksForErpCode && !proposalExported;
     const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
-    const statsCodeOptions = selectedMaterialOption?.erpCodes?.length
+    const allStatsCodeOptions = selectedMaterialOption?.erpCodes?.length
       ? selectedMaterialOption.erpCodes
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
+    const proposedQuantity = Math.max(0, t.items[0]?.quantity ?? 0);
+    // Khi mã chưa bị khóa, chỉ gợi ý các mã đủ tồn ERP để đáp ứng toàn bộ
+    // số lượng đề xuất. Phiếu đã xuất vẫn hiện mã đã chọn để đối chiếu.
+    const statsCodeOptions = proposalExported
+      ? allStatsCodeOptions
+      : allStatsCodeOptions.filter((option) => option.erpStock >= proposedQuantity);
     const selectedStatsErp = statsCodeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
@@ -1634,7 +1693,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               </label>
             </>
           ) : asksForReceiver ? (
-            <label className="field">Tên VHV nhận phiếu ĐXVT (không bắt buộc)
+            <label className="field">Tên VHV nhận phiếu ĐXVT
               <input
                 value={proposalReceiverName}
                 onChange={(e) => setProposalReceiverName(e.target.value)}
@@ -1643,6 +1702,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </label>
           ) : <div className="warnbox"><AlertTriangle size={15} /> Chưa xác nhận đã trả phiếu.</div>}
         </div>
+        {asksForErpCode && !proposalExported && statsCodeOptions.length === 0 && (
+          <div className="warnbox">
+            <AlertTriangle size={15} />
+            Không có mã vật tư nào đủ tồn ERP cho số lượng đề xuất <b>{proposedQuantity} {t.items[0]?.material.unit ?? ""}</b>.
+          </div>
+        )}
         {asksForErpCode && selectedStatsErp && (
           <div className="note"><Package size={14} /><span><b>Tên vật tư ERP:</b> {selectedStatsErp.name} · <b>Số lượng ERP:</b> {selectedStatsErp.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</span></div>
         )}
@@ -1655,7 +1720,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {proposalLocked ? (
           <button
             className="btn primary big"
-            disabled={!erpCode || act.isPending}
+            disabled={!selectedStatsErp || act.isPending}
             onClick={() => run({ action: "statsExportProposal", erpCode }, "Đã xuất Phiếu ĐXVT")}
           >
             {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận & xuất Phiếu ĐXVT
@@ -1908,7 +1973,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           </>
         {t.type === "UNG" ? (
           <div className="accept-two-grid">
-            <label className="field">Số BBNT ký tay (nếu có)
+            <label className="field">Số BBNT ký tay
               <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Nhập số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
             </label>
             <label className="field">Mã vật tư nhập tay (nếu có)
@@ -1916,7 +1981,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </label>
           </div>
         ) : (
-          <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
+          <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         )}
         <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, ...(t.type === "UNG" ? { materialCode: manualMaterialCode.trim() || undefined } : {}), workStartedAt: startedAt, workEndedAt: endedAt }, "Đã nghiệm thu và xuất các biên bản")}>
@@ -2234,8 +2299,10 @@ const CSS = `
 .ticket-note-row b{overflow-wrap:anywhere;}
 .completion-overview{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch;min-width:0;}
 .completion-overview.with-documents{grid-template-columns:minmax(0,1fr) minmax(250px,26%);}
-.completion-details{display:flex;min-width:0;flex-direction:column;padding-top:1px;}
+.completion-details{display:flex;min-width:0;flex-direction:column;gap:12px;padding-top:1px;}
 .completion-details>.act{margin-bottom:0;}
+.completion-summary-card{display:flex;min-width:0;flex-direction:column;gap:9px;border:1px solid ${C.line};border-radius:12px;background:linear-gradient(145deg,#fff 0%,#fbfcfe 100%);padding:13px 14px;box-shadow:0 4px 14px rgba(30,64,175,.05);}
+.completion-summary-card .ticket-note-row,.completion-summary-card .done-note,.completion-summary-card .meta-line{margin-bottom:0;}
 .document-downloads{display:flex;min-width:0;min-height:100%;align-self:stretch;flex-direction:column;justify-content:flex-start;gap:12px;border:1px solid #c9ded7;border-radius:12px;background:linear-gradient(145deg,#f7fcfa 0%,#eef8f4 100%);padding:14px;box-shadow:0 4px 14px rgba(15,118,110,.07);}
 .document-downloads-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
 .document-downloads-label{display:flex;align-items:center;gap:7px;min-width:0;color:#0f766e;font-size:12.5px;font-weight:800;}

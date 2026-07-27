@@ -58,7 +58,7 @@ export async function GET() {
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
       const positions = new Set<string>();
-      const mdevices: { seq: string; label: string; managingPosition: string | null }[] = [];
+      const mdevices: { seq: string; label: string; system: string | null; managingPosition: string | null }[] = [];
       for (const r of m.replacements) {
         if (r.managingPosition) positions.add(r.managingPosition);
         // Điểm có tên nhập tay cần một giá trị riêng, kể cả khi cùng trỏ tới
@@ -76,6 +76,7 @@ export async function GET() {
         mdevices.push({
           seq,
           label: r.location || r.device?.name || r.system || seq,
+          system: r.system,
           managingPosition: r.managingPosition,
         });
       }

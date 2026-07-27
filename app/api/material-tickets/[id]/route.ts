@@ -870,8 +870,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
       const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
       if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
-      const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
+      const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true, erpStock: true } });
       if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
+      if (erpMaterial.erpStock < item.quantity) {
+        return fail(
+          `Mã vật tư ERP "${erpCode}" chỉ còn ${erpMaterial.erpStock.toLocaleString("vi-VN")} ${item.material.unit}, không đủ số lượng đề xuất ${item.quantity.toLocaleString("vi-VN")} ${item.material.unit}`
+        );
+      }
       const proposalDoc = await buildProposalDocument(t, user, { materialCode: erpCode, materialName: erpMaterial.name });
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
