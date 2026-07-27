@@ -65,6 +65,9 @@ npx prisma db execute \
 npx prisma db execute \
   --file prisma/manual/optimize-n8n-defect-source-sync.sql \
   --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/optimize-defect-page-queries.sql \
+  --schema prisma/schema.prisma
 npx prisma generate
 ```
 
@@ -181,3 +184,46 @@ location / {
 
 Nếu n8n và website có IP cố định, nên whitelist IP n8n riêng cho prefix
 `/api/integrations/n8n/`.
+
+## Vận hành lâu dài
+
+### Backup
+
+Mỗi ngày cần backup cả database n8n và volume chứa khóa/cấu hình. Ví dụ chạy từ
+`/opt/n8n` (thay `/var/backups/dh1-n8n` bằng thư mục backup riêng trên server):
+
+```bash
+sudo install -d -m 700 /var/backups/dh1-n8n
+sudo docker compose exec -T n8n-db \
+  pg_dump -U n8n -d n8n -Fc \
+  > /var/backups/dh1-n8n/n8n-$(date +%F-%H%M).dump
+sudo docker compose stop n8n
+sudo tar -C /var/lib/docker/volumes -czf \
+  /var/backups/dh1-n8n/n8n-data-$(date +%F-%H%M).tgz \
+  n8n_n8n_data
+sudo docker compose start n8n
+```
+
+Không coi backup là hợp lệ nếu chưa thử phục hồi trên thư mục/container tách
+biệt. Giữ ít nhất 7 bản ngày và một bản tháng; sao chép thêm ra nơi khác máy chủ.
+
+### Theo dõi
+
+- Website hiển thị lượt gần nhất, trạng thái, nguồn và số dòng ngay trên trang
+  Khiếm khuyết cho người có quyền quản lý.
+- API danh sách ghi log `[slow defect list]` nếu truy vấn mất từ 750 ms.
+- n8n chỉ lưu execution thất bại; execution thành công không lưu để tránh tăng
+  database khoảng nhiều MB mỗi lượt.
+- Kiểm tra định kỳ `docker compose ps`, dung lượng ổ đĩa, log container và lần
+  backup gần nhất.
+
+### Xoay token
+
+1. Sinh token mới bằng `openssl rand -hex 32`.
+2. Đổi Header Auth credential trong n8n.
+3. Đổi `N8N_DEFECT_SYNC_TOKEN` trong `.env` website.
+4. Build/reload website, rồi chạy thử thủ công một lượt.
+5. Không ghi token vào workflow JSON, Git, ảnh chụp hoặc log.
+
+Nên xoay token khi người quản trị thay đổi, nghi ngờ lộ bí mật hoặc định kỳ
+6–12 tháng.

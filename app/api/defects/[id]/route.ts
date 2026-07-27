@@ -15,11 +15,33 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
+  node: { select: { seq: true, name: true } },
   relatedDevices: {
     select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
 };
+
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  return handle(async () => {
+    const user = await requireUser();
+    const defect = await prisma.defect.findUnique({
+      where: { id: params.id },
+      include: INCLUDE,
+    });
+    if (!defect) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+
+    const access = await resolveEquipmentAccessForUser(user);
+    const canView = defect.deviceSeq
+      ? access.canViewSeq(defect.deviceSeq)
+      : access.canViewDeviceLike({ device: defect.device, system: defect.system });
+    if (access.hasExplicitScopes && !canView) {
+      return fail("Cương vị của bạn không có quyền xem phiếu khiếm khuyết này", 403);
+    }
+
+    return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
+  });
+}
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {

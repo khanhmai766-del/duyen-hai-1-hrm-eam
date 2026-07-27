@@ -21,16 +21,18 @@ export async function POST() {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["full"], "Chỉ người có toàn quyền khiếm khuyết được chạy đồng bộ");
 
-    const running = await prisma.defectSyncRun.findFirst({
+    const recent = await prisma.defectSyncRun.findFirst({
       where: {
-        status: "RUNNING",
         startedAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
       },
       orderBy: { startedAt: "desc" },
-      select: { startedAt: true },
+      select: { status: true, startedAt: true },
     });
-    if (running) {
+    if (recent?.status === "RUNNING") {
       return fail("Đang có một lượt đồng bộ khiếm khuyết chạy trên n8n", 409);
+    }
+    if (recent && recent.startedAt.getTime() > Date.now() - 10_000) {
+      return fail("Vui lòng chờ 10 giây trước khi yêu cầu đồng bộ lại", 429);
     }
 
     const webhookUrl = process.env.N8N_DEFECT_MANUAL_WEBHOOK_URL?.trim();

@@ -26,7 +26,6 @@ export interface DefectListParams {
   severity?: string;
   q?: string;
   deviceSeq?: string;
-  export?: number;
 }
 
 export interface DefectListMeta {
@@ -65,9 +64,19 @@ export function useDefects(params: DefectListParams = {}) {
   });
 }
 
-/** Chỉ tải toàn bộ dữ liệu khi người dùng chủ động bấm xuất báo cáo. */
-export async function getDefectsForExport(params: Omit<DefectListParams, "page" | "limit">) {
-  return apiGet<DefectItem[]>(defectListUrl({ ...params, page: 1, limit: 20_000, export: 1 }));
+export function defectDetailQuery(id: string) {
+  return {
+    queryKey: ["defect", id] as const,
+    queryFn: () => apiGet<DefectItem>(`/api/defects/${encodeURIComponent(id)}`),
+    staleTime: 30_000,
+  };
+}
+
+export function useDefect(id?: string | null) {
+  return useQuery({
+    ...defectDetailQuery(id ?? ""),
+    enabled: Boolean(id),
+  });
 }
 
 export type DefectInput = Record<string, unknown>;
@@ -89,7 +98,10 @@ export function useUpdateDefect() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...body }: DefectInput & { id: string }) => apiMutate<DefectItem>(`/api/defects/${id}`, "PUT", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["defects"] }),
+    onSuccess: (updated) => {
+      qc.setQueryData(["defect", updated.id], { data: updated, meta: null });
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+    },
   });
 }
 
@@ -119,7 +131,10 @@ export function useDefectSyncStatus(enabled = true) {
     queryKey: ["defect-sync-status"],
     queryFn: () => apiGet<DefectSyncRun[]>("/api/defects/sync"),
     enabled,
-    refetchInterval: 5_000,
+    refetchInterval: (query) => {
+      const latest = query.state.data?.data?.[0];
+      return latest?.status === "RUNNING" ? 3_000 : 30_000;
+    },
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
@@ -131,6 +146,8 @@ export function useSyncDefects() {
     mutationFn: () => apiMutate<DefectSyncResult>("/api/defects/sync", "POST"),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["defect-sync-status"] });
+      window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defect-sync-status"] }), 1_500);
+      window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defect-sync-status"] }), 4_000);
     },
   });
 }

@@ -541,6 +541,9 @@ model Defect {
   // Trang khiếm khuyết: lọc tổ máy/trạng thái nguồn và ưu tiên đối chiếu + ngày phát hiện.
   @@index([unit, sourceType, syncState])
   @@index([unit, status, severity])
+  // Trang khiếm khuyết mặc định lọc tổ máy + loại yêu cầu rồi sắp mới nhất.
+  @@index([unit, requestType, detectedAt(sort: Desc)])
+  @@index([unit, requestType, status, severity])
   @@index([sourceStatusMismatch, detectedAt(sort: Desc)])
   @@index([unit, deviceSeq])
 }
@@ -623,6 +626,7 @@ model DefectSyncRun {
 
   @@index([startedAt])
   @@index([status])
+  @@index([status, startedAt(sort: Desc)])
 }
 
 // Một batch n8n được ghi lại để retry không làm tăng số liệu hoặc ghi trùng.

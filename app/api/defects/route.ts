@@ -52,6 +52,22 @@ const LIST_SELECT = {
   },
 } satisfies Prisma.DefectSelect;
 
+const PAGE_SELECT = {
+  ...LIST_SELECT,
+  sourceStatusRaw: true,
+  reminderCount: true,
+  createdBy: {
+    // Danh sách chỉ dùng avatar đã đưa lên object storage; không đọc lại base64 cũ
+    // từ PostgreSQL vì payload này có thể lớn hàng MB.
+    select: { id: true, name: true, position: true, avatarKey: true },
+  },
+  node: { select: { seq: true, name: true } },
+  relatedDevices: {
+    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    orderBy: { createdAt: "asc" as const },
+  },
+} satisfies Prisma.DefectSelect;
+
 function activeDefectWhere(): Prisma.DefectWhereInput {
   return {
     OR: [
@@ -61,14 +77,34 @@ function activeDefectWhere(): Prisma.DefectWhereInput {
   };
 }
 
+function defectStatusWhere(status?: string): Prisma.DefectWhereInput | null {
+  if (!status || status === "ALL") return null;
+  if (status === "SOURCE_MISSING") {
+    return { sourceType: "GOOGLE_SHEETS", syncState: "MISSING" };
+  }
+  if (status === "TON_DONG") return { postRepairAwaitingMaterial: true };
+  if (status === "DA_XU_LY") {
+    return { status: "DA_XU_LY", postRepairAwaitingMaterial: false };
+  }
+  return { status };
+}
+
+function defectQueryTiming(startedAt: number, mode: "database" | "compatibility", total: number) {
+  const durationMs = Date.now() - startedAt;
+  if (durationMs >= 750) {
+    console.warn("[slow defect list]", { durationMs, mode, total });
+  }
+  return durationMs;
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
+    const queryStartedAt = Date.now();
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
     const params = req.nextUrl.searchParams;
     const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
-    const maxLimit = params.get("export") === "1" ? 20_000 : 100;
-    const limit = Math.min(maxLimit, Math.max(1, Number.parseInt(params.get("limit") ?? "10", 10) || 10));
+    const limit = Math.min(100, Math.max(1, Number.parseInt(params.get("limit") ?? "10", 10) || 10));
     const unit = params.get("unit")?.trim();
     const requestType = params.get("requestType")?.trim();
     const position = params.get("position")?.trim();
@@ -103,6 +139,81 @@ export async function GET(req: NextRequest) {
           : []),
       ],
     };
+
+    // Fast path cho quản trị/cương vị không bị giới hạn phạm vi: lọc, KPI, sắp xếp
+    // và phân trang ngay trong PostgreSQL. Tìm kiếm không dấu và scope thiết bị phức
+    // tạp vẫn dùng nhánh tương thích phía dưới để giữ nguyên kết quả nghiệp vụ.
+    const useDatabasePagination =
+      !access.hasExplicitScopes &&
+      !query &&
+      (!position || position === "ALL");
+
+    if (useDatabasePagination) {
+      const statusWhere = defectStatusWhere(status);
+      const filteredWhere: Prisma.DefectWhereInput = {
+        AND: [
+          where,
+          ...(statusWhere ? [statusWhere] : []),
+          ...(severity && severity !== "ALL" ? [{ severity }] : []),
+        ],
+      };
+      const [total, scopeTotal, groupedStatus, tonDong, daXuLy] = await Promise.all([
+        prisma.defect.count({ where: filteredWhere }),
+        prisma.defect.count({
+          where: {
+            AND: [
+              activeDefectWhere(),
+              ...(scopeWhere ? [{ OR: [scopeWhere, { deviceSeq: null }] } as Prisma.DefectWhereInput] : []),
+            ],
+          },
+        }),
+        prisma.defect.groupBy({
+          by: ["status"],
+          where,
+          _count: { _all: true },
+        }),
+        prisma.defect.count({ where: { AND: [where, { postRepairAwaitingMaterial: true }] } }),
+        prisma.defect.count({
+          where: { AND: [where, { status: "DA_XU_LY", postRepairAwaitingMaterial: false }] },
+        }),
+      ]);
+      const statusCount = new Map(groupedStatus.map((item) => [item.status, item._count._all]));
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      const safePage = Math.min(page, totalPages);
+      const pageRows = await prisma.defect.findMany({
+        where: filteredWhere,
+        select: PAGE_SELECT,
+        orderBy: [
+          { sourceStatusMismatch: "desc" },
+          { deviceSeq: { sort: "asc", nulls: "first" } },
+          { detectedAt: { sort: "desc", nulls: "last" } },
+          { createdAt: "desc" },
+        ],
+        skip: (safePage - 1) * limit,
+        take: limit,
+      });
+
+      const durationMs = defectQueryTiming(queryStartedAt, "database", total);
+      return ok(
+        pageRows.map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) })),
+        {
+          total,
+          page: safePage,
+          limit,
+          totalPages,
+          scopeTotal,
+          kpi: {
+            chuaXuLy: statusCount.get("CHUA_XU_LY") ?? 0,
+            coPct: statusCount.get("CO_PCT") ?? 0,
+            choVatTu: statusCount.get("CHO_VAT_TU") ?? 0,
+            tonDong,
+            daXuLy,
+          },
+          queryMode: "database",
+          durationMs,
+        }
+      );
+    }
 
     // Chỉ lấy tập trường nhẹ để lọc/đếm/sắp xếp. Quan hệ đầy đủ chỉ tải cho trang hiện tại.
     const [candidates, scopeTotal] = await Promise.all([
@@ -187,7 +298,7 @@ export async function GET(req: NextRequest) {
     const safePage = Math.min(page, totalPages);
     const ids = filtered.slice((safePage - 1) * limit, safePage * limit).map((item) => item.id);
     const pageRows = ids.length
-      ? await prisma.defect.findMany({ where: { id: { in: ids } }, include: INCLUDE })
+      ? await prisma.defect.findMany({ where: { id: { in: ids } }, select: PAGE_SELECT })
       : [];
     const byId = new Map(pageRows.map((item) => [item.id, item]));
     const data = ids
@@ -195,6 +306,7 @@ export async function GET(req: NextRequest) {
       .filter((item): item is NonNullable<typeof item> => !!item)
       .map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) }));
 
+    const durationMs = defectQueryTiming(queryStartedAt, "compatibility", total);
     return ok(data, {
       total,
       page: safePage,
@@ -202,6 +314,8 @@ export async function GET(req: NextRequest) {
       totalPages,
       scopeTotal,
       kpi,
+      queryMode: "compatibility",
+      durationMs,
     });
   });
 }
