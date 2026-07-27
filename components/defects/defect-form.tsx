@@ -233,6 +233,19 @@ export function DefectForm({
   }
   function setDeviceSystemNode(node: { seq: string; name: string } | null) {
     setForm((f) => {
+      const isLeaf = node ? (equipmentIndex.childrenOf.get(node.seq) ?? []).length === 0 : false;
+      if (node && isLeaf) {
+        const parentSeq = equipmentIndex.parentOf.get(node.seq) ?? "";
+        const parentNode = parentSeq ? equipmentIndex.bySeq.get(parentSeq) ?? null : null;
+        return {
+          ...f,
+          deviceSystem: parentNode?.name ?? "",
+          deviceSystemSeq: parentSeq,
+          device: node.seq,
+          relatedDeviceSeqs: f.relatedDeviceSeqs.filter((seq) => seq !== node.seq),
+        };
+      }
+
       const deviceSystem = node?.name ?? "";
       const deviceSystemSeq = node?.seq ?? "";
       const nextDeviceSeqs = new Set(leafNodesFor(deviceSystemSeq).flatMap((leaf) => leaf.duplicateSeqs));
@@ -418,6 +431,7 @@ export function DefectForm({
                   value={form.deviceSystemSeq}
                   position={form.system || null}
                   accessFilter="edit"
+                  includeLeaves
                   onChange={setDeviceSystemNode}
                   placeholder="Chọn hệ thống thiết bị"
                 />
