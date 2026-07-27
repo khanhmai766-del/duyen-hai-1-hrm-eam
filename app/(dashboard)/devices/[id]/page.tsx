@@ -68,6 +68,11 @@ function DeviceDetailPageContent() {
   const treeReturnUrl = device
     ? `/devices?view=tree&focusSeq=${encodeURIComponent(device.id)}&machine=${encodeURIComponent(deviceMachine)}`
     : "/devices?view=tree";
+  const fullHistoryUrl = device
+    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}${
+        deviceMachine === "COMMON" ? "" : `&unit=${encodeURIComponent(deviceMachine)}`
+      }`
+    : "/repair-history";
 
   async function createQrCard() {
     try {
@@ -196,7 +201,7 @@ function DeviceDetailPageContent() {
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Lịch sử sửa chữa</CardTitle>
               <Button asChild variant="link" size="sm">
-                <Link href={`/repair-history?device=${encodeURIComponent(device.id)}&unit=${deviceMachine}`}>Xem đầy đủ</Link>
+                <Link href={fullHistoryUrl}>Xem đầy đủ</Link>
               </Button>
             </CardHeader>
             <CardContent>

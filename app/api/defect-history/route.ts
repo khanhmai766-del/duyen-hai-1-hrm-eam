@@ -28,14 +28,24 @@ export async function GET(req: NextRequest) {
     const unit = searchParams.get("unit");
     const workOrderNumber = searchParams.get("workOrderNumber");
     const device = searchParams.get("device");
+    const deviceSeq = searchParams.get("deviceSeq")?.trim();
     const from = searchParams.get("from");
     const to = searchParams.get("to");
 
     const where: Record<string, unknown> = {};
+    const andConditions: Record<string, unknown>[] = [];
     if (system) where.system = system;
     if (unit) where.unit = unit;
     if (workOrderNumber) where.workOrderNumber = { contains: workOrderNumber, mode: "insensitive" };
     if (device) where.device = { contains: device, mode: "insensitive" };
+    if (deviceSeq) {
+      andConditions.push({
+        OR: [
+          { deviceSeq },
+          { relatedDevices: { some: { deviceSeq } } },
+        ],
+      });
+    }
     if (from || to) {
       where.performedAt = {
         ...(from ? { gte: dateRange(from).start } : {}),
@@ -45,7 +55,8 @@ export async function GET(req: NextRequest) {
     // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây; bản ghi chưa gắn
     // thiết bị (deviceSeq null) vẫn lấy về, xét tiếp bằng rule text bên dưới.
     const scopeWhere = equipmentSeqWhere(access.branchFilter, "deviceSeq");
-    if (scopeWhere) where.AND = [{ OR: [scopeWhere, { deviceSeq: null }] }];
+    if (scopeWhere) andConditions.push({ OR: [scopeWhere, { deviceSeq: null }] });
+    if (andConditions.length) where.AND = andConditions;
 
     const history = await prisma.defectHistory.findMany({
       where,

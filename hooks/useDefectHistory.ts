@@ -17,6 +17,7 @@ export interface DefectHistoryFilters {
   unit?: string;
   workOrderNumber?: string;
   device?: string;
+  deviceSeq?: string;
   from?: string;
   to?: string;
 }

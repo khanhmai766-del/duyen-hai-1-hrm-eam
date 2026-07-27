@@ -72,6 +72,10 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
   const machine = normalizedMachine && allowedMachines.includes(normalizedMachine)
     ? normalizedMachine
     : allowedMachines[0];
+  // Thiết bị COMMON dùng chung một deviceSeq cho cả phiếu S1, S2 và COMMON.
+  // Khi xem lịch sử của thiết bị dùng chung, không lọc theo unit để tránh bỏ sót
+  // các phiếu đã chốt từ từng tổ máy. Thiết bị thường vẫn giữ đúng hồ sơ S1/S2.
+  const defectHistoryUnitWhere = machine === "COMMON" ? {} : { unit: machine };
   const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
   const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
   const [repairLogs, materials, materialDeclarations, replacementUsage, qrCard, currentDefects, defectHistory, managingPositions, profile, parentProfile] = await Promise.all([
@@ -135,7 +139,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     }),
     prisma.defectHistory.findMany({
       where: {
-        unit: machine,
+        ...defectHistoryUnitWhere,
         OR: [
           { deviceSeq: node.seq },
           { relatedDevices: { some: { deviceSeq: node.seq } } },
