@@ -52,6 +52,119 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced;
 }
 
+type FloatingScrollbarGeometry = {
+  visible: boolean;
+  left: number;
+  width: number;
+  contentWidth: number;
+};
+
+function PersistentHorizontalScroll({ children }: { children: React.ReactNode }) {
+  const tableScrollRef = React.useRef<HTMLDivElement>(null);
+  const floatingScrollRef = React.useRef<HTMLDivElement>(null);
+  const frameRef = React.useRef<number | null>(null);
+  const [geometry, setGeometry] = React.useState<FloatingScrollbarGeometry>({
+    visible: false,
+    left: 0,
+    width: 0,
+    contentWidth: 0,
+  });
+
+  const updateGeometry = React.useCallback(() => {
+    if (frameRef.current !== null) return;
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      const tableScroll = tableScrollRef.current;
+      if (!tableScroll) return;
+
+      const rect = tableScroll.getBoundingClientRect();
+      const left = Math.max(0, rect.left);
+      const right = Math.min(window.innerWidth, rect.right);
+      const width = Math.max(0, right - left);
+      const hasHorizontalOverflow = tableScroll.scrollWidth > tableScroll.clientWidth + 1;
+      const tableIsVisible = rect.top < window.innerHeight && rect.bottom > 0;
+      const nativeScrollbarIsBelowViewport = rect.bottom > window.innerHeight;
+
+      setGeometry((current) => {
+        const next = {
+          visible: hasHorizontalOverflow && tableIsVisible && nativeScrollbarIsBelowViewport && width > 0,
+          left,
+          width,
+          contentWidth: tableScroll.scrollWidth,
+        };
+        return current.visible === next.visible &&
+          current.left === next.left &&
+          current.width === next.width &&
+          current.contentWidth === next.contentWidth
+          ? current
+          : next;
+      });
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const tableScroll = tableScrollRef.current;
+    if (!tableScroll) return;
+
+    const resizeObserver = new ResizeObserver(updateGeometry);
+    resizeObserver.observe(tableScroll);
+    if (tableScroll.firstElementChild) resizeObserver.observe(tableScroll.firstElementChild);
+
+    window.addEventListener("scroll", updateGeometry, { passive: true });
+    window.addEventListener("resize", updateGeometry);
+    updateGeometry();
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("scroll", updateGeometry);
+      window.removeEventListener("resize", updateGeometry);
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, [updateGeometry]);
+
+  React.useEffect(() => {
+    if (!geometry.visible) return;
+    const tableScroll = tableScrollRef.current;
+    const floatingScroll = floatingScrollRef.current;
+    if (tableScroll && floatingScroll) floatingScroll.scrollLeft = tableScroll.scrollLeft;
+  }, [geometry.visible, geometry.contentWidth]);
+
+  return (
+    <>
+      <div
+        ref={tableScrollRef}
+        className="overflow-x-auto"
+        onScroll={(event) => {
+          const floatingScroll = floatingScrollRef.current;
+          if (floatingScroll && floatingScroll.scrollLeft !== event.currentTarget.scrollLeft) {
+            floatingScroll.scrollLeft = event.currentTarget.scrollLeft;
+          }
+        }}
+      >
+        {children}
+      </div>
+      {geometry.visible && (
+        <div
+          ref={floatingScrollRef}
+          role="region"
+          aria-label="Thanh cuộn ngang của danh sách khiếm khuyết"
+          tabIndex={0}
+          className="fixed bottom-0 z-40 h-[14px] overflow-x-scroll overflow-y-hidden border-x border-t border-border bg-background/95 shadow-[0_-2px_8px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+          style={{ left: geometry.left, width: geometry.width }}
+          onScroll={(event) => {
+            const tableScroll = tableScrollRef.current;
+            if (tableScroll && tableScroll.scrollLeft !== event.currentTarget.scrollLeft) {
+              tableScroll.scrollLeft = event.currentTarget.scrollLeft;
+            }
+          }}
+        >
+          <div aria-hidden="true" className="h-px" style={{ width: geometry.contentWidth }} />
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function DefectsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -391,7 +504,7 @@ export default function DefectsPage() {
         )
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
+          <PersistentHorizontalScroll>
           <Table className="min-w-[1500px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
@@ -573,7 +686,7 @@ export default function DefectsPage() {
               })}
             </TableBody>
           </Table>
-          </div>
+          </PersistentHorizontalScroll>
           <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div>
               Hiển thị {firstShown}-{lastShown} trong tổng số {total} bản ghi
