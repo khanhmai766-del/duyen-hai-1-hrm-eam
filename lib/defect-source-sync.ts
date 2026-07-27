@@ -185,6 +185,7 @@ export async function upsertPreparedDefectRecords(params: {
           postRepairAwaitingMaterial: true,
           reminderCount: true,
           lastRemindedAt: true,
+          pendingHistory: { select: { id: true } },
         },
       })
     : [];
@@ -192,7 +193,7 @@ export async function upsertPreparedDefectRecords(params: {
   const creates: Prisma.DefectCreateManyInput[] = [];
   const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
   const unchangedIds: string[] = [];
-  const unchangedCompletedIds: string[] = [];
+  const cancelledPendingIds: string[] = [];
   let unchangedCount = 0;
   let confirmedSkippedCount = 0;
 
@@ -235,7 +236,8 @@ export async function upsertPreparedDefectRecords(params: {
         ...sourceData,
         sourceType: "GOOGLE_SHEETS",
         sourceKey: item.sourceKey,
-        completedAt: sourceStatus === "DA_XU_LY" ? now : null,
+        // Mốc 14 ngày chỉ bắt đầu khi VHV bấm xác nhận đưa vào lịch sử.
+        completedAt: null,
         reminderCount: item.reminder.count,
         lastRemindedAt: item.reminder.lastDate,
         createdById: creator.id,
@@ -259,12 +261,11 @@ export async function upsertPreparedDefectRecords(params: {
     if (existing.sourceHash === item.hash && existing.syncState === "ACTIVE") {
       unchangedCount++;
       unchangedIds.push(existing.id);
-      if (sourceStatus === "DA_XU_LY" && !existing.completedAt) {
-        unchangedCompletedIds.push(existing.id);
-      }
       continue;
     }
 
+    const cancelPending = sourceStatus !== "DA_XU_LY" && Boolean(existing.pendingHistory);
+    if (cancelPending) cancelledPendingIds.push(existing.id);
     updates.push({
       id: existing.id,
       data: {
@@ -272,8 +273,12 @@ export async function upsertPreparedDefectRecords(params: {
         syncState: "ACTIVE",
         completedAt:
           sourceStatus === "DA_XU_LY"
-            ? existing.completedAt ?? now
+            ? existing.completedAt
             : null,
+        confirmedAt: cancelPending ? null : undefined,
+        confirmedById: cancelPending ? null : undefined,
+        confirmedByName: cancelPending ? null : undefined,
+        confirmedHistoryId: cancelPending ? null : undefined,
         postRepairAwaitingMaterial:
           sourceData.status === "DA_XU_LY" ? existing.postRepairAwaitingMaterial : false,
         reminderCount: Math.max(existing.reminderCount, item.reminder.count),
@@ -301,10 +306,9 @@ export async function upsertPreparedDefectRecords(params: {
       data: { sourceLastSeenAt: now, sourceSyncedAt: now },
     });
   }
-  for (let index = 0; index < unchangedCompletedIds.length; index += 1000) {
-    await prisma.defect.updateMany({
-      where: { id: { in: unchangedCompletedIds.slice(index, index + 1000) } },
-      data: { completedAt: now },
+  for (let index = 0; index < cancelledPendingIds.length; index += 1000) {
+    await prisma.defectHistoryPending.deleteMany({
+      where: { defectId: { in: cancelledPendingIds.slice(index, index + 1000) } },
     });
   }
 

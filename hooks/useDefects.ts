@@ -13,6 +13,10 @@ export interface DefectItem extends Defect {
     deviceSeq: string;
     device: { seq: string; name: string };
   }>;
+  pendingHistory: {
+    startedAt: string;
+    finalizeAt: string;
+  } | null;
 }
 
 export interface DefectListParams {

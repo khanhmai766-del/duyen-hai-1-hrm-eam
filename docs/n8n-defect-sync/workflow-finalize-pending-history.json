@@ -1,0 +1,70 @@
+{
+  "name": "Khiếm khuyết DH1 - Chốt lịch sử đến hạn",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "71fd9280-7c72-4b8e-9a78-e38472c4d003",
+      "name": "Kiểm tra mỗi giờ",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://duyenhai1.vn/api/integrations/n8n/defects/history/finalize",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ batchSize: 50 }) }}",
+        "options": {}
+      },
+      "id": "ee185468-804a-41f0-aad6-4068778b8f15",
+      "name": "Chốt lịch sử đến hạn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [240, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Kiểm tra mỗi giờ": {
+      "main": [
+        [
+          {
+            "node": "Chốt lịch sử đến hạn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

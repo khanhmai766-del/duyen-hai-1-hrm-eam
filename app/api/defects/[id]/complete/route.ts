@@ -6,6 +6,8 @@ import { deleteFromS3, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 
+const HISTORY_PENDING_DAYS = 14;
+
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const HISTORY_INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
@@ -16,10 +18,9 @@ const HISTORY_INCLUDE = {
 };
 
 /**
- * Đánh dấu một khiếm khuyết đã thực hiện xong:
- *  - sinh một DefectHistory (lịch sử theo cương vị) với số phiếu công tác, ngày
- *    thực hiện, kết quả, ảnh (≤3) + snapshot tổ máy/cương vị/nội dung từ khiếm khuyết,
- *  - cập nhật khiếm khuyết: status = DA_XU_LY, completedAt = thời điểm thực hiện.
+ * Phiếu thủ công được ghi lịch sử ngay như trước.
+ * Phiếu Google Sheet chỉ tạo bản nháp chờ 14 ngày để n8n tiếp tục nhận dữ liệu
+ * sửa chữa mới; tác vụ chốt lịch sử sẽ tạo DefectHistory sau thời hạn này.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
@@ -44,12 +45,70 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (defect.syncState === "CONFIRMED") {
       return fail("Khiếm khuyết này đã được xác nhận vào lịch sử");
     }
+    if (defect.sourceType === "GOOGLE_SHEETS") {
+      const pending = await prisma.defectHistoryPending.findUnique({
+        where: { defectId: defect.id },
+        select: { finalizeAt: true },
+      });
+      if (pending) {
+        return fail(`Phiếu đang chờ hoàn thiện lịch sử đến ${pending.finalizeAt.toLocaleDateString("vi-VN")}`);
+      }
+    }
     const access = await resolveEquipmentAccessForUser(user);
     if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: defect.device, system: defect.system })) {
       return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
     }
 
     const performedAt = body.performedAt ? parseDateInput(body.performedAt) : new Date();
+
+    if (defect.sourceType === "GOOGLE_SHEETS") {
+      const startedAt = new Date();
+      const finalizeAt = new Date(startedAt.getTime() + HISTORY_PENDING_DAYS * 24 * 60 * 60 * 1000);
+      const pending = await prisma.$transaction(async (tx) => {
+        const created = await tx.defectHistoryPending.create({
+          data: {
+            defectId: defect.id,
+            workOrderNumber: body.workOrderNumber?.trim() || null,
+            requestType: body.requestType?.trim() || defect.requestType,
+            performedAt,
+            content: body.content?.trim() || defect.content,
+            result: body.result?.trim() || null,
+            confirmedById: user.id,
+            confirmedByName: user.name,
+            startedAt,
+            finalizeAt,
+          },
+        });
+        await tx.defect.update({
+          where: { id: defect.id },
+          data: {
+            createdById: user.id,
+            completedAt: startedAt,
+            confirmedAt: startedAt,
+            confirmedById: user.id,
+            confirmedByName: user.name,
+            confirmedHistoryId: null,
+            // Giữ ACTIVE để n8n tiếp tục cập nhật cho tới khi chốt lịch sử.
+            syncState: "ACTIVE",
+          },
+        });
+        return created;
+      });
+
+      await audit(
+        user.id,
+        "CONFIRM_DEFECT_HISTORY_PENDING",
+        "Defect",
+        defect.id,
+        auditDetailWithPosition(user, `Chờ chốt lịch sử đến ${finalizeAt.toISOString()}`)
+      );
+      return ok({
+        pending: true,
+        startedAt: pending.startedAt,
+        finalizeAt: pending.finalizeAt,
+      });
+    }
+
     // Ảnh ghi nhận ban đầu chỉ tồn tại trong vòng đời phiếu đang xử lý.
     // Khi xác nhận lịch sử, xoá ảnh khỏi S3 và không nhận thêm ảnh ở bước này.
     const originalImages = defect.images.length > 0 ? defect.images : defect.imageUrl ? [defect.imageUrl] : [];
@@ -70,25 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           lastRemindedAt: defect.lastRemindedAt,
           reminderRaw: defect.reminderRaw,
           sourceKey: defect.sourceKey,
-          sourceSnapshot: defect.sourceType === "GOOGLE_SHEETS"
-            ? {
-                sourceSpreadsheetId: defect.sourceSpreadsheetId,
-                sourceSheetName: defect.sourceSheetName,
-                sourceRow: defect.sourceRow,
-                sourceDeviceRaw: defect.sourceDeviceRaw,
-                sourcePositionRaw: defect.sourcePositionRaw,
-                sourceStatusRaw: defect.sourceStatusRaw,
-                repairResultRaw: defect.repairResultRaw,
-                sourceStatusMismatch: defect.sourceStatusMismatch,
-                sourceCompletedAt: defect.sourceCompletedAt,
-                repeatedRepairRaw: defect.repeatedRepairRaw,
-                fireSafetyImpact: defect.fireSafetyImpact,
-                environmentSafetyImpact: defect.environmentSafetyImpact,
-                severity: defect.severity,
-                condition: defect.condition,
-                note: defect.note,
-              }
-            : undefined,
+          sourceSnapshot: undefined,
           workOrderNumber: body.workOrderNumber?.trim() || null,
           performedAt,
           result: body.result?.trim() || null,
@@ -111,20 +152,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           postRepairAwaitingMaterial: false,
           images: [],
           imageUrl: null,
-          syncState: defect.sourceType === "GOOGLE_SHEETS" ? "CONFIRMED" : defect.syncState,
-          confirmedAt: defect.sourceType === "GOOGLE_SHEETS" ? new Date() : defect.confirmedAt,
-          confirmedById: defect.sourceType === "GOOGLE_SHEETS" ? user.id : defect.confirmedById,
-          confirmedByName: defect.sourceType === "GOOGLE_SHEETS" ? user.name : defect.confirmedByName,
+          syncState: defect.syncState,
+          confirmedAt: defect.confirmedAt,
+          confirmedById: defect.confirmedById,
+          confirmedByName: defect.confirmedByName,
         },
       }),
     ]);
-
-    if (defect.sourceType === "GOOGLE_SHEETS") {
-      await prisma.defect.update({
-        where: { id: defect.id },
-        data: { confirmedHistoryId: history.id },
-      });
-    }
 
     await audit(user.id, "COMPLETE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user, defect.requestNumber));
     return ok({ ...history, createdBy: publicUserRef(history.createdBy) });

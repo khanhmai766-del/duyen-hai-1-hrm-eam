@@ -158,6 +158,17 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
    `/webhook/defects-manual-sync-dh1` qua backend, dùng Header Auth và yêu cầu
    đồng bộ cả hai nguồn. Token không được gửi xuống trình duyệt.
 
+### Chốt lịch sử sau 14 ngày
+
+Khi VHV xác nhận một phiếu Google Sheet đã xử lý, website chỉ tạo bản nháp
+lịch sử và giữ phiếu ở Tồn đọng trong 14 ngày. Trong thời gian này n8n vẫn đồng
+bộ dữ liệu sửa chữa mới. Hết hạn, workflow độc lập
+`workflow-finalize-pending-history.json` gọi API chốt lịch sử mỗi giờ.
+
+Workflow này phải được import, chọn lại credential `Header Auth account`, rồi
+Publish. Không nối tác vụ chốt lịch sử vào nhánh kiểm tra `modifiedTime`, vì lịch
+sử vẫn phải được chốt đúng hạn ngay cả khi hai Sheet không thay đổi.
+
 Trong giai đoạn kiểm thử có thể đặt `EXECUTIONS_DATA_SAVE_ON_SUCCESS=all` để xem
 output. Khi chạy ổn định, đổi lại `none` để database n8n không giữ thêm bản sao
 dữ liệu vận hành.

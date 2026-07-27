@@ -20,6 +20,9 @@ const INCLUDE = {
     select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
+  pendingHistory: {
+    select: { startedAt: true, finalizeAt: true },
+  },
 };
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {

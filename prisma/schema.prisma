@@ -520,6 +520,7 @@ model Defect {
   createdBy      User                  @relation("DefectCreatedBy", fields: [createdById], references: [id])
   node           EquipmentNode?        @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
   relatedDevices DefectRelatedDevice[]
+  pendingHistory DefectHistoryPending?
 
   @@index([deviceSeq])
   // Lịch sử "khiếm khuyết của thiết bị X, mới nhất trước" đọc thẳng từ index.
@@ -547,6 +548,28 @@ model Defect {
   @@index([unit, requestType, status, severity])
   @@index([sourceStatusMismatch, detectedAt(sort: Desc)])
   @@index([unit, deviceSeq])
+}
+
+// Bản nháp lịch sử của phiếu Google Sheet sau khi VHV xác nhận.
+// Trong 14 ngày chờ, Defect vẫn ACTIVE để nhận dữ liệu sửa chữa mới từ n8n.
+model DefectHistoryPending {
+  id              String   @id @default(cuid())
+  defectId        String   @unique
+  workOrderNumber String?
+  requestType     String?
+  performedAt     DateTime
+  content         String?
+  result          String?
+  confirmedById   String // Snapshot ID người xác nhận, không FK
+  confirmedByName String // Snapshot tên người xác nhận
+  startedAt       DateTime @default(now())
+  finalizeAt      DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  defect Defect @relation(fields: [defectId], references: [id], onDelete: Cascade)
+
+  @@index([finalizeAt])
 }
 
 // Danh sách thiết bị liên quan của một phiếu khiếm khuyết.

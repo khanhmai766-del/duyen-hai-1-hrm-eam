@@ -49,9 +49,11 @@ export function CompleteDefectDialog({
       performedAt: defect.sourceType === "GOOGLE_SHEETS" && defect.sourceCompletedAt
         ? formatDateInput(defect.sourceCompletedAt)
         : todayInput(),
-      content: defect.sourceType === "GOOGLE_SHEETS" ? defect.content ?? "" : "",
+      content: defect.sourceType === "GOOGLE_SHEETS"
+        ? defect.repeatedRepairRaw?.trim() || defect.content || ""
+        : "",
       result: defect.sourceType === "GOOGLE_SHEETS"
-        ? defect.note?.trim() || defect.sourceStatusRaw?.trim() || ""
+        ? defect.repairResultRaw?.trim() || defect.note?.trim() || defect.sourceStatusRaw?.trim() || ""
         : "",
     });
   }, [defect]);
@@ -68,7 +70,11 @@ export function CompleteDefectDialog({
         content: form.content,
         result: form.result,
       });
-      toast.success(defect.sourceType === "GOOGLE_SHEETS" ? "Đã xác nhận và lưu vào lịch sử" : "Đã hoàn thành & ghi lịch sử thiết bị");
+      toast.success(
+        defect.sourceType === "GOOGLE_SHEETS"
+          ? "Đã xác nhận; phiếu sẽ được chốt lịch sử sau 14 ngày"
+          : "Đã hoàn thành & ghi lịch sử thiết bị"
+      );
       onClose();
     } catch (e) {
       toast.error((e as Error).message);
@@ -93,6 +99,12 @@ export function CompleteDefectDialog({
               <ReadOnly label="Cương vị" value={defect.system ?? "—"} />
             </div>
             <ReadOnly label="Khối quản lý" value={blockForPosition(defect.system)} />
+            {defect.sourceType === "GOOGLE_SHEETS" && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+                Phiếu vẫn nằm trong Tồn đọng và tiếp tục nhận dữ liệu sửa chữa từ Google Sheet trong 14 ngày.
+                Sau thời hạn này hệ thống mới chốt bản đầy đủ vào lịch sử.
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Số phiếu công tác">
@@ -128,8 +140,8 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Nội dung thực hiện">
-              {defect.sourceType === "GOOGLE_SHEETS" && defect.content && (
-                <SourceValue value={defect.content} multiline />
+              {defect.sourceType === "GOOGLE_SHEETS" && (defect.repeatedRepairRaw || defect.content) && (
+                <SourceValue value={defect.repeatedRepairRaw || defect.content || ""} multiline />
               )}
               <Textarea
                 value={form.content}
@@ -139,8 +151,8 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Kết quả thực hiện">
-              {defect.sourceType === "GOOGLE_SHEETS" && (defect.note || defect.sourceStatusRaw) && (
-                <SourceValue value={defect.note || defect.sourceStatusRaw || ""} multiline />
+              {defect.sourceType === "GOOGLE_SHEETS" && (defect.repairResultRaw || defect.note || defect.sourceStatusRaw) && (
+                <SourceValue value={defect.repairResultRaw || defect.note || defect.sourceStatusRaw || ""} multiline />
               )}
               <Textarea
                 value={form.result}

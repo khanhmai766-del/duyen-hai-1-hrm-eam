@@ -25,6 +25,9 @@ const INCLUDE = {
     select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
+  pendingHistory: {
+    select: { startedAt: true, finalizeAt: true },
+  },
 };
 
 const LIST_SELECT = {
@@ -47,6 +50,7 @@ const LIST_SELECT = {
   note: true,
   createdAt: true,
   createdBy: { select: { name: true } },
+  pendingHistory: { select: { startedAt: true, finalizeAt: true } },
   relatedDevices: {
     select: { deviceSeq: true, device: { select: { name: true } } },
   },
@@ -75,7 +79,6 @@ function activeDefectWhere(): Prisma.DefectWhereInput {
       {
         sourceType: "GOOGLE_SHEETS",
         syncState: { not: "CONFIRMED" },
-        status: { not: "DA_XU_LY" },
       },
       {
         sourceType: { not: "GOOGLE_SHEETS" },
@@ -85,6 +88,7 @@ function activeDefectWhere(): Prisma.DefectWhereInput {
       { status: "DA_XU_LY", postRepairAwaitingMaterial: true },
       // Phiếu đã xử lý bình thường ở lại 14 ngày để VHV có thể xem lại.
       {
+        sourceType: { not: "GOOGLE_SHEETS" },
         status: "DA_XU_LY",
         postRepairAwaitingMaterial: false,
         completedAt: { gte: completedCutoff },

@@ -498,6 +498,13 @@ export default function DefectsPage() {
                             <CloudOff className="h-3.5 w-3.5" />
                             Không còn trên Google Sheet
                           </span>
+                        ) : d.pendingHistory ? (
+                          <span
+                            className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800 ring-1 ring-blue-200"
+                            title={`Hệ thống sẽ chốt lịch sử vào ${formatDate(d.pendingHistory.finalizeAt)}`}
+                          >
+                            Chờ chốt lịch sử · {formatDate(d.pendingHistory.finalizeAt)}
+                          </span>
                         ) : d.postRepairAwaitingMaterial ? (
                           <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
                             Tồn đọng · Chờ vật tư
@@ -537,7 +544,7 @@ export default function DefectsPage() {
                       <TableCell className="px-2 py-3">
                         <div className="flex items-center justify-center gap-1">
                           {canManage && (
-                            (d.sourceType === "GOOGLE_SHEETS" && !!d.deviceSeq && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
+                            (d.sourceType === "GOOGLE_SHEETS" && !!d.deviceSeq && !d.pendingHistory && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
                             (d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY")
                           ) && (
                             <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title="Hoàn thành" className="text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); void openComplete(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
@@ -617,7 +624,7 @@ export default function DefectsPage() {
               onMappingSaved={(updated) => {
                 setFormOpen(false);
                 setEditTarget(null);
-                if (updated.status === "DA_XU_LY" && !updated.postRepairAwaitingMaterial && updated.syncState !== "CONFIRMED") {
+                if (updated.status === "DA_XU_LY" && !updated.pendingHistory && !updated.postRepairAwaitingMaterial && updated.syncState !== "CONFIRMED") {
                   setCompleteTarget(updated);
                 }
               }}
@@ -885,6 +892,12 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
               label="Trạng thái đồng bộ"
               value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
             />
+            {defect.pendingHistory && (
+              <>
+                <DetailLine label="Xác nhận chờ lịch sử" value={formatDate(defect.pendingHistory.startedAt)} />
+                <DetailLine label="Dự kiến chốt lịch sử" value={formatDate(defect.pendingHistory.finalizeAt)} />
+              </>
+            )}
             <DetailLine label="Trạng thái nguồn" value={defect.sourceStatusRaw || "—"} />
             <DetailLine
               label="Kết quả sửa chữa"
