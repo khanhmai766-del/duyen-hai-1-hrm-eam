@@ -42,7 +42,7 @@ const STATUS: Record<string, { label: string; c: string }> = {
   SU_DUNG_VAT_TU: { label: "Sử dụng vật tư", c: "#6d28d9" },
   CHO_NGHIEM_THU: { label: "Chờ nghiệm thu", c: C.warn },
   CHO_QUYET_TOAN: { label: "Chờ quyết toán", c: "#7c3aed" },
-  CHO_THONG_KE_XUAT_BIEN_BAN: { label: "Chờ Thống kê xuất biên bản", c: "#0f766e" },
+  CHO_THONG_KE_XUAT_BIEN_BAN: { label: "Chờ Thống kê xác nhận mã", c: "#0f766e" },
   CHO_NHAP_LIEU: { label: "Chờ nhập số lượng ứng", c: C.ung },
   CHO_NHAP_LIEU_THAY_THE: { label: "Chờ nhập liệu thay thế", c: C.ung },
   CHO_XAC_NHAN_PDF: { label: "Chờ xác nhận xuất file", c: C.ung },
@@ -61,24 +61,24 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "BBNT ký tay + BBNT thu hồi", who: "Theo phân quyền quy trình" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + BBNT DO", who: "Thống kê" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   UNG: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "VHV_LANH_VAT_TU", label: "VHV lãnh vật tư", who: "VHV được giao thực hiện" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu + BBNT ký tay", who: "Theo phân quyền quy trình" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
-    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư + xuất biên bản", who: "Thống kê" },
+    { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "NHAN_TU_HIEN_CO", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
-    { key: "CHO_NGHIEM_THU", label: "BBNT ký tay + BBNT thu hồi", who: "Theo phân quyền quy trình" },
-    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận + BBNT D-Office", who: "Thống kê" },
+    { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
+    { key: "CHO_THONG_KE_XUAT_BIEN_BAN", label: "Thống kê xác nhận mã vật tư", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
 };
@@ -298,7 +298,7 @@ export default function MaterialTicketBoard({
 		            : t.type === "UNG" && t.status === "NHAN_VAT_TU"
 		            ? { label: "Chờ xác nhận ĐXVT", c: "#0891b2" }
 		            : STATUS[t.status] ?? { label: t.status, c: C.soft };
-		          const recoveryPending = t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
+		          const recoveryPending = t.recoveryRequired && !t.recoveryReturnedAt;
 	          const mine = actionsFor(t, viewer).length > 0;
 	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
 	          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
@@ -656,7 +656,7 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = 
   { key: "stats", label: "Thống kê xác nhận ĐXVT (nhập số + xác nhận giao/trả phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "receive", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "accept", label: "Nghiệm thu — BBNT ký tay + BBNT thu hồi", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", label: "Nghiệm thu và xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "settle", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
   { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
@@ -965,7 +965,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     .filter(Boolean)))
     .join(", ");
   const handwrittenBbntUrl = t.bbktDocUrl ? bbntDownloadUrl(t.bbktDocUrl, replacementDeviceName) : null;
-  const exportedDocumentCount = [t.proposalDocUrl, t.docUrl, handwrittenBbntUrl, t.recoveryDocUrl].filter(Boolean).length;
+  // Không hiển thị biên bản thu hồi cũ từng sinh sớm trước khi bước Nghiệm thu hoàn thành.
+  const recoveryDocumentUrl = t.completedAt ? t.recoveryDocUrl : null;
+  const exportedDocumentCount = [t.proposalDocUrl, t.docUrl, handwrittenBbntUrl, recoveryDocumentUrl].filter(Boolean).length;
   const activityLogs = [
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
@@ -992,7 +994,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const si = order.indexOf(s.key);
 	            const done = t.status === "HOAN_TAT" || si < idx;
 	            const cur = s.key === flowStatus;
-	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && (!t.recoveryReturnedAt || !t.recoveryDocUrl);
+	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && !t.recoveryReturnedAt;
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const caption = s.key === "CHO_PHIEU__XUAT_KHO" && t.proposalReceiverName
 	              ? "Xem lại"
@@ -1092,7 +1094,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                   {t.proposalDocUrl && <a className="pdf" href={t.proposalDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Phiếu Đề Xuất Vật Tư</a>}
                   {handwrittenBbntUrl && <a className="pdf" href={handwrittenBbntUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu Ký Tay</a>}
                   {t.docUrl && <a className="pdf" href={t.docUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Nghiệm Thu D-Office</a>}
-                  {t.recoveryDocUrl && <a className="pdf recovery-download" href={t.recoveryDocUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
+                  {recoveryDocumentUrl && <a className="pdf recovery-download" href={recoveryDocumentUrl} target="_blank" rel="noreferrer"><Download size={14} /> Biên Bản Vật Tư Thu Hồi</a>}
                 </div>
               </div>
               )}
@@ -1235,7 +1237,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
 function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | null }) {
   const acts = actionsFor(t, viewer);
   const act = useTicketAction(t.id);
-  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("statsExportDocuments");
+  const needItems = acts.includes("confirm") || acts.includes("receive") || acts.includes("propose") || acts.includes("stats") || acts.includes("accept") || acts.includes("statsExportDocuments");
   const { data: opts } = useTicketOptions(needItems);
   const [items, setItems] = useState([{ materialId: "", erpCode: "", deviceSeq: "", quantity: 1 }]);
   const [note, setNote] = useState("");
@@ -1853,7 +1855,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 		              <span>Xác nhận đã trả vật tư thu hồi</span>
 		            </label>
 		          </div>
-	          {t.type !== "DE_XUAT" && <div className="note"><FileText size={15}/> {t.type === "UNG" ? "Biên bản vật tư thu hồi sẽ được tạo tại bước Xác nhận ĐXVT." : "Biên bản vật tư thu hồi sẽ được tạo tại bước Nghiệm thu."}</div>}
+	          <div className="note"><FileText size={15}/> BBNT ký tay, BBNT D-Office và biên bản vật tư thu hồi sẽ được tạo cùng lúc khi xác nhận bước nghiệm thu.</div>
 		        </>}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
@@ -1870,10 +1872,22 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("accept")) {
     // Phiếu theo luồng mới đã có PCT/chỉ huy/nội dung từ bước Sử dụng vật tư;
     // phiếu cũ (trước khi thêm bước) vẫn nhập tại đây để tương thích.
+    const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
+    const codeOptions = selectedMaterialOption?.erpCodes?.length
+      ? selectedMaterialOption.erpCodes
+      : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
+          .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
+    const selectedErp = codeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <label className="lb">{t.type === "UNG" ? "Nghiệm thu — chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Nghiệm thu — chuyển Thống kê xác nhận" : "Nghiệm thu — biên bản ký tay (nếu có) & xuất Biên Bản (Word)"}</label>
           <>
+            <label className="field">Mã vật tư dùng xuất biên bản *
+              <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+                <option value="">— Chọn mã vật tư ERP —</option>
+                {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
+              </select>
+            </label>
+            {selectedErp && <p className="hint">BBNT D-Office sẽ sử dụng mã <b>{selectedErp.code}</b> và tên <b>{selectedErp.name || t.items[0]?.material.name}</b>.</p>}
             <div className="accept-two-grid">
               <label className="field">Số PCT/LCT *
                 <input placeholder="Nhập số PCT/LCT" value={pct} onChange={(e) => setPct(e.target.value)} />
@@ -1904,9 +1918,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         ) : (
           <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Số BBNT ký tay (nếu có)" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
         )}
-        <button className="btn primary big" disabled={act.isPending || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
-          onClick={() => run({ action: "accept", completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, ...(t.type === "UNG" ? { materialCode: manualMaterialCode.trim() || undefined } : {}), workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "UNG" ? "Đã nghiệm thu, chuyển xác nhận vật tư lãnh" : t.type === "SU_DUNG_HIEN_CO" ? "Đã nghiệm thu, chuyển Thống kê xác nhận và xuất biên bản" : "Đã nghiệm thu, chờ Thống kê quyết toán")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu & xuất BBNT ký tay
+        <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
+          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, ...(t.type === "UNG" ? { materialCode: manualMaterialCode.trim() || undefined } : {}), workStartedAt: startedAt, workEndedAt: endedAt }, "Đã nghiệm thu và xuất các biên bản")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu và xuất biên bản
         </button>
       </div>
     );
@@ -1922,9 +1936,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const selectedErp = codeOptions.find((option) => option.code === erpCode);
     return (
       <div className="act">
-        <label className="lb">Thống kê xác nhận và xuất BBNT D-Office</label>
+        <label className="lb">Thống kê xác nhận mã vật tư</label>
         <label className="field">Mã vật tư *
-          <select value={erpCode} onChange={(e) => setErpCode(e.target.value)}>
+          <select value={erpCode} disabled>
             <option value="">— Chọn mã vật tư ERP —</option>
             {codeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {unit}</option>)}
           </select>
@@ -1937,10 +1951,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </div>
           </div>
         )}
-        <p className="hint">Mã và tên vật tư đã chọn sẽ được lưu vào phiếu và dùng để xuất Biên Bản Nghiệm Thu D-Office.</p>
+        <p className="hint">BBNT D-Office đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán.</p>
         <button className="btn primary big" disabled={!erpCode || act.isPending}
-          onClick={() => run({ action: "statsExportDocuments", erpCode }, "Đã xác nhận mã vật tư và xuất BBNT D-Office")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận & xuất BBNT D-Office
+          onClick={() => run({ action: "statsExportDocuments", erpCode }, "Đã xác nhận mã vật tư")}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận mã vật tư
         </button>
       </div>
     );
@@ -1959,10 +1973,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         </span>
         <span className="settlement-check-label">Xác nhận đã quyết toán vật tư</span>
       </label>
-      {t.type === "DE_XUAT" && <div className="note"><FileText size={15}/> Khi hoàn tất phiếu, hệ thống sẽ xuất <b>Biên Bản Nghiệm Thu D-Office</b>.</div>}
-      {t.type === "UNG" && <div className="note"><FileText size={15}/> Khi quyết toán, hệ thống sẽ xuất <b>Biên Bản Nghiệm Thu D-Office</b>{t.recoveryRequired ? <> và <b>Biên Bản Vật Tư Thu Hồi</b></> : ""}.</div>}
-      <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, t.type === "UNG" ? "Đã quyết toán và xuất biên bản" : "Phiếu đã hoàn thành")}>
-        {t.type === "UNG" ? <FileText size={15}/> : <CircleCheck size={15}/>} {t.type === "UNG" ? "Quyết toán & xuất biên bản" : "Hoàn tất phiếu"}
+      <div className="note"><CircleCheck size={15}/> Các biên bản đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận quyết toán vật tư.</div>
+      <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Đã xác nhận quyết toán vật tư")}>
+        <CircleCheck size={15}/> Xác nhận quyết toán vật tư
       </button>
     </div>
   );

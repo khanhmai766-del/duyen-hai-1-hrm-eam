@@ -579,9 +579,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.usedQuantity;
         if (item.material.quantity - delta < 0) return fail("Không đủ số lượng hiện có để tăng số lượng sử dụng");
-        const recoveryDocument = recoveryRequired && !t.recoveryDocUrl
-          ? await buildRecoveryDocument(t, { recoveryQuantity })
-          : null;
         before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
@@ -595,7 +592,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               recoveryRequired,
               recoveryQuantity,
               recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
-              recoveryDocUrl: recoveryRequired ? (t.recoveryDocUrl ?? recoveryDocument?.url ?? null) : null,
+              // Biên bản thu hồi chỉ được sinh cùng BBNT ký tay ở bước Nghiệm thu.
+              // Xóa liên kết cũ từng được sinh sớm, nhưng giữ biên bản của phiếu đã nghiệm thu.
+              recoveryDocUrl: recoveryRequired && t.completedAt ? t.recoveryDocUrl : null,
             },
             include: ITEM_INCLUDE,
           });
@@ -607,16 +606,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
         before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
         const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
+        const bbntDo = await buildBbntDoDocument(t, { pctNumber: pct });
         // Đổi số PCT/LCT → xuất lại BBTHVT để cột Ghi chú đồng bộ số mới.
         const recoveryDoc = t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url, ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}) }, include: ITEM_INCLUDE });
+        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url, docUrl: bbntDo.url, ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}) }, include: ITEM_INCLUDE });
       }
       if (!up) return fail("Không thể cập nhật bước");
-      // Bước accept đã tự xuất lại BBNT ký tay và biên bản thu hồi ở trên.
+      // Bước accept đã tự xuất lại BBNT ký tay, BBNT D-Office và biên bản thu hồi ở trên.
       // Các file còn lại (nếu đã tồn tại) được tạo lại từ dữ liệu vừa lưu.
       const skipRefreshedInStep = step === "accept"
-        ? new Set<keyof ExportedDocumentUrls>(["bbktDocUrl", "recoveryDocUrl"])
-        : new Set<keyof ExportedDocumentUrls>();
+        ? new Set<keyof ExportedDocumentUrls>(["bbktDocUrl", "docUrl", "recoveryDocUrl"])
+        : step === "use" && !t.completedAt
+          // Không tái tạo liên kết BBTHVT cũ trước khi phiếu hoàn tất bước Nghiệm thu.
+          ? new Set<keyof ExportedDocumentUrls>(["recoveryDocUrl"])
+          : new Set<keyof ExportedDocumentUrls>();
       up = await refreshExistingDocuments(t, up, user, skipRefreshedInStep);
       await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${materialTicketReference(t)}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
       return ok(up);
@@ -1074,10 +1077,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail(`Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. ${mat.name} hiện còn ${mat.quantity}; vui lòng nhập lại số lượng.`);
       }
       const newQty = mat.quantity - usedQuantity;
-      const recoveryDocument = recoveryRequired && t.type === "DE_XUAT"
-        ? await buildRecoveryDocument(t, { recoveryQuantity })
-        : null;
-
       const up = await prisma.$transaction(async (tx) => {
         if (newQty !== mat.quantity) {
           const sharedCodes = mat.erpCodes.length ? mat.erpCodes : [mat.code];
@@ -1093,7 +1092,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             status: "CHO_NGHIEM_THU",
             recoveryRequired, recoveryQuantity,
             recoveryReturnedAt: recoveryRequired && recoveryReturned ? new Date() : null,
-            recoveryDocUrl: recoveryDocument?.url ?? null,
+            // Không xuất file tại bước xác nhận sử dụng; bước Nghiệm thu sẽ sinh đồng thời
+            // BBNT ký tay và Biên bản vật tư thu hồi.
+            recoveryDocUrl: null,
             usedQuantity, remainingQuantity: remaining, materialUserName,
             usedById: user.id, usedByName: user.name ?? "",
             usedByPosition: user.position ?? null, usedAt: new Date(),
@@ -1128,10 +1129,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
 
-      // Mọi luồng: nghiệm thu xuất BBNT ký tay. Đề xuất & Sử dụng hiện có kèm Biên bản
-      // vật tư thu hồi; luồng Ứng xuất BBNT D-Office và Biên bản vật tư thu hồi ở bước Quyết toán.
-      // Luồng Đề xuất cũng xuất BBNT D-Office tại Quyết toán; Sử dụng hiện có xuất tại bước
-      // Thống kê xác nhận + BBNT D-Office.
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const erpCode = String(body.erpCode || item.erpCode || "").trim();
+      if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP để xuất BBNT D-Office");
+      const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+      if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+      const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
+      if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
+      const itemOverride = { materialCode: erpCode, materialName: erpMaterial.name };
+      const bbntItems = toBbntItems(t).map((bbntItem, index) => index === 0
+        ? { ...bbntItem, materialCode: erpCode, materialName: erpMaterial.name }
+        : bbntItem);
+
+      // Mọi luồng: bước Nghiệm thu xuất đồng thời BBNT ký tay, BBNT D-Office
+      // và Biên bản vật tư thu hồi (khi có khai báo thu hồi).
       const documents = {
         bbkt: await generateBbntDoc({
           fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
@@ -1139,33 +1151,48 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
           unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
-          items: toBbntItems(t),
+          items: bbntItems,
         }),
-        // BBTHVT tạo lại tại đây (bước Sử dụng vật tư chưa có PCT) để Ghi chú có số PCT/LCT.
-        recovery: t.type !== "UNG" && t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null,
+        bbntDo: await buildBbntDoDocument(t, {
+          pctNumber: pct,
+          workStartedAt,
+          workEndedAt,
+          receivedQuantity: t.receivedQuantity ?? t.vhvReceivedQuantity ?? undefined,
+          deliveryNoteNumber: t.deliveryNoteNumber ?? t.receivedMethod ?? undefined,
+          itemOverride,
+        }),
+        // BBTHVT được tạo cùng hai BBNT tại đây để Ghi chú có số PCT/LCT.
+        recovery: t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride }) : null,
       };
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: t.type === "UNG" ? "NHAN_VAT_TU" : t.type === "SU_DUNG_HIEN_CO" ? "CHO_THONG_KE_XUAT_BIEN_BAN" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
-          ...(documents ? { bbktDocUrl: documents.bbkt.url } : {}),
-          ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
-          workStartedAt, workEndedAt,
-          ...(bbkt ? { bbktNumber: bbkt } : {}),
-          ...(t.type === "UNG" ? { vhvMaterialCode: materialCode || null } : {}),
-          completedById: user.id, completedByName: user.name ?? "",
-          completedByPosition: user.position ?? null, completedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const up = await prisma.$transaction(async (tx) => {
+        await tx.materialTicketItem.update({
+          where: { id: item.id },
+          data: { erpCode, erpName: erpMaterial.name },
+        });
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: t.type === "UNG" ? "NHAN_VAT_TU" : t.type === "SU_DUNG_HIEN_CO" ? "CHO_THONG_KE_XUAT_BIEN_BAN" : "CHO_QUYET_TOAN", completionNote: note, pctNumber: pct, chiHuyName: chiHuy,
+            bbktDocUrl: documents.bbkt.url,
+            docUrl: documents.bbntDo.url,
+            ...(documents.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
+            workStartedAt, workEndedAt,
+            ...(bbkt ? { bbktNumber: bbkt } : {}),
+            ...(t.type === "UNG" ? { vhvMaterialCode: materialCode || null } : {}),
+            completedById: user.id, completedByName: user.name ?? "",
+            completedByPosition: user.position ?? null, completedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
-      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay${t.type === "UNG" ? `, mã vật tư nhập tay ${materialCode || "không có"}` : ""}${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận và xuất BBNT DO" : "chờ Thống kê quyết toán"}`);
+      await audit(user.id, "MT_ACCEPT", "MaterialTicket", t.id, `${materialTicketReference(t)}: nghiệm thu, xuất BBNT ký tay và BBNT D-Office${t.type === "UNG" ? `, mã vật tư nhập tay ${materialCode || "không có"}` : ""}${documents.recovery ? " và Biên bản vật tư thu hồi" : ""}, ${t.type === "UNG" ? "chuyển Thống kê xác nhận ĐXVT" : t.type === "SU_DUNG_HIEN_CO" ? "chuyển Thống kê xác nhận mã vật tư" : "chờ Thống kê quyết toán"}`);
       return ok(up);
     }
 
     if (action === "statsExportDocuments") {
-      if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "CHO_THONG_KE_XUAT_BIEN_BAN") return fail("Phiếu không ở bước Thống kê xác nhận và xuất biên bản");
+      if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "CHO_THONG_KE_XUAT_BIEN_BAN") return fail("Phiếu không ở bước Thống kê xác nhận mã vật tư");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
-        return fail("Bạn không có quyền Thống kê xác nhận và xuất biên bản", 403);
+        return fail("Bạn không có quyền Thống kê xác nhận mã vật tư", 403);
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const erpCode = String(body.erpCode || "").trim();
@@ -1175,43 +1202,34 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true } });
       if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
 
-      // BBNT ký tay + Biên bản vật tư thu hồi đã xuất ở bước Nghiệm thu;
-      // Thống kê xác nhận mã ERP tại đây và xuất BBNT DO.
-      const bbnt = await buildBbntDoDocument(t, {
-        itemOverride: { materialCode: erpCode, materialName: erpMaterial.name },
-      });
+      if (t.docUrl && item.erpCode && erpCode !== item.erpCode)
+        return fail("Mã vật tư đã được khóa khi xuất BBNT D-Office ở bước Nghiệm thu");
+
+      // Cả ba biên bản đã xuất ở bước Nghiệm thu; Thống kê chỉ xác nhận mã ERP.
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
             status: "CHO_QUYET_TOAN",
-            docUrl: bbnt.url,
           },
           include: ITEM_INCLUDE,
         });
       });
-      await audit(user.id, "MT_STATS_EXPORT", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất BBNT DO, chuyển Quyết toán`);
+      await audit(user.id, "MT_STATS_EXPORT", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận mã ${erpCode}, chuyển Quyết toán`);
       return ok(up);
     }
 
     if (action === "settle") {
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "CHO_QUYET_TOAN") return fail("Phiếu không ở bước quyết toán");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "settle", user)) return fail("Bạn không có quyền xác nhận quyết toán", 403);
-      // Luồng Đề xuất và Ứng: BBNT D-Office được xuất khi quyết toán.
-      // Riêng luồng Ứng, nếu có vật tư thu hồi thì đồng thời xuất Biên bản vật tư thu hồi.
-      const bbnt = ["DE_XUAT", "UNG"].includes(t.type) ? await buildBbntDoDocument(t) : null;
-      const recovery = t.type === "UNG" && t.recoveryRequired
-        ? await buildRecoveryDocument(t)
-        : null;
+      // Cả ba biên bản đã được xuất ở bước Nghiệm thu; bước này chỉ xác nhận quyết toán.
       const up = await prisma.materialTicket.update({
         where: { id: t.id },
         data: {
           status: "HOAN_TAT",
           settledAt: new Date(),
           settledByName: user.name ?? "",
-          ...(bbnt ? { docUrl: bbnt.url } : {}),
-          ...(recovery ? { recoveryDocUrl: recovery.url } : {}),
         },
         include: ITEM_INCLUDE,
       });
@@ -1220,7 +1238,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         "MT_SETTLE",
         "MaterialTicket",
         t.id,
-        `${materialTicketReference(t)}: đã quyết toán vật tư${bbnt ? ", xuất BBNT D-Office" : ""}${recovery ? " và Biên bản vật tư thu hồi" : ""}`
+        `${materialTicketReference(t)}: đã xác nhận quyết toán vật tư`
       );
       return ok(up);
     }
