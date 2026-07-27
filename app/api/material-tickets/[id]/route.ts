@@ -736,6 +736,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const bbktNumber = String(body.bbktNumber || "").trim();
       const proposalNote = String(body.proposalNote || "").trim(); // Lý do — hiện ở "Ghi chú lý do" trên phiếu
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
+      if (t.type === "CHUA_CHON" && workflowType === "DE_XUAT") {
+        const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
+        const availableErpCode = await prisma.erpMaterial.findFirst({
+          where: {
+            code: { in: allowedCodes },
+            isActive: true,
+            mappingStatus: "CONFIRMED",
+            erpStock: { gt: 0 },
+          },
+          select: { code: true },
+        });
+        if (!availableErpCode) {
+          return fail("Không thể chọn luồng Đề xuất vì tất cả mã vật tư ERP đều không còn tồn kho. Vui lòng chọn luồng Ứng");
+        }
+      }
       const short = t.items.filter((it) => (it.id === item.id ? quantity : it.quantity) > it.material.quantity);
       if (workflowType === "SU_DUNG_HIEN_CO" && short.length > 0) {
         return fail(

@@ -629,20 +629,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                     <label>Số lượng đề xuất *</label>
                     <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
                   </div></div>
-                <label>Thiết bị thay thế *</label>
-                <select
-                  value={replacementDeviceSeq}
-                  disabled={!selectedMaterialId || !selectedDeviceOptions.length}
-                  onChange={(e) => {
-                    const deviceSeq = e.target.value;
-                    setReplacementDeviceSeq(deviceSeq);
-                    const device = availableDeviceOptions.find((option) => option.seq === deviceSeq);
-                    setReplacementSystem(device?.system?.trim() ?? "");
-                  }}
-                >
-                  <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
-                  {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
-                </select>
                 <label>Thuộc hệ thống</label>
                 <select
                   value={replacementSystem}
@@ -662,6 +648,20 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                         : "— Chưa khai báo hệ thống / thiết bị —"}
                   </option>
                   {replacementSystemOptions.map((system) => <option key={system} value={system}>{system}</option>)}
+                </select>
+                <label>Thiết bị thay thế *</label>
+                <select
+                  value={replacementDeviceSeq}
+                  disabled={!selectedMaterialId || !selectedDeviceOptions.length}
+                  onChange={(e) => {
+                    const deviceSeq = e.target.value;
+                    setReplacementDeviceSeq(deviceSeq);
+                    const device = availableDeviceOptions.find((option) => option.seq === deviceSeq);
+                    setReplacementSystem(device?.system?.trim() ?? "");
+                  }}
+                >
+                  <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
+                  {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
                 </select>
                 {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
               </>
@@ -1316,6 +1316,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [recoveryQuantityInput, setRecoveryQuantityInput] = useState("1");
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
+  const confirmationMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
+  const confirmationErpInfoRows = confirmationMaterialOption?.erpCodes?.length
+    ? confirmationMaterialOption.erpCodes
+    : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
+        .map((code) => ({ code, name: t.items[0]?.material.name ?? "—", erpStock: 0 }));
+  const proposalFlowAvailable = opts ? confirmationErpInfoRows.some((row) => row.erpStock > 0) : null;
   const repairRequestConflictsProposal =
     !!repairRequestNumber.trim() &&
     !!t.proposalNumber?.trim() &&
@@ -1334,6 +1340,17 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     setProposalNumberInput("");
     setBbktNumberInput("");
   }, [t.id, t.status]);
+
+  React.useEffect(() => {
+    if (
+      t.type === "CHUA_CHON"
+      && t.status === "CHO_XAC_NHAN"
+      && proposalFlowAvailable === false
+      && workflowType === "DE_XUAT"
+    ) {
+      setWorkflowType("UNG");
+    }
+  }, [proposalFlowAvailable, t.status, t.type, workflowType]);
 
   React.useEffect(() => {
     setRepairRequestNumber((current) => {
@@ -1556,24 +1573,22 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   if (acts.includes("confirm")) {
     if (t.type === "CHUA_CHON") {
-      const selectedMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
-      const erpInfoRows = selectedMaterialOption?.erpCodes?.length
-        ? selectedMaterialOption.erpCodes
-        : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
-            .map((code) => ({ code, name: t.items[0]?.material.name ?? "—", erpStock: 0 }));
       const existingStockShortages = t.items.filter((item, index) => (index === 0 ? qty : item.quantity) > item.material.quantity);
       const canUseExistingStock = existingStockShortages.length === 0;
       return <div className="act">
         <div className="act-title-row">
           <label className="lb">Xác nhận yêu cầu</label>
           <div className="seg3 flow-toggle" aria-label="Chọn luồng vật tư">
-            <button
-              type="button"
-              className={workflowType === "DE_XUAT" ? "on" : ""}
-              onClick={() => setWorkflowType("DE_XUAT")}
-            >
-              Đề xuất
-            </button>
+            {proposalFlowAvailable !== false && (
+              <button
+                type="button"
+                className={workflowType === "DE_XUAT" ? "on" : ""}
+                disabled={proposalFlowAvailable !== true}
+                onClick={() => setWorkflowType("DE_XUAT")}
+              >
+                Đề xuất
+              </button>
+            )}
             <button type="button" className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button>
             <button
               type="button"
@@ -1589,7 +1604,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {!canUseExistingStock && (
           <div className="warnbox">
             <AlertTriangle size={15} />
-            Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.id === t.items[0]?.id ? qty : item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. Bạn vẫn có thể chọn <b>Đề xuất</b> hoặc <b>Ứng</b>.
+            Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.id === t.items[0]?.id ? qty : item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. {proposalFlowAvailable === false ? <>Bạn chỉ có thể chọn <b>Ứng</b> vì tất cả mã vật tư ERP đều không còn tồn kho.</> : <>Bạn vẫn có thể chọn <b>Đề xuất</b> hoặc <b>Ứng</b>.</>}
           </div>
         )}
         {workflowType !== "SU_DUNG_HIEN_CO" && (
@@ -1602,7 +1617,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               <div className="erp-readonly-row erp-readonly-labels" aria-hidden="true">
                 <span>Mã vật tư</span><span>Tên vật tư</span><span>Số lượng ERP</span>
               </div>
-              {erpInfoRows.map((row) => (
+              {confirmationErpInfoRows.map((row) => (
                 <div className="erp-readonly-row" key={row.code}>
                   <b>{row.code}</b>
                   <span>{row.name || t.items[0]?.material.name || "—"}</span>
@@ -1623,7 +1638,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
           </label>
         </div>
-        <button className="btn primary big" disabled={qty <= 0 || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, proposalNote: confirmReasonInput.trim() || undefined, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
+        <button className="btn primary big" disabled={qty <= 0 || (workflowType === "DE_XUAT" && proposalFlowAvailable !== true) || (workflowType === "SU_DUNG_HIEN_CO" && !canUseExistingStock) || act.isPending} onClick={() => run({ action: "confirm", workflowType, proposedQuantity: qty, proposalNote: confirmReasonInput.trim() || undefined, bbktNumber: bbktNumberInput.trim() || undefined }, `Đã chọn luồng ${workflowType === "DE_XUAT" ? "Đề xuất" : workflowType === "UNG" ? "Ứng" : "Sử dụng hiện có"}`)}><Check size={15} /> Xác nhận</button>
       </div>;
     }
     const short = t.items.some((it) => it.quantity > it.material.quantity);

@@ -604,10 +604,10 @@ export default function DefectsPage() {
           <Table className="min-w-[1500px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[96px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
-                <TableHead className="w-[150px] text-center">Số yêu cầu</TableHead>
-                <TableHead className="w-[180px] text-center">Cương vị</TableHead>
-                <TableHead className="w-[240px] text-center">Nội dung</TableHead>
+                <TableHead className="w-[80px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
+                <TableHead className="w-[128px] px-2 text-center">Số yêu cầu</TableHead>
+                <TableHead className="w-[140px] px-2 text-center">Cương vị</TableHead>
+                <TableHead className="w-[320px] text-center">Nội dung</TableHead>
                 <TableHead className="w-[110px] text-center">
                   <ColumnFilter
                     label="Mức độ"
@@ -643,7 +643,7 @@ export default function DefectsPage() {
                 return (
                   <React.Fragment key={d.id}>
                     <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : d.id)}>
-                      <TableCell className="whitespace-nowrap px-3 py-3 text-[13px] font-semibold text-ink">
+                      <TableCell className="whitespace-nowrap px-2 py-3 text-[13px] font-semibold text-ink">
                         <div className="flex items-center justify-center gap-2">
                           <button
                             type="button"
@@ -662,7 +662,7 @@ export default function DefectsPage() {
                           <span>{d.unit}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
+                      <TableCell className="px-2 py-3 text-center text-[13px] text-ink">
                         <div className="truncate" title={d.requestNumber ?? undefined}>{d.requestNumber || "—"}</div>
                         {d.sourceType === "GOOGLE_SHEETS" && (
                           <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
@@ -685,7 +685,7 @@ export default function DefectsPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
+                      <TableCell className="px-2 py-3 text-center text-[13px] text-muted-foreground">
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
                       </TableCell>
                       <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
