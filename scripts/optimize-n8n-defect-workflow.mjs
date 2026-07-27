@@ -38,7 +38,8 @@ if (missingNodes.length > 0) {
 
 workflow.name = "Đồng bộ khiếm khuyết DH1 - Tự động tối ưu";
 
-nodeByName.get("Chuẩn bị lượt đồng bộ").parameters.jsCode = `const requestedSources = $input.first()?.json?.expectedSources;
+nodeByName.get("Chuẩn bị lượt đồng bộ").parameters.jsCode = `const input = $input.first()?.json || {};
+const requestedSources = input.expectedSources ?? input.body?.expectedSources;
 const expectedSources = Array.isArray(requestedSources)
   ? [...new Set(requestedSources.filter((source) => source === "CO" || source === "DIEN"))]
   : ["CO", "DIEN"];
@@ -153,12 +154,37 @@ function sourceConditionNode(name, source, position) {
   };
 }
 
-for (const name of ["Có đồng bộ Cơ?", "Có đồng bộ Điện?"]) {
+function manualWebhookNode() {
+  return {
+    parameters: {
+      httpMethod: "POST",
+      path: "defects-manual-sync-dh1",
+      authentication: "headerAuth",
+      responseMode: "onReceived",
+      options: {},
+    },
+    id: randomUUID(),
+    name: "Đồng bộ tay từ website",
+    type: "n8n-nodes-base.webhook",
+    typeVersion: 2.1,
+    position: [64, -224],
+    webhookId: randomUUID(),
+    credentials: {
+      httpHeaderAuth: {
+        id: "aqtXWwXwpZ58pFi7",
+        name: "Header Auth account",
+      },
+    },
+  };
+}
+
+for (const name of ["Có đồng bộ Cơ?", "Có đồng bộ Điện?", "Đồng bộ tay từ website"]) {
   const existingIndex = workflow.nodes.findIndex((node) => node.name === name);
   if (existingIndex >= 0) workflow.nodes.splice(existingIndex, 1);
 }
 
 workflow.nodes.push(
+  manualWebhookNode(),
   sourceConditionNode("Có đồng bộ Cơ?", "CO", [704, -32]),
   sourceConditionNode("Có đồng bộ Điện?", "DIEN", [1536, -32])
 );
@@ -187,6 +213,7 @@ const link = (node, index = 0) => ({ node, type: "main", index });
 
 workflow.connections = {
   "Chạy thủ công": { main: [[link("Chuẩn bị lượt đồng bộ")]] },
+  "Đồng bộ tay từ website": { main: [[link("Chuẩn bị lượt đồng bộ")]] },
   "Thời gian kiểm tra SHEET": {
     main: [[link("Kiểm tra modifiedTime Cơ"), link("Kiểm tra modifiedTime Điện")]],
   },

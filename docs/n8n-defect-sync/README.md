@@ -151,6 +151,9 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
 7. Chỉ sau khi finish trả `SUCCESS` mới lưu các mốc `modifiedTime`.
 8. Error Workflow dùng `execution.id` để gọi endpoint `by-external-id/fail`,
    đóng run ngay, gửi cảnh báo và tuyệt đối không gọi `finish`.
+9. Nút `Đồng bộ bằng n8n` trên website gọi Production Webhook
+   `/webhook/defects-manual-sync-dh1` qua backend, dùng Header Auth và yêu cầu
+   đồng bộ cả hai nguồn. Token không được gửi xuống trình duyệt.
 
 Trong giai đoạn kiểm thử có thể đặt `EXECUTIONS_DATA_SAVE_ON_SUCCESS=all` để xem
 output. Khi chạy ổn định, đổi lại `none` để database n8n không giữ thêm bản sao

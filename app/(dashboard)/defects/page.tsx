@@ -149,14 +149,14 @@ export default function DefectsPage() {
             onClick={async () => {
               try {
                 const result = await sync.mutateAsync();
-                toast.success(`Đồng bộ xong: thêm ${result.createdCount}, cập nhật ${result.updatedCount}`);
+                toast.success(result.message);
               } catch (error) {
                 toast.error((error as Error).message);
               }
             }}
           >
             {sync.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
-            Đồng bộ Google Sheet
+            Đồng bộ bằng n8n
           </Button>
         )}
         {canManage && (

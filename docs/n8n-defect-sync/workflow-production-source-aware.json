@@ -14,7 +14,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const requestedSources = $input.first()?.json?.expectedSources;\nconst expectedSources = Array.isArray(requestedSources)\n  ? [...new Set(requestedSources.filter((source) => source === \"CO\" || source === \"DIEN\"))]\n  : [\"CO\", \"DIEN\"];\n\nif (!expectedSources.length) {\n  return [];\n}\n\nreturn [{\n  json: {\n    externalRunId: `defects-${$execution.id}`,\n    expectedSources,\n  },\n}];"
+        "jsCode": "const input = $input.first()?.json || {};\nconst requestedSources = input.expectedSources ?? input.body?.expectedSources;\nconst expectedSources = Array.isArray(requestedSources)\n  ? [...new Set(requestedSources.filter((source) => source === \"CO\" || source === \"DIEN\"))]\n  : [\"CO\", \"DIEN\"];\n\nif (!expectedSources.length) {\n  return [];\n}\n\nreturn [{\n  json: {\n    externalRunId: `defects-${$execution.id}`,\n    expectedSources,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -366,6 +366,30 @@
     },
     {
       "parameters": {
+        "httpMethod": "POST",
+        "path": "defects-manual-sync-dh1",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "e3c9bf71-9a1f-48a6-8701-3b60707833fb",
+      "name": "Đồng bộ tay từ website",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        64,
+        -224
+      ],
+      "webhookId": "484734b8-b75e-4668-809a-239934ed43ef",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -436,6 +460,17 @@
   "pinData": {},
   "connections": {
     "Chạy thủ công": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn bị lượt đồng bộ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đồng bộ tay từ website": {
       "main": [
         [
           {

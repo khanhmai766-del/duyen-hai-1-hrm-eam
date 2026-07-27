@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { audit, auditDetailWithPosition, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { runGoogleDefectSync } from "@/lib/defect-google-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -21,18 +20,41 @@ export async function POST() {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["full"], "Chỉ người có toàn quyền khiếm khuyết được chạy đồng bộ");
-    const result = await runGoogleDefectSync({
-      trigger: "MANUAL",
-      user: { id: user.id, name: user.name },
-      force: true,
+
+    const webhookUrl = process.env.N8N_DEFECT_MANUAL_WEBHOOK_URL?.trim();
+    const token = process.env.N8N_DEFECT_SYNC_TOKEN?.trim();
+    if (!webhookUrl || !token) {
+      return fail("Chưa cấu hình webhook đồng bộ thủ công của n8n", 503);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ expectedSources: ["CO", "DIEN"] }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      return fail("Không kết nối được n8n để bắt đầu đồng bộ", 502);
+    }
+
+    if (!response.ok) {
+      console.error("[manual n8n defect sync]", response.status, await response.text());
+      return fail("n8n từ chối yêu cầu đồng bộ", 502);
+    }
+
+    await audit(user.id, "TRIGGER_N8N_DEFECT_SYNC", "Defect", undefined, auditDetailWithPosition(user, "Yêu cầu đồng bộ thủ công Cơ và Điện"), {
+      actorName: user.name,
     });
-    await audit(
-      user.id,
-      "SYNC_GOOGLE_DEFECTS",
-      "Defect",
-      undefined,
-      auditDetailWithPosition(user, `Tạo ${result.createdCount} · cập nhật ${result.updatedCount}`)
-    );
-    return ok(result);
+
+    return ok({
+      accepted: true,
+      message: "Đã gửi yêu cầu đồng bộ đến n8n",
+    });
   });
 }

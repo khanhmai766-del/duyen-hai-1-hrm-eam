@@ -110,21 +110,19 @@ export function useRemindDefect() {
 }
 
 export interface DefectSyncResult {
-  runId: string;
-  readCount: number;
-  createdCount: number;
-  updatedCount: number;
-  unchangedCount: number;
-  confirmedSkippedCount: number;
-  missingCount: number;
-  skippedByInterval?: boolean;
+  accepted: boolean;
+  message: string;
 }
 
 export function useSyncDefects() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiMutate<DefectSyncResult>("/api/defects/sync", "POST"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["defects"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+      window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defects"] }), 15_000);
+      window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defects"] }), 35_000);
+    },
   });
 }
 
