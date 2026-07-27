@@ -2,7 +2,7 @@
 
 Thiết kế này giữ lại các phần hạ tầng hợp lý của phương án tham khảo nhưng không
 dùng bảng mirror và không `DELETE + INSERT`. Dữ liệu tiếp tục được upsert vào
-`Defect` theo đúng `sourceKey` đang dùng bởi Apps Script V2.
+`Defect` theo khóa nguồn ổn định `sourceKey`.
 
 ## Nguyên tắc
 
@@ -54,7 +54,7 @@ Thêm vào `.env` của website:
 N8N_DEFECT_SYNC_TOKEN="token-rieng-cua-n8n"
 ```
 
-Không dùng lại `DEFECT_SYNC_TOKEN` hoặc `CRON_SECRET`.
+Token này chỉ dùng cho kết nối hai chiều giữa website và n8n.
 
 Áp dụng schema:
 

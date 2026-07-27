@@ -5,7 +5,7 @@ import {
   prepareDefectSourceRecords,
   upsertPreparedDefectRecords,
   type DefectSourceRecord,
-} from "@/lib/defect-google-sync";
+} from "@/lib/defect-source-sync";
 
 export const N8N_DEFECT_SOURCES = ["CO", "DIEN"] as const;
 export type N8nDefectSource = (typeof N8N_DEFECT_SOURCES)[number];
