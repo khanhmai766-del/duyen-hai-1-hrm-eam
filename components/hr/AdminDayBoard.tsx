@@ -456,7 +456,7 @@ export default function AdminDayBoard() {
             <div className="space-y-3">
               {dayRegs.map((r) => {
                 const st = STATUS_UI[r.registrationStatus];
-                const handled = handlingLine(r);
+                const handled = selDate === todayIso ? null : handlingLine(r);
                 const panelOpen = actionPanel?.id === r.id;
                 const canEdit = r.registrationStatus === "PENDING" && (canApprove || r.userId === myId);
                 return (
