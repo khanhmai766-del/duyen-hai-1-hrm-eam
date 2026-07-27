@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     const params = req.nextUrl.searchParams;
     const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
     const maxLimit = params.get("export") === "1" ? 20_000 : 100;
-    const limit = Math.min(maxLimit, Math.max(1, Number.parseInt(params.get("limit") ?? "25", 10) || 25));
+    const limit = Math.min(maxLimit, Math.max(1, Number.parseInt(params.get("limit") ?? "10", 10) || 10));
     const unit = params.get("unit")?.trim();
     const requestType = params.get("requestType")?.trim();
     const position = params.get("position")?.trim();

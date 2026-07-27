@@ -88,7 +88,7 @@ export default function DefectsPage() {
   const [statusFilter, setStatusFilter] = React.useState("ALL");
   const [severityFilter, setSeverityFilter] = React.useState("ALL");
   const [tableSearch, setTableSearch] = React.useState("");
-  const [pageSize, setPageSize] = React.useState(25);
+  const [pageSize, setPageSize] = React.useState(10);
   const [page, setPage] = React.useState(1);
   const deferredSearch = React.useDeferredValue(tableSearch.trim());
   const listParams = React.useMemo(() => ({
