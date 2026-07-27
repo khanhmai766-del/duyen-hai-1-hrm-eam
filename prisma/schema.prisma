@@ -1087,6 +1087,8 @@ model MaterialTicket {
   recoveryDocNoYear    Int? // năm cấp số văn bản (dãy số reset mỗi năm)
   workStartedAt        DateTime? // thời gian ghi vào BBNT DO
   workEndedAt          DateTime?
+  sccnRepresentativeName     String? // đại diện đơn vị sửa chữa cơ nhiệt in trên BBNT D-Office
+  sccnRepresentativePosition String? // chức vụ đại diện SCCN tại thời điểm xuất biên bản
   settledAt            DateTime? // Thống kê xác nhận đã quyết toán
   settledByName        String?
   rejectedReason       String?

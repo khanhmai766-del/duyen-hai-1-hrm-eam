@@ -133,8 +133,12 @@ async function buildBbntDoDocument(
   ]);
   // Quản đốc PXVH1 (không tính Phó quản đốc): giữ riêng với đại diện SCCN.
   const defaultQuanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
-  const selectedSccnUser = overrides?.sccnRepresentative
-    ? activeUsers.find((u) => normalizeText(u.name) === normalizeText(overrides.sccnRepresentative!.name)) ?? null
+  const selectedSccnRepresentative = overrides?.sccnRepresentative
+    ?? (t.sccnRepresentativeName && t.sccnRepresentativePosition
+      ? { name: t.sccnRepresentativeName, position: t.sccnRepresentativePosition }
+      : undefined);
+  const selectedSccnUser = selectedSccnRepresentative
+    ? activeUsers.find((u) => normalizeText(u.name) === normalizeText(selectedSccnRepresentative.name)) ?? null
     : null;
   // Người in vào biên bản: ưu tiên tên VHV trực tiếp sử dụng vật tư (nhập tay ở bước
   // sử dụng); chữ ký lấy theo tài khoản khớp tên đó, không khớp thì theo tài khoản
@@ -157,8 +161,8 @@ async function buildBbntDoDocument(
     pctNumber: overrides?.pctNumber ?? t.pctNumber,
     proposalNumber: t.proposalNumber,
     deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
-    sccnRepresentativeName: overrides?.sccnRepresentative?.name ?? selectedSccnUser?.name ?? null,
-    sccnRepresentativePosition: overrides?.sccnRepresentative?.position ?? selectedSccnUser?.position ?? null,
+    sccnRepresentativeName: selectedSccnRepresentative?.name ?? selectedSccnUser?.name ?? null,
+    sccnRepresentativePosition: selectedSccnRepresentative?.position ?? selectedSccnUser?.position ?? null,
     quanDocName: defaultQuanDoc?.name ?? null,
     quanDocPosition: defaultQuanDoc?.position ?? null,
     usedByName: materialUserName || t.usedByName,
@@ -210,14 +214,18 @@ async function buildProposalDocument(
   itemOverride: { materialCode: string; materialName: string },
   sccnRepresentative?: { name: string; position: string }
 ) {
+  const selectedSccnRepresentative = sccnRepresentative
+    ?? (t.sccnRepresentativeName && t.sccnRepresentativePosition
+      ? { name: t.sccnRepresentativeName, position: t.sccnRepresentativePosition }
+      : undefined);
   const signatureSelect = { name: true, position: true, signatureKey: true, signatureUrl: true } as const;
   const [statsUserRow, activeUsers] = await Promise.all([
     prisma.user.findUnique({ where: { id: statsUser.id }, select: signatureSelect }),
     prisma.user.findMany({ where: { isActive: true }, select: signatureSelect }),
   ]);
   const defaultQuanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
-  const representativeUser = sccnRepresentative
-    ? activeUsers.find((u) => normalizeText(u.name) === normalizeText(sccnRepresentative.name)) ?? null
+  const representativeUser = selectedSccnRepresentative
+    ? activeUsers.find((u) => normalizeText(u.name) === normalizeText(selectedSccnRepresentative.name)) ?? null
     : defaultQuanDoc;
   const [chuKyThongKe, chuKyQuanDoc] = await Promise.all([
     resolveSignatureBuffer(statsUserRow),
@@ -246,8 +254,8 @@ async function buildProposalDocument(
     fileBaseName: materialTicketFileBase(t),
     lyDo: t.proposalNote,
     soBBKT: t.bbktNumber,
-    quanDocName: sccnRepresentative?.name ?? representativeUser?.name ?? null,
-    quanDocPosition: sccnRepresentative?.position ?? null,
+    quanDocName: selectedSccnRepresentative?.name ?? representativeUser?.name ?? null,
+    quanDocPosition: selectedSccnRepresentative?.position ?? representativeUser?.position ?? null,
     tenThongKe: statsUserRow?.name ?? statsUser.name ?? null,
     items: proposalItems.map((item) => ({
       ...item,
@@ -331,6 +339,8 @@ async function refreshExistingDocuments(
       soBBKT: updated.bbktNumber,
       soPCT: updated.pctNumber,
       noiDung: updated.completionNote ?? "",
+      thoiGianBatDau: updated.workStartedAt,
+      thoiGianKetThuc: updated.workEndedAt,
       tenChiHuy: updated.chiHuyName ?? "",
       tenTruongCa: updated.completedByName ?? "",
       tenVHV: updated.proposedByName,
@@ -542,6 +552,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       let before = "";
       let after = "";
       let up: FullTicket | null = null;
+      let recoveryDocumentCreatedAfterEdit = false;
 
       if (step === "confirm") {
         if (!t.confirmedAt) return fail("Bước Trưởng ca/Trưởng kíp xác nhận chưa hoàn thành");
@@ -593,9 +604,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
         if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
         if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
+        if (!recoveryRequired && t.recoveryDocUrl) {
+          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể chuyển sang không có vật tư thu hồi; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
+        }
         const item = t.items[0]; if (!item) return fail("Phiếu chưa có vật tư");
         const delta = value - t.usedQuantity;
         if (item.material.quantity - delta < 0) return fail("Không đủ số lượng hiện có để tăng số lượng sử dụng");
+        // Phiếu đã nghiệm thu nhưng mới chuyển sang "Có vật tư thu hồi" phải được
+        // bổ sung BBTHVT ngay. Điều kiện thiếu URL cũng tự sửa các phiếu cũ đã lưu
+        // recoveryRequired=true nhưng chưa từng phát sinh tài liệu.
+        const recoveryDoc = recoveryRequired && t.completedAt && !t.recoveryDocUrl
+          ? await buildRecoveryDocument(t, { recoveryQuantity })
+          : null;
         before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
@@ -610,23 +630,85 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               recoveryQuantity,
               recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
               // Biên bản thu hồi chỉ được sinh cùng BBNT ký tay ở bước Nghiệm thu.
-              // Xóa liên kết cũ từng được sinh sớm, nhưng giữ biên bản của phiếu đã nghiệm thu.
-              recoveryDocUrl: recoveryRequired && t.completedAt ? t.recoveryDocUrl : null,
+              // Khi chỉnh sửa sau nghiệm thu, bổ sung tài liệu còn thiếu ngay trong lần lưu.
+              recoveryDocUrl: recoveryRequired && t.completedAt
+                ? (recoveryDoc?.url ?? t.recoveryDocUrl)
+                : null,
             },
             include: ITEM_INCLUDE,
           });
         });
+        recoveryDocumentCreatedAfterEdit = recoveryDoc != null;
       } else if (step === "accept") {
         if (!t.completedAt) return fail("Bước xác nhận/nghiệm thu chưa hoàn thành");
-        const pct = String(body.pctNumber || "").trim(); const chiHuy = String(body.chiHuyName || "").trim();
+        const pct = String(body.pctNumber || "").trim();
+        const chiHuy = String(body.chiHuyName || "").trim();
         const note = String(body.completionNote ?? t.completionNote ?? "").trim();
-        if (!pct || !chiHuy) return fail("Vui lòng nhập số PCT/LCT và tên chỉ huy");
-        before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}`; after = `${pct}; ${chiHuy}`;
-        const { url } = await generateBbntDoc({ fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: t.bbktNumber, soPCT: pct, noiDung: note, tenChiHuy: chiHuy, tenTruongCa: t.completedByName ?? "", tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition, unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition, items: toBbntItems(t) });
-        const bbntDo = await buildBbntDoDocument(t, { pctNumber: pct });
+        const workStartedAt = new Date(String(body.workStartedAt || ""));
+        const workEndedAt = new Date(String(body.workEndedAt || ""));
+        const sccnRepresentativeName = String(body.sccnRepresentative || "").trim();
+        const sccnRepresentativePosition = String(body.sccnPosition || "").trim();
+        if (!pct || !chiHuy || !note) return fail("Vui lòng nhập đầy đủ số PCT/LCT, tên chỉ huy và nội dung nghiệm thu");
+        if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) {
+          return fail("Vui lòng chọn thời gian bắt đầu và kết thúc nghiệm thu");
+        }
+        if (workEndedAt <= workStartedAt) {
+          return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
+        }
+        if (!SCCN_REPRESENTATIVES.includes(sccnRepresentativeName as typeof SCCN_REPRESENTATIVES[number])) {
+          return fail("Vui lòng chọn đại diện SCCN hợp lệ");
+        }
+        if (!SCCN_POSITIONS.includes(sccnRepresentativePosition as typeof SCCN_POSITIONS[number])) {
+          return fail("Vui lòng chọn chức vụ đại diện SCCN hợp lệ");
+        }
+        const sccnRepresentative = { name: sccnRepresentativeName, position: sccnRepresentativePosition };
+        before = `${t.pctNumber ?? "—"}; ${t.chiHuyName ?? "—"}; ${t.workStartedAt?.toISOString() ?? "—"} → ${t.workEndedAt?.toISOString() ?? "—"}; ${t.sccnRepresentativeName ?? "—"} (${t.sccnRepresentativePosition ?? "—"})`;
+        after = `${pct}; ${chiHuy}; ${workStartedAt.toISOString()} → ${workEndedAt.toISOString()}; ${sccnRepresentativeName} (${sccnRepresentativePosition})`;
+        const { url } = await generateBbntDoc({
+          fileBaseName: materialTicketFileBase(t),
+          lyDo: t.proposalNote,
+          soBBKT: t.bbktNumber,
+          soPCT: pct,
+          noiDung: note,
+          thoiGianBatDau: workStartedAt,
+          thoiGianKetThuc: workEndedAt,
+          tenChiHuy: chiHuy,
+          tenTruongCa: t.completedByName ?? "",
+          tenVHV: t.proposedByName,
+          chucVuVHV: t.proposedByPosition,
+          unit: t.unit,
+          usedByName: t.materialUserName || t.usedByName,
+          usedByPosition: t.usedByPosition,
+          items: toBbntItems(t),
+        });
+        // Chỉ tái xuất BBNT D-Office nếu loại tài liệu này đã được phát hành.
+        // Phiếu Đề xuất/Ứng đang chờ tác vụ Thống kê không được sinh file sớm.
+        const bbntDo = t.docUrl
+          ? await buildBbntDoDocument(t, {
+              pctNumber: pct,
+              workStartedAt,
+              workEndedAt,
+              sccnRepresentative,
+            })
+          : null;
         // Đổi số PCT/LCT → xuất lại BBTHVT để cột Ghi chú đồng bộ số mới.
         const recoveryDoc = t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
-        up = await prisma.materialTicket.update({ where: { id: t.id }, data: { pctNumber: pct, chiHuyName: chiHuy, completionNote: note, bbktDocUrl: url, docUrl: bbntDo.url, ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}) }, include: ITEM_INCLUDE });
+        up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            pctNumber: pct,
+            chiHuyName: chiHuy,
+            completionNote: note,
+            workStartedAt,
+            workEndedAt,
+            sccnRepresentativeName,
+            sccnRepresentativePosition,
+            bbktDocUrl: url,
+            ...(bbntDo ? { docUrl: bbntDo.url } : {}),
+            ...(recoveryDoc ? { recoveryDocUrl: recoveryDoc.url } : {}),
+          },
+          include: ITEM_INCLUDE,
+        });
       }
       if (!up) return fail("Không thể cập nhật bước");
       // Bước accept đã tự xuất lại BBNT ký tay, BBNT D-Office và biên bản thu hồi ở trên.
@@ -638,6 +720,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           ? new Set<keyof ExportedDocumentUrls>(["recoveryDocUrl"])
           : new Set<keyof ExportedDocumentUrls>();
       up = await refreshExistingDocuments(t, up, user, skipRefreshedInStep);
+      if (recoveryDocumentCreatedAfterEdit) {
+        await audit(
+          user.id,
+          "MT_RECOVERY_DOC_CREATE_AFTER_EDIT",
+          "MaterialTicket",
+          t.id,
+          `${materialTicketReference(t)}: phát sinh Biên bản vật tư thu hồi sau khi chỉnh sửa bước sử dụng vật tư`
+        );
+      }
       await audit(user.id, "MT_EDIT_STEP", "MaterialTicket", t.id, `${materialTicketReference(t)}: chỉnh sửa bước ${step} — ${before} → ${after}`, { actorName: user.name, beforeData: { summary: before }, afterData: { summary: after }, changedFields: [step] });
       return ok(up);
     }
@@ -946,6 +1037,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           data: {
             proposalDocUrl: proposalDoc.url,
             ...(bbntDo ? { docUrl: bbntDo.url } : {}),
+            ...(sccnRepresentative
+              ? {
+                  sccnRepresentativeName: sccnRepresentative.name,
+                  sccnRepresentativePosition: sccnRepresentative.position,
+                }
+              : {}),
           },
           include: ITEM_INCLUDE,
         });
@@ -1323,6 +1420,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             status: "CHO_QUYET_TOAN",
             ...(documents?.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
             ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
+            ...(isProposalDocumentExport
+              ? {
+                  sccnRepresentativeName,
+                  sccnRepresentativePosition,
+                }
+              : {}),
           },
           include: ITEM_INCLUDE,
         });

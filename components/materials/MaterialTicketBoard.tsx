@@ -96,6 +96,12 @@ const flowStatusKey = (status: string, type: string) =>
   : status;
 const fmt = (s?: string | null) =>
   s ? new Date(s).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
+const datetimeLocalValue = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
 const normalizeReceiptSource = (source?: string | null): "ERP" | "EXISTING" =>
   source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
 const receiptSourceLabel = (source?: string | null) =>
@@ -1206,6 +1212,10 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [recoveryRequired, setRecoveryRequired] = useState(t.recoveryRequired === true);
   const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? 1);
   const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
+  const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
+  const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
+  const [sccnRepresentative, setSccnRepresentative] = useState(t.sccnRepresentativeName ?? "");
+  const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
 
   const label = FLOW[t.type].find((step) => step.key === stepKey)?.label ?? "Chi tiết bước";
   async function save() {
@@ -1221,7 +1231,15 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       recoveryQuantity: recoveryRequired ? recoveryQuantity : null,
       recoveryReturned: recoveryRequired && recoveryReturned,
     });
-    if (editStep === "accept") Object.assign(payload, { pctNumber, chiHuyName, completionNote });
+    if (editStep === "accept") Object.assign(payload, {
+      pctNumber,
+      chiHuyName,
+      completionNote,
+      workStartedAt,
+      workEndedAt,
+      sccnRepresentative,
+      sccnPosition,
+    });
     try {
       await act.mutateAsync(payload);
       const hasExportedDocuments = Boolean(t.proposalDocUrl || t.bbktDocUrl || t.docUrl || t.recoveryDocUrl);
@@ -1285,9 +1303,43 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             {!recoveryReturned && <p className="recovery-review-warning"><AlertTriangle size={15} /> Bước này vẫn hiển thị màu vàng cho đến khi xác nhận đã trả vật tư.</p>}
           </>}
         </>}
-        {editStep === "accept" && <><label>Số PCT/LCT<input value={pctNumber} disabled={!canEdit} onChange={(e) => setPctNumber(e.target.value)} /></label><label>Chỉ huy trực tiếp<input value={chiHuyName} disabled={!canEdit} onChange={(e) => setChiHuyName(e.target.value)} /></label><label>Nội dung<textarea rows={3} value={completionNote} disabled={!canEdit} onChange={(e) => setCompletionNote(e.target.value)} /></label></>}
+        {editStep === "accept" && <>
+          <div className="review-accept-grid">
+            <label>Số PCT/LCT *
+              <input value={pctNumber} disabled={!canEdit} onChange={(e) => setPctNumber(e.target.value)} />
+            </label>
+            <label>Chỉ huy trực tiếp *
+              <input value={chiHuyName} disabled={!canEdit} onChange={(e) => setChiHuyName(e.target.value)} />
+            </label>
+          </div>
+          <label>Nội dung nghiệm thu *
+            <textarea rows={3} value={completionNote} disabled={!canEdit} onChange={(e) => setCompletionNote(e.target.value)} />
+          </label>
+          <div className="review-accept-grid">
+            <label>Thời gian bắt đầu nghiệm thu *
+              <input type="datetime-local" value={workStartedAt} disabled={!canEdit} onChange={(e) => setWorkStartedAt(e.target.value)} />
+            </label>
+            <label>Thời gian kết thúc nghiệm thu *
+              <input type="datetime-local" value={workEndedAt} disabled={!canEdit} onChange={(e) => setWorkEndedAt(e.target.value)} />
+            </label>
+          </div>
+          <div className="review-accept-grid">
+            <label>Đại diện SCCN *
+              <select value={sccnRepresentative} disabled={!canEdit} onChange={(e) => setSccnRepresentative(e.target.value)}>
+                <option value="">— Chọn đại diện SCCN —</option>
+                {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <label>Chức vụ *
+              <select value={sccnPosition} disabled={!canEdit} onChange={(e) => setSccnPosition(e.target.value)}>
+                <option value="">— Chọn chức vụ —</option>
+                {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
+              </select>
+            </label>
+          </div>
+        </>}
         {permission && !canEdit && <p className="hint">Bạn có thể xem lại nhưng chưa được phân quyền chỉnh sửa bước này.</p>}
-        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending || (editStep === "confirm" && !reason.trim())} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
+        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt || !sccnRepresentative || !sccnPosition))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
       </div>
     </div>
   </>;
@@ -1317,8 +1369,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
   const [workflowType, setWorkflowType] = useState<"DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO">("DE_XUAT");
   const [erpCode, setErpCode] = useState(t.items[0]?.erpCode ?? "");
-  const [sccnRepresentative, setSccnRepresentative] = useState("");
-  const [sccnPosition, setSccnPosition] = useState("");
+  const [sccnRepresentative, setSccnRepresentative] = useState(t.sccnRepresentativeName ?? "");
+  const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
   const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [recoveryReturned, setRecoveryReturned] = useState(false);
   const [recoveryQuantityInput, setRecoveryQuantityInput] = useState("1");
@@ -1642,7 +1694,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <label className="field">Lý do
             <input name={`reason-confirm-${t.id}`} autoComplete="off" value={confirmReasonInput} onChange={(e) => setConfirmReasonInput(e.target.value)} placeholder="VD: thay định kỳ / hư hỏng đột xuất…" />
           </label>
-          <label className="field">Biên Bản Kiểm Tra (nếu có)
+          <label className="field">Biên Bản Kiểm Tra
             <input name={`bbkt-confirm-${t.id}`} autoComplete="off" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
           </label>
         </div>
@@ -2122,7 +2174,7 @@ const CSS = `
 .step-review:not(:disabled):hover{background:#f8fafc;border-radius:10px;}
 .step.recovery-pending{color:${C.warn};background:${C.warnBg};}
 .recovery-review-warning{display:flex;align-items:center;gap:8px;margin:0;color:${C.warn};font-size:13px;font-weight:650;}
-.step-review-dialog{width:min(560px,calc(100vw - 32px));max-height:86vh;overflow-x:hidden;overflow-y:auto;}
+.step-review-dialog{width:min(680px,calc(100vw - 32px));max-height:86vh;overflow-x:hidden;overflow-y:auto;}
 .review-receive-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:12px;align-items:end;min-width:0;}
 .review-receive-row.single{grid-template-columns:minmax(0,1fr) minmax(170px,1fr);}
 .review-receive-source{display:flex;flex-direction:column;gap:6px;min-width:0;}
@@ -2131,7 +2183,7 @@ const CSS = `
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}
-.review-use-grid,.review-recovery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
+.review-use-grid,.review-recovery-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
 .review-use-toggle{display:flex;flex-direction:column;gap:6px;min-width:0;}
 .review-use-toggle .seg2{grid-template-columns:repeat(2,minmax(0,1fr));}
 .review-recovery-check{display:flex;min-height:40px;align-items:center;gap:10px;border:1.5px solid ${C.line};border-radius:10px;background:#fff;padding:9px 12px;color:${C.navy};cursor:pointer;}
@@ -2455,6 +2507,6 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

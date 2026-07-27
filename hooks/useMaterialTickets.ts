@@ -44,6 +44,8 @@ export interface MaterialTicket {
   recoveryDocUrl: string | null;
   workStartedAt: string | null;
   workEndedAt: string | null;
+  sccnRepresentativeName: string | null;
+  sccnRepresentativePosition: string | null;
   settledAt: string | null;
   settledByName: string | null;
   rejectedReason: string | null;
