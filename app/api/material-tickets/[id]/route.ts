@@ -131,11 +131,11 @@ async function buildBbntDoDocument(
       : Promise.resolve(null),
     prisma.user.findMany({ where: { isActive: true }, select: signatureSelect }),
   ]);
-  // Quản đốc (không tính Phó quản đốc): chức vụ chuẩn hóa bắt đầu bằng "quan doc".
+  // Quản đốc PXVH1 (không tính Phó quản đốc): giữ riêng với đại diện SCCN.
   const defaultQuanDoc = activeUsers.find((u) => normalizeText(u.position ?? "").startsWith("quan doc")) ?? null;
-  const sccnRepresentative = overrides?.sccnRepresentative
+  const selectedSccnUser = overrides?.sccnRepresentative
     ? activeUsers.find((u) => normalizeText(u.name) === normalizeText(overrides.sccnRepresentative!.name)) ?? null
-    : defaultQuanDoc;
+    : null;
   // Người in vào biên bản: ưu tiên tên VHV trực tiếp sử dụng vật tư (nhập tay ở bước
   // sử dụng); chữ ký lấy theo tài khoản khớp tên đó, không khớp thì theo tài khoản
   // thao tác bước sử dụng (chỉ khi cùng tên) để tránh ký nhầm người.
@@ -146,7 +146,7 @@ async function buildBbntDoDocument(
   }
   const [chuKyNguoiLap, chuKyQuanDoc] = await Promise.all([
     resolveSignatureBuffer(signer),
-    resolveSignatureBuffer(sccnRepresentative),
+    resolveSignatureBuffer(defaultQuanDoc),
   ]);
   return generateBbntDoDoc({
     fileBaseName: materialTicketFileBase(t),
@@ -157,8 +157,10 @@ async function buildBbntDoDocument(
     pctNumber: overrides?.pctNumber ?? t.pctNumber,
     proposalNumber: t.proposalNumber,
     deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
-    quanDocName: overrides?.sccnRepresentative?.name ?? sccnRepresentative?.name ?? null,
-    quanDocPosition: overrides?.sccnRepresentative?.position ?? null,
+    sccnRepresentativeName: overrides?.sccnRepresentative?.name ?? selectedSccnUser?.name ?? null,
+    sccnRepresentativePosition: overrides?.sccnRepresentative?.position ?? selectedSccnUser?.position ?? null,
+    quanDocName: defaultQuanDoc?.name ?? null,
+    quanDocPosition: defaultQuanDoc?.position ?? null,
     usedByName: materialUserName || t.usedByName,
     usedByPosition: (materialUserName ? signer?.position : null) ?? t.usedByPosition,
     workStartedAt: overrides?.workStartedAt ?? t.workStartedAt,
@@ -1189,11 +1191,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
+      const sccnRepresentativeName = String(body.sccnRepresentative || "").trim();
+      const sccnRepresentativePosition = String(body.sccnPosition || "").trim();
+      const sccnRepresentative = t.type === "DE_XUAT"
+        ? { name: sccnRepresentativeName, position: sccnRepresentativePosition }
+        : undefined;
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
+      if (t.type === "DE_XUAT" && !SCCN_REPRESENTATIVES.includes(sccnRepresentativeName as typeof SCCN_REPRESENTATIVES[number])) {
+        return fail("Vui lòng chọn đại diện SCCN hợp lệ");
+      }
+      if (t.type === "DE_XUAT" && !SCCN_POSITIONS.includes(sccnRepresentativePosition as typeof SCCN_POSITIONS[number])) {
+        return fail("Vui lòng chọn chức vụ đại diện SCCN hợp lệ");
+      }
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -1226,6 +1239,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             receivedQuantity: t.receivedQuantity ?? t.vhvReceivedQuantity ?? undefined,
             deliveryNoteNumber: t.deliveryNoteNumber ?? t.receivedMethod ?? undefined,
             itemOverride,
+            sccnRepresentative,
           }),
         // BBTHVT được tạo cùng hai BBNT tại đây để Ghi chú có số PCT/LCT.
         recovery: t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride }) : null,

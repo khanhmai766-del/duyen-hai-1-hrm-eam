@@ -35,6 +35,8 @@ export interface BbntDoData {
   pctNumber?: string | null;
   proposalNumber?: string | null;
   deliveryNoteNumber?: string | null; // số phiếu giao hàng
+  sccnRepresentativeName?: string | null; // đại diện Phân xưởng Sửa chữa Cơ nhiệt
+  sccnRepresentativePosition?: string | null;
   quanDocName?: string | null; // tên Quản đốc (đại diện đơn vị chủ quản)
   quanDocPosition?: string | null; // chức vụ đại diện đơn vị chủ quản
   usedByName?: string | null; // người sử dụng vật tư = Người lập
@@ -106,6 +108,49 @@ function bbntDoTemplateFileName(materialCategory?: string | null) {
   return "bbnt-do-template-bi.docx";
 }
 
+function patchSccnRepresentativeTokens(documentXml: string) {
+  let patched = documentXml;
+  const sectionMarker = "Đại diện đơn vị sửa chữa: Phân xưởng Sửa chữa cơ nhiệt:";
+  const sectionIndex = patched.indexOf(sectionMarker);
+  const sectionParagraphEnd = sectionIndex >= 0
+    ? patched.indexOf("</w:p>", sectionIndex)
+    : -1;
+  const representativeParagraphStart = sectionParagraphEnd >= 0
+    ? patched.indexOf("<w:p", sectionParagraphEnd + 6)
+    : -1;
+  const representativeParagraphEnd = representativeParagraphStart >= 0
+    ? patched.indexOf("</w:p>", representativeParagraphStart)
+    : -1;
+  if (representativeParagraphStart >= 0 && representativeParagraphEnd >= 0) {
+    const originalParagraph = patched.slice(
+      representativeParagraphStart,
+      representativeParagraphEnd + 6
+    );
+    const representativeParagraph = originalParagraph.replace(
+      "Ông: ……………………………",
+      "Ông: {{sccnRepresentativeName}}"
+    ).replace(
+      "Chức vụ: ……………………",
+      "Chức vụ: {{sccnRepresentativePosition}}"
+    );
+    patched =
+      patched.slice(0, representativeParagraphStart) +
+      representativeParagraph +
+      patched.slice(representativeParagraphEnd + 6);
+  }
+  // Ô cuối cùng có chữ "Trống" thuộc cột Phân Xưởng Sửa Chữa Cơ Nhiệt.
+  // Thay đúng ô này bằng tên đại diện SCCN, giữ nguyên định dạng căn giữa/in đậm.
+  const emptyNameCell = "<w:t>Trống</w:t>";
+  const lastEmptyNameCell = patched.lastIndexOf(emptyNameCell);
+  if (lastEmptyNameCell >= 0 && !patched.includes("<w:t>{{sccnRepresentativeName}}</w:t>")) {
+    patched =
+      patched.slice(0, lastEmptyNameCell) +
+      "<w:t>{{sccnRepresentativeName}}</w:t>" +
+      patched.slice(lastEmptyNameCell + emptyNameCell.length);
+  }
+  return patched;
+}
+
 /** Sinh file Word BBNT DO đã điền dữ liệu, upload MinIO, trả về { key, url }. */
 export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; url: string }> {
   const tplPath = path.join(
@@ -114,14 +159,20 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     bbntDoTemplateFileName(d.materialCategory)
   );
   const zip = new PizZip(readFileSync(tplPath));
+  let documentXml = zip.file("word/document.xml")?.asText();
+  if (documentXml) {
+    documentXml = patchSccnRepresentativeTokens(documentXml);
+  }
   // Tương thích với mẫu đang được mở/khóa hoặc bản mẫu cũ đã deploy:
   // thay chức vụ cố định bằng token ngay trong OOXML trước khi render.
-  const documentXml = zip.file("word/document.xml")?.asText();
   if (documentXml && !documentXml.includes("{{quanDocPosition}}")) {
-    zip.file(
-      "word/document.xml",
-      documentXml.replace("Chức vụ: Quản đốc", "Chức vụ: {{quanDocPosition}}")
+    documentXml = documentXml.replace(
+      "Chức vụ: Quản đốc",
+      "Chức vụ: {{quanDocPosition}}"
     );
+  }
+  if (documentXml) {
+    zip.file("word/document.xml", documentXml);
   }
   // Giá trị tag ảnh phải là CHUỖI base64 (Buffer là object sẽ bị module hiểu nhầm
   // thành dữ liệu đã resolve và crash) — getImage decode lại thành Buffer.
@@ -147,6 +198,8 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
     pctNumber: d.pctNumber || "",
     proposalNumber: d.proposalNumber ? `Phiếu đề xuất vật tư số ${d.proposalNumber}` : "Phiếu đề xuất vật tư: (không)",
     deliveryNote: d.deliveryNoteNumber ? `Phiếu giao hàng số ${d.deliveryNoteNumber}` : "",
+    sccnRepresentativeName: d.sccnRepresentativeName || "",
+    sccnRepresentativePosition: d.sccnRepresentativePosition || "",
     quanDocName: d.quanDocName || "……………………………",
     quanDocPosition: d.quanDocPosition || "Quản Đốc",
     usedByName: d.usedByName || "……………………………",

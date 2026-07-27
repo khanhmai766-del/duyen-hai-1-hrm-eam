@@ -2013,9 +2013,25 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 <input type="datetime-local" value={endedAt} onChange={(e) => setEndedAt(e.target.value)} />
               </label>
             </div>
+            {t.type === "DE_XUAT" && (
+              <div className="accept-two-grid">
+                <label className="field">Đại diện SCCN *
+                  <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
+                    <option value="">— Chọn đại diện SCCN —</option>
+                    {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
+                <label className="field">Chức vụ *
+                  <select value={sccnPosition} onChange={(e) => setSccnPosition(e.target.value)}>
+                    <option value="">— Chọn chức vụ —</option>
+                    {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
+                  </select>
+                </label>
+              </div>
+            )}
           </>
-        <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
-          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, "Đã nghiệm thu và xuất các biên bản")}>
+        <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt || (t.type === "DE_XUAT" && (!sccnRepresentative || !sccnPosition))}
+          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt, sccnRepresentative: t.type === "DE_XUAT" ? sccnRepresentative : undefined, sccnPosition: t.type === "DE_XUAT" ? sccnPosition : undefined }, "Đã nghiệm thu và xuất các biên bản")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Nghiệm thu và xuất biên bản
         </button>
       </div>
