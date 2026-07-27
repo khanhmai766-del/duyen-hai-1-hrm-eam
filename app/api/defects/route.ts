@@ -81,8 +81,14 @@ function activeDefectWhere(): Prisma.DefectWhereInput {
         sourceType: { not: "GOOGLE_SHEETS" },
         status: { not: "DA_XU_LY" },
       },
-      // Giữ phiếu đã xử lý trong Tồn đọng đủ 14 ngày để VHV có thể xem lại.
-      { status: "DA_XU_LY", completedAt: { gte: completedCutoff } },
+      // Phiếu còn chờ vật tư phải ở lại Tồn đọng cho đến khi VHV bỏ đánh dấu.
+      { status: "DA_XU_LY", postRepairAwaitingMaterial: true },
+      // Phiếu đã xử lý bình thường ở lại 14 ngày để VHV có thể xem lại.
+      {
+        status: "DA_XU_LY",
+        postRepairAwaitingMaterial: false,
+        completedAt: { gte: completedCutoff },
+      },
     ],
   };
 }
