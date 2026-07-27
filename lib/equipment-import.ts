@@ -68,17 +68,25 @@ const cleanNull = (v: unknown): string | null => {
 const cleanKks = (v: unknown): string | null => {
   const t = cleanNull(v);
   if (!t) return null;
-  if (/^không có/i.test(t) || /^\(?n\/a\)?$/i.test(t)) return null;
+  if (/^[kx]hông có/i.test(t) || /^\(?n\/a\)?$/i.test(t)) return null;
   return t;
 };
 
 /** Chuẩn hóa các tiền tố KKS sai cho phần 1, phần 2 và phần 3. */
+export function normalizeKksX0Tokens(kks: string): string {
+  return kks.replace(
+    /(^|[^A-Z0-9])X(?:0|\s+O)/gi,
+    (_match, boundary: string) => `${boundary}10`
+  );
+}
+
 export function normalizeImportedKks(fullCode: string, kks: string | null): string | null {
   if (!kks) return null;
+  const normalizedX0 = normalizeKksX0Tokens(kks);
   const electricalPrefix = `${S1_PREFIX}.3`;
   const belongsToElectrical = fullCode === electricalPrefix || fullCode.startsWith(`${electricalPrefix}.`);
   if (belongsToElectrical) {
-    const normalizedElectrical = kks.replace(/^X(?=[02])/i, "1");
+    const normalizedElectrical = normalizedX0.replace(/^X(?=[02])/i, "1");
     return /^20/i.test(normalizedElectrical) ? `10${normalizedElectrical.slice(2)}` : normalizedElectrical;
   }
 
@@ -88,7 +96,7 @@ export function normalizeImportedKks(fullCode: string, kks: string | null): stri
   );
   const turbinePrefix = `${S1_PREFIX}.2`;
   const belongsToTurbine = fullCode === turbinePrefix || fullCode.startsWith(`${turbinePrefix}.`);
-  const normalizedUnit = belongsToTurbine ? kks.replace(/\bX(?=[12])/gi, "1") : kks;
+  const normalizedUnit = belongsToTurbine ? normalizedX0.replace(/\bX(?=[12])/gi, "1") : normalizedX0;
   return belongsToNormalizedBranch && /^(?:X0|XO|1O|20|2O)/i.test(normalizedUnit)
     ? `10${normalizedUnit.slice(2)}`
     : normalizedUnit;
@@ -130,7 +138,7 @@ export function parseDanhmucRows(raw: Record<string, unknown>[]): RawImportRow[]
       assetId: clean(r[kAsset]),
       assetParentId: kParent ? clean(r[kParent]) : "",
       fullCode: clean(r[kCode]),
-      name: kName ? clean(r[kName]) : "",
+      name: kName ? normalizeKksX0Tokens(clean(r[kName])) : "",
       kks: kKks ? normalizeImportedKks(clean(r[kCode]), cleanKks(r[kKks])) : null,
       drawing: kDraw ? cleanNull(r[kDraw]) : null,
       dept: kDept ? clean(r[kDept]) : "",

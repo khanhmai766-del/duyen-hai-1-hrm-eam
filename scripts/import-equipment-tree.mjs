@@ -36,20 +36,25 @@ const clean = (v) => {
 const cleanKks = (v) => {
   const t = clean(v);
   if (!t) return null;
-  if (/^không có/i.test(t) || /^\(?n\/a\)?$/i.test(t)) return null;
+  if (/^[kx]hông có/i.test(t) || /^\(?n\/a\)?$/i.test(t)) return null;
   return t;
 };
 
-// Phần 1, 2 và 3 dùng tiền tố KKS tổ máy S1; chuẩn hóa các lỗi nguồn thường gặp.
+// Mỗi ô có thể chứa nhiều KKS; chuẩn hóa mọi mã con bắt đầu X0 trên toàn cây.
+const normalizeKksX0Tokens = (kks) =>
+  kks.replace(/(^|[^A-Z0-9])X(?:0|\s+O)/gi, (_match, boundary) => `${boundary}10`);
+
+// Phần 1, 2 và 3 dùng tiền tố KKS tổ máy S1; chuẩn hóa thêm các lỗi nguồn thường gặp.
 const normalizeKksPrefix = (seq, kks) => {
   if (!kks) return null;
+  const normalizedX0 = normalizeKksX0Tokens(kks);
   if (/^DH1\.S1\.3(?:\.|$)/.test(seq)) {
-    const normalizedElectrical = kks.replace(/^X(?=[02])/i, "1");
+    const normalizedElectrical = normalizedX0.replace(/^X(?=[02])/i, "1");
     return /^20/i.test(normalizedElectrical) ? `10${normalizedElectrical.slice(2)}` : normalizedElectrical;
   }
 
   const belongsToNormalizedBranch = /^DH1\.S1\.(?:1|2)(?:\.|$)/.test(seq);
-  const normalizedUnit = /^DH1\.S1\.2(?:\.|$)/.test(seq) ? kks.replace(/\bX(?=[12])/gi, "1") : kks;
+  const normalizedUnit = /^DH1\.S1\.2(?:\.|$)/.test(seq) ? normalizedX0.replace(/\bX(?=[12])/gi, "1") : normalizedX0;
   return belongsToNormalizedBranch && /^(?:X0|XO|1O|20|2O)/i.test(normalizedUnit)
     ? `10${normalizedUnit.slice(2)}`
     : normalizedUnit;
@@ -135,7 +140,7 @@ async function main() {
   const nodes = dept.map((r, i) => {
     const seq = maOf(r); // Mã thiết bị đầy đủ = fullCode = khóa
     const kks = normalizeKksPrefix(seq, cleanKks(r["Mã KKS"]));
-    const name = clean(r["Tên thiết bị"]) ?? seq;
+    const name = normalizeKksX0Tokens(clean(r["Tên thiết bị"]) ?? seq);
     const strippedCode = seq.replace(/^DH1\.S1\.?/, "") || seq;
     return {
       seq,
