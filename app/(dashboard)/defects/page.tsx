@@ -601,14 +601,14 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <PersistentHorizontalScroll>
-          <Table className="min-w-[1500px] table-fixed">
+          <Table className="min-w-[1176px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[80px] whitespace-nowrap px-2 text-center">Tổ máy</TableHead>
-                <TableHead className="w-[128px] px-2 text-center">Số yêu cầu</TableHead>
-                <TableHead className="w-[140px] px-2 text-center">Cương vị</TableHead>
-                <TableHead className="w-[320px] text-center">Nội dung</TableHead>
-                <TableHead className="w-[110px] text-center">
+                <TableHead className="w-[56px] whitespace-nowrap px-1 text-center">Tổ máy</TableHead>
+                <TableHead className="w-[96px] px-1.5 text-center">Số yêu cầu</TableHead>
+                <TableHead className="w-[104px] px-1.5 text-center">Cương vị</TableHead>
+                <TableHead className="w-[288px] px-2 text-center">Nội dung</TableHead>
+                <TableHead className="w-[68px] px-1 text-center">
                   <ColumnFilter
                     label="Mức độ"
                     value={severityFilter}
@@ -616,7 +616,7 @@ export default function DefectsPage() {
                     onChange={setSeverityFilter}
                   />
                 </TableHead>
-                <TableHead className="w-[150px] text-center">
+                <TableHead className="w-[112px] px-1 text-center">
                   <ColumnFilter
                     label="Tình trạng"
                     value={statusFilter}
@@ -630,11 +630,11 @@ export default function DefectsPage() {
                     onChange={setStatusFilter}
                   />
                 </TableHead>
-                <TableHead className="w-[180px] text-center">Kết quả sửa chữa</TableHead>
-                <TableHead className="w-[100px] text-center">Nhắc lại</TableHead>
-                <TableHead className="w-[120px] text-center">Phát hiện</TableHead>
-                <TableHead className="w-[110px] text-center">Người cập nhật</TableHead>
-                <TableHead className="w-[110px] text-center">Thao tác</TableHead>
+                <TableHead className="w-[120px] px-1.5 text-center">Kết quả sửa chữa</TableHead>
+                <TableHead className="w-[64px] px-1 text-center">Nhắc lại</TableHead>
+                <TableHead className="w-[84px] px-1 text-center">Phát hiện</TableHead>
+                <TableHead className="w-[72px] px-1 text-center">Người cập nhật</TableHead>
+                <TableHead className="w-[112px] px-1 text-center">Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -643,8 +643,8 @@ export default function DefectsPage() {
                 return (
                   <React.Fragment key={d.id}>
                     <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : d.id)}>
-                      <TableCell className="whitespace-nowrap px-2 py-3 text-[13px] font-semibold text-ink">
-                        <div className="flex items-center justify-center gap-2">
+                      <TableCell className="whitespace-nowrap px-1 py-3 text-[13px] font-semibold text-ink">
+                        <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -662,7 +662,7 @@ export default function DefectsPage() {
                           <span>{d.unit}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="px-2 py-3 text-center text-[13px] text-ink">
+                      <TableCell className="px-1.5 py-3 text-center text-[13px] text-ink">
                         <div className="truncate" title={d.requestNumber ?? undefined}>{d.requestNumber || "—"}</div>
                         {d.sourceType === "GOOGLE_SHEETS" && (
                           <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
@@ -685,20 +685,20 @@ export default function DefectsPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="px-2 py-3 text-center text-[13px] text-muted-foreground">
+                      <TableCell className="px-1.5 py-3 text-center text-[13px] text-muted-foreground">
                         <div className="truncate" title={d.system ?? undefined}>{d.system ?? "—"}</div>
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
+                      <TableCell className="px-2 py-3 text-center text-[13px] text-ink">
                         <div className="whitespace-pre-wrap break-words text-left leading-6">
                           {d.content || "—"}
                         </div>
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center">
+                      <TableCell className="px-1 py-3 text-center">
                         {d.severity ? (
                           <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
                         ) : "—"}
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center">
+                      <TableCell className="px-1 py-3 text-center">
                         {d.syncState === "MISSING" ? (
                           <span
                             className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200"
@@ -722,7 +722,7 @@ export default function DefectsPage() {
                           <DefectStatusBadge status={d.status} />
                         )}
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center text-[12px]">
+                      <TableCell className="px-1.5 py-3 text-center text-[12px]">
                         {d.repairResultRaw ? (
                           <span
                             className={cn(
@@ -741,31 +741,31 @@ export default function DefectsPage() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="px-3 py-3 text-center text-[13px]">
+                      <TableCell className="px-1 py-3 text-center text-[13px]">
                         <span className={cn("font-semibold", d.reminderCount > 0 ? "text-amber-700" : "text-muted-foreground")}>
                           {d.reminderCount} lần
                         </span>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] text-muted-foreground">{formatDate(d.detectedAt)}</TableCell>
-                      <TableCell className="px-3 py-3 text-center">
+                      <TableCell className="whitespace-nowrap px-1 py-3 text-center text-[12px] text-muted-foreground">{formatDate(d.detectedAt)}</TableCell>
+                      <TableCell className="px-1 py-3 text-center">
                         <DefectUserAvatar user={d.createdBy} />
                       </TableCell>
-                      <TableCell className="px-2 py-3">
-                        <div className="flex items-center justify-center gap-1">
+                      <TableCell className="px-1 py-3">
+                        <div className="flex items-center justify-center gap-0">
                           {canManage && (
                             (d.sourceType === "GOOGLE_SHEETS" && !!d.deviceSeq && !d.pendingHistory && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
                             (d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY")
                           ) && (
-                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title="Hoàn thành" className="text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); void openComplete(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
+                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title="Hoàn thành" className="h-7 w-7 text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); void openComplete(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
                           )}
                           {canManage && d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY" && (
-                            <Button variant="ghost" size="icon" title="Nhắc lại" className="text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
                           {canManage && (
-                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : "Sửa"} onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
+                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
                           )}
                           {canDelete && d.sourceType !== "GOOGLE_SHEETS" && (
-                            <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(d); }}><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" title="Xoá" className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(d); }}><Trash2 className="h-4 w-4" /></Button>
                           )}
                         </div>
                       </TableCell>
