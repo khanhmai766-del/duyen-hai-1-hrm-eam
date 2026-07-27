@@ -534,6 +534,7 @@ model Defect {
   @@index([shiftLeaderId])
   @@index([createdAt])
   @@index([completedAt])
+  @@index([status, completedAt(sort: Desc)])
   @@index([createdById])
   @@index([sourceType, syncState])
   // Snapshot từng nguồn chỉ quét và đánh dấu thiếu trong đúng Google Sheet vừa đồng bộ.

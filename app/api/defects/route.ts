@@ -69,10 +69,20 @@ const PAGE_SELECT = {
 } satisfies Prisma.DefectSelect;
 
 function activeDefectWhere(): Prisma.DefectWhereInput {
+  const completedCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   return {
     OR: [
-      { sourceType: "GOOGLE_SHEETS", syncState: { not: "CONFIRMED" } },
-      { sourceType: { not: "GOOGLE_SHEETS" }, status: { not: "DA_XU_LY" } },
+      {
+        sourceType: "GOOGLE_SHEETS",
+        syncState: { not: "CONFIRMED" },
+        status: { not: "DA_XU_LY" },
+      },
+      {
+        sourceType: { not: "GOOGLE_SHEETS" },
+        status: { not: "DA_XU_LY" },
+      },
+      // Giữ phiếu đã xử lý trong Tồn đọng đủ 14 ngày để VHV có thể xem lại.
+      { status: "DA_XU_LY", completedAt: { gte: completedCutoff } },
     ],
   };
 }
@@ -82,10 +92,7 @@ function defectStatusWhere(status?: string): Prisma.DefectWhereInput | null {
   if (status === "SOURCE_MISSING") {
     return { sourceType: "GOOGLE_SHEETS", syncState: "MISSING" };
   }
-  if (status === "TON_DONG") return { postRepairAwaitingMaterial: true };
-  if (status === "DA_XU_LY") {
-    return { status: "DA_XU_LY", postRepairAwaitingMaterial: false };
-  }
+  if (status === "TON_DONG" || status === "DA_XU_LY") return { status: "DA_XU_LY" };
   return { status };
 }
 
@@ -157,7 +164,7 @@ export async function GET(req: NextRequest) {
           ...(severity && severity !== "ALL" ? [{ severity }] : []),
         ],
       };
-      const [total, scopeTotal, groupedStatus, tonDong, daXuLy] = await Promise.all([
+      const [total, scopeTotal, groupedStatus, tonDong] = await Promise.all([
         prisma.defect.count({ where: filteredWhere }),
         prisma.defect.count({
           where: {
@@ -172,10 +179,7 @@ export async function GET(req: NextRequest) {
           where,
           _count: { _all: true },
         }),
-        prisma.defect.count({ where: { AND: [where, { postRepairAwaitingMaterial: true }] } }),
-        prisma.defect.count({
-          where: { AND: [where, { status: "DA_XU_LY", postRepairAwaitingMaterial: false }] },
-        }),
+        prisma.defect.count({ where: { AND: [where, { status: "DA_XU_LY" }] } }),
       ]);
       const statusCount = new Map(groupedStatus.map((item) => [item.status, item._count._all]));
       const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -208,7 +212,6 @@ export async function GET(req: NextRequest) {
             choVatTu: statusCount.get("CHO_VAT_TU") ?? 0,
             choNgungMay: statusCount.get("CHO_NGUNG_MAY") ?? 0,
             tonDong,
-            daXuLy,
           },
           queryMode: "database",
           durationMs,
@@ -253,8 +256,7 @@ export async function GET(req: NextRequest) {
       coPct: base.filter((item) => item.status === "CO_PCT").length,
       choVatTu: base.filter((item) => item.status === "CHO_VAT_TU").length,
       choNgungMay: base.filter((item) => item.status === "CHO_NGUNG_MAY").length,
-      tonDong: base.filter((item) => item.postRepairAwaitingMaterial).length,
-      daXuLy: base.filter((item) => item.status === "DA_XU_LY" && !item.postRepairAwaitingMaterial).length,
+      tonDong: base.filter((item) => item.status === "DA_XU_LY").length,
     };
 
     const filtered = base
@@ -263,9 +265,9 @@ export async function GET(req: NextRequest) {
           if (status === "SOURCE_MISSING") {
             if (!(item.sourceType === "GOOGLE_SHEETS" && item.syncState === "MISSING")) return false;
           } else if (status === "TON_DONG") {
-            if (!item.postRepairAwaitingMaterial) return false;
+            if (item.status !== "DA_XU_LY") return false;
           } else if (status === "DA_XU_LY") {
-            if (!(item.status === "DA_XU_LY" && !item.postRepairAwaitingMaterial)) return false;
+            if (item.status !== "DA_XU_LY") return false;
           } else if (item.status !== status) {
             return false;
           }
@@ -370,6 +372,7 @@ export async function POST(req: NextRequest) {
         requestNumber: body.requestNumber?.trim() || null,
         content: body.content?.trim() || null,
         status: body.status || "CHUA_XU_LY",
+        completedAt: body.status === "DA_XU_LY" ? new Date() : null,
         detectedAt: body.detectedAt ? parseDateInput(body.detectedAt) : null,
         reminderCount,
         lastRemindedAt: reminderCount > 0 && body.lastRemindedAt ? parseDateInput(body.lastRemindedAt) : null,

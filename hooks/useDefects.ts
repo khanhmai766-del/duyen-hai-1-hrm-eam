@@ -40,7 +40,6 @@ export interface DefectListMeta {
     choVatTu: number;
     choNgungMay: number;
     tonDong: number;
-    daXuLy: number;
   };
 }
 

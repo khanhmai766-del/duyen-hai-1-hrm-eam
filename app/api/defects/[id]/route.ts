@@ -178,6 +178,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           ? (await prisma.equipmentNode.findUnique({ where: { seq: String(body.device) }, select: { seq: true } }))?.seq ?? null
           : null
         : undefined;
+    const nextStatus = body.status !== undefined ? String(body.status) : existing.status;
+    const completedAt =
+      nextStatus === "DA_XU_LY" && existing.status !== "DA_XU_LY"
+        ? new Date()
+        : nextStatus !== "DA_XU_LY" && existing.status === "DA_XU_LY"
+          ? null
+          : undefined;
     const defect = await prisma.defect.update({
       where: { id: params.id },
       data: {
@@ -196,6 +203,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         requestNumber: body.requestNumber !== undefined ? body.requestNumber?.trim() || null : undefined,
         content: body.content !== undefined ? body.content?.trim() || null : undefined,
         status: body.status,
+        completedAt,
         detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? parseDateInput(body.detectedAt) : null) : undefined,
         reminderCount: body.reminderCount !== undefined ? reminderCount : undefined,
         lastRemindedAt:

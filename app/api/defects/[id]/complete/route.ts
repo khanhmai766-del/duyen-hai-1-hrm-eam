@@ -105,7 +105,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         data: {
           createdById: user.id,
           status: "DA_XU_LY",
-          completedAt: performedAt,
+          // Mốc 14 ngày tính từ lúc VHV xác nhận chuyển phiếu sang Đã xử lý;
+          // ngày thực hiện nghiệp vụ vẫn được lưu riêng trong DefectHistory.performedAt.
+          completedAt: new Date(),
           postRepairAwaitingMaterial: false,
           images: [],
           imageUrl: null,

@@ -180,6 +180,8 @@ export async function upsertPreparedDefectRecords(params: {
           sourceKey: true,
           sourceHash: true,
           syncState: true,
+          status: true,
+          completedAt: true,
           postRepairAwaitingMaterial: true,
           reminderCount: true,
           lastRemindedAt: true,
@@ -190,6 +192,7 @@ export async function upsertPreparedDefectRecords(params: {
   const creates: Prisma.DefectCreateManyInput[] = [];
   const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
   const unchangedIds: string[] = [];
+  const unchangedCompletedIds: string[] = [];
   let unchangedCount = 0;
   let confirmedSkippedCount = 0;
 
@@ -232,6 +235,7 @@ export async function upsertPreparedDefectRecords(params: {
         ...sourceData,
         sourceType: "GOOGLE_SHEETS",
         sourceKey: item.sourceKey,
+        completedAt: sourceStatus === "DA_XU_LY" ? now : null,
         reminderCount: item.reminder.count,
         lastRemindedAt: item.reminder.lastDate,
         createdById: creator.id,
@@ -255,6 +259,9 @@ export async function upsertPreparedDefectRecords(params: {
     if (existing.sourceHash === item.hash && existing.syncState === "ACTIVE") {
       unchangedCount++;
       unchangedIds.push(existing.id);
+      if (sourceStatus === "DA_XU_LY" && !existing.completedAt) {
+        unchangedCompletedIds.push(existing.id);
+      }
       continue;
     }
 
@@ -263,6 +270,10 @@ export async function upsertPreparedDefectRecords(params: {
       data: {
         ...sourceData,
         syncState: "ACTIVE",
+        completedAt:
+          sourceStatus === "DA_XU_LY"
+            ? existing.completedAt ?? now
+            : null,
         postRepairAwaitingMaterial:
           sourceData.status === "DA_XU_LY" ? existing.postRepairAwaitingMaterial : false,
         reminderCount: Math.max(existing.reminderCount, item.reminder.count),
@@ -288,6 +299,12 @@ export async function upsertPreparedDefectRecords(params: {
     await prisma.defect.updateMany({
       where: { id: { in: unchangedIds.slice(index, index + 1000) } },
       data: { sourceLastSeenAt: now, sourceSyncedAt: now },
+    });
+  }
+  for (let index = 0; index < unchangedCompletedIds.length; index += 1000) {
+    await prisma.defect.updateMany({
+      where: { id: { in: unchangedCompletedIds.slice(index, index + 1000) } },
+      data: { completedAt: now },
     });
   }
 
