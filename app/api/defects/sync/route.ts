@@ -10,7 +10,7 @@ export async function GET() {
     await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền xem trạng thái đồng bộ");
     const runs = await prisma.defectSyncRun.findMany({
       orderBy: { startedAt: "desc" },
-      take: 10,
+      take: 5,
     });
     return ok(runs);
   });
@@ -20,6 +20,18 @@ export async function POST() {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["full"], "Chỉ người có toàn quyền khiếm khuyết được chạy đồng bộ");
+
+    const running = await prisma.defectSyncRun.findFirst({
+      where: {
+        status: "RUNNING",
+        startedAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+      },
+      orderBy: { startedAt: "desc" },
+      select: { startedAt: true },
+    });
+    if (running) {
+      return fail("Đang có một lượt đồng bộ khiếm khuyết chạy trên n8n", 409);
+    }
 
     const webhookUrl = process.env.N8N_DEFECT_MANUAL_WEBHOOK_URL?.trim();
     const token = process.env.N8N_DEFECT_SYNC_TOKEN?.trim();

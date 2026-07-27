@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import type { Defect } from "@prisma/client";
+import type { Defect, DefectSyncRun } from "@prisma/client";
 
 export interface DefectItem extends Defect {
   createdBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
@@ -114,14 +114,23 @@ export interface DefectSyncResult {
   message: string;
 }
 
+export function useDefectSyncStatus(enabled = true) {
+  return useQuery({
+    queryKey: ["defect-sync-status"],
+    queryFn: () => apiGet<DefectSyncRun[]>("/api/defects/sync"),
+    enabled,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useSyncDefects() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiMutate<DefectSyncResult>("/api/defects/sync", "POST"),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["defects"] });
-      window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defects"] }), 15_000);
-      window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defects"] }), 35_000);
+      void qc.invalidateQueries({ queryKey: ["defect-sync-status"] });
     },
   });
 }

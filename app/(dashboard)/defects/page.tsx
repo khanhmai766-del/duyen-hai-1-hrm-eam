@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ShieldAlert, Wrench, CircleSlash, CircleDashed, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -18,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DefectForm } from "@/components/defects/defect-form";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
-import { getDefectsForExport, useDefects, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
+import { getDefectsForExport, useDefects, useDefectSyncStatus, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
 import { usePositions } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
@@ -37,6 +38,7 @@ const OTHER_REQUEST_TYPES = DEFECT_REQUEST_TYPES.filter((type) => type !== "Cơ"
 
 export default function DefectsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.toUpperCase();
@@ -48,6 +50,29 @@ export default function DefectsPage() {
   const remind = useRemindDefect();
   const sync = useSyncDefects();
   const canRunSync = rbac.can("defect-manage", ["full"]);
+  const syncStatus = useDefectSyncStatus(canRunSync);
+  const latestSyncRun = syncStatus.data?.data?.[0];
+  const syncRunning = latestSyncRun?.status === "RUNNING";
+  const observedSyncRef = React.useRef<{ id: string; status: string } | null>(null);
+
+  React.useEffect(() => {
+    if (!latestSyncRun) return;
+    const previous = observedSyncRef.current;
+    const justFinished =
+      latestSyncRun.status !== "RUNNING" &&
+      previous !== null &&
+      (previous.id !== latestSyncRun.id || previous.status === "RUNNING");
+
+    observedSyncRef.current = { id: latestSyncRun.id, status: latestSyncRun.status };
+    if (justFinished) {
+      void queryClient.invalidateQueries({ queryKey: ["defects"] });
+      if (latestSyncRun.status === "SUCCESS") {
+        toast.success("n8n đã đồng bộ khiếm khuyết thành công");
+      } else if (latestSyncRun.status === "FAILED") {
+        toast.error(latestSyncRun.error || "Lượt đồng bộ n8n thất bại");
+      }
+    }
+  }, [latestSyncRun, queryClient]);
 
   // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Kỹ thuật viên / Thống kê khỏi bộ lọc.
@@ -145,7 +170,7 @@ export default function DefectsPage() {
         {canRunSync && (
           <Button
             variant="outline"
-            disabled={sync.isPending}
+            disabled={sync.isPending || syncStatus.isLoading || syncRunning}
             onClick={async () => {
               try {
                 const result = await sync.mutateAsync();
@@ -155,8 +180,8 @@ export default function DefectsPage() {
               }
             }}
           >
-            {sync.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
-            Đồng bộ bằng n8n
+            {sync.isPending || syncRunning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+            {syncRunning ? "n8n đang đồng bộ…" : "Đồng bộ bằng n8n"}
           </Button>
         )}
         {canManage && (
