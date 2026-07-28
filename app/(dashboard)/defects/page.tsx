@@ -447,7 +447,7 @@ export default function DefectsPage() {
             thay cho 2 banner cũ chiếm trọn chiều ngang phía trên bộ lọc. */}
         {canViewSync && (
           <DefectSyncChip
-            run={latestSyncRun}
+            runs={syncStatus.data?.data ?? []}
             running={syncRunning}
             syncing={sync.isPending || syncStatus.isLoading}
             canRunSync={canRunSync}

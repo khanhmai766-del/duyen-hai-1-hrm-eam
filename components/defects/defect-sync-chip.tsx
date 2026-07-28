@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { DefectSyncRun } from "@prisma/client";
-import { RefreshCw, ChevronDown, CloudDownload } from "lucide-react";
+import { RefreshCw, ChevronDown, CloudDownload, History } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -26,6 +26,17 @@ const fullFmt = new Intl.DateTimeFormat("vi-VN", {
   minute: "2-digit",
   second: "2-digit",
 });
+const logFmt = new Intl.DateTimeFormat("vi-VN", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function toneOf(run: DefectSyncRun) {
+  if (run.status === "RUNNING") return "bg-sky-500";
+  return run.status === "SUCCESS" ? "bg-emerald-500" : "bg-rose-500";
+}
 
 function sourceLabelOf(run: DefectSyncRun) {
   return (
@@ -36,14 +47,15 @@ function sourceLabelOf(run: DefectSyncRun) {
 }
 
 export function DefectSyncChip({
-  run,
+  runs,
   running,
   syncing,
   canRunSync,
   canManageTwoWaySync,
   onSync,
 }: {
-  run?: DefectSyncRun;
+  /** 5 lượt chạy gần nhất do /api/defects/sync trả sẵn; [0] là mới nhất. */
+  runs: DefectSyncRun[];
   running: boolean;
   syncing: boolean;
   canRunSync: boolean;
@@ -51,6 +63,9 @@ export function DefectSyncChip({
   onSync: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const [showLog, setShowLog] = React.useState(false);
+  const run = runs[0];
+  const previous = runs.slice(1);
   const success = run?.status === "SUCCESS";
   const failed = !!run && !running && !success;
 
@@ -121,6 +136,55 @@ export function DefectSyncChip({
         )}
 
         {canManageTwoWaySync && <TwoWaySyncRow />}
+
+        {/* Nhật ký thu gọn — dùng luôn 5 lượt API đã trả, không gọi thêm gì. */}
+        {previous.length > 0 && (
+          <div className="mt-3 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setShowLog((v) => !v)}
+              aria-expanded={showLog}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-semibold text-ink transition-colors hover:bg-muted/50"
+            >
+              <History className="h-4 w-4 text-muted-foreground" />
+              {showLog ? "Ẩn nhật ký đồng bộ" : `Xem ${previous.length} lượt đồng bộ trước`}
+              <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showLog && "rotate-180")} />
+            </button>
+
+            {showLog && (
+              <ul className="mt-2 space-y-1">
+                {previous.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/40"
+                    title={item.error ?? undefined}
+                  >
+                    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", toneOf(item))} />
+                    <span className="shrink-0 font-medium tabular-nums text-ink">{logFmt.format(new Date(item.startedAt))}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{sourceLabelOf(item)}</span>
+                    {item.status === "SUCCESS" ? (
+                      // Ghi rõ "mới"/"sửa" thay vì ký hiệu +/~ — ở cỡ chữ này dấu ~ dễ bị
+                      // đọc nhầm thành dấu trừ (tưởng là giảm).
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {item.readCount.toLocaleString("vi-VN")} đọc
+                        {item.createdCount > 0 && (
+                          <span className="ml-1.5 font-semibold text-emerald-600">{item.createdCount} mới</span>
+                        )}
+                        {item.updatedCount > 0 && (
+                          <span className="ml-1.5 font-semibold text-blue-600">{item.updatedCount} sửa</span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className={cn("shrink-0 font-semibold", item.status === "RUNNING" ? "text-sky-600" : "text-rose-600")}>
+                        {item.status === "RUNNING" ? "đang chạy" : "lỗi"}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
