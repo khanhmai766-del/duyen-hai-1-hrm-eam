@@ -15,6 +15,7 @@ import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1906,10 +1907,12 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
   const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
   const [trackDate, setTrackDate] = React.useState("");
   const [trackMonths, setTrackMonths] = React.useState(12);
+  const [trackNote, setTrackNote] = React.useState("");
 
   function openTracking(p: PanelPoint) {
     setTrackDate(formatDateInput(new Date()));
     setTrackMonths(p.intervalMonths);
+    setTrackNote("");
     setTracking(p);
   }
 
@@ -1931,6 +1934,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         intervalMonths: months,
         lastReplacedAt: trackDate || formatDateInput(new Date()),
         nextDueAt: formatDateInput(due),
+        note: trackNote.trim() || null,
       });
       toast.success("Đã thêm điểm theo dõi");
       setTracking(null);
@@ -2023,6 +2027,14 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
               </Field>
               <Field label="Chu kỳ thay thế (tháng)">
                 <Input type="number" min={0} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
+              </Field>
+              <Field label="Ghi chú">
+                <Textarea
+                  rows={3}
+                  value={trackNote}
+                  onChange={(e) => setTrackNote(e.target.value)}
+                  placeholder="Tuỳ chọn — ghi chú cho điểm theo dõi này"
+                />
               </Field>
               <p className="text-xs text-muted-foreground">
                 Điểm theo dõi chỉ được tạo từ thao tác này và sẽ xuất hiện trong tab Theo dõi thay thế vật tư.
