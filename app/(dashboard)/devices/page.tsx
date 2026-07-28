@@ -46,6 +46,7 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DeviceForm } from "@/components/devices/device-form";
 import { EquipmentTreeView } from "@/components/devices/equipment-tree";
+import { defaultScopeOf, parseScope, scopeCode, seqInScope, TREE_SCOPES, type TreeScope } from "@/lib/equipment-units";
 import { QRModal } from "@/components/devices/qr-modal";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -188,10 +189,14 @@ function DevicesPageContent() {
   const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
 
   // Xuất báo cáo cây thiết bị: tải toàn bộ node NGAY KHI bấm xuất (lazy) — không tải khi mở trang.
-  const getTreeExportRows = React.useCallback(
-    async () => buildTreeExportRows((await apiGet<EquipmentNode[]>("/api/equipment-tree")).data),
-    []
-  );
+  // Chỉ xuất PHẠM VI đang xem (Tổ máy S1 / Tổ máy S2 / Dùng chung) cho khớp cây trên màn hình.
+  const treeScope = parseScope(params.get("scope"));
+  const getTreeExportRows = React.useCallback(async () => {
+    const nodes = (await apiGet<EquipmentNode[]>("/api/equipment-tree")).data.filter((n) =>
+      seqInScope(n.seq, treeScope)
+    );
+    return buildTreeExportRows(nodes, treeScope);
+  }, [treeScope]);
 
   return (
     <div className="space-y-6">
@@ -199,8 +204,8 @@ function DevicesPageContent() {
         {view === "tree" && (
           <ExportButton
             getRows={getTreeExportRows}
-            filename="cay-thiet-bi"
-            title="Danh mục cây thiết bị"
+            filename={`cay-thiet-bi-${treeScope.toLowerCase()}`}
+            title={`Danh mục cây thiết bị — ${TREE_SCOPES.find((s) => s.key === treeScope)?.label ?? treeScope}`}
             widths={{ seq: 12, level: 6, name: 40, parentName: 32, classification: 20, drawing: 16, hasProfile: 10 }}
           />
         )}
@@ -401,7 +406,7 @@ function compareSeq(a: string, b: string) {
 }
 
 /** Dựng dữ liệu xuất báo cáo cho TOÀN BỘ cây thiết bị (sắp theo số thứ tự phân cấp). */
-function buildTreeExportRows(nodes: EquipmentNode[]): Record<string, unknown>[] {
+function buildTreeExportRows(nodes: EquipmentNode[], scope: TreeScope): Record<string, unknown>[] {
   const bySeq = new Map(nodes.map((n) => [n.seq, n]));
   // Cha hiệu lực = tổ tiên gần nhất có thật; đếm số con trực tiếp cho cột "Phân loại".
   const effParent = new Map<string, string | null>();
@@ -427,10 +432,10 @@ function buildTreeExportRows(nodes: EquipmentNode[]): Record<string, unknown>[] 
       const parentSeq = effParent.get(n.seq);
       const parent = parentSeq ? bySeq.get(parentSeq) : null;
       return {
-        seq: n.seq,
+        seq: scopeCode(n.seq, scope),
         level: (n.depth ?? 0) + 1,
         name: n.name,
-        parentName: parent ? `${parent.seq} · ${parent.name}` : "(Gốc)",
+        parentName: parent ? `${scopeCode(parent.seq, scope)} · ${parent.name}` : "(Gốc)",
         classification: kids > 0 ? `Nhóm — ${kids} thiết bị con` : "Thiết bị",
         drawing: n.drawing || "",
         hasProfile: n.deviceId ? "Có" : "",
@@ -511,7 +516,7 @@ function SystemLeafCardView({ rows, selectedSystemName }: { rows: SystemTreeRow[
               </div>
               <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <Button asChild size="sm" variant="outline" className="flex-1">
-                  <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>
+                  <Link href={`/devices?view=tree&scope=${defaultScopeOf(row.seq)}&focusSeq=${encodeURIComponent(row.seq)}`}>
                     <Network className="h-4 w-4" /> Trong cây
                   </Link>
                 </Button>
@@ -627,7 +632,7 @@ function SystemTreeTableView({ rows, selectedSystemName }: { rows: SystemTreeRow
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
                         <Button asChild variant="ghost" size="icon" title="Xem trong cây">
-                          <Link href={`/devices?view=tree&focusSeq=${encodeURIComponent(row.seq)}`}>
+                          <Link href={`/devices?view=tree&scope=${defaultScopeOf(row.seq)}&focusSeq=${encodeURIComponent(row.seq)}`}>
                             <Network className="h-4 w-4" />
                           </Link>
                         </Button>

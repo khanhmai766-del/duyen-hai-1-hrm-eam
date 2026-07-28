@@ -133,7 +133,7 @@ export function EquipmentTreePicker({
       if (childrenBySeq.has(seq)) return childrenBySeq.get(seq) ?? [];
       setLoadingSeqs((current) => new Set(current).add(seq));
       try {
-        const response = await fetchTreeChildren(queryClient, seq);
+        const response = await fetchTreeChildren(queryClient, undefined, seq);
         setChildrenBySeq((current) => new Map(current).set(seq, response.data));
         return response.data;
       } catch {

@@ -17,13 +17,12 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
-import { useNodeProfiles } from "@/hooks/useEquipment";
 import { useSeqAccess } from "@/hooks/useSystemAccess";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { formatDate } from "@/lib/utils";
 import { DEFECT_SEVERITY, DEFECT_STATUS, defectSeverityCriteriaLabels } from "@/lib/constants";
-import { machinesOf } from "@/lib/equipment-units";
+import { defaultScopeOf, TREE_SCOPES } from "@/lib/equipment-units";
 
 export default function DeviceDetailPage() {
   return (
@@ -40,7 +39,6 @@ function DeviceDetailPageContent() {
   const requestedMachine = searchParams.get("machine");
   const { data: session } = useSession();
   const { data, isLoading } = useDevice(id, requestedMachine);
-  const profilesQuery = useNodeProfiles(id);
   const del = useDeleteDevice();
   const access = useSeqAccess(data?.data?.id);
   const rbac = useRbacAccess();
@@ -62,11 +60,11 @@ function DeviceDetailPageContent() {
   const canCreateDefect = Boolean(device && rbac.can("defect-manage", ["create", "manage", "full"]) && access.canEdit);
   const deviceMachine = React.useMemo(() => {
     if (!device) return "S1";
-    return device.machine ?? machinesOf(device.id)[0];
+    return device.machine ?? defaultScopeOf(device.id);
   }, [device]);
-  const machineProfiles = profilesQuery.data?.data ?? [];
+  // Quay lại đúng CÂY đã mở thiết bị này (S1 / S2 / Dùng chung).
   const treeReturnUrl = device
-    ? `/devices?view=tree&focusSeq=${encodeURIComponent(device.id)}&machine=${encodeURIComponent(deviceMachine)}`
+    ? `/devices?view=tree&scope=${encodeURIComponent(deviceMachine)}&focusSeq=${encodeURIComponent(device.id)}`
     : "/devices?view=tree";
   const fullHistoryUrl = device
     ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}${
@@ -111,35 +109,18 @@ function DeviceDetailPageContent() {
           <p className="mt-1 font-mono text-sm text-navy">{device.code}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {machineProfiles.length > 1 && (
-            <div className="flex items-center rounded-lg border border-border bg-muted/50 p-1" role="tablist" aria-label="Chuyển hồ sơ tổ máy">
-              {machineProfiles.map((profile) => {
-                const selected = deviceMachine === profile.machine;
-                return (
-                  <button
-                    key={profile.machine}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    disabled={!profile.exists}
-                    title={!profile.exists ? `Chưa có hồ sơ ${profile.machine}` : `Chuyển sang hồ sơ ${profile.machine}`}
-                    onClick={() => router.replace(`/devices/${encodeURIComponent(id)}?machine=${profile.machine}`, { scroll: false })}
-                    className={[
-                      "min-w-14 rounded-md px-3 py-1.5 text-xs font-bold transition-all",
-                      selected
-                        ? "bg-navy text-white shadow-sm"
-                        : profile.exists
-                          ? "text-muted-foreground hover:bg-white hover:text-ink"
-                          : "cursor-not-allowed text-muted-foreground/45",
-                    ].join(" ")}
-                  >
-                    {profile.machine}
-                    {!profile.exists && <span className="ml-1 font-normal">· chưa có</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Tổ máy đã được chọn từ cây thiết bị — chỉ hiển thị, không chuyển ở đây nữa. */}
+          <span
+            className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide ring-1 ${
+              deviceMachine === "COMMON"
+                ? "bg-teal-50 text-teal-700 ring-teal-200"
+                : deviceMachine === "S2"
+                  ? "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200"
+                  : "bg-blue-50 text-accent ring-blue-200"
+            }`}
+          >
+            {TREE_SCOPES.find((s) => s.key === deviceMachine)?.label ?? deviceMachine}
+          </span>
           <Button variant="outline" onClick={() => setQrOpen(true)}>
             <QrCode className="h-4 w-4" /> Mã QR
           </Button>

@@ -2,6 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import type { TreeScope } from "@/lib/equipment-units";
 
 export interface EquipmentNode {
   seq: string;
@@ -12,10 +13,16 @@ export interface EquipmentNode {
   deviceId?: string | null;
 }
 
-/** Node cây LAZY — trường nhẹ trả từ /roots, /children, /search. */
+/**
+ * Node cây LAZY — trường nhẹ trả từ /roots, /children, /search.
+ * `seq` LUÔN là mã chuẩn DH1.S1.x (khóa nghiệp vụ chung cho cả 3 phạm vi);
+ * `fullCode`/`code`/`kks` đã được chiếu theo phạm vi đang xem.
+ */
 export interface TreeNode {
   seq: string;
   parentSeq: string | null;
+  machine: TreeScope;
+  fullCode: string;
   code: string;
   name: string;
   kks: string | null;
@@ -26,34 +33,44 @@ export interface TreeNode {
 
 const TREE_STALE = 5 * 60 * 1000; // nhánh ít đổi → cache 5 phút, không refetch khi focus lại
 
-/** Chỉ tải các nhánh GỐC khi mở trang (không tải toàn bộ cây). */
-export function useTreeRoots() {
+// Bỏ trống `scope` = CẢ cây (đủ 6 nhánh) — bộ chọn thư mục khi cấu hình phân quyền cần vậy.
+const scopeKeyOf = (scope?: TreeScope) => scope ?? "ALL";
+const scopeParam = (scope?: TreeScope) => (scope ? `scope=${scope}&` : "");
+
+/** Chỉ tải các nhánh GỐC của phạm vi đang xem khi mở trang (không tải toàn bộ cây). */
+export function useTreeRoots(scope?: TreeScope) {
   return useQuery({
-    queryKey: ["equipment-tree", "roots"],
-    queryFn: () => apiGet<TreeNode[]>("/api/equipment-tree/roots"),
+    queryKey: ["equipment-tree", "roots", scopeKeyOf(scope)],
+    queryFn: () => apiGet<TreeNode[]>(`/api/equipment-tree/roots?${scopeParam(scope)}`),
     staleTime: TREE_STALE,
     refetchOnWindowFocus: false,
   });
 }
 
-export const treeChildrenKey = (parentSeq: string) => ["equipment-tree", "children", parentSeq] as const;
+export const treeChildrenKey = (scope: TreeScope | undefined, parentSeq: string) =>
+  ["equipment-tree", "children", scopeKeyOf(scope), parentSeq] as const;
 
 /** Tải CON TRỰC TIẾP của một nút khi bung (dùng imperative qua queryClient, cache lại). */
-export function fetchTreeChildren(qc: QueryClient, parentSeq: string) {
+export function fetchTreeChildren(qc: QueryClient, scope: TreeScope | undefined, parentSeq: string) {
   return qc.fetchQuery({
-    queryKey: treeChildrenKey(parentSeq),
-    queryFn: () => apiGet<TreeNode[]>(`/api/equipment-tree/children?parentSeq=${encodeURIComponent(parentSeq)}`),
+    queryKey: treeChildrenKey(scope, parentSeq),
+    queryFn: () =>
+      apiGet<TreeNode[]>(
+        `/api/equipment-tree/children?${scopeParam(scope)}parentSeq=${encodeURIComponent(parentSeq)}`
+      ),
     staleTime: TREE_STALE,
   });
 }
 
 /** Tìm kiếm phía server, phân trang 50/lần (cursor theo sort). */
-export function useTreeSearch(q: string) {
+export function useTreeSearch(q: string, scope?: TreeScope) {
   const query = q.trim();
   return useInfiniteQuery({
-    queryKey: ["equipment-tree", "search", query],
+    queryKey: ["equipment-tree", "search", scopeKeyOf(scope), query],
     queryFn: ({ pageParam }) =>
-      apiGet<TreeNode[]>(`/api/equipment-tree/search?q=${encodeURIComponent(query)}&cursor=${pageParam ?? 0}`),
+      apiGet<TreeNode[]>(
+        `/api/equipment-tree/search?${scopeParam(scope)}q=${encodeURIComponent(query)}&cursor=${pageParam ?? 0}`
+      ),
     initialPageParam: 0 as number,
     getNextPageParam: (lastPage) => (lastPage.meta?.nextCursor ?? null) as number | null,
     enabled: query.length >= 2,
@@ -63,6 +80,9 @@ export function useTreeSearch(q: string) {
 }
 
 export interface EquipmentNodeDetail extends EquipmentNode {
+  machine: TreeScope;
+  fullCode: string;
+  kks: string | null;
   attachedInfo: string | null;
   documentUrl: string | null;
   imageUrl: string | null;
@@ -83,10 +103,11 @@ export function useEquipmentTree(options?: { enabled?: boolean }) {
   });
 }
 
-export function useEquipmentNode(seq: string | null | undefined) {
+export function useEquipmentNode(seq: string | null | undefined, machine: TreeScope = "S1") {
   return useQuery({
-    queryKey: ["equipment-node", seq],
-    queryFn: () => apiGet<EquipmentNodeDetail>(`/api/equipment-tree/${encodeURIComponent(seq!)}`),
+    queryKey: ["equipment-node", seq, machine],
+    queryFn: () =>
+      apiGet<EquipmentNodeDetail>(`/api/equipment-tree/${encodeURIComponent(seq!)}?machine=${machine}`),
     enabled: !!seq,
     staleTime: 5 * 60 * 1000,
   });
@@ -112,38 +133,9 @@ export function useImportEquipmentTree() {
   });
 }
 
-import type { EquipmentMachine } from "@/lib/equipment-units";
-
-/** Hồ sơ theo tổ máy của một nút (S1/COMMON ngầm định; S2 tạo lười). */
-export interface MachineProfile {
-  machine: EquipmentMachine;
-  code: string;
-  kks: string | null;
-  name: string;
-  exists: boolean;
-  attachedInfo: string | null;
-  documentUrl: string | null;
-  imageUrl: string | null;
-}
-
-export function useNodeProfiles(seq: string | null | undefined) {
-  return useQuery({
-    queryKey: ["equipment-profiles", seq],
-    queryFn: () => apiGet<MachineProfile[]>(`/api/equipment-tree/profiles?seq=${encodeURIComponent(seq!)}`),
-    enabled: !!seq,
-    staleTime: 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-}
-
-/** "Tạo hồ sơ S2 từ S1" — chỉ tạo dòng profile, KHÔNG sao chép dữ liệu nghiệp vụ. */
-export function useCreateS2Profile() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (seq: string) => apiMutate<{ id: string; code: string }>("/api/equipment-tree/profiles", "POST", { seq }),
-    onSuccess: (_d, seq) => qc.invalidateQueries({ queryKey: ["equipment-profiles", seq] }),
-  });
-}
+// Hồ sơ theo tổ máy không còn được đọc từ client: tổ máy đã chọn ở CÂY (?scope=) và mã/KKS
+// theo tổ máy được các API cây/thiết bị chiếu sẵn. /api/equipment-tree/profiles chỉ còn là
+// nơi lưu ghi đè tên/KKS riêng của một tổ máy (xem lib/equipment-profile-cache.ts).
 
 /** Cập nhật thông tin/tài liệu/ảnh bổ sung của một node thiết bị (theo seq). */
 export function useUpdateEquipmentNode() {

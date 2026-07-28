@@ -29,11 +29,16 @@ import {
   useTreeSearch,
   fetchTreeChildren,
   treeChildrenKey,
-  useNodeProfiles,
-  useCreateS2Profile,
   type TreeNode,
 } from "@/hooks/useEquipment";
-import { machinesOf, type EquipmentMachine } from "@/lib/equipment-units";
+import {
+  branchOf,
+  defaultScopeOf,
+  parseScope,
+  seqInScope,
+  TREE_SCOPES,
+  type TreeScope,
+} from "@/lib/equipment-units";
 import { useCountBulkDelete, useDeleteDevice, useDeleteDevices, useUpdateDevice } from "@/hooks/useDevices";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { toast } from "sonner";
@@ -49,6 +54,10 @@ import { Label } from "@/components/ui/label";
 
 const MAX_BULK_DELETE = 500;
 
+// Cấu trúc cây là DÙNG CHUNG cho 2 tổ máy (S2 là hình chiếu của cùng bộ node), nên mọi
+// thao tác thêm/sửa/xoá thiết bị đều ảnh hưởng cả hai — phải nói rõ trước khi người dùng bấm.
+const BOTH_UNITS_NOTE = "Cấu trúc cây dùng chung cho 2 tổ máy: thay đổi này áp dụng cho CẢ Tổ máy S1 và Tổ máy S2.";
+
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debounced, setDebounced] = React.useState(value);
   React.useEffect(() => {
@@ -58,7 +67,11 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced;
 }
 
-/** Chuỗi tổ tiên (seq) của một seq — cắt dần đuôi. Dùng để bung nhánh khi deep-link. */
+/**
+ * Chuỗi tổ tiên (seq) của một seq — cắt dần đuôi. Dùng để bung nhánh khi deep-link.
+ * Bỏ các cấp KHÔNG còn là nút trên cây sau khi tách phạm vi (gốc nhà máy "DH1.S1" và
+ * "DH1") để không bắn request bung nhánh vô ích.
+ */
 function ancestorSeqs(seq: string) {
   const chain: string[] = [];
   const parts = seq.split(".");
@@ -67,7 +80,7 @@ function ancestorSeqs(seq: string) {
     chain.unshift(parts.join("."));
     parts.pop();
   }
-  return chain;
+  return chain.filter((s) => branchOf(s) !== null);
 }
 
 type FlatRow = { node: TreeNode; depth: number; open: boolean; loading: boolean };
@@ -169,11 +182,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       <span className={cn("min-w-0 flex-1 truncate", hasKids && "uppercase")} title={node.name}>
         {node.name}
       </span>
-      {machinesOf(node.seq)[0] === "COMMON" && (
-        <span className="shrink-0 rounded bg-teal-50 px-1.5 text-[9px] font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-200">Common</span>
-      )}
       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{node.childCount}</span>}
-      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground" title={node.seq}>{node.code}</span>
+      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground" title={node.fullCode}>{node.code}</span>
       {canEdit && (
         <button
           type="button"
@@ -206,22 +216,54 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   );
 });
 
-export function EquipmentTreeView({
-  canDelete = false,
-  canEdit = false,
-  canCreate = false,
-  onCreateChild,
-}: {
+type TreeViewProps = {
   canDelete?: boolean;
   canEdit?: boolean;
   canCreate?: boolean;
   onCreateChild?: (node: TreeNode) => void;
-}) {
+};
+
+/**
+ * Ba cây riêng biệt (Tổ máy S1 · Tổ máy S2 · Dùng chung) trên cùng MỘT bộ node vật lý.
+ * Phạm vi nằm ở URL (?scope=) và được truyền xuống thân cây qua `key` → đổi phạm vi thì
+ * state bung/chọn dựng lại sạch và chỉ một cây nằm trong RAM, còn dữ liệu vẫn nằm trong
+ * cache TanStack Query (khoá theo phạm vi) nên hiện lại tức thì, không gọi lại API.
+ */
+export function EquipmentTreeView(props: TreeViewProps) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const focusSeq = params.get("focusSeq");
+  const requested = parseScope(params.get("scope"));
+  // Deep-link tới thiết bị không thuộc phạm vi được yêu cầu (vd nhánh dùng chung mà
+  // ?scope=S1) → mở đúng cây của thiết bị đó thay vì hiện cây rỗng.
+  const scope = focusSeq && !seqInScope(focusSeq, requested) ? defaultScopeOf(focusSeq) : requested;
+
+  const setScope = React.useCallback(
+    (next: TreeScope) => {
+      const sp = new URLSearchParams(params.toString());
+      sp.set("scope", next);
+      sp.delete("focusSeq"); // thiết bị đang trỏ tới thuộc cây cũ
+      router.replace(`/devices?${sp.toString()}`, { scroll: false });
+    },
+    [params, router]
+  );
+
+  return <TreeScopeBody key={scope} scope={scope} onScopeChange={setScope} {...props} />;
+}
+
+function TreeScopeBody({
+  scope,
+  onScopeChange,
+  canDelete = false,
+  canEdit = false,
+  canCreate = false,
+  onCreateChild,
+}: TreeViewProps & { scope: TreeScope; onScopeChange: (scope: TreeScope) => void }) {
   const params = useSearchParams();
   const focusSeq = params.get("focusSeq");
   const qc = useQueryClient();
 
-  const rootsQuery = useTreeRoots();
+  const rootsQuery = useTreeRoots(scope);
   const roots = React.useMemo(() => rootsQuery.data?.data ?? [], [rootsQuery.data]);
 
   // Cây LAZY: con của từng nhánh chỉ tải khi bung. childrenBySeq tích lũy nhánh đã tải.
@@ -244,7 +286,7 @@ export function EquipmentTreeView({
   const debouncedSearch = useDebouncedValue(search, 350);
   const q = debouncedSearch.trim();
   const searchActive = q.length >= 2;
-  const searchQuery = useTreeSearch(q);
+  const searchQuery = useTreeSearch(q, scope);
   const searchResults = React.useMemo(
     () => (searchQuery.data?.pages ?? []).flatMap((p) => p.data),
     [searchQuery.data]
@@ -256,7 +298,7 @@ export function EquipmentTreeView({
       if (childrenBySeq.has(seq)) return;
       setLoadingSeqs((s) => new Set(s).add(seq));
       try {
-        const res = await fetchTreeChildren(qc, seq);
+        const res = await fetchTreeChildren(qc, scope, seq);
         setChildrenBySeq((prev) => new Map(prev).set(seq, res.data));
       } catch {
         toast.error("Không tải được danh mục con");
@@ -268,7 +310,7 @@ export function EquipmentTreeView({
         });
       }
     },
-    [qc, childrenBySeq]
+    [qc, scope, childrenBySeq]
   );
 
   const onToggle = React.useCallback(
@@ -374,20 +416,21 @@ export function EquipmentTreeView({
   // Làm mới 1 nhánh sau khi sửa/xóa (con của parentSeq đổi).
   const refreshBranch = React.useCallback(
     async (parentSeq: string | null) => {
+      // Cấu trúc dùng chung: sửa/xóa ở một phạm vi làm cả 3 cây đổi theo → bỏ cache cả 3.
       qc.invalidateQueries({ queryKey: ["equipment-tree", "roots"] });
       qc.invalidateQueries({ queryKey: ["equipment-tree", "search"] });
       if (!parentSeq) return;
-      qc.removeQueries({ queryKey: treeChildrenKey(parentSeq) });
+      for (const s of TREE_SCOPES) qc.removeQueries({ queryKey: treeChildrenKey(s.key, parentSeq) });
       if (childrenBySeq.has(parentSeq)) {
         try {
-          const res = await fetchTreeChildren(qc, parentSeq);
+          const res = await fetchTreeChildren(qc, scope, parentSeq);
           setChildrenBySeq((prev) => new Map(prev).set(parentSeq, res.data));
         } catch {
           /* bỏ qua */
         }
       }
     },
-    [qc, childrenBySeq]
+    [qc, scope, childrenBySeq]
   );
 
   // Danh sách dòng hiển thị: chế độ tìm kiếm = kết quả phẳng; ngược lại = cây đang bung.
@@ -444,6 +487,32 @@ export function EquipmentTreeView({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
       <Card className="flex flex-col overflow-hidden">
+        <div
+          className="flex items-center gap-1 border-b border-border bg-muted/40 p-1.5"
+          role="tablist"
+          aria-label="Phạm vi cây thiết bị"
+        >
+          {TREE_SCOPES.map((s) => {
+            const selected = scope === s.key;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => onScopeChange(s.key)}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors",
+                  selected
+                    ? "bg-white text-accent shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-ink"
+                )}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex items-center gap-2 border-b border-border p-3">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -602,6 +671,7 @@ export function EquipmentTreeView({
         {selectedNode ? (
           <DetailPanel
             node={selectedNode}
+            scope={scope}
             ancestors={ancestors}
             onSelect={setSelected}
             canCreate={canCreate}
@@ -619,7 +689,7 @@ export function EquipmentTreeView({
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Xóa thiết bị khỏi cây?"
-        description={deleteTarget ? `Bạn chắc chắn muốn xóa “${deleteTarget.seq} — ${deleteTarget.name}”? Dữ liệu liên quan của thiết bị cũng có thể bị xóa và thao tác này không thể hoàn tác.` : undefined}
+        description={deleteTarget ? `Bạn chắc chắn muốn xóa “${deleteTarget.fullCode} — ${deleteTarget.name}”? Dữ liệu liên quan của thiết bị cũng có thể bị xóa và thao tác này không thể hoàn tác. ${BOTH_UNITS_NOTE}` : undefined}
         confirmLabel="Xóa thiết bị"
         loading={deleteDevice.isPending}
         onConfirm={async () => {
@@ -628,7 +698,7 @@ export function EquipmentTreeView({
             const parentSeq = deleteTarget.parentSeq;
             await deleteDevice.mutateAsync(deleteTarget.seq);
             if (selected === deleteTarget.seq) setSelected(null);
-            toast.success(`Đã xóa thiết bị ${deleteTarget.seq} — ${deleteTarget.name}`);
+            toast.success(`Đã xóa thiết bị ${deleteTarget.fullCode} — ${deleteTarget.name}`);
             setDeleteTarget(null);
             await refreshBranch(parentSeq);
           } catch (error) {
@@ -649,7 +719,7 @@ export function EquipmentTreeView({
           <DialogHeader>
             <DialogTitle>Chỉnh sửa tên thiết bị</DialogTitle>
             <DialogDescription>
-              Số thứ tự <span className="font-mono font-semibold text-ink">{editTarget?.seq}</span> được giữ nguyên.
+              Số thứ tự <span className="font-mono font-semibold text-ink">{editTarget?.fullCode}</span> được giữ nguyên. {BOTH_UNITS_NOTE}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -668,7 +738,7 @@ export function EquipmentTreeView({
               try {
                 const parentSeq = editTarget.parentSeq;
                 await updateDevice.mutateAsync({ id: editTarget.seq, name });
-                toast.success(`Đã cập nhật tên thiết bị ${editTarget.seq}`);
+                toast.success(`Đã cập nhật tên thiết bị ${editTarget.fullCode}`);
                 setEditTarget(null);
                 setEditName("");
                 await refreshBranch(parentSeq);
@@ -722,8 +792,8 @@ export function EquipmentTreeView({
           bulkCountPending
             ? "Đang tính tổng số thiết bị sẽ bị xóa (gồm cả thiết bị con trong nhóm)…"
             : checkedHasFolder
-              ? `Trong ${checkedSeqs.size.toLocaleString("vi-VN")} mục đã chọn có nhóm/thư mục — toàn bộ thiết bị con bên trong sẽ bị xóa cùng (${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị). Dữ liệu liên quan cũng bị xóa khỏi cây. Thao tác này không thể hoàn tác.`
-              : "Các thiết bị và dữ liệu liên quan sẽ bị xóa khỏi cây. Thao tác này không thể hoàn tác."
+              ? `Trong ${checkedSeqs.size.toLocaleString("vi-VN")} mục đã chọn có nhóm/thư mục — toàn bộ thiết bị con bên trong sẽ bị xóa cùng (${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị). Dữ liệu liên quan cũng bị xóa khỏi cây. Thao tác này không thể hoàn tác. ${BOTH_UNITS_NOTE}`
+              : `Các thiết bị và dữ liệu liên quan sẽ bị xóa khỏi cây. Thao tác này không thể hoàn tác. ${BOTH_UNITS_NOTE}`
         }
         confirmLabel={bulkCountPending ? "Đang tính…" : `Xóa ${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị`}
         loading={deleteDevices.isPending || bulkCountPending}
@@ -750,37 +820,25 @@ export function EquipmentTreeView({
 
 function DetailPanel({
   node,
+  scope,
   ancestors,
   onSelect,
   canCreate,
   onCreateChild,
 }: {
   node: TreeNode;
+  scope: TreeScope;
   ancestors: TreeNode[];
   onSelect: (seq: string) => void;
   canCreate: boolean;
   onCreateChild?: (node: TreeNode) => void;
 }) {
   const router = useRouter();
-  const params = useSearchParams();
   const isGroup = node.hasChildren;
-  const detailQuery = useEquipmentNode(node.seq);
+  // Tổ máy đã được chọn ở cây (phạm vi) — không hỏi lại ở đây.
+  const detailQuery = useEquipmentNode(node.seq, scope);
   const detail = detailQuery.data?.data ?? null;
-  // Hồ sơ theo tổ máy trên cây dùng chung: COMMON (nhánh 5,6) hoặc S1/S2 (nhánh còn lại).
-  const machines = machinesOf(node.seq);
-  const profilesQuery = useNodeProfiles(node.seq);
-  const profiles = React.useMemo(() => profilesQuery.data?.data ?? [], [profilesQuery.data]);
-  const createS2 = useCreateS2Profile();
-  const requestedMachine = params.get("machine")?.toUpperCase() as EquipmentMachine | undefined;
-  const [activeMachine, setActiveMachine] = React.useState<EquipmentMachine>(() =>
-    requestedMachine && machines.includes(requestedMachine) ? requestedMachine : machines[0]
-  );
-  React.useEffect(() => {
-    const nextMachines = machinesOf(node.seq);
-    setActiveMachine((current) => nextMachines.includes(current) ? current : nextMachines[0]);
-  }, [node.seq]);
-  const active = profiles.find((p) => p.machine === activeMachine) ?? null;
-  const s2Missing = activeMachine === "S2" && active !== null && !active.exists;
+  const scopeLabel = TREE_SCOPES.find((s) => s.key === scope)?.label ?? scope;
 
   return (
     <div className="space-y-4">
@@ -817,76 +875,37 @@ function DetailPanel({
         </div>
       </div>
 
-      {machines.length > 1 ? (
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1" role="tablist" aria-label="Hồ sơ theo tổ máy">
-          {machines.map((m) => {
-            const p = profiles.find((x) => x.machine === m);
-            const selected = activeMachine === m;
-            return (
-              <button
-                key={m}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setActiveMachine(m)}
-                className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition-colors",
-                  selected ? "bg-white text-accent shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-ink"
-                )}
-              >
-                {m}
-                {m === "S2" && p && !p.exists && <span className="ml-1 font-medium text-muted-foreground">· chưa có</span>}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <span className="inline-flex w-fit items-center rounded-md bg-teal-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-teal-700 ring-1 ring-teal-200">
-          Common — dùng chung 2 tổ máy
-        </span>
-      )}
-
-      {s2Missing && (
-        <div className="space-y-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-          <div>Chưa có hồ sơ S2 cho vị trí này. Tạo hồ sơ S2 sẽ dùng mã <span className="font-mono font-semibold text-ink">{active?.code}</span>{active?.kks ? <> · KKS <span className="font-mono font-semibold text-ink">{active.kks}</span></> : null} (dẫn xuất từ S1) và KHÔNG sao chép lịch sử/QR/khiếm khuyết/vật tư của S1.</div>
-          {canCreate && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={createS2.isPending}
-              onClick={async () => {
-                try {
-                  await createS2.mutateAsync(node.seq);
-                  toast.success(`Đã tạo hồ sơ S2 — ${active?.code}`);
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Không thể tạo hồ sơ S2");
-                }
-              }}
-            >
-              {createS2.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Tạo hồ sơ S2 từ S1
-            </Button>
-          )}
-        </div>
-      )}
+      <span
+        className={cn(
+          "inline-flex w-fit items-center rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide ring-1",
+          scope === "COMMON"
+            ? "bg-teal-50 text-teal-700 ring-teal-200"
+            : "bg-blue-50 text-accent ring-blue-200"
+        )}
+      >
+        {scope === "COMMON" ? `${scopeLabel} — dùng chung 2 tổ máy` : scopeLabel}
+      </span>
 
       <div className="space-y-2">
-        <DetailRow label="Mã thiết bị" value={active?.code ?? node.seq} mono />
-        {(active?.kks ?? node.kks) && <DetailRow label="Mã KKS" value={(active?.kks ?? node.kks)!} />}
+        <DetailRow label="Mã thiết bị" value={node.fullCode} mono />
+        {node.kks && <DetailRow label="Mã KKS" value={node.kks} />}
         <DetailRow label="Bản vẽ liên quan" value={detail?.drawing || "—"} />
         <DetailRow label="Phân loại" value={isGroup ? `Nhóm — ${node.childCount} thiết bị con` : "Thiết bị"} />
       </div>
 
       {canCreate && node.depth < 16 && onCreateChild && (
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full border-accent/40 text-accent hover:border-accent hover:bg-accent/5 hover:text-accent"
-          onClick={() => onCreateChild(node)}
-        >
-          <Plus className="h-4 w-4" />
-          Thêm mới trong hệ thống này
-        </Button>
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-accent/40 text-accent hover:border-accent hover:bg-accent/5 hover:text-accent"
+            onClick={() => onCreateChild(node)}
+          >
+            <Plus className="h-4 w-4" />
+            Thêm mới trong hệ thống này
+          </Button>
+          <p className="text-[11px] leading-snug text-muted-foreground">{BOTH_UNITS_NOTE}</p>
+        </div>
       )}
 
       {detailQuery.isLoading && (
@@ -895,15 +914,15 @@ function DetailPanel({
         </div>
       )}
 
-      {active && !s2Missing && (
+      {detail && (
         <div className="space-y-3">
-          {active.imageUrl && (
+          {detail.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={active.imageUrl} alt={active.name} className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
+            <img src={detail.imageUrl} alt={detail.name} className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
           )}
-          {active.attachedInfo && <DetailRow label="Thông tin thêm" value={active.attachedInfo} />}
-          {active.documentUrl && (
-            <a href={active.documentUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-accent hover:underline">
+          {detail.attachedInfo && <DetailRow label="Thông tin thêm" value={detail.attachedInfo} />}
+          {detail.documentUrl && (
+            <a href={detail.documentUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-accent hover:underline">
               Mở tài liệu đính kèm
             </a>
           )}
@@ -912,7 +931,7 @@ function DetailPanel({
 
       <Button
         className="w-full"
-        onClick={() => router.push(`/devices/${encodeURIComponent(node.seq)}?machine=${activeMachine}`)}
+        onClick={() => router.push(`/devices/${encodeURIComponent(node.seq)}?machine=${scope}`)}
       >
         Xem lý lịch thiết bị
       </Button>

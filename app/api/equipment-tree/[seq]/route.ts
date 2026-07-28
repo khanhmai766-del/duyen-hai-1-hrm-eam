@@ -3,34 +3,46 @@ import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser } from "@/lib/api";
 import { assertSeqViewable } from "@/lib/server-access";
 import { normalizeEquipmentNodeName } from "@/lib/equipment-tree";
+import { getProfileOverrides } from "@/lib/equipment-profile-cache";
+import { parseScope, scopeCode, scopeKks } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest, { params }: { params: { seq: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { seq: string } }) {
   return handle(async () => {
     const user = await requireUser();
     const seq = decodeURIComponent(params.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự thiết bị");
+    // `seq` luôn là mã chuẩn S1; phạm vi chỉ đổi mã hiển thị/KKS và phần ghi đè.
+    const scope = parseScope(req.nextUrl.searchParams.get("machine"));
 
     await assertSeqViewable(user, seq);
-    const node = await prisma.equipmentNode.findUnique({
-      where: { seq },
-      select: {
-        seq: true,
-        parentSeq: true,
-        name: true,
-        drawing: true,
-        depth: true,
-        attachedInfo: true,
-        documentUrl: true,
-        imageUrl: true,
-      },
-    });
+    const [node, overrideOf] = await Promise.all([
+      prisma.equipmentNode.findUnique({
+        where: { seq },
+        select: {
+          seq: true,
+          parentSeq: true,
+          name: true,
+          kks: true,
+          drawing: true,
+          depth: true,
+          attachedInfo: true,
+          documentUrl: true,
+          imageUrl: true,
+        },
+      }),
+      getProfileOverrides(scope),
+    ]);
     if (!node) return fail("Không tìm thấy thiết bị", 404);
+    const override = overrideOf(node.seq);
 
     return ok({
       ...node,
-      name: normalizeEquipmentNodeName(node.seq, node.name),
+      machine: scope,
+      fullCode: scopeCode(node.seq, scope),
+      kks: override?.kks ?? scopeKks(node.kks, scope),
+      name: override?.name ?? normalizeEquipmentNodeName(node.seq, node.name),
       deviceId: null,
     });
   });
