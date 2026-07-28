@@ -27,11 +27,12 @@ export function s2Code(seq: string): string {
 }
 
 /**
- * KKS S2 dẫn xuất: CHỈ đổi tiền tố "10" ở ĐẦU chuỗi thành "20" (10BJA01E → 20BJA01E).
- * Tiền tố khác (X0…, A0…, "BOP - DH1", "N/A", "Không có KKS") và số 10 nằm giữa chuỗi
- * (X0ABC10AA001) giữ nguyên.
+ * KKS S2 dẫn xuất: CHỈ đổi KÝ TỰ ĐẦU TIÊN "1" thành "2", phần còn lại giữ nguyên
+ * (10BJA01E → 20BJA01E, 11XAX10CP403 → 21XAX10CP403, 1QFK01 → 2QFK01, 101MK01 → 201MK01).
+ * KKS bắt đầu bằng ký tự khác (X0…, A0…, "BOP - DH1", "N/A", "Không có KKS") và số 1
+ * nằm giữa chuỗi (X0ABC10AA001) giữ nguyên.
  */
 export function s2Kks(kks: string | null): string | null {
   if (!kks) return kks;
-  return /^10/.test(kks) ? `20${kks.slice(2)}` : kks;
+  return kks.startsWith("1") ? `2${kks.slice(1)}` : kks;
 }

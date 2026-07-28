@@ -892,7 +892,7 @@ model EquipmentNode {
 
 // Hồ sơ theo TỔ MÁY trên cây thiết bị dùng chung (phương án S2): một nút có thể có hồ sơ
 // S1 / S2 / COMMON. Bảng THƯA — chỉ tạo dòng khi bấm "Tạo hồ sơ S2 từ S1" hoặc khi một
-// tổ máy cần override thông tin riêng. Mã S2 (DH1.S1→DH1.S2) và KKS S2 (tiền tố 10→20)
+// tổ máy cần override thông tin riêng. Mã S2 (DH1.S1→DH1.S2) và KKS S2 (ký tự đầu 1→2)
 // là DẪN XUẤT từ node (lib/equipment-units.ts) — chỉ lưu tại đây khi người dùng sửa khác đi.
 // Dữ liệu nghiệp vụ KHÔNG nằm ở đây: repair/defect/vật tư/QR phân tổ máy bằng cột
 // machine/unit trên chính bảng nghiệp vụ (deviceSeq vẫn trỏ node → giữ lọc quyền theo nhánh).
@@ -900,7 +900,7 @@ model EquipmentProfile {
   id           String   @id @default(cuid())
   nodeSeq      String // EquipmentNode.seq
   machine      String // "S1" | "S2" | "COMMON"
-  kks          String? // override KKS (mặc định dẫn xuất: S2 = tiền tố 10→20)
+  kks          String? // override KKS (mặc định dẫn xuất: S2 = ký tự đầu 1→2)
   name         String? // override tên nếu tổ máy đặt khác
   attachedInfo String?
   documentUrl  String?
