@@ -13,7 +13,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDevice, useUpdateDevice, type DeviceRecord } from "@/hooks/useDevices";
 import { useEquipmentTree } from "@/hooks/useEquipment";
-import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
+import {
+  EquipmentTreePicker,
+  type PickerEquipmentNode,
+} from "@/components/devices/equipment-tree-picker";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { announcementShiftRosterPositionOptions } from "@/lib/positions";
@@ -76,7 +79,7 @@ export function DeviceForm({
     form.systemSeq || (form.system ? equipmentNodes.find((n) => n.name === form.system)?.seq ?? "" : "");
   const currentLevel = form.code.trim() ? form.code.trim().split(".").length : null;
 
-  function selectParent(node: (typeof equipmentNodes)[number] | null) {
+  function selectParent(node: PickerEquipmentNode | null) {
     setForm((current) => {
       if (isEdit) {
         return { ...current, system: node?.name ?? "", systemSeq: node?.seq ?? "" };

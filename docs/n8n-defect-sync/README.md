@@ -13,6 +13,9 @@ dùng bảng mirror và không `DELETE + INSERT`. Dữ liệu tiếp tục đư�
 - Retry cùng `runId/source/batchNumber` không ghi trùng.
 - Chỉ khi tất cả nguồn khai báo trong lượt hoàn tất, backend mới đánh dấu khóa
   không còn xuất hiện thành `MISSING`, và chỉ trong đúng Sheet đã đồng bộ.
+- Phiếu `MISSING` có STT duy nhất vẫn được giữ để VHV kiểm tra. Nếu cùng Sheet
+  đã có phiếu `ACTIVE` mang cùng STT, bản `MISSING` cũ bị xóa ngay khi lượt đồng
+  bộ hoàn tất vì đã được phiếu mới thay thế.
 - Nếu workflow dừng giữa chừng, dữ liệu hiện có vẫn được giữ nguyên.
 - Run n8n treo quá 30 phút được tự đóng và dọn khóa staging; lịch sử run/batch
   đã kết thúc được giữ 90 ngày.

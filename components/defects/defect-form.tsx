@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Check, Loader2, ChevronRight, ChevronLeft, Plus, X } from "lucide-react";
+import { Check, Loader2, ChevronRight, ChevronLeft, Cpu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,10 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateDefect, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
-import { useDevices } from "@/hooks/useDevices";
-import { useEquipmentTree } from "@/hooks/useEquipment";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
-import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
+import { useEquipmentNode } from "@/hooks/useEquipment";
+import {
+  EquipmentTreePicker,
+  type PickerEquipmentNode,
+} from "@/components/devices/equipment-tree-picker";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import {
   DEFECT_UNITS,
@@ -28,8 +29,6 @@ import {
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
-import { createPositionAccessResolver } from "@/lib/position-system-scopes";
-import { dedupeEquipmentLeafNodes } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 
 function toDateInput(v: Date | string | null | undefined): string {
@@ -79,14 +78,6 @@ export function DefectForm({
       .sort((a, b) => a.name.localeCompare(b.name, "vi")),
     [usersQuery.data]
   );
-  // Thiết bị lấy từ module Thiết bị.
-  const { data: devicesData } = useDevices({});
-  const { data: equipmentTreeData } = useEquipmentTree();
-  const scopesQuery = usePositionSystemScopes();
-  const devices = React.useMemo(() => devicesData?.data ?? [], [devicesData]);
-  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
-  const positionScopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
-
   const [form, setForm] = React.useState({
     unit: defect?.unit ?? initialDevice?.unit ?? "",
     device: defect?.device ?? initialDevice?.code ?? "",
@@ -148,98 +139,25 @@ export function DefectForm({
       return { ...f, unit: u };
     });
   }
-  const equipmentIndex = React.useMemo(() => {
-    const bySeq = new Map(equipmentNodes.map((node) => [node.seq, node]));
-    const parentOf = new Map<string, string | null>();
-    const childrenOf = new Map<string, typeof equipmentNodes>();
-
-    for (const node of equipmentNodes) {
-      let parent = node.parentSeq && bySeq.has(node.parentSeq) ? node.parentSeq : null;
-      if (!parent) {
-        const parts = node.seq.split(".");
-        parts.pop();
-        while (parts.length) {
-          const candidate = parts.join(".");
-          if (bySeq.has(candidate)) {
-            parent = candidate;
-            break;
-          }
-          parts.pop();
-        }
-      }
-      parentOf.set(node.seq, parent);
-      if (parent) {
-        const children = childrenOf.get(parent) ?? [];
-        children.push(node);
-        childrenOf.set(parent, children);
-      }
-    }
-
-    return { bySeq, parentOf, childrenOf };
-  }, [equipmentNodes]);
-  function leafNodesFor(systemSeq: string) {
-    if (!systemSeq) return [];
-    const result: typeof equipmentNodes = [];
-    const queue = [...(equipmentIndex.childrenOf.get(systemSeq) ?? [])];
-    while (queue.length) {
-      const node = queue.shift()!;
-      const children = equipmentIndex.childrenOf.get(node.seq) ?? [];
-      if (children.length === 0) {
-        result.push(node);
-      } else {
-        queue.push(...children);
-      }
-    }
-    return dedupeEquipmentLeafNodes(result);
-  }
-  function systemSeqOfDevice(device: (typeof devices)[number]) {
-    return device.systemSeq ?? equipmentIndex.parentOf.get(device.code) ?? "";
-  }
-  const deviceOptions = React.useMemo(
-    () => leafNodesFor(form.deviceSystemSeq),
-    [equipmentIndex, form.deviceSystemSeq]
-  );
-  const selectedDeviceValue = React.useMemo(() => {
-    if (!form.device) return NONE;
-    return deviceOptions.find((node) => node.duplicateSeqs.includes(form.device))?.seq ?? form.device;
-  }, [deviceOptions, form.device]);
+  const selectedDeviceQuery = useEquipmentNode(form.device || null);
+  const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null);
   React.useEffect(() => {
-    if (!form.device || form.deviceSystemSeq || form.deviceSystem) return;
-    const selectedDevice = devices.find((d) => d.code === form.device);
-    const systemSeq = selectedDevice
-      ? systemSeqOfDevice(selectedDevice)
-      : equipmentIndex.parentOf.get(form.device) ?? "";
-    const systemName = systemSeq
-      ? equipmentIndex.bySeq.get(systemSeq)?.name ?? selectedDevice?.system ?? ""
-      : selectedDevice?.system ?? "";
-    if (!systemName && !systemSeq) return;
-    setForm((f) => (f.deviceSystemSeq || f.deviceSystem ? f : { ...f, deviceSystem: systemName, deviceSystemSeq: systemSeq }));
-  }, [devices, form.device, form.deviceSystem, form.deviceSystemSeq, equipmentIndex]);
+    const systemName = selectedSystemQuery.data?.data.name;
+    if (!systemName || form.deviceSystem === systemName) return;
+    setForm((current) => ({ ...current, deviceSystem: systemName }));
+  }, [form.deviceSystem, selectedSystemQuery.data]);
+
   function setSystem(v: string) {
-    setForm((f) => {
-      const system = v === NONE ? "" : v;
-      const selectedDevice = devices.find((d) => d.code === f.device);
-      const keepDevice =
-        !f.device ||
-        !selectedDevice ||
-        !system ||
-        createPositionAccessResolver(system, equipmentNodes, positionScopes).accessForDevice(selectedDevice) !== "none";
-      return {
-        ...f,
-        system,
-        device: keepDevice ? f.device : "",
-      };
-    });
+    set("system", v === NONE ? "" : v);
   }
-  function setDeviceSystemNode(node: { seq: string; name: string } | null) {
+
+  function setDeviceSystemNode(node: PickerEquipmentNode | null) {
     setForm((f) => {
-      const isLeaf = node ? (equipmentIndex.childrenOf.get(node.seq) ?? []).length === 0 : false;
-      if (node && isLeaf) {
-        const parentSeq = equipmentIndex.parentOf.get(node.seq) ?? "";
-        const parentNode = parentSeq ? equipmentIndex.bySeq.get(parentSeq) ?? null : null;
+      if (node && !node.hasChildren) {
+        const parentSeq = node.parentSeq ?? "";
         return {
           ...f,
-          deviceSystem: parentNode?.name ?? "",
+          deviceSystem: "",
           deviceSystemSeq: parentSeq,
           device: node.seq,
           relatedDeviceSeqs: f.relatedDeviceSeqs.filter((seq) => seq !== node.seq),
@@ -248,32 +166,20 @@ export function DefectForm({
 
       const deviceSystem = node?.name ?? "";
       const deviceSystemSeq = node?.seq ?? "";
-      const nextDeviceSeqs = new Set(leafNodesFor(deviceSystemSeq).flatMap((leaf) => leaf.duplicateSeqs));
       return {
         ...f,
         deviceSystem,
         deviceSystemSeq,
-        device: f.device && !nextDeviceSeqs.has(f.device) ? "" : f.device,
+        device: "",
       };
     });
   }
-  function setDevice(v: string) {
-    setForm((f) => {
-      const device = v === NONE ? null : devices.find((d) => d.code === v);
-      const equipmentNode = v === NONE ? null : equipmentIndex.bySeq.get(v) ?? null;
-      return {
-        ...f,
-        device: equipmentNode?.seq ?? device?.code ?? "",
-        system: isSynced ? f.system : device?.managingPosition ?? f.system,
-        relatedDeviceSeqs: f.relatedDeviceSeqs.filter((seq) => seq !== (equipmentNode?.seq ?? device?.code ?? "")),
-      };
-    });
-  }
+
   const [relatedPickerValue, setRelatedPickerValue] = React.useState("");
-  function addRelatedDevice(node: { seq: string; name: string } | null) {
+  function addRelatedDevice(node: PickerEquipmentNode | null) {
     setRelatedPickerValue("");
     if (!node) return;
-    if ((equipmentIndex.childrenOf.get(node.seq) ?? []).length > 0) {
+    if (node.hasChildren) {
       toast.error("Vui lòng chọn thiết bị cấp cuối, không chọn thư mục hệ thống");
       return;
     }
@@ -428,7 +334,7 @@ export function DefectForm({
                 <LockedValue primary={initialDevice.system || "Chưa xác định hệ thống"} secondary={initialDevice.systemSeq || undefined} />
               ) : (
                 <EquipmentTreePicker
-                  value={form.deviceSystemSeq}
+                  value={form.device || form.deviceSystemSeq}
                   position={form.system || null}
                   accessFilter="edit"
                   includeLeaves
@@ -440,16 +346,15 @@ export function DefectForm({
             <Row label={isSynced ? "Thiết Bị *" : "Thiết Bị"}>
               {lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.name} secondary={initialDevice.displayCode ?? initialDevice.code} />
+              ) : form.device ? (
+                <LockedValue
+                  primary={selectedDeviceQuery.data?.data.name ?? "Đang tải tên thiết bị…"}
+                  secondary={form.device}
+                />
               ) : (
-                <Select value={selectedDeviceValue} onValueChange={setDevice}>
-                  <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                    {deviceOptions.map((node) => (
-                      <SelectItem key={node.seq} value={node.seq}>{node.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="rounded-lg border border-dashed border-border bg-muted/25 px-3 py-2.5 text-sm text-muted-foreground">
+                  Chọn thiết bị cấp cuối trong cây Hệ thống; tên thiết bị sẽ tự điền tại đây.
+                </div>
               )}
             </Row>
             <Row label="Thiết Bị Liên Quan">
@@ -465,25 +370,12 @@ export function DefectForm({
                 {form.relatedDeviceSeqs.length > 0 ? (
                   <div className="space-y-2">
                     {form.relatedDeviceSeqs.map((seq) => {
-                      const node = equipmentIndex.bySeq.get(seq);
                       return (
-                        <div key={seq} className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
-                            <Plus className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold text-ink">{node?.name ?? seq}</div>
-                            <div className="truncate font-mono text-[11px] text-muted-foreground">{seq}</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => set("relatedDeviceSeqs", form.relatedDeviceSeqs.filter((item) => item !== seq))}
-                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-white hover:text-destructive"
-                            aria-label={`Bỏ thiết bị ${node?.name ?? seq}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
+                        <RelatedDeviceRow
+                          key={seq}
+                          seq={seq}
+                          onRemove={() => set("relatedDeviceSeqs", form.relatedDeviceSeqs.filter((item) => item !== seq))}
+                        />
                       );
                     })}
                   </div>
@@ -879,6 +771,31 @@ function LockedValue({ primary, secondary }: { primary: string; secondary?: stri
     <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5">
       <div className="text-sm font-semibold text-ink">{primary}</div>
       {secondary && <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{secondary}</div>}
+    </div>
+  );
+}
+
+function RelatedDeviceRow({ seq, onRemove }: { seq: string; onRemove: () => void }) {
+  const nodeQuery = useEquipmentNode(seq);
+  const name = nodeQuery.data?.data.name ?? (nodeQuery.isLoading ? "Đang tải tên thiết bị…" : seq);
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+        <Cpu className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-ink">{name}</div>
+        <div className="truncate font-mono text-[11px] text-muted-foreground">{seq}</div>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-white hover:text-destructive"
+        aria-label={`Bỏ thiết bị ${name}`}
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   );
 }

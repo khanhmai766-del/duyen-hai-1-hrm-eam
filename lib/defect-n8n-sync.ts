@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { deleteFromS3 } from "@/lib/s3";
 import {
   prepareDefectSourceRecords,
   upsertPreparedDefectRecords,
@@ -318,7 +319,7 @@ export async function finishN8nDefectRun(params: {
     (source) => N8N_DEFECT_SOURCE_SPREADSHEET_IDS[source]
   );
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const missingCount = await tx.$executeRaw(Prisma.sql`
       UPDATE "Defect" AS defect
       SET
@@ -337,19 +338,71 @@ export async function finishN8nDefectRun(params: {
         )
     `);
 
+    // STT là số phiếu yêu cầu duy nhất trong từng Sheet nguồn. Nếu một STT đã
+    // xuất hiện lại dưới dạng phiếu ACTIVE thì bản MISSING cùng STT là phiếu cũ
+    // đã bị thay thế, không còn giá trị nghiệp vụ. Phiếu MISSING có STT duy nhất
+    // (ví dụ nguồn bị thiếu ngày phát hiện) vẫn được giữ để VHV kiểm tra.
+    const duplicateMissing = await tx.$queryRaw<Array<{
+      id: string;
+      images: string[];
+      imageUrl: string | null;
+    }>>(Prisma.sql`
+      SELECT
+        missing."id",
+        missing."images",
+        missing."imageUrl"
+      FROM "Defect" AS missing
+      WHERE missing."sourceType" = 'GOOGLE_SHEETS'
+        AND missing."syncState" = 'MISSING'
+        AND missing."sourceSpreadsheetId" IN (${Prisma.join(completedSpreadsheetIds)})
+        AND NULLIF(BTRIM(split_part(COALESCE(missing."requestNumber", ''), '/', 1)), '') IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM "Defect" AS active
+          WHERE active."sourceType" = 'GOOGLE_SHEETS'
+            AND active."syncState" = 'ACTIVE'
+            AND active."sourceSpreadsheetId" = missing."sourceSpreadsheetId"
+            AND BTRIM(split_part(COALESCE(active."requestNumber", ''), '/', 1))
+              = BTRIM(split_part(COALESCE(missing."requestNumber", ''), '/', 1))
+            AND active."id" <> missing."id"
+        )
+    `);
+    if (duplicateMissing.length > 0) {
+      await tx.defect.deleteMany({
+        where: { id: { in: duplicateMissing.map((item) => item.id) } },
+      });
+    }
+
+    const remainingMissingCount = Math.max(0, missingCount - duplicateMissing.length);
     const finished = await tx.defectSyncRun.update({
       where: { id: run.id },
       data: {
         status: "SUCCESS",
         finishedAt: new Date(),
         completedSources: params.completedSources,
-        missingCount,
+        missingCount: remainingMissingCount,
         error: null,
       },
     });
     await tx.defectSyncSeen.deleteMany({ where: { runId: run.id } });
-    return finished;
+    return {
+      finished,
+      deletedImageUrls: duplicateMissing.flatMap((item) => [
+        ...item.images,
+        ...(item.imageUrl ? [item.imageUrl] : []),
+      ]),
+    };
   });
+
+  const imageCleanupResults = await Promise.allSettled(
+    result.deletedImageUrls.map((url) => deleteFromS3(url))
+  );
+  for (const cleanupResult of imageCleanupResults) {
+    if (cleanupResult.status === "rejected") {
+      console.error("[n8n defect sync] Không thể xóa ảnh của phiếu MISSING trùng STT", cleanupResult.reason);
+    }
+  }
+  return result.finished;
 }
 
 export async function failN8nDefectRun(params: { runId: string; message?: string }) {
