@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
+import { parseDateInput } from "@/lib/utils";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { seqInScope, type TreeScope } from "@/lib/equipment-units";
@@ -23,6 +24,7 @@ type ImportRow = {
   quantity?: number; // Số lượng cần thay CHO MỖI thiết bị
   intervalNote?: string; // Chu kỳ O&M
   intervalMonths?: number; // Chu kỳ thay thế (tháng); 0 = không theo dõi lịch
+  lastReplacedAt?: string; // "yyyy-mm-dd" — có ngày = BẬT lịch theo dõi cho điểm này
 };
 
 type ImportError = { rowNumber: number; message: string };
@@ -64,16 +66,18 @@ export async function POST(req: NextRequest) {
       if (node.externalId) nodeByExternalId.set(node.externalId.trim(), node);
     }
 
-    // Nhận diện thiết bị từ ô "Mã thiết bị": mã cây đầy đủ (DH1.S1.1.1...), mã cây
-    // rút gọn (tự thêm tiền tố DH1.<tổ máy>.), mã KKS, hoặc externalId.
-    function resolveNode(raw: string, machine: string) {
+    // Nhận diện thiết bị từ ô "Mã thiết bị": mã cây đầy đủ (DH1.S1.1.1…), mã cây theo tổ
+    // máy S2 (DH1.S2.1.1… — chỉ là HÌNH CHIẾU, phải quy về mã chuẩn DH1.S1), mã cây rút
+    // gọn (1.1.1…), mã KKS, hoặc externalId.
+    function resolveNode(raw: string) {
       const v = raw.trim();
       if (!v) return null;
       const exact = nodeBySeq.get(v);
       if (exact) return exact;
-      const relative = v.replace(/^DH1\.S[12]\./i, "");
-      const prefixed = nodeBySeq.get(`DH1.${machine}.${relative}`);
-      if (prefixed) return prefixed;
+      // Mọi tiền tố tổ máy đều quy về gốc chuẩn DH1.S1 (cây vật lý chỉ có mã S1).
+      const relative = v.replace(/^DH1\.S\d+\./i, "");
+      const canonical = nodeBySeq.get(`DH1.S1.${relative}`);
+      if (canonical) return canonical;
       return nodeByKks.get(normalizeText(v)) ?? nodeByExternalId.get(v) ?? null;
     }
 
@@ -106,6 +110,7 @@ export async function POST(req: NextRequest) {
       quantity: number;
       intervalNote: string | null;
       intervalMonths: number;
+      lastReplacedAt: Date | null;
     }> = [];
     const seen = new Set<string>();
 
@@ -141,7 +146,7 @@ export async function POST(req: NextRequest) {
       let resolvedLocation: string | null = null;
       let deviceLabel = "";
       if (deviceSeq) {
-        const node = resolveNode(deviceSeq, machine);
+        const node = resolveNode(deviceSeq);
         if (!node) {
           return errors.push({
             rowNumber,
@@ -185,6 +190,32 @@ export async function POST(req: NextRequest) {
       if (!Number.isFinite(quantity) || quantity < 0) return errors.push({ rowNumber, message: "Số lượng cần thay không hợp lệ" });
       if (deviceCount < 1) return errors.push({ rowNumber, message: "Số lượng thiết bị phải ≥ 1" });
 
+      // 4b) "Lần thay gần nhất" — điền là bật lịch theo dõi cho điểm này.
+      const rawLast = String(row.lastReplacedAt ?? "").trim();
+      let lastReplacedAt: Date | null = null;
+      if (rawLast) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(rawLast)) {
+          return errors.push({
+            rowNumber,
+            message: `Không đọc được ngày “${rawLast}” ở cột Lần thay gần nhất — hãy nhập dạng dd/mm/yyyy (ví dụ 15/03/2026)`,
+          });
+        }
+        const parsedLast = parseDateInput(rawLast);
+        if (Number.isNaN(parsedLast.getTime())) {
+          return errors.push({ rowNumber, message: `Lần thay gần nhất “${rawLast}” không phải ngày hợp lệ` });
+        }
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (parsedLast >= tomorrow) {
+          return errors.push({ rowNumber, message: "Lần thay gần nhất không được là ngày trong tương lai" });
+        }
+        lastReplacedAt = parsedLast;
+        if (intervalMonths === 0) {
+          return errors.push({ rowNumber, message: "Đã điền Lần thay gần nhất thì Chu kỳ thay thế phải > 0 để lên lịch theo dõi" });
+        }
+      }
+
       // 5) Chống trùng trong cùng file: mỗi (vật tư × thiết bị|hệ thống+tên) chỉ 1 dòng.
       const targetKey = resolvedSeq
         ? `seq:${resolvedSeq}`
@@ -208,23 +239,35 @@ export async function POST(req: NextRequest) {
         quantity: Math.round(quantity),
         intervalNote: String(row.intervalNote ?? "").trim() || null,
         intervalMonths,
+        lastReplacedAt,
       });
     });
 
     if (errors.length || body.dryRun === true) {
-      return ok({ validCount: normalized.length, errors, preview: normalized.slice(0, 50), created: 0, updated: 0 });
+      return ok({
+        validCount: normalized.length,
+        // Số dòng sẽ được lên lịch theo dõi (có "Lần thay gần nhất") — cho người dùng xem trước.
+        willSchedule: normalized.filter((r) => r.lastReplacedAt).length,
+        errors,
+        preview: normalized.slice(0, 50),
+        created: 0,
+        updated: 0,
+        scheduled: 0,
+      });
     }
 
     const result = await prisma.$transaction(
       async (tx) => {
         let created = 0;
         let updated = 0;
+        let scheduled = 0;
         for (const row of normalized) {
-          // Điểm khai báo (isActive=false) — hiển thị trong "Chi tiết điểm thay thế".
-          const where = row.deviceSeq
-            ? { materialId: row.materialId, deviceSeq: row.deviceSeq, isActive: false }
-            : { materialId: row.materialId, deviceSeq: null, system: row.system, location: row.location, isActive: false };
-          const existing = await tx.materialReplacement.findFirst({ where, select: { id: true } });
+          // Khoá nhận diện một điểm: theo thiết bị trên cây, hoặc theo hệ thống + tên tự do.
+          const target = (isActive: boolean) =>
+            row.deviceSeq
+              ? { materialId: row.materialId, deviceSeq: row.deviceSeq, isActive }
+              : { materialId: row.materialId, deviceSeq: null, system: row.system, location: row.location, isActive };
+
           const data = {
             machine: row.machine, // Đồng bộ tổ máy để hiện đúng ở trang thiết bị (lọc theo machine).
             system: row.system,
@@ -234,19 +277,56 @@ export async function POST(req: NextRequest) {
             quantity: row.quantity,
             intervalNote: row.intervalNote,
             intervalMonths: row.intervalMonths,
-            nextDueAt: addMonths(new Date(), row.intervalMonths),
           };
+
+          // 1) DÒNG KHAI BÁO (isActive=false) — nguồn của "Chi tiết điểm thay thế" và của
+          //    tổng nhu cầu 1 chu kỳ. Luôn tạo/cập nhật, không mang ngày thay.
+          const existing = await tx.materialReplacement.findFirst({ where: target(false), select: { id: true } });
           if (existing) {
-            await tx.materialReplacement.update({ where: { id: existing.id }, data });
+            await tx.materialReplacement.update({
+              where: { id: existing.id },
+              data: { ...data, nextDueAt: addMonths(new Date(), row.intervalMonths) },
+            });
             updated += 1;
           } else {
             await tx.materialReplacement.create({
-              data: { ...data, materialId: row.materialId, deviceSeq: row.deviceSeq, isActive: false, createdById: user.id },
+              data: {
+                ...data,
+                materialId: row.materialId,
+                deviceSeq: row.deviceSeq,
+                isActive: false,
+                nextDueAt: addMonths(new Date(), row.intervalMonths),
+                createdById: user.id,
+              },
             });
             created += 1;
           }
+
+          // 2) ĐIỂM THEO DÕI (isActive=true) — chỉ khi file có "Lần thay gần nhất".
+          //    Hạn kế tiếp = ngày thay gần nhất + chu kỳ. Đây là dòng lên lịch/cảnh báo.
+          if (!row.lastReplacedAt) continue;
+          const track = await tx.materialReplacement.findFirst({ where: target(true), select: { id: true } });
+          const trackData = {
+            ...data,
+            lastReplacedAt: row.lastReplacedAt,
+            nextDueAt: addMonths(row.lastReplacedAt, row.intervalMonths),
+          };
+          if (track) {
+            await tx.materialReplacement.update({ where: { id: track.id }, data: trackData });
+          } else {
+            await tx.materialReplacement.create({
+              data: {
+                ...trackData,
+                materialId: row.materialId,
+                deviceSeq: row.deviceSeq,
+                isActive: true,
+                createdById: user.id,
+              },
+            });
+          }
+          scheduled += 1;
         }
-        return { created, updated };
+        return { created, updated, scheduled };
       },
       { timeout: 120_000 }
     );
@@ -256,8 +336,17 @@ export async function POST(req: NextRequest) {
       "IMPORT_MATERIAL_REPLACEMENTS",
       "MaterialReplacement",
       undefined,
-      auditDetailWithPosition(user, `${result.created} điểm mới, ${result.updated} cập nhật`)
+      auditDetailWithPosition(
+        user,
+        `${result.created} điểm mới, ${result.updated} cập nhật, ${result.scheduled} lên lịch theo dõi`
+      )
     );
-    return ok({ validCount: normalized.length, errors: [], preview: normalized.slice(0, 50), ...result });
+    return ok({
+      validCount: normalized.length,
+      willSchedule: normalized.filter((r) => r.lastReplacedAt).length,
+      errors: [],
+      preview: normalized.slice(0, 50),
+      ...result,
+    });
   });
 }

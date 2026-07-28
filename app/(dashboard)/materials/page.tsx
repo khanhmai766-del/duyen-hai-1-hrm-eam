@@ -27,9 +27,10 @@ import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { useCreateReplacement } from "@/hooks/useReplacements";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, blockForPosition, canManageMaterialCatalog, materialCategoryMatches } from "@/lib/constants";
+import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, canManageMaterialCatalog, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
-import { cn, formatDateInput } from "@/lib/utils";
+import { parseScope, scopeCode } from "@/lib/equipment-units";
+import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
 
 // Tab tổ máy — key trùng giá trị Material.machine (S1 | S2 | COMMON).
@@ -246,15 +247,15 @@ function MaterialsPageContent() {
    * Dùng đúng thứ tự sắp xếp như bảng: gom theo hệ thống, rồi thiết bị theo thứ tự tự nhiên.
    */
   function exportReplacementPointsCsv() {
-    const header = [
-      "Loại vật tư", "Tên vật tư", "Mã ERP", "ĐVT", "Tổ máy",
-      "Hệ thống / thiết bị", "Thiết bị", "Cương vị quản lý",
-      "SL thiết bị", "Chu kỳ O&M", "Chu kỳ thay thế", "Số lượng cần thay",
-    ];
+    // Xuất ĐÚNG bộ cột của form nhập (IMPORT_HEADERS) + cột "Lần thay gần nhất" để người
+    // dùng điền ngày rồi tải lại lên → hệ thống tạo lịch theo dõi. Hai cột cuối chỉ để
+    // tham chiếu, KHÔNG được đọc khi nhập lại.
+    const header = [...IMPORT_HEADERS, "Loại vật tư (tham chiếu)", "ĐVT (tham chiếu)", "Tổng nhu cầu 1 chu kỳ (tham chiếu)"];
     const rows: (string | number)[][] = [];
     const sortedMaterials = materials.slice().sort((a, b) => compareNatural(a.name, b.name));
     for (const m of sortedMaterials) {
-      const points = (m.replacements ?? [])
+      const all = m.replacements ?? [];
+      const points = all
         .filter((r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter))
         .slice()
         .sort((a, b) => {
@@ -263,18 +264,31 @@ function MaterialsPageContent() {
           return compareNatural(systemOf(a), systemOf(b)) || compareNatural(deviceOf(a), deviceOf(b));
         });
       for (const p of points) {
+        // Ngày thay gần nhất nằm ở ĐIỂM THEO DÕI (isActive=true) tương ứng, không ở dòng
+        // khai báo — xuất ra để lần sau thấy ngày đang có, sửa rồi tải lại.
+        const tracking = all.find(
+          (r) =>
+            r.isActive &&
+            (p.deviceSeq
+              ? r.deviceSeq === p.deviceSeq
+              : r.deviceSeq === null && r.system === p.system && r.location === p.location)
+        );
         rows.push([
-          m.category ?? "",
           m.name,
           materialErpCodes(m).join(" / "),
-          m.unit ?? "",
           m.machine ?? "COMMON",
-          p.device?.system || p.system || p.device?.name || "",
+          p.device?.system || p.system || "",
+          // Mã theo tổ máy của vật tư (S2 → DH1.S2…) — khi nhập lại được quy về mã chuẩn.
+          p.deviceSeq ? scopeCode(p.deviceSeq, parseScope(m.machine)) : "",
           p.device?.name || p.location || "",
           p.managingPosition || "",
           p.deviceCount ?? 1,
+          p.quantity, // per thiết bị — khớp đúng nghĩa cột của form nhập
           p.intervalNote || "",
           p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`,
+          tracking?.lastReplacedAt ? formatDate(tracking.lastReplacedAt) : "",
+          m.category ?? "",
+          m.unit ?? "",
           p.quantity * (p.deviceCount || 1),
         ]);
       }
@@ -283,18 +297,18 @@ function MaterialsPageContent() {
       toast.error("Không có điểm thay thế nào trong danh sách đang hiển thị");
       return;
     }
-    const sheet = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    // Dấu ; + BOM UTF-8: Excel tiếng Việt mở đúng cột và không lỗi font.
-    const csv = XLSX.utils.sheet_to_csv(sheet, { FS: ";" });
-    const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `diem-thay-the_${machineTab}_${categoryFilter}_${new Date().toISOString().slice(0, 10)}.csv`
-      .replace(/\s+/g, "-")
-      .toLowerCase();
-    a.click();
-    URL.revokeObjectURL(url);
+    // Xuất .xlsx để cột ngày giữ nguyên định dạng dd/mm/yyyy và tải lại được ngay
+    // (CSV dấu ; hay bị Excel tự đổi kiểu ngày theo locale máy).
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws["!cols"] = [32, 18, 8, 26, 22, 26, 18, 12, 16, 14, 18, 18, 16, 8, 16].map((wch) => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, ws, "Nhập điểm thay thế");
+    XLSX.writeFile(
+      wb,
+      `diem-thay-the_${machineTab}_${categoryFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`
+        .replace(/\s+/g, "-")
+        .toLowerCase()
+    );
     toast.success(`Đã xuất ${rows.length} điểm thay thế của ${sortedMaterials.length} vật tư`);
   }
 
@@ -1174,14 +1188,27 @@ type ImportParsedRow = {
   quantity?: number;
   intervalNote?: string;
   intervalMonths?: number;
+  lastReplacedAt?: string; // ISO yyyy-mm-dd — điền ngày này là bật lịch theo dõi
 };
 
 type ImportResult = {
   validCount: number;
+  willSchedule: number; // số dòng có "Lần thay gần nhất" → sẽ lên lịch theo dõi
   errors: { rowNumber: number; message: string }[];
-  preview: Array<{ rowNumber: number; materialName: string; deviceLabel: string; system: string | null; deviceCount: number; quantity: number; unit: string; intervalMonths: number }>;
+  preview: Array<{
+    rowNumber: number;
+    materialName: string;
+    deviceLabel: string;
+    system: string | null;
+    deviceCount: number;
+    quantity: number;
+    unit: string;
+    intervalMonths: number;
+    lastReplacedAt: string | null;
+  }>;
   created: number;
   updated: number;
+  scheduled: number; // số điểm đã lên lịch theo dõi
 };
 
 // Thứ tự cột file mẫu — (*) = bắt buộc.
@@ -1197,12 +1224,15 @@ const IMPORT_HEADERS = [
   "Số lượng cần thay / thiết bị (*)",
   "Chu kỳ O&M",
   "Chu kỳ thay thế (tháng) (*)",
+  "Lần thay gần nhất (dd/mm/yyyy)",
 ];
 
 // Nhận diện cột theo tên tiêu đề (fold dấu) — bền với thứ tự/biến thể chữ.
 function detectImportColumn(header: unknown): keyof ImportParsedRow | null {
   const h = normalizeText(String(header ?? "")).replace(/\s+/g, " ");
   if (!h) return null;
+  // File XUẤT có vài cột đuôi "(tham chiếu)" chỉ để người dùng đối chiếu — không nhập lại.
+  if (h.includes("tham chieu")) return null;
   if (h.includes("erp")) return "erpCode";
   if (h.includes("ten vat tu") || h === "vat tu") return "materialName";
   if (h.includes("to may")) return "machine";
@@ -1211,10 +1241,40 @@ function detectImportColumn(header: unknown): keyof ImportParsedRow | null {
   if (h.includes("ten thiet bi")) return "deviceName";
   if (h.includes("cuong vi")) return "managingPosition";
   if (h.includes("so luong thiet bi")) return "deviceCount";
+  // "Lần thay gần nhất" phải xét TRƯỚC "chu ky thay the" (cả hai chứa "thay").
+  if (h.includes("lan thay") || h.includes("gan nhat") || h.includes("ngay thay")) return "lastReplacedAt";
   if (h.includes("can thay")) return "quantity";
   if (h.includes("chu ky thay the")) return "intervalMonths";
   if (h.includes("chu ky")) return "intervalNote";
   return null;
+}
+
+/**
+ * Ô ngày trong Excel: có thể là số serial (Excel), Date, hoặc chuỗi dd/mm/yyyy —
+ * chuẩn hoá về "yyyy-mm-dd" để gửi lên server. Ô trống → "".
+ * Ô CÓ chữ nhưng đọc không ra ngày → trả nguyên chuỗi gốc để server báo lỗi đúng dòng,
+ * thay vì lặng lẽ bỏ qua khiến người dùng tưởng đã lên lịch.
+ */
+function parseDateCell(value: unknown): string {
+  const toIso = (d: Date) =>
+    Number.isNaN(d.getTime())
+      ? ""
+      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  if (value instanceof Date) return toIso(value);
+  // Số serial Excel (gốc 1899-12-30), bỏ phần giờ.
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return toIso(new Date(Date.UTC(1899, 11, 30) + Math.round(value) * 86400000));
+  }
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  // dd/mm/yyyy hoặc dd-mm-yyyy (định dạng người dùng nhập tay)
+  const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (dmy) return toIso(new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])));
+  // yyyy-mm-dd
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (ymd) return toIso(new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])));
+  return s; // không đọc được → giữ nguyên để server báo lỗi dòng
 }
 
 // "12 tháng" / 12 / "Không theo dõi lịch" → số tháng.
@@ -1276,7 +1336,7 @@ function ImportReplacementsDialog({
 
     // Sheet 1 — form nhập (chỉ có dòng tiêu đề, người dùng điền tiếp).
     const ws1 = XLSX.utils.aoa_to_sheet([IMPORT_HEADERS]);
-    ws1["!cols"] = [32, 16, 8, 28, 16, 26, 18, 12, 18, 14, 18].map((wch) => ({ wch }));
+    ws1["!cols"] = [32, 18, 8, 26, 22, 26, 18, 12, 16, 14, 18, 18].map((wch) => ({ wch }));
     XLSX.utils.book_append_sheet(wb, ws1, "Nhập điểm thay thế");
 
     // Sheet 2 — danh mục vật tư đang theo dõi (tham chiếu để điền đúng tên).
@@ -1298,6 +1358,13 @@ function ImportReplacementsDialog({
       ["• Cột có (*) là bắt buộc.", ""],
       ["• Tải lại lên hệ thống: điểm đã có sẽ được CẬP NHẬT, điểm mới sẽ được THÊM.", ""],
       ["", ""],
+      ["CÁCH THÊM LỊCH THEO DÕI THAY THẾ", ""],
+      ["• Bấm “Xuất điểm thay thế” để lấy file có sẵn toàn bộ điểm đang khai báo.", ""],
+      ["• Điền cột “Lần thay gần nhất” (dd/mm/yyyy) cho những điểm cần theo dõi.", ""],
+      ["• Tải file đó lên lại — hệ thống tự tạo/cập nhật lịch theo dõi, hạn kế tiếp = ngày thay gần nhất + chu kỳ.", ""],
+      ["• Để TRỐNG cột ngày = chỉ khai báo, KHÔNG lên lịch theo dõi.", ""],
+      ["• Chu kỳ thay thế = 0 thì không lên lịch, dù có điền ngày.", ""],
+      ["", ""],
       ["Cột", "Ý nghĩa"],
       ["Tên vật tư (*)", "Tên vật tư trong danh mục (xem sheet Danh mục vật tư)."],
       ["Mã ERP", "Điền khi tên vật tư bị trùng, để xác định đúng vật tư."],
@@ -1310,11 +1377,14 @@ function ImportReplacementsDialog({
       ["Số lượng cần thay / thiết bị (*)", "Dung tích/số lượng cần thay cho MỖI thiết bị (theo ĐVT của vật tư)."],
       ["Chu kỳ O&M", "Ghi chú chu kỳ theo giờ vận hành, ví dụ 2500h (tuỳ chọn)."],
       ["Chu kỳ thay thế (tháng) (*)", "Số tháng giữa 2 lần thay. 0 = chỉ khai báo, không theo dõi lịch."],
+      ["Lần thay gần nhất (dd/mm/yyyy)", "Ngày thay thực tế gần nhất. ĐIỀN vào là bật lịch theo dõi cho điểm này (hạn kế tiếp = ngày này + chu kỳ). Để trống = chỉ khai báo, không lên lịch."],
       ["", ""],
-      ["VÍ DỤ 1 (theo hệ thống, không cần mã)", ""],
-      ["Dầu Shell Turbo T32 | (trống) | S1 | Hệ thống dầu điều khiển | (trống) | Bơm dầu chính | Trưởng ca VH | 2 | 40 | 8000h | 12", ""],
-      ["VÍ DỤ 2 (liên kết thiết bị bằng mã cây)", ""],
-      ["Dầu Shell Turbo T32 | (trống) | S1 | (trống) | DH1.S1.1.1.1.1 | Quạt gió PAF A | Trưởng ca VH | 1 | 20 | 8000h | 12", ""],
+      ["VÍ DỤ 1 (theo hệ thống, không cần mã — chỉ khai báo)", ""],
+      ["Dầu Shell Turbo T32 | (trống) | S1 | Hệ thống dầu điều khiển | (trống) | Bơm dầu chính | Trưởng ca VH | 2 | 40 | 8000h | 12 | (trống)", ""],
+      ["VÍ DỤ 2 (liên kết thiết bị bằng mã cây + lên lịch theo dõi)", ""],
+      ["Dầu Shell Turbo T32 | (trống) | S1 | (trống) | DH1.S1.1.1.1.1 | Quạt gió PAF A | Trưởng ca VH | 1 | 20 | 8000h | 12 | 15/03/2026", ""],
+      ["VÍ DỤ 3 (vật tư tổ máy S2 — dùng mã DH1.S2…)", ""],
+      ["Dầu Total Preslia 68 | (trống) | S2 | (trống) | DH1.S2.1.1.1.2.1 | Bồn dầu | Thải xỉ | 1 | 630 | 8000h | 12 | 01/07/2026", ""],
     ];
     const ws3 = XLSX.utils.aoa_to_sheet(guide);
     ws3["!cols"] = [32, 78].map((wch) => ({ wch }));
@@ -1342,7 +1412,8 @@ function ImportReplacementsDialog({
     setFileName(file.name);
     try {
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      // cellDates: ô ngày về đúng Date thay vì số serial → parseDateCell đọc chắc tay hơn.
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
       const sheetName = wb.SheetNames.find((n) => normalizeText(n).includes("nhap diem")) ?? wb.SheetNames[0];
       const ws = wb.Sheets[sheetName];
       const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: "" });
@@ -1386,6 +1457,7 @@ function ImportReplacementsDialog({
           quantity: parseIntCell(num(row, "quantity")),
           intervalNote: str(row, "intervalNote"),
           intervalMonths: parseMonths(num(row, "intervalMonths")),
+          lastReplacedAt: parseDateCell(num(row, "lastReplacedAt")),
         });
       }
       if (!parsed.length) throw new Error("Không có dòng dữ liệu hợp lệ trong file");
@@ -1406,7 +1478,10 @@ function ImportReplacementsDialog({
     setBusy(true);
     try {
       const res = await runImport(rows, false);
-      toast.success(`Đã nhập ${res.created} điểm mới, cập nhật ${res.updated} điểm thay thế`);
+      toast.success(
+        `Đã nhập ${res.created} điểm mới, cập nhật ${res.updated} điểm` +
+          (res.scheduled > 0 ? `, lên lịch theo dõi ${res.scheduled} điểm` : "")
+      );
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["device-material-options"] });
       close();
@@ -1464,6 +1539,13 @@ function ImportReplacementsDialog({
                   {rows.length} dòng đọc được · {result.validCount} hợp lệ
                   {hasErrors && ` · ${result.errors.length} lỗi`}
                 </span>
+                {!hasErrors && (
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-accent ring-1 ring-blue-200">
+                    {result.willSchedule > 0
+                      ? `${result.willSchedule} điểm sẽ lên lịch theo dõi (có Lần thay gần nhất)`
+                      : "Chưa điền “Lần thay gần nhất” — chỉ khai báo, không lên lịch"}
+                  </span>
+                )}
               </div>
 
               {hasErrors ? (
@@ -1495,6 +1577,8 @@ function ImportReplacementsDialog({
                         <th className="px-3 py-2 text-center font-medium">SL TB</th>
                         <th className="px-3 py-2 text-center font-medium">Cần thay</th>
                         <th className="px-3 py-2 text-center font-medium">Chu kỳ</th>
+                        <th className="px-3 py-2 text-center font-medium">Lần thay gần nhất</th>
+                        <th className="px-3 py-2 text-center font-medium">Hạn kế tiếp</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1505,6 +1589,14 @@ function ImportReplacementsDialog({
                           <td className="px-3 py-1.5 text-center text-ink">{p.deviceCount}</td>
                           <td className="px-3 py-1.5 text-center text-ink">{p.quantity * p.deviceCount} {p.unit}</td>
                           <td className="px-3 py-1.5 text-center text-ink">{p.intervalMonths === 0 ? "—" : `${p.intervalMonths} th`}</td>
+                          <td className="px-3 py-1.5 text-center text-ink">
+                            {p.lastReplacedAt ? formatDate(p.lastReplacedAt) : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-3 py-1.5 text-center text-ink">
+                            {p.lastReplacedAt
+                              ? formatDate(addMonths(new Date(p.lastReplacedAt), p.intervalMonths))
+                              : <span className="text-muted-foreground">chưa lên lịch</span>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
