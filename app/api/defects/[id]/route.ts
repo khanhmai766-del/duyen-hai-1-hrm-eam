@@ -8,10 +8,11 @@ import { deleteFromS3, maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
-import { normalizeDefectSeverityCriteria } from "@/lib/constants";
+import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/constants";
 import { validateDefectImages } from "@/lib/defect-images";
 import { parseReminderCount } from "@/lib/defect-reminder";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
+import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -58,6 +59,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ? existing.reminderCount
       : parseReminderCount(body.reminderCount);
     if (reminderCount === null) return fail("Số lần nhắc lại phải là số nguyên không âm");
+    const content = body.content === undefined ? String(existing.content ?? "").trim() : String(body.content ?? "").trim();
+    if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
     const relatedDeviceSeqs = body.relatedDeviceSeqs === undefined
       ? undefined
       : normalizeRelatedDeviceSeqs(body.relatedDeviceSeqs, body.device ?? existing.deviceSeq ?? existing.device);
@@ -86,19 +89,29 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         select: { seq: true, parentSeq: true },
       });
       const parentBySeq = new Map(equipmentNodes.map((node) => [node.seq, node.parentSeq]));
+      const seqsWithChildren = new Set(
+        equipmentNodes.map((node) => node.parentSeq).filter((seq): seq is string => !!seq)
+      );
       if (!parentBySeq.has(requestedSystemSeq)) return fail("Hệ thống đã chọn không tồn tại");
       if (!parentBySeq.has(requestedDeviceSeq)) return fail("Thiết bị đã chọn không tồn tại");
-
-      let cursor: string | null = requestedDeviceSeq;
-      let belongsToSystem = false;
-      while (cursor) {
-        if (cursor === requestedSystemSeq) {
-          belongsToSystem = true;
-          break;
-        }
-        cursor = parentBySeq.get(cursor) ?? null;
+      if (seqsWithChildren.has(requestedDeviceSeq)) {
+        return fail("Thiết bị chính phải là thiết bị cấp cuối trong Hệ thống");
       }
-      if (!belongsToSystem) return fail("Thiết bị đã chọn không thuộc Hệ thống đang ánh xạ");
+      if (relatedDeviceSeqs?.some((seq) => seqsWithChildren.has(seq))) {
+        return fail("Thiết bị liên quan phải là thiết bị cấp cuối trong Hệ thống");
+      }
+
+      function belongsToSelectedSystem(seq: string) {
+        let cursor: string | null = seq;
+        while (cursor) {
+          if (cursor === requestedSystemSeq) return true;
+          cursor = parentBySeq.get(cursor) ?? null;
+        }
+        return false;
+      }
+      if (!belongsToSelectedSystem(requestedDeviceSeq)) {
+        return fail("Thiết bị chính không thuộc Hệ thống đang ánh xạ");
+      }
 
       const existingImages = existing.images.length > 0
         ? existing.images
@@ -187,6 +200,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           ? (await prisma.equipmentNode.findUnique({ where: { seq: String(body.device) }, select: { seq: true } }))?.seq ?? null
           : null
         : undefined;
+    const commonSubUnit = body.unit !== undefined
+      ? (body.unit === "COMMON" ? String(body.commonSubUnit ?? "").trim() : null)
+      : undefined;
+    if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
+      return fail("Vui lòng chọn BOP hoặc CHUNG");
+    }
     const nextStatus = body.status !== undefined ? String(body.status) : existing.status;
     const completedAt =
       nextStatus === "DA_XU_LY" && existing.status !== "DA_XU_LY"
@@ -194,57 +213,64 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         : nextStatus !== "DA_XU_LY" && existing.status === "DA_XU_LY"
           ? null
           : undefined;
-    const defect = await prisma.defect.update({
-      where: { id: params.id },
-      data: {
-        createdById: user.id,
-        unit: body.unit,
-        device: body.device !== undefined ? body.device || null : undefined,
-        deviceSeq,
-        system: body.system !== undefined ? body.system || null : undefined,
-        severity: body.severity !== undefined ? body.severity || null : undefined,
-        severityCriteria:
-          body.severity !== undefined || body.severityCriteria !== undefined
-            ? normalizeDefectSeverityCriteria(body.severity ?? existing.severity, body.severityCriteria ?? existing.severityCriteria)
-            : undefined,
-        condition: body.condition !== undefined ? body.condition || null : undefined,
-        requestType: body.requestType !== undefined ? body.requestType || null : undefined,
-        requestNumber: body.requestNumber !== undefined ? body.requestNumber?.trim() || null : undefined,
-        content: body.content !== undefined ? body.content?.trim() || null : undefined,
-        status: body.status,
-        completedAt,
-        detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? parseDateInput(body.detectedAt) : null) : undefined,
-        reminderCount: body.reminderCount !== undefined ? reminderCount : undefined,
-        lastRemindedAt:
-          reminderCount === 0
-            ? null
-            : body.lastRemindedAt !== undefined
-              ? body.lastRemindedAt
-                ? parseDateInput(body.lastRemindedAt)
-                : null
+    const defect = await prisma.$transaction(async (tx) => {
+      const updated = await tx.defect.update({
+        where: { id: params.id },
+        data: {
+          createdById: user.id,
+          unit: body.unit,
+          commonSubUnit,
+          device: body.device !== undefined ? body.device || null : undefined,
+          deviceSeq,
+          system: body.system !== undefined ? body.system || null : undefined,
+          severity: body.severity !== undefined ? body.severity || null : undefined,
+          severityCriteria:
+            body.severity !== undefined || body.severityCriteria !== undefined
+              ? normalizeDefectSeverityCriteria(body.severity ?? existing.severity, body.severityCriteria ?? existing.severityCriteria)
               : undefined,
-        shiftLeaderId: body.shiftLeaderId !== undefined ? shiftLeader?.id ?? null : undefined,
-        shiftLeaderName: body.shiftLeaderId !== undefined ? shiftLeader?.name ?? null : undefined,
-        note: body.note !== undefined ? body.note?.trim() || null : undefined,
-        images,
-        // Khi gửi 1 trong 2 trường ảnh hưởng thì cập nhật cả hai (giữ nguyên hành vi cũ);
-        // không gửi gì thì để undefined → Prisma bỏ qua, không đổi giá trị.
-        fireSafetyImpact:
-          body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined
-            ? normalizeImpactValue(body.fireSafetyImpact)
+          condition: body.condition !== undefined ? body.condition || null : undefined,
+          requestType: body.requestType !== undefined ? body.requestType || null : undefined,
+          // Số yêu cầu không cho sửa qua API — chỉ hệ thống tự cấp lúc tạo mới.
+          content: body.content !== undefined ? content : undefined,
+          repeatedRepairRaw: body.repeatedRepairRaw !== undefined ? body.repeatedRepairRaw?.trim() || null : undefined,
+          sourceDeviceRaw: body.sourceDeviceRaw !== undefined ? body.sourceDeviceRaw?.trim() || null : undefined,
+          status: body.status,
+          completedAt,
+          detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? parseDateInput(body.detectedAt) : null) : undefined,
+          reminderCount: body.reminderCount !== undefined ? reminderCount : undefined,
+          lastRemindedAt:
+            reminderCount === 0
+              ? null
+              : body.lastRemindedAt !== undefined
+                ? body.lastRemindedAt
+                  ? parseDateInput(body.lastRemindedAt)
+                  : null
+                : undefined,
+          shiftLeaderId: body.shiftLeaderId !== undefined ? shiftLeader?.id ?? null : undefined,
+          shiftLeaderName: body.shiftLeaderId !== undefined ? shiftLeader?.name ?? null : undefined,
+          note: body.note !== undefined ? body.note?.trim() || null : undefined,
+          images,
+          // Khi gửi 1 trong 2 trường ảnh hưởng thì cập nhật cả hai (giữ nguyên hành vi cũ);
+          // không gửi gì thì để undefined → Prisma bỏ qua, không đổi giá trị.
+          fireSafetyImpact:
+            body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined
+              ? normalizeImpactValue(body.fireSafetyImpact)
+              : undefined,
+          environmentSafetyImpact:
+            body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined
+              ? normalizeImpactValue(body.environmentSafetyImpact)
+              : undefined,
+          relatedDevices: relatedDeviceSeqs
+            ? {
+                deleteMany: {},
+                create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
+              }
             : undefined,
-        environmentSafetyImpact:
-          body.fireSafetyImpact !== undefined || body.environmentSafetyImpact !== undefined
-            ? normalizeImpactValue(body.environmentSafetyImpact)
-            : undefined,
-        relatedDevices: relatedDeviceSeqs
-          ? {
-              deleteMany: {},
-              create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
-            }
-          : undefined,
-      },
-      include: INCLUDE,
+        },
+        include: INCLUDE,
+      });
+      await enqueueDefectSyncEvent(tx, { defect: updated, eventType: "UPDATE" });
+      return updated;
     });
     if (images) {
       const retained = new Set(images);

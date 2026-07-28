@@ -1,0 +1,9 @@
+ALTER TABLE "Defect"
+  ADD COLUMN IF NOT EXISTS "repairOrderNumberRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairSolutionRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairPlanRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairUnitRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairPerformedByRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairStartedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "repairPerformedContentRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "repairNoteRaw" TEXT;

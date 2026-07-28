@@ -5,6 +5,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { deleteFromS3, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 
 const HISTORY_PENDING_DAYS = 14;
 
@@ -33,19 +34,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       include: { relatedDevices: { select: { deviceSeq: true } } },
     });
     if (!defect) return fail("Không tìm thấy khiếm khuyết", 404);
-    if (defect.sourceType === "GOOGLE_SHEETS" && defect.status !== "DA_XU_LY") {
+    const sheetOrigin = defect.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
+    if (sheetOrigin && defect.status !== "DA_XU_LY") {
       return fail("Chỉ xác nhận lịch sử khi Google Sheet đã ghi nhận khiếm khuyết được xử lý");
     }
-    if (defect.sourceType === "GOOGLE_SHEETS" && !defect.deviceSeq) {
+    if (sheetOrigin && !defect.deviceSeq) {
       return fail("Vui lòng lưu ánh xạ thiết bị trước khi xác nhận đưa vào lịch sử");
     }
-    if (defect.sourceType === "GOOGLE_SHEETS" && defect.postRepairAwaitingMaterial) {
+    if (sheetOrigin && defect.postRepairAwaitingMaterial) {
       return fail("Phiếu đang được đánh dấu chờ vật tư; vui lòng bỏ đánh dấu Tồn đọng trước khi xác nhận");
     }
     if (defect.syncState === "CONFIRMED") {
       return fail("Khiếm khuyết này đã được xác nhận vào lịch sử");
     }
-    if (defect.sourceType === "GOOGLE_SHEETS") {
+    if (sheetOrigin) {
       const pending = await prisma.defectHistoryPending.findUnique({
         where: { defectId: defect.id },
         select: { finalizeAt: true },
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const performedAt = body.performedAt ? parseDateInput(body.performedAt) : new Date();
 
-    if (defect.sourceType === "GOOGLE_SHEETS") {
+    if (sheetOrigin) {
       const startedAt = new Date();
       const finalizeAt = new Date(startedAt.getTime() + HISTORY_PENDING_DAYS * 24 * 60 * 60 * 1000);
       const pending = await prisma.$transaction(async (tx) => {
@@ -112,10 +114,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Ảnh ghi nhận ban đầu chỉ tồn tại trong vòng đời phiếu đang xử lý.
     // Khi xác nhận lịch sử, xoá ảnh khỏi S3 và không nhận thêm ảnh ở bước này.
     const originalImages = defect.images.length > 0 ? defect.images : defect.imageUrl ? [defect.imageUrl] : [];
-    await Promise.all(originalImages.map((url) => deleteFromS3(url)));
 
-    const [history] = await prisma.$transaction([
-      prisma.defectHistory.create({
+    const history = await prisma.$transaction(async (tx) => {
+      const createdHistory = await tx.defectHistory.create({
         data: {
           defectId: defect.id,
           unit: defect.unit,
@@ -140,8 +141,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           },
         },
         include: HISTORY_INCLUDE,
-      }),
-      prisma.defect.update({
+      });
+      const updatedDefect = await tx.defect.update({
         where: { id: defect.id },
         data: {
           createdById: user.id,
@@ -157,10 +158,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           confirmedById: defect.confirmedById,
           confirmedByName: defect.confirmedByName,
         },
-      }),
-    ]);
+      });
+      if (defect.websiteCreated) {
+        await enqueueDefectSyncEvent(tx, { defect: updatedDefect, eventType: "UPDATE" });
+      }
+      return createdHistory;
+    });
 
     await audit(user.id, "COMPLETE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user, defect.requestNumber));
+
+    const imageCleanupResults = await Promise.allSettled(originalImages.map((url) => deleteFromS3(url)));
+    for (const cleanupResult of imageCleanupResults) {
+      if (cleanupResult.status === "rejected") {
+        console.error("[complete defect] Không thể xóa ảnh ghi nhận ban đầu", cleanupResult.reason);
+      }
+    }
+
     return ok({ ...history, createdBy: publicUserRef(history.createdBy) });
   });
 }

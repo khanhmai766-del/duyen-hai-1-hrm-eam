@@ -11,9 +11,25 @@ import {
 export const N8N_DEFECT_SOURCES = ["CO", "DIEN"] as const;
 export type N8nDefectSource = (typeof N8N_DEFECT_SOURCES)[number];
 
-export const N8N_DEFECT_SOURCE_SPREADSHEET_IDS: Record<N8nDefectSource, string> = {
+const PRODUCTION_SOURCE_SPREADSHEET_IDS: Record<N8nDefectSource, string> = {
   CO: "1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA",
   DIEN: "1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ",
+};
+
+function configuredSpreadsheetId(source: N8nDefectSource) {
+  const envName = source === "CO"
+    ? "N8N_DEFECT_CO_SPREADSHEET_ID"
+    : "N8N_DEFECT_DIEN_SPREADSHEET_ID";
+  return process.env[envName]?.trim() || PRODUCTION_SOURCE_SPREADSHEET_IDS[source];
+}
+
+/**
+ * Mặc định luôn là Sheet production. Chỉ môi trường kiểm thử chủ động đặt hai
+ * biến N8N_DEFECT_*_SPREADSHEET_ID mới được nhận snapshot từ Sheet bản sao.
+ */
+export const N8N_DEFECT_SOURCE_SPREADSHEET_IDS: Record<N8nDefectSource, string> = {
+  CO: configuredSpreadsheetId("CO"),
+  DIEN: configuredSpreadsheetId("DIEN"),
 };
 
 const MAX_BATCH_SIZE = 500;
@@ -40,7 +56,11 @@ function isSource(value: unknown): value is N8nDefectSource {
 }
 
 export function verifyN8nDefectToken(authorization: string | null) {
-  const expected = process.env.N8N_DEFECT_SYNC_TOKEN?.trim() ?? "";
+  const expected = (
+    process.env.N8N_DEFECT_SYNC_TOKEN
+    || process.env.N8N_DEFECT_TWO_WAY_SYNC_TOKEN
+    || ""
+  ).trim();
   const received = authorization?.replace(/^Bearer\s+/i, "").trim() ?? "";
   if (!expected || !received) return false;
   const expectedHash = createHash("sha256").update(expected).digest();
@@ -103,8 +123,16 @@ export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
       severityRaw: text(row.severityRaw, `records[${index}].severityRaw`, 100),
       conditionRaw: text(row.conditionRaw, `records[${index}].conditionRaw`, 100),
       sourceStatusRaw: text(row.sourceStatusRaw, `records[${index}].sourceStatusRaw`, 2_000),
+      repairOrderNumberRaw: text(row.repairOrderNumberRaw, `records[${index}].repairOrderNumberRaw`, 2_000),
+      repairSolutionRaw: text(row.repairSolutionRaw, `records[${index}].repairSolutionRaw`),
+      repairPlanRaw: text(row.repairPlanRaw, `records[${index}].repairPlanRaw`),
+      repairUnitRaw: text(row.repairUnitRaw, `records[${index}].repairUnitRaw`, 2_000),
       repairResultRaw: text(row.repairResultRaw, `records[${index}].repairResultRaw`),
+      repairPerformedByRaw: text(row.repairPerformedByRaw, `records[${index}].repairPerformedByRaw`, 2_000),
+      repairStartedAtRaw: text(row.repairStartedAtRaw, `records[${index}].repairStartedAtRaw`, 100),
       completedAtRaw: text(row.completedAtRaw, `records[${index}].completedAtRaw`, 100),
+      repairPerformedContentRaw: text(row.repairPerformedContentRaw, `records[${index}].repairPerformedContentRaw`),
+      repairNoteRaw: text(row.repairNoteRaw, `records[${index}].repairNoteRaw`),
       noteRaw: text(row.noteRaw, `records[${index}].noteRaw`),
     };
   });

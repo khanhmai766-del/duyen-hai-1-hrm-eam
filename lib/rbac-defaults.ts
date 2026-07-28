@@ -25,6 +25,7 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "repair-approve": { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
   "defect-manage": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "create", VIEWER: "read" },
   "defect-close": { ADMIN: "full", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+  "defect-two-way-sync": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "material-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "replacement-manage": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   "announcement-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },

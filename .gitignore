@@ -38,3 +38,6 @@ scripts/data/equipment-dedupe-backup-*.json
 
 # Index cuc bo cua CodeGraph (khong dua vao git)
 /.codegraph/
+
+# Dữ liệu n8n chạy thử trực tiếp trên máy, tách biệt hoàn toàn n8n production
+/.n8n-local/

@@ -19,15 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { defectDetailQuery, useDefect, useDefects, useDefectSyncStatus, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
-import { usePositions } from "@/hooks/useUsers";
+import { defectDetailQuery, useDefect, useDefects, useDefectSyncStatus, useDefectTwoWaySync, useDeleteDefect, useRemindDefect, useSetDefectTwoWaySync, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
+import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
   DEFECT_SEVERITY,
   DEFECT_SEVERITY_ORDER,
   DEFECT_REQUEST_TYPES,
-  defectSeverityCriteriaLabels,
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
@@ -281,9 +280,17 @@ export default function DefectsPage() {
 
   const del = useDeleteDefect();
   const remind = useRemindDefect();
+  const usersQuery = useUsers();
+  const shiftLeaders = React.useMemo(
+    () => (usersQuery.data?.data ?? []).filter((user) =>
+      user.isActive && String(user.position ?? "").toLocaleLowerCase("vi").includes("trưởng ca")
+    ),
+    [usersQuery.data?.data]
+  );
   const sync = useSyncDefects();
   const canRunSync = rbac.can("defect-manage", ["full"]);
   const canViewSync = rbac.can("defect-manage", ["manage", "full"]);
+  const canManageTwoWaySync = rbac.can("defect-two-way-sync", ["full"]);
   const syncStatus = useDefectSyncStatus(canViewSync);
   const latestSyncRun = syncStatus.data?.data?.[0];
   const syncRunning = latestSyncRun?.status === "RUNNING";
@@ -401,6 +408,7 @@ export default function DefectsPage() {
   const [delTarget, setDelTarget] = React.useState<DefectItem | null>(null);
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
   const [remindTarget, setRemindTarget] = React.useState<DefectItem | null>(null);
+  const [remindShiftLeaderId, setRemindShiftLeaderId] = React.useState("");
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = React.useState<string | null>(null);
 
@@ -462,6 +470,8 @@ export default function DefectsPage() {
       {canViewSync && latestSyncRun && (
         <DefectSyncSummary run={latestSyncRun} />
       )}
+
+      {canManageTwoWaySync && <DefectTwoWaySyncToggle />}
 
       {deviceSeqFilter && (
         <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -623,7 +633,7 @@ export default function DefectsPage() {
                 </TableHead>
                 <TableHead className="w-[112px] px-1 text-center">
                   <ColumnFilter
-                    label="Tình trạng"
+                    label="KQ Vận hành"
                     value={statusFilter}
                     options={[
                       { value: "SOURCE_MISSING", label: "Không còn trên Google Sheet" },
@@ -635,7 +645,7 @@ export default function DefectsPage() {
                     onChange={setStatusFilter}
                   />
                 </TableHead>
-                <TableHead className="w-[120px] px-1.5 text-center">Kết quả</TableHead>
+                <TableHead className="w-[120px] px-1.5 text-center">KQ Sửa chữa</TableHead>
                 <TableHead className="w-[64px] px-1 text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[84px] px-1 text-center">Phát hiện</TableHead>
                 <TableHead className="w-[72px] px-1 text-center">Cập nhật</TableHead>
@@ -758,13 +768,13 @@ export default function DefectsPage() {
                       <TableCell className="px-1 py-3">
                         <div className="flex items-center justify-center gap-0">
                           {canManage && (
-                            (d.sourceType === "GOOGLE_SHEETS" && !!d.deviceSeq && !d.pendingHistory && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
-                            (d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY")
+                            (d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated && !!d.deviceSeq && !d.pendingHistory && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
+                            ((d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated) && d.status !== "DA_XU_LY")
                           ) && (
                             <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title="Hoàn thành" className="h-7 w-7 text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); void openComplete(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
                           )}
-                          {canManage && d.sourceType !== "GOOGLE_SHEETS" && d.status !== "DA_XU_LY" && (
-                            <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
+                          {canManage && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated) && d.status !== "DA_XU_LY" && (
+                            <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindShiftLeaderId(""); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
                           {canManage && (
                             <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
@@ -862,15 +872,32 @@ export default function DefectsPage() {
         loading={remind.isPending}
         onConfirm={async () => {
           if (!remindTarget) return;
+          if (!remindShiftLeaderId) {
+            toast.error("Vui lòng chọn Trưởng ca cho lần nhắc lại");
+            return;
+          }
           try {
-            const updated = await remind.mutateAsync(remindTarget.id);
+            const updated = await remind.mutateAsync({ id: remindTarget.id, shiftLeaderId: remindShiftLeaderId });
             toast.success(`Đã ghi nhận nhắc lại lần ${updated.reminderCount}`);
             setRemindTarget(null);
+            setRemindShiftLeaderId("");
           } catch (e) {
             toast.error((e as Error).message);
           }
         }}
-      />
+      >
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Trưởng ca <span className="text-destructive">*</span></label>
+          <Select value={remindShiftLeaderId} onValueChange={setRemindShiftLeaderId}>
+            <SelectTrigger><SelectValue placeholder="Chọn Trưởng ca" /></SelectTrigger>
+            <SelectContent>
+              {shiftLeaders.map((leader) => (
+                <SelectItem key={leader.id} value={leader.id}>{leader.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={!!delTarget}
@@ -984,6 +1011,58 @@ function DefectSyncSummary({ run }: { run: DefectSyncRun }) {
   );
 }
 
+// Cờ dự phòng cho giai đoạn đồng bộ HAI CHIỀU (ghi ngược lên Google Sheet) sau này.
+// Hiện tại chưa có tác vụ ghi ngược nào phụ thuộc vào cờ này — chỉ lưu trạng thái
+// bật/tắt để chuẩn bị hạ tầng, mặc định tắt và chỉ ADMIN/người được phân quyền thấy nút này.
+function DefectTwoWaySyncToggle() {
+  const query = useDefectTwoWaySync();
+  const setEnabled = useSetDefectTwoWaySync();
+  const enabled = query.data?.data?.twoWaySyncEnabled ?? false;
+
+  async function toggle() {
+    try {
+      await setEnabled.mutateAsync(!enabled);
+      toast.success(!enabled ? "Đã bật đồng bộ hai chiều (dự phòng)" : "Đã tắt đồng bộ hai chiều");
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="font-semibold text-ink">Đồng bộ hai chiều (dự phòng)</div>
+        <p className="text-xs text-muted-foreground">
+          Thiết kế cho giai đoạn phát triển sau — hiện đồng bộ khiếm khuyết vẫn chỉ một chiều Google Sheet → DH1.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2.5">
+        <span className={cn("text-xs font-semibold", enabled ? "text-emerald-700" : "text-muted-foreground")}>
+          {enabled ? "Đang bật" : "Đang tắt"}
+        </span>
+        <button
+          onClick={toggle}
+          disabled={query.isLoading || setEnabled.isPending}
+          title={enabled ? "Tắt đồng bộ hai chiều" : "Bật đồng bộ hai chiều"}
+          className={cn(
+            "relative h-7 w-12 shrink-0 rounded-full shadow-inner ring-1 transition-all duration-300 disabled:opacity-60",
+            enabled
+              ? "bg-gradient-to-b from-emerald-400 to-green-600 ring-green-700/30"
+              : "bg-gradient-to-b from-slate-200 to-slate-400 ring-slate-400/40"
+          )}
+        >
+          <span
+            className={cn(
+              "absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform duration-300",
+              enabled ? "translate-x-[20px]" : "translate-x-0"
+            )}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Bộ lọc gắn trên tiêu đề cột (nút phễu + danh sách lựa chọn), giống bảng Thiết bị.
 function ColumnFilter({
   label,
@@ -1057,25 +1136,16 @@ function ExpandedDefectDetails({ id }: { id: string }) {
 }
 
 function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
-  const severityCriteria = defectSeverityCriteriaLabels(
-    defect.severity,
-    defect.severityCriteria
-  );
-  const severity = severityCriteria.length > 0
-    ? severityCriteria.map((criterion) => `Mức ${defect.severity} · ${criterion}`).join("\n")
-    : defect.severity
-      ? DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] ?? defect.severity
-      : "—";
-  const status = DEFECT_STATUS[defect.status as keyof typeof DEFECT_STATUS]?.label ?? defect.status;
-  const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-3 shadow-sm";
+  const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-4 shadow-sm";
 
   return (
-    <div className="grid gap-5 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2">
+    <div className="grid gap-4 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2 xl:grid-cols-3">
       <div className={detailCardClass}>
-        <DetailLine label="Số yêu cầu" value={defect.requestNumber || "—"} />
+        <div className="mb-3 border-b border-blue-100 pb-2">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-blue-800">Thông tin Vận hành</h3>
+          <p className="text-xs text-muted-foreground">Thông tin bổ sung của phiếu Vận hành</p>
+        </div>
         <DetailLine label="Yêu cầu" value={defect.requestType || "—"} />
-        <DetailLine label="Tổ máy" value={defect.unit || "—"} />
-        <DetailLine label="Cương vị" value={defect.system || "—"} />
         <DetailLine label="Trưởng ca" value={defect.shiftLeaderName || "—"} />
         {defect.sourceType === "GOOGLE_SHEETS" && (
           <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
@@ -1091,42 +1161,22 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             : "—"}
           multiline
         />
-        <DetailLine label="Nội dung" value={defect.content || "—"} multiline />
       </div>
       <div className={detailCardClass}>
-        <DetailLine label="Mức độ" value={severity} multiline={severityCriteria.length > 0} />
-        <DetailLine label="Tình trạng" value={status} />
+        <div className="mb-3 border-b border-sky-100 pb-2">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-sky-800">Theo dõi Vận hành</h3>
+          <p className="text-xs text-muted-foreground">Ảnh hưởng, lịch sử nhắc lại và ghi chú</p>
+        </div>
         <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
         <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
-        <DetailLine label="Ngày phát hiện" value={formatDate(defect.detectedAt)} />
-        <DetailLine label="Số lần nhắc lại" value={`${defect.reminderCount} lần`} />
         <DetailLine label="Ngày nhắc gần nhất" value={defect.lastRemindedAt ? formatDate(defect.lastRemindedAt) : "—"} />
         {defect.sourceType === "GOOGLE_SHEETS" && (
           <>
             <DetailLine label="Nội dung nhắc lại" value={defect.reminderRaw || "—"} multiline />
             <DetailLine label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} multiline />
-            <DetailLine
-              label="Trạng thái đồng bộ"
-              value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
-            />
-            {defect.pendingHistory && (
-              <>
-                <DetailLine label="Xác nhận chờ lịch sử" value={formatDate(defect.pendingHistory.startedAt)} />
-                <DetailLine label="Dự kiến chốt lịch sử" value={formatDate(defect.pendingHistory.finalizeAt)} />
-              </>
-            )}
-            <DetailLine label="Trạng thái nguồn" value={defect.sourceStatusRaw || "—"} />
-            <DetailLine
-              label="Kết quả sửa chữa"
-              value={defect.sourceStatusMismatch
-                ? `⚠ ${defect.repairResultRaw || "—"} (khác tình trạng VH1)`
-                : defect.repairResultRaw || "—"}
-              multiline
-            />
-            <DetailLine label="Đồng bộ gần nhất" value={formatDate(defect.sourceSyncedAt)} />
           </>
         )}
-        <DetailLine label="Ghi chú" value={defect.note || "—"} multiline />
+        <DetailLine label="Ghi chú Vận hành" value={defect.note || "—"} multiline />
         <DetailLine label="Người cập nhật cuối" value={defect.createdBy?.name || "—"} />
         {defect.images.length > 0 && (
           <div className="pt-1">
@@ -1140,6 +1190,36 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
               ))}
             </div>
           </div>
+        )}
+      </div>
+      <div className={detailCardClass}>
+        <div className="mb-3 border-b border-emerald-100 pb-2">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-emerald-800">Nội dung Sửa chữa</h3>
+          <p className="text-xs text-muted-foreground">Kế hoạch, thực hiện và dữ liệu đồng bộ</p>
+        </div>
+        <DetailLine label="Số PCT/LCT" value={defect.repairOrderNumberRaw || "—"} />
+        <DetailLine label="Giải pháp sửa chữa" value={defect.repairSolutionRaw || "—"} multiline />
+        <DetailLine label="Kế hoạch thực hiện" value={defect.repairPlanRaw || "—"} multiline />
+        <DetailLine label="Đơn vị sửa chữa" value={defect.repairUnitRaw || "—"} multiline />
+        <DetailLine label="Người thực hiện" value={defect.repairPerformedByRaw || "—"} multiline />
+        <DetailLine label="Ngày thực hiện" value={formatDate(defect.repairStartedAt)} />
+        <DetailLine label="Ngày hoàn thành" value={formatDate(defect.sourceCompletedAt)} />
+        <DetailLine label="Nội dung đã thực hiện" value={defect.repairPerformedContentRaw || "—"} multiline />
+        <DetailLine label="Ghi chú Sửa chữa" value={defect.repairNoteRaw || "—"} multiline />
+        {defect.sourceType === "GOOGLE_SHEETS" && (
+          <>
+            <DetailLine
+              label="Trạng thái đồng bộ"
+              value={defect.syncState === "MISSING" ? "⚠ Không còn trên Google Sheet" : "Đang có trên Google Sheet"}
+            />
+            {defect.pendingHistory && (
+              <>
+                <DetailLine label="Xác nhận chờ lịch sử" value={formatDate(defect.pendingHistory.startedAt)} />
+                <DetailLine label="Dự kiến chốt lịch sử" value={formatDate(defect.pendingHistory.finalizeAt)} />
+              </>
+            )}
+            <DetailLine label="Đồng bộ gần nhất" value={formatDate(defect.sourceSyncedAt)} />
+          </>
         )}
       </div>
     </div>

@@ -9,10 +9,12 @@ import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
-import { normalizeDefectSeverityCriteria } from "@/lib/constants";
+import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/constants";
 import { validateDefectImages } from "@/lib/defect-images";
 import { parseReminderCount } from "@/lib/defect-reminder";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
+import { nextDefectRequestNumber } from "@/lib/defect-request-number";
+import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel } from "@/lib/positions";
 
@@ -44,6 +46,7 @@ const LIST_SELECT = {
   status: true,
   detectedAt: true,
   sourceType: true,
+  websiteCreated: true,
   syncState: true,
   postRepairAwaitingMaterial: true,
   sourceStatusMismatch: true,
@@ -342,6 +345,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
+    const commonSubUnit = body.unit === "COMMON" ? String(body.commonSubUnit ?? "").trim() : null;
+    if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
+      return fail("Vui lòng chọn BOP hoặc CHUNG");
+    }
     const reminderCount = body.reminderCount === undefined ? 0 : parseReminderCount(body.reminderCount);
     if (reminderCount === null) return fail("Số lần nhắc lại phải là số nguyên không âm");
     const relatedDeviceSeqs = normalizeRelatedDeviceSeqs(body.relatedDeviceSeqs, body.device);
@@ -372,35 +379,53 @@ export async function POST(req: NextRequest) {
       ? (await prisma.equipmentNode.findUnique({ where: { seq: String(body.device) }, select: { seq: true } }))?.seq ?? null
       : null;
 
-    const defect = await prisma.defect.create({
-      data: {
-        unit: body.unit,
-        device: body.device || null,
-        deviceSeq,
-        system: body.system || null,
-        severity: body.severity || null,
-        severityCriteria: normalizeDefectSeverityCriteria(body.severity, body.severityCriteria),
-        condition: body.condition || null,
-        requestType: body.requestType || null,
-        requestNumber: body.requestNumber?.trim() || null,
-        content: body.content?.trim() || null,
-        status: body.status || "CHUA_XU_LY",
-        completedAt: body.status === "DA_XU_LY" ? new Date() : null,
-        detectedAt: body.detectedAt ? parseDateInput(body.detectedAt) : null,
-        reminderCount,
-        lastRemindedAt: reminderCount > 0 && body.lastRemindedAt ? parseDateInput(body.lastRemindedAt) : null,
-        shiftLeaderId: shiftLeader?.id ?? null,
-        shiftLeaderName: shiftLeader?.name ?? null,
-        note: body.note?.trim() || null,
-        images,
-        fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
-        environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
-        createdById: user.id,
-        relatedDevices: {
-          create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
+    const detectedAt = body.detectedAt ? parseDateInput(body.detectedAt) : null;
+    // Số yêu cầu không nhận từ client — luôn tự cấp số kế tiếp để chuẩn bị cho
+    // đồng bộ hai chiều (tránh trùng/gõ sai khi ghi ngược lên Google Sheet).
+    const requestYear = (detectedAt ?? new Date()).getUTCFullYear();
+    const requestType = String(body.requestType ?? "").trim();
+    if (!requestType) return fail("Vui lòng chọn loại phiếu");
+    const content = String(body.content ?? "").trim();
+    if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
+
+    const defect = await prisma.$transaction(async (tx) => {
+      const requestNumber = await nextDefectRequestNumber(tx, requestYear, requestType);
+      const created = await tx.defect.create({
+        data: {
+          unit: body.unit,
+          commonSubUnit,
+          device: body.device || null,
+          deviceSeq,
+          system: body.system || null,
+          severity: body.severity || null,
+          severityCriteria: normalizeDefectSeverityCriteria(body.severity, body.severityCriteria),
+          condition: body.condition || null,
+          requestType,
+          requestNumber,
+          content,
+          repeatedRepairRaw: body.repeatedRepairRaw?.trim() || null,
+          websiteCreated: true,
+          sourceDeviceRaw: body.sourceDeviceRaw?.trim() || null,
+          status: body.status || "CHUA_XU_LY",
+          completedAt: body.status === "DA_XU_LY" ? new Date() : null,
+          detectedAt,
+          reminderCount,
+          lastRemindedAt: reminderCount > 0 && body.lastRemindedAt ? parseDateInput(body.lastRemindedAt) : null,
+          shiftLeaderId: shiftLeader?.id ?? null,
+          shiftLeaderName: shiftLeader?.name ?? null,
+          note: body.note?.trim() || null,
+          images,
+          fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
+          environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
+          createdById: user.id,
+          relatedDevices: {
+            create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
+          },
         },
-      },
-      include: INCLUDE,
+        include: INCLUDE,
+      });
+      await enqueueDefectSyncEvent(tx, { defect: created, eventType: "CREATE" });
+      return created;
     });
     await audit(user.id, "CREATE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user));
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });

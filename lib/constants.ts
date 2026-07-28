@@ -123,6 +123,7 @@ export type DefectUnit = (typeof DEFECT_UNITS)[number];
  */
 export const DEFECT_UNIT_POSITIONS: Record<DefectUnit, readonly string[]> = {
   S1: [
+    "Trưởng ca",
     "TK Lò máy",
     "Trưởng kíp điện",
     "Trực chính điện",
@@ -140,6 +141,7 @@ export const DEFECT_UNIT_POSITIONS: Record<DefectUnit, readonly string[]> = {
     "Thiết bị đo lường điều khiển",
   ],
   S2: [
+    "Trưởng ca",
     "TK Lò máy",
     "Trưởng kíp điện",
     "Trực chính điện",
@@ -157,6 +159,7 @@ export const DEFECT_UNIT_POSITIONS: Record<DefectUnit, readonly string[]> = {
     "Thiết bị đo lường điều khiển",
   ],
   COMMON: [
+    "Trưởng ca",
     "TK Lò máy",
     "Trưởng kíp điện",
     "XLNT",
@@ -189,6 +192,10 @@ export function isPositionAllowedForDefectUnit(unit: string | null | undefined, 
     return positionKey === allowedKey || positionKey.includes(allowedKey) || allowedKey.includes(positionKey);
   });
 }
+
+/** Khi Tổ máy = COMMON, Sheet còn phân biệt thêm BOP | CHUNG (2 khái niệm khác nhau). */
+export const DEFECT_COMMON_SUB_UNITS = ["BOP", "CHUNG"] as const;
+export type DefectCommonSubUnit = (typeof DEFECT_COMMON_SUB_UNITS)[number];
 
 /** Mức độ khiếm khuyết (1–4). */
 export const DEFECT_SEVERITY = {

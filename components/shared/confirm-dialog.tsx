@@ -13,6 +13,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   destructive?: boolean;
   loading?: boolean;
+  children?: React.ReactNode;
   onConfirm: () => void;
 }
 
@@ -24,6 +25,7 @@ export function ConfirmDialog({
   confirmLabel = "Xác nhận",
   destructive = true,
   loading,
+  children,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -40,6 +42,7 @@ export function ConfirmDialog({
           </div>
           {description && <DialogDescription className="pt-1">{description}</DialogDescription>}
         </DialogHeader>
+        {children}
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Huỷ

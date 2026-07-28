@@ -184,6 +184,7 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
       "archive-create-delete",
       "archive-backup",
       "forum-moderate",
+      "defect-two-way-sync",
     ].includes(row.id)
   ) {
     return "none";
@@ -383,6 +384,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     feature: "Xoá / đóng hồ sơ khiếm khuyết",
     note: "Chỉ cấp quản lý vận hành thực hiện các thao tác kết thúc hoặc xoá.",
     matrix: { ADMIN: "full", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "defect-two-way-sync",
+    group: "Khiếm khuyết",
+    feature: "Bật/tắt đồng bộ hai chiều khiếm khuyết (n8n)",
+    note: "Cờ dự phòng cho giai đoạn phát triển sau, mặc định tắt. Hiện tại đồng bộ chỉ một chiều Google Sheet → DH1; chưa có tác vụ ghi ngược nào phụ thuộc vào cờ này.",
+    matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "material-manage",

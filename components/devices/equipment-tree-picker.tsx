@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Cpu, Folder, FolderOpen, Loader2, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Cpu, Folder, FolderOpen, Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
@@ -89,10 +89,15 @@ export function EquipmentTreePicker({
   rootSeq,
   accessFilter,
   includeLeaves = false,
+  leafOnly = false,
   maxSelectableDepth,
   placeholder = "Chọn thư mục hệ thống",
   disabled = false,
   scope,
+  selectedValues = [],
+  keepOpenOnSelect = false,
+  allowClear = true,
+  selectionLabel,
 }: {
   value: string;
   onChange: (node: PickerEquipmentNode | null) => void;
@@ -100,6 +105,7 @@ export function EquipmentTreePicker({
   rootSeq?: string | null;
   accessFilter?: "edit";
   includeLeaves?: boolean;
+  leafOnly?: boolean;
   maxSelectableDepth?: number;
   placeholder?: string;
   disabled?: boolean;
@@ -109,6 +115,10 @@ export function EquipmentTreePicker({
    * quyền, cần thấy đủ 6 nhánh).
    */
   scope?: TreeScope;
+  selectedValues?: string[];
+  keepOpenOnSelect?: boolean;
+  allowClear?: boolean;
+  selectionLabel?: string;
 }) {
   const queryClient = useQueryClient();
   const rootsQuery = useTreeRoots(scope);
@@ -217,15 +227,17 @@ export function EquipmentTreePicker({
     () =>
       searchResults.filter((node) => {
         if (!accessFor(node.seq).visible) return false;
+        if (rootSeq && !seqIsSameOrDescendant(node.seq, rootSeq)) return false;
         return includeLeaves || node.hasChildren;
       }),
-    [accessFor, includeLeaves, searchResults]
+    [accessFor, includeLeaves, rootSeq, searchResults]
   );
 
   const selectedName = selectedQuery.data?.data.name;
   const loading = rootsQuery.isLoading || (rootSeq ? loadingSeqs.has(rootSeq) : false);
 
   function canSelect(node: TreeNode) {
+    if (leafOnly && node.hasChildren) return false;
     if (!includeLeaves && !node.hasChildren) return false;
     if (maxSelectableDepth !== undefined && node.depth > maxSelectableDepth) return false;
     return accessFor(node.seq).selectable;
@@ -235,21 +247,28 @@ export function EquipmentTreePicker({
     const isExpanded = expanded.has(node.seq);
     const isLoading = loadingSeqs.has(node.seq);
     const selectable = canSelect(node);
+    const selected = selectedValues.includes(node.seq) || (!selectedValues.length && value === node.seq);
     return (
       <button
         key={node.seq}
         type="button"
         onClick={() => {
           if (node.hasChildren && !searchMode) {
-            if (selectable) onChange(node);
+            if (selectable) {
+              if (keepOpenOnSelect) onChange(node);
+              else pick(node);
+            }
             toggle(node);
             return;
           }
-          if (selectable) pick(node);
+          if (selectable) {
+            if (keepOpenOnSelect) onChange(node);
+            else pick(node);
+          }
         }}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-[13px] transition-colors",
-          value === node.seq ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted",
+          selected ? "bg-accent/10 font-semibold text-accent" : "text-ink hover:bg-muted",
           !selectable && !node.hasChildren && "cursor-not-allowed opacity-50"
         )}
         style={{ paddingLeft: depth * 16 + 4 }}
@@ -282,6 +301,7 @@ export function EquipmentTreePicker({
           </span>
         )}
         <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{node.code}</span>
+        {selected && <Check className="h-4 w-4 shrink-0 text-accent" />}
       </button>
     );
   }
@@ -294,10 +314,13 @@ export function EquipmentTreePicker({
           disabled={disabled}
           className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
-          <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value ? selectedName ?? value : placeholder}
+          <span className={cn("truncate", !value && !selectedValues.length && "text-muted-foreground")}>
+            {selectionLabel
+              ?? (selectedValues.length > 0
+                ? `${selectedValues.length} thiết bị đã chọn`
+                : value ? selectedName ?? value : placeholder)}
           </span>
-          {value && selectedQuery.isLoading ? (
+          {value && !selectionLabel && selectedQuery.isLoading ? (
             <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
           ) : (
             <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -331,7 +354,7 @@ export function EquipmentTreePicker({
           )}
         </div>
 
-        <div className="px-1.5 pt-1.5">
+        {allowClear && <div className="px-1.5 pt-1.5">
           <button
             type="button"
             onClick={() => pick(null)}
@@ -342,7 +365,7 @@ export function EquipmentTreePicker({
           >
             — Không chọn —
           </button>
-        </div>
+        </div>}
 
         <div className="max-h-[320px] touch-pan-y overscroll-contain overflow-y-auto px-1.5 pb-1.5">
           {searchActive ? (

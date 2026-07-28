@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import type { Defect, DefectSyncRun } from "@prisma/client";
+import type { Defect, DefectSyncRun, DefectSyncSetting } from "@prisma/client";
 
 export interface DefectItem extends Defect {
   createdBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
@@ -120,7 +120,8 @@ export function useDeleteDefect() {
 export function useRemindDefect() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiMutate<DefectItem>(`/api/defects/${id}/remind`, "POST"),
+    mutationFn: ({ id, shiftLeaderId }: { id: string; shiftLeaderId: string }) =>
+      apiMutate<DefectItem>(`/api/defects/${id}/remind`, "POST", { shiftLeaderId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["defects"] }),
   });
 }
@@ -153,6 +154,24 @@ export function useSyncDefects() {
       window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defect-sync-status"] }), 1_500);
       window.setTimeout(() => void qc.invalidateQueries({ queryKey: ["defect-sync-status"] }), 4_000);
     },
+  });
+}
+
+// Cờ dự phòng cho giai đoạn đồng bộ hai chiều (ghi ngược) sau này; hiện chưa có tác vụ
+// nào phụ thuộc vào cờ này, chỉ lưu trạng thái bật/tắt cho quản trị/người được phân quyền.
+export function useDefectTwoWaySync(enabled = true) {
+  return useQuery({
+    queryKey: ["defect-two-way-sync"],
+    queryFn: () => apiGet<DefectSyncSetting>("/api/defects/two-way-sync"),
+    enabled,
+  });
+}
+
+export function useSetDefectTwoWaySync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => apiMutate<DefectSyncSetting>("/api/defects/two-way-sync", "PUT", { enabled }),
+    onSuccess: (setting) => qc.setQueryData(["defect-two-way-sync"], { data: setting, meta: undefined }),
   });
 }
 

@@ -34,25 +34,25 @@ model User {
   isActive            Boolean   @default(true)
   createdAt           DateTime  @default(now())
 
-  checkIns                 CheckIn[]
-  shiftAssignments         ShiftAssignment[]
-  repairLogs               RepairLog[]                  @relation("CreatedBy")
-  approvedLogs             RepairLog[]                  @relation("ApprovedBy")
-  auditLogs                AuditLog[]
-  operationEvents          OperationEvent[]             @relation("OpCreatedBy")
-  hcGroups                 HcGroup[]                    @relation("HcGroupCreator")
-  hcCheckIns               HcCheckIn[]                  @relation("HcCheckInUser")
-  announcements            Announcement[]               @relation("AnnouncementCreator")
-  announcementReads        AnnouncementRead[]           @relation("AnnouncementReader")
-  materialReplacements     MaterialReplacement[]        @relation("MrCreatedBy")
-  materialReplacementLogs  MaterialReplacementLog[]     @relation("MrDoneBy")
-  defects                  Defect[]                     @relation("DefectCreatedBy")
-  defectHistories          DefectHistory[]              @relation("DefectHistoryCreatedBy")
-  webAuthnCredentials      WebAuthnCredential[]
-  forumPosts               ForumPost[]                  @relation("ForumPostAuthor")
-  forumReplies             ForumReply[]                 @relation("ForumReplyAuthor")
-  forumPostLikes           ForumPostLike[]              @relation("ForumPostLikeUser")
-  forumReplyLikes          ForumReplyLike[]             @relation("ForumReplyLikeUser")
+  checkIns                CheckIn[]
+  shiftAssignments        ShiftAssignment[]
+  repairLogs              RepairLog[]              @relation("CreatedBy")
+  approvedLogs            RepairLog[]              @relation("ApprovedBy")
+  auditLogs               AuditLog[]
+  operationEvents         OperationEvent[]         @relation("OpCreatedBy")
+  hcGroups                HcGroup[]                @relation("HcGroupCreator")
+  hcCheckIns              HcCheckIn[]              @relation("HcCheckInUser")
+  announcements           Announcement[]           @relation("AnnouncementCreator")
+  announcementReads       AnnouncementRead[]       @relation("AnnouncementReader")
+  materialReplacements    MaterialReplacement[]    @relation("MrCreatedBy")
+  materialReplacementLogs MaterialReplacementLog[] @relation("MrDoneBy")
+  defects                 Defect[]                 @relation("DefectCreatedBy")
+  defectHistories         DefectHistory[]          @relation("DefectHistoryCreatedBy")
+  webAuthnCredentials     WebAuthnCredential[]
+  forumPosts              ForumPost[]              @relation("ForumPostAuthor")
+  forumReplies            ForumReply[]             @relation("ForumReplyAuthor")
+  forumPostLikes          ForumPostLike[]          @relation("ForumPostLikeUser")
+  forumReplyLikes         ForumReplyLike[]         @relation("ForumReplyLikeUser")
 
   @@index([position])
   @@index([role])
@@ -469,6 +469,7 @@ model EquipmentMaterial {
 model Defect {
   id                         String    @id @default(cuid())
   unit                       String // Tổ máy: S1 | S2
+  commonSubUnit              String? // Khi unit = COMMON: BOP | CHUNG — Sheet có 4 giá trị Tổ máy, tách riêng để không gộp mất thông tin
   deviceSeq                  String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
   device                     String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
   system                     String? // Cương vị (chức vụ phụ trách)
@@ -478,7 +479,7 @@ model Defect {
   fireSafetyImpact           String? // Ảnh hưởng PCCC: Có | Không
   environmentSafetyImpact    String? // Môi trường, ATVSLĐ: Có | Không
   requestType                String? // Yêu cầu: Cơ | Điện | I&C | Khác
-  requestNumber              String? // Số yêu cầu
+  requestNumber              String? // Số yêu cầu STT/năm; dữ liệu Sheet cũ có thể trùng giữa/và trong nguồn
   content                    String? // Nội dung
   status                     String    @default("CHUA_XU_LY") // Tình trạng khiếm khuyết
   detectedAt                 DateTime? // Ngày phát hiện
@@ -487,6 +488,7 @@ model Defect {
   reminderRaw                String? // Nội dung nhắc lại nguyên văn từ nguồn
   repeatedRepairRaw          String? // Nội dung sửa chữa lặp lại nguyên văn từ nguồn
   sourceType                 String    @default("MANUAL") // MANUAL | GOOGLE_SHEETS
+  websiteCreated             Boolean   @default(false) // Phiếu khởi tạo trên website, giữ quyền Nhắc lại/Hoàn thành sau khi liên kết Sheet
   sourceKey                  String?   @unique // Khóa chống trùng ổn định của dòng nguồn
   sourceSpreadsheetId        String?
   sourceSheetName            String?
@@ -494,9 +496,17 @@ model Defect {
   sourceDeviceRaw            String? // Tên thiết bị nguyên văn trên Google Sheet
   sourcePositionRaw          String? // Cương vị nguyên văn trên Google Sheet
   sourceStatusRaw            String? // Trạng thái nguyên văn trên Google Sheet
+  repairOrderNumberRaw       String? // Số PCT/LCT (17) do bộ phận sửa chữa cập nhật
+  repairSolutionRaw          String? // Giải pháp sửa chữa (18)
+  repairPlanRaw              String? // Kế hoạch thực hiện (19)
+  repairUnitRaw              String? // Đơn vị sửa chữa (20)
   repairResultRaw            String? // Kết quả thực hiện (21) do bộ phận sửa chữa cập nhật
+  repairPerformedByRaw       String? // Người thực hiện (22)
+  repairStartedAt            DateTime? // Ngày thực hiện (23)
   sourceStatusMismatch       Boolean   @default(false) // Kết quả sửa chữa khác tình trạng VH1
   sourceCompletedAt          DateTime? // Ngày kết thúc theo Google Sheet
+  repairPerformedContentRaw  String? // Nội dung đã thực hiện (25)
+  repairNoteRaw              String? // Ghi chú sửa chữa (26)
   sourceHash                 String? // Dấu kiểm tra nội dung nguồn
   sourceSyncedAt             DateTime?
   sourceLastSeenAt           DateTime?
@@ -521,6 +531,7 @@ model Defect {
   node           EquipmentNode?        @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
   relatedDevices DefectRelatedDevice[]
   pendingHistory DefectHistoryPending?
+  reminderLogs   DefectReminderLog[]
 
   @@index([deviceSeq])
   // Lịch sử "khiếm khuyết của thiết bị X, mới nhất trước" đọc thẳng từ index.
@@ -540,6 +551,7 @@ model Defect {
   @@index([sourceType, syncState])
   // Snapshot từng nguồn chỉ quét và đánh dấu thiếu trong đúng Google Sheet vừa đồng bộ.
   @@index([sourceSpreadsheetId, syncState])
+  @@index([requestNumber])
   // Trang khiếm khuyết: lọc tổ máy/trạng thái nguồn và ưu tiên đối chiếu + ngày phát hiện.
   @@index([unit, sourceType, syncState])
   @@index([unit, status, severity])
@@ -570,6 +582,22 @@ model DefectHistoryPending {
   defect Defect @relation(fields: [defectId], references: [id], onDelete: Cascade)
 
   @@index([finalizeAt])
+}
+
+// Ngày của từng lần nhắc lại kể từ khi tính năng này được triển khai. Luôn ghi
+// độc lập với cờ tích hợp để dữ liệu nghiệp vụ đầy đủ và có thể retry đồng bộ.
+model DefectReminderLog {
+  id              String   @id @default(cuid())
+  defectId        String
+  occurredAt      DateTime
+  createdById     String // Snapshot ID người bấm nhắc lại, không FK
+  shiftLeaderId   String? // Snapshot Trưởng ca được chọn cho riêng lần nhắc này
+  shiftLeaderName String?
+  createdAt       DateTime @default(now())
+
+  defect Defect @relation(fields: [defectId], references: [id], onDelete: Cascade)
+
+  @@index([defectId, occurredAt])
 }
 
 // Danh sách thiết bị liên quan của một phiếu khiếm khuyết.
@@ -687,6 +715,48 @@ model DefectSyncSeen {
 
   @@id([runId, sourceKey])
   @@index([runId, source])
+}
+
+// Cờ bật/tắt khả năng đồng bộ HAI CHIỀU (DH1 ghi ngược lên Google Sheet) — dự phòng cho
+// giai đoạn phát triển sau; hiện tại luồng đồng bộ chỉ đọc một chiều Sheet → DB.
+// Bảng chỉ có một dòng duy nhất (id cố định "singleton"), mặc định tắt.
+model DefectSyncSetting {
+  id                String   @id @default("singleton")
+  twoWaySyncEnabled Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
+  updatedByName     String?
+}
+
+// Bộ cấp STT phiếu khiếm khuyết theo năm phát hiện và loại phiếu. Cơ/Điện có
+// dãy riêng, mỗi dãy bắt đầu lại từ 1 khi sang năm mới.
+model DefectRequestSequence {
+  year         Int
+  requestType  String
+  currentValue Int
+  updatedAt    DateTime @updatedAt
+
+  @@id([year, requestType])
+}
+
+// Transactional outbox cho chiều DH1 → Google Sheet. Không đặt FK với Defect để
+// vẫn giữ được dấu vết/retry nếu phiếu được chuyển lịch sử hoặc xóa sau đó.
+model DefectSyncOutbox {
+  id            String   @id @default(cuid())
+  defectId      String
+  eventType     String // CREATE | UPDATE | REMIND
+  payload       Json
+  status        String   @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED
+  attemptCount  Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  claimedAt     DateTime?
+  completedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([defectId, createdAt])
 }
 
 // Snapshot danh sách thiết bị liên quan khi phiếu được chuyển sang lịch sử.
@@ -1066,32 +1136,32 @@ model MaterialTicket {
   assignedPosition String // cương vị được giao — CHỈ cương vị này thao tác đề xuất/nhập liệu và thấy phiếu (trừ nhóm quản lý)
   materialCategory String? // Loại vật tư: "Dầu bôi trơn" | "Lọc dầu" | "Hóa chất" | "Bi nghiền"
 
-  bbktNumber           String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
-  proposalNote         String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
-  pctNumber            String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
-  proposalNumber       String? // số phiếu đề xuất vật tư (Thống kê nhập)
-  proposalDocUrl       String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
-  proposalIssuedAt     DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
-  proposalReceiverName String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
-  deliveryNoteNumber   String? // số phiếu giao hàng
-  repairRequestNumber  String? // số phiếu yêu cầu sửa chữa
-  completionNote       String? // thông tin xác nhận thay thế xong
-  chiHuyName           String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
-  docUrl               String? // file Word BBNT trên MinIO
-  bbktDocUrl           String? // file Word BBKT, tách riêng khỏi BBNT DO
-  recoveryRequired     Boolean? // có vật tư thu hồi hay không
-  recoveryQuantity     Int?
-  recoveryReturnedAt   DateTime?
-  recoveryDocUrl       String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
-  recoveryDocNo        Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
-  recoveryDocNoYear    Int? // năm cấp số văn bản (dãy số reset mỗi năm)
-  workStartedAt        DateTime? // thời gian ghi vào BBNT DO
-  workEndedAt          DateTime?
+  bbktNumber                 String? // số Biên Bản Kiểm Tra (Đề xuất: nhập ở bước nghiệm thu, nếu có; Ứng: bổ sung sau PDF)
+  proposalNote               String? // ghi chú khi tạo phiếu đề xuất (thay cho BBKT ở B0)
+  pctNumber                  String? // số PCT/LCT (nhập ở bước nghiệm thu/xuất file)
+  proposalNumber             String? // số phiếu đề xuất vật tư (Thống kê nhập)
+  proposalDocUrl             String? // file Word Phiếu ĐXVT (QLVT.12) trên MinIO — xuất trước khi nhập số phiếu
+  proposalIssuedAt           DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
+  proposalReceiverName       String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
+  deliveryNoteNumber         String? // số phiếu giao hàng
+  repairRequestNumber        String? // số phiếu yêu cầu sửa chữa
+  completionNote             String? // thông tin xác nhận thay thế xong
+  chiHuyName                 String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
+  docUrl                     String? // file Word BBNT trên MinIO
+  bbktDocUrl                 String? // file Word BBKT, tách riêng khỏi BBNT DO
+  recoveryRequired           Boolean? // có vật tư thu hồi hay không
+  recoveryQuantity           Int?
+  recoveryReturnedAt         DateTime?
+  recoveryDocUrl             String? // biên bản vật tư thu hồi (bổ sung khi có mẫu)
+  recoveryDocNo              Int? // số văn bản BBTHVT đã cấp — giữ nguyên khi xuất lại biên bản
+  recoveryDocNoYear          Int? // năm cấp số văn bản (dãy số reset mỗi năm)
+  workStartedAt              DateTime? // thời gian ghi vào BBNT DO
+  workEndedAt                DateTime?
   sccnRepresentativeName     String? // đại diện đơn vị sửa chữa cơ nhiệt in trên BBNT D-Office
   sccnRepresentativePosition String? // chức vụ đại diện SCCN tại thời điểm xuất biên bản
-  settledAt            DateTime? // Thống kê xác nhận đã quyết toán
-  settledByName        String?
-  rejectedReason       String?
+  settledAt                  DateTime? // Thống kê xác nhận đã quyết toán
+  settledByName              String?
+  rejectedReason             String?
 
   // dấu vết từng bước: id + tên hiển thị (đóng băng tại thời điểm thao tác)
   createdById           String

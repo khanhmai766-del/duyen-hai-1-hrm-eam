@@ -18,6 +18,7 @@ import {
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import {
   DEFECT_UNITS,
+  DEFECT_COMMON_SUB_UNITS,
   DEFECT_SEVERITY_ORDER,
   DEFECT_SEVERITY_CRITERIA,
   DEFECT_CONDITION,
@@ -81,6 +82,7 @@ export function DefectForm({
   );
   const [form, setForm] = React.useState({
     unit: defect?.unit ?? initialDevice?.unit ?? "",
+    commonSubUnit: defect?.commonSubUnit ?? "",
     device: defect?.device ?? initialDevice?.code ?? "",
     relatedDeviceSeqs: defect?.relatedDevices?.map((item) => item.deviceSeq) ?? [],
     deviceSystem: initialDevice?.system ?? "",
@@ -91,7 +93,8 @@ export function DefectForm({
     condition: defect?.condition ?? "",
     fireSafetyImpact: defect?.fireSafetyImpact ?? "Không",
     environmentSafetyImpact: defect?.environmentSafetyImpact ?? "Không",
-    requestType: defect?.requestType ?? "Cơ",
+    // Phiếu mới phải để VHV chủ động chọn Cơ/Điện để tránh ghi nhầm Sheet.
+    requestType: defect?.requestType ?? "",
     requestNumber: defect?.requestNumber ?? "",
     content: defect?.content ?? "",
     status: defect?.status ?? "CHUA_XU_LY",
@@ -101,6 +104,8 @@ export function DefectForm({
     postRepairAwaitingMaterial: defect?.postRepairAwaitingMaterial ?? false,
     shiftLeaderId: defect?.shiftLeaderId ?? "",
     note: defect?.note ?? "",
+    repeatedRepairRaw: defect?.repeatedRepairRaw ?? "",
+    sourceDeviceRaw: defect?.sourceDeviceRaw ?? "",
     images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
   });
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
@@ -136,12 +141,13 @@ export function DefectForm({
   // nên đổi tổ máy phải bỏ luôn thiết bị đã chọn — thiết bị cũ thuộc cây khác.
   function selectUnit(u: string) {
     setForm((f) => {
-      if (f.unit === u) return f;
+      const commonSubUnit = u === "COMMON" ? f.commonSubUnit : "";
+      if (f.unit === u) return { ...f, commonSubUnit };
       const cleared = { deviceSystem: "", deviceSystemSeq: "", device: "", relatedDeviceSeqs: [] };
       if (f.system && !isPositionAllowedForDefectUnit(u, f.system)) {
-        return { ...f, unit: u, system: "", ...cleared };
+        return { ...f, unit: u, commonSubUnit, system: "", ...cleared };
       }
-      return { ...f, unit: u, ...cleared };
+      return { ...f, unit: u, commonSubUnit, ...cleared };
     });
   }
   // Phạm vi cây theo tổ máy đang chọn: khiếm khuyết S1 ánh xạ vào cây S1 (DH1.S1…),
@@ -153,6 +159,11 @@ export function DefectForm({
   const selectedDeviceQuery = useEquipmentNode(form.device || null, treeScope);
   const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, treeScope);
   React.useEffect(() => {
+    const deviceName = selectedDeviceQuery.data?.data.name;
+    if (!deviceName) return;
+    setForm((current) => (current.sourceDeviceRaw ? current : { ...current, sourceDeviceRaw: deviceName }));
+  }, [selectedDeviceQuery.data]);
+  React.useEffect(() => {
     const systemName = selectedSystemQuery.data?.data.name;
     if (!systemName || form.deviceSystem === systemName) return;
     setForm((current) => ({ ...current, deviceSystem: systemName }));
@@ -162,57 +173,57 @@ export function DefectForm({
     set("system", v === NONE ? "" : v);
   }
 
-  function setDeviceSystemNode(node: PickerEquipmentNode | null) {
-    setForm((f) => {
-      if (node && !node.hasChildren) {
-        const parentSeq = node.parentSeq ?? "";
-        return {
-          ...f,
-          deviceSystem: "",
-          deviceSystemSeq: parentSeq,
-          device: node.seq,
-          relatedDeviceSeqs: f.relatedDeviceSeqs.filter((seq) => seq !== node.seq),
-        };
-      }
-
-      const deviceSystem = node?.name ?? "";
-      const deviceSystemSeq = node?.seq ?? "";
-      return {
-        ...f,
-        deviceSystem,
-        deviceSystemSeq,
-        device: "",
-      };
-    });
-  }
-
-  const [relatedPickerValue, setRelatedPickerValue] = React.useState("");
-  function addRelatedDevice(node: PickerEquipmentNode | null) {
-    setRelatedPickerValue("");
+  function selectMappedDevice(node: PickerEquipmentNode | null) {
     if (!node) return;
     if (node.hasChildren) {
       toast.error("Vui lòng chọn thiết bị cấp cuối, không chọn thư mục hệ thống");
       return;
     }
-    if (node.seq === form.device) {
-      toast.error("Thiết bị này đang là thiết bị chính");
-      return;
-    }
-    if (form.relatedDeviceSeqs.includes(node.seq)) {
-      toast.error("Thiết bị này đã có trong danh sách liên quan");
-      return;
-    }
-    if (form.relatedDeviceSeqs.length >= 20) {
-      toast.error("Mỗi khiếm khuyết chỉ được chọn tối đa 20 thiết bị liên quan");
-      return;
-    }
-    set("relatedDeviceSeqs", [...form.relatedDeviceSeqs, node.seq]);
+    setForm((current) => {
+      if (node.seq === current.device) {
+        const [nextPrimary = "", ...remaining] = current.relatedDeviceSeqs;
+        return { ...current, device: nextPrimary, relatedDeviceSeqs: remaining };
+      }
+      if (current.relatedDeviceSeqs.includes(node.seq)) {
+        return {
+          ...current,
+          relatedDeviceSeqs: current.relatedDeviceSeqs.filter((seq) => seq !== node.seq),
+        };
+      }
+      if (!current.device) {
+        return {
+          ...current,
+          deviceSystem: "",
+          deviceSystemSeq: node.parentSeq ?? "",
+          device: node.seq,
+          relatedDeviceSeqs: [],
+        };
+      }
+      if (current.relatedDeviceSeqs.length >= 20) {
+        toast.error("Mỗi khiếm khuyết chỉ được chọn tối đa 20 thiết bị liên quan");
+        return current;
+      }
+      return { ...current, relatedDeviceSeqs: [...current.relatedDeviceSeqs, node.seq] };
+    });
+  }
+  function removeMappedDevice(seq: string) {
+    setForm((current) => {
+      if (seq === current.device) {
+        const [nextPrimary = "", ...remaining] = current.relatedDeviceSeqs;
+        return { ...current, device: nextPrimary, relatedDeviceSeqs: remaining };
+      }
+      return {
+        ...current,
+        relatedDeviceSeqs: current.relatedDeviceSeqs.filter((item) => item !== seq),
+      };
+    });
   }
 
   // Tab "Thông tin chung" bắt buộc chọn đủ; trả về tên thẻ còn thiếu (nếu có).
   function missingGeneral(): string | null {
     if (isSynced) return null;
     if (!form.unit) return "Tổ máy";
+    if (form.unit === "COMMON" && !form.commonSubUnit) return "BOP hoặc CHUNG";
     if (!form.system) return "Cương vị";
     if (!form.condition) return "Điều kiện thực hiện";
     if (!form.shiftLeaderId) return "Trưởng ca";
@@ -227,6 +238,14 @@ export function DefectForm({
     const missing = missingGeneral();
     if (missing) { setStep(1); return toast.error(`Vui lòng chọn ${missing}`); }
     if (!form.severity) { setStep(2); return toast.error("Vui lòng chọn Mức độ"); }
+    if (!form.requestType) {
+      setStep(3);
+      return toast.error("Vui lòng chọn Yêu cầu");
+    }
+    if (!form.content.trim()) {
+      setStep(3);
+      return toast.error("Vui lòng nhập Nội dung");
+    }
     setStep(3);
   }
 
@@ -331,6 +350,25 @@ export function DefectForm({
                 </div>
               )}
             </Row>
+            {!isSynced && form.unit === "COMMON" && (
+              <Row label="Phân Loại Dùng Chung *">
+                <div className="grid grid-cols-2 gap-2">
+                  {DEFECT_COMMON_SUB_UNITS.map((sub) => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => set("commonSubUnit", sub)}
+                      className={cn(
+                        "h-10 rounded-md border text-sm font-medium transition-colors",
+                        form.commonSubUnit === sub ? "border-navy bg-navy text-white" : "border-input bg-muted/40 text-ink hover:border-accent"
+                      )}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              </Row>
+            )}
             <Row label="Cương Vị *">
               <Select value={form.system || NONE} onValueChange={setSystem} disabled={isSynced}>
                 <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
@@ -340,49 +378,54 @@ export function DefectForm({
                 </SelectContent>
               </Select>
             </Row>
-            <Row label={isSynced ? "Hệ Thống *" : "Hệ Thống"}>
+            <Row label={isSynced ? "Hệ Thống Chính *" : "Hệ Thống Chính"}>
               {lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.system || "Chưa xác định hệ thống"} secondary={initialDevice.systemSeq || undefined} />
               ) : (
-                <EquipmentTreePicker
-                  value={form.device || form.deviceSystemSeq}
-                  position={form.system || null}
-                  accessFilter="edit"
-                  includeLeaves
-                  scope={treeScope}
-                  disabled={!treeScope}
-                  onChange={setDeviceSystemNode}
-                  placeholder={treeScope ? "Chọn hệ thống thiết bị" : "Chọn tổ máy trước"}
-                />
+                <div className="space-y-2">
+                  <EquipmentTreePicker
+                    value={form.deviceSystemSeq}
+                    position={form.system || null}
+                    accessFilter="edit"
+                    includeLeaves
+                    leafOnly
+                    selectedValues={[form.device, ...form.relatedDeviceSeqs].filter(Boolean)}
+                    keepOpenOnSelect
+                    allowClear={false}
+                    scope={treeScope}
+                    disabled={!treeScope}
+                    selectionLabel={
+                      form.device
+                        ? `${form.deviceSystem || "Hệ thống đã chọn"} · ${1 + form.relatedDeviceSeqs.length} thiết bị`
+                        : undefined
+                    }
+                    onChange={selectMappedDevice}
+                    placeholder={treeScope ? "Mở cây và chọn một hoặc nhiều thiết bị con" : "Chọn tổ máy trước"}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Thiết bị đầu tiên xác định Hệ thống chính; các thiết bị liên quan có thể thuộc Hệ thống khác.
+                  </p>
+                </div>
               )}
             </Row>
             <Row label={isSynced ? "Thiết Bị *" : "Thiết Bị"}>
               {lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.name} secondary={initialDevice.displayCode ?? initialDevice.code} />
               ) : form.device ? (
-                <LockedValue
-                  primary={selectedDeviceQuery.data?.data.name ?? "Đang tải tên thiết bị…"}
-                  // Mã theo tổ máy đang chọn (S2 → DH1.S2…); form vẫn lưu mã chuẩn DH1.S1.
-                  secondary={selectedDeviceQuery.data?.data.fullCode ?? form.device}
+                <RelatedDeviceRow
+                  seq={form.device}
+                  scope={treeScope}
+                  role="Thiết bị chính"
+                  onRemove={() => removeMappedDevice(form.device)}
                 />
               ) : (
                 <div className="rounded-lg border border-dashed border-border bg-muted/25 px-3 py-2.5 text-sm text-muted-foreground">
-                  Chọn thiết bị cấp cuối trong cây Hệ thống; tên thiết bị sẽ tự điền tại đây.
+                  Chưa chọn thiết bị. Hãy bung cây Hệ thống đến cấp cuối để chọn.
                 </div>
               )}
             </Row>
             <Row label="Thiết Bị Liên Quan">
               <div className="space-y-3">
-                <EquipmentTreePicker
-                  value={relatedPickerValue}
-                  position={form.system || null}
-                  accessFilter="edit"
-                  includeLeaves
-                  scope={treeScope}
-                  disabled={!treeScope}
-                  onChange={addRelatedDevice}
-                  placeholder={treeScope ? "Chọn thêm thiết bị liên quan" : "Chọn tổ máy trước"}
-                />
                 {form.relatedDeviceSeqs.length > 0 ? (
                   <div className="space-y-2">
                     {form.relatedDeviceSeqs.map((seq) => {
@@ -391,7 +434,8 @@ export function DefectForm({
                           key={seq}
                           seq={seq}
                           scope={treeScope}
-                          onRemove={() => set("relatedDeviceSeqs", form.relatedDeviceSeqs.filter((item) => item !== seq))}
+                          role="Thiết bị liên quan"
+                          onRemove={() => removeMappedDevice(seq)}
                         />
                       );
                     })}
@@ -484,47 +528,32 @@ export function DefectForm({
           <div className={cn(step === 2 ? "block" : "hidden")}>
             <div className="mx-auto max-w-2xl space-y-4">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
-                <h3 className="font-bold text-emerald-900">Nội dung sẽ ghi vào lịch sử</h3>
+                <h3 className="font-bold text-emerald-900">Dữ liệu của bộ phận Sửa chữa</h3>
                 <p className="mt-1 text-sm text-emerald-800">
-                  Dữ liệu nguồn được giữ nguyên; các mục chưa có sẽ được VHV bổ sung khi bấm xác nhận hoàn thành.
+                  Các nội dung dưới đây được đọc từ cột 17–26 trên Google Sheet.
                 </p>
               </div>
 
               <div className="grid gap-4 rounded-xl border border-border bg-white p-4 sm:grid-cols-2">
-                <SourcePreviewValue label="Tổ máy" value={defect.unit || "—"} />
-                <SourcePreviewValue label="Cương vị" value={defect.system || "—"} />
-                <SourcePreviewValue label="Loại yêu cầu (PCT)" value={defect.requestType || "—"} />
-                <SourcePreviewValue label="Số yêu cầu khiếm khuyết" value={defect.requestNumber || "—"} />
-                <SourcePreviewValue label="Số phiếu công tác" value="Chưa nhập – bổ sung khi xác nhận" pending />
+                <SourcePreviewValue label="Số PCT/LCT" value={defect.repairOrderNumberRaw || "—"} />
+                <SourcePreviewValue label="Đơn vị sửa chữa" value={defect.repairUnitRaw || "—"} />
+                <SourcePreviewValue label="Người thực hiện" value={defect.repairPerformedByRaw || "—"} />
+                <SourcePreviewValue
+                  label="Ngày thực hiện"
+                  value={defect.repairStartedAt ? formatDate(defect.repairStartedAt) : "—"}
+                />
                 <SourcePreviewValue
                   label="Ngày kết thúc"
-                  value={defect.sourceCompletedAt ? formatDate(defect.sourceCompletedAt) : "Chưa có ngày kết thúc trên Google Sheet"}
-                  pending={!defect.sourceCompletedAt}
-                />
-                <SourcePreviewValue
-                  label="Thiết bị chính"
-                  value={defect.device || "Chưa ánh xạ thiết bị"}
-                  pending={!defect.device}
-                />
-                <SourcePreviewValue
-                  label="Thiết bị liên quan"
-                  value={defect.relatedDevices.length
-                    ? defect.relatedDevices.map((item) => item.device.name || item.deviceSeq).join(", ")
-                    : "Không có"}
+                  value={defect.sourceCompletedAt ? formatDate(defect.sourceCompletedAt) : "—"}
                 />
               </div>
 
               <div className="space-y-4 rounded-xl border border-border bg-white p-4">
-                <SourcePreviewValue label="Nội dung thực hiện" value={defect.content || "—"} />
-                <SourcePreviewValue
-                  label="Kết quả thực hiện"
-                  value={defect.note || defect.sourceStatusRaw || "Chưa nhập – bổ sung khi xác nhận"}
-                  pending={!defect.note && !defect.sourceStatusRaw}
-                />
-                <SourcePreviewValue label="Trạng thái trên Google Sheet" value={defect.sourceStatusRaw || "—"} />
-                <SourcePreviewValue label="Sửa chữa lặp lại" value={defect.repeatedRepairRaw || "—"} />
-                <SourcePreviewValue label="Số lần nhắc lại" value={`${defect.reminderCount} lần`} />
-                <SourcePreviewValue label="Hình ảnh kết quả" value="Chưa có – bổ sung khi xác nhận (tối đa 3 ảnh)" pending />
+                <SourcePreviewValue label="Giải pháp sửa chữa" value={defect.repairSolutionRaw || "—"} />
+                <SourcePreviewValue label="Kế hoạch thực hiện" value={defect.repairPlanRaw || "—"} />
+                <SourcePreviewValue label="Kết quả thực hiện" value={defect.repairResultRaw || "—"} />
+                <SourcePreviewValue label="Nội dung đã thực hiện" value={defect.repairPerformedContentRaw || "—"} />
+                <SourcePreviewValue label="Ghi chú Sửa chữa" value={defect.repairNoteRaw || "—"} />
               </div>
             </div>
           </div>
@@ -630,20 +659,48 @@ export function DefectForm({
           <div className="mx-auto w-full max-w-2xl rounded-xl border border-border/80 bg-white p-5 shadow-sm">
             <div className="grid gap-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <StackField label="Yêu Cầu">
+                <StackField label="Yêu Cầu" required>
                   <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
-                    <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11"><SelectValue placeholder="Chọn Cơ hoặc Điện" /></SelectTrigger>
                     <SelectContent>
                       {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </StackField>
                 <StackField label="Số Yêu Cầu">
-                  <Input className="h-11" value={form.requestNumber} onChange={(e) => set("requestNumber", e.target.value)} />
+                  {isEdit ? (
+                    <Input className="h-11" value={form.requestNumber || "—"} disabled />
+                  ) : (
+                    <div className="flex h-11 items-center rounded-md border border-dashed border-input bg-muted/30 px-3 text-sm text-muted-foreground">
+                      Sẽ tự cấp số khi lưu
+                    </div>
+                  )}
                 </StackField>
               </div>
-              <StackField label="Nội Dung">
-                <Textarea className="min-h-[88px] resize-y" value={form.content} onChange={(e) => set("content", e.target.value)} />
+              <StackField label="Nội Dung" required>
+                <Textarea
+                  className="min-h-[88px] resize-y"
+                  value={form.content}
+                  onChange={(e) => set("content", e.target.value)}
+                  placeholder="Nhập nội dung khiếm khuyết"
+                  required
+                />
+              </StackField>
+              <StackField label="Sửa Chữa Lặp Lại">
+                <Textarea
+                  className="min-h-[64px] resize-y"
+                  value={form.repeatedRepairRaw}
+                  onChange={(e) => set("repeatedRepairRaw", e.target.value)}
+                  placeholder="Để trống nếu không có"
+                />
+              </StackField>
+              <StackField label="Tên Thiết Bị Ghi Lên Google Sheet">
+                <Input
+                  className="h-11"
+                  value={form.sourceDeviceRaw}
+                  onChange={(e) => set("sourceDeviceRaw", e.target.value)}
+                  placeholder="Mặc định theo tên thiết bị đã chọn, có thể sửa lại"
+                />
               </StackField>
               <StackField label="Tình Trạng Khiếm Khuyết">
                 <Select value={form.status} onValueChange={(v) => set("status", v)}>
@@ -760,10 +817,12 @@ function Row({ label, children, compact = false }: { label: string; children: Re
   );
 }
 
-function StackField({ label, children }: { label: string; children: React.ReactNode }) {
+function StackField({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div className="grid gap-2">
-      <Label className="text-sm font-semibold text-slate-600">{label}</Label>
+      <Label className="text-sm font-semibold text-slate-600">
+        {label}{required && <span className="ml-1 text-destructive">*</span>}
+      </Label>
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -792,7 +851,17 @@ function LockedValue({ primary, secondary }: { primary: string; secondary?: stri
   );
 }
 
-function RelatedDeviceRow({ seq, scope, onRemove }: { seq: string; scope?: TreeScope; onRemove: () => void }) {
+function RelatedDeviceRow({
+  seq,
+  scope,
+  onRemove,
+  role = "Thiết bị liên quan",
+}: {
+  seq: string;
+  scope?: TreeScope;
+  onRemove: () => void;
+  role?: string;
+}) {
   const nodeQuery = useEquipmentNode(seq, scope);
   const name = nodeQuery.data?.data.name ?? (nodeQuery.isLoading ? "Đang tải tên thiết bị…" : seq);
   const code = nodeQuery.data?.data.fullCode ?? seq;
@@ -804,7 +873,10 @@ function RelatedDeviceRow({ seq, scope, onRemove }: { seq: string; scope?: TreeS
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-ink">{name}</div>
-        <div className="truncate font-mono text-[11px] text-muted-foreground">{code}</div>
+        <div className="flex items-center gap-2">
+          <span className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{role}</span>
+          <span className="truncate font-mono text-[11px] text-muted-foreground">{code}</span>
+        </div>
       </div>
       <button
         type="button"
