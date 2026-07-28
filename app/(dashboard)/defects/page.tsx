@@ -4,11 +4,10 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import type { DefectSyncRun } from "@prisma/client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, RefreshCw, CloudDownload, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -19,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { defectDetailQuery, useDefect, useDefects, useDefectSyncStatus, useDefectTwoWaySync, useDeleteDefect, useRemindDefect, useSetDefectTwoWaySync, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
+import { defectDetailQuery, useDefect, useDefects, useDefectSyncStatus, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
@@ -30,6 +29,7 @@ import {
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
+import { DefectSyncChip } from "@/components/defects/defect-sync-chip";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 
@@ -443,11 +443,16 @@ export default function DefectsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="KHIẾM KHUYẾT THIẾT BỊ" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
-        {canRunSync && (
-          <Button
-            variant="outline"
-            disabled={sync.isPending || syncStatus.isLoading || syncRunning}
-            onClick={async () => {
+        {/* Trạng thái + thao tác đồng bộ gói trong 1 chip, bấm mới mở chi tiết —
+            thay cho 2 banner cũ chiếm trọn chiều ngang phía trên bộ lọc. */}
+        {canViewSync && (
+          <DefectSyncChip
+            run={latestSyncRun}
+            running={syncRunning}
+            syncing={sync.isPending || syncStatus.isLoading}
+            canRunSync={canRunSync}
+            canManageTwoWaySync={canManageTwoWaySync}
+            onSync={async () => {
               try {
                 const result = await sync.mutateAsync();
                 toast.success(result.message);
@@ -455,10 +460,7 @@ export default function DefectsPage() {
                 toast.error((error as Error).message);
               }
             }}
-          >
-            {sync.isPending || syncRunning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
-            {syncRunning ? "n8n đang đồng bộ…" : "Đồng bộ bằng n8n"}
-          </Button>
+          />
         )}
         {canManage && (
           <Button onClick={openCreate}>
@@ -466,12 +468,6 @@ export default function DefectsPage() {
           </Button>
         )}
       </PageHeader>
-
-      {canViewSync && latestSyncRun && (
-        <DefectSyncSummary run={latestSyncRun} />
-      )}
-
-      {canManageTwoWaySync && <DefectTwoWaySyncToggle />}
 
       {deviceSeqFilter && (
         <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -954,114 +950,6 @@ const SEVERITY_TONE: Record<string, string> = {
   "4": "bg-gray-100 text-gray-600",
 };
 
-function DefectSyncSummary({ run }: { run: DefectSyncRun }) {
-  const running = run.status === "RUNNING";
-  const success = run.status === "SUCCESS";
-  const label = running ? "Đang đồng bộ" : success ? "Đồng bộ thành công" : "Đồng bộ thất bại";
-  const sourceLabel = run.expectedSources
-    .map((source) => source === "CO" ? "Cơ" : source === "DIEN" ? "Điện" : source)
-    .join(", ");
-
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between",
-        running && "border-sky-200 bg-sky-50/80",
-        success && "border-emerald-200 bg-emerald-50/70",
-        !running && !success && "border-rose-200 bg-rose-50/80"
-      )}
-      role="status"
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <span
-          className={cn(
-            "h-2.5 w-2.5 shrink-0 rounded-full",
-            running && "animate-pulse bg-sky-500",
-            success && "bg-emerald-500",
-            !running && !success && "bg-rose-500"
-          )}
-        />
-        <div className="min-w-0">
-          <div className="font-semibold text-ink">{label}</div>
-          <div className="truncate text-xs text-muted-foreground">
-            {sourceLabel || "Không xác định nguồn"} · bắt đầu{" "}
-            {new Intl.DateTimeFormat("vi-VN", {
-              day: "2-digit",
-              month: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            }).format(new Date(run.startedAt))}
-          </div>
-        </div>
-      </div>
-      {!running && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground">
-          <span>Đọc {run.readCount.toLocaleString("vi-VN")}</span>
-          <span>Mới {run.createdCount.toLocaleString("vi-VN")}</span>
-          <span>Cập nhật {run.updatedCount.toLocaleString("vi-VN")}</span>
-          <span>Không đổi {run.unchangedCount.toLocaleString("vi-VN")}</span>
-          {run.missingCount > 0 && <span>Không còn nguồn {run.missingCount.toLocaleString("vi-VN")}</span>}
-        </div>
-      )}
-      {!running && !success && run.error && (
-        <div className="max-w-xl text-xs font-medium text-rose-700">{run.error}</div>
-      )}
-    </div>
-  );
-}
-
-// Cờ dự phòng cho giai đoạn đồng bộ HAI CHIỀU (ghi ngược lên Google Sheet) sau này.
-// Hiện tại chưa có tác vụ ghi ngược nào phụ thuộc vào cờ này — chỉ lưu trạng thái
-// bật/tắt để chuẩn bị hạ tầng, mặc định tắt và chỉ ADMIN/người được phân quyền thấy nút này.
-function DefectTwoWaySyncToggle() {
-  const query = useDefectTwoWaySync();
-  const setEnabled = useSetDefectTwoWaySync();
-  const enabled = query.data?.data?.twoWaySyncEnabled ?? false;
-
-  async function toggle() {
-    try {
-      await setEnabled.mutateAsync(!enabled);
-      toast.success(!enabled ? "Đã bật đồng bộ hai chiều (dự phòng)" : "Đã tắt đồng bộ hai chiều");
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <div className="font-semibold text-ink">Đồng bộ hai chiều (dự phòng)</div>
-        <p className="text-xs text-muted-foreground">
-          Thiết kế cho giai đoạn phát triển sau — hiện đồng bộ khiếm khuyết vẫn chỉ một chiều Google Sheet → DH1.
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2.5">
-        <span className={cn("text-xs font-semibold", enabled ? "text-emerald-700" : "text-muted-foreground")}>
-          {enabled ? "Đang bật" : "Đang tắt"}
-        </span>
-        <button
-          onClick={toggle}
-          disabled={query.isLoading || setEnabled.isPending}
-          title={enabled ? "Tắt đồng bộ hai chiều" : "Bật đồng bộ hai chiều"}
-          className={cn(
-            "relative h-7 w-12 shrink-0 rounded-full shadow-inner ring-1 transition-all duration-300 disabled:opacity-60",
-            enabled
-              ? "bg-gradient-to-b from-emerald-400 to-green-600 ring-green-700/30"
-              : "bg-gradient-to-b from-slate-200 to-slate-400 ring-slate-400/40"
-          )}
-        >
-          <span
-            className={cn(
-              "absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform duration-300",
-              enabled ? "translate-x-[20px]" : "translate-x-0"
-            )}
-          />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // Bộ lọc gắn trên tiêu đề cột (nút phễu + danh sách lựa chọn), giống bảng Thiết bị.
 function ColumnFilter({
