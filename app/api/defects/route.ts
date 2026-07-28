@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -348,6 +349,8 @@ export async function POST(req: NextRequest) {
       return fail(`Danh sách thiết bị liên quan không hợp lệ hoặc vượt quá ${MAX_DEFECT_RELATED_DEVICES} thiết bị`);
     }
     if (!String(body.shiftLeaderId ?? "").trim()) return fail("Vui lòng chọn Trưởng ca");
+    // Tổ máy quyết định CÂY thiết bị được phép gắn (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+    assertSeqsInScope([body.device, ...relatedDeviceSeqs], String(body.unit));
     if (body.device) await assertSeqEditable(user, String(body.device));
     await Promise.all(relatedDeviceSeqs.map((seq) => assertSeqEditable(user, seq)));
     if (relatedDeviceSeqs.length > 0) {

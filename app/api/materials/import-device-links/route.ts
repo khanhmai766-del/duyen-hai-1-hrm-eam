@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { addMonths, canManageMaterialCatalog, DEFECT_UNITS } from "@/lib/constants";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
+import { seqInScope, type TreeScope } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,15 @@ export async function POST(req: NextRequest) {
       if (!deviceSeq || !deviceName || !materialName) return errors.push({ rowNumber, message: "Thiếu Số thứ tự, Tên thiết bị hoặc Tên vật tư" });
       if (!node) return errors.push({ rowNumber, message: `Không tìm thấy thiết bị có Số thứ tự ${deviceSeq}` });
       if (parentSeqs.has(deviceSeq)) return errors.push({ rowNumber, message: `Số thứ tự ${deviceSeq} là thư mục, không phải thiết bị lá` });
+      // Tổ máy của dòng quyết định cây thiết bị hợp lệ (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+      if (!seqInScope(deviceSeq, machine as TreeScope)) {
+        return errors.push({
+          rowNumber,
+          message: machine === "COMMON"
+            ? `Thiết bị “${deviceSeq}” không thuộc nhánh dùng chung (5, 6) — dòng tổ máy COMMON chỉ nhận thiết bị dùng chung`
+            : `Thiết bị “${deviceSeq}” thuộc nhánh dùng chung — dòng tổ máy ${machine} chỉ nhận thiết bị của tổ máy`,
+        });
+      }
       if (normalizeText(deviceName) !== normalizeText(node.name)) return errors.push({ rowNumber, message: `Tên thiết bị không khớp với Số thứ tự ${deviceSeq}; tên đúng là “${node.name}”` });
       if (!group) return errors.push({ rowNumber, message: `Không tìm thấy nhóm vật tư ERP “${materialName}” thuộc loại ${category}` });
       if (matchedGroups.length > 1) return errors.push({ rowNumber, message: `Tên nhóm vật tư ERP “${materialName}” bị trùng` });

@@ -5,6 +5,7 @@ import { addMonths, DEFECT_UNITS } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { canManageMaterialCatalog } from "@/lib/constants";
 
@@ -159,10 +160,13 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
 /** Lọc các điểm hợp lệ (phải có thiết bị hoặc hệ thống) từ payload. */
 function parseReplacements(body: { replacements?: unknown }, userId: string, defaultSystem: string | null, machine: string) {
   if (!Array.isArray(body.replacements)) return [];
-  return body.replacements
+  const rows = body.replacements
     .filter((r: ReplacementInput) =>
       r && (String(r.deviceSeq ?? "").trim() || String(r.system ?? "").trim() || String(r.location ?? "").trim()))
     .map((r: ReplacementInput) => buildReplacementCreate(r, userId, defaultSystem, machine));
+  // Tổ máy của vật tư quyết định CÂY thiết bị được phép gán (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+  assertSeqsInScope(rows.map((r) => r.deviceSeq), machine);
+  return rows;
 }
 
 function parseErpCodes(body: { code?: unknown; erpCodes?: unknown }) {

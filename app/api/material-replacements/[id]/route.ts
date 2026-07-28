@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -69,6 +70,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return fail("Cương vị của bạn không có quyền thao tác trên điểm thay thế này", 403);
     }
     if (body.deviceId) await assertSeqEditable(user, String(body.deviceId));
+    // Đổi thiết bị của một điểm cũng phải nằm trong đúng cây của tổ máy sở hữu điểm.
+    if (body.deviceId) assertSeqsInScope([String(body.deviceId)], existing.machine);
 
     const intervalMonths = body.intervalMonths != null ? Number(body.intervalMonths) : undefined;
     if (intervalMonths != null && (!Number.isFinite(intervalMonths) || intervalMonths < 0)) {

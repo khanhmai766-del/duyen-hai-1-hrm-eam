@@ -887,6 +887,7 @@ function MaterialsPageContent() {
             <ReplacementPointsEditor
               value={detailRows}
               unit={editingDetails.unit}
+              machine={editingDetails.machine}
               onChange={setDetailRows}
             />
           )}
@@ -1561,7 +1562,7 @@ function InlineTrackingEditor({
           </Button>
         </div>
       </div>
-      <ReplacementPointsEditor value={rows} unit={material.unit} onChange={onRowsChange} />
+      <ReplacementPointsEditor value={rows} unit={material.unit} machine={material.machine} onChange={onRowsChange} />
     </div>
   );
 }

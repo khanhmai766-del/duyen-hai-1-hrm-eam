@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { usePositions } from "@/hooks/useUsers";
 import { isSelectableManagingPosition } from "@/lib/constants";
+import { parseScopeParam, TREE_SCOPES } from "@/lib/equipment-units";
 import type { MaterialReplacementInput } from "@/hooks/useMaterials";
 
 const NO_POSITION = "__NONE__";
@@ -15,17 +16,24 @@ const NO_POSITION = "__NONE__";
 /**
  * Bảng "điểm dùng / thay thế" cho một vật tư: mỗi dòng = 1 hệ thống/thiết bị +
  * chu kỳ thay thế + số lượng cần thay. Cho phép thêm/xoá nhiều dòng.
+ *
+ * `unit` là ĐVT của vật tư (Lít, Cái…); `machine` là TỔ MÁY sở hữu danh mục và quyết định
+ * cây thiết bị được phép gán: S1/S2 → nhánh 1,2,3,7 (mã theo tổ máy); COMMON → nhánh 5,6.
  */
 export function ReplacementPointsEditor({
   value,
   unit,
+  machine,
   onChange,
 }: {
   value: MaterialReplacementInput[];
   unit?: string;
+  machine?: string;
   onChange: (rows: MaterialReplacementInput[]) => void;
 }) {
   const rows = value ?? [];
+  const scope = parseScopeParam(machine) ?? undefined;
+  const scopeLabel = TREE_SCOPES.find((s) => s.key === scope)?.label ?? null;
   // Cương vị quản lý: cùng nguồn với ô "Cương Vị" của form nhập khiếm khuyết
   // (chức vụ từ Quản lý người dùng, lọc bỏ nhóm quản đốc/thống kê/kỹ thuật viên).
   const allPositions = usePositions();
@@ -46,11 +54,14 @@ export function ReplacementPointsEditor({
         <div key={i} className="space-y-2 rounded-lg border border-border bg-muted/20 p-2">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="min-w-0">
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Hệ thống / thiết bị</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Hệ thống / thiết bị{scopeLabel ? ` — ${scopeLabel}` : ""}
+              </label>
               <EquipmentTreePicker
                 value={row.deviceSeq ?? ""}
                 onChange={(node) => update(i, { deviceSeq: node?.seq ?? null, system: node?.name ?? null })}
                 includeLeaves
+                scope={scope}
                 placeholder="Chọn hệ thống / thiết bị"
               />
             </div>

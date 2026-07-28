@@ -1,6 +1,14 @@
+import { fail } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { resolveEquipmentTreeAccess } from "@/lib/server-access";
-import { branchOf, COMMON_BRANCHES, seqInScope, type TreeScope } from "@/lib/equipment-units";
+import {
+  branchOf,
+  COMMON_BRANCHES,
+  parseScopeParam,
+  seqInScope,
+  TREE_SCOPES,
+  type TreeScope,
+} from "@/lib/equipment-units";
 import { normalizeText } from "@/lib/nav";
 
 // Tách cây thiết bị dùng chung thành 3 phạm vi hiển thị mà KHÔNG nhân bản node:
@@ -67,4 +75,23 @@ export function scopeSearchTerms(q: string, scope: TreeScope): string[] {
   const term = normalizeText(q);
   if (scope !== "S2" || !term.startsWith("2")) return [term];
   return [term, `1${term.slice(1)}`];
+}
+
+/**
+ * Chặn cứng phía server: dữ liệu nghiệp vụ của một tổ máy chỉ được gắn vào ĐÚNG cây của
+ * tổ máy đó — khiếm khuyết S1/S2 vào nhánh 1,2,3,7; khiếm khuyết dùng chung vào nhánh 5,6.
+ * Không có ràng buộc này thì client cũ (hoặc gọi API trực tiếp) vẫn ghi lẫn được hai cây.
+ */
+export function assertSeqsInScope(seqs: Array<string | null | undefined>, unit: string) {
+  const scope = parseScopeParam(unit);
+  if (!scope) return; // tổ máy không hợp lệ đã được các route kiểm riêng
+  const label = TREE_SCOPES.find((s) => s.key === scope)?.label ?? scope;
+  for (const seq of seqs) {
+    if (!seq || seqInScope(seq, scope)) continue;
+    throw fail(
+      scope === "COMMON"
+        ? `Thiết bị ${seq} không thuộc nhóm dùng chung — phiếu ${label} chỉ được gắn thiết bị ở nhánh dùng chung.`
+        : `Thiết bị ${seq} thuộc nhánh dùng chung — phiếu ${label} chỉ được gắn thiết bị của tổ máy.`
+    );
+  }
 }

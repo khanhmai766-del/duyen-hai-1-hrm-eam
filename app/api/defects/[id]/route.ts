@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { deleteFromS3, maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -63,6 +64,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (relatedDeviceSeqs === null) {
       return fail(`Danh sách thiết bị liên quan không hợp lệ hoặc vượt quá ${MAX_DEFECT_RELATED_DEVICES} thiết bị`);
     }
+    // Tổ máy quyết định CÂY thiết bị được phép gắn (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+    assertSeqsInScope(
+      [body.device ?? undefined, ...(relatedDeviceSeqs ?? [])],
+      String(body.unit ?? existing.unit ?? "")
+    );
     if (existing.device) await assertSeqEditable(user, existing.device);
     if (body.device) await assertSeqEditable(user, String(body.device));
     if (relatedDeviceSeqs) {

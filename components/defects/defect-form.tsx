@@ -30,6 +30,7 @@ import {
 } from "@/lib/constants";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
+import type { TreeScope } from "@/lib/equipment-units";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -131,16 +132,26 @@ export function DefectForm({
     [positions, form.unit, form.system]
   );
   // Chọn tổ máy; nếu cương vị hiện tại không thuộc nhóm mặc định của tổ máy mới thì bỏ chọn.
+  // Mỗi tổ máy ánh xạ vào một CÂY thiết bị riêng (S1/S2 = nhánh 1,2,3,7; COMMON = nhánh 5,6)
+  // nên đổi tổ máy phải bỏ luôn thiết bị đã chọn — thiết bị cũ thuộc cây khác.
   function selectUnit(u: string) {
     setForm((f) => {
+      if (f.unit === u) return f;
+      const cleared = { deviceSystem: "", deviceSystemSeq: "", device: "", relatedDeviceSeqs: [] };
       if (f.system && !isPositionAllowedForDefectUnit(u, f.system)) {
-        return { ...f, unit: u, system: "", deviceSystem: "", deviceSystemSeq: "", device: "" };
+        return { ...f, unit: u, system: "", ...cleared };
       }
-      return { ...f, unit: u };
+      return { ...f, unit: u, ...cleared };
     });
   }
-  const selectedDeviceQuery = useEquipmentNode(form.device || null);
-  const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null);
+  // Phạm vi cây theo tổ máy đang chọn: khiếm khuyết S1 ánh xạ vào cây S1 (DH1.S1…),
+  // S2 vào cây S2 (DH1.S2…), COMMON vào nhánh dùng chung 5, 6.
+  const treeScope = React.useMemo<TreeScope | undefined>(
+    () => (DEFECT_UNITS as readonly string[]).includes(form.unit) ? (form.unit as TreeScope) : undefined,
+    [form.unit]
+  );
+  const selectedDeviceQuery = useEquipmentNode(form.device || null, treeScope);
+  const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, treeScope);
   React.useEffect(() => {
     const systemName = selectedSystemQuery.data?.data.name;
     if (!systemName || form.deviceSystem === systemName) return;
@@ -338,8 +349,10 @@ export function DefectForm({
                   position={form.system || null}
                   accessFilter="edit"
                   includeLeaves
+                  scope={treeScope}
+                  disabled={!treeScope}
                   onChange={setDeviceSystemNode}
-                  placeholder="Chọn hệ thống thiết bị"
+                  placeholder={treeScope ? "Chọn hệ thống thiết bị" : "Chọn tổ máy trước"}
                 />
               )}
             </Row>
@@ -349,7 +362,8 @@ export function DefectForm({
               ) : form.device ? (
                 <LockedValue
                   primary={selectedDeviceQuery.data?.data.name ?? "Đang tải tên thiết bị…"}
-                  secondary={form.device}
+                  // Mã theo tổ máy đang chọn (S2 → DH1.S2…); form vẫn lưu mã chuẩn DH1.S1.
+                  secondary={selectedDeviceQuery.data?.data.fullCode ?? form.device}
                 />
               ) : (
                 <div className="rounded-lg border border-dashed border-border bg-muted/25 px-3 py-2.5 text-sm text-muted-foreground">
@@ -364,8 +378,10 @@ export function DefectForm({
                   position={form.system || null}
                   accessFilter="edit"
                   includeLeaves
+                  scope={treeScope}
+                  disabled={!treeScope}
                   onChange={addRelatedDevice}
-                  placeholder="Chọn thêm thiết bị liên quan"
+                  placeholder={treeScope ? "Chọn thêm thiết bị liên quan" : "Chọn tổ máy trước"}
                 />
                 {form.relatedDeviceSeqs.length > 0 ? (
                   <div className="space-y-2">
@@ -374,6 +390,7 @@ export function DefectForm({
                         <RelatedDeviceRow
                           key={seq}
                           seq={seq}
+                          scope={treeScope}
                           onRemove={() => set("relatedDeviceSeqs", form.relatedDeviceSeqs.filter((item) => item !== seq))}
                         />
                       );
@@ -775,9 +792,10 @@ function LockedValue({ primary, secondary }: { primary: string; secondary?: stri
   );
 }
 
-function RelatedDeviceRow({ seq, onRemove }: { seq: string; onRemove: () => void }) {
-  const nodeQuery = useEquipmentNode(seq);
+function RelatedDeviceRow({ seq, scope, onRemove }: { seq: string; scope?: TreeScope; onRemove: () => void }) {
+  const nodeQuery = useEquipmentNode(seq, scope);
   const name = nodeQuery.data?.data.name ?? (nodeQuery.isLoading ? "Đang tải tên thiết bị…" : seq);
+  const code = nodeQuery.data?.data.fullCode ?? seq;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
@@ -786,7 +804,7 @@ function RelatedDeviceRow({ seq, onRemove }: { seq: string; onRemove: () => void
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-ink">{name}</div>
-        <div className="truncate font-mono text-[11px] text-muted-foreground">{seq}</div>
+        <div className="truncate font-mono text-[11px] text-muted-foreground">{code}</div>
       </div>
       <button
         type="button"

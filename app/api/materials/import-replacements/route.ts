@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
+import { seqInScope, type TreeScope } from "@/lib/equipment-units";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 
@@ -148,6 +149,15 @@ export async function POST(req: NextRequest) {
           });
         }
         if (parentSeqs.has(node.seq)) return errors.push({ rowNumber, message: `Mã “${deviceSeq}” là thư mục/hệ thống, không phải thiết bị lá` });
+        // Tổ máy của dòng quyết định cây thiết bị hợp lệ (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+        if (!seqInScope(node.seq, machine as TreeScope)) {
+          return errors.push({
+            rowNumber,
+            message: machine === "COMMON"
+              ? `Thiết bị “${node.seq}” không thuộc nhánh dùng chung (5, 6) — dòng tổ máy COMMON chỉ nhận thiết bị dùng chung`
+              : `Thiết bị “${node.seq}” thuộc nhánh dùng chung — dòng tổ máy ${machine} chỉ nhận thiết bị của tổ máy`,
+          });
+        }
         if (deviceName && normalizeText(deviceName) !== normalizeText(node.name)) {
           return errors.push({ rowNumber, message: `Tên thiết bị không khớp mã “${deviceSeq}”; tên đúng là “${node.name}”` });
         }

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { assertSeqEditable } from "@/lib/server-access";
+import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { DEFECT_UNITS, MATERIAL_CATEGORIES, addMonths } from "@/lib/constants";
 import { parseDateInput } from "@/lib/utils";
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest) {
     ]);
     if (!device) return fail("Không tìm thấy thiết bị", 404);
     if (!material) return fail("Vật tư không tồn tại trong danh mục của tổ máy đã chọn", 404);
+    // Tổ máy quyết định CÂY thiết bị được phép khai báo (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+    assertSeqsInScope([deviceSeq], machine);
 
     const duplicate = await prisma.materialReplacement.findFirst({
       where: { materialId, deviceSeq, machine, isActive: false },

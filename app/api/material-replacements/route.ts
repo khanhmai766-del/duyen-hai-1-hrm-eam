@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
@@ -109,12 +110,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const materialId = String(body.materialId || "").trim();
-    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true, code: true } });
+    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true, code: true, machine: true } });
     if (!material) return fail("Không tìm thấy vật tư", 404);
 
     const deviceSeq = String(body.deviceSeq ?? body.deviceId ?? "").trim() || null;
     const system = String(body.system ?? "").trim() || null;
     if (!deviceSeq && !system) return fail("Điểm theo dõi phải gắn với thiết bị hoặc hệ thống");
+    // Tổ máy của điểm theo dõi bám theo tổ máy của vật tư, và chỉ được gắn thiết bị trong
+    // đúng cây của tổ máy đó (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
+    assertSeqsInScope([deviceSeq], material.machine);
 
     const access = await resolveEquipmentAccessForUser(user);
     if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: deviceSeq, system })) {
@@ -136,6 +140,7 @@ export async function POST(req: NextRequest) {
       data: {
         materialId,
         deviceSeq,
+        machine: material.machine,
         system,
         location: String(body.location ?? "").trim() || null,
         managingPosition: String(body.managingPosition ?? "").trim() || null,

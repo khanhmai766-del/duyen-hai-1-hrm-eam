@@ -30,6 +30,7 @@ import {
   defectSeverityCriteriaLabels,
   isSelectableManagingPosition,
 } from "@/lib/constants";
+import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 
@@ -468,12 +469,16 @@ export default function DefectsPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Đang lọc theo thiết bị</p>
             <p className="truncate font-semibold text-ink">
               {deviceDisplayName ?? "Thiết bị"}
-              <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">{deviceSeqFilter}</span>
+              <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">
+                {scopeCode(deviceSeqFilter, parseScope(unitFilter))}
+              </span>
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button asChild variant="outline" size="sm" className="bg-white">
-              <Link href={`/devices/${encodeURIComponent(deviceSeqFilter)}`}>Về lý lịch thiết bị</Link>
+              <Link href={`/devices/${encodeURIComponent(deviceSeqFilter)}?machine=${parseScope(unitFilter)}`}>
+                Về lý lịch thiết bị
+              </Link>
             </Button>
             <Button variant="ghost" size="sm" onClick={() => router.replace("/defects", { scroll: false })}>
               Bỏ lọc thiết bị
@@ -1075,11 +1080,14 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         {defect.sourceType === "GOOGLE_SHEETS" && (
           <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
         )}
-        <DetailLine label="Thiết bị đã ánh xạ" value={defect.device || "—"} />
+        {/* Mã hiển thị theo tổ máy của phiếu: S2 → DH1.S2… (DB vẫn lưu mã chuẩn DH1.S1). */}
+        <DetailLine label="Thiết bị đã ánh xạ" value={defect.device ? scopeCode(defect.device, parseScope(defect.unit)) : "—"} />
         <DetailLine
           label="Thiết bị liên quan"
           value={defect.relatedDevices.length > 0
-            ? defect.relatedDevices.map((item) => `${item.device.name} (${item.deviceSeq})`).join("\n")
+            ? defect.relatedDevices
+                .map((item) => `${item.device.name} (${scopeCode(item.deviceSeq, parseScope(defect.unit))})`)
+                .join("\n")
             : "—"}
           multiline
         />
