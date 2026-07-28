@@ -34,8 +34,8 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 
 const PAGE_SIZES = [10, 25, 50, 100];
-// Lựa chọn của bộ lọc "KQ vận hành" — dùng chung cho dropdown trên thanh lọc và cho
-// việc tra nhãn hiển thị trên chip "Đang lọc".
+// Nhãn hiển thị của từng giá trị statusFilter. Bộ lọc kết quả vận hành không còn
+// dropdown riêng — chỉ đặt bằng 5 thẻ KPI; bảng này dùng để hiện tên trên chip "Đang lọc".
 const DEFECT_STATUS_FILTER_OPTIONS = [
   { value: "SOURCE_MISSING", label: "Không còn trên Google Sheet" },
   { value: "TON_DONG", label: "Tồn đọng" },
@@ -574,15 +574,6 @@ export default function DefectsPage() {
               allValue: "ALL",
               allLabel: "Tất cả cương vị",
               onChange: setPositionFilter,
-            },
-            {
-              label: "KQ vận hành",
-              value: statusFilter,
-              // Cùng state với 5 thẻ KPI phía dưới nên hai nơi luôn khớp nhau.
-              options: DEFECT_STATUS_FILTER_OPTIONS,
-              allValue: "ALL",
-              allLabel: "Tất cả kết quả",
-              onChange: setStatusFilter,
             },
             {
               label: "KQ sửa chữa",
