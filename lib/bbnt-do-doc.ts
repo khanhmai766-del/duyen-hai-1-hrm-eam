@@ -142,7 +142,9 @@ function patchSccnRepresentativeTokens(documentXml: string) {
   // Thay đúng ô này bằng tên đại diện SCCN, giữ nguyên định dạng căn giữa/in đậm.
   const emptyNameCell = "<w:t>Trống</w:t>";
   const lastEmptyNameCell = patched.lastIndexOf(emptyNameCell);
-  if (lastEmptyNameCell >= 0 && !patched.includes("<w:t>{{sccnRepresentativeName}}</w:t>")) {
+  const representativeNameTokenCount =
+    patched.split("{{sccnRepresentativeName}}").length - 1;
+  if (lastEmptyNameCell >= 0 && representativeNameTokenCount < 2) {
     patched =
       patched.slice(0, lastEmptyNameCell) +
       "<w:t>{{sccnRepresentativeName}}</w:t>" +
