@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, CloudOff, Minus, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, CloudOff, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -34,6 +34,13 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 
 const PAGE_SIZES = [10, 25, 50, 100];
+// Lựa chọn của bộ lọc "KQ vận hành" — dùng chung cho dropdown trên thanh lọc và cho
+// việc tra nhãn hiển thị trên chip "Đang lọc".
+const DEFECT_STATUS_FILTER_OPTIONS = [
+  { value: "SOURCE_MISSING", label: "Không còn trên Google Sheet" },
+  { value: "TON_DONG", label: "Tồn đọng" },
+  ...DEFECT_STATUS_ORDER.filter((s) => s !== "DA_XU_LY").map((s) => ({ value: s, label: DEFECT_STATUS[s].label })),
+];
 const DefectForm = dynamic(
   () => import("@/components/defects/defect-form").then((module) => module.DefectForm),
   { ssr: false }
@@ -424,12 +431,8 @@ export default function DefectsPage() {
     if (statusFilter !== "ALL") {
       chips.push({
         key: "status",
-        label: "Tình trạng",
-        value: statusFilter === "TON_DONG"
-          ? "Tồn đọng"
-          : statusFilter === "SOURCE_MISSING"
-            ? "Không còn trên Google Sheet"
-            : (DEFECT_STATUS as Record<string, { label: string }>)[statusFilter]?.label ?? statusFilter,
+        label: "KQ vận hành",
+        value: DEFECT_STATUS_FILTER_OPTIONS.find((option) => option.value === statusFilter)?.label ?? statusFilter,
         onClear: () => setStatusFilter("ALL"),
       });
     }
@@ -562,6 +565,15 @@ export default function DefectsPage() {
               onChange: setPositionFilter,
             },
             {
+              label: "KQ vận hành",
+              value: statusFilter,
+              // Cùng state với 5 thẻ KPI phía dưới nên hai nơi luôn khớp nhau.
+              options: DEFECT_STATUS_FILTER_OPTIONS,
+              allValue: "ALL",
+              allLabel: "Tất cả kết quả",
+              onChange: setStatusFilter,
+            },
+            {
               label: "Mức độ",
               value: severityFilter,
               options: DEFECT_SEVERITY_ORDER.map((s) => ({ value: s, label: DEFECT_SEVERITY[s] })),
@@ -614,28 +626,10 @@ export default function DefectsPage() {
                 <TableHead className="w-[96px] px-1.5 text-center">Số yêu cầu</TableHead>
                 <TableHead className="w-[104px] px-1.5 text-center">Cương vị</TableHead>
                 <TableHead className="w-[288px] px-2 text-center">Nội dung</TableHead>
-                <TableHead className="w-[68px] px-1 text-center">
-                  <ColumnFilter
-                    label="Mức độ"
-                    value={severityFilter}
-                    options={DEFECT_SEVERITY_ORDER.map((s) => ({ value: s, label: DEFECT_SEVERITY[s] }))}
-                    onChange={setSeverityFilter}
-                  />
-                </TableHead>
-                <TableHead className="w-[112px] px-1 text-center">
-                  <ColumnFilter
-                    label="KQ Vận hành"
-                    value={statusFilter}
-                    options={[
-                      { value: "SOURCE_MISSING", label: "Không còn trên Google Sheet" },
-                      { value: "TON_DONG", label: "Tồn đọng" },
-                      ...DEFECT_STATUS_ORDER
-                        .filter((s) => s !== "DA_XU_LY")
-                        .map((s) => ({ value: s, label: DEFECT_STATUS[s].label })),
-                    ]}
-                    onChange={setStatusFilter}
-                  />
-                </TableHead>
+                {/* Mức độ và KQ Vận hành đã chuyển lên thanh lọc phía trên — tiêu đề cột
+                    chỉ còn là nhãn, không kèm phễu lọc riêng nữa. */}
+                <TableHead className="w-[68px] px-1 text-center">Mức độ</TableHead>
+                <TableHead className="w-[112px] px-1 text-center">KQ Vận hành</TableHead>
                 <TableHead className="w-[120px] px-1.5 text-center">KQ Sửa chữa</TableHead>
                 <TableHead className="w-[64px] px-1 text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[84px] px-1 text-center">Phát hiện</TableHead>
@@ -945,67 +939,6 @@ const SEVERITY_TONE: Record<string, string> = {
   "4": "bg-gray-100 text-gray-600",
 };
 
-
-// Bộ lọc gắn trên tiêu đề cột (nút phễu + danh sách lựa chọn), giống bảng Thiết bị.
-function ColumnFilter({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-}) {
-  const active = value !== "ALL";
-  return (
-    <div className="inline-flex h-8 items-center justify-center gap-1">
-      <span className="whitespace-nowrap">{label}</span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-6 w-6 rounded-full border border-transparent text-muted-foreground transition-colors hover:border-blue-100 hover:bg-blue-50 hover:text-blue-700",
-              active && "border-blue-200 bg-blue-50 text-blue-700 shadow-sm shadow-blue-100"
-            )}
-            title={`Lọc theo ${label.toLowerCase()}`}
-            aria-label={`Lọc theo ${label.toLowerCase()}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Filter className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuLabel className="text-xs text-muted-foreground">{label}</DropdownMenuLabel>
-          <DropdownMenuItem
-            className={cn("justify-between text-sm", value === "ALL" && "bg-blue-50 text-blue-700")}
-            onClick={() => onChange("ALL")}
-          >
-            <span>Tất cả</span>
-            {value === "ALL" && <span className="text-xs font-bold">✓</span>}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <div className="max-h-64 overflow-y-auto">
-            {options.map((o) => (
-              <DropdownMenuItem
-                key={o.value}
-                className={cn("justify-between gap-3 text-sm", value === o.value && "bg-blue-50 text-blue-700")}
-                onClick={() => onChange(o.value)}
-              >
-                <span className="truncate">{o.label}</span>
-                {value === o.value && <span className="text-xs font-bold">✓</span>}
-              </DropdownMenuItem>
-            ))}
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
 
 function ExpandedDefectDetails({ id }: { id: string }) {
   const detail = useDefect(id);
