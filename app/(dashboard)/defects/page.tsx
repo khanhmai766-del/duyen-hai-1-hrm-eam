@@ -650,11 +650,11 @@ export default function DefectsPage() {
                 <TableHead className="w-[96px] px-1.5 text-center">Số yêu cầu</TableHead>
                 <TableHead className="w-[104px] px-1.5 text-center">Cương vị</TableHead>
                 <TableHead className="w-[288px] px-2 text-center">Nội dung</TableHead>
-                {/* Mức độ và KQ Vận hành đã chuyển lên thanh lọc phía trên — tiêu đề cột
+                {/* Mức độ và Vận hành đã chuyển lên thanh lọc phía trên — tiêu đề cột
                     chỉ còn là nhãn, không kèm phễu lọc riêng nữa. */}
                 <TableHead className="w-[68px] px-1 text-center">Mức độ</TableHead>
-                <TableHead className="w-[112px] px-1 text-center">KQ Vận hành</TableHead>
-                <TableHead className="w-[120px] px-1.5 text-center">KQ Sửa chữa</TableHead>
+                <TableHead className="w-[112px] px-1 text-center">Vận hành</TableHead>
+                <TableHead className="w-[120px] px-1.5 text-center">Sửa chữa</TableHead>
                 <TableHead className="w-[64px] px-1 text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[84px] px-1 text-center">Phát hiện</TableHead>
                 <TableHead className="w-[72px] px-1 text-center">Cập nhật</TableHead>
