@@ -7,14 +7,13 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, CloudOff, Minus, Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, CloudOff, Minus, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -30,11 +29,11 @@ import {
 } from "@/lib/constants";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { DefectSyncChip } from "@/components/defects/defect-sync-chip";
+import { DefectFilterBar, type ActiveChip } from "@/components/defects/defect-filter-bar";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 
 const PAGE_SIZES = [10, 25, 50, 100];
-const OTHER_REQUEST_TYPES = DEFECT_REQUEST_TYPES.filter((type) => type !== "Cơ" && type !== "Điện");
 const DefectForm = dynamic(
   () => import("@/components/defects/defect-form").then((module) => module.DefectForm),
   { ssr: false }
@@ -394,6 +393,52 @@ export default function DefectsPage() {
     setTableSearch("");
   }
 
+  // Chip "Đang lọc": chỉ gắn nút × khi bấm vào THỰC SỰ đổi được gì đó. Tổ máy và Yêu cầu
+  // luôn phải có một giá trị nên khi đang ở mặc định (S1 / Cơ) chúng chỉ là chip ngữ cảnh.
+  const activeFilterChips = React.useMemo<ActiveChip[]>(() => {
+    const chips: ActiveChip[] = [
+      {
+        key: "unit",
+        label: "Tổ máy",
+        value: unitFilter === "COMMON" ? "Common" : unitFilter,
+        onClear: unitFilter !== "S1" ? () => setUnitFilter("S1") : undefined,
+      },
+      {
+        key: "request",
+        label: "Yêu cầu",
+        value: requestFilter,
+        onClear: requestFilter !== "Cơ" ? () => setRequestFilter("Cơ") : undefined,
+      },
+    ];
+    if (positionFilter !== "ALL") {
+      chips.push({ key: "position", label: "Cương vị", value: positionFilter, onClear: () => setPositionFilter("ALL") });
+    }
+    if (severityFilter !== "ALL") {
+      chips.push({
+        key: "severity",
+        label: "Mức độ",
+        value: (DEFECT_SEVERITY as Record<string, string>)[severityFilter] ?? severityFilter,
+        onClear: () => setSeverityFilter("ALL"),
+      });
+    }
+    if (statusFilter !== "ALL") {
+      chips.push({
+        key: "status",
+        label: "Tình trạng",
+        value: statusFilter === "TON_DONG"
+          ? "Tồn đọng"
+          : statusFilter === "SOURCE_MISSING"
+            ? "Không còn trên Google Sheet"
+            : (DEFECT_STATUS as Record<string, { label: string }>)[statusFilter]?.label ?? statusFilter,
+        onClear: () => setStatusFilter("ALL"),
+      });
+    }
+    if (tableSearch.trim()) {
+      chips.push({ key: "search", label: "Tìm", value: tableSearch.trim(), onClear: () => setTableSearch("") });
+    }
+    return chips;
+  }, [unitFilter, requestFilter, positionFilter, severityFilter, statusFilter, tableSearch]);
+
   const chuaXuLy = data?.meta?.kpi?.chuaXuLy ?? 0;
   const coPct = data?.meta?.kpi?.coPct ?? 0;
   const choVatTu = data?.meta?.kpi?.choVatTu ?? 0;
@@ -494,93 +539,43 @@ export default function DefectsPage() {
       )}
 
       {!isLoading && scopeTotal > 0 && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 xl:flex-nowrap">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
-            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
-              {(["S1", "S2", "COMMON"] as const).map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setUnitFilter(u)}
-                  className={cn(
-                    "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-                    unitFilter === u ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
-                  )}
-                >
-                  {u}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Yêu cầu:</span>
-            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
-              {(["Cơ", "Điện"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setRequestFilter(type)}
-                  className={cn(
-                    "h-8 rounded-md px-4 text-sm font-medium transition-colors",
-                    requestFilter === type ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
-                  )}
-                >
-                  {type}
-                </button>
-              ))}
-              <Select
-                value={OTHER_REQUEST_TYPES.includes(requestFilter as (typeof OTHER_REQUEST_TYPES)[number]) ? requestFilter : ""}
-                onValueChange={setRequestFilter}
-              >
-                <SelectTrigger
-                  className={cn(
-                    "h-8 w-auto min-w-[92px] rounded-md border-0 px-4 shadow-none focus:ring-0",
-                    OTHER_REQUEST_TYPES.includes(requestFilter as (typeof OTHER_REQUEST_TYPES)[number])
-                      ? "bg-navy text-white"
-                      : "text-muted-foreground hover:text-ink"
-                  )}
-                  aria-label="Chọn loại yêu cầu khác"
-                >
-                  <SelectValue placeholder="Khác" />
-                </SelectTrigger>
-                <SelectContent>
-                  {OTHER_REQUEST_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>{type}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Cương vị:</span>
-            <Select value={positionFilter} onValueChange={setPositionFilter}>
-              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isFiltered && (
-            <button onClick={resetFilters} className="text-sm font-medium text-accent hover:underline">
-              Xoá bộ lọc
-            </button>
-          )}
-
-          <div className="relative ml-auto w-full shrink-0 sm:w-64 xl:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              placeholder="Tìm trong bảng..."
-              className="h-9 pl-9"
-            />
-          </div>
-        </div>
+        <DefectFilterBar
+          search={tableSearch}
+          onSearchChange={setTableSearch}
+          units={["S1", "S2", "COMMON"]}
+          unit={unitFilter}
+          onUnitChange={(value) => setUnitFilter(value as typeof unitFilter)}
+          dropdowns={[
+            {
+              label: "Yêu cầu",
+              value: requestFilter,
+              // Luôn phải có 1 loại yêu cầu (Cơ/Điện/… ) — không có mục "Tất cả".
+              options: DEFECT_REQUEST_TYPES.map((type) => ({ value: type, label: type })),
+              onChange: setRequestFilter,
+            },
+            {
+              label: "Cương vị",
+              value: positionFilter,
+              options: positions.map((position) => ({ value: position, label: position })),
+              allValue: "ALL",
+              allLabel: "Tất cả cương vị",
+              onChange: setPositionFilter,
+            },
+            {
+              label: "Mức độ",
+              value: severityFilter,
+              options: DEFECT_SEVERITY_ORDER.map((s) => ({ value: s, label: DEFECT_SEVERITY[s] })),
+              allValue: "ALL",
+              allLabel: "Tất cả mức độ",
+              onChange: setSeverityFilter,
+            },
+          ]}
+          chips={activeFilterChips}
+          total={total}
+          scopeTotal={scopeTotal}
+          canReset={isFiltered}
+          onReset={resetFilters}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
