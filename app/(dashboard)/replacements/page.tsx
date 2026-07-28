@@ -101,8 +101,9 @@ function ReplacementsPageContent() {
 
   /* ---- Tab 1: Lịch thay thế (schedule) ---- */
   const [due, setDue] = React.useState("ALL");
-  const [machineFilter, setMachineFilter] = React.useState("ALL");
-  const [categoryFilter, setCategoryFilter] = React.useState("ALL");
+  // Mặc định vào thẳng nhóm dùng nhiều nhất: Tổ máy S1 · Dầu bôi trơn.
+  const [machineFilter, setMachineFilter] = React.useState("S1");
+  const [categoryFilter, setCategoryFilter] = React.useState<string>(CATEGORY_FILTERS[0]);
   // Ngày đang chọn trên lịch ("YYYY-MM-DD") — lọc panel danh sách bên phải.
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
   React.useEffect(() => {
