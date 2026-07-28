@@ -75,29 +75,91 @@ export async function POST(req: NextRequest) {
     const parsedInterval = Math.round(Number(body.intervalMonths));
     const intervalMonths = Number.isFinite(parsedInterval) ? Math.max(0, parsedInterval) : 0;
     const lastReplacedAt = body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : null;
-    const nextDueAt = addMonths(lastReplacedAt ?? new Date(), intervalMonths);
-    const point = await prisma.materialReplacement.create({
-      data: {
-        materialId,
-        deviceSeq,
-        machine,
-        system: String(body.system ?? "").trim() || null,
-        location: String(body.location ?? "").trim() || device.name,
-        managingPosition: String(body.managingPosition ?? "").trim() || null,
-        quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
-        deviceCount: Math.max(1, Math.round(Number(body.deviceCount)) || 1),
-        intervalMonths,
-        intervalNote: String(body.intervalNote ?? "").trim() || null,
-        lastReplacedAt,
-        nextDueAt,
-        note: String(body.note ?? "").trim() || null,
-        isActive: false,
-        createdById: user.id,
-      },
-      include: { material: { select: { id: true, name: true, unit: true, machine: true, category: true } } },
+    if (lastReplacedAt && Number.isNaN(lastReplacedAt.getTime())) {
+      return fail("Lần thay gần nhất không phải ngày hợp lệ");
+    }
+    if (lastReplacedAt) {
+      const tomorrow = new Date();
+      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (lastReplacedAt >= tomorrow) {
+        return fail("Lần thay gần nhất không được là ngày trong tương lai");
+      }
+      if (intervalMonths <= 0) {
+        return fail("Đã nhập Lần thay gần nhất thì Chu kỳ thay thế phải lớn hơn 0 tháng để lên lịch theo dõi");
+      }
+    }
+
+    const declarationData = {
+      machine,
+      system: String(body.system ?? "").trim() || null,
+      location: String(body.location ?? "").trim() || device.name,
+      managingPosition: String(body.managingPosition ?? "").trim() || null,
+      quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
+      deviceCount: Math.max(1, Math.round(Number(body.deviceCount)) || 1),
+      intervalMonths,
+      intervalNote: String(body.intervalNote ?? "").trim() || null,
+      note: String(body.note ?? "").trim() || null,
+    };
+
+    const point = await prisma.$transaction(async (tx) => {
+      // Dòng khai báo luôn được giữ riêng để tiếp tục hiển thị tại Chi tiết điểm thay thế.
+      const declaration = await tx.materialReplacement.create({
+        data: {
+          ...declarationData,
+          materialId,
+          deviceSeq,
+          lastReplacedAt: null,
+          nextDueAt: addMonths(new Date(), intervalMonths),
+          isActive: false,
+          createdById: user.id,
+        },
+        include: { material: { select: { id: true, name: true, unit: true, machine: true, category: true } } },
+      });
+
+      // Có ngày thay gần nhất: tạo/cập nhật đúng một điểm theo dõi tương ứng.
+      // Lịch thay thế và sidebar đều đọc dòng isActive=true này.
+      if (lastReplacedAt) {
+        const trackingData = {
+          ...declarationData,
+          lastReplacedAt,
+          nextDueAt: addMonths(lastReplacedAt, intervalMonths),
+          isActive: true,
+        };
+        const existingTracking = await tx.materialReplacement.findFirst({
+          where: { materialId, deviceSeq, isActive: true },
+          select: { id: true },
+        });
+        if (existingTracking) {
+          await tx.materialReplacement.update({
+            where: { id: existingTracking.id },
+            data: trackingData,
+          });
+        } else {
+          await tx.materialReplacement.create({
+            data: {
+              ...trackingData,
+              materialId,
+              deviceSeq,
+              createdById: user.id,
+            },
+          });
+        }
+      }
+
+      return declaration;
     });
 
-    await audit(user.id, "DECLARE_DEVICE_MATERIAL", "MaterialReplacement", point.id, auditDetailWithPosition(user, `${deviceSeq} · ${material.code}`));
+    await audit(
+      user.id,
+      "DECLARE_DEVICE_MATERIAL",
+      "MaterialReplacement",
+      point.id,
+      auditDetailWithPosition(
+        user,
+        `${deviceSeq} · ${material.code}${lastReplacedAt ? " · đồng bộ lịch thay thế" : ""}`
+      )
+    );
     return ok(point);
   });
 }

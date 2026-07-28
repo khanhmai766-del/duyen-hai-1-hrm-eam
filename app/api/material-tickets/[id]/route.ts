@@ -388,6 +388,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const user = await requireUser();
     const t = await getTicket(params.id);
     if (!t) return fail("Không tìm thấy phiếu", 404);
+    if (t.settledAt && user.role !== "ADMIN") {
+      return fail("Phiếu đã xác nhận quyết toán, chỉ Quản trị mới được phép xóa", 403);
+    }
     if (!(await canManageTicket(user, t)))
       return fail("Bạn không có quyền xóa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
     await prisma.$transaction(async (tx) => {

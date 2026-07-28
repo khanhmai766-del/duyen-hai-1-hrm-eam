@@ -316,6 +316,7 @@ export default function MaterialTicketBoard({
 	            (viewer.isAdmin ||
 	              viewer.steps?.manage ||
 	              (!viewer.steps?.manageConfigured && viewer.id === t.createdById));
+	          const canDelete = canEdit && (!t.settledAt || viewer?.isAdmin);
           const materialNames = Array.from(new Set(t.items.map((i) => i.erpName || i.material?.name).filter(Boolean)));
           const materialText = materialNames.length ? materialNames.join(", ") : "—";
           const isOpen = openId === t.id;
@@ -369,14 +370,15 @@ export default function MaterialTicketBoard({
                     })()}
               </span>
               <span className="ops">
-                {canEdit ? (
-                  <>
-                    <span role="button" tabIndex={0} title="Sửa phiếu" className="op"
-                      onClick={(e) => { e.stopPropagation(); setEditTicket(t); }}><Pencil size={14} /></span>
-                    <span role="button" tabIndex={0} title="Xóa phiếu" className="op del"
-                      onClick={(e) => { e.stopPropagation(); setDelTicket(t); }}><Trash2 size={14} /></span>
-                  </>
-                ) : <span className="soft">—</span>}
+                {canEdit && (
+                  <span role="button" tabIndex={0} title="Sửa phiếu" className="op"
+                    onClick={(e) => { e.stopPropagation(); setEditTicket(t); }}><Pencil size={14} /></span>
+                )}
+                {canDelete && (
+                  <span role="button" tabIndex={0} title="Xóa phiếu" className="op del"
+                    onClick={(e) => { e.stopPropagation(); setDelTicket(t); }}><Trash2 size={14} /></span>
+                )}
+                {!canEdit && !canDelete && <span className="soft">—</span>}
               </span>
             </button>
             {/* Chi tiết bung ngay dưới dòng — cùng kiểu panel chi tiết của bảng Danh mục vật tư */}

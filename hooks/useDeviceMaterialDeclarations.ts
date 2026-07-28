@@ -47,10 +47,12 @@ export function useCreateDeviceMaterialDeclaration() {
   return useMutation({
     mutationFn: (body: DeviceMaterialDeclarationInput) =>
       apiMutate("/api/device-material-declarations", "POST", body),
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["replacements"] });
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),
+        qc.invalidateQueries({ queryKey: ["materials"] }),
+        qc.invalidateQueries({ queryKey: ["replacements"] }),
+      ]);
     },
   });
 }

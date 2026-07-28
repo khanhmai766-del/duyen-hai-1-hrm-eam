@@ -90,6 +90,9 @@ export function DeviceMaterialDeclarationDialog({
   async function submit() {
     if (!materialId) return toast.error("Vui lòng chọn vật tư trong danh mục PXVH1");
     if (Number(quantity) <= 0) return toast.error("Dung tích hoặc số lượng phải lớn hơn 0");
+    if (lastReplacedAt && Number(intervalMonths) <= 0) {
+      return toast.error("Đã nhập Lần thay gần nhất thì Chu kỳ thay thế phải lớn hơn 0 tháng");
+    }
     try {
       await create.mutateAsync({
         deviceSeq: device.code,
@@ -191,6 +194,9 @@ export function DeviceMaterialDeclarationDialog({
               </Field>
               <Field label="Lần thay gần nhất">
                 <Input type="date" value={lastReplacedAt} onChange={(event) => setLastReplacedAt(event.target.value)} />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Nhập ngày để tự động tạo hoặc cập nhật lịch và danh sách theo dõi thay thế.
+                </p>
               </Field>
               <Field label="Cương vị quản lý">
                 <Select value={managingPosition || NONE} onValueChange={(value) => setManagingPosition(value === NONE ? "" : value)}>
