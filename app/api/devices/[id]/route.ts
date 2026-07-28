@@ -14,7 +14,7 @@ import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { normalizeText } from "@/lib/nav";
-import { machinesOf, s2Code, s2Kks, type EquipmentMachine } from "@/lib/equipment-units";
+import { MAX_EQUIPMENT_DEPTH, canonicalSeq, machinesOf, s2Code, s2Kks, type EquipmentMachine, validateEquipmentSeq } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +24,6 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
-const MAX_EQUIPMENT_DEPTH = 16; // số đoạn của mã đầy đủ (gồm DH1.S1) — giới hạn kỹ thuật
-
-// Mã thiết bị đầy đủ (fullCode) sau re-key: DH1.S1 + các cấp số nguyên dương.
-function validateEquipmentSeq(seq: string) {
-  if (!/^DH1\.S1(?:\.[1-9]\d*)*$/.test(seq)) {
-    return "Mã thiết bị phải bắt đầu bằng DH1.S1, các cấp sau là số nguyên dương phân cách bằng dấu chấm (vd DH1.S1.1.2.3)";
-  }
-  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa ${MAX_EQUIPMENT_DEPTH} cấp`;
-  return null;
-}
 
 function publicEquipmentUrl(seq: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -215,7 +205,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const current = await prisma.equipmentNode.findUnique({ where: { seq: currentSeq } });
     if (!current) return fail("Không tìm thấy thiết bị", 404);
 
-    const nextSeq = typeof body.code === "string" ? body.code.trim() : currentSeq;
+    // Mã gửi lên có thể theo tổ máy đang xem (DH1.S2.…) — quy về mã chuẩn trước khi dùng.
+    const nextSeq = typeof body.code === "string" ? canonicalSeq(body.code.trim()) : currentSeq;
     const name = typeof body.name === "string" ? body.name.trim() : current.name;
     const kks = body.kks !== undefined ? String(body.kks ?? "").trim() || null : current.kks;
     if (!nextSeq || !name) return fail("Số thứ tự và tên thiết bị không được để trống");
@@ -236,7 +227,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ? await maybeUploadDataUrl({ value: images[0] ?? null, folder: "equipment/images", preset: "image" })
         : undefined;
     const parentSeq = typeof body.systemSeq === "string" && body.systemSeq.trim()
-      ? body.systemSeq.trim()
+      ? canonicalSeq(body.systemSeq.trim())
       : parentSeqOf(nextSeq);
     if (parentSeq) {
       // Dùng cây chuẩn hoá giống API cây thiết bị; một số thư mục hệ thống tổng

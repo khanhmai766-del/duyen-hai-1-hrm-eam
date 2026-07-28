@@ -266,6 +266,7 @@ function DevicesPageContent() {
         canManageDevices ? (
           <DeviceForm
             initialParentSeq={parentSeq || undefined}
+            initialScope={parseScope(params.get("scope"))}
             onDone={(device) => {
               const sp = new URLSearchParams(params.toString());
               sp.set("view", "tree");

@@ -15,6 +15,7 @@ import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { recomputeChildCount } from "@/lib/equipment-child-count";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { canonicalSeq, MAX_EQUIPMENT_DEPTH, validateEquipmentSeq } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,6 @@ function parentSeqOf(seq: string) {
   return parts.length ? parts.join(".") : null;
 }
 
-const MAX_EQUIPMENT_DEPTH = 16; // số đoạn của mã đầy đủ (gồm DH1.S1) — giới hạn kỹ thuật
-
-// Mã thiết bị đầy đủ (fullCode) sau re-key: DH1.S1 + các cấp số nguyên dương.
-function validateEquipmentSeq(seq: string) {
-  if (!/^DH1\.S1(?:\.[1-9]\d*)*$/.test(seq)) {
-    return "Mã thiết bị phải bắt đầu bằng DH1.S1, các cấp sau là số nguyên dương phân cách bằng dấu chấm (vd DH1.S1.1.2.3)";
-  }
-  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) return `Cây thiết bị chỉ hỗ trợ tối đa ${MAX_EQUIPMENT_DEPTH} cấp`;
-  return null;
-}
 
 function publicEquipmentUrl(seq: string) {
   const base = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -230,17 +221,20 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền thêm thiết bị");
     const body = await req.json();
-    const seq = String(body.code ?? body.seq ?? "").trim();
+    const rawSeq = String(body.code ?? body.seq ?? "").trim();
     const name = String(body.name ?? "").trim();
     const kks = String(body.kks ?? "").trim() || null;
-    if (!seq || !name) return fail("Thiếu số thứ tự hoặc tên thiết bị");
-    const seqError = validateEquipmentSeq(seq);
+    if (!rawSeq || !name) return fail("Thiếu số thứ tự hoặc tên thiết bị");
+    const seqError = validateEquipmentSeq(rawSeq);
     if (seqError) return fail(seqError);
+    // Giao diện hiển thị mã theo tổ máy đang xem (DH1.S2.…) nhưng cây vật lý chỉ có mã
+    // chuẩn — quy về DH1.S1.… trước khi tra cứu và ghi.
+    const seq = canonicalSeq(rawSeq);
 
     const existing = await prisma.equipmentNode.findUnique({ where: { seq } });
     if (existing) return fail("Số thứ tự thiết bị đã tồn tại");
 
-    const parentSeq = String(body.systemSeq ?? "").trim() || parentSeqOf(seq);
+    const parentSeq = canonicalSeq(String(body.systemSeq ?? "").trim()) || parentSeqOf(seq);
     if (parentSeq) {
       // Xác thực theo cùng cây đã chuẩn hoá mà giao diện đang hiển thị. Cây này có
       // một số node hệ thống tổng hợp (vd. 1.0), nên không phải node nào cũng có

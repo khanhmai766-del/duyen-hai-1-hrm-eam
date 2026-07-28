@@ -85,6 +85,33 @@ export function scopeCode(seq: string, scope: TreeScope): string {
   return scope === "S2" ? s2Code(seq) : seq;
 }
 
+/**
+ * Chiều ngược của scopeCode: mọi tiền tố tổ máy quy về MÃ CHUẨN (DH1.S2.1.2 → DH1.S1.1.2).
+ * Cây vật lý chỉ có mã S1; mã theo tổ máy chỉ là hình chiếu để hiển thị, nên trước khi
+ * tra cứu hay ghi vào DB luôn phải đưa về dạng chuẩn.
+ */
+export function canonicalSeq(seq: string): string {
+  return seq.replace(/^DH1\.S\d+/, "DH1.S1");
+}
+
+/** Số đoạn tối đa của mã thiết bị đầy đủ (gồm cả "DH1.S1") — giới hạn kỹ thuật của cây. */
+export const MAX_EQUIPMENT_DEPTH = 16;
+
+/**
+ * Kiểm tra mã thiết bị đầy đủ. Chấp nhận tiền tố của MỌI tổ máy (DH1.S1, DH1.S2…) vì giao
+ * diện hiển thị mã theo tổ máy đang xem; nơi gọi tự quy về mã chuẩn bằng canonicalSeq()
+ * trước khi tra cứu/ghi DB. Trả null nếu hợp lệ, ngược lại trả thông báo lỗi.
+ */
+export function validateEquipmentSeq(seq: string): string | null {
+  if (!/^DH1\.S\d+(?:\.[1-9]\d*)*$/.test(seq)) {
+    return "Mã thiết bị phải bắt đầu bằng DH1.S1 hoặc DH1.S2, các cấp sau là số nguyên dương phân cách bằng dấu chấm (vd DH1.S1.1.2.3)";
+  }
+  if (seq.split(".").length > MAX_EQUIPMENT_DEPTH) {
+    return `Cây thiết bị chỉ hỗ trợ tối đa ${MAX_EQUIPMENT_DEPTH} cấp`;
+  }
+  return null;
+}
+
 /** KKS theo phạm vi (chỉ S2 khác: ký tự đầu 1 → 2). */
 export function scopeKks(kks: string | null, scope: TreeScope): string | null {
   return scope === "S2" ? s2Kks(kks) : kks;

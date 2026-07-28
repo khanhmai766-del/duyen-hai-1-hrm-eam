@@ -12,24 +12,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDevice, useUpdateDevice, type DeviceRecord } from "@/hooks/useDevices";
-import { useEquipmentTree } from "@/hooks/useEquipment";
+import { useEquipmentNode } from "@/hooks/useEquipment";
 import {
   EquipmentTreePicker,
   type PickerEquipmentNode,
 } from "@/components/devices/equipment-tree-picker";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
+import {
+  canonicalSeq,
+  defaultScopeOf,
+  scopeCode,
+  seqInScope,
+  TREE_SCOPES,
+  type TreeScope,
+} from "@/lib/equipment-units";
 import { announcementShiftRosterPositionOptions } from "@/lib/positions";
+import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
 
 export function DeviceForm({
   device,
   initialParentSeq,
+  initialScope,
   onDone,
 }: {
   device?: DeviceRecord | null;
   initialParentSeq?: string;
+  /** Cây đang mở khi bấm "Thêm mới" — quyết định nhóm nhánh và cách hiện mã. */
+  initialScope?: TreeScope;
   onDone?: (d: DeviceRecord) => void;
 }) {
   const { data: session } = useSession();
@@ -42,11 +54,14 @@ export function DeviceForm({
     () => announcementShiftRosterPositionOptions().filter(isSelectableManagingPosition),
     []
   );
-  const { data: equipmentTreeData } = useEquipmentTree();
-  const equipmentNodes = React.useMemo(() => equipmentTreeData?.data ?? [], [equipmentTreeData]);
+  // Phạm vi cây đang tạo. Với thiết bị đã có thì suy từ chính mã của nó.
+  const [scope, setScope] = React.useState<TreeScope>(
+    () => (device ? defaultScopeOf(device.code) : initialScope ?? (initialParentSeq ? defaultScopeOf(initialParentSeq) : "S1"))
+  );
 
   const [form, setForm] = React.useState({
-    code: device?.code ?? (initialParentSeq ? `${initialParentSeq}.` : ""),
+    // `code` giữ MÃ HIỂN THỊ theo phạm vi; quy về mã chuẩn ngay trước khi gửi.
+    code: device?.code ?? (initialParentSeq ? `${scopeCode(initialParentSeq, scope)}.` : ""),
     name: device?.name ?? "",
     kks: device?.kks ?? "",
     system: device?.system ?? "",
@@ -57,13 +72,27 @@ export function DeviceForm({
     documentUrl: device?.documentUrl ?? "",
   });
 
-  // Khi đi từ cây thiết bị sang tab Thêm mới, dữ liệu cây có thể về sau lần render
-  // đầu tiên. Đồng bộ tên hệ thống mà không ghi đè các trường người dùng đang nhập.
+  // Chỉ tải ĐÚNG node cha để lấy tên, thay vì kéo cả cây ~22k node (3,5 MB) như trước.
+  const parentNodeQuery = useEquipmentNode(!isEdit && initialParentSeq ? initialParentSeq : null, scope);
   React.useEffect(() => {
-    if (isEdit || !initialParentSeq || form.system) return;
-    const parent = equipmentNodes.find((node) => node.seq === initialParentSeq);
-    if (parent) setForm((current) => ({ ...current, system: parent.name }));
-  }, [equipmentNodes, form.system, initialParentSeq, isEdit]);
+    const parentName = parentNodeQuery.data?.data?.name;
+    if (isEdit || !initialParentSeq || !parentName) return;
+    setForm((current) => (current.system ? current : { ...current, system: parentName }));
+  }, [parentNodeQuery.data, initialParentSeq, isEdit]);
+
+  /** Đổi phạm vi: giữ cha nếu vẫn thuộc nhóm nhánh mới, ngược lại bỏ chọn. */
+  function changeScope(next: TreeScope) {
+    setScope(next);
+    setForm((current) => {
+      const canonicalParent = current.systemSeq ? canonicalSeq(current.systemSeq) : "";
+      if (canonicalParent && !seqInScope(canonicalParent, next)) {
+        // Nhánh dùng chung và nhánh tổ máy không giao nhau — cha cũ không còn hợp lệ.
+        return { ...current, code: "", system: "", systemSeq: "" };
+      }
+      // Cùng nhóm nhánh: chỉ vẽ lại mã theo tổ máy mới.
+      return { ...current, code: current.code ? scopeCode(canonicalSeq(current.code), next) : "" };
+    });
+  }
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -74,9 +103,8 @@ export function DeviceForm({
     form.managingPosition && !positions.includes(form.managingPosition)
       ? [form.managingPosition, ...positions]
       : positions;
-  // Seq đang chọn cho ô cây: ưu tiên systemSeq; nếu (sửa) chỉ có tên thì dò seq theo tên.
-  const systemSeqValue =
-    form.systemSeq || (form.system ? equipmentNodes.find((n) => n.name === form.system)?.seq ?? "" : "");
+  // Ô chọn cây nhận MÃ CHUẨN (seq), không phải mã hiển thị theo tổ máy.
+  const systemSeqValue = form.systemSeq ? canonicalSeq(form.systemSeq) : "";
   const currentLevel = form.code.trim() ? form.code.trim().split(".").length : null;
 
   function selectParent(node: PickerEquipmentNode | null) {
@@ -86,19 +114,19 @@ export function DeviceForm({
       }
 
       let code = current.code;
+      const oldParentDisplay = current.systemSeq ? scopeCode(canonicalSeq(current.systemSeq), scope) : "";
       if (!node) {
         // Chỉ xoá tiền tố tự điền khi người dùng chưa nhập mã con.
-        if (current.systemSeq && code === `${current.systemSeq}.`) code = "";
+        if (oldParentDisplay && code === `${oldParentDisplay}.`) code = "";
       } else {
-        const oldParent = current.systemSeq;
-        const oldPrefix = oldParent ? `${oldParent}.` : "";
+        const oldPrefix = oldParentDisplay ? `${oldParentDisplay}.` : "";
         const previousChildPart = oldPrefix && code.startsWith(oldPrefix)
           ? code.slice(oldPrefix.length)
           : "";
         const childPart = /^\d+$/.test(previousChildPart) ? previousChildPart : "";
         // Thư mục cha là nguồn chuẩn của tiền tố. Khi đổi cha, chỉ giữ lại đúng
         // một đoạn mã con đã nhập; mã không cùng nhánh sẽ được thay bằng tiền tố mới.
-        code = `${node.seq}.${childPart}`;
+        code = `${node.fullCode}.${childPart}`;
       }
 
       return {
@@ -113,10 +141,12 @@ export function DeviceForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.code.trim() || !form.name.trim()) return toast.error("Nhập Số thứ tự và Tên thiết bị");
+    // Cây vật lý chỉ có mã chuẩn — mã đang hiển thị theo tổ máy phải quy về trước khi gửi.
+    const payload = { ...form, code: canonicalSeq(form.code.trim()) };
     try {
       const result = isEdit
-        ? await update.mutateAsync({ id: device!.id, ...form })
-        : await create.mutateAsync(form);
+        ? await update.mutateAsync({ id: device!.id, ...payload })
+        : await create.mutateAsync(payload);
       toast.success(isEdit ? "Đã cập nhật thiết bị" : "Đã thêm thiết bị mới");
       onDone?.(result);
     } catch (err) {
@@ -133,10 +163,36 @@ export function DeviceForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {!isEdit && (
+            <Field label="Thiết bị thuộc" className="md:col-span-2">
+              <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                {TREE_SCOPES.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => changeScope(s.key)}
+                    className={cn(
+                      "h-9 rounded-md px-4 text-sm font-semibold transition-colors",
+                      scope === s.key ? "bg-navy text-white shadow-sm" : "text-muted-foreground hover:text-ink"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {scope === "COMMON"
+                  ? "Thiết bị dùng chung cho 2 tổ máy (nhánh 5, 6)."
+                  : "Cấu trúc cây dùng chung: thiết bị này sẽ có ở CẢ Tổ máy S1 và S2. Lịch sử sửa chữa, khiếm khuyết và vật tư vẫn tách riêng theo từng tổ máy."}
+              </p>
+            </Field>
+          )}
           <Field label="Mã thiết bị *">
-            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder="VD: DH1.S1.1.4.11.2.2" />
+            <Input value={form.code} onChange={(e) => set("code", e.target.value)} disabled={!canEditCode} required placeholder={`VD: ${scopeCode("DH1.S1.1.4.11.2.2", scope)}`} />
             <p className="mt-1 text-xs text-muted-foreground">
-              {currentLevel ? `Thiết bị đang ở cấp ${currentLevel}/16.` : "Mã bắt đầu bằng DH1.S1, các cấp sau là số — hỗ trợ tối đa 16 cấp."}
+              {currentLevel
+                ? `Thiết bị đang ở cấp ${currentLevel}/16.`
+                : `Mã bắt đầu bằng ${scopeCode("DH1.S1", scope)}, các cấp sau là số — hỗ trợ tối đa 16 cấp.`}
             </p>
           </Field>
           <Field label="Tên thiết bị *">
@@ -144,6 +200,11 @@ export function DeviceForm({
           </Field>
           <Field label="Mã KKS">
             <Input value={form.kks} onChange={(e) => set("kks", e.target.value)} placeholder="VD: X0HFV11BB001" />
+            {scope === "S2" && (
+              <p className="mt-1 text-xs text-amber-700">
+                Nhập KKS của <b>Tổ máy S1</b> (bắt đầu bằng 1…). KKS S2 được suy ra tự động bằng cách đổi ký tự đầu 1 → 2.
+              </p>
+            )}
           </Field>
           <Field label="Hệ thống thiết bị">
             <EquipmentTreePicker
@@ -151,6 +212,9 @@ export function DeviceForm({
               position={form.managingPosition || null}
               includeLeaves
               maxSelectableDepth={15}
+              // Giới hạn đúng nhóm nhánh của phạm vi đang chọn, tránh đặt thiết bị tổ máy
+              // vào nhánh dùng chung (và ngược lại).
+              scope={scope}
               placeholder="Chọn thư mục hoặc thiết bị cha (tối đa cấp 15)"
               onChange={selectParent}
             />
