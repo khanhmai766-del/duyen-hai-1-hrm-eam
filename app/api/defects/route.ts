@@ -132,6 +132,11 @@ export async function GET(req: NextRequest) {
     const mapping = params.get("mapping")?.trim();
     const status = params.get("status")?.trim();
     const severity = params.get("severity")?.trim();
+    // "KQ sửa chữa" là chuỗi tự do đồng bộ từ Google Sheet (Đã thực hiện xong, Chờ vật tư,
+    // Thuê ngoài…) nên lọc theo giá trị nguyên văn, không map sang enum.
+    const repairResult = params.get("repairResult")?.trim();
+    const repairResultWhere: Prisma.DefectWhereInput[] =
+      repairResult && repairResult !== "ALL" ? [{ repairResultRaw: repairResult }] : [];
     const deviceSeq = params.get("deviceSeq")?.trim();
     const query = normalizeText(params.get("q")?.trim() ?? "");
 
@@ -176,9 +181,10 @@ export async function GET(req: NextRequest) {
           where,
           ...(statusWhere ? [statusWhere] : []),
           ...(severity && severity !== "ALL" ? [{ severity }] : []),
+          ...repairResultWhere,
         ],
       };
-      const [total, scopeTotal, groupedStatus, tonDong] = await Promise.all([
+      const [total, scopeTotal, groupedStatus, tonDong, groupedRepair] = await Promise.all([
         prisma.defect.count({ where: filteredWhere }),
         prisma.defect.count({
           where: {
@@ -194,8 +200,19 @@ export async function GET(req: NextRequest) {
           _count: { _all: true },
         }),
         prisma.defect.count({ where: { AND: [where, { status: "DA_XU_LY" }] } }),
+        // Danh sách "KQ sửa chữa" thực có trong phạm vi đang xem (bỏ qua bộ lọc KQ sửa
+        // chữa để danh sách không tự thu hẹp còn đúng giá trị đang chọn).
+        prisma.defect.groupBy({
+          by: ["repairResultRaw"],
+          where,
+          _count: { _all: true },
+          orderBy: { _count: { repairResultRaw: "desc" } },
+        }),
       ]);
       const statusCount = new Map(groupedStatus.map((item) => [item.status, item._count._all]));
+      const repairResults = groupedRepair
+        .map((item) => item.repairResultRaw?.trim())
+        .filter((value): value is string => !!value);
       const totalPages = Math.max(1, Math.ceil(total / limit));
       const safePage = Math.min(page, totalPages);
       const pageRows = await prisma.defect.findMany({
@@ -227,6 +244,7 @@ export async function GET(req: NextRequest) {
             choNgungMay: statusCount.get("CHO_NGUNG_MAY") ?? 0,
             tonDong,
           },
+          repairResults,
           queryMode: "database",
           durationMs,
         }
@@ -273,6 +291,14 @@ export async function GET(req: NextRequest) {
       tonDong: base.filter((item) => item.status === "DA_XU_LY").length,
     };
 
+    // Danh sách "KQ sửa chữa" dựng từ tập trước khi áp bộ lọc KQ sửa chữa, xếp theo số lượng.
+    const repairCount = new Map<string, number>();
+    for (const item of base) {
+      const value = item.repairResultRaw?.trim();
+      if (value) repairCount.set(value, (repairCount.get(value) ?? 0) + 1);
+    }
+    const repairResults = [...repairCount.entries()].sort((a, b) => b[1] - a[1]).map(([value]) => value);
+
     const filtered = base
       .filter((item) => {
         if (status && status !== "ALL") {
@@ -287,6 +313,7 @@ export async function GET(req: NextRequest) {
           }
         }
         if (severity && severity !== "ALL" && item.severity !== severity) return false;
+        if (repairResult && repairResult !== "ALL" && (item.repairResultRaw ?? "") !== repairResult) return false;
         if (!query) return true;
         return normalizeText([
           item.requestNumber,
@@ -332,6 +359,7 @@ export async function GET(req: NextRequest) {
       totalPages,
       scopeTotal,
       kpi,
+      repairResults,
       queryMode: "compatibility",
       durationMs,
     });

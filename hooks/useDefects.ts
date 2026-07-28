@@ -28,6 +28,7 @@ export interface DefectListParams {
   mapping?: string;
   status?: string;
   severity?: string;
+  repairResult?: string;
   q?: string;
   deviceSeq?: string;
 }
@@ -45,6 +46,9 @@ export interface DefectListMeta {
     choNgungMay: number;
     tonDong: number;
   };
+  /** Các giá trị "KQ sửa chữa" thực có trong phạm vi đang xem — dựng danh sách lọc động
+   *  vì cột này là chuỗi tự do đồng bộ từ Google Sheet, không phải enum cố định. */
+  repairResults?: string[];
 }
 
 function defectListUrl(params: DefectListParams) {

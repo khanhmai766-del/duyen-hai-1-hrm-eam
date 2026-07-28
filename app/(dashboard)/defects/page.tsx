@@ -334,6 +334,7 @@ export default function DefectsPage() {
   const [positionFilter, setPositionFilter] = React.useState(positionFromUrl || "ALL");
   const [statusFilter, setStatusFilter] = React.useState(statusFromUrl || "ALL");
   const [severityFilter, setSeverityFilter] = React.useState(severityFromUrl || "ALL");
+  const [repairResultFilter, setRepairResultFilter] = React.useState("ALL");
   const [tableSearch, setTableSearch] = React.useState(searchFromUrl || "");
   const [pageSize, setPageSize] = React.useState(
     PAGE_SIZES.includes(pageSizeFromUrl) ? pageSizeFromUrl : 10
@@ -348,9 +349,10 @@ export default function DefectsPage() {
     position: positionFilter,
     status: statusFilter,
     severity: severityFilter,
+    repairResult: repairResultFilter,
     q: deferredSearch,
     deviceSeq: deviceSeqFilter,
-  }), [page, pageSize, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, deferredSearch, deviceSeqFilter]);
+  }), [page, pageSize, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, deferredSearch, deviceSeqFilter]);
   const { data, isLoading, isFetching } = useDefects(listParams);
   const pagedDefects = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
@@ -389,7 +391,7 @@ export default function DefectsPage() {
     unitFilter,
   ]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace("/defects", { scroll: false });
     setUnitFilter("S1");
@@ -397,6 +399,7 @@ export default function DefectsPage() {
     setPositionFilter("ALL");
     setStatusFilter("ALL");
     setSeverityFilter("ALL");
+    setRepairResultFilter("ALL");
     setTableSearch("");
   }
 
@@ -420,14 +423,6 @@ export default function DefectsPage() {
     if (positionFilter !== "ALL") {
       chips.push({ key: "position", label: "Cương vị", value: positionFilter, onClear: () => setPositionFilter("ALL") });
     }
-    if (severityFilter !== "ALL") {
-      chips.push({
-        key: "severity",
-        label: "Mức độ",
-        value: (DEFECT_SEVERITY as Record<string, string>)[severityFilter] ?? severityFilter,
-        onClear: () => setSeverityFilter("ALL"),
-      });
-    }
     if (statusFilter !== "ALL") {
       chips.push({
         key: "status",
@@ -436,11 +431,27 @@ export default function DefectsPage() {
         onClear: () => setStatusFilter("ALL"),
       });
     }
+    if (repairResultFilter !== "ALL") {
+      chips.push({
+        key: "repairResult",
+        label: "KQ sửa chữa",
+        value: repairResultFilter,
+        onClear: () => setRepairResultFilter("ALL"),
+      });
+    }
+    if (severityFilter !== "ALL") {
+      chips.push({
+        key: "severity",
+        label: "Mức độ",
+        value: (DEFECT_SEVERITY as Record<string, string>)[severityFilter] ?? severityFilter,
+        onClear: () => setSeverityFilter("ALL"),
+      });
+    }
     if (tableSearch.trim()) {
       chips.push({ key: "search", label: "Tìm", value: tableSearch.trim(), onClear: () => setTableSearch("") });
     }
     return chips;
-  }, [unitFilter, requestFilter, positionFilter, severityFilter, statusFilter, tableSearch]);
+  }, [unitFilter, requestFilter, positionFilter, severityFilter, statusFilter, repairResultFilter, tableSearch]);
 
   const chuaXuLy = data?.meta?.kpi?.chuaXuLy ?? 0;
   const coPct = data?.meta?.kpi?.coPct ?? 0;
@@ -486,7 +497,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -572,6 +583,19 @@ export default function DefectsPage() {
               allValue: "ALL",
               allLabel: "Tất cả kết quả",
               onChange: setStatusFilter,
+            },
+            {
+              label: "KQ sửa chữa",
+              value: repairResultFilter,
+              // Danh sách dựng động từ dữ liệu thực (cột đồng bộ từ Google Sheet, không
+              // phải enum cố định) — giữ lại giá trị đang chọn kể cả khi nó rơi khỏi tập
+              // hiện tại để dropdown không mất mục đang lọc.
+              options: Array.from(
+                new Set([...(data?.meta?.repairResults ?? []), ...(repairResultFilter !== "ALL" ? [repairResultFilter] : [])])
+              ).map((value) => ({ value, label: value })),
+              allValue: "ALL",
+              allLabel: "Tất cả kết quả sửa chữa",
+              onChange: setRepairResultFilter,
             },
             {
               label: "Mức độ",
