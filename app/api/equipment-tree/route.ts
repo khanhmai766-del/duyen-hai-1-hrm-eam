@@ -5,7 +5,7 @@ import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-acc
 import { getCachedEquipmentNodeList, invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const canAccessAllNodes = await canBypassEquipmentPositionScope(
       user,
       req.nextUrl.searchParams.get("permissionScope")
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền cập nhật cây thiết bị");
+    await requireDeviceManage(user, "Bạn không có quyền cập nhật cây thiết bị");
     const body = await req.json();
     const seq = String(body.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự");

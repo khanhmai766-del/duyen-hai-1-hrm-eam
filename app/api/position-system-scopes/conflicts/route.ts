@@ -13,8 +13,8 @@ const WRITE_CHECKS: Array<{
   label: string;
   levels: PermissionLevel[];
 }> = [
-  { permissionId: "device-manage", label: "Thêm, sửa và nhập thiết bị", levels: ["personal", "manage", "full"] },
-  { permissionId: "device-delete", label: "Xóa từng thiết bị", levels: ["full"] },
+  { permissionId: "device-manage", label: "Quản lý danh mục và cây thiết bị", levels: ["personal", "manage", "full"] },
+  { permissionId: "device-delete", label: "Xóa thiết bị", levels: ["full"] },
   { permissionId: "repair-edit", label: "Tạo/cập nhật lịch sử sửa chữa và phiếu khiếm khuyết", levels: ["personal", "manage", "full"] },
   { permissionId: "repair-approve", label: "Xác nhận kết quả sửa chữa", levels: ["manage", "full"] },
   { permissionId: "defect-close", label: "Đóng phiếu khiếm khuyết", levels: ["manage", "full"] },

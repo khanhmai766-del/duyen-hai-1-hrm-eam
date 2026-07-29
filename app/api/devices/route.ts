@@ -9,6 +9,7 @@ import {
 } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
 import {
+  assertSeqEditable,
   filterEquipmentNodesForUser,
   loadPositionSystemScopeRows,
   managingPositionsByEquipmentSeq,
@@ -17,7 +18,7 @@ import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { recomputeChildCount } from "@/lib/equipment-child-count";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { requireDeviceCreate, requireDeviceView } from "@/lib/device-permissions";
 import { canonicalSeq, MAX_EQUIPMENT_DEPTH, validateEquipmentSeq } from "@/lib/equipment-units";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
@@ -191,6 +192,7 @@ async function getDeviceCountsByPosition(
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const sp = req.nextUrl.searchParams;
     const q = normalizeText(sp.get("q")?.trim() ?? "");
     const systemSeq = sp.get("systemSeq")?.trim();
@@ -260,7 +262,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["personal", "manage", "full"], "Không đủ quyền thêm thiết bị");
+    await requireDeviceCreate(user);
     const body = await req.json();
     const rawSeq = String(body.code ?? body.seq ?? "").trim();
     const name = String(body.name ?? "").trim();
@@ -276,6 +278,7 @@ export async function POST(req: NextRequest) {
     if (existing) return fail("Số thứ tự thiết bị đã tồn tại");
 
     const parentSeq = canonicalSeq(String(body.systemSeq ?? "").trim()) || parentSeqOf(seq);
+    await assertSeqEditable(user, parentSeq ?? seq);
     if (parentSeq) {
       // Xác thực theo cùng cây đã chuẩn hoá mà giao diện đang hiển thị. Cây này có
       // một số node hệ thống tổng hợp (vd. 1.0), nên không phải node nào cũng có

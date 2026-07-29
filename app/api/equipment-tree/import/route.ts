@@ -2,7 +2,8 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { requireDeviceManage } from "@/lib/device-permissions";
+import { assertSeqsEditable } from "@/lib/server-access";
 import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import {
@@ -22,7 +23,7 @@ const CHUNK = 500;
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền nhập danh mục thiết bị");
+    await requireDeviceManage(user, "Bạn không có quyền nhập danh mục thiết bị");
 
     const body = await req.json();
     const rows: RawImportRow[] = Array.isArray(body.rows) ? body.rows : [];
@@ -43,6 +44,8 @@ export async function POST(req: NextRequest) {
     };
 
     const { preview, nodes } = validateAndBuild(rows, system, existing, mode);
+    const importRoot = system ? `${S1_PREFIX}.${system}` : S1_PREFIX;
+    await assertSeqsEditable(user, [importRoot, ...nodes.map((node) => node.seq)]);
 
     if (dryRun) return ok({ preview, mode });
 

@@ -49,6 +49,7 @@ import { EquipmentTreeView } from "@/components/devices/equipment-tree";
 import { defaultScopeOf, parseScope, scopeCode, seqInScope, TREE_SCOPES, type TreeScope } from "@/lib/equipment-units";
 import { QRModal } from "@/components/devices/qr-modal";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
+import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -102,7 +103,9 @@ type SystemTreeRow = {
 export default function DevicesPage() {
   return (
     <PeakProtectedRoute>
-      <DevicesPageContent />
+      <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
+        <DevicesPageContent />
+      </RbacProtectedRoute>
     </PeakProtectedRoute>
   );
 }
@@ -114,7 +117,7 @@ function DevicesPageContent() {
   const canCreateDevices = rbac.can("device-manage", ["personal", "manage", "full"]);
   const canManageDevices = rbac.can("device-manage", ["manage", "full"]);
   const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
-  const canDeleteDevices = rbac.can("device-delete", ["manage", "full"]);
+  const canDeleteDevices = rbac.can("device-delete", ["full"]);
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";

@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { requireDeviceManage } from "@/lib/device-permissions";
+import { assertSeqsEditable } from "@/lib/server-access";
 
 function parentSeqOf(seq: string) {
   const parts = seq.split(".");
@@ -14,10 +15,14 @@ function parentSeqOf(seq: string) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền nhập danh mục thiết bị");
+    await requireDeviceManage(user, "Bạn không có quyền nhập danh mục thiết bị");
     const body = await req.json();
     const rows: Array<{ code?: string; name?: string; systemSeq?: string }> = Array.isArray(body.rows) ? body.rows : [];
     if (!rows.length) return fail("Không có dòng dữ liệu hợp lệ");
+    await assertSeqsEditable(
+      user,
+      rows.flatMap((row) => [String(row.code ?? "").trim(), String(row.systemSeq ?? "").trim()])
+    );
 
     let created = 0;
     let updated = 0;

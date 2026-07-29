@@ -216,41 +216,6 @@ function normalizeMergedRoleMatrix(rows: PermissionRow[]) {
 
 const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
-    id: "overview-dashboard-read",
-    group: "Tổng quan",
-    feature: "Xem dashboard tổng quan",
-    note: "Xem các chỉ số nhanh, cảnh báo, lịch trực và thông tin tổng hợp trên trang chủ.",
-    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
-  },
-  {
-    id: "overview-reports-read",
-    group: "Tổng quan",
-    feature: "Xem báo cáo và thống kê",
-    note: "Tra cứu các báo cáo tổng hợp, biểu đồ và số liệu thống kê trong hệ thống.",
-    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
-  },
-  {
-    id: "overview-devices-read",
-    group: "Tổng quan",
-    feature: "Xem thông tin thiết bị",
-    note: "Xem danh sách thiết bị, cây thiết bị, lý lịch thiết bị và thông tin QR công khai.",
-    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
-  },
-  {
-    id: "overview-repair-defect-read",
-    group: "Tổng quan",
-    feature: "Xem sửa chữa và khiếm khuyết",
-    note: "Tra cứu phiếu sửa chữa, lịch sử sửa chữa và hồ sơ khiếm khuyết thiết bị.",
-    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
-  },
-  {
-    id: "overview-materials-read",
-    group: "Tổng quan",
-    feature: "Xem vật tư và lịch thay thế",
-    note: "Tra cứu danh mục vật tư, điểm dùng, lịch thay thế và cảnh báo đến hạn.",
-    matrix: { ADMIN: "read", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
-  },
-  {
     id: "shift-operation-check-in",
     group: "Nhân sự / Ca vận hành",
     feature: "Điểm danh ca vận hành theo sơ đồ tổ chức",
@@ -328,17 +293,24 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "device-view",
+    group: "Thiết bị",
+    feature: "Xem thông tin thiết bị",
+    note: "Hiển thị menu Thông tin thiết bị; cho phép xem, tìm kiếm, lọc, mở cây và lý lịch thiết bị trong phạm vi cương vị/hệ thống được giao.",
+    matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
     id: "device-manage",
     group: "Thiết bị",
-    feature: "Thêm, sửa và nhập danh mục thiết bị",
-    note: "Cập nhật lý lịch thiết bị, ảnh, QR và thông tin đính kèm.",
-    matrix: { ADMIN: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+    feature: "Quản lý danh mục và cây thiết bị",
+    note: "Cá nhân được thêm thiết bị và tạo QR; Quản lý/Toàn quyền được thêm, sửa, nhập danh mục, cập nhật ảnh/tài liệu, tạo hồ sơ S2 và tạo/gỡ QR trong phạm vi được giao.",
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "device-delete",
     group: "Thiết bị",
     feature: "Xoá thiết bị",
-    note: "Xoá thiết bị sẽ xoá lịch sử sửa chữa liên quan.",
+    note: "Chỉ cấp Toàn quyền; chỉ xóa thiết bị lá trong phạm vi cương vị/hệ thống được giao. Dữ liệu quan hệ có cấu hình cascade có thể bị xóa theo.",
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
@@ -536,7 +508,6 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
   if (!rows.length) return DEFAULT_PERMISSIONS;
 
   const existingById = new Map(rows.map((row) => [row.id, row]));
-  const legacyOverviewMatrix = existingById.get("dashboard-read")?.matrix;
   const legacyMatrixByNewId: Record<string, Record<string, PermissionValue> | undefined> = {
     "shift-operation-check-in": existingById.get("shift-check-in")?.matrix,
     "shift-operation-approve": existingById.get("shift-approve")?.matrix,
@@ -548,9 +519,31 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
     "rbac-manage": existingById.get("user-admin")?.matrix,
   };
   const defaultIds = new Set(DEFAULT_PERMISSIONS.map((row) => row.id));
-  const legacyIds = new Set(["dashboard-read", "shift-check-in", "shift-approve", "user-admin", "repair-create", "defect-manage"]);
+  const legacyIds = new Set([
+    "dashboard-read",
+    "overview-dashboard-read",
+    "overview-reports-read",
+    "overview-devices-read",
+    "overview-repair-defect-read",
+    "overview-materials-read",
+    "shift-check-in",
+    "shift-approve",
+    "user-admin",
+    "repair-create",
+    "defect-manage",
+  ]);
   const mergedDefaults = DEFAULT_PERMISSIONS.map((row) => {
     const existing = existingById.get(row.id);
+    if (row.id === "device-manage" && existing) {
+      const roleIds = new Set([...Object.keys(row.matrix), ...Object.keys(existing.matrix)]);
+      const matrix = Object.fromEntries(
+        Array.from(roleIds).map((roleId) => [
+          roleId,
+          existing.matrix[roleId] === "read" ? row.matrix[roleId] ?? "none" : existing.matrix[roleId] ?? row.matrix[roleId] ?? "none",
+        ])
+      );
+      return { ...row, matrix };
+    }
     if (row.id === "repair-edit") {
       const legacyCreate = existingById.get("repair-create");
       const legacyDefect = existingById.get("defect-manage");
@@ -576,13 +569,28 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
       }
     }
     if (existing) return { ...row, matrix: { ...row.matrix, ...existing.matrix } };
-    if (row.group === "Tổng quan" && legacyOverviewMatrix) return { ...row, matrix: { ...row.matrix, ...legacyOverviewMatrix } };
     const legacyMatrix = legacyMatrixByNewId[row.id];
     if (legacyMatrix) return { ...row, matrix: { ...row.matrix, ...legacyMatrix } };
     return row;
   });
   const customRows = rows.filter((row) => !defaultIds.has(row.id) && !legacyIds.has(row.id));
   return [...mergedDefaults, ...customRows];
+}
+
+function migrateDevicePermissionOverrides(rows: UserPermissionOverride[]) {
+  const explicitDeviceView = new Set(
+    rows
+      .filter((row) => row.permissionId === "device-view")
+      .map((row) => `${row.userId}|${row.roleId ?? ""}`)
+  );
+  return rows
+    .map((row) => {
+      if (row.permissionId !== "device-manage" || row.value !== "read") return row;
+      const key = `${row.userId}|${row.roleId ?? ""}`;
+      if (explicitDeviceView.has(key)) return null;
+      return { ...row, permissionId: "device-view" };
+    })
+    .filter((row): row is UserPermissionOverride => row !== null);
 }
 
 const PERMISSION_META: Record<PermissionValue, { label: string; icon: LucideIcon; className: string; title: string }> = {
@@ -676,7 +684,7 @@ export default function RolesPage() {
     if (!config) return;
     setPermissions(normalizeMergedRoleMatrix(mergeDefaultPermissions(config.permissions ?? [])));
     setCustomRoles(config.roles ?? []);
-    setUserOverrides(config.userOverrides ?? []);
+    setUserOverrides(migrateDevicePermissionOverrides(config.userOverrides ?? []));
   }, [rbacQuery.data]);
 
   const roleColumns = React.useMemo(() => [...SYSTEM_ROLE_COLUMNS, ...customRoles], [customRoles]);

@@ -2,8 +2,8 @@ import { randomUUID } from "crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { assertSeqViewable } from "@/lib/server-access";
+import { requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
+import { assertSeqEditable, assertSeqViewable } from "@/lib/server-access";
 import { machinesOf, s2Code, s2Kks, type EquipmentMachine } from "@/lib/equipment-units";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,7 @@ export interface MachineProfile {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const seq = (req.nextUrl.searchParams.get("seq") ?? "").trim();
     if (!seq) return fail("Thiếu seq");
     await assertSeqViewable(user, seq);
@@ -61,10 +62,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền tạo hồ sơ S2");
+    await requireDeviceManage(user, "Bạn không có quyền tạo hồ sơ S2");
     const body = await req.json();
     const seq = String(body.seq ?? "").trim();
     if (!seq) return fail("Thiếu seq");
+    await assertSeqEditable(user, seq);
 
     const node = await prisma.equipmentNode.findUnique({ where: { seq }, select: { seq: true, name: true } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);

@@ -10,7 +10,8 @@ import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { recomputeChildCount } from "@/lib/equipment-child-count";
-import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasPermissionLevel } from "@/lib/rbac-guard";
+import { requireDeviceDelete, requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { normalizeText } from "@/lib/nav";
@@ -187,6 +188,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const seq = decodeURIComponent(params.id);
     await assertSeqViewable(user, seq);
     const device = await findEquipmentRecord(seq, req.nextUrl.searchParams.get("machine"));
@@ -198,7 +200,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền cập nhật thiết bị");
+    await requireDeviceManage(user, "Bạn không có quyền cập nhật thiết bị");
     const currentSeq = decodeURIComponent(params.id);
     await assertSeqEditable(user, currentSeq);
     const body = await req.json();
@@ -273,8 +275,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-delete", ["manage", "full"], "Không đủ quyền xoá thiết bị");
+    await requireDeviceDelete(user);
     const seq = decodeURIComponent(params.id);
+    await assertSeqEditable(user, seq);
     const node = await prisma.equipmentNode.findUnique({ where: { seq } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);
     if (node.parentSeq === null) return fail("Không thể xóa hệ thống gốc", 400);

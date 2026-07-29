@@ -15,6 +15,7 @@ import { DeviceMaterialDeclarationDialog } from "@/components/devices/device-mat
 import { DefectForm } from "@/components/defects/defect-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
+import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
 import { useSeqAccess } from "@/hooks/useSystemAccess";
@@ -27,7 +28,9 @@ import { defaultScopeOf, TREE_SCOPES } from "@/lib/equipment-units";
 export default function DeviceDetailPage() {
   return (
     <PeakProtectedRoute>
-      <DeviceDetailPageContent />
+      <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
+        <DeviceDetailPageContent />
+      </RbacProtectedRoute>
     </PeakProtectedRoute>
   );
 }
@@ -128,7 +131,7 @@ function DeviceDetailPageContent() {
           {rbac.can("device-manage", ["manage", "full"]) && access.canEdit && (
             <Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Sửa</Button>
           )}
-          {rbac.can("device-delete", ["manage", "full"]) && (
+          {rbac.can("device-delete", ["full"]) && access.canEdit && (
             <Button variant="outline" onClick={() => setDelOpen(true)}>
               <Trash2 className="h-4 w-4 text-destructive" /> Xoá
             </Button>

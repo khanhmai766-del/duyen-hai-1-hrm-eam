@@ -6,12 +6,14 @@ import { normalizeEquipmentNodeName } from "@/lib/equipment-tree";
 import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScope, scopeCode, scopeKks } from "@/lib/equipment-units";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
+import { requireDeviceView } from "@/lib/device-permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: { seq: string } }) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const seq = decodeURIComponent(params.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự thiết bị");
     // `seq` luôn là mã chuẩn S1; phạm vi chỉ đổi mã hiển thị/KKS và phần ghi đè.

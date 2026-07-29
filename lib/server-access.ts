@@ -348,6 +348,16 @@ export async function assertSeqEditable(user: SessionUser, seq: string) {
   }
 }
 
+export async function assertSeqsEditable(user: SessionUser, seqs: Array<string | null | undefined>) {
+  const uniqueSeqs = Array.from(new Set(seqs.map((seq) => String(seq ?? "").trim()).filter(Boolean)));
+  if (!uniqueSeqs.length) return;
+  const access = await resolveEquipmentAccessForUser(user);
+  const deniedSeq = uniqueSeqs.find((seq) => !access.canEditSeq(seq));
+  if (deniedSeq) {
+    throw fail(`Cương vị của bạn không có quyền chỉnh sửa nhánh thiết bị ${deniedSeq}`, 403);
+  }
+}
+
 export async function assertDeviceEditable(user: SessionUser, device: DeviceLike) {
   const access = await resolveEquipmentAccessForUser(user);
   const canEdit = device.code

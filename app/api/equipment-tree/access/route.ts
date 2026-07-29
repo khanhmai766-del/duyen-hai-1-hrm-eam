@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail, requireUser, handle } from "@/lib/api";
 import { loadPositionSystemScopeRows, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { scopesForPosition } from "@/lib/position-system-scopes";
+import { requireDeviceView } from "@/lib/device-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const seq = (req.nextUrl.searchParams.get("seq") ?? "").trim();
     if (!seq) return fail("Thiếu seq");
 

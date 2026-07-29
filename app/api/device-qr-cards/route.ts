@@ -7,8 +7,8 @@ import {
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { getCachedEquipmentNodeFull,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
-import { filterEquipmentNodesForUser } from "@/lib/server-access";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { assertSeqEditable, filterEquipmentNodesForUser } from "@/lib/server-access";
+import { requireDeviceCreate, requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
 import { ensureDeviceQrCardTable } from "@/lib/device-qr-card-table";
 import { ensureRepairMachineColumn } from "@/lib/repair-machine";
 
@@ -48,6 +48,7 @@ function toCardRecord(
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     await Promise.all([ensureDeviceQrCardTable(), ensureRepairMachineColumn()]);
     const cards = await prisma.deviceQrCard.findMany({ select: { deviceSeq: true } });
     if (!cards.length) return ok([], { total: 0 });
@@ -88,10 +89,11 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureDeviceQrCardTable();
-    await requirePermissionLevel(user, "device-manage", ["personal", "manage", "full"], "Không đủ quyền tạo thẻ QR thiết bị");
+    await requireDeviceCreate(user);
     const body = await req.json();
     const deviceSeq = String(body.deviceSeq ?? "").trim();
     if (!deviceSeq) return fail("Chưa chọn thiết bị");
+    await assertSeqEditable(user, deviceSeq);
 
     const nodes = await getCachedEquipmentNodeFull();
     const index = getEquipmentTreeIndexFor(nodes);
@@ -114,9 +116,10 @@ export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureDeviceQrCardTable();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền gỡ thẻ QR thiết bị");
+    await requireDeviceManage(user, "Bạn không có quyền gỡ thẻ QR thiết bị");
     const seq = req.nextUrl.searchParams.get("seq")?.trim();
     if (!seq) return fail("Thiếu seq thiết bị");
+    await assertSeqEditable(user, seq);
     const { count } = await prisma.deviceQrCard.deleteMany({ where: { deviceSeq: seq } });
     if (!count) return fail("Thiết bị này chưa có thẻ QR", 404);
     await audit(user.id, "DELETE_DEVICE_QR_CARD", "DeviceQrCard", seq, seq);

@@ -7,6 +7,7 @@ import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScopeParam } from "@/lib/equipment-units";
 import { TREE_SELECT, toTreeNode } from "@/lib/equipment-tree-lazy";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
+import { requireDeviceView } from "@/lib/device-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    await requireDeviceView(user);
     const scope = parseScopeParam(req.nextUrl.searchParams.get("scope"));
     const canAccessAllNodes = await canBypassEquipmentPositionScope(
       user,
