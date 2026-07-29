@@ -108,8 +108,9 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/material-replacements — tạo MỘT ĐIỂM THEO DÕI thời gian thay thế (isActive=true).
-// Điểm này là bản ghi riêng, tách khỏi dòng khai báo thiết bị trong Danh mục vật tư
-// (dòng khai báo giữ isActive=false nên nút "Thêm điểm" luôn còn để tạo tiếp).
+// Số điểm đang hoạt động của cùng vật tư + thiết bị không được vượt quá deviceCount
+// trên dòng khai báo (isActive=false, chưa có lịch sử). Khi điểm bị xoá hoặc được
+// ghi nhận vào lịch sử (isActive=false), lượt tương ứng được giải phóng.
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -123,6 +124,7 @@ export async function POST(req: NextRequest) {
 
     const deviceSeq = String(body.deviceSeq ?? body.deviceId ?? "").trim() || null;
     const system = String(body.system ?? "").trim() || null;
+    const location = String(body.location ?? "").trim() || null;
     if (!deviceSeq && !system) return fail("Điểm theo dõi phải gắn với thiết bị hoặc hệ thống");
     // Tổ máy của điểm theo dõi bám theo tổ máy của vật tư, và chỉ được gắn thiết bị trong
     // đúng cây của tổ máy đó (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
@@ -164,25 +166,70 @@ export async function POST(req: NextRequest) {
       nextDueAt.setMonth(nextDueAt.getMonth() + intervalMonths);
     }
 
-    const point = await prisma.materialReplacement.create({
-      data: {
-        materialId,
-        deviceSeq,
-        machine: material.machine,
-        system,
-        location: String(body.location ?? "").trim() || null,
-        managingPosition,
-        quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
-        deviceCount: Math.max(1, Math.round(Number(body.deviceCount)) || 1),
-        intervalMonths,
-        intervalNote: String(body.intervalNote ?? "").trim() || null,
-        lastReplacedAt,
-        nextDueAt,
-        note: String(body.note ?? "").trim() || null,
-        isActive: intervalMonths > 0,
-        createdById: user.id,
-      },
-      include: INCLUDE,
+    if (intervalMonths === 0) return fail("Chu kỳ 0 không theo dõi lịch thay thế");
+
+    const targetWhere: Prisma.MaterialReplacementWhereInput = deviceSeq
+      ? { materialId, deviceSeq }
+      : { materialId, deviceSeq: null, system, location };
+    const targetLockKey = deviceSeq
+      ? `${materialId}|device:${deviceSeq}`
+      : `${materialId}|system:${normalizeText(system ?? "")}|location:${normalizeText(location ?? "")}`;
+
+    const point = await prisma.$transaction(async (tx) => {
+      // Khoá tuần tự theo đúng vật tư + thiết bị để hai yêu cầu đồng thời không thể
+      // cùng đọc một lượt trống rồi tạo vượt quá số lượng thiết bị đã khai báo.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${targetLockKey}))`;
+
+      const declaration = await tx.materialReplacement.findFirst({
+        where: {
+          ...targetWhere,
+          isActive: false,
+          logs: { none: {} },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, deviceCount: true },
+      });
+      if (!declaration) {
+        throw fail(
+          "Không tìm thấy dòng khai báo thiết bị tương ứng trong Danh mục vật tư. Vui lòng cập nhật danh mục trước khi thêm điểm theo dõi.",
+          400
+        );
+      }
+
+      const limit = Math.max(1, declaration.deviceCount);
+      const activeCount = await tx.materialReplacement.count({
+        where: { ...targetWhere, isActive: true },
+      });
+      if (activeCount >= limit) {
+        throw fail(
+          limit === 1
+            ? "Thiết bị này đã có điểm theo dõi. Chỉ được thêm lại sau khi điểm hiện tại bị xoá hoặc được ghi nhận vào lịch sử thay thế."
+            : `Đã đủ ${activeCount}/${limit} điểm theo dõi theo số lượng thiết bị đã khai báo.`,
+          409
+        );
+      }
+
+      return tx.materialReplacement.create({
+        data: {
+          materialId,
+          deviceSeq,
+          machine: material.machine,
+          system,
+          location,
+          managingPosition,
+          quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
+          // Điểm theo dõi kế thừa giới hạn từ dòng khai báo, không tin giá trị client gửi lên.
+          deviceCount: limit,
+          intervalMonths,
+          intervalNote: String(body.intervalNote ?? "").trim() || null,
+          lastReplacedAt,
+          nextDueAt,
+          note: String(body.note ?? "").trim() || null,
+          isActive: true,
+          createdById: user.id,
+        },
+        include: INCLUDE,
+      });
     });
     await audit(user.id, "CREATE_REPLACEMENT", "MaterialReplacement", point.id, auditDetailWithPosition(user, material.code));
     return ok(mapPoint(point));

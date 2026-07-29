@@ -1891,7 +1891,12 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
   const points = React.useMemo(
     () =>
       (m.replacements ?? [])
-        .filter((r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter))
+        .filter(
+          (r) =>
+            !r.isActive &&
+            (r._count?.logs ?? 0) === 0 &&
+            (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter)
+        )
         // Gom các điểm CÙNG HỆ THỐNG nằm liền kề; trong mỗi hệ thống sắp thiết bị theo thứ tự
         // tự nhiên (Bơm A → B → C, Quạt 1 → 2 → 3, "#2" trước "#10").
         .slice()
@@ -1905,6 +1910,25 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         }),
     [m.replacements, blockFilter]
   );
+  const activeCountByDeclaration = React.useMemo(() => {
+    const allPoints = m.replacements ?? [];
+    return new Map(
+      points.map((declaration) => {
+        const count = allPoints.filter((candidate) => {
+          if (!candidate.isActive) return false;
+          if (declaration.deviceSeq) {
+            return candidate.deviceSeq === declaration.deviceSeq;
+          }
+          return (
+            !candidate.deviceSeq &&
+            (candidate.system?.trim() || null) === (declaration.system?.trim() || null) &&
+            (candidate.location?.trim() || null) === (declaration.location?.trim() || null)
+          );
+        }).length;
+        return [declaration.id, count] as const;
+      })
+    );
+  }, [m.replacements, points]);
   const createPoint = useCreateReplacement();
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
@@ -1982,33 +2006,54 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
             </tr>
           </thead>
           <tbody>
-            {points.map((p) => (
-              <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
-                {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
-                <td className="px-4 py-2.5 font-medium uppercase text-ink whitespace-nowrap">{p.device?.system || p.system || p.device?.name || "—"}</td>
-                {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
-                <td className="px-4 py-2.5 text-ink whitespace-nowrap">{p.device?.name || p.location || "—"}</td>
-                <td className="px-3 py-2.5 text-ink whitespace-nowrap">{p.managingPosition || "—"}</td>
-                <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.deviceCount ?? 1}</td>
-                {/* Ghi chú O&M quá dài thì cắt bớt kèm tooltip, tránh 1 ô kéo vỡ cả bảng. */}
-                <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">
-                  <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
-                </td>
-                <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
-                <td className="px-3 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
-                <td className="px-4 py-2.5 text-center">
-                  <button
-                    type="button"
-                    disabled={createPoint.isPending || p.intervalMonths === 0}
-                    onClick={() => openTracking(p)}
-                    title={p.intervalMonths === 0 ? "Chu kỳ 0 không theo dõi lịch thay thế" : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này"}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> {p.intervalMonths === 0 ? "Không theo dõi" : "Thêm điểm"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {points.map((p) => {
+              const activeCount = activeCountByDeclaration.get(p.id) ?? 0;
+              const deviceLimit = Math.max(1, p.deviceCount ?? 1);
+              const capacityReached = activeCount >= deviceLimit;
+              const trackingLabel =
+                p.intervalMonths === 0
+                  ? "Không theo dõi"
+                  : capacityReached
+                    ? deviceLimit === 1
+                      ? "Đang theo dõi"
+                      : `Đã đủ ${activeCount}/${deviceLimit}`
+                    : deviceLimit > 1
+                      ? `Thêm điểm (${activeCount}/${deviceLimit})`
+                      : "Thêm điểm";
+              const trackingTitle =
+                p.intervalMonths === 0
+                  ? "Chu kỳ 0 không theo dõi lịch thay thế"
+                  : capacityReached
+                    ? "Chỉ được thêm lại sau khi điểm đang theo dõi bị xoá hoặc được ghi nhận vào lịch sử thay thế"
+                    : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này";
+              return (
+                <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
+                  {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
+                  <td className="px-4 py-2.5 font-medium uppercase text-ink whitespace-nowrap">{p.device?.system || p.system || p.device?.name || "—"}</td>
+                  {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
+                  <td className="px-4 py-2.5 text-ink whitespace-nowrap">{p.device?.name || p.location || "—"}</td>
+                  <td className="px-3 py-2.5 text-ink whitespace-nowrap">{p.managingPosition || "—"}</td>
+                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.deviceCount ?? 1}</td>
+                  {/* Ghi chú O&M quá dài thì cắt bớt kèm tooltip, tránh 1 ô kéo vỡ cả bảng. */}
+                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">
+                    <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
+                  <td className="px-3 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <button
+                      type="button"
+                      disabled={createPoint.isPending || p.intervalMonths === 0 || capacityReached}
+                      onClick={() => openTracking(p)}
+                      title={trackingTitle}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> {trackingLabel}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         </div>

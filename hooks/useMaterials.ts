@@ -22,6 +22,7 @@ export interface MaterialReplacementPoint {
   lastReplacedAt: string | Date | null;
   nextDueAt: string | Date;
   note: string | null;
+  _count?: { logs: number };
   device: { id: string; code: string; name: string; system: string | null } | null;
 }
 

@@ -19,7 +19,12 @@ const MATERIAL_INCLUDE = {
   },
   // Điểm dùng/thay thế: mỗi (vật tư × hệ thống/thiết bị) có chu kỳ + số lượng cần thay riêng.
   replacements: {
-    include: { device: { select: EQUIPMENT_DEVICE_SELECT } },
+    // Phân biệt dòng khai báo (chưa có lịch sử) với điểm đã ghi nhận và chuyển vào lịch sử.
+    // Cả hai đều có isActive=false, nhưng chỉ dòng khai báo được hiện ở bảng chi tiết.
+    include: {
+      device: { select: EQUIPMENT_DEVICE_SELECT },
+      _count: { select: { logs: true } },
+    },
     orderBy: { nextDueAt: "asc" as const },
   },
 };
