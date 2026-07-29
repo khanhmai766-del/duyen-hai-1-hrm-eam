@@ -141,6 +141,7 @@ export function useQlvtSyncStatus() {
     queryKey: ["qlvt-sync-status"],
     queryFn: () => apiGet<QlvtSyncStatus[]>("/api/vat-tu/oil-grouping/stock-import"),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 }
 

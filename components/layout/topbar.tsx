@@ -104,7 +104,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const [ackedReplKeys, setAckedReplKeys] = React.useState<Set<string>>(new Set());
   const { notices, loading: notifLoading } = useNotifications();
   const { data: alertsData, isLoading: alertsLoading } = useReplacementAlerts();
-  const { data: opsData, isLoading: opsLoading } = useOperations();
+  // Sự kiện vận hành CHỈ nuôi nội dung tab "Nội bộ" trong chuông, không nằm trong số badge
+  // (totalAlerts = notices + cảnh báo vật tư) → chỉ tải khi người dùng thực sự mở chuông.
+  const { data: opsData, isLoading: opsLoading } = useOperations(undefined, { enabled: notifOpen });
   const { data: profileData } = useMeProfile();
   const profile = profileData?.data ?? null;
   // Tab Nội bộ trên chuông chỉ phản chiếu đúng các mục đang hiển thị trong

@@ -81,6 +81,7 @@ export function useForumPosts(filters: ForumFilters) {
     queryKey: ["forum-posts", filters],
     queryFn: () => apiGet<ForumPost[]>(`/api/forum${qs ? `?${qs}` : ""}`),
     refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
     staleTime: 30 * 1000,
   });
 }

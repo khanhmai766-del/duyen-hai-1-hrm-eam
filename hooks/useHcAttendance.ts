@@ -46,6 +46,7 @@ export function useHcGroups(date: string) {
     queryKey: ["hc-groups", date],
     queryFn: () => apiGet<HcGroup[]>(`/api/hc-groups?date=${date}`),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -63,6 +64,7 @@ export function useHcRegistrations(from: string, to?: string, options: HcRegistr
     queryFn: () => apiGet<HcRegistration[]>(`/api/hc-registrations?${qs.toString()}`),
     enabled: options.enabled ?? true,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 }
 

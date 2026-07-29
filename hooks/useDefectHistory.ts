@@ -10,6 +10,8 @@ export interface DefectHistoryItem extends DefectHistory {
     deviceSeq: string;
     device: { seq: string; name: string };
   }>;
+  /** Tên thiết bị lấy thẳng từ cây — khỏi phải tải cả danh mục để tra mã → tên. */
+  node?: { seq: string; name: string } | null;
 }
 
 export interface DefectHistoryFilters {

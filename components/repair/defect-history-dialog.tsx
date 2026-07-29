@@ -44,8 +44,10 @@ export function DefectHistoryDialog({
   const update = useUpdateDefectHistory();
   // Cương vị chọn được — loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
   const positions = usePositions().filter(isSelectableManagingPosition);
-  // Thiết bị — dùng chung danh mục với form khiếm khuyết.
-  const { data: devicesData } = useDevices({});
+  // Thiết bị — dùng chung danh mục với form khiếm khuyết. Chỉ tải KHI HỘP THOẠI MỞ:
+  // component này được render sẵn (2 lần) ngoài trang nên nếu không chặn thì mỗi lần vào
+  // Lịch sử sửa chữa đều kéo trọn danh mục thiết bị (~10 MB) dù chưa ai mở hộp thoại.
+  const { data: devicesData } = useDevices({ enabled: open });
   const devices = devicesData?.data ?? [];
   const [form, setForm] = React.useState({ ...EMPTY });
   const filteredDevices = React.useMemo(

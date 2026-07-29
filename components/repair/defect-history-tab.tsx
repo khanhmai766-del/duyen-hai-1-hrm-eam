@@ -34,7 +34,6 @@ import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
-import { useDevices } from "@/hooks/useDevices";
 import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { DEFECT_UNITS, isSelectableManagingPosition } from "@/lib/constants";
@@ -57,11 +56,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const canDelete = rbac.can("defect-history-delete", ["full"]);
   // Loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên khỏi bộ lọc cương vị.
   const positions = usePositions().filter(isSelectableManagingPosition);
-  const { data: devicesData } = useDevices({});
-  const deviceNameByCode = React.useMemo(
-    () => new Map((devicesData?.data ?? []).map((d) => [d.code, d.name])),
-    [devicesData]
-  );
   const [filters, setFilters] = React.useState<DefectHistoryFilters>(() => ({
     ...(deviceFromUrl ? { device: deviceFromUrl } : {}),
     ...(deviceSeqFromUrl ? { deviceSeq: deviceSeqFromUrl } : {}),
@@ -70,6 +64,13 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const { data, isLoading } = useDefectHistory(filters);
   const del = useDeleteDefectHistory();
   const rows = data?.data ?? [];
+  // Tên thiết bị nay do /api/defect-history trả kèm (quan hệ node) — trước đây phải tải
+  // TOÀN BỘ danh mục thiết bị (~10 MB) mỗi lần mở trang chỉ để dựng bảng tra mã → tên.
+  const deviceNameByCode = React.useMemo(
+    // Khoá theo r.device (mã snapshot) đúng như bảng tra cũ, để mọi chỗ dùng giữ nguyên.
+    () => new Map((rows ?? []).flatMap((r) => (r.device && r.node ? [[r.device, r.node.name] as const] : []))),
+    [rows]
+  );
 
   const [lightbox, setLightbox] = React.useState<string | null>(null);
   const [delTarget, setDelTarget] = React.useState<DefectHistoryItem | null>(null);

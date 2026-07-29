@@ -41,7 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDefectHistory } from "@/hooks/useDefectHistory";
 import { useDefects } from "@/hooks/useDefects";
-import { useDevices } from "@/hooks/useDevices";
+import { useDeviceSummaries } from "@/hooks/useDevices";
 import { useOilGroupingSummary } from "@/hooks/useOilGrouping";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
 import { useReplacements } from "@/hooks/useReplacements";
@@ -85,7 +85,7 @@ function ReportsPageContent() {
   const [repairYearFilter, setRepairYearFilter] = React.useState(() => String(new Date().getFullYear()));
 
   const dateRange = React.useMemo(() => makeDateRange(from, to), [from, to]);
-  const devicesQuery = useDevices({});
+  const devicesQuery = useDeviceSummaries();
   const defectsQuery = useDefects();
   const historyQuery = useDefectHistory({ from: from || undefined, to: to || undefined });
   const replacementsQuery = useReplacements({});
@@ -218,7 +218,7 @@ function ReportsPageContent() {
 
     const allDeviceSignalRows = devices
       .map((device) => {
-        const repairCount = repairCountByDevice.get(device.code) ?? device._count?.repairLogs ?? 0;
+        const repairCount = repairCountByDevice.get(device.code) ?? device.repairCount ?? 0;
         const openDefectCount = openDefects.filter((defect) => defect.device === device.code).length;
         const replacementWarn = replacements.filter(
           (item) => item.device?.code === device.code && replacementDueStatus(item.nextDueAt) !== "OK"

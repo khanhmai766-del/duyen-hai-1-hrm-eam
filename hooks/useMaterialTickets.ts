@@ -165,6 +165,7 @@ export function useMaterialTickets(month = "ALL") {
     // Quy trình nhiều người chờ lượt nhau: tự làm mới mỗi 60s để phiếu người khác
     // vừa chuyển bước hiện ra mà không cần F5 (chỉ chạy khi tab đang mở).
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const qs = new URLSearchParams();
       if (month !== "ALL") qs.set("month", month);

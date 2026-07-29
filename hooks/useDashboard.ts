@@ -89,11 +89,12 @@ export function useUpdateSafeOperation() {
   });
 }
 
-export function useOperations(month?: string) {
+export function useOperations(month?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["operations", month ?? "recent"],
     queryFn: () => apiGet<OperationEvent[]>(`/api/operations${month ? `?month=${month}` : ""}`),
     staleTime: 5 * 60 * 1000,
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -129,6 +130,7 @@ export function useWeather(coords?: Coords) {
     queryFn: () => fetchWeather(coords),
     staleTime: 1000 * 60 * 10,
     refetchInterval: 1000 * 60 * 15,
+    refetchIntervalInBackground: false,
   });
 }
 

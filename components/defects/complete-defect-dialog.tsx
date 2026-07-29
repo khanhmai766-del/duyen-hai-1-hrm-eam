@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
-import { useDevices } from "@/hooks/useDevices";
+import { useEquipmentNode } from "@/hooks/useEquipment";
+import { parseScope } from "@/lib/equipment-units";
 import { DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
 import { formatDate, formatDateInput } from "@/lib/utils";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
@@ -29,11 +30,10 @@ export function CompleteDefectDialog({
   onClose: () => void;
 }) {
   const complete = useCompleteDefect();
-  const { data: devicesData } = useDevices({});
-  const deviceNameByCode = React.useMemo(
-    () => new Map((devicesData?.data ?? []).map((d) => [d.code, d.name])),
-    [devicesData]
-  );
+  // Chỉ cần TÊN của đúng một thiết bị. Trước đây dùng useDevices({}) — tải toàn bộ 21.948
+  // thiết bị (10 MB) mỗi lần vào trang Khiếm khuyết, vì hook chạy cả khi hộp thoại đang đóng.
+  const deviceQuery = useEquipmentNode(defect?.device || null, parseScope(defect?.unit));
+  const deviceName = deviceQuery.data?.data?.name ?? defect?.device ?? "—";
   const [form, setForm] = React.useState({
     workOrderNumber: "",
     requestType: "",
@@ -142,7 +142,7 @@ export function CompleteDefectDialog({
               </Field>
             </div>
             {/* Tên thiết bị — đồng bộ từ danh mục thiết bị theo mã thiết bị của khiếm khuyết. */}
-            <ReadOnly label="Tên thiết bị" value={deviceNameByCode.get(defect.device ?? "") ?? defect.device ?? "—"} />
+            <ReadOnly label="Tên thiết bị" value={deviceName} />
             <Field label="Ngày kết thúc *">
               {hasSheetSourceData && defect.sourceCompletedAt && (
                 <SourceValue value={formatDate(defect.sourceCompletedAt)} />

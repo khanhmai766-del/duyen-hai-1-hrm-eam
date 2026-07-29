@@ -86,6 +86,7 @@ export function useReplacementAlerts() {
     queryFn: () => apiGet<ReplacementItem[]>(`/api/material-replacements?due=WARN`),
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 }
 

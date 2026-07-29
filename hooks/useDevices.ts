@@ -118,6 +118,33 @@ export function useDevices(params: {
   });
 }
 
+/** Dòng rút gọn cho thống kê — xem toDeviceSummary trong app/api/devices/route.ts. */
+export interface DeviceSummaryItem {
+  code: string;
+  name: string;
+  system: string | null;
+  managingPosition: string | null;
+  repairCount: number;
+}
+
+/**
+ * Danh sách thiết bị dạng rút gọn cho màn hình thống kê. Trang Báo cáo buộc phải duyệt cả
+ * cây (không lọc bớt được) nên điều tiết kiệm duy nhất là cắt bớt trường: bản đầy đủ nặng
+ * ~8,2 MB, bản này ~3 MB. Query key riêng để không đụng cache của useDevices.
+ */
+export function useDeviceSummaries() {
+  return useQuery({
+    queryKey: ["devices", "summary"],
+    queryFn: () =>
+      apiGet<DeviceSummaryItem[]>("/api/devices?view=summary") as Promise<{
+        data: DeviceSummaryItem[];
+        meta: DeviceListMeta;
+      }>,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 export function useDevice(id: string | undefined, machine?: string | null) {
   const machineParam = machine?.toUpperCase() ?? "";
   return useQuery({

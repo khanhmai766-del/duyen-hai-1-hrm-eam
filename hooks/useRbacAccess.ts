@@ -49,6 +49,7 @@ export function useRbacAccess() {
     enabled: !!user,
     staleTime: 10_000,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: "always",
   });
   const permissions = query.data?.data?.permissions;

@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 // Tầng 4: avatar trong list đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
+  // Tên thiết bị trả kèm từ cây: trước đây giao diện phải tải TOÀN BỘ danh mục thiết bị
+  // (~10 MB) chỉ để dựng bảng tra mã → tên cho các dòng đang hiển thị.
+  node: { select: { seq: true, name: true } },
   relatedDevices: {
     select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
