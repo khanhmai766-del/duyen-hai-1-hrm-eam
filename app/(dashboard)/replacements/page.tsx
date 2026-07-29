@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange, Activity } from "lucide-react";
+import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange, Activity, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -19,6 +19,7 @@ import {
   ReplacementStatusDashboard,
   type ReplacementStatusPoint,
 } from "@/components/materials/replacement-status-dashboard";
+import { ReplacementScheduleImportDialog } from "@/components/materials/replacement-schedule-import-dialog";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import { Card } from "@/components/ui/card";
@@ -303,6 +304,7 @@ function ReplacementsPageContent() {
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
   const [editLogTarget, setEditLogTarget] = React.useState<ReplacementLogItem | null>(null);
   const [delLogTarget, setDelLogTarget] = React.useState<ReplacementLogItem | null>(null);
+  const [scheduleImportOpen, setScheduleImportOpen] = React.useState(false);
 
   /* ---- Tab 2: Lịch sử thay thế (history) ---- */
   const [historyFromMonth, setHistoryFromMonth] = React.useState(() => ym(new Date()));
@@ -463,8 +465,8 @@ function ReplacementsPageContent() {
           active={tab === "status"}
           onClick={() => {
             setTab("status");
-            setMachineFilter("ALL");
-            setCategoryFilter("ALL");
+            setMachineFilter("S1");
+            setCategoryFilter("Dầu bôi trơn");
           }}
           icon={Activity}
           label="Trạng thái theo dõi"
@@ -490,6 +492,17 @@ function ReplacementsPageContent() {
                 ))}
               </SelectContent>
             </Select>
+            {tab === "schedule" && canManage && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-xl border-sky-200 bg-white px-4 text-accent shadow-sm hover:border-accent hover:bg-sky-50"
+                onClick={() => setScheduleImportOpen(true)}
+              >
+                <Upload className="h-4 w-4" />
+                Nhập lịch theo dõi
+              </Button>
+            )}
           </div>
         ) : (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
@@ -734,6 +747,12 @@ function ReplacementsPageContent() {
       )}
 
       {/* Schedule dialogs */}
+      <ReplacementScheduleImportDialog
+        open={scheduleImportOpen}
+        onOpenChange={setScheduleImportOpen}
+        defaultMachine={machineFilter}
+      />
+
       <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Sửa điểm thay thế</DialogTitle></DialogHeader>
