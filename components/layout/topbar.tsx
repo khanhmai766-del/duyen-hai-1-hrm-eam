@@ -4,7 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,6 +23,7 @@ import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
 import { useMeProfile } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { usePeakMode } from "@/hooks/usePeakMode";
+import { useAdminMode } from "@/hooks/useAdminMode";
 import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -46,8 +48,9 @@ const GRID_TINTS = [
 ];
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
-function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
-  if (role === "ADMIN") return true;
+function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"], adminMode = true) {
+  if (role === "ADMIN" && adminMode) return true;
+  if (item.adminOnly) return false;
   if (item.permissionIds?.length) {
     return item.permissionIds.some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
   }
@@ -77,9 +80,12 @@ async function logout(callbackUrl = "/login") {
 export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => void; onToggleSidebar?: () => void }) {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
+  const isSystemAdmin = session?.user?.role === "ADMIN";
+  const [adminMode, setAdminMode] = useAdminMode();
   const currentPosition = useCurrentPosition();
   const peakMode = usePeakMode();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const role = session?.user?.role;
   const [q, setQ] = React.useState("");
   const [open, setOpen] = React.useState(false);
@@ -161,12 +167,12 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
       navSections.flatMap((s) =>
         s.items.flatMap((i) => {
           if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)) return [];
-          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
+          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
           if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon }));
-          return navItemAllowed(i, role, rbac.can) ? [{ label: i.label, href: i.href, icon: i.icon }] : [];
+          return navItemAllowed(i, role, rbac.can, adminMode) ? [{ label: i.label, href: i.href, icon: i.icon }] : [];
         })
       ),
-    [navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
+    [adminMode, navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
   function toggleFullscreen() {
@@ -195,9 +201,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
           .filter((i) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)))
           .map((i) => ({
             ...i,
-            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href))),
+            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href))),
           }))
-          .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can)))
+          .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can, adminMode)))
           .flatMap((i) => {
             const own = i.children ? null : {
               label: i.label,
@@ -216,7 +222,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             return own ? [own, ...kids] : kids;
           })
       ),
-    [navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
+    [adminMode, navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
   );
 
   const nq = normalizeText(q);
@@ -483,6 +489,33 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             </div>
           )}
         </div>
+
+        {isSystemAdmin && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={adminMode}
+            onClick={() => {
+              const next = !adminMode;
+              setAdminMode(next);
+              void queryClient.invalidateQueries();
+              router.refresh();
+              toast.success(next ? "Đã bật chế độ Quản trị" : "Đã chuyển sang chế độ Nghiệp vụ");
+            }}
+            className={cn(
+              "relative hidden h-9 min-w-9 items-center justify-center gap-1.5 rounded-xl px-2 text-white shadow-lg ring-1 ring-white/50 transition-transform duration-200 before:absolute before:inset-x-1 before:top-0.5 before:h-1/3 before:rounded-t-lg before:bg-white/25 hover:scale-105 active:scale-95 sm:flex",
+              adminMode
+                ? "bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-500/30"
+                : "bg-gradient-to-br from-slate-400 to-slate-600 shadow-slate-500/25"
+            )}
+            aria-label={adminMode ? "Tắt chế độ quản trị" : "Bật chế độ quản trị"}
+            title={adminMode ? "Đang ở chế độ Quản trị — bấm để chuyển sang Nghiệp vụ" : "Đang ở chế độ Nghiệp vụ — bấm để bật Quản trị"}
+          >
+            <ShieldCheck className="relative h-[18px] w-[18px] drop-shadow-sm" />
+            <span className="relative hidden text-[10px] font-black tracking-wide xl:inline">{adminMode ? "QT" : "NV"}</span>
+            <span className={cn("absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white", adminMode ? "bg-emerald-400" : "bg-slate-300")} />
+          </button>
+        )}
 
         {/* App-grid quick launcher */}
         <div ref={gridRef} className="relative hidden sm:block">

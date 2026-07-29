@@ -277,6 +277,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const seq = decodeURIComponent(params.id);
     const node = await prisma.equipmentNode.findUnique({ where: { seq } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);
+    if (node.parentSeq === null) return fail("Không thể xóa hệ thống gốc", 400);
     const childCount = await prisma.equipmentNode.count({ where: { parentSeq: seq } });
     if (childCount > 0) return fail("Không thể xóa thư mục/hệ thống đang có thiết bị con", 400);
     await prisma.equipmentNode.delete({ where: { seq } });

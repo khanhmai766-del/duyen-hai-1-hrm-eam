@@ -90,6 +90,18 @@ export function normalizePositionScopeKey(position?: string | null) {
   return normalizeText(normalizePositionScopeLabel(position));
 }
 
+const UNRESTRICTED_EQUIPMENT_POSITION_KEYS = new Set([
+  "quan doc",
+  "pho quan doc",
+  "ky thuat vien",
+  "truong ca",
+]);
+
+/** Các cương vị mặc định được xem và thao tác toàn bộ cây, không cần cấu hình từng nhánh. */
+export function isUnrestrictedEquipmentPosition(position?: string | null) {
+  return UNRESTRICTED_EQUIPMENT_POSITION_KEYS.has(normalizePositionScopeKey(position));
+}
+
 const HIDDEN_POSITION_SCOPE_OPTION_KEYS = new Set([
   "i&c",
   "khi nen - nha dau 300m3",
@@ -166,6 +178,7 @@ export function createPositionAccessResolver(
   scopes: PositionSystemScope[]
 ) {
   const normalizedPosition = normalizeText(position ?? "");
+  const unrestricted = isUnrestrictedEquipmentPosition(position);
   const explicit = scopesForPosition(scopes, position);
   const scopeConfigurationActive = scopes.some(
     (scope) => normalizeScopeAccess(scope.access) === "edit"
@@ -188,6 +201,7 @@ export function createPositionAccessResolver(
   };
 
   const accessForSeq = (seq: string | null | undefined): NodeAccess => {
+    if (unrestricted) return "edit";
     if (!normalizedPosition) return "edit";
     const direct = scopedSeqAccess(seq);
     if (direct === "edit") return "edit";
@@ -197,6 +211,7 @@ export function createPositionAccessResolver(
   };
 
   const accessForDevice = (device: DeviceLike | null | undefined): NodeAccess => {
+    if (unrestricted) return "edit";
     if (!normalizedPosition) return "edit";
     if (!device) return "edit";
     if (!scopeConfigurationActive && !explicit.length) {
@@ -215,7 +230,7 @@ export function createPositionAccessResolver(
   };
 
   return {
-    hasExplicitScopes: scopeConfigurationActive || explicit.length > 0,
+    hasExplicitScopes: unrestricted ? false : scopeConfigurationActive || explicit.length > 0,
     accessForSeq,
     accessForDevice,
   };

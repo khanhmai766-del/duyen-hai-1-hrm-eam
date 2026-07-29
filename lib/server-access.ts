@@ -11,6 +11,7 @@ import {
   createPositionAccessResolver,
   normalizePositionScopeKey,
   normalizeScopeAccess,
+  isUnrestrictedEquipmentPosition,
   scopesForPosition,
   type PositionSystemScope,
 } from "@/lib/position-system-scopes";
@@ -214,6 +215,7 @@ async function buildEquipmentAccessContext(
   if (user.role === "ADMIN") return unrestricted;
   const position = user.currentPosition ?? user.position ?? "";
   if (!position) return unrestricted;
+  if (isUnrestrictedEquipmentPosition(position)) return unrestricted;
 
   const scopes = await loadPositionSystemScopeRows();
   if (!hasExplicitScopes(scopes, position)) return unrestricted;
@@ -310,6 +312,7 @@ export async function resolveEquipmentTreeAccess(
   if (user.role === "ADMIN") return { filter: { kind: "all" }, rootSeqs: null };
   const position = user.currentPosition ?? user.position ?? "";
   if (!position) return { filter: { kind: "all" }, rootSeqs: null };
+  if (isUnrestrictedEquipmentPosition(position)) return { filter: { kind: "all" }, rootSeqs: null };
   const scopes = await loadPositionSystemScopeRows();
   if (!hasExplicitScopes(scopes, position)) return { filter: { kind: "all" }, rootSeqs: null };
 

@@ -7,6 +7,7 @@ const MANAGE_LEVELS = new Set(["manage", "full"]);
 const VIEW_LEVELS = new Set(["read", "personal", "manage", "full"]);
 const FALLBACK_PERMISSION_IDS: Record<string, string[]> = {
   "hc-attendance-group-create": ["hc-attendance-check-in"],
+  "repair-edit": ["repair-create", "defect-manage"],
 };
 export type PermissionLevel = "none" | "read" | "personal" | "manage" | "full";
 
@@ -122,12 +123,13 @@ function assignedPermissionLevelFromConfig(
 ): PermissionLevel {
   if (user.role === "ADMIN") return "full";
   if (!user.id) return "none";
+  const canonicalPermissionId = permissionId === "defect-manage" ? "repair-edit" : permissionId;
   if (!config) return permissionLevel(DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""]);
 
   const permissions = Array.isArray(config.permissions) ? config.permissions : [];
   const overrides = Array.isArray(config.userOverrides) ? config.userOverrides : [];
-  const targetPermission = permissions.find((item) => item.id === permissionId);
-  const fallbackPermissionIds = targetPermission ? [] : (FALLBACK_PERMISSION_IDS[permissionId] ?? []);
+  const targetPermission = permissions.find((item) => item.id === canonicalPermissionId);
+  const fallbackPermissionIds = FALLBACK_PERMISSION_IDS[canonicalPermissionId] ?? [];
   const fallbackPermission = fallbackPermissionIds
     .map((id) => permissions.find((item) => item.id === id))
     .find(Boolean);
@@ -138,7 +140,7 @@ function assignedPermissionLevelFromConfig(
   const overrideValues = overrides
     .filter((override) => override.userId === user.id)
     .flatMap((override) => {
-      if (override.permissionId === permissionId || fallbackPermissionIds.includes(override.permissionId)) return [override.value];
+      if (override.permissionId === canonicalPermissionId || fallbackPermissionIds.includes(override.permissionId)) return [override.value];
       if (override.permissionId !== ROLE_PROFILE_PERMISSION || !override.roleId) return [];
       return [
         override.value,

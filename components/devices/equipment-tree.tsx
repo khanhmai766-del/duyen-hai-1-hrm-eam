@@ -39,7 +39,7 @@ import {
   TREE_SCOPES,
   type TreeScope,
 } from "@/lib/equipment-units";
-import { useCountBulkDelete, useDeleteDevice, useDeleteDevices, useUpdateDevice } from "@/hooks/useDevices";
+import { useDeleteDevice, useUpdateDevice } from "@/hooks/useDevices";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { toast } from "sonner";
 import {
@@ -51,8 +51,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-
-const MAX_BULK_DELETE = 500;
 
 // Cấu trúc cây là DÙNG CHUNG cho 2 tổ máy (S2 là hình chiếu của cùng bộ node), nên mọi
 // thao tác thêm/sửa/xoá thiết bị đều ảnh hưởng cả hai — phải nói rõ trước khi người dùng bấm.
@@ -99,8 +97,6 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onToggle,
   canDelete,
   onDelete,
-  isChecked,
-  onToggleChecked,
   canEdit,
   onEdit,
 }: {
@@ -113,8 +109,6 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onToggle: (seq: string) => void;
   canDelete: boolean;
   onDelete: (node: TreeNode) => void;
-  isChecked: boolean;
-  onToggleChecked: (seq: string) => void;
   canEdit: boolean;
   onEdit: (node: TreeNode) => void;
 }) {
@@ -156,20 +150,6 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       ) : (
         <span className="h-5 w-5 shrink-0" />
       )}
-      {canDelete && (
-        <input
-          type="checkbox"
-          checked={isChecked}
-          onChange={() => onToggleChecked(node.seq)}
-          onClick={(event) => event.stopPropagation()}
-          className={cn(
-            "h-4 w-4 shrink-0 cursor-pointer rounded border-border text-accent focus:ring-2 focus:ring-accent/40",
-            isChecked ? "opacity-100" : "opacity-60 group-hover:opacity-100"
-          )}
-          aria-label={hasKids ? `Chọn nhóm ${node.name} (gồm toàn bộ thiết bị con)` : `Chọn thiết bị ${node.name}`}
-          title={hasKids ? "Chọn cả nhóm — xóa sẽ gồm toàn bộ thiết bị con bên trong" : undefined}
-        />
-      )}
       {hasKids ? (
         isOpen ? (
           <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
@@ -198,7 +178,7 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
           <Pencil className="h-3.5 w-3.5" />
         </button>
       )}
-      {canDelete && !hasKids && (
+      {canDelete && !hasKids && node.parentSeq !== null && (
         <button
           type="button"
           onClick={(event) => {
@@ -273,14 +253,9 @@ function TreeScopeBody({
   const [selected, setSelected] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<TreeNode | null>(null);
-  const [checkedSeqs, setCheckedSeqs] = React.useState<Set<string>>(new Set());
-  const [bulkConfirmOpen, setBulkConfirmOpen] = React.useState(false);
-  const [previewCount, setPreviewCount] = React.useState<number | null>(null);
   const [editTarget, setEditTarget] = React.useState<TreeNode | null>(null);
   const [editName, setEditName] = React.useState("");
   const deleteDevice = useDeleteDevice();
-  const deleteDevices = useDeleteDevices();
-  const countBulkDelete = useCountBulkDelete();
   const updateDevice = useUpdateDevice();
 
   const debouncedSearch = useDebouncedValue(search, 350);
@@ -328,15 +303,6 @@ function TreeScopeBody({
     [ensureChildren]
   );
   const onSelect = React.useCallback((seq: string) => setSelected(seq), []);
-  const onToggleChecked = React.useCallback((seq: string) => {
-    setCheckedSeqs((current) => {
-      const next = new Set(current);
-      if (next.has(seq)) next.delete(seq);
-      else if (next.size < MAX_BULK_DELETE) next.add(seq);
-      else toast.error(`Chỉ được chọn tối đa ${MAX_BULK_DELETE} thiết bị mỗi lần`);
-      return next;
-    });
-  }, []);
 
   // Toàn bộ node đã tải (roots + con đã bung + kết quả tìm) — để tra selected/tổ tiên.
   const nodesBySeq = React.useMemo(() => {
@@ -346,35 +312,6 @@ function TreeScopeBody({
     for (const n of searchResults) if (!m.has(n.seq)) m.set(n.seq, n);
     return m;
   }, [roots, childrenBySeq, searchResults]);
-
-  // Khi mở hộp thoại xác nhận xóa hàng loạt: nếu có chọn nhóm/thư mục thì đếm trước số thiết bị
-  // thực tế sẽ bị xóa (gồm cả thiết bị con) để hiển thị đúng; chọn toàn thiết bị lẻ thì số = số ô đã tick.
-  React.useEffect(() => {
-    if (!bulkConfirmOpen) {
-      setPreviewCount(null);
-      return;
-    }
-    const ids = [...checkedSeqs];
-    const hasFolder = ids.some((seq) => nodesBySeq.get(seq)?.hasChildren);
-    if (!hasFolder) {
-      setPreviewCount(ids.length);
-      return;
-    }
-    let cancelled = false;
-    setPreviewCount(null);
-    countBulkDelete
-      .mutateAsync(ids)
-      .then((res) => {
-        if (!cancelled) setPreviewCount(res.count);
-      })
-      .catch(() => {
-        if (!cancelled) setPreviewCount(ids.length);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bulkConfirmOpen]);
 
   const selectedNode = selected ? nodesBySeq.get(selected) ?? null : null;
   const ancestors = React.useMemo(() => {
@@ -452,19 +389,6 @@ function TreeScopeBody({
     walk(roots, 0);
     return rows;
   }, [searchActive, searchResults, roots, expanded, childrenBySeq, loadingSeqs]);
-
-  const selectableSeqs = React.useMemo(
-    () => flatRows.filter((row) => !row.node.hasChildren).map((row) => row.node.seq),
-    [flatRows]
-  );
-  const selectableBatch = React.useMemo(() => selectableSeqs.slice(0, MAX_BULK_DELETE), [selectableSeqs]);
-  const allVisibleChecked = selectableBatch.length > 0 && selectableBatch.every((seq) => checkedSeqs.has(seq));
-  const checkedHasFolder = React.useMemo(
-    () => [...checkedSeqs].some((seq) => nodesBySeq.get(seq)?.hasChildren),
-    [checkedSeqs, nodesBySeq]
-  );
-  const bulkCountPending = checkedHasFolder && previewCount === null;
-  const bulkDeleteCount = previewCount ?? checkedSeqs.size;
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -555,51 +479,6 @@ function TreeScopeBody({
           )}
         </div>
 
-        {canDelete && checkedSeqs.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-slate-50 px-3 py-2 text-xs">
-            <button
-              type="button"
-              disabled={selectableSeqs.length === 0}
-              onClick={() => setCheckedSeqs((current) => {
-                const next = new Set(current);
-                if (allVisibleChecked) selectableBatch.forEach((seq) => next.delete(seq));
-                else selectableBatch.forEach((seq) => {
-                  if (next.size < MAX_BULK_DELETE) next.add(seq);
-                });
-                return next;
-              })}
-              className="rounded-md border border-border bg-white px-2.5 py-1.5 font-medium text-ink transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {allVisibleChecked
-                ? "Bỏ chọn mục đang hiển thị"
-                : `Chọn ${Math.min(selectableSeqs.length, MAX_BULK_DELETE).toLocaleString("vi-VN")} mục đang hiển thị`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCheckedSeqs(new Set())}
-              className="rounded-md border border-border bg-white px-2.5 py-1.5 font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
-            >
-              Bỏ chọn tất cả
-            </button>
-            <span className="font-semibold text-ink">Đã chọn {checkedSeqs.size.toLocaleString("vi-VN")} mục</span>
-            {checkedHasFolder && (
-              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
-                Gồm nhóm — xóa cả thiết bị con
-              </span>
-            )}
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="ml-auto h-8"
-              disabled={checkedSeqs.size === 0 || deleteDevices.isPending}
-              onClick={() => setBulkConfirmOpen(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Xóa mục đã chọn
-            </Button>
-          </div>
-        )}
-
         <div ref={scrollRef} className="max-h-[68vh] min-h-[340px] overflow-y-auto p-2">
           {isLoading || showSearchLoading ? (
             <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -631,8 +510,6 @@ function TreeScopeBody({
                       onToggle={onToggle}
                       canDelete={canDelete}
                       onDelete={setDeleteTarget}
-                      isChecked={checkedSeqs.has(row.node.seq)}
-                      onToggleChecked={onToggleChecked}
                       canEdit={canEdit}
                       onEdit={(node) => {
                         setEditTarget(node);
@@ -780,40 +657,6 @@ function TreeScopeBody({
           </form>
         </DialogContent>
       </Dialog>
-      <ConfirmDialog
-        open={bulkConfirmOpen}
-        onOpenChange={setBulkConfirmOpen}
-        title={
-          bulkCountPending
-            ? "Đang tính số lượng thiết bị…"
-            : `Xóa ${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị đã chọn?`
-        }
-        description={
-          bulkCountPending
-            ? "Đang tính tổng số thiết bị sẽ bị xóa (gồm cả thiết bị con trong nhóm)…"
-            : checkedHasFolder
-              ? `Trong ${checkedSeqs.size.toLocaleString("vi-VN")} mục đã chọn có nhóm/thư mục — toàn bộ thiết bị con bên trong sẽ bị xóa cùng (${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị). Dữ liệu liên quan cũng bị xóa khỏi cây. Thao tác này không thể hoàn tác. ${BOTH_UNITS_NOTE}`
-              : `Các thiết bị và dữ liệu liên quan sẽ bị xóa khỏi cây. Thao tác này không thể hoàn tác. ${BOTH_UNITS_NOTE}`
-        }
-        confirmLabel={bulkCountPending ? "Đang tính…" : `Xóa ${bulkDeleteCount.toLocaleString("vi-VN")} thiết bị`}
-        loading={deleteDevices.isPending || bulkCountPending}
-        onConfirm={async () => {
-          const ids = [...checkedSeqs];
-          if (ids.length === 0) return;
-          try {
-            const parentSeqs = new Set(ids.map((seq) => nodesBySeq.get(seq)?.parentSeq ?? null));
-            const result = await deleteDevices.mutateAsync(ids);
-            // result.ids = toàn bộ seq đã xóa (đã tính cả thiết bị con) → xóa lựa chọn chi tiết nếu nằm trong đó.
-            if (selected && result.ids.includes(selected)) setSelected(null);
-            setCheckedSeqs(new Set());
-            setBulkConfirmOpen(false);
-            toast.success(`Đã xóa ${result.count.toLocaleString("vi-VN")} thiết bị`);
-            for (const p of parentSeqs) await refreshBranch(p);
-          } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Không thể xóa các thiết bị đã chọn");
-          }
-        }}
-      />
     </div>
   );
 }

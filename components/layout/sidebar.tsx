@@ -11,6 +11,7 @@ import { navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { usePeakMode } from "@/hooks/usePeakMode";
 import { isPeakBlockedHref } from "@/lib/peak-mode";
+import { useAdminMode } from "@/hooks/useAdminMode";
 
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
@@ -34,6 +35,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
+  const [adminMode] = useAdminMode();
   const peakMode = usePeakMode();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
   const positionCarrier = React.useMemo(
@@ -105,13 +107,13 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
         {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
-              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
+              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
               return children ? { ...item, children } : item;
             })
             .filter((item) => {
               if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(item.href)) return false;
               if (item.children) return item.children.length > 0;
-              return navItemAllowed(item, role, rbac.can);
+              return navItemAllowed(item, role, rbac.can, adminMode);
             });
           if (!items.length) return null;
           const sectionClosed = closedSections[section.title] ?? sectionIndex !== 0;
@@ -225,8 +227,9 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   );
 }
 
-function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
-  if (role === "ADMIN") return true;
+function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"], adminMode: boolean) {
+  if (role === "ADMIN" && adminMode) return true;
+  if (item.adminOnly) return false;
   if (item.permissionIds?.length) {
     return item.permissionIds.some((permissionId) => can(permissionId, [...NAV_ACCESS_LEVELS]));
   }

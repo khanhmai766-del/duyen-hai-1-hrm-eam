@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { writeActivityLog } from "@/lib/activity-log";
 import { effectiveUserPosition } from "@/lib/current-position";
 import { prisma } from "@/lib/prisma";
+import { ADMIN_MODE_COOKIE, adminModeEnabled } from "@/lib/admin-mode";
 
 let userPositionColumnsReady = false;
 
@@ -52,9 +54,15 @@ export async function requireUser() {
   }).catch(() => null);
   if (!dbUser?.isActive || dbUser.lockedAt) throw fail("Tài khoản không hợp lệ", 401);
   const currentPosition = effectiveUserPosition(dbUser) ?? undefined;
+  const effectiveRole =
+    dbUser.role === "ADMIN" && !adminModeEnabled(cookies().get(ADMIN_MODE_COOKIE)?.value)
+      ? "MANAGER"
+      : dbUser.role;
   return {
     ...session.user,
     ...dbUser,
+    role: effectiveRole,
+    systemRole: dbUser.role,
     position: currentPosition,
     primaryPosition: dbUser.position ?? undefined,
     secondaryPosition: dbUser.secondaryPosition ?? undefined,

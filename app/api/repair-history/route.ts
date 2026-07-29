@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureRepairMachineColumn();
-    await requirePermissionLevel(user, "repair-create", ["personal", "manage", "full"], "Không đủ quyền tạo phiếu sửa chữa");
+    await requirePermissionLevel(user, "repair-edit", ["personal", "manage", "full"], "Không đủ quyền tạo bản ghi lịch sử sửa chữa");
     const body = await req.json();
     if (!body.deviceId || !body.title || !body.action) {
       return fail("Thiếu thông tin bắt buộc (thiết bị, tiêu đề, hành động)");

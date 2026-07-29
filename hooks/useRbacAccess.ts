@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { apiGet } from "@/lib/fetcher";
 import { DEFAULT_RBAC_MATRIX, type RbacLevel } from "@/lib/rbac-defaults";
+import { useAdminMode } from "@/hooks/useAdminMode";
 
 const RANK: Record<RbacLevel, number> = {
   none: 0,
@@ -39,9 +40,11 @@ function satisfiesAllowedLevels(current: RbacLevel, allowed: RbacLevel[]) {
 export function useRbacAccess() {
   const { data: session } = useSession();
   const user = session?.user;
+  const [adminMode] = useAdminMode();
+  const effectiveRole = user?.role === "ADMIN" && !adminMode ? "MANAGER" : user?.role;
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: ["rbac-me", user?.id],
+    queryKey: ["rbac-me", user?.id, adminMode],
     queryFn: () => apiGet<RbacMe>("/api/rbac/me"),
     enabled: !!user,
     staleTime: 10_000,
@@ -72,11 +75,11 @@ export function useRbacAccess() {
 
   const permissionLevel = React.useCallback(
     (permissionId: string): RbacLevel => {
-      if (user?.role === "ADMIN") return "full";
+      if (user?.role === "ADMIN" && adminMode) return "full";
       if (!user?.id) return "none";
-      return level(permissions?.[permissionId] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[user.role ?? ""]);
+      return level(permissions?.[permissionId] ?? DEFAULT_RBAC_MATRIX[permissionId]?.[effectiveRole ?? ""]);
     },
-    [permissions, user?.id, user?.role]
+    [adminMode, effectiveRole, permissions, user?.id, user?.role]
   );
 
   const can = React.useCallback(

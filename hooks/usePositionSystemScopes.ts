@@ -23,6 +23,7 @@ export function useUpdatePositionSystemScope() {
       queryClient.setQueryData(["position-system-scopes"], { data, meta: null });
       queryClient.invalidateQueries({ queryKey: ["position-system-scopes"] });
       queryClient.invalidateQueries({ queryKey: ["devices"] });
+      queryClient.invalidateQueries({ queryKey: ["position-system-scope-conflicts"] });
     },
   });
 }

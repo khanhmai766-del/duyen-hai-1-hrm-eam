@@ -342,57 +342,43 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
-    id: "repair-create",
-    group: "Sửa chữa",
-    feature: "Tạo phiếu sửa chữa",
-    note: "Lập phiếu từ trang thiết bị hoặc lịch sử sửa chữa.",
-    matrix: { ADMIN: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },
-  },
-  {
     id: "repair-edit",
-    group: "Sửa chữa",
-    feature: "Sửa phiếu sửa chữa",
-    note: "Quản lý và Trưởng ca sửa được mọi phiếu; kỹ thuật viên chỉ sửa phiếu do mình tạo.",
+    group: "Lịch sử sửa chữa & Khiếm khuyết",
+    feature: "Tạo và cập nhật bản ghi sửa chữa / phiếu khiếm khuyết",
+    note: "Thêm, cập nhật bản ghi trong Lịch sử sửa chữa hoặc phiếu khiếm khuyết của thiết bị. Mức Cá nhân chỉ cập nhật hồ sơ do mình tạo; mức Quản lý cập nhật mọi hồ sơ.",
     matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
     id: "repair-delete",
-    group: "Sửa chữa",
-    feature: "Xoá phiếu sửa chữa",
-    note: "Quản trị xoá mọi phiếu; người tạo được xoá phiếu của mình.",
+    group: "Lịch sử sửa chữa & Khiếm khuyết",
+    feature: "Xoá bản ghi lịch sử sửa chữa",
+    note: "Quản trị xoá mọi bản ghi; người tạo được xoá bản ghi của mình.",
     matrix: { ADMIN: "full", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
     id: "repair-approve",
-    group: "Sửa chữa",
-    feature: "Duyệt phiếu sửa chữa",
-    note: "Xác nhận kết quả xử lý và trạng thái sau sửa chữa.",
+    group: "Lịch sử sửa chữa & Khiếm khuyết",
+    feature: "Xác nhận kết quả sửa chữa",
+    note: "Ghi người xác nhận và trạng thái cuối cho bản ghi Lịch sử sửa chữa sau khi công việc hoàn thành.",
     matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
-    id: "defect-manage",
-    group: "Khiếm khuyết",
-    feature: "Ghi nhận và cập nhật khiếm khuyết thiết bị",
-    note: "Theo dõi tình trạng, mức độ, yêu cầu xử lý và hình ảnh hiện trường.",
-    matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "read" },
-  },
-  {
     id: "defect-close",
-    group: "Khiếm khuyết",
+    group: "Lịch sử sửa chữa & Khiếm khuyết",
     feature: "Hoàn thành / đóng phiếu khiếm khuyết",
     note: "Xác nhận kết quả xử lý và đưa phiếu vào lịch sử; không bao gồm quyền xoá.",
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-delete",
-    group: "Khiếm khuyết",
+    group: "Lịch sử sửa chữa & Khiếm khuyết",
     feature: "Xoá phiếu khiếm khuyết",
     note: "Quyền độc lập, mặc định chỉ Quản trị viên. Không cho xoá phiếu phản chiếu trực tiếp từ Google Sheet.",
     matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-history-delete",
-    group: "Khiếm khuyết",
+    group: "Lịch sử sửa chữa & Khiếm khuyết",
     feature: "Xoá lịch sử khiếm khuyết",
     note: "Quyền độc lập để xoá hồ sơ đã đưa vào lịch sử; mặc định chỉ Quản trị viên.",
     matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
@@ -562,9 +548,33 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
     "rbac-manage": existingById.get("user-admin")?.matrix,
   };
   const defaultIds = new Set(DEFAULT_PERMISSIONS.map((row) => row.id));
-  const legacyIds = new Set(["dashboard-read", "shift-check-in", "shift-approve", "user-admin"]);
+  const legacyIds = new Set(["dashboard-read", "shift-check-in", "shift-approve", "user-admin", "repair-create", "defect-manage"]);
   const mergedDefaults = DEFAULT_PERMISSIONS.map((row) => {
     const existing = existingById.get(row.id);
+    if (row.id === "repair-edit") {
+      const legacyCreate = existingById.get("repair-create");
+      const legacyDefect = existingById.get("defect-manage");
+      if (existing || legacyCreate || legacyDefect) {
+        const roleIds = new Set([
+          ...Object.keys(row.matrix),
+          ...Object.keys(existing?.matrix ?? {}),
+          ...Object.keys(legacyCreate?.matrix ?? {}),
+          ...Object.keys(legacyDefect?.matrix ?? {}),
+        ]);
+        const matrix = Object.fromEntries(
+          Array.from(roleIds).map((roleId) => [
+            roleId,
+            strongestPermission([
+              row.matrix[roleId],
+              existing?.matrix[roleId],
+              legacyCreate?.matrix[roleId],
+              legacyDefect?.matrix[roleId],
+            ]),
+          ])
+        );
+        return { ...row, matrix };
+      }
+    }
     if (existing) return { ...row, matrix: { ...row.matrix, ...existing.matrix } };
     if (row.group === "Tổng quan" && legacyOverviewMatrix) return { ...row, matrix: { ...row.matrix, ...legacyOverviewMatrix } };
     const legacyMatrix = legacyMatrixByNewId[row.id];

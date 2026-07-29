@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BarChart3, ChevronRight, Eye, FolderCog, Lock, Pencil, Save } from "lucide-react";
+import { AlertTriangle, BarChart3, ChevronRight, Eye, FolderCog, Lock, Pencil, Save, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,8 +12,24 @@ import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/u
 import { usePositions } from "@/hooks/useUsers";
 import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
 import { selectableManagingPositionOptions } from "@/lib/positions";
-import { normalizeScopeAccess, positionScopeOptions, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
+import { isUnrestrictedEquipmentPosition, normalizeScopeAccess, positionScopeOptions, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
+import { apiGet } from "@/lib/fetcher";
+
+const REQUIRED_SCOPE_POSITIONS = ["Quản đốc", "Phó Quản đốc", "Kỹ thuật viên"] as const;
+
+type ScopeConflictReport = {
+  hasExplicitScope: boolean;
+  hasEditScope: boolean;
+  fixedUnrestricted: boolean;
+  explicitScopeCount: number;
+  users: Array<{
+    role: string;
+    adminBypassesScope: boolean;
+    allowed: Array<{ id: string; label: string; level: string }>;
+    blocked: Array<{ id: string; label: string; level: string }>;
+  }>;
+};
 
 const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; className: string }[] = [
   { value: "none", label: "Không", icon: Lock, className: "data-[active=true]:bg-rose-100 data-[active=true]:text-rose-700" },
@@ -23,7 +40,10 @@ const ACCESS_OPTIONS: { value: NodeAccess; label: string; icon: typeof Eye; clas
 export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const allPositions = usePositions();
   const positions = React.useMemo(
-    () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
+    () => positionScopeOptions([
+      ...REQUIRED_SCOPE_POSITIONS,
+      ...selectableManagingPositionOptions(allPositions),
+    ]),
     [allPositions]
   );
   const treeQuery = useEquipmentTree();
@@ -36,6 +56,16 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const [grants, setGrants] = React.useState<Map<string, NodeAccess>>(new Map());
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [previewOpen, setPreviewOpen] = React.useState(false);
+  const fixedUnrestricted = isUnrestrictedEquipmentPosition(position);
+  const conflictsQuery = useQuery({
+    queryKey: ["position-system-scope-conflicts", position],
+    queryFn: () => apiGet<ScopeConflictReport>(
+      `/api/position-system-scopes/conflicts?position=${encodeURIComponent(position)}`
+    ),
+    enabled: isAdmin && Boolean(position),
+    staleTime: 30_000,
+  });
+  const conflictReport = conflictsQuery.data?.data;
 
   const { roots, childrenOf, parentOf, allChildrenOf } = React.useMemo(() => {
     const index = buildEquipmentTreeIndex(equipmentNodes);
@@ -82,8 +112,8 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   );
 
   const effectiveAccess = React.useCallback(
-    (seq: string): NodeAccess => grants.get(seq) ?? inheritedAccess(seq),
-    [grants, inheritedAccess]
+    (seq: string): NodeAccess => fixedUnrestricted ? "edit" : grants.get(seq) ?? inheritedAccess(seq),
+    [fixedUnrestricted, grants, inheritedAccess]
   );
 
   function setAccess(seq: string, value: NodeAccess) {
@@ -105,6 +135,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
 
   async function save() {
     if (!position) return toast.error("Vui lòng chọn cương vị");
+    if (fixedUnrestricted) return toast.info("Cương vị này mặc định được sửa toàn bộ thiết bị, không cần lưu cấu hình");
     const entries = Array.from(grants.entries()).map(([systemSeq, access]) => ({ systemSeq, access }));
     try {
       await updateScopes.mutateAsync({ position, entries });
@@ -115,6 +146,42 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const savedCount = React.useMemo(() => scopesForPosition(scopes, position).length, [scopes, position]);
+  const scopeConfigurationActive = React.useMemo(
+    () => scopes.some((scope) => normalizeScopeAccess(scope.access) === "edit"),
+    [scopes]
+  );
+  const conflictItems = React.useMemo(() => {
+    if (!conflictReport) return [];
+    const grouped = new Map<string, { count: number; title: string; detail: string }>();
+    for (const user of conflictReport.users) {
+      let type = "";
+      let title = "";
+      let detail = "";
+      if (user.adminBypassesScope) {
+        type = "admin";
+        title = "Tài khoản ADMIN bỏ qua phạm vi cây";
+        detail = "ADMIN luôn xem và thao tác toàn bộ thiết bị; cấu hình Không/Xem/Sửa của cương vị không có hiệu lực.";
+      } else if (conflictReport.hasEditScope && user.blocked.length > 0) {
+        type = `rbac-blocks:${user.blocked.map((item) => `${item.id}:${item.level}`).join("|")}`;
+        title = `Cây cho Sửa nhưng RBAC vai trò ${user.role} còn chặn ${user.blocked.length} thao tác`;
+        detail = user.blocked.map((item) => `${item.label} (${item.level})`).join(" · ");
+      } else if (!conflictReport.hasEditScope && user.allowed.length > 0) {
+        type = `scope-blocks:${user.allowed.map((item) => `${item.id}:${item.level}`).join("|")}`;
+        title = `RBAC vai trò ${user.role} cho thao tác nhưng cây chưa có nhánh Sửa`;
+        detail = user.allowed.map((item) => `${item.label} (${item.level})`).join(" · ");
+      }
+      if (!type) continue;
+      const key = `${user.role}:${type}`;
+      const current = grouped.get(key);
+      if (current) current.count += 1;
+      else grouped.set(key, { count: 1, title, detail });
+    }
+    return Array.from(grouped.entries()).map(([key, item]) => ({
+      key,
+      title: `${item.count} tài khoản · ${item.title}`,
+      detail: item.detail,
+    }));
+  }, [conflictReport]);
 
   const summary = React.useMemo(() => {
     const result = {
@@ -200,14 +267,14 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
             </span>
             <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
               {ACCESS_OPTIONS.map((opt) => {
-                const active = (own ?? "none") === opt.value;
+                const active = fixedUnrestricted ? opt.value === "edit" : (own ?? "none") === opt.value;
                 const Icon = opt.icon;
                 return (
                   <button
                     key={opt.value}
                     type="button"
                     data-active={active}
-                    disabled={!isAdmin}
+                    disabled={!isAdmin || fixedUnrestricted}
                     onClick={() => setAccess(node.seq, opt.value)}
                     title={opt.label}
                     className={cn(
@@ -262,7 +329,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
               <Eye className="h-4 w-4" />
               Xem trước
             </Button>
-            <Button type="button" onClick={save} disabled={!isAdmin || updateScopes.isPending || !position}>
+            <Button type="button" onClick={save} disabled={!isAdmin || updateScopes.isPending || !position || fixedUnrestricted}>
               <Save className="h-4 w-4" />
               Lưu cấu hình
             </Button>
@@ -280,6 +347,12 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
           </div>
         ) : (
           <>
+            {fixedUnrestricted && (
+              <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <b>Quyền mặc định cố định:</b> {position} được xem và thao tác toàn bộ hệ thống, thiết bị.
+                Không cần cấu hình hoặc lưu từng nhánh trên cây.
+              </div>
+            )}
             <div className="mb-3 grid gap-2 md:grid-cols-3">
               <div className="rounded-lg border border-rose-100 bg-white px-3 py-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-rose-700">
@@ -307,6 +380,36 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
                 <div className="mt-1 text-sm text-muted-foreground">
                   {summary.systems.edit} hệ thống · {summary.devices.edit} thiết bị
                 </div>
+              </div>
+            </div>
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/70">
+              <div className="flex items-center gap-2 border-b border-amber-200 px-3 py-2 text-sm font-semibold text-amber-900">
+                <ShieldAlert className="h-4 w-4" />
+                Xung đột giữa phạm vi cây và RBAC
+                {conflictItems.length > 0 && (
+                  <span className="ml-auto rounded-full bg-amber-200 px-2 py-0.5 text-xs font-bold text-amber-900">
+                    {conflictItems.length}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-2 px-3 py-3">
+                {conflictsQuery.isLoading ? (
+                  <div className="text-sm text-amber-800">Đang đối chiếu quyền hiệu lực của các tài khoản…</div>
+                ) : conflictItems.length > 0 ? (
+                  conflictItems.map((item) => (
+                    <div key={item.key} className="rounded-lg border border-amber-200 bg-white px-3 py-2">
+                      <div className="flex items-start gap-2 text-sm font-semibold text-amber-950">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        {item.title}
+                      </div>
+                      <div className="mt-1 pl-6 text-xs leading-5 text-muted-foreground">{item.detail}</div>
+                    </div>
+                  ))
+                ) : conflictReport?.users.length === 0 ? (
+                  <div className="text-sm text-amber-800">Chưa có tài khoản nào mang cương vị này để đối chiếu RBAC.</div>
+                ) : (
+                  <div className="text-sm text-emerald-700">Không phát hiện xung đột quyền hiệu lực trên các tài khoản của cương vị này.</div>
+                )}
               </div>
             </div>
             {previewOpen && (
@@ -337,9 +440,13 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
           </>
         )}
         <div className="mt-3 text-xs text-muted-foreground">
-          {savedCount > 0
+          {fixedUnrestricted
+            ? `${position} mặc định được xem và thao tác toàn bộ cây thiết bị; cấu hình từng nhánh không áp dụng.`
+            : savedCount > 0
             ? `Cương vị này đang có ${savedCount} hệ thống được cấu hình riêng. Hệ thống không đặt quyền và ngoài nhánh được cấp sẽ bị ẩn (trừ nhánh COMMON luôn xem được).`
-            : "Chưa có cấu hình riêng: cương vị này đang được xem & thao tác toàn bộ (giữ nguyên hành vi cũ). Đặt quyền cho ít nhất một hệ thống để bắt đầu giới hạn."}
+            : scopeConfigurationActive
+              ? "Cương vị này chưa có nhánh được cấp. Do phân quyền cây đang hoạt động, toàn bộ hệ thống/thiết bị hiện bị ẩn cho cương vị này."
+              : "Chưa có cấu hình phân quyền cây: cương vị này đang được xem & thao tác toàn bộ theo hành vi tương thích cũ."}
         </div>
       </CardContent>
     </Card>

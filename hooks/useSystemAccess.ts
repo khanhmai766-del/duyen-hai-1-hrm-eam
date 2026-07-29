@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { apiGet } from "@/lib/fetcher";
 import type { NodeAccess } from "@/lib/position-system-scopes";
+import { useAdminMode } from "@/hooks/useAdminMode";
 
 /**
  * Quyền của NGƯỜI DÙNG hiện tại trên MỘT seq của cây thiết bị (theo cương vị).
@@ -12,10 +13,11 @@ import type { NodeAccess } from "@/lib/position-system-scopes";
  */
 export function useSeqAccess(seq: string | null | undefined) {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const [adminMode] = useAdminMode();
+  const isAdmin = session?.user?.role === "ADMIN" && adminMode;
 
   const query = useQuery({
-    queryKey: ["equipment-access", seq],
+    queryKey: ["equipment-access", seq, adminMode],
     queryFn: () => apiGet<{ access: NodeAccess }>(`/api/equipment-tree/access?seq=${encodeURIComponent(seq!)}`),
     enabled: !!seq && !isAdmin,
     staleTime: 60 * 1000,
