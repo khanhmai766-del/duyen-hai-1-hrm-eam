@@ -1,6 +1,6 @@
-import { isSelectableManagingPosition } from "@/lib/constants";
+import { blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
-import { ORG_SEAT_TITLES } from "@/lib/org-template";
+import { ORG_CHIEF, ORG_LEADS, ORG_SEAT_TITLES } from "@/lib/org-template";
 
 export function uniqueVietnamesePositions(positions: Array<string | null | undefined>) {
   const seen = new Set<string>();
@@ -192,6 +192,37 @@ export function announcementPositionsMatch(
   const leftLabel = announcementPositionLabel(left);
   const rightLabel = announcementPositionLabel(right);
   return Boolean(leftLabel && rightLabel && normalizeText(leftLabel) === normalizeText(rightLabel));
+}
+
+/**
+ * Quyền xem phiếu Sheet chưa ánh xạ theo sơ đồ ca trực:
+ * - cương vị trực tiếp thấy phiếu của chính mình;
+ * - Trưởng ca thấy toàn bộ;
+ * - Trưởng kíp thấy các cương vị nằm dưới nhánh mình;
+ * - Lò trưởng/Máy trưởng thấy toàn bộ cương vị trong khối mình quản lý.
+ */
+export function canViewUnmappedDefectPosition(
+  sourcePosition?: string | null,
+  viewerPosition?: string | null
+) {
+  if (announcementPositionsMatch(sourcePosition, viewerPosition)) return true;
+  if (!sourcePosition || !viewerPosition) return false;
+
+  if (announcementPositionsMatch(viewerPosition, ORG_CHIEF)) return true;
+
+  const lead = ORG_LEADS.find((item) => announcementPositionsMatch(viewerPosition, item.title));
+  if (lead) {
+    return lead.columns
+      .flat()
+      .some((managedPosition) => announcementPositionsMatch(sourcePosition, managedPosition));
+  }
+
+  const viewerLabel = normalizeText(announcementPositionLabel(viewerPosition));
+  const sourceBlock = blockForPosition(announcementPositionLabel(sourcePosition));
+  if (viewerLabel === normalizeText("Lò Trưởng")) return sourceBlock === "Khối Lò Hơi";
+  if (viewerLabel === normalizeText("Máy trưởng")) return sourceBlock === "Khối Turbine";
+
+  return false;
 }
 
 export function announcementPositionCode(position?: string | null): AnnouncementPositionCode | null {

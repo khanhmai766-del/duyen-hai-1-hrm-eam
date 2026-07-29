@@ -15,7 +15,7 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 import { nextDefectRequestNumber } from "@/lib/defect-request-number";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { normalizeText } from "@/lib/nav";
-import { announcementPositionLabel, announcementPositionsMatch } from "@/lib/positions";
+import { announcementPositionLabel, canViewUnmappedDefectPosition } from "@/lib/positions";
 
 export const dynamic = "force-dynamic";
 
@@ -276,7 +276,7 @@ export async function GET(req: NextRequest) {
             // làm việc. Sau khi ánh xạ, quyền xem bám theo cây thiết bị.
             defect.sourceType === "GOOGLE_SHEETS" &&
             !defect.deviceSeq
-              ? announcementPositionsMatch(defect.system, user.currentPosition ?? user.position)
+              ? canViewUnmappedDefectPosition(defect.system, user.currentPosition ?? user.position)
               // Có deviceSeq → đã qua lọc SQL; chỉ phiếu cũ chưa gắn thiết bị mới
               // xét rule text tương thích.
               : !!defect.deviceSeq ||
