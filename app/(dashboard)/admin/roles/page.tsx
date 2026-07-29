@@ -184,6 +184,8 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
       "archive-create-delete",
       "archive-backup",
       "forum-moderate",
+      "defect-delete",
+      "defect-history-delete",
       "defect-two-way-sync",
     ].includes(row.id)
   ) {
@@ -381,9 +383,23 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
   {
     id: "defect-close",
     group: "Khiếm khuyết",
-    feature: "Xoá / đóng hồ sơ khiếm khuyết",
-    note: "Chỉ cấp quản lý vận hành thực hiện các thao tác kết thúc hoặc xoá.",
+    feature: "Hoàn thành / đóng phiếu khiếm khuyết",
+    note: "Xác nhận kết quả xử lý và đưa phiếu vào lịch sử; không bao gồm quyền xoá.",
     matrix: { ADMIN: "full", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "defect-delete",
+    group: "Khiếm khuyết",
+    feature: "Xoá phiếu khiếm khuyết",
+    note: "Quyền độc lập, mặc định chỉ Quản trị viên. Không cho xoá phiếu phản chiếu trực tiếp từ Google Sheet.",
+    matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
+    id: "defect-history-delete",
+    group: "Khiếm khuyết",
+    feature: "Xoá lịch sử khiếm khuyết",
+    note: "Quyền độc lập để xoá hồ sơ đã đưa vào lịch sử; mặc định chỉ Quản trị viên.",
+    matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-two-way-sync",

@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
+import { defectResultStatusOf } from "@/lib/defect-result-status";
 
 export type DefectSourceRecord = {
   sourceSpreadsheetId: string;
@@ -54,6 +55,7 @@ export type DefectUpsertStats = {
 };
 
 const CHUNK = 100;
+const COMPLETED_HISTORY_PENDING_DAYS = 2;
 
 function text(value: unknown) {
   return String(value ?? "").trim();
@@ -92,17 +94,6 @@ function statusOf(value: unknown) {
   if (normalized.startsWith("cho vat tu")) return "CHO_VAT_TU";
   if (normalized.startsWith("cho ngung may")) return "CHO_NGUNG_MAY";
   return "CHUA_XU_LY";
-}
-
-function explicitStatusOf(value: unknown): string | null {
-  const normalized = normalizeText(text(value));
-  if (!normalized) return null;
-  if (normalized.includes("chua xu ly") || normalized.includes("chua thuc hien")) return "CHUA_XU_LY";
-  if (normalized.includes("cho vat tu")) return "CHO_VAT_TU";
-  if (normalized.includes("cho ngung may")) return "CHO_NGUNG_MAY";
-  if (normalized.includes("dang xu ly") || normalized.includes("dang thuc hien")) return "CO_PCT";
-  if (normalized.includes("da xu ly") || normalized.includes("da xong") || normalized.includes("hoan thanh")) return "DA_XU_LY";
-  return null;
 }
 
 function reminderOf(value: unknown) {
@@ -200,7 +191,13 @@ export async function upsertPreparedDefectRecords(params: {
           sourceKey: true,
           sourceHash: true,
           syncState: true,
+          websiteCreated: true,
           status: true,
+          severity: true,
+          condition: true,
+          fireSafetyImpact: true,
+          environmentSafetyImpact: true,
+          note: true,
           completedAt: true,
           postRepairAwaitingMaterial: true,
           reminderCount: true,
@@ -226,7 +223,13 @@ export async function upsertPreparedDefectRecords(params: {
           requestNumber: true,
           sourceHash: true,
           syncState: true,
+          websiteCreated: true,
           status: true,
+          severity: true,
+          condition: true,
+          fireSafetyImpact: true,
+          environmentSafetyImpact: true,
+          note: true,
           completedAt: true,
           postRepairAwaitingMaterial: true,
           reminderCount: true,
@@ -253,6 +256,7 @@ export async function upsertPreparedDefectRecords(params: {
   const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
   const unchangedIds: string[] = [];
   const cancelledPendingIds: string[] = [];
+  const expeditedPendingIds: string[] = [];
   let unchangedCount = 0;
   let confirmedSkippedCount = 0;
 
@@ -261,7 +265,7 @@ export async function upsertPreparedDefectRecords(params: {
     const matchedByRequestNumber = matchedByKey ? undefined : existingByRequestNumber.get(item.requestNumber);
     const existing = matchedByKey ?? matchedByRequestNumber;
     const sourceStatus = statusOf(item.record.sourceStatusRaw);
-    const repairStatus = explicitStatusOf(item.record.repairResultRaw);
+    const repairStatus = defectResultStatusOf(item.record.repairResultRaw);
     const sourceData = {
       unit: unitOf(item.record.unit),
       commonSubUnit: commonSubUnitOf(item.record.unit),
@@ -361,10 +365,31 @@ export async function upsertPreparedDefectRecords(params: {
 
     const cancelPending = !twoWaySyncEnabled && sourceStatus !== "DA_XU_LY" && Boolean(existing.pendingHistory);
     if (cancelPending) cancelledPendingIds.push(existing.id);
+    if (
+      existing.pendingHistory
+      && existing.status === "DA_XU_LY"
+      && repairStatus === "DA_XU_LY"
+    ) {
+      expeditedPendingIds.push(existing.id);
+    }
     updates.push({
       id: existing.id,
       data: {
-        ...(twoWaySyncEnabled ? sourceObservationData : sourceData),
+        ...(twoWaySyncEnabled
+          ? existing.websiteCreated
+            ? sourceObservationData
+            : {
+                ...sourceData,
+                // Phiếu cũ nguồn Sheet: website sở hữu H và J:O sau khi bật
+                // hai chiều; các cột Vận hành còn lại vẫn tiếp tục đọc từ Sheet.
+                fireSafetyImpact: existing.fireSafetyImpact,
+                environmentSafetyImpact: existing.environmentSafetyImpact,
+                severity: existing.severity,
+                condition: existing.condition,
+                status: existing.status,
+                note: existing.note,
+              }
+          : sourceData),
         // Khi ghép phiếu website với dòng vừa ghi lên Sheet, chuyển sang chế độ
         // theo dõi Google Sheet nhưng giữ websiteCreated để không mất các thao
         // tác Nhắc lại/Hoàn thành.
@@ -415,6 +440,19 @@ export async function upsertPreparedDefectRecords(params: {
   for (let index = 0; index < cancelledPendingIds.length; index += 1000) {
     await prisma.defectHistoryPending.deleteMany({
       where: { defectId: { in: cancelledPendingIds.slice(index, index + 1000) } },
+    });
+  }
+  const expeditedFinalizeAt = new Date(
+    now.getTime() + COMPLETED_HISTORY_PENDING_DAYS * 24 * 60 * 60 * 1000
+  );
+  for (let index = 0; index < expeditedPendingIds.length; index += 1000) {
+    await prisma.defectHistoryPending.updateMany({
+      where: {
+        defectId: { in: expeditedPendingIds.slice(index, index + 1000) },
+        // Không kéo dài một hạn đã gần hơn; chỉ được phép rút ngắn.
+        finalizeAt: { gt: expeditedFinalizeAt },
+      },
+      data: { finalizeAt: expeditedFinalizeAt },
     });
   }
 

@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 const START_ROW = 6;
 const COLUMN_COUNT = 15; // A:O
 
-type OutboxEvent = {
+export type DefectSheetOutboxEvent = {
   id: string;
   eventType: string;
   payload: Prisma.JsonValue;
@@ -22,6 +22,8 @@ type Payload = {
   reminderNumber?: number;
   remindedAt?: string;
   reminderShiftLeader?: string;
+  legacyReminderRaw?: string;
+  writeScope?: string;
   repeatedRepair: string;
   fireSafetyImpact: string;
   environmentSafetyImpact: string;
@@ -111,15 +113,20 @@ function reminderPrefix(requestNumber: string) {
 }
 
 function fullReminderHistory(payload: Payload) {
-  const entries = (payload.reminderHistory ?? [])
+  const legacyLines = text(payload.legacyReminderRaw)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^số lần nhắc lại\s*:/i.test(line));
+  const newLines = (payload.reminderHistory ?? [])
     .map((item) => `Nhắc lại lần ${item.reminderNumber} ngày ${dateVi(item.remindedAt)}`)
-    .join("\n");
-  const count = payload.reminderHistory?.length ?? (Number(payload.reminderCount) || 0);
-  return entries ? `Số lần nhắc lại: ${count}\n${entries}` : "";
+    .filter(Boolean);
+  const count = Number(payload.reminderCount) || payload.reminderHistory?.length || 0;
+  const history = [...new Set([...legacyLines, ...newLines])].join("\n");
+  return history ? `Số lần nhắc lại: ${count}\n${history}` : "";
 }
 
 export function buildDefectSheetWritePlan(
-  event: OutboxEvent,
+  event: DefectSheetOutboxEvent,
   inputRows: unknown[]
 ): DefectSheetWritePlan {
   if (!event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) {
@@ -185,6 +192,18 @@ export function buildDefectSheetWritePlan(
   const original = originals[0];
 
   if (event.eventType === "UPDATE") {
+    if (payload.writeScope === "SHEET_ORIGIN_LIMITED") {
+      writes.push({ range: `J${original.sheetRow}:O${original.sheetRow}`, values: [[...current.slice(9, 15)]] });
+      // Các hàng nhắc lại kiểu cũ vẫn nằm riêng trên Sheet. Chỉ đồng bộ hai
+      // trường Vận hành đang được website sở hữu; không ghi đè cột M hoặc dữ
+      // liệu sửa chữa của những hàng lịch sử này.
+      const prefix = reminderPrefix(requestNumber);
+      for (const row of rows.map((value, index) => ({ value, sheetRow: START_ROW + index }))) {
+        if (!row.value[4].startsWith(prefix)) continue;
+        writes.push({ range: `J${row.sheetRow}:O${row.sheetRow}`, values: [[...current.slice(9, 15)]] });
+      }
+      return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+    }
     // Nhắc lại chỉ nằm ở cột H của hàng gốc. Giữ nguyên lịch sử hiện có khi
     // người dùng sửa các thông tin khác của phiếu.
     current[7] = original.row[7];
@@ -204,14 +223,114 @@ export function buildDefectSheetWritePlan(
     throw new Error("Sự kiện nhắc lại thiếu số lần hoặc ngày nhắc");
   }
   const reminderHistory = payload.reminderHistory ?? [];
-  if (reminderHistory.length < reminderNumber) {
+  if (!reminderHistory.some((item) => item.reminderNumber === reminderNumber)) {
     throw new Error(`Lịch sử nhắc lại của phiếu ${requestNumber} chưa đủ lần ${reminderNumber}`);
   }
 
   const history = fullReminderHistory(payload);
+  if (payload.writeScope === "SHEET_ORIGIN_LIMITED") {
+    writes.push({ range: `H${original.sheetRow}`, values: [[history]] });
+    return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+  }
   // Nghiệp vụ mới chỉ cập nhật hàng gốc, không tạo/copy hàng nhắc riêng.
   writes.push({ range: `D${original.sheetRow}`, values: [[current[3]]] });
   writes.push({ range: `G${original.sheetRow}`, values: [[current[6]]] });
   writes.push({ range: `H${original.sheetRow}`, values: [[history]] });
   return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+}
+
+export type DefectSheetBatchWritePlan = {
+  eventIds: string[];
+  eventCount: number;
+  requestNumbers: string[];
+  writes: DefectSheetWritePlan["writes"];
+};
+
+function columnIndex(value: string) {
+  const code = value.toUpperCase().charCodeAt(0) - 65;
+  if (code < 0 || code >= COLUMN_COUNT) throw new Error(`Cột ngoài phạm vi A:O: ${value}`);
+  return code;
+}
+
+function columnName(index: number) {
+  return String.fromCharCode(65 + index);
+}
+
+function applyWrites(rows: string[][], writes: DefectSheetWritePlan["writes"]) {
+  for (const write of writes) {
+    const match = write.range.match(/^([A-O])(\d+)(?::([A-O])(\d+))?$/i);
+    if (!match) throw new Error(`Vùng ghi không được hỗ trợ trong lô: ${write.range}`);
+    const startColumn = columnIndex(match[1]);
+    const startRow = Number(match[2]);
+    const endColumn = columnIndex(match[3] ?? match[1]);
+    const endRow = Number(match[4] ?? match[2]);
+    if (startRow !== endRow || startRow < START_ROW || write.values.length !== 1) {
+      throw new Error(`Lô chỉ hỗ trợ ghi một hàng trong A:O: ${write.range}`);
+    }
+    const values = write.values[0].map(text);
+    if (values.length !== endColumn - startColumn + 1) {
+      throw new Error(`Số ô không khớp vùng ${write.range}`);
+    }
+    const rowIndex = startRow - START_ROW;
+    while (rows.length <= rowIndex) rows.push(normalizeRow([]));
+    for (let offset = 0; offset < values.length; offset += 1) {
+      rows[rowIndex][startColumn + offset] = values[offset];
+    }
+  }
+}
+
+/**
+ * Lập kế hoạch tuần tự cho nhiều event cùng một Sheet trên một snapshot duy nhất.
+ * Mỗi kế hoạch được áp vào bản sao trong bộ nhớ trước khi xử lý event kế tiếp, nhờ
+ * vậy nhiều CREATE trong cùng lô luôn nhận các dòng khác nhau. Kết quả cuối được
+ * nén thành các dải ô không chồng lấn để Google chỉ cần một values:batchUpdate.
+ */
+export function buildDefectSheetBatchWritePlan(
+  events: DefectSheetOutboxEvent[],
+  inputRows: unknown[]
+): DefectSheetBatchWritePlan {
+  if (!events.length) throw new Error("Lô đồng bộ không có sự kiện");
+  const before = inputRows.map(normalizeRow);
+  const after = before.map((row) => [...row]);
+  const plans: DefectSheetWritePlan[] = [];
+
+  for (const event of events) {
+    const plan = buildDefectSheetWritePlan(event, after);
+    applyWrites(after, plan.writes);
+    plans.push(plan);
+  }
+
+  const writes: DefectSheetWritePlan["writes"] = [];
+  const rowCount = Math.max(before.length, after.length);
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const previous = before[rowIndex] ?? normalizeRow([]);
+    const current = after[rowIndex] ?? normalizeRow([]);
+    let column = 0;
+    while (column < COLUMN_COUNT) {
+      if (previous[column] === current[column]) {
+        column += 1;
+        continue;
+      }
+      const start = column;
+      while (column + 1 < COLUMN_COUNT && previous[column + 1] !== current[column + 1]) {
+        column += 1;
+      }
+      const end = column;
+      const sheetRow = START_ROW + rowIndex;
+      writes.push({
+        range: start === end
+          ? `${columnName(start)}${sheetRow}`
+          : `${columnName(start)}${sheetRow}:${columnName(end)}${sheetRow}`,
+        values: [[...current.slice(start, end + 1)]],
+      });
+      column += 1;
+    }
+  }
+
+  return {
+    eventIds: events.map((event) => event.id),
+    eventCount: events.length,
+    requestNumbers: plans.map((plan) => plan.requestNumber),
+    writes,
+  };
 }

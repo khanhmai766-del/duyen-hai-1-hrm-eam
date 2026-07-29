@@ -1,0 +1,214 @@
+{
+  "name": "COPY ONLY - Ghi ngược khiếm khuyết theo lô từ localhost",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Chạy thử thủ công",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-900, 20]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Lịch mỗi phút (để tắt)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-900, 180],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3000/api/integrations/n8n/defects/outbox/claim?limit=50&exclusive=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "claim-batch",
+      "name": "Claim tối đa 50 sự kiện",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-660, 80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const events = Array.isArray($json.data) ? $json.data : [];\nif (!events.length) return [];\nconst normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();\nconst configs = {\n  CO: { spreadsheetId: '17Jn2j18UOqfY-1rj65HLfYUtBD9euYFkagkaorjnpYo', sheetName: 'DH1', requestType: 'Cơ' },\n  DIEN: { spreadsheetId: '1x-EqgwKHCshEgXQVo7RrmK7Wqecpo7F7-czDS_ZqYqo', sheetName: 'DH1', requestType: 'Điện' },\n};\nconst groups = new Map();\nfor (const event of events) {\n  const requestType = normalize(event.payload?.requestType);\n  const key = requestType.includes('dien') || requestType.includes('i&c') ? 'DIEN' : 'CO';\n  if (!groups.has(key)) groups.set(key, { ...configs[key], events: [] });\n  groups.get(key).events.push(event);\n}\nreturn [...groups.values()].map(group => ({ json: { ...group, eventIds: group.events.map(event => event.id) } }));"
+      },
+      "id": "group-by-sheet",
+      "name": "Gom sự kiện theo Sheet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 80]
+    },
+    {
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $json.spreadsheetId }}/values/{{ encodeURIComponent($json.sheetName + '!A6:O') }}?majorDimension=ROWS",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "id": "read-sheet-once",
+      "name": "Đọc mỗi Sheet đúng 1 lần",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-180, 80],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3000/api/integrations/n8n/defects/outbox/batch/plan",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ eventIds: $('Gom sự kiện theo Sheet').item.json.eventIds, rows: $json.values ?? [] }) }}",
+        "options": {}
+      },
+      "id": "plan-batch",
+      "name": "Lập kế hoạch cả lô",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [60, 80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-writes",
+              "leftValue": "={{ ($json.data?.writes ?? []).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-writes",
+      "name": "Lô có thay đổi cần ghi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [300, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Gom sự kiện theo Sheet').item.json.spreadsheetId }}/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ valueInputOption: 'USER_ENTERED', data: $('Lập kế hoạch cả lô').item.json.data.writes.map(write => ({ range: $('Gom sự kiện theo Sheet').item.json.sheetName + '!' + write.range, majorDimension: 'ROWS', values: write.values })) }) }}",
+        "options": {}
+      },
+      "id": "write-batch",
+      "name": "Ghi 1 batchUpdate mỗi Sheet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [540, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3000/api/integrations/n8n/defects/outbox/batch/ack",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ eventIds: $('Lập kế hoạch cả lô').item.json.data.eventIds }) }}",
+        "options": {}
+      },
+      "id": "ack-batch",
+      "name": "ACK cả lô",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [780, 80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chạy thử thủ công": {
+      "main": [[{ "node": "Claim tối đa 50 sự kiện", "type": "main", "index": 0 }]]
+    },
+    "Lịch mỗi phút (để tắt)": {
+      "main": [[{ "node": "Claim tối đa 50 sự kiện", "type": "main", "index": 0 }]]
+    },
+    "Claim tối đa 50 sự kiện": {
+      "main": [[{ "node": "Gom sự kiện theo Sheet", "type": "main", "index": 0 }]]
+    },
+    "Gom sự kiện theo Sheet": {
+      "main": [[{ "node": "Đọc mỗi Sheet đúng 1 lần", "type": "main", "index": 0 }]]
+    },
+    "Đọc mỗi Sheet đúng 1 lần": {
+      "main": [[{ "node": "Lập kế hoạch cả lô", "type": "main", "index": 0 }]]
+    },
+    "Lập kế hoạch cả lô": {
+      "main": [[{ "node": "Lô có thay đổi cần ghi?", "type": "main", "index": 0 }]]
+    },
+    "Lô có thay đổi cần ghi?": {
+      "main": [
+        [{ "node": "Ghi 1 batchUpdate mỗi Sheet", "type": "main", "index": 0 }],
+        [{ "node": "ACK cả lô", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ghi 1 batchUpdate mỗi Sheet": {
+      "main": [[{ "node": "ACK cả lô", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "active": false,
+  "versionId": "copy-batch-localhost-v1"
+}

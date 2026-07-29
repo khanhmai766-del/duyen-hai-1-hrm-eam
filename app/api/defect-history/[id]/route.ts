@@ -61,7 +61,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-close", ["approve", "manage", "full"], "Không đủ quyền xoá lịch sử khiếm khuyết");
+    await requirePermissionLevel(user, "defect-history-delete", ["full"], "Không đủ quyền xoá lịch sử khiếm khuyết");
     const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
     const access = await resolveEquipmentAccessForUser(user);

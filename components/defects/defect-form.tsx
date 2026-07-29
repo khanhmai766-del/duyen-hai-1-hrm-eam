@@ -30,8 +30,8 @@ import {
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
-import { normalizeText } from "@/lib/nav";
 import type { TreeScope } from "@/lib/equipment-units";
+import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -64,7 +64,10 @@ export function DefectForm({
   onCancel?: () => void;
 }) {
   const isEdit = !!defect;
-  const isSynced = defect?.sourceType === "GOOGLE_SHEETS";
+  // Phiếu tạo trên website vẫn thuộc quyền chỉnh sửa của Vận hành sau khi được
+  // đồng bộ vòng về từ Sheet. Chỉ phiếu có nguồn gốc thật sự từ Sheet mới dùng
+  // màn hình ánh xạ cục bộ.
+  const isSynced = defect?.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
   const create = useCreateDefect();
   const update = useUpdateDefect();
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
@@ -76,7 +79,7 @@ export function DefectForm({
   const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
   const shiftLeaders = React.useMemo(
     () => (usersQuery.data?.data ?? [])
-      .filter((user) => user.isActive && [user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition].some((value) => normalizeText(value ?? "") === "truong ca"))
+      .filter((user) => user.isActive && [user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition].some(isDefectShiftLeaderCandidatePosition))
       .sort((a, b) => a.name.localeCompare(b.name, "vi")),
     [usersQuery.data]
   );
@@ -251,27 +254,31 @@ export function DefectForm({
 
   async function submit() {
     if (isSynced) {
-      if (!form.deviceSystemSeq) {
-        setStep(1);
-        return toast.error("Vui lòng chọn Hệ thống trước khi lưu ánh xạ");
-      }
-      if (!form.device) {
+      if (!form.device && !defect?.deviceSeq) {
         setStep(1);
         return toast.error("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
       }
       try {
         const syncedPayload: Record<string, unknown> = {
           id: defect!.id,
-          deviceSystemSeq: form.deviceSystemSeq,
-          device: form.device || null,
-          relatedDeviceSeqs: form.relatedDeviceSeqs,
-          postRepairAwaitingMaterial: form.postRepairAwaitingMaterial,
+          severity: form.severity,
+          status: form.status,
+          fireSafetyImpact: form.fireSafetyImpact,
+          environmentSafetyImpact: form.environmentSafetyImpact,
+          condition: form.condition,
+          note: form.note,
         };
+        if (form.deviceSystemSeq) {
+          syncedPayload.deviceSystemSeq = form.deviceSystemSeq;
+          syncedPayload.device = form.device || null;
+          syncedPayload.relatedDeviceSeqs = form.relatedDeviceSeqs;
+          syncedPayload.postRepairAwaitingMaterial = form.postRepairAwaitingMaterial;
+        }
         // Chỉ gửi ảnh khi VHV chủ động lưu tại tab hình ảnh.
         // Lưu ánh xạ không được kích hoạt kiểm tra/tải lại ảnh.
         if (step === 3) syncedPayload.images = form.images;
         const updated = await update.mutateAsync(syncedPayload as { id: string } & Record<string, unknown>);
-        toast.success(step === 3 ? "Đã lưu hình ảnh khiếm khuyết" : "Đã lưu ánh xạ thiết bị");
+        toast.success(step === 3 ? "Đã lưu hình ảnh khiếm khuyết" : "Đã lưu ánh xạ và KQ Vận hành");
         if (step === 1 && onMappingSaved) onMappingSaved(updated);
         else onDone?.();
       } catch (error) {
@@ -282,11 +289,16 @@ export function DefectForm({
     const missing = missingGeneral();
     if (missing) { setStep(1); return toast.error(`Vui lòng chọn ${missing}`); }
     if (!form.severity) { setStep(2); return toast.error("Vui lòng chọn Mức độ"); }
-    const { deviceSystem: _deviceSystem, deviceSystemSeq: _deviceSystemSeq, ...defectForm } = form;
+    const {
+      deviceSystem: _deviceSystem,
+      deviceSystemSeq: _deviceSystemSeq,
+      reminderCount: _reminderCount,
+      lastRemindedAt: _lastRemindedAt,
+      ...defectForm
+    } = form;
     const payload = {
       ...defectForm,
       detectedAt: form.detectedAt || null,
-      lastRemindedAt: form.reminderCount > 0 ? form.lastRemindedAt || null : null,
     };
     try {
       if (isEdit) await update.mutateAsync({ id: defect!.id, ...payload });
@@ -447,6 +459,58 @@ export function DefectForm({
                 )}
               </div>
             </Row>
+            {isSynced && (
+              <div className="my-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                <div className="mb-4">
+                  <p className="font-semibold text-blue-950">Cập nhật Vận hành</p>
+                  <p className="text-xs text-blue-800/75">Các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet.</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <StackField label="Mức Độ">
+                    <Select value={form.severity} onValueChange={(value) => set("severity", value)}>
+                      <SelectTrigger className="h-11"><SelectValue placeholder="Chọn mức độ" /></SelectTrigger>
+                      <SelectContent>
+                        {DEFECT_SEVERITY_ORDER.map((severity) => (
+                          <SelectItem key={severity} value={severity}>Mức {severity}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </StackField>
+                  <StackField label="KQ Vận Hành">
+                    <Select value={form.status} onValueChange={(value) => set("status", value)}>
+                      <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DEFECT_STATUS_ORDER.map((status) => (
+                          <SelectItem key={status} value={status}>{DEFECT_STATUS[status].label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </StackField>
+                  <StackField label="Ảnh Hưởng PCCC">
+                    <Select value={form.fireSafetyImpact} onValueChange={(value) => set("fireSafetyImpact", value)}>
+                      <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                      <SelectContent>{YES_NO_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </StackField>
+                  <StackField label="Môi Trường, ATVSLĐ">
+                    <Select value={form.environmentSafetyImpact} onValueChange={(value) => set("environmentSafetyImpact", value)}>
+                      <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                      <SelectContent>{YES_NO_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </StackField>
+                  <StackField label="Điều Kiện Thực Hiện">
+                    <Select value={form.condition} onValueChange={(value) => set("condition", value)}>
+                      <SelectTrigger className="h-11"><SelectValue placeholder="Chọn điều kiện" /></SelectTrigger>
+                      <SelectContent>{DEFECT_CONDITION_ORDER.map((value) => <SelectItem key={value} value={value}>{DEFECT_CONDITION[value]}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </StackField>
+                  <StackField label="Ghi Chú">
+                    <Input className="h-11" value={form.note} onChange={(event) => set("note", event.target.value)} />
+                  </StackField>
+                </div>
+                <p className="mt-3 text-xs text-blue-800/75">Nhắc lại được ghi riêng vào cột H bằng nút “Nhắc lại” trên danh sách.</p>
+              </div>
+            )}
             {isSynced && defect?.status === "DA_XU_LY" && (
               <Row label="Tồn Đọng">
                 <button
@@ -715,17 +779,9 @@ export function DefectForm({
                   <Input
                     className="h-11"
                     type="number"
-                    min={0}
-                    step={1}
                     value={form.reminderCount}
-                    onChange={(e) => {
-                      const reminderCount = Math.max(0, Math.trunc(Number(e.target.value) || 0));
-                      setForm((current) => ({
-                        ...current,
-                        reminderCount,
-                        lastRemindedAt: reminderCount === 0 ? "" : current.lastRemindedAt,
-                      }));
-                    }}
+                    readOnly
+                    disabled
                   />
                 </StackField>
                 <StackField label="Ngày Nhắc Lại Gần Nhất">
@@ -733,13 +789,13 @@ export function DefectForm({
                     className="h-11"
                     type="date"
                     value={form.lastRemindedAt}
-                    disabled={form.reminderCount === 0}
-                    onChange={(e) => set("lastRemindedAt", e.target.value)}
+                    readOnly
+                    disabled
                   />
                 </StackField>
               </div>
               <p className="-mt-2 text-xs text-muted-foreground">
-                Nút “Nhắc lại” trên danh sách sẽ tự tăng số lần và cập nhật ngày gần nhất.
+                Dữ liệu chỉ đọc, được hệ thống tự tính từ lịch sử khi bấm nút “Nhắc lại” trên danh sách.
               </p>
               <StackField label="Ghi Chú">
                 <Textarea className="min-h-[88px] resize-y" value={form.note} onChange={(e) => set("note", e.target.value)} />
@@ -773,7 +829,7 @@ export function DefectForm({
         {isSynced && (step === 1 || step === 3) ? (
           <Button type="button" onClick={submit} disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {step === 3 ? "Lưu hình ảnh" : "Lưu ánh xạ"}
+            {step === 3 ? "Lưu hình ảnh" : "Lưu ánh xạ & Vận hành"}
           </Button>
         ) : isSynced ? (
           <Button type="button" onClick={() => setStep(1)}>

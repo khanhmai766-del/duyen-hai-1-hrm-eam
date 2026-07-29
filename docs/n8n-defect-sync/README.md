@@ -183,8 +183,9 @@ Import hai workflow production:
 
 - `workflow-production-source-aware.json`: đọc hai Sheet chính thức vào website,
   bao gồm đầy đủ dữ liệu Vận hành và 10 trường Sửa chữa ở cột 17–26.
-- `workflow-two-way-production.json`: claim hàng đợi từ website và ghi thay đổi
-  vào đúng Sheet Cơ hoặc Điện.
+- `workflow-two-way-batch-production.json`: claim tối đa 50 sự kiện, gom theo
+  Sheet và ghi thay đổi vào đúng Sheet Cơ hoặc Điện bằng tối đa hai lượt đọc và
+  hai lượt `batchUpdate`.
 
 Sau khi import, chọn lại credential `Header Auth account` và
 `Google Sheets account` cho tất cả node có cảnh báo. Chạy thủ công từng workflow
@@ -207,10 +208,11 @@ website mặc định tắt; chỉ bật sau khi đã kiểm tra đúng Sheet, �
 
 ### Chiều website → Google Sheet
 
-Workflow ghi ngược gọi lần lượt `claim → plan → Google Sheets batchUpdate →
-ack`. Không tự xây số dòng trong n8n: API `plan` chịu trách nhiệm tìm hàng gốc,
-chọn dòng trống và tạo danh sách ô cần ghi để tránh lệch dòng khi người dùng
-chèn/xóa trên Sheet.
+Workflow ghi ngược gọi lần lượt `claim độc quyền → gom theo Sheet → batch plan →
+Google Sheets batchUpdate → batch ack`. Không tự xây số dòng trong n8n: API
+`batch/plan` chịu trách nhiệm lập kế hoạch tuần tự trên ảnh chụp Sheet, tìm hàng
+gốc, chọn dòng trống và tạo danh sách ô cần ghi để tránh lệch dòng khi người
+dùng chèn/xóa trên Sheet. Lượt lịch mới không chạy chồng khi lô trước chưa ACK.
 
 - Phiếu mới ghi vào hàng trống có sẵn hoặc hàng cuối.
 - Sửa phiếu cập nhật đúng hàng có `STT/năm`.

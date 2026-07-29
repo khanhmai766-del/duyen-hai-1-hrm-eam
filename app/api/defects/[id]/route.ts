@@ -10,7 +10,6 @@ import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/constants";
 import { validateDefectImages } from "@/lib/defect-images";
-import { parseReminderCount } from "@/lib/defect-reminder";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 
@@ -55,10 +54,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
-    const reminderCount = body.reminderCount === undefined
-      ? existing.reminderCount
-      : parseReminderCount(body.reminderCount);
-    if (reminderCount === null) return fail("Số lần nhắc lại phải là số nguyên không âm");
     const content = body.content === undefined ? String(existing.content ?? "").trim() : String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
     const relatedDeviceSeqs = body.relatedDeviceSeqs === undefined
@@ -79,22 +74,46 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const existingRelatedCount = await prisma.equipmentNode.count({ where: { seq: { in: relatedDeviceSeqs } } });
       if (existingRelatedCount !== relatedDeviceSeqs.length) return fail("Có thiết bị liên quan không tồn tại");
     }
-    if (existing.sourceType === "GOOGLE_SHEETS") {
+    if (existing.sourceType === "GOOGLE_SHEETS" && !existing.websiteCreated) {
+      const mappingRequested =
+        body.deviceSystemSeq !== undefined
+        || body.device !== undefined
+        || body.relatedDeviceSeqs !== undefined;
       const requestedDeviceSeq = String(body.device ?? "").trim();
       const requestedSystemSeq = String(body.deviceSystemSeq ?? "").trim();
-      if (!requestedSystemSeq) return fail("Vui lòng chọn Hệ thống trước khi lưu ánh xạ");
-      if (!requestedDeviceSeq) return fail("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
+      if (mappingRequested && !requestedSystemSeq) return fail("Vui lòng chọn Hệ thống trước khi lưu ánh xạ");
+      if (mappingRequested && !requestedDeviceSeq) return fail("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
+      const severity = body.severity === undefined ? undefined : String(body.severity);
+      if (severity !== undefined && !["1", "2", "3", "4"].includes(severity)) {
+        return fail("Mức độ khiếm khuyết không hợp lệ");
+      }
+      const status = body.status === undefined ? undefined : String(body.status);
+      if (
+        status !== undefined
+        && !["CHUA_XU_LY", "CO_PCT", "CHO_VAT_TU", "CHO_NGUNG_MAY", "DA_XU_LY"].includes(status)
+      ) {
+        return fail("KQ Vận hành không hợp lệ");
+      }
+      const condition = body.condition === undefined ? undefined : String(body.condition).toUpperCase();
+      if (condition !== undefined && !["A", "B"].includes(condition)) {
+        return fail("Điều kiện thực hiện không hợp lệ");
+      }
+      const fireSafetyImpact =
+        body.fireSafetyImpact === undefined ? undefined : normalizeImpactValue(body.fireSafetyImpact);
+      const environmentSafetyImpact =
+        body.environmentSafetyImpact === undefined ? undefined : normalizeImpactValue(body.environmentSafetyImpact);
+      const note = body.note === undefined ? undefined : String(body.note ?? "").trim();
 
-      const equipmentNodes = await prisma.equipmentNode.findMany({
+      const equipmentNodes = mappingRequested ? await prisma.equipmentNode.findMany({
         select: { seq: true, parentSeq: true },
-      });
+      }) : [];
       const parentBySeq = new Map(equipmentNodes.map((node) => [node.seq, node.parentSeq]));
       const seqsWithChildren = new Set(
         equipmentNodes.map((node) => node.parentSeq).filter((seq): seq is string => !!seq)
       );
-      if (!parentBySeq.has(requestedSystemSeq)) return fail("Hệ thống đã chọn không tồn tại");
-      if (!parentBySeq.has(requestedDeviceSeq)) return fail("Thiết bị đã chọn không tồn tại");
-      if (seqsWithChildren.has(requestedDeviceSeq)) {
+      if (mappingRequested && !parentBySeq.has(requestedSystemSeq)) return fail("Hệ thống đã chọn không tồn tại");
+      if (mappingRequested && !parentBySeq.has(requestedDeviceSeq)) return fail("Thiết bị đã chọn không tồn tại");
+      if (mappingRequested && seqsWithChildren.has(requestedDeviceSeq)) {
         return fail("Thiết bị chính phải là thiết bị cấp cuối trong Hệ thống");
       }
       if (relatedDeviceSeqs?.some((seq) => seqsWithChildren.has(seq))) {
@@ -109,7 +128,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         }
         return false;
       }
-      if (!belongsToSelectedSystem(requestedDeviceSeq)) {
+      if (mappingRequested && !belongsToSelectedSystem(requestedDeviceSeq)) {
         return fail("Thiết bị chính không thuộc Hệ thống đang ánh xạ");
       }
 
@@ -137,12 +156,35 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             ? requestedDeviceSeq
             : null
           : undefined;
-      const defect = await prisma.defect.update({
-        where: { id: params.id },
-        data: {
+      const operationalChanged =
+        (severity !== undefined && severity !== existing.severity)
+        || (status !== undefined && status !== existing.status)
+        || (condition !== undefined && condition !== existing.condition)
+        || (fireSafetyImpact !== undefined && fireSafetyImpact !== existing.fireSafetyImpact)
+        || (environmentSafetyImpact !== undefined && environmentSafetyImpact !== existing.environmentSafetyImpact)
+        || (note !== undefined && note !== (existing.note ?? ""));
+      if (operationalChanged && !existing.deviceSeq && !requestedDeviceSeq) {
+        return fail("Vui lòng ánh xạ thiết bị trước khi cập nhật Vận hành");
+      }
+      const defect = await prisma.$transaction(async (tx) => {
+        const updated = await tx.defect.update({
+          where: { id: params.id },
+          data: {
           createdById: user.id,
-          device: body.device !== undefined ? body.device || null : undefined,
+          device: mappingRequested && body.device !== undefined ? body.device || null : undefined,
           deviceSeq,
+          severity,
+          status,
+          condition,
+          fireSafetyImpact,
+          environmentSafetyImpact,
+          note,
+          completedAt:
+            status === "DA_XU_LY" && existing.status !== "DA_XU_LY"
+              ? new Date()
+              : status !== undefined && status !== "DA_XU_LY" && existing.status === "DA_XU_LY"
+                ? null
+                : undefined,
           postRepairAwaitingMaterial:
             existing.status === "DA_XU_LY" && typeof body.postRepairAwaitingMaterial === "boolean"
               ? body.postRepairAwaitingMaterial
@@ -155,8 +197,29 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
                 create: relatedDeviceSeqs.map((relatedSeq) => ({ deviceSeq: relatedSeq })),
               }
             : undefined,
-        },
-        include: INCLUDE,
+          },
+          include: INCLUDE,
+        });
+        if (operationalChanged) {
+          await enqueueDefectSyncEvent(tx, {
+            defect: updated,
+            eventType: "UPDATE",
+            extra: { writeScope: "SHEET_ORIGIN_LIMITED" },
+          });
+        }
+        if (status !== undefined && status !== "DA_XU_LY") {
+          await tx.defectHistoryPending.deleteMany({ where: { defectId: updated.id } });
+          await tx.defect.update({
+            where: { id: updated.id },
+            data: {
+              confirmedAt: null,
+              confirmedById: null,
+              confirmedByName: null,
+              confirmedHistoryId: null,
+            },
+          });
+        }
+        return updated;
       });
       if (images) {
         const retained = new Set(images);
@@ -237,15 +300,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           status: body.status,
           completedAt,
           detectedAt: body.detectedAt !== undefined ? (body.detectedAt ? parseDateInput(body.detectedAt) : null) : undefined,
-          reminderCount: body.reminderCount !== undefined ? reminderCount : undefined,
-          lastRemindedAt:
-            reminderCount === 0
-              ? null
-              : body.lastRemindedAt !== undefined
-                ? body.lastRemindedAt
-                  ? parseDateInput(body.lastRemindedAt)
-                  : null
-                : undefined,
+          // Không nhận sửa tay bộ đếm/ngày nhắc lại. Hai trường này chỉ được
+          // cập nhật nguyên tử cùng DefectReminderLog tại API /remind.
           shiftLeaderId: body.shiftLeaderId !== undefined ? shiftLeader?.id ?? null : undefined,
           shiftLeaderName: body.shiftLeaderId !== undefined ? shiftLeader?.name ?? null : undefined,
           note: body.note !== undefined ? body.note?.trim() || null : undefined,
@@ -284,7 +340,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-close", ["approve", "manage", "full"], "Không đủ quyền xoá khiếm khuyết");
+    await requirePermissionLevel(user, "defect-delete", ["full"], "Không đủ quyền xoá phiếu khiếm khuyết");
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
     if (existing.sourceType === "GOOGLE_SHEETS") {

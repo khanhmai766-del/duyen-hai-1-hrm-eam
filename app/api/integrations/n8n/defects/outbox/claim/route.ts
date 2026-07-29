@@ -23,8 +23,17 @@ export async function POST(req: NextRequest) {
 
     const requestedLimit = Number(req.nextUrl.searchParams.get("limit") ?? 20);
     const limit = Number.isInteger(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : 20;
+    const exclusive = ["1", "true", "yes"].includes(
+      String(req.nextUrl.searchParams.get("exclusive") ?? "").toLowerCase()
+    );
 
     const events = await prisma.$transaction(async (tx) => {
+      if (exclusive) {
+        // Một worker tối ưu xử lý trọn một lô. Advisory lock đóng khe thời gian
+        // giữa bước kiểm tra và claim khi hai Schedule Trigger đến cùng lúc.
+        // PostgreSQL trả `void`; ép sang text để Prisma không lỗi deserialize P2010.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(2026072901)::text AS "locked"`;
+      }
       // Thu hồi event bị worker giữ quá lâu do n8n dừng giữa chừng.
       await tx.$executeRaw`
         UPDATE "DefectSyncOutbox"
@@ -36,6 +45,11 @@ export async function POST(req: NextRequest) {
         WHERE "status" = 'PROCESSING'
           AND "claimedAt" < NOW() - INTERVAL '15 minutes'
       `;
+
+      if (exclusive) {
+        const processing = await tx.defectSyncOutbox.count({ where: { status: "PROCESSING" } });
+        if (processing > 0) return [];
+      }
 
       return tx.$queryRaw<ClaimedEvent[]>(Prisma.sql`
         WITH picked AS (

@@ -31,6 +31,9 @@ export const DEFECT_SHEET_POSITION_LABELS_SHARED: Record<string, string> = {
 
 /** Cương vị chỉ áp dụng cho tổ máy COMMON (bao gồm cả 2 nhánh BOP/CHUNG). */
 export const DEFECT_SHEET_POSITION_LABELS_COMMON: Record<string, string> = {
+  // FGD có ba phạm vi: S1, S2 và phần dùng chung. Trên Sheet phần dùng chung
+  // dùng nhãn riêng "FGD"; Tổ máy CHUNG mới là dữ liệu phân biệt phạm vi.
+  "FGD": "FGD",
   "Trạm bơm nước thô": "30. VHV Trạm bơm nước thô",
   "NH3- Lò hơi phụ": "26. VHV NH3-LHP",
   "Thiết bị đo lường điều khiển": "29. VHV C&I",
@@ -39,19 +42,56 @@ export const DEFECT_SHEET_POSITION_LABELS_COMMON: Record<string, string> = {
   "Khí nén - Nhà dầu": "23. VHV MNK-ND3.",
 };
 
+function positionKey(value: string) {
+  return normalizeText(value)
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/^vhv\s+/, "")
+    .replace(/\s+s[12]$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function exactLabel(
+  labels: Record<string, string>,
+  normalizedPosition: string
+) {
+  return Object.entries(labels)
+    .find(([key]) => positionKey(key) === normalizedPosition)?.[1] ?? null;
+}
+
+// Tên cương vị trong dữ liệu nhân sự có thể dài hơn tên nghiệp vụ trên Sheet
+// và khác giữa localhost/production. Các cụm dưới đây đủ đặc trưng để nhận diện,
+// không phụ thuộc tiền tố "VHV" hoặc phần mô tả nhà dầu/trạm ở phía sau.
+const DEFECT_SHEET_COMMON_POSITION_ALIASES: Array<{
+  aliasGroups: string[][];
+  label: string;
+}> = [
+  { aliasGroups: [["tram bom nuoc tho"]], label: "30. VHV Trạm bơm nước thô" },
+  { aliasGroups: [["nh3"], ["lo hoi phu", "lhp"]], label: "26. VHV NH3-LHP" },
+  { aliasGroups: [["thiet bi do luong dieu khien", "c i"]], label: "29. VHV C&I" },
+  { aliasGroups: [["xln thai", "xlnt"], ["nha dau 5000", "nd5"]], label: "25. VHV XLNT-ND5." },
+  { aliasGroups: [["xln hon hop", "xlnhh"]], label: "24. VHV XLNHH" },
+  { aliasGroups: [["khi nen", "mnk nd3"]], label: "23. VHV MNK-ND3." },
+];
+
 /** Tra nhãn Sheet cho một cương vị nội bộ theo tổ máy đang chọn. Trả về null nếu chưa có ánh xạ. */
 export function defectSheetPositionLabel(position: string | null | undefined, unit: string | null | undefined): string | null {
   if (!position) return null;
-  const normalizedPosition = normalizeText(position);
+  const normalizedPosition = positionKey(position);
   const byUnitEntry = Object.entries(DEFECT_SHEET_POSITION_LABELS_BY_UNIT)
-    .find(([key]) => normalizeText(key) === normalizedPosition);
+    .find(([key]) => positionKey(key) === normalizedPosition);
   if (unit === "S1" || unit === "S2") {
     const byUnit = byUnitEntry?.[1];
     if (byUnit) return byUnit[unit];
   }
-  const shared = Object.entries(DEFECT_SHEET_POSITION_LABELS_SHARED)
-    .find(([key]) => normalizeText(key) === normalizedPosition)?.[1];
-  const common = Object.entries(DEFECT_SHEET_POSITION_LABELS_COMMON)
-    .find(([key]) => normalizeText(key) === normalizedPosition)?.[1];
-  return shared ?? common ?? null;
+  const shared = exactLabel(DEFECT_SHEET_POSITION_LABELS_SHARED, normalizedPosition);
+  const common = exactLabel(DEFECT_SHEET_POSITION_LABELS_COMMON, normalizedPosition);
+  if (shared || common) return shared ?? common;
+  if (unit !== "COMMON") return null;
+  return DEFECT_SHEET_COMMON_POSITION_ALIASES.find((rule) =>
+    rule.aliasGroups.every((aliases) =>
+      aliases.some((alias) => normalizedPosition.includes(alias))
+    )
+  )?.label ?? null;
 }

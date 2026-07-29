@@ -1,0 +1,414 @@
+{
+  "name": "LOCAL COPY ONLY - Pull khiếm khuyết DH1 vào localhost",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ff47a8c1-4fc1-4ddc-b17b-b2e4a0cd7b51",
+      "name": "Chạy thủ công"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    externalRunId: `defects-${new Date().toISOString()}`,\n    expectedSources: [\"CO\", \"DIEN\"],\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "5d6f5074-21e4-4545-836d-08bde14d686c",
+      "name": "Chuẩn bị lượt đồng bộ"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:3000/api/integrations/n8n/defects/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        440,
+        0
+      ],
+      "id": "57a3bbf0-b1ac-418d-b493-e6176271ec10",
+      "name": "Bắt đầu run",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "17Jn2j18UOqfY-1rj65HLfYUtBD9euYFkagkaorjnpYo",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 428426440,
+          "mode": "list",
+          "cachedResultName": "DH1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/17Jn2j18UOqfY-1rj65HLfYUtBD9euYFkagkaorjnpYo/edit#gid=428426440"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A6:Z"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        660,
+        0
+      ],
+      "id": "42ca3598-f4f2-4df2-9654-ff9c59dc30db",
+      "name": "Đọc Sheet Cơ",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const SOURCE = {\n  code: \"CO\",\n  spreadsheetId: \"17Jn2j18UOqfY-1rj65HLfYUtBD9euYFkagkaorjnpYo\",\n  sheet: \"CƠ_DH1\",\n  tab: \"DH1\",\n  requestType: \"Cơ\",\n};\n\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/đ/g, \"d\")\n  .replace(/Đ/g, \"D\")\n  .toLowerCase()\n  .replace(/\\s+/g, \" \")\n  .trim();\n\nconst text = (value) => String(value ?? \"\").trim();\n\nfunction valueOf(row, aliases) {\n  const entries = Object.entries(row).map(([key, value]) => [normalize(key), value]);\n  for (const alias of aliases) {\n    const exact = entries.find(([key]) => key === alias);\n    if (exact) return text(exact[1]);\n  }\n  for (const alias of aliases) {\n    const partial = entries.find(([key]) => key.includes(alias));\n    if (partial) return text(partial[1]);\n  }\n  return \"\";\n}\n\nfunction sourceDate(value) {\n  const match = text(value).match(/(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{2,4})/);\n  if (!match) return null;\n  const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);\n  const date = new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[1])));\n  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);\n}\n\nfunction sourceKey(record) {\n  const unit = text(record.unit).toUpperCase().replace(/\\s+/g, \" \");\n  return [\n    record.sourceSpreadsheetId,\n    record.sourceSheet,\n    record.requestType,\n    text(record.stt).replace(/\\.0$/, \"\"),\n    sourceDate(record.detectedAtRaw),\n    unit === \"S1\" || unit === \"S2\" ? unit : \"COMMON\",\n    normalize(record.positionRaw),\n    normalize(record.deviceRaw),\n  ].join(\"|\");\n}\n\nconst rawRecords = $input.all().map(({ json: row }) => {\n  const stt = valueOf(row, [\"stt (vh1)\", \"stt\"]);\n  const content = valueOf(row, [\"ton tai/khuyet diem (vh1)\", \"ton tai/kiem khuyet (vh1)\", \"ton tai/kiem khuyet\", \"ton tai\", \"khiem khuyet\"]);\n  const detectedAtRaw = valueOf(row, [\"ngay phat hien (vh1)\", \"ngay phat hien\"]);\n  if (!stt || stt.startsWith(\"(\") || !content || !sourceDate(detectedAtRaw)) return null;\n\n  return {\n    sourceSpreadsheetId: SOURCE.spreadsheetId,\n    sourceSheet: SOURCE.sheet,\n    sourceTab: SOURCE.tab,\n    sourceRow: Number(row.row_number || 0) + 5,\n    requestType: SOURCE.requestType,\n    stt,\n    unit: valueOf(row, [\"to may (vh1)\", \"to may\"]),\n    deviceRaw: valueOf(row, [\"thiet bi (vh1)\", \"thiet bi\"]),\n    positionRaw: valueOf(row, [\"cuong vi (vh1)\", \"cuong vi\"]),\n    content,\n    detectedAtRaw,\n    shiftLeaderRaw: valueOf(row, [\"truong ca (vh1)\", \"truong ca\"]),\n    reminderRaw: valueOf(row, [\"nhac lai (vh1)\", \"nhac lai\"]),\n    repeatedRepairRaw: valueOf(row, [\"sua chua lap lai (vh1)\", \"sua chua lap lai\"]),\n    fireSafetyImpact: valueOf(row, [\"anh huong pccc (vh1)\", \"anh huong pccc\"]),\n    environmentSafetyImpact: valueOf(row, [\"moi truong, atvsld (vh1)\", \"moi truong, atvsld\", \"moi truong\", \"atvsld\"]),\n    severityRaw: valueOf(row, [\"phan loai anh huong (vh1)\", \"phan loai anh huong\", \"phan loai\"]),\n    conditionRaw: valueOf(row, [\"dk thuc hien (vh1)\", \"dieu kien thuc hien\", \"dk thuc hien\"]),\n    sourceStatusRaw: valueOf(row, [\"ghi chu kq sua chua (vh1)\", \"ghi chu kq\", \"tinh trang khiem khuyet\", \"tinh trang\"]),\n    repairOrderNumberRaw: valueOf(row, [\"so pct/l ct (sccn)\", \"so pct/lct (sccn)\", \"so pct/l ct (dtd)\", \"so pct/lct (dtd)\", \"so pct/l ct\", \"so pct/lct\"]),\n    repairSolutionRaw: valueOf(row, [\"giai phap sua chua (sccn)\", \"giai phap sua chua (dtd)\", \"giai phap sua chua\"]),\n    repairPlanRaw: valueOf(row, [\"ke hoach thuc hien (sccn)\", \"ke hoach thuc hien (dtd)\", \"ke hoach thuc hien\"]),\n    repairUnitRaw: valueOf(row, [\"dvsc (sccn)\", \"dvsc (dtd)\", \"dvsc\", \"don vi sua chua\"]),\n    repairResultRaw: valueOf(row, [\"ket qua thuc hien (sccn)\", \"ket qua thuc hien\"]),\n    repairPerformedByRaw: valueOf(row, [\"nguoi thuc hien (sccn)\", \"nguoi thuc hien\"]),\n    repairStartedAtRaw: valueOf(row, [\"ngay thuc hien (sccn)\", \"ngay thuc hien\"]),\n    completedAtRaw: valueOf(row, [\"ngay ket thuc (sccn)\", \"ngay ket thuc\"]),\n    repairPerformedContentRaw: valueOf(row, [\"noi dung da thuc hien (sccn)\", \"noi dung da thuc hien\"]),\n    repairNoteRaw: valueOf(row, [\"ghi chu (sccn)\"]),\n    noteRaw: valueOf(row, [\"ghi chu (vh1)\", \"ghi chu vh1\", \"ghi chu\"]),\n  };\n}).filter(Boolean);\n\nconst byKey = new Map();\nfor (const record of rawRecords) {\n  const key = sourceKey(record);\n  const { sourceRow, ...stableRecord } = record;\n  const stable = JSON.stringify(stableRecord);\n  const previous = byKey.get(key);\n  if (!previous) byKey.set(key, { record, stable });\n  else if (previous.stable !== stable) throw new Error(`Sheet Cơ có khóa trùng nhưng nội dung khác: ${key}`);\n}\nconst records = Array.from(byKey.values(), ({ record }) => record);\n\nif (!records.length) throw new Error(\"Sheet Cơ không có dòng hợp lệ để đồng bộ\");\n\nconst batches = [];\nfor (let index = 0; index < records.length; index += 500) {\n  batches.push({\n    json: {\n      source: SOURCE.code,\n      batchNumber: batches.length + 1,\n      records: records.slice(index, index + 500),\n    },\n  });\n}\nreturn batches;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "47fdcff4-d9b5-44fa-bdf4-f4c35db7e4b0",
+      "name": "Chuẩn hóa và chia batch Cơ"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://127.0.0.1:3000/api/integrations/n8n/defects/runs/{{ $('Bắt đầu run').first().json.data.runId }}/batches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "0c0dc97a-0d7c-43c7-9a16-e3ef3f0788a5",
+      "name": "Gửi batch Cơ",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { source: \"CO\", successfulBatches: $input.all().length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "7d7a710f-9483-4527-a4cb-0966e8151c7e",
+      "name": "Xác nhận xong nguồn Cơ"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1x-EqgwKHCshEgXQVo7RrmK7Wqecpo7F7-czDS_ZqYqo",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1906730067,
+          "mode": "list",
+          "cachedResultName": "DH1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1x-EqgwKHCshEgXQVo7RrmK7Wqecpo7F7-czDS_ZqYqo/edit#gid=1906730067"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A6:Z"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1540,
+        0
+      ],
+      "id": "5af90a39-1760-45c0-aa8b-20e1f05060f5",
+      "name": "Đọc Sheet Điện",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const SOURCE = {\n  code: \"DIEN\",\n  spreadsheetId: \"1x-EqgwKHCshEgXQVo7RrmK7Wqecpo7F7-czDS_ZqYqo\",\n  sheet: \"ĐIỆN_DH1\",\n  tab: \"DH1\",\n  requestType: \"Điện\",\n};\n\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/đ/g, \"d\")\n  .replace(/Đ/g, \"D\")\n  .toLowerCase()\n  .replace(/\\s+/g, \" \")\n  .trim();\n\nconst text = (value) => String(value ?? \"\").trim();\n\nfunction valueOf(row, aliases) {\n  const entries = Object.entries(row).map(([key, value]) => [normalize(key), value]);\n  for (const alias of aliases) {\n    const exact = entries.find(([key]) => key === alias);\n    if (exact) return text(exact[1]);\n  }\n  for (const alias of aliases) {\n    const partial = entries.find(([key]) => key.includes(alias));\n    if (partial) return text(partial[1]);\n  }\n  return \"\";\n}\n\nfunction sourceDate(value) {\n  const match = text(value).match(/(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{2,4})/);\n  if (!match) return null;\n  const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);\n  const date = new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[1])));\n  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);\n}\n\nfunction sourceKey(record) {\n  const unit = text(record.unit).toUpperCase().replace(/\\s+/g, \" \");\n  return [\n    record.sourceSpreadsheetId,\n    record.sourceSheet,\n    record.requestType,\n    text(record.stt).replace(/\\.0$/, \"\"),\n    sourceDate(record.detectedAtRaw),\n    unit === \"S1\" || unit === \"S2\" ? unit : \"COMMON\",\n    normalize(record.positionRaw),\n    normalize(record.deviceRaw),\n  ].join(\"|\");\n}\n\nconst rawRecords = $input.all().map(({ json: row }) => {\n  const stt = valueOf(row, [\"stt (vh1)\", \"stt\"]);\n  const content = valueOf(row, [\"ton tai/khuyet diem (vh1)\", \"ton tai/kiem khuyet (vh1)\", \"ton tai/kiem khuyet\", \"ton tai\", \"khiem khuyet\"]);\n  const detectedAtRaw = valueOf(row, [\"ngay phat hien (vh1)\", \"ngay phat hien\"]);\n  if (!stt || stt.startsWith(\"(\") || !content || !sourceDate(detectedAtRaw)) return null;\n\n  return {\n    sourceSpreadsheetId: SOURCE.spreadsheetId,\n    sourceSheet: SOURCE.sheet,\n    sourceTab: SOURCE.tab,\n    sourceRow: Number(row.row_number || 0) + 5,\n    requestType: SOURCE.requestType,\n    stt,\n    unit: valueOf(row, [\"to may (vh1)\", \"to may\"]),\n    deviceRaw: valueOf(row, [\"thiet bi (vh1)\", \"thiet bi\"]),\n    positionRaw: valueOf(row, [\"cuong vi (vh1)\", \"cuong vi\"]),\n    content,\n    detectedAtRaw,\n    shiftLeaderRaw: valueOf(row, [\"truong ca (vh1)\", \"truong ca\"]),\n    reminderRaw: valueOf(row, [\"nhac lai (vh1)\", \"nhac lai\"]),\n    repeatedRepairRaw: valueOf(row, [\"sua chua lap lai (vh1)\", \"sua chua lap lai\"]),\n    fireSafetyImpact: valueOf(row, [\"anh huong pccc (vh1)\", \"anh huong pccc\"]),\n    environmentSafetyImpact: valueOf(row, [\"moi truong, atvsld (vh1)\", \"moi truong, atvsld\", \"moi truong\", \"atvsld\"]),\n    severityRaw: valueOf(row, [\"phan loai anh huong (vh1)\", \"phan loai anh huong\", \"phan loai\"]),\n    conditionRaw: valueOf(row, [\"dk thuc hien (vh1)\", \"dieu kien thuc hien\", \"dk thuc hien\"]),\n    sourceStatusRaw: valueOf(row, [\"ghi chu kq sua chua (vh1)\", \"ghi chu kq\", \"tinh trang khiem khuyet\", \"tinh trang\"]),\n    repairOrderNumberRaw: valueOf(row, [\"so pct/l ct (sccn)\", \"so pct/lct (sccn)\", \"so pct/l ct (dtd)\", \"so pct/lct (dtd)\", \"so pct/l ct\", \"so pct/lct\"]),\n    repairSolutionRaw: valueOf(row, [\"giai phap sua chua (sccn)\", \"giai phap sua chua (dtd)\", \"giai phap sua chua\"]),\n    repairPlanRaw: valueOf(row, [\"ke hoach thuc hien (sccn)\", \"ke hoach thuc hien (dtd)\", \"ke hoach thuc hien\"]),\n    repairUnitRaw: valueOf(row, [\"dvsc (sccn)\", \"dvsc (dtd)\", \"dvsc\", \"don vi sua chua\"]),\n    repairResultRaw: valueOf(row, [\"ket qua thuc hien (dtd)\", \"ket qua thuc hien\"]),\n    repairPerformedByRaw: valueOf(row, [\"nguoi thuc hien (dtd)\", \"nguoi thuc hien\"]),\n    repairStartedAtRaw: valueOf(row, [\"ngay thuc hien (dtd)\", \"ngay thuc hien\"]),\n    completedAtRaw: valueOf(row, [\"ngay ket thuc (dtd)\", \"ngay ket thuc\"]),\n    repairPerformedContentRaw: valueOf(row, [\"noi dung da thuc hien (dtd)\", \"noi dung da thuc hien\"]),\n    repairNoteRaw: valueOf(row, [\"ghi chu (dtd)\"]),\n    noteRaw: valueOf(row, [\"ghi chu (vh1)\", \"ghi chu vh1\", \"ghi chu\"]),\n  };\n}).filter(Boolean);\n\nconst byKey = new Map();\nfor (const record of rawRecords) {\n  const key = sourceKey(record);\n  const { sourceRow, ...stableRecord } = record;\n  const stable = JSON.stringify(stableRecord);\n  const previous = byKey.get(key);\n  if (!previous) byKey.set(key, { record, stable });\n  else if (previous.stable !== stable) throw new Error(`Sheet Điện có khóa trùng nhưng nội dung khác: ${key}`);\n}\nconst records = Array.from(byKey.values(), ({ record }) => record);\n\nif (!records.length) throw new Error(\"Sheet Điện không có dòng hợp lệ để đồng bộ\");\n\nconst batches = [];\nfor (let index = 0; index < records.length; index += 500) {\n  batches.push({\n    json: {\n      source: SOURCE.code,\n      batchNumber: batches.length + 1,\n      records: records.slice(index, index + 500),\n    },\n  });\n}\nreturn batches;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "53c51994-2c73-4ce5-b304-37f4cb95668d",
+      "name": "Chuẩn hóa và chia batch Điện"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://127.0.0.1:3000/api/integrations/n8n/defects/runs/{{ $('Bắt đầu run').first().json.data.runId }}/batches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1980,
+        0
+      ],
+      "id": "43c357e9-1224-41ad-a235-673529d06e2e",
+      "name": "Gửi batch Điện",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { source: \"DIEN\", successfulBatches: $input.all().length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "id": "e963e69e-a37c-46ca-95f8-3d8bdeba8a2a",
+      "name": "Xác nhận xong nguồn Điện"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://127.0.0.1:3000/api/integrations/n8n/defects/runs/{{ $('Bắt đầu run').first().json.data.runId }}/finish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"completedSources\": [\"CO\", \"DIEN\"]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2420,
+        0
+      ],
+      "id": "9133be56-b844-4464-9ee5-87d69b204145",
+      "name": "Hoàn tất run",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chạy thủ công": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn bị lượt đồng bộ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn bị lượt đồng bộ": {
+      "main": [
+        [
+          {
+            "node": "Bắt đầu run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bắt đầu run": {
+      "main": [
+        [
+          {
+            "node": "Đọc Sheet Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc Sheet Cơ": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn hóa và chia batch Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn hóa và chia batch Cơ": {
+      "main": [
+        [
+          {
+            "node": "Gửi batch Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi batch Cơ": {
+      "main": [
+        [
+          {
+            "node": "Xác nhận xong nguồn Cơ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xác nhận xong nguồn Cơ": {
+      "main": [
+        [
+          {
+            "node": "Đọc Sheet Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Đọc Sheet Điện": {
+      "main": [
+        [
+          {
+            "node": "Chuẩn hóa và chia batch Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chuẩn hóa và chia batch Điện": {
+      "main": [
+        [
+          {
+            "node": "Gửi batch Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gửi batch Điện": {
+      "main": [
+        [
+          {
+            "node": "Xác nhận xong nguồn Điện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xác nhận xong nguồn Điện": {
+      "main": [
+        [
+          {
+            "node": "Hoàn tất run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "versionId": "pull-copy-localhost-v1"
+}

@@ -303,7 +303,19 @@ export function EquipmentTreePicker({
             {node.childCount}
           </span>
         )}
-        <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{node.code}</span>
+        {!node.hasChildren && (
+          <span
+            className={cn(
+              "max-w-[150px] shrink-0 truncate rounded border px-1.5 py-0.5 font-mono text-[10.5px]",
+              node.kks
+                ? "border-sky-200 bg-sky-50 font-semibold text-sky-700"
+                : "border-slate-200 bg-slate-50 italic text-muted-foreground"
+            )}
+            title={node.kks ? `KKS: ${node.kks}` : "Thiết bị chưa có mã KKS"}
+          >
+            {node.kks ?? "Chưa có KKS"}
+          </span>
+        )}
         {selected && <Check className="h-4 w-4 shrink-0 text-accent" />}
       </button>
     );

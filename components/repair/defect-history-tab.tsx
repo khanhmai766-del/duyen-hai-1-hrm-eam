@@ -53,7 +53,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const unitFromUrl = searchParams.get("unit")?.trim().toUpperCase() ?? "";
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
-  const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
+  const canDelete = rbac.can("defect-history-delete", ["full"]);
   // Loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên khỏi bộ lọc cương vị.
   const positions = usePositions().filter(isSelectableManagingPosition);
   const { data: devicesData } = useDevices({});

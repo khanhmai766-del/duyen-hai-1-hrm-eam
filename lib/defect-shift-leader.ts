@@ -1,9 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeText } from "@/lib/nav";
-
-function isShiftLeaderPosition(value: string | null | undefined) {
-  return normalizeText(value ?? "") === "truong ca";
-}
+import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 
 /** Xác thực người được chọn đang hoạt động và có một cương vị là Trưởng ca. */
 export async function resolveDefectShiftLeader(userId: unknown) {
@@ -14,6 +10,6 @@ export async function resolveDefectShiftLeader(userId: unknown) {
     select: { id: true, name: true, position: true, secondaryPosition: true, secondaryPosition2: true, currentPosition: true },
   });
   if (!user) return null;
-  if (![user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition].some(isShiftLeaderPosition)) return null;
+  if (![user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition].some(isDefectShiftLeaderCandidatePosition)) return null;
   return { id: user.id, name: user.name };
 }

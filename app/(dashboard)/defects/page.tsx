@@ -32,6 +32,7 @@ import { DefectSyncChip } from "@/components/defects/defect-sync-chip";
 import { DefectFilterBar, type ActiveChip } from "@/components/defects/defect-filter-bar";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
+import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 // Nhãn hiển thị của từng giá trị statusFilter. Bộ lọc kết quả vận hành không còn
@@ -282,15 +283,20 @@ export default function DefectsPage() {
   const pageFromUrl = Number.parseInt(searchParams.get("page") ?? "", 10);
   const rbac = useRbacAccess();
   const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
-  const canDelete = rbac.can("defect-close", ["approve", "manage", "full"]);
+  const canClose = rbac.can("defect-close", ["approve", "manage", "full"]);
+  const canDelete = rbac.can("defect-delete", ["full"]);
 
   const del = useDeleteDefect();
   const remind = useRemindDefect();
   const usersQuery = useUsers();
   const shiftLeaders = React.useMemo(
-    () => (usersQuery.data?.data ?? []).filter((user) =>
-      user.isActive && String(user.position ?? "").toLocaleLowerCase("vi").includes("trưởng ca")
-    ),
+    () => (usersQuery.data?.data ?? [])
+      .filter((user) =>
+        user.isActive &&
+        [user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition]
+          .some(isDefectShiftLeaderCandidatePosition)
+      )
+      .sort((a, b) => a.name.localeCompare(b.name, "vi")),
     [usersQuery.data?.data]
   );
   const sync = useSyncDefects();
@@ -767,17 +773,17 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-1 py-3">
                         <div className="flex items-center justify-center gap-0">
-                          {canManage && (
+                          {canClose && (
                             (d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated && !!d.deviceSeq && !d.pendingHistory && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
                             ((d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated) && d.status !== "DA_XU_LY")
                           ) && (
                             <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title="Hoàn thành" className="h-7 w-7 text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); void openComplete(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
                           )}
-                          {canManage && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated) && d.status !== "DA_XU_LY" && (
+                          {canManage && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated || !!d.deviceSeq) && d.status !== "DA_XU_LY" && (
                             <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindShiftLeaderId(""); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
                           {canManage && (
-                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
+                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated ? "Ánh xạ / cập nhật Vận hành" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
                           )}
                           {canDelete && d.sourceType !== "GOOGLE_SHEETS" && (
                             <Button variant="ghost" size="icon" title="Xoá" className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(d); }}><Trash2 className="h-4 w-4" /></Button>
@@ -839,7 +845,7 @@ export default function DefectsPage() {
             <div className="flex items-center gap-2 border-b border-border p-4">
               <button onClick={() => setFormOpen(false)} className="rounded-md p-1.5 hover:bg-muted" aria-label="Đóng"><X className="h-5 w-5" /></button>
               <h2 className="text-lg font-bold text-ink">
-                {editTarget?.sourceType === "GOOGLE_SHEETS" ? "Ánh xạ thiết bị" : editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}
+                {editTarget?.sourceType === "GOOGLE_SHEETS" && !editTarget.websiteCreated ? "Ánh xạ & cập nhật Vận hành" : editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}
               </h2>
             </div>
             <DefectForm

@@ -75,6 +75,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         orderBy: { occurredAt: "asc" },
         select: { id: true, occurredAt: true, shiftLeaderName: true },
       });
+      const legacyReminderCount = Math.max(0, updated.reminderCount - reminderHistory.length);
       await enqueueDefectSyncEvent(tx, {
         defect: updated,
         eventType: "REMIND",
@@ -83,9 +84,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           remindedAt: remindedAt.toISOString(),
           reminderNumber: updated.reminderCount,
           reminderShiftLeader: shiftLeader.name,
+          legacyReminderRaw: existing.reminderRaw ?? "",
+          writeScope:
+            existing.sourceType === "GOOGLE_SHEETS" && !existing.websiteCreated
+              ? "SHEET_ORIGIN_LIMITED"
+              : "FULL",
           reminderHistory: reminderHistory.map((item, index) => ({
             reminderLogId: item.id,
-            reminderNumber: index + 1,
+            reminderNumber: legacyReminderCount + index + 1,
             remindedAt: item.occurredAt.toISOString(),
             shiftLeader: item.shiftLeaderName ?? updated.shiftLeaderName ?? "",
           })),

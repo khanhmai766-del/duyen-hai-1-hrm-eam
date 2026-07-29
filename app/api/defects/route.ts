@@ -11,7 +11,6 @@ import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/constants";
 import { validateDefectImages } from "@/lib/defect-images";
-import { parseReminderCount } from "@/lib/defect-reminder";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 import { nextDefectRequestNumber } from "@/lib/defect-request-number";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
@@ -377,8 +376,6 @@ export async function POST(req: NextRequest) {
     if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
       return fail("Vui lòng chọn BOP hoặc CHUNG");
     }
-    const reminderCount = body.reminderCount === undefined ? 0 : parseReminderCount(body.reminderCount);
-    if (reminderCount === null) return fail("Số lần nhắc lại phải là số nguyên không âm");
     const relatedDeviceSeqs = normalizeRelatedDeviceSeqs(body.relatedDeviceSeqs, body.device);
     if (relatedDeviceSeqs === null) {
       return fail(`Danh sách thiết bị liên quan không hợp lệ hoặc vượt quá ${MAX_DEFECT_RELATED_DEVICES} thiết bị`);
@@ -437,8 +434,10 @@ export async function POST(req: NextRequest) {
           status: body.status || "CHUA_XU_LY",
           completedAt: body.status === "DA_XU_LY" ? new Date() : null,
           detectedAt,
-          reminderCount,
-          lastRemindedAt: reminderCount > 0 && body.lastRemindedAt ? parseDateInput(body.lastRemindedAt) : null,
+          // Bộ đếm nhắc lại chỉ được thay đổi qua API /remind để luôn có đủ
+          // lịch sử ngày và Trưởng ca tương ứng.
+          reminderCount: 0,
+          lastRemindedAt: null,
           shiftLeaderId: shiftLeader?.id ?? null,
           shiftLeaderName: shiftLeader?.name ?? null,
           note: body.note?.trim() || null,

@@ -9,6 +9,7 @@ import {
   TREE_SCOPES,
   type TreeScope,
 } from "@/lib/equipment-units";
+import { normalizeKksPrefix } from "@/lib/equipment-import";
 import { normalizeText } from "@/lib/nav";
 
 // Tách cây thiết bị dùng chung thành 3 phạm vi hiển thị mà KHÔNG nhân bản node:
@@ -73,8 +74,26 @@ export async function resolveScopeRootWhere(
  */
 export function scopeSearchTerms(q: string, scope: TreeScope): string[] {
   const term = normalizeText(q);
-  if (scope !== "S2" || !term.startsWith("2")) return [term];
-  return [term, `1${term.slice(1)}`];
+  const compact = term.replace(/[\s._-]+/g, "");
+  const terms = new Set([term, compact]);
+
+  // KKS trong dữ liệu lịch sử có thể dùng X0/XO/20/1O/2O cho tiền tố chuẩn 10.
+  // Tìm tất cả biến thể để người dùng có thể nhập đúng mã đang in ngoài hiện trường
+  // mà không phụ thuộc dữ liệu được nhập trước hay sau bước chuẩn hóa.
+  const canonical = normalizeKksPrefix(compact);
+  terms.add(canonical);
+  if (canonical.startsWith("10")) {
+    const suffix = canonical.slice(2);
+    for (const prefix of ["x0", "xo", "20", "1o", "2o"]) terms.add(`${prefix}${suffix}`);
+  }
+
+  // Cây S2 chỉ là hình chiếu của dữ liệu S1. KKS S2 bắt đầu bằng 2 phải tìm thêm
+  // dạng bắt đầu bằng 1 đang lưu trong cột searchText.
+  if (scope === "S2" && compact.startsWith("2")) {
+    terms.add(`1${compact.slice(1)}`);
+  }
+
+  return [...terms].filter(Boolean);
 }
 
 /**

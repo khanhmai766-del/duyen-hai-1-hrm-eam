@@ -13,6 +13,7 @@ import { useCompleteDefect, type DefectItem } from "@/hooks/useDefects";
 import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_REQUEST_TYPES, blockForPosition } from "@/lib/constants";
 import { formatDate, formatDateInput } from "@/lib/utils";
+import { defectResultStatusOf } from "@/lib/defect-result-status";
 
 const NONE = "__none__";
 
@@ -40,22 +41,30 @@ export function CompleteDefectDialog({
     content: "",
     result: "",
   });
+  const sheetTracked = defect?.sourceType === "GOOGLE_SHEETS" || defect?.websiteCreated;
+  const hasSheetSourceData = defect?.sourceType === "GOOGLE_SHEETS";
+  // Thao tác xác nhận này sẽ đưa KQ Vận hành về "Đã xử lý", vì vậy chỉ cần
+  // đối chiếu KQ Sửa chữa để hiển thị đúng hạn mà backend sắp tạo.
+  const pendingDays = defectResultStatusOf(defect?.repairResultRaw) === "DA_XU_LY" ? 2 : 14;
 
   // Reset mỗi khi mở cho một khiếm khuyết khác. PCT mặc định = "Yêu Cầu" của khiếm khuyết.
   React.useEffect(() => {
-    if (defect) setForm({
-      workOrderNumber: "",
-      requestType: defect.requestType ?? "",
-      performedAt: defect.sourceType === "GOOGLE_SHEETS" && defect.sourceCompletedAt
-        ? formatDateInput(defect.sourceCompletedAt)
-        : todayInput(),
-      content: defect.sourceType === "GOOGLE_SHEETS"
-        ? defect.repeatedRepairRaw?.trim() || defect.content || ""
-        : "",
-      result: defect.sourceType === "GOOGLE_SHEETS"
-        ? defect.repairResultRaw?.trim() || defect.note?.trim() || defect.sourceStatusRaw?.trim() || ""
-        : "",
-    });
+    if (defect) {
+      const hasSourceData = defect.sourceType === "GOOGLE_SHEETS";
+      setForm({
+        workOrderNumber: "",
+        requestType: defect.requestType ?? "",
+        performedAt: hasSourceData && defect.sourceCompletedAt
+          ? formatDateInput(defect.sourceCompletedAt)
+          : todayInput(),
+        content: hasSourceData
+          ? defect.repeatedRepairRaw?.trim() || defect.content || ""
+          : "",
+        result: hasSourceData
+          ? defect.repairResultRaw?.trim() || defect.note?.trim() || defect.sourceStatusRaw?.trim() || ""
+          : "",
+      });
+    }
   }, [defect]);
 
   async function submit() {
@@ -71,8 +80,8 @@ export function CompleteDefectDialog({
         result: form.result,
       });
       toast.success(
-        defect.sourceType === "GOOGLE_SHEETS"
-          ? "Đã xác nhận; phiếu sẽ được chốt lịch sử sau 14 ngày"
+        sheetTracked
+          ? `Đã xác nhận; phiếu sẽ được chốt lịch sử sau ${pendingDays} ngày`
           : "Đã hoàn thành & ghi lịch sử thiết bị"
       );
       onClose();
@@ -87,7 +96,7 @@ export function CompleteDefectDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-600" />
-            {defect?.sourceType === "GOOGLE_SHEETS" ? "Xác nhận đưa vào lịch sử" : "Hoàn thành khiếm khuyết"}
+            {sheetTracked ? "Xác nhận đưa vào lịch sử" : "Hoàn thành khiếm khuyết"}
           </DialogTitle>
         </DialogHeader>
 
@@ -99,9 +108,9 @@ export function CompleteDefectDialog({
               <ReadOnly label="Cương vị" value={defect.system ?? "—"} />
             </div>
             <ReadOnly label="Khối quản lý" value={blockForPosition(defect.system)} />
-            {defect.sourceType === "GOOGLE_SHEETS" && (
+            {sheetTracked && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
-                Phiếu vẫn nằm trong Tồn đọng và tiếp tục nhận dữ liệu sửa chữa từ Google Sheet trong 14 ngày.
+                Phiếu vẫn nằm trong Tồn đọng và tiếp tục nhận dữ liệu sửa chữa từ Google Sheet trong {pendingDays} ngày.
                 Sau thời hạn này hệ thống mới chốt bản đầy đủ vào lịch sử.
               </div>
             )}
@@ -112,13 +121,18 @@ export function CompleteDefectDialog({
                   value={form.workOrderNumber}
                   onChange={(e) => setForm((f) => ({ ...f, workOrderNumber: e.target.value }))}
                   placeholder="VD: PCT-2026-001"
+                  disabled={sheetTracked}
                 />
               </Field>
               <Field label="PCT">
-                {defect.sourceType === "GOOGLE_SHEETS" && defect.requestType && (
+                {hasSheetSourceData && defect.requestType && (
                   <SourceValue value={defect.requestType} />
                 )}
-                <Select value={form.requestType || NONE} onValueChange={(v) => setForm((f) => ({ ...f, requestType: v === NONE ? "" : v }))}>
+                <Select
+                  value={form.requestType || NONE}
+                  disabled={sheetTracked}
+                  onValueChange={(v) => setForm((f) => ({ ...f, requestType: v === NONE ? "" : v }))}
+                >
                   <SelectTrigger><SelectValue placeholder="Chọn PCT" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>— Không chọn —</SelectItem>
@@ -130,7 +144,7 @@ export function CompleteDefectDialog({
             {/* Tên thiết bị — đồng bộ từ danh mục thiết bị theo mã thiết bị của khiếm khuyết. */}
             <ReadOnly label="Tên thiết bị" value={deviceNameByCode.get(defect.device ?? "") ?? defect.device ?? "—"} />
             <Field label="Ngày kết thúc *">
-              {defect.sourceType === "GOOGLE_SHEETS" && defect.sourceCompletedAt && (
+              {hasSheetSourceData && defect.sourceCompletedAt && (
                 <SourceValue value={formatDate(defect.sourceCompletedAt)} />
               )}
               <Input
@@ -140,7 +154,7 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Nội dung thực hiện">
-              {defect.sourceType === "GOOGLE_SHEETS" && (defect.repeatedRepairRaw || defect.content) && (
+              {hasSheetSourceData && (defect.repeatedRepairRaw || defect.content) && (
                 <SourceValue value={defect.repeatedRepairRaw || defect.content || ""} multiline />
               )}
               <Textarea
@@ -148,10 +162,11 @@ export function CompleteDefectDialog({
                 onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                 rows={3}
                 placeholder="Mô tả nội dung công việc thực hiện…"
+                disabled={sheetTracked}
               />
             </Field>
             <Field label="Kết quả thực hiện">
-              {defect.sourceType === "GOOGLE_SHEETS" && (defect.repairResultRaw || defect.note || defect.sourceStatusRaw) && (
+              {hasSheetSourceData && (defect.repairResultRaw || defect.note || defect.sourceStatusRaw) && (
                 <SourceValue value={defect.repairResultRaw || defect.note || defect.sourceStatusRaw || ""} multiline />
               )}
               <Textarea
@@ -159,6 +174,7 @@ export function CompleteDefectDialog({
                 onChange={(e) => setForm((f) => ({ ...f, result: e.target.value }))}
                 rows={3}
                 placeholder="Mô tả kết quả xử lý…"
+                disabled={sheetTracked}
               />
             </Field>
           </div>
@@ -168,7 +184,7 @@ export function CompleteDefectDialog({
           <Button variant="outline" onClick={onClose}>Huỷ</Button>
           <Button onClick={submit} disabled={complete.isPending}>
             {complete.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {defect?.sourceType === "GOOGLE_SHEETS" ? "Xác nhận" : "Hoàn thành"}
+            {sheetTracked ? "Xác nhận" : "Hoàn thành"}
           </Button>
         </DialogFooter>
       </DialogContent>
