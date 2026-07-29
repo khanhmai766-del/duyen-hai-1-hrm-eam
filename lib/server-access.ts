@@ -4,6 +4,7 @@ import {
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { getCachedEquipmentNodeList } from "@/lib/equipment-node-cache";
+import { getCachedPositionSystemScopes } from "@/lib/position-scope-cache";
 import { positionAllowsOilSoot } from "@/lib/oil-soot-access";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
@@ -73,21 +74,12 @@ export type EquipmentAccessContext = {
   canEditDeviceLike: (device: { device?: string | null; system?: string | null }) => boolean;
 };
 
+/**
+ * Đọc bảng phân quyền cương vị. Hàm này bị gọi NHIỀU LẦN trong một request nên đi qua cache
+ * in-process (lib/position-scope-cache.ts) thay vì truy vấn thẳng DB mỗi lượt.
+ */
 export async function loadPositionSystemScopeRows(): Promise<PositionSystemScope[]> {
-  try {
-    const rows = await prisma.$queryRaw<
-      Array<{ id: string; position: string; systemSeq: string; access: string; createdAt: Date }>
-    >`SELECT "id", "position", "systemSeq", "access", "createdAt" FROM "PositionSystemScope"`;
-    return rows.map((row) => ({
-      id: row.id,
-      position: row.position,
-      systemSeq: row.systemSeq,
-      access: normalizeScopeAccess(row.access),
-      createdAt: row.createdAt.toISOString(),
-    }));
-  } catch {
-    return [];
-  }
+  return getCachedPositionSystemScopes();
 }
 
 /**

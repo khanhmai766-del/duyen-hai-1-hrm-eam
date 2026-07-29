@@ -5,6 +5,7 @@ import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizePositionScopeKey, normalizePositionScopeLabel } from "@/lib/position-system-scopes";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { invalidateEquipmentAccessCache } from "@/lib/server-access";
+import { invalidatePositionScopeCache } from "@/lib/position-scope-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,8 @@ export async function PUT(req: NextRequest) {
       Array.from(bySeq.entries()).map(([seq, access]) => `${seq}:${access}`).join(", ")
     );
     invalidateDeviceListCache();
+    // Bảng scope được cache in-process — xoá cache để quyền mới có hiệu lực ngay.
+    invalidatePositionScopeCache();
     invalidateEquipmentAccessCache();
     const rows = await listScopes();
     return ok(rows, { total: rows.length });

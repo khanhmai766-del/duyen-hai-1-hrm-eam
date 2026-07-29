@@ -64,14 +64,18 @@ export interface ReplacementMeta {
   warn: number;
 }
 
-export function useReplacements(filters: ReplacementFilters = {}) {
+export function useReplacements(filters: ReplacementFilters = {}, options?: { enabled?: boolean }) {
   const qs = new URLSearchParams();
   if (filters.q) qs.set("q", filters.q);
   if (filters.materialId) qs.set("materialId", filters.materialId);
   if (filters.due && filters.due !== "ALL") qs.set("due", filters.due);
   return useQuery({
+    enabled: options?.enabled ?? true,
     queryKey: ["replacements", filters],
     queryFn: () => apiGet<ReplacementItem[]>(`/api/material-replacements?${qs.toString()}`),
+    // Không có staleTime = coi dữ liệu cũ ngay lập tức → gọi lại API mỗi lần mount.
+    // Ghi nhận/sửa/xoá điểm thay thế đều invalidate ["replacements"] nên vẫn tươi khi cần.
+    staleTime: 60_000,
   });
 }
 

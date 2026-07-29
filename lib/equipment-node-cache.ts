@@ -8,7 +8,11 @@ import { prisma } from "@/lib/prisma";
 //  - "list": bản nhẹ (không ảnh/tài liệu) — cây thiết bị, kiểm tra quyền.
 //  - "full": kèm imageUrl/attachedInfo/documentUrl — thẻ QR, chi tiết thiết bị,
 //    danh sách thiết bị (trước đây các chỗ này đọc thẳng DB mỗi request).
-const TTL_MS = 60_000;
+// TTL dài vì MỌI đường ghi (thêm/sửa/xoá thiết bị, nhập cây) đều đã gọi
+// invalidateEquipmentNodeCache() — TTL chỉ là lưới an toàn cuối, không phải cơ chế làm mới.
+// Với TTL 60s, prod đo được cứ mỗi phút lại có một request phải chờ trọn 349ms để nạp lại
+// 21.9k node (3,56 MB) trước khi tới lượt truy vấn của trang.
+const TTL_MS = 10 * 60_000;
 
 type CacheEntry = { value: NormalizedEquipmentNode[]; expiresAt: number };
 

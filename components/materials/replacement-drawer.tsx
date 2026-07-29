@@ -30,7 +30,13 @@ export function ReplacementDrawer({
 }) {
   const rbac = useRbacAccess();
   const canManage = rbac.can("replacement-manage", ["manage", "full"]);
-  const { data, isLoading } = useReplacements(material ? { materialId: material.id } : {});
+  // Hook luôn chạy trước lệnh `if (!material) return null` bên dưới, nên khi ngăn kéo ĐANG
+  // ĐÓNG mà không chặn thì filters rỗng = tải TOÀN BỘ danh sách điểm thay thế (366 dòng /
+  // 327 KB) một cách vô ích trên trang Danh mục vật tư.
+  const { data, isLoading } = useReplacements(
+    material ? { materialId: material.id } : {},
+    { enabled: !!material }
+  );
   // Điểm theo dõi là bản ghi RIÊNG (tạo từ nút "Thêm điểm"); xoá ở đây chỉ xoá điểm
   // theo dõi này — dòng khai báo thiết bị trong Danh mục vật tư là bản ghi khác, vẫn còn.
   const del = useDeleteReplacement();

@@ -63,7 +63,10 @@ export function useMaterials(params: { machine?: string; includeUsage?: boolean 
     queryKey: ["materials", session?.user?.id, permissionLevel, params],
     queryFn: () => apiGet<MaterialWithDevices[]>(`/api/materials?${qs.toString()}`),
     enabled: status === "authenticated" && !rbac.isLoading && permissionLevel !== "none",
-    refetchOnMount: "always",
+    // Trước đây refetchOnMount:"always" + không staleTime → mỗi lần vào trang đều gọi lại API
+    // và phải chờ trọn vòng đời request. Danh mục vật tư đổi không thường xuyên; các thao tác
+    // thêm/sửa/xoá đều đã invalidate queryKey ["materials"] nên dữ liệu vẫn tươi khi cần.
+    staleTime: 60_000,
   });
 }
 
