@@ -75,13 +75,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const created = await tx.defectHistoryPending.create({
           data: {
             defectId: defect.id,
-            // Các trường sửa chữa chỉ lấy từ Sheet; VHV không được ghi thay
-            // bộ phận Sửa chữa khi xác nhận bắt đầu thời gian chờ.
-            workOrderNumber: defect.repairOrderNumberRaw?.trim() || null,
-            requestType: defect.requestType,
+            // Đây là nội dung Vận hành xác nhận để ghi vào lịch sử. Dữ liệu
+            // Sửa chữa được giữ riêng trong snapshot khi chốt sau thời gian chờ.
+            workOrderNumber: body.workOrderNumber?.trim() || null,
+            requestType: body.requestType?.trim() || defect.requestType,
             performedAt,
-            content: defect.repeatedRepairRaw?.trim() || defect.content,
-            result: defect.repairResultRaw?.trim() || null,
+            content: body.content?.trim() || null,
+            result: body.result?.trim() || null,
             confirmedById: user.id,
             confirmedByName: user.name,
             startedAt,

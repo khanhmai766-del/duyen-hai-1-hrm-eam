@@ -20,6 +20,14 @@ function sourceSnapshot(defect: {
   sourcePositionRaw: string | null;
   sourceStatusRaw: string | null;
   repairResultRaw: string | null;
+  repairOrderNumberRaw: string | null;
+  repairSolutionRaw: string | null;
+  repairPlanRaw: string | null;
+  repairUnitRaw: string | null;
+  repairPerformedByRaw: string | null;
+  repairStartedAt: Date | null;
+  repairPerformedContentRaw: string | null;
+  repairNoteRaw: string | null;
   sourceStatusMismatch: boolean;
   sourceCompletedAt: Date | null;
   repeatedRepairRaw: string | null;
@@ -37,6 +45,14 @@ function sourceSnapshot(defect: {
     sourcePositionRaw: defect.sourcePositionRaw,
     sourceStatusRaw: defect.sourceStatusRaw,
     repairResultRaw: defect.repairResultRaw,
+    repairOrderNumberRaw: defect.repairOrderNumberRaw,
+    repairSolutionRaw: defect.repairSolutionRaw,
+    repairPlanRaw: defect.repairPlanRaw,
+    repairUnitRaw: defect.repairUnitRaw,
+    repairPerformedByRaw: defect.repairPerformedByRaw,
+    repairStartedAt: defect.repairStartedAt?.toISOString() ?? null,
+    repairPerformedContentRaw: defect.repairPerformedContentRaw,
+    repairNoteRaw: defect.repairNoteRaw,
     sourceStatusMismatch: defect.sourceStatusMismatch,
     sourceCompletedAt: defect.sourceCompletedAt?.toISOString() ?? null,
     repeatedRepairRaw: defect.repeatedRepairRaw,
@@ -119,9 +135,9 @@ export async function finalizePendingDefectHistories(
           deviceSeq: defect.deviceSeq,
           system: defect.system,
           requestType: pending.requestType || defect.requestType,
-          // "Sửa chữa lặp lại" là nội dung sửa chữa mới nhất từ nguồn;
-          // nếu nguồn chưa có thì giữ nội dung VHV đã xác nhận.
-          content: defect.repeatedRepairRaw?.trim() || pending.content || defect.content,
+          // Nội dung chính của lịch sử do Vận hành nhập khi xác nhận.
+          // Dữ liệu Sửa chữa mới nhất nằm riêng trong sourceSnapshot để tham khảo.
+          content: pending.content || defect.content,
           requestNumber: defect.requestNumber,
           reminderCount: defect.reminderCount,
           lastRemindedAt: defect.lastRemindedAt,
@@ -129,9 +145,8 @@ export async function finalizePendingDefectHistories(
           sourceKey: defect.sourceKey,
           sourceSnapshot: sourceSnapshot(defect),
           workOrderNumber: pending.workOrderNumber,
-          // Ưu tiên ngày/kết quả mới nhất do bộ phận sửa chữa cập nhật trong 14 ngày.
-          performedAt: defect.sourceCompletedAt ?? pending.performedAt,
-          result: defect.repairResultRaw?.trim() || pending.result,
+          performedAt: pending.performedAt,
+          result: pending.result,
           images: [],
           // Người nhập lịch sử là VHV cập nhật phiếu gần nhất.
           createdById: defect.createdById,

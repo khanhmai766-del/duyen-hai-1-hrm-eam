@@ -47,22 +47,16 @@ export function CompleteDefectDialog({
   // đối chiếu KQ Sửa chữa để hiển thị đúng hạn mà backend sắp tạo.
   const pendingDays = defectResultStatusOf(defect?.repairResultRaw) === "DA_XU_LY" ? 2 : 14;
 
-  // Reset mỗi khi mở cho một khiếm khuyết khác. PCT mặc định = "Yêu Cầu" của khiếm khuyết.
+  // Đây là nội dung Vận hành ghi vào lịch sử. Dữ liệu Sửa chữa từ Sheet chỉ
+  // hiển thị để đối chiếu, không tự điền hoặc khóa các trường này.
   React.useEffect(() => {
     if (defect) {
-      const hasSourceData = defect.sourceType === "GOOGLE_SHEETS";
       setForm({
         workOrderNumber: "",
         requestType: defect.requestType ?? "",
-        performedAt: hasSourceData && defect.sourceCompletedAt
-          ? formatDateInput(defect.sourceCompletedAt)
-          : todayInput(),
-        content: hasSourceData
-          ? defect.repeatedRepairRaw?.trim() || defect.content || ""
-          : "",
-        result: hasSourceData
-          ? defect.repairResultRaw?.trim() || defect.note?.trim() || defect.sourceStatusRaw?.trim() || ""
-          : "",
+        performedAt: todayInput(),
+        content: "",
+        result: "",
       });
     }
   }, [defect]);
@@ -116,24 +110,22 @@ export function CompleteDefectDialog({
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Số phiếu công tác">
+              <Field label="Số PCT/LCT">
+                {hasSheetSourceData && defect.repairOrderNumberRaw?.trim() && (
+                  <SourceValue value={defect.repairOrderNumberRaw.trim()} />
+                )}
                 <Input
                   value={form.workOrderNumber}
                   onChange={(e) => setForm((f) => ({ ...f, workOrderNumber: e.target.value }))}
-                  placeholder="VD: PCT-2026-001"
-                  disabled={sheetTracked}
+                  placeholder="Nhập số PCT/LCT của Vận hành"
                 />
               </Field>
-              <Field label="PCT">
-                {hasSheetSourceData && defect.requestType && (
-                  <SourceValue value={defect.requestType} />
-                )}
+              <Field label="Loại yêu cầu">
                 <Select
                   value={form.requestType || NONE}
-                  disabled={sheetTracked}
                   onValueChange={(v) => setForm((f) => ({ ...f, requestType: v === NONE ? "" : v }))}
                 >
-                  <SelectTrigger><SelectValue placeholder="Chọn PCT" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Chọn loại yêu cầu" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>— Không chọn —</SelectItem>
                     {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -154,15 +146,14 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Nội dung thực hiện">
-              {hasSheetSourceData && (defect.repeatedRepairRaw || defect.content) && (
-                <SourceValue value={defect.repeatedRepairRaw || defect.content || ""} multiline />
+              {hasSheetSourceData && defect.repairPerformedContentRaw?.trim() && (
+                <SourceValue value={defect.repairPerformedContentRaw.trim()} multiline />
               )}
               <Textarea
                 value={form.content}
                 onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                 rows={3}
-                placeholder="Mô tả nội dung công việc thực hiện…"
-                disabled={sheetTracked}
+                placeholder="Vận hành nhập nội dung thực hiện để ghi vào lịch sử…"
               />
             </Field>
             <Field label="Kết quả thực hiện">
@@ -173,8 +164,7 @@ export function CompleteDefectDialog({
                 value={form.result}
                 onChange={(e) => setForm((f) => ({ ...f, result: e.target.value }))}
                 rows={3}
-                placeholder="Mô tả kết quả xử lý…"
-                disabled={sheetTracked}
+                placeholder="Vận hành nhập kết quả thực hiện để ghi vào lịch sử…"
               />
             </Field>
           </div>
@@ -213,7 +203,7 @@ function ReadOnly({ label, value }: { label: string; value: string }) {
 function SourceValue({ value, multiline = false }: { value: string; multiline?: boolean }) {
   return (
     <div className="mb-2 rounded-md border border-blue-100 bg-blue-50/70 px-3 py-2">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Dữ liệu có sẵn từ Google Sheet</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Thông tin Sửa chữa từ Google Sheet · chỉ tham khảo</div>
       <div className={multiline ? "mt-1 whitespace-pre-wrap text-sm text-ink" : "mt-0.5 text-sm font-medium text-ink"}>
         {value}
       </div>

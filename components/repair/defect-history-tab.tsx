@@ -471,6 +471,7 @@ function PageButton({
 }
 
 function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (src: string) => void }) {
+  const repair = repairReferenceOf(row.sourceSnapshot);
   return (
     <div className="max-w-[760px] space-y-2 px-1 py-1 text-[13px] leading-5">
       <DetailLine label="Số Phiếu Công Tác" value={row.workOrderNumber || "—"} />
@@ -491,6 +492,15 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
         />
         <DetailLine label="Nội dung thực hiện" value={row.content || "—"} multiline />
         <DetailLine label="Kết quả thực hiện" value={row.result || "—"} multiline />
+      {repair && (
+        <div className="mt-3 space-y-2 rounded-md border border-blue-100 bg-blue-50/60 p-3">
+          <div className="font-semibold text-blue-800">Thông tin Sửa chữa từ Google Sheet · chỉ tham khảo</div>
+          <DetailLine label="Số PCT/LCT" value={repair.repairOrderNumberRaw || "—"} />
+          <DetailLine label="Ngày hoàn thành" value={formatSnapshotDate(repair.sourceCompletedAt)} />
+          <DetailLine label="Nội dung sửa chữa" value={repair.repairPerformedContentRaw || "—"} multiline />
+          <DetailLine label="Kết quả sửa chữa" value={repair.repairResultRaw || "—"} multiline />
+        </div>
+      )}
       <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
         <div className="whitespace-nowrap font-semibold text-ink">Hình ảnh kèm theo:</div>
         <div>
@@ -511,6 +521,32 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
       <DetailLine label="Vận hành viên" value={row.createdBy?.name || "—"} />
     </div>
   );
+}
+
+type RepairReference = {
+  repairOrderNumberRaw?: string;
+  sourceCompletedAt?: string;
+  repairPerformedContentRaw?: string;
+  repairResultRaw?: string;
+};
+
+function repairReferenceOf(value: unknown): RepairReference | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const text = (key: string) => typeof source[key] === "string" && source[key] ? source[key] as string : undefined;
+  const repair = {
+    repairOrderNumberRaw: text("repairOrderNumberRaw"),
+    sourceCompletedAt: text("sourceCompletedAt"),
+    repairPerformedContentRaw: text("repairPerformedContentRaw"),
+    repairResultRaw: text("repairResultRaw"),
+  };
+  return Object.values(repair).some(Boolean) ? repair : null;
+}
+
+function formatSnapshotDate(value?: string): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
 }
 
 function DetailLine({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
