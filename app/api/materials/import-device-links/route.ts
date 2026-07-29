@@ -1,9 +1,10 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { addMonths, canManageMaterialCatalog, DEFECT_UNITS } from "@/lib/constants";
+import { addMonths, DEFECT_UNITS } from "@/lib/constants";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { normalizeText } from "@/lib/nav";
 import { seqInScope, type TreeScope } from "@/lib/equipment-units";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,12 @@ type ImportError = { rowNumber: number; message: string };
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Không đủ quyền nhập liên kết vật tư và thiết bị", 403);
-    }
+    await requirePermissionLevel(
+      user,
+      "material-manage",
+      ["create", "manage", "full"],
+      "Không đủ quyền nhập liên kết vật tư và thiết bị"
+    );
 
     const body = await req.json();
     const defaultMachine = String(body.machine ?? "").trim();

@@ -12,6 +12,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
+import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,8 @@ import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
 import { useCreateReplacement } from "@/hooks/useReplacements";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, canManageMaterialCatalog, materialCategoryMatches } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
@@ -64,7 +66,9 @@ type MaterialEdit = Partial<Material> & {
 export default function MaterialsPage() {
   return (
     <PeakProtectedRoute>
-      <MaterialsPageContent />
+      <RbacProtectedRoute permissionId="material-manage" featureLabel="Danh mục Vận Hành 1">
+        <MaterialsPageContent />
+      </RbacProtectedRoute>
     </PeakProtectedRoute>
   );
 }
@@ -72,8 +76,8 @@ export default function MaterialsPage() {
 function MaterialsPageContent() {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  // Xem bảng: mọi cương vị. Thao tác (Thêm/Sửa/Xoá/Xuất): Quản đốc/Phó Quản đốc/Kỹ thuật viên/Quản trị.
-  const canManage = canManageMaterialCatalog({ role, position: session?.user?.position });
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("material-manage", ["create", "manage", "full"]);
   const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();

@@ -7,7 +7,7 @@ import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -296,7 +296,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được thêm vật tư", 403);
+    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền thêm vật tư");
     const body = await req.json();
     const erpCodes = parseErpCodes(body);
     const primaryCode = erpCodes[0];
@@ -357,7 +357,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được cập nhật vật tư", 403);
+    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền cập nhật vật tư");
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     const erpCodes = body.erpCodes !== undefined || body.code !== undefined ? parseErpCodes(body) : undefined;
@@ -498,7 +498,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được xoá vật tư", 403);
+    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền xoá vật tư");
 
     // Gom danh sách id cần xoá từ query (đơn) hoặc body (hàng loạt).
     const single = req.nextUrl.searchParams.get("id");

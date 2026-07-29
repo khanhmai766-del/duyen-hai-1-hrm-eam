@@ -95,6 +95,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Danh mục Vận Hành 1",
         href: "/materials",
         icon: Package,
+        permissionIds: ["material-manage"],
         keywords: "material vat tu pxvh1 phu tung ton kho",
       },
       {
@@ -110,7 +111,13 @@ export const NAV_SECTIONS: NavSection[] = [
           { label: "Bi Nghiền Than", href: "/vat-tu/loai-dau?loai=bi-nghien-than", icon: CircleDot, keywords: "ton kho nhom bi nghien than" },
         ],
       },
-      { label: "Lịch thay thế vật tư", href: "/replacements", icon: Repeat, keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc" },
+      {
+        label: "Lịch thay thế vật tư",
+        href: "/replacements",
+        icon: Repeat,
+        permissionIds: ["replacement-manage"],
+        keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc",
+      },
       { label: "Theo dõi vật tư", href: "/replacement-procedures", icon: ClipboardList, keywords: "theo doi vat tu quy trinh thay the huong dan checklist procedure replacement" },
     ],
   },
