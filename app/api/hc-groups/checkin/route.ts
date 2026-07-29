@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import {
   HC_PERIOD_HOURS,
   HC_PERIOD_LABEL,
@@ -82,7 +82,7 @@ function canRecallCheckIn(checkIn: { updatedAt?: Date | null; createdAt: Date },
 }
 
 async function canManageHc(user: { id?: string; role?: string }) {
-  return hasAssignedApprovePermission(user, APPROVE_PERMISSION_ID);
+  return hasAssignedManagePermission(user, APPROVE_PERMISSION_ID);
 }
 
 function isAutoApprovedHcPosition(position?: string | null) {

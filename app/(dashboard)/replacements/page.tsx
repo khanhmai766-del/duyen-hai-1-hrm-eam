@@ -225,8 +225,9 @@ function ReplacementsPageContent() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
-  const canManage = rbac.can("replacement-manage", ["create", "manage", "full"]);
-  const canDelete = rbac.can("replacement-manage", ["full"]);
+  const canCreate = rbac.can("replacement-manage", ["personal", "manage", "full"]);
+  const canManage = rbac.can("replacement-manage", ["manage", "full"]);
+  const canDelete = rbac.can("replacement-manage", ["manage", "full"]);
   const [tab, setTab] = React.useState<TabKey>("schedule");
   // Bộ lọc tháng/năm dùng chung cho cả 2 tab (mặc định tháng hiện tại).
   const [month, setMonth] = React.useState(() => ym(new Date()));
@@ -495,7 +496,7 @@ function ReplacementsPageContent() {
                 ))}
               </SelectContent>
             </Select>
-            {tab === "schedule" && canManage && (
+            {tab === "schedule" && canCreate && (
               <Button
                 type="button"
                 variant="outline"

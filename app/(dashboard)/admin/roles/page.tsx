@@ -11,7 +11,6 @@ import {
   Eye,
   KeyRound,
   Lock,
-  PencilLine,
   Plus,
   RotateCcw,
   Save,
@@ -19,7 +18,6 @@ import {
   Settings2,
   ShieldCheck,
   Trash2,
-  UserCheck,
   Users,
   XCircle,
   type LucideIcon,
@@ -48,7 +46,7 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-type PermissionValue = "full" | "manage" | "approve" | "create" | "own" | "read" | "none";
+type PermissionValue = "full" | "manage" | "personal" | "read" | "none";
 
 interface PermissionRow {
   id: string;
@@ -85,7 +83,7 @@ interface RbacConfig {
   userOverrides: UserPermissionOverride[];
 }
 
-const PERMISSION_VALUES: PermissionValue[] = ["full", "manage", "approve", "create", "own", "read", "none"];
+const PERMISSION_VALUES: PermissionValue[] = ["full", "manage", "personal", "read", "none"];
 
 const SYSTEM_ROLE_COLUMNS: RoleColumn[] = [
   {
@@ -149,11 +147,9 @@ const MATRIX_SYSTEM_ROLE_COLUMNS: RoleColumn[] = [
 const PERMISSION_RANK: Record<PermissionValue, number> = {
   none: 0,
   read: 1,
-  own: 2,
-  create: 3,
-  approve: 4,
-  manage: 5,
-  full: 6,
+  personal: 2,
+  manage: 3,
+  full: 4,
 };
 
 function strongestPermission(values: Array<PermissionValue | undefined>): PermissionValue {
@@ -184,9 +180,9 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
       "archive-create-delete",
       "archive-backup",
       "forum-moderate",
+      "defect-two-way-sync",
       "defect-delete",
       "defect-history-delete",
-      "defect-two-way-sync",
     ].includes(row.id)
   ) {
     return "none";
@@ -259,42 +255,42 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Nhân sự / Ca vận hành",
     feature: "Điểm danh ca vận hành theo sơ đồ tổ chức",
     note: "Tự chọn cương vị trực, xem phân công theo ca và ghi nhận có mặt trên sơ đồ ca.",
-    matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
+    matrix: { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
   },
   {
     id: "shift-operation-approve",
     group: "Nhân sự / Ca vận hành",
     feature: "Duyệt điểm danh ca vận hành",
     note: "Xác nhận người trực theo từng cương vị, duyệt hoặc thu hồi điểm danh trong ca vận hành.",
-    matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "hc-attendance-group-create",
     group: "Nhân sự / Hành chính",
     feature: "Tạo nhóm hành chính",
     note: "Tạo nhóm hành chính theo ngày, buổi, số giờ và nội dung công việc; cấp Quản lý/Toàn quyền được sửa hoặc xoá nhóm.",
-    matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "none" },
+    matrix: { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
     id: "hc-attendance-check-in",
     group: "Nhân sự / Hành chính",
     feature: "Đăng ký và chấm công hành chính",
     note: "Đăng ký nhân sự và ghi nhận chấm công hành chính trong ngày; không bao gồm quyền tạo nhóm hành chính.",
-    matrix: { ADMIN: "create", MANAGER: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "read" },
+    matrix: { ADMIN: "personal", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "read" },
   },
   {
     id: "hc-attendance-approve",
     group: "Nhân sự / Hành chính",
     feature: "Duyệt chấm công hành chính",
     note: "Duyệt danh sách hành chính, xác nhận giờ công và phê duyệt đăng ký đi hành chính.",
-    matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "timesheet-edit",
     group: "Nhân sự / Hành chính",
     feature: "Chỉnh bảng công",
     note: "Điều chỉnh thủ công các ô bảng công khi cần, độc lập với quyền duyệt chấm công hành chính.",
-    matrix: { ADMIN: "approve", MANAGER: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "user-manage",
@@ -308,7 +304,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Quản trị người dùng",
     feature: "Reset mật khẩu Người xem",
     note: "Đặt lại mật khẩu mặc định cho tài khoản vai trò Người xem; không áp dụng cho Quản trị, Quản lý, Trưởng ca hoặc Kỹ thuật viên.",
-    matrix: { ADMIN: "approve", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "manage", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "rbac-manage",
@@ -350,56 +346,56 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Sửa chữa",
     feature: "Tạo phiếu sửa chữa",
     note: "Lập phiếu từ trang thiết bị hoặc lịch sử sửa chữa.",
-    matrix: { ADMIN: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "none" },
+    matrix: { ADMIN: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
     id: "repair-edit",
     group: "Sửa chữa",
     feature: "Sửa phiếu sửa chữa",
     note: "Quản lý và Trưởng ca sửa được mọi phiếu; kỹ thuật viên chỉ sửa phiếu do mình tạo.",
-    matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "own", VIEWER: "none" },
+    matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
     id: "repair-delete",
     group: "Sửa chữa",
     feature: "Xoá phiếu sửa chữa",
     note: "Quản trị xoá mọi phiếu; người tạo được xoá phiếu của mình.",
-    matrix: { ADMIN: "full", SUPERVISOR: "own", TECHNICIAN: "own", VIEWER: "none" },
+    matrix: { ADMIN: "full", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },
   },
   {
     id: "repair-approve",
     group: "Sửa chữa",
     feature: "Duyệt phiếu sửa chữa",
     note: "Xác nhận kết quả xử lý và trạng thái sau sửa chữa.",
-    matrix: { ADMIN: "approve", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-manage",
     group: "Khiếm khuyết",
     feature: "Ghi nhận và cập nhật khiếm khuyết thiết bị",
     note: "Theo dõi tình trạng, mức độ, yêu cầu xử lý và hình ảnh hiện trường.",
-    matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "create", VIEWER: "read" },
+    matrix: { ADMIN: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "read" },
   },
   {
     id: "defect-close",
     group: "Khiếm khuyết",
     feature: "Hoàn thành / đóng phiếu khiếm khuyết",
     note: "Xác nhận kết quả xử lý và đưa phiếu vào lịch sử; không bao gồm quyền xoá.",
-    matrix: { ADMIN: "full", SUPERVISOR: "approve", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-delete",
     group: "Khiếm khuyết",
     feature: "Xoá phiếu khiếm khuyết",
     note: "Quyền độc lập, mặc định chỉ Quản trị viên. Không cho xoá phiếu phản chiếu trực tiếp từ Google Sheet.",
-    matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-history-delete",
     group: "Khiếm khuyết",
     feature: "Xoá lịch sử khiếm khuyết",
     note: "Quyền độc lập để xoá hồ sơ đã đưa vào lịch sử; mặc định chỉ Quản trị viên.",
-    matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+    matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
     id: "defect-two-way-sync",
@@ -419,7 +415,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "replacement-manage",
     group: "Vật tư",
     feature: "Lịch thay thế vật tư",
-    note: "Cho phép hiện mục Lịch thay thế vật tư trên menu. Quyền Xem chỉ tra cứu theo phạm vi cương vị; quyền Quản lý/Toàn quyền được xem toàn bộ, nhập lịch, sửa và ghi nhận thay thế; Toàn quyền được xoá.",
+    note: "Cho phép hiện mục Lịch thay thế vật tư trên menu. Quyền Xem chỉ tra cứu theo phạm vi cương vị; quyền Quản lý/Toàn quyền được xem toàn bộ, nhập lịch, sửa, xoá và ghi nhận thay thế.",
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
@@ -517,7 +513,7 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "archive-create-delete",
     group: "Tài liệu số",
     feature: "Thư mục lưu trữ - thêm mới và xoá hồ sơ",
-    note: "Chỉ Quản trị viên được tạo hồ sơ lưu trữ mới hoặc xoá hồ sơ khỏi danh mục.",
+    note: "Quyền Cá nhân được thêm hồ sơ; quyền Quản lý/Toàn quyền được thêm, sửa và xoá hồ sơ khỏi danh mục.",
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
@@ -539,13 +535,13 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Tài liệu số",
     feature: "Forum kỹ thuật - tạo chủ đề và phản hồi",
     note: "Tài khoản nội bộ có thể trao đổi kỹ thuật, chia sẻ tài liệu, quy trình, sơ đồ và bản vẽ.",
-    matrix: { ADMIN: "create", SUPERVISOR: "create", TECHNICIAN: "create", VIEWER: "create" },
+    matrix: { ADMIN: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "personal" },
   },
   {
     id: "forum-moderate",
     group: "Tài liệu số",
     feature: "Forum kỹ thuật - gỡ nội dung không phù hợp",
-    note: "Quản trị viên được xoá chủ đề hoặc phản hồi nếu nội dung không phù hợp.",
+    note: "Quyền Quản lý/Toàn quyền được ghim, sửa hoặc xoá chủ đề và phản hồi nếu nội dung không phù hợp.",
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
 ];
@@ -590,25 +586,13 @@ const PERMISSION_META: Record<PermissionValue, { label: string; icon: LucideIcon
     label: "Quản lý",
     icon: KeyRound,
     className: "bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-blue-500/30",
-    title: "Được điều phối và cập nhật nghiệp vụ; không mặc định có quyền xoá hoặc cấu hình hệ thống.",
+    title: "Xem toàn bộ website; tạo, sửa, xoá, xác nhận, phê duyệt hoặc chốt trạng thái trong phạm vi chức năng.",
   },
-  approve: {
-    label: "Duyệt",
-    icon: UserCheck,
-    className: "bg-gradient-to-b from-teal-400 to-emerald-600 text-white shadow-emerald-500/30",
-    title: "Được xác nhận, phê duyệt hoặc chốt trạng thái; không mặc định được tạo/sửa toàn bộ.",
-  },
-  create: {
-    label: "Tạo",
-    icon: PencilLine,
-    className: "bg-gradient-to-b from-sky-400 to-cyan-600 text-white shadow-cyan-500/30",
-    title: "Được thêm mới dữ liệu; chỉ sửa/xoá khi chức năng hoặc quyền riêng cho phép.",
-  },
-  own: {
-    label: "Của mình",
+  personal: {
+    label: "Cá nhân",
     icon: CircleDot,
-    className: "bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-amber-500/30",
-    title: "Chỉ thao tác với dữ liệu do mình tạo hoặc được gán cho mình.",
+    className: "bg-gradient-to-b from-sky-400 to-cyan-600 text-white shadow-cyan-500/30",
+    title: "Xem và thêm dữ liệu mới; không mặc định được sửa/xoá.",
   },
   read: {
     label: "Chỉ xem",
@@ -626,10 +610,8 @@ const PERMISSION_META: Record<PermissionValue, { label: string; icon: LucideIcon
 
 const PERMISSION_HELP: Array<{ value: PermissionValue; description: string }> = [
   { value: "full", description: "Xem, tạo, sửa, xoá, duyệt và cấu hình trong phạm vi chức năng." },
-  { value: "manage", description: "Điều phối và cập nhật nghiệp vụ; không mặc định có quyền xoá hoặc cấu hình hệ thống." },
-  { value: "approve", description: "Xác nhận, phê duyệt hoặc chốt trạng thái; không mặc định được tạo/sửa toàn bộ." },
-  { value: "create", description: "Thêm mới dữ liệu; chỉ sửa/xoá khi chức năng hoặc quyền riêng cho phép." },
-  { value: "own", description: "Chỉ thao tác với dữ liệu do mình tạo hoặc được gán cho mình." },
+  { value: "manage", description: "Xem toàn bộ website; tạo, sửa, xoá, xác nhận, phê duyệt hoặc chốt trạng thái trong phạm vi chức năng." },
+  { value: "personal", description: "Xem và thêm dữ liệu mới; không mặc định được sửa/xoá." },
   { value: "read", description: "Chỉ xem, tra cứu, lọc và mở chi tiết; không thêm, sửa, xoá hoặc duyệt." },
   { value: "none", description: "Không được truy cập hoặc không được thao tác chức năng này." },
 ];
@@ -1024,7 +1006,7 @@ export default function RolesPage() {
 
       <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
         <span className="font-semibold text-ink">Ghi chú:</span> các quyền thao tác dữ liệu nhạy cảm như người dùng, phân quyền,
-        danh mục thiết bị và danh mục vật tư đang giới hạn cho Quản trị. Quản lý và Trưởng ca tập trung ở luồng duyệt, điều phối vận hành.
+        Quyền Quản lý bao gồm xem, tạo, sửa, xoá, xác nhận, phê duyệt và chốt trạng thái trong phạm vi từng chức năng. Các cấu hình hệ thống nhạy cảm vẫn yêu cầu Toàn quyền.
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

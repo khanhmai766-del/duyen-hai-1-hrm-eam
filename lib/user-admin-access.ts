@@ -3,7 +3,7 @@ import { hasPermissionLevel } from "@/lib/rbac-guard";
 
 const USER_LIST_PERMISSIONS = [
   { id: "user-manage", levels: ["read", "manage", "full"] },
-  { id: "user-reset-viewer-password", levels: ["approve", "manage", "full"] },
+  { id: "user-reset-viewer-password", levels: ["manage", "full"] },
   { id: "system_audit_log:view", levels: ["read", "manage", "full"] },
   { id: "rbac-manage", levels: ["full"] },
 ] as const;

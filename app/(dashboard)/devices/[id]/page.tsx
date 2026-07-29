@@ -55,9 +55,10 @@ function DeviceDetailPageContent() {
 
   const device = data?.data;
   const url = typeof window !== "undefined" && device ? `${window.location.origin}/public/equipment/${encodeURIComponent(device.code)}` : "";
-  const canManageQr = Boolean(device && rbac.can("device-manage", ["create", "manage", "full"]) && access.canEdit);
-  const canDeclareMaterial = Boolean(device && rbac.can("replacement-manage", ["create", "manage", "full"]) && access.canEdit);
-  const canCreateDefect = Boolean(device && rbac.can("defect-manage", ["create", "manage", "full"]) && access.canEdit);
+  const canCreateQr = Boolean(device && rbac.can("device-manage", ["personal", "manage", "full"]) && access.canEdit);
+  const canDeleteQr = Boolean(device && rbac.can("device-manage", ["manage", "full"]) && access.canEdit);
+  const canDeclareMaterial = Boolean(device && rbac.can("replacement-manage", ["personal", "manage", "full"]) && access.canEdit);
+  const canCreateDefect = Boolean(device && rbac.can("defect-manage", ["personal", "manage", "full"]) && access.canEdit);
   const deviceMachine = React.useMemo(() => {
     if (!device) return "S1";
     return device.machine ?? defaultScopeOf(device.id);
@@ -127,7 +128,7 @@ function DeviceDetailPageContent() {
           {rbac.can("device-manage", ["manage", "full"]) && access.canEdit && (
             <Button variant="outline" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Sửa</Button>
           )}
-          {rbac.can("device-delete", ["full"]) && (
+          {rbac.can("device-delete", ["manage", "full"]) && (
             <Button variant="outline" onClick={() => setDelOpen(true)}>
               <Trash2 className="h-4 w-4 text-destructive" /> Xoá
             </Button>
@@ -413,7 +414,7 @@ function DeviceDetailPageContent() {
                   <Link href={`/devices/${id}/qr`}>Trang in</Link>
                 </Button>
               </div>
-              {canManageQr && (
+              {canDeleteQr && (
                 <Button variant="ghost" className="w-full text-destructive hover:bg-red-50 hover:text-destructive" onClick={() => setQrDeleteOpen(true)}>
                   <Trash2 className="h-4 w-4" /> Xóa mã QR
                 </Button>
@@ -426,7 +427,7 @@ function DeviceDetailPageContent() {
                 <div className="font-semibold text-ink">Thiết bị chưa có mã QR</div>
                 <p className="mt-1 text-sm text-muted-foreground">Chỉ khởi tạo cho thiết bị cần dán thẻ hoặc tra cứu bằng mã quét.</p>
               </div>
-              {canManageQr ? (
+              {canCreateQr ? (
                 <Button onClick={createQrCard} disabled={addQrCard.isPending}>
                   {addQrCard.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Khởi tạo mã QR
                 </Button>

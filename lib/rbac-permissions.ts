@@ -3,22 +3,19 @@ import { DEFAULT_RBAC_MATRIX } from "@/lib/rbac-defaults";
 
 const RBAC_CONFIG_KEY = "rbac-permissions";
 const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
-const APPROVE_LEVELS = new Set(["approve", "manage", "full"]);
 const MANAGE_LEVELS = new Set(["manage", "full"]);
-const VIEW_LEVELS = new Set(["read", "own", "create", "approve", "manage", "full"]);
+const VIEW_LEVELS = new Set(["read", "personal", "manage", "full"]);
 const FALLBACK_PERMISSION_IDS: Record<string, string[]> = {
   "hc-attendance-group-create": ["hc-attendance-check-in"],
 };
-export type PermissionLevel = "none" | "read" | "own" | "create" | "approve" | "manage" | "full";
+export type PermissionLevel = "none" | "read" | "personal" | "manage" | "full";
 
 const PERMISSION_RANK: Record<PermissionLevel, number> = {
   none: 0,
   read: 1,
-  own: 2,
-  create: 3,
-  approve: 4,
-  manage: 5,
-  full: 6,
+  personal: 2,
+  manage: 3,
+  full: 4,
 };
 
 type RbacPermission = {
@@ -40,6 +37,10 @@ type RbacConfig = {
 
 function permissionLevel(value: string | null | undefined): PermissionLevel {
   const raw = String(value ?? "none");
+  // Tương thích cấu hình cũ: quyền "approve" đã được gộp vào "manage".
+  if (raw === "approve") return "manage";
+  // Tương thích cấu hình cũ: "create" và "own" được gộp vào "personal".
+  if (raw === "create" || raw === "own") return "personal";
   return raw in PERMISSION_RANK ? (raw as PermissionLevel) : "none";
 }
 
@@ -90,16 +91,21 @@ export function invalidateRbacConfigCache() {
   rbacConfigInFlight = null;
 }
 
-function allowsApprove(value: string | null | undefined) {
-  return APPROVE_LEVELS.has(String(value ?? "none"));
-}
-
 function allowsView(value: string | null | undefined) {
-  return VIEW_LEVELS.has(String(value ?? "none"));
+  return VIEW_LEVELS.has(permissionLevel(value));
 }
 
 function allowsManage(value: string | null | undefined) {
-  return MANAGE_LEVELS.has(String(value ?? "none"));
+  return MANAGE_LEVELS.has(permissionLevel(value));
+}
+
+function satisfiesAllowedLevels(level: PermissionLevel, allowed: PermissionLevel[]) {
+  if (allowed.includes(level)) return true;
+  if (level === "full") return allowed.some((required) => required !== "none");
+  if (level === "manage") {
+    return allowed.some((required) => ["read", "personal", "manage"].includes(required));
+  }
+  return false;
 }
 
 export async function assignedPermissionLevel(user: { id?: string; role?: string }, permissionId: string): Promise<PermissionLevel> {
@@ -160,11 +166,7 @@ export async function hasAssignedPermissionLevel(
   allowed: PermissionLevel[]
 ) {
   const level = await assignedPermissionLevel(user, permissionId);
-  return allowed.includes(level);
-}
-
-export async function hasAssignedApprovePermission(user: { id?: string; role?: string }, permissionId: string) {
-  return allowsApprove(await assignedPermissionLevel(user, permissionId));
+  return satisfiesAllowedLevels(level, allowed);
 }
 
 export async function hasAssignedManagePermission(user: { id?: string; role?: string }, permissionId: string) {

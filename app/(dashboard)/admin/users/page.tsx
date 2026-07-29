@@ -31,7 +31,7 @@ const PERMANENT_DELETE_CONFIRMATION = "xác nhận xóa";
 const ROLE_PROFILE_PERMISSION = "__ROLE_PROFILE__";
 const NO_ROLE_PROFILE = "__none__";
 type ActivityCategory = "SYSTEM" | "SECURITY" | "ATTENDANCE" | "USER";
-type PermissionValue = "full" | "manage" | "approve" | "create" | "own" | "read" | "none";
+type PermissionValue = "full" | "manage" | "personal" | "read" | "none";
 type RbacRoleProfile = {
   id: string;
   label: string;
@@ -123,7 +123,7 @@ export default function AdminUsersPage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
   const canManageUsers = rbac.can("user-manage", ["manage", "full"]);
-  const canResetViewerPassword = rbac.can("user-reset-viewer-password", ["approve", "manage", "full"]);
+  const canResetViewerPassword = rbac.can("user-reset-viewer-password", ["manage", "full"]);
   const canViewActivityLog = rbac.can("system_audit_log:view", ["read", "manage", "full"]);
   const canManageRbac = rbac.can("rbac-manage", ["full"]);
   const canOpenPage = canManageUsers || canResetViewerPassword || canViewActivityLog || canManageRbac;

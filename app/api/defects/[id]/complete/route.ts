@@ -28,7 +28,7 @@ const HISTORY_INCLUDE = {
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-close", ["approve", "manage", "full"], "Không đủ quyền hoàn thành phiếu khiếm khuyết");
+    await requirePermissionLevel(user, "defect-close", ["manage", "full"], "Không đủ quyền hoàn thành phiếu khiếm khuyết");
     const body = await req.json().catch(() => ({}));
 
     const defect = await prisma.defect.findUnique({

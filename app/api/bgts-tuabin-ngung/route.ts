@@ -242,7 +242,7 @@ async function loadArchive(unit: string) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "archive-grid-separation", ["read", "own", "create", "approve", "manage", "full"], "Bạn không có quyền xem BGTS Tuabin ngừng");
+    await requirePermissionLevel(user, "archive-grid-separation", ["read", "personal", "manage", "full"], "Bạn không có quyền xem BGTS Tuabin ngừng");
     await ensureTables();
 
     const unit = normalizeUnit(req.nextUrl.searchParams.get("unit"));
@@ -261,7 +261,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "archive-grid-separation", ["create", "manage", "full"], "Bạn không có quyền lưu BGTS Tuabin ngừng");
+    await requirePermissionLevel(user, "archive-grid-separation", ["manage", "full"], "Bạn không có quyền lưu BGTS Tuabin ngừng");
     await ensureTables();
 
     const body = (await req.json()) as Record<string, unknown>;

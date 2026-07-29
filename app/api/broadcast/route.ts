@@ -93,7 +93,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, BROADCAST_PERMISSION, ["full"], "Không đủ quyền xoá thông báo hệ thống");
+    await requirePermissionLevel(user, BROADCAST_PERMISSION, ["manage", "full"], "Không đủ quyền xoá thông báo hệ thống");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id");
     await prisma.$executeRawUnsafe(`DELETE FROM "SystemBroadcast" WHERE id = $1`, id);

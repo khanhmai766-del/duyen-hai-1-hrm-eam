@@ -16,7 +16,7 @@ const SEQ_PATTERN = /^(?:DH1\.S1|[1-9]\d*)(?:\.[1-9]\d*)*$/;
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-delete", ["full"], "Không đủ quyền xoá thiết bị");
+    await requirePermissionLevel(user, "device-delete", ["manage", "full"], "Không đủ quyền xoá thiết bị");
 
     const body = (await req.json().catch(() => null)) as { ids?: unknown; dryRun?: unknown } | null;
     if (!Array.isArray(body?.ids)) return fail("Danh sách thiết bị không hợp lệ");

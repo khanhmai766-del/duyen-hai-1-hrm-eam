@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureDeviceQrCardTable();
-    await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền tạo thẻ QR thiết bị");
+    await requirePermissionLevel(user, "device-manage", ["personal", "manage", "full"], "Không đủ quyền tạo thẻ QR thiết bị");
     const body = await req.json();
     const deviceSeq = String(body.deviceSeq ?? "").trim();
     if (!deviceSeq) return fail("Chưa chọn thiết bị");
@@ -114,7 +114,7 @@ export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureDeviceQrCardTable();
-    await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền gỡ thẻ QR thiết bị");
+    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền gỡ thẻ QR thiết bị");
     const seq = req.nextUrl.searchParams.get("seq")?.trim();
     if (!seq) return fail("Thiếu seq thiết bị");
     const { count } = await prisma.deviceQrCard.deleteMany({ where: { deviceSeq: seq } });

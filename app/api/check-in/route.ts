@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền duyệt");
+    await requirePermissionLevel(user, "shift-operation-approve", ["manage", "full"], "Không đủ quyền duyệt");
     const body = await req.json();
     if (!body.checkInId) return fail("Thiếu checkInId");
     const record = await prisma.checkIn.update({

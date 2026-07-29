@@ -12,7 +12,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { usePeakMode } from "@/hooks/usePeakMode";
 import { isPeakBlockedHref } from "@/lib/peak-mode";
 
-const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
+const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
 function pathActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

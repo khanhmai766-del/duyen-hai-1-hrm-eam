@@ -18,7 +18,7 @@ function parseMachine(value: unknown) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền khai báo vật tư thiết bị");
+    await requirePermissionLevel(user, "replacement-manage", ["personal", "manage", "full"], "Không đủ quyền khai báo vật tư thiết bị");
 
     const deviceSeq = req.nextUrl.searchParams.get("deviceSeq")?.trim();
     const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền khai báo vật tư thiết bị");
+    await requirePermissionLevel(user, "replacement-manage", ["personal", "manage", "full"], "Không đủ quyền khai báo vật tư thiết bị");
     const body = await req.json();
 
     const deviceSeq = String(body.deviceSeq ?? "").trim();

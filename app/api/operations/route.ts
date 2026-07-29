@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "operation-events", ["create", "manage", "full"], "Không đủ quyền cập nhật thông tin vận hành");
+    await requirePermissionLevel(user, "operation-events", ["personal", "manage", "full"], "Không đủ quyền cập nhật thông tin vận hành");
     const body = await req.json();
     if (!body.title || !body.date || !body.type) return fail("Thiếu loại, tiêu đề hoặc ngày");
     const event = await prisma.operationEvent.create({
@@ -85,7 +85,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "operation-events", ["full"], "Không đủ quyền xoá thông tin vận hành");
+    await requirePermissionLevel(user, "operation-events", ["manage", "full"], "Không đủ quyền xoá thông tin vận hành");
     const id = req.nextUrl.searchParams.get("id");
     if (!id) return fail("Thiếu id");
     await prisma.operationEvent.delete({ where: { id } });

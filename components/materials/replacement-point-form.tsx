@@ -21,6 +21,17 @@ const NO_SYSTEM = "__none__";
 const NO_DEVICE = "__none__";
 const NO_POSITION = "__none__";
 
+function positionsOfDevice(device: {
+  managingPosition: string | null;
+  managingPositions?: string[];
+}) {
+  return device.managingPositions?.length
+    ? device.managingPositions
+    : device.managingPosition
+      ? [device.managingPosition]
+      : [];
+}
+
 export function ReplacementPointForm({
   materialId,
   point,
@@ -37,13 +48,16 @@ export function ReplacementPointForm({
   const { data: devicesData } = useDevices({ permissionScope: "replacement-manage" });
   const devices = devicesData?.data ?? [];
   const devicePositions = React.useMemo(
-    () => Array.from(new Set(devices.map((device) => device.managingPosition).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),
+    () =>
+      Array.from(new Set(devices.flatMap(positionsOfDevice))).sort((a, b) =>
+        a.localeCompare(b, "vi")
+      ),
     [devices]
   );
 
   const [form, setForm] = React.useState({
     deviceId: point?.deviceId ?? "",
-    managingPosition: "",
+    managingPosition: point?.managingPosition ?? "",
     system: point ? (point.system ?? "") : (defaultSystem ?? ""),
     intervalMonths: String(point?.intervalMonths ?? 6),
     intervalNote: point?.intervalNote ?? "",
@@ -56,7 +70,12 @@ export function ReplacementPointForm({
     setForm((f) => ({ ...f, [k]: v }));
   }
   const positionDevices = React.useMemo(
-    () => devices.filter((device) => !form.managingPosition || device.managingPosition === form.managingPosition),
+    () =>
+      devices.filter(
+        (device) =>
+          !form.managingPosition ||
+          positionsOfDevice(device).includes(form.managingPosition)
+      ),
     [devices, form.managingPosition]
   );
   const deviceSystems = React.useMemo(
@@ -71,10 +90,13 @@ export function ReplacementPointForm({
     setForm((f) => {
       const nextDeviceId = deviceId === NO_DEVICE ? "" : deviceId;
       const device = devices.find((d) => d.id === nextDeviceId);
+      const positions = device ? positionsOfDevice(device) : [];
       return {
         ...f,
         deviceId: nextDeviceId,
-        managingPosition: device?.managingPosition ?? "",
+        managingPosition: positions.includes(f.managingPosition)
+          ? f.managingPosition
+          : positions[0] ?? "",
         system: device?.system ?? "",
       };
     });
@@ -83,12 +105,14 @@ export function ReplacementPointForm({
     setForm((f) => {
       const managingPosition = position === NO_POSITION ? "" : position;
       const selectedDevice = devices.find((d) => d.id === f.deviceId);
-      const positionDevices = devices.filter((d) => !managingPosition || d.managingPosition === managingPosition);
+      const positionDevices = devices.filter(
+        (d) => !managingPosition || positionsOfDevice(d).includes(managingPosition)
+      );
       const keepSystem = !f.system || positionDevices.some((d) => d.system === f.system);
       const nextSystem = keepSystem ? f.system : "";
       const keepDevice =
         !selectedDevice ||
-        ((!managingPosition || selectedDevice.managingPosition === managingPosition) &&
+        ((!managingPosition || positionsOfDevice(selectedDevice).includes(managingPosition)) &&
           (!nextSystem || selectedDevice.system === nextSystem));
       return {
         ...f,
@@ -104,7 +128,7 @@ export function ReplacementPointForm({
       const selectedDevice = devices.find((d) => d.id === f.deviceId);
       const keepDevice =
         !selectedDevice ||
-        ((!f.managingPosition || selectedDevice.managingPosition === f.managingPosition) &&
+        ((!f.managingPosition || positionsOfDevice(selectedDevice).includes(f.managingPosition)) &&
           (!system || selectedDevice.system === system));
       return {
         ...f,
@@ -118,7 +142,10 @@ export function ReplacementPointForm({
     if (!form.deviceId) return;
     const device = devices.find((d) => d.id === form.deviceId);
     if (!device) return;
-    const managingPosition = device.managingPosition ?? "";
+    const positions = positionsOfDevice(device);
+    const managingPosition = positions.includes(form.managingPosition)
+      ? form.managingPosition
+      : positions[0] ?? "";
     const system = device.system ?? "";
     if (form.managingPosition === managingPosition && form.system === system) return;
     setForm((f) => ({ ...f, managingPosition, system }));
@@ -148,6 +175,7 @@ export function ReplacementPointForm({
       deviceId: form.deviceId,
       location: null,
       system: form.system || null,
+      managingPosition: form.managingPosition,
       intervalMonths: Number(form.intervalMonths),
       intervalNote: form.intervalNote,
       lastReplacedAt: form.lastReplacedAt || null,

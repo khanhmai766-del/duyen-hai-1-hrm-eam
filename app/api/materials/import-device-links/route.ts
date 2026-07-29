@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     await requirePermissionLevel(
       user,
       "material-manage",
-      ["create", "manage", "full"],
+      ["personal", "manage", "full"],
       "Không đủ quyền nhập liên kết vật tư và thiết bị"
     );
 

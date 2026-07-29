@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await requirePermissionLevel(
       user,
       "defect-manage",
-      ["create", "manage", "full"],
+      ["manage", "full"],
       "Không đủ quyền nhắc lại khiếm khuyết"
     );
 

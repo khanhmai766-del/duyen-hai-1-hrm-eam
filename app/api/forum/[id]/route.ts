@@ -44,13 +44,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const isOwner = user.id === authorId;
 
     if (typeof body.isPinned === "boolean") {
-      await requirePermissionLevel(user, "forum-moderate", ["full"], "Không đủ quyền ghim chủ đề");
+      await requirePermissionLevel(user, "forum-moderate", ["manage", "full"], "Không đủ quyền ghim chủ đề");
       await prisma.$executeRawUnsafe(`UPDATE "ForumPost" SET "isPinned" = $2 WHERE id = $1`, params.id, body.isPinned);
       await audit(user.id, "PIN_FORUM_POST", "ForumPost", params.id, String(body.isPinned));
       return ok({ id: params.id, isPinned: body.isPinned });
     }
 
-    if (!isOwner && !(await hasPermissionLevel(user, "forum-moderate", ["full"]))) return fail("Bạn không có quyền sửa chủ đề này", 403);
+    if (!isOwner && !(await hasPermissionLevel(user, "forum-moderate", ["manage", "full"]))) return fail("Bạn không có quyền sửa chủ đề này", 403);
 
     if (body.action === "CLOSE") {
       if (await isPostClosed(params.id)) return fail("Chủ đề này đã được kết thúc", 400);
@@ -96,7 +96,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const user = await requireUser();
     const authorId = await getPostAuthor(params.id);
     if (!authorId) return fail("Không tìm thấy chủ đề Forum", 404);
-    if (user.id !== authorId && !(await hasPermissionLevel(user, "forum-moderate", ["full"]))) return fail("Bạn không có quyền gỡ chủ đề này", 403);
+    if (user.id !== authorId && !(await hasPermissionLevel(user, "forum-moderate", ["manage", "full"]))) return fail("Bạn không có quyền gỡ chủ đề này", 403);
 
     await prisma.$executeRawUnsafe(`DELETE FROM "ForumPost" WHERE id = $1`, params.id);
     await audit(user.id, "DELETE_FORUM_POST", "ForumPost", params.id);

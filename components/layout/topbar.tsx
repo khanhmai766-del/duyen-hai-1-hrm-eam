@@ -44,7 +44,7 @@ const GRID_TINTS = [
   "bg-gradient-to-br from-pink-100 to-pink-200 text-pink-700",
   "bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700",
 ];
-const NAV_ACCESS_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
+const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
 function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"]) {
   if (role === "ADMIN") return true;

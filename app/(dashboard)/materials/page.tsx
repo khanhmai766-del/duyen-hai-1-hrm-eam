@@ -77,7 +77,8 @@ function MaterialsPageContent() {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
-  const canManage = rbac.can("material-manage", ["create", "manage", "full"]);
+  const canCreate = rbac.can("material-manage", ["personal", "manage", "full"]);
+  const canManage = rbac.can("material-manage", ["manage", "full"]);
   const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
@@ -582,7 +583,7 @@ function MaterialsPageContent() {
         <Button variant="outline" onClick={exportReplacementPointsCsv} title="Xuất CSV chi tiết điểm thay thế của các vật tư đang hiển thị">
           <Download className="h-4 w-4" /> Xuất điểm thay thế
         </Button>
-        {canManage && (
+        {canCreate && (
           <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
           </Button>

@@ -21,7 +21,7 @@ import type { CheckInWithUser, ShiftAssignmentWithUser } from "@/types";
 export default function CheckInPage() {
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const canApproveCheckIn = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
+  const canApproveCheckIn = rbac.can("shift-operation-approve", ["manage", "full"]);
   const date = formatDateInput();
   const { data, isLoading } = useShift({ date });
   const shift = data?.data;

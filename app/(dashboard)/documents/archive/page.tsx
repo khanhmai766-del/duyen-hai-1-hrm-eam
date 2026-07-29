@@ -112,7 +112,7 @@ export default function ArchiveDocumentsPage() {
       ARCHIVE_TABS.filter((item) => {
         if (OIL_SOOT_GATED_CATEGORIES.has(item.key)) return canSeeOilSootTabs;
         const permissionId = archiveCategoryPermissionId(item.key);
-        return permissionId ? rbac.can(permissionId, ["read", "own", "create", "approve", "manage", "full"]) : true;
+        return permissionId ? rbac.can(permissionId, ["read", "personal", "manage", "full"]) : true;
       }),
     [rbac, canSeeOilSootTabs]
   );

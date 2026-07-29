@@ -51,7 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await assertCanEditLog(user, params.id, ["full"]);
+    await assertCanEditLog(user, params.id, ["manage", "full"]);
 
     await prisma.materialReplacementLog.delete({ where: { id: params.id } });
     await audit(user.id, "DELETE_REPLACEMENT_LOG", "MaterialReplacementLog", params.id, auditDetailWithPosition(user));

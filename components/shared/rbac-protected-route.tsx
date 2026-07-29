@@ -5,7 +5,7 @@ import { Loader2, ShieldX } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
-const VIEW_LEVELS = ["read", "own", "create", "approve", "manage", "full"] as const;
+const VIEW_LEVELS = ["read", "personal", "manage", "full"] as const;
 
 export function RbacProtectedRoute({
   permissionId,

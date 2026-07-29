@@ -38,7 +38,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền tải lịch trực ca");
+    await requirePermissionLevel(user, "shift-operation-approve", ["manage", "full"], "Không đủ quyền tải lịch trực ca");
 
     const form = await req.formData();
     const file = form.get("file");
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "shift-operation-approve", ["approve", "manage", "full"], "Không đủ quyền xoá lịch trực ca");
+    await requirePermissionLevel(user, "shift-operation-approve", ["manage", "full"], "Không đủ quyền xoá lịch trực ca");
     const previous = await readMeta();
     if (previous?.url) await deleteFromS3(previous.url);
     await prisma.rbacConfig.deleteMany({ where: { key: ROSTER_META_KEY } });

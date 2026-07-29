@@ -9,17 +9,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const RBAC_CONFIG_KEY = "rbac-permissions";
-const PERMISSION_VALUES = new Set(["full", "manage", "approve", "create", "own", "read", "none"]);
+const PERMISSION_VALUES = new Set(["full", "manage", "personal", "read", "none"]);
 const ROLES = ["ADMIN", "MANAGER", "SUPERVISOR", "TECHNICIAN", "VIEWER"] as const;
-type PermissionValue = "full" | "manage" | "approve" | "create" | "own" | "read" | "none";
+type PermissionValue = "full" | "manage" | "personal" | "read" | "none";
 const PERMISSION_RANK: Record<string, number> = {
   none: 0,
   read: 1,
-  own: 2,
-  create: 3,
-  approve: 4,
-  manage: 5,
-  full: 6,
+  personal: 2,
+  manage: 3,
+  full: 4,
 };
 
 function parseJsonSafe(value?: string | null) {
@@ -50,6 +48,8 @@ function normalizeRoles(value: unknown) {
 
 function validPermissionValue(value: unknown, fallback: PermissionValue = "none"): PermissionValue {
   const raw = String(value ?? fallback);
+  if (raw === "approve") return "manage";
+  if (raw === "create" || raw === "own") return "personal";
   return PERMISSION_VALUES.has(raw) ? (raw as PermissionValue) : fallback;
 }
 
@@ -93,13 +93,12 @@ function normalizeUserOverrides(value: unknown) {
   return value
     .map((row) => {
       const item = row as Record<string, unknown>;
-      const permissionValue = String(item.value ?? "read");
       return {
         id: String(item.id ?? "").trim(),
         userId: String(item.userId ?? "").trim(),
         permissionId: String(item.permissionId ?? "").trim(),
         roleId: String(item.roleId ?? "").trim() || undefined,
-        value: PERMISSION_VALUES.has(permissionValue) ? permissionValue : "read",
+        value: validPermissionValue(item.value, "read"),
         note: String(item.note ?? "").trim() || undefined,
         createdAt: String(item.createdAt ?? new Date().toISOString()),
       };

@@ -52,7 +52,8 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const deviceSeqFromUrl = searchParams.get("deviceSeq")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.trim().toUpperCase() ?? "";
   const rbac = useRbacAccess();
-  const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
+  const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
+  const canManage = rbac.can("defect-manage", ["manage", "full"]);
   const canDelete = rbac.can("defect-history-delete", ["full"]);
   // Loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên khỏi bộ lọc cương vị.
   const positions = usePositions().filter(isSelectableManagingPosition);
@@ -158,7 +159,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           subtitle="Báo cáo backup lịch sử sửa chữa thiết bị theo năm"
           filenamePrefix="lich-su-sua-chua"
         />
-        {canManage && (
+        {canCreate && (
           <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Thêm mới</Button>
         )}
       </PageHeader>

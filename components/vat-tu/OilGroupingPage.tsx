@@ -6,11 +6,11 @@
 // Loại vật tư chọn qua menu con trên sidebar (?loai=...), không có tab trong trang.
 // Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Ban, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Download, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, Upload, X, type LucideIcon } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,6 @@ import {
   useOilGroupingConfirm,
   useCreateGroupedErpMaterial,
   useUpdateGroupedErpStock,
-  useImportGroupedErpMaterials,
   useSyncErpStocksFromQlvt,
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
@@ -41,7 +40,6 @@ import {
   type GroupedErpMaterialInput,
   type ErpStockUpdateInput,
 } from "@/hooks/useOilGrouping";
-import { downloadErpImportTemplate, readErpImportFile } from "@/lib/erp-import";
 import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 import { normalizeText } from "@/lib/nav";
 
@@ -82,7 +80,7 @@ export default function OilGroupingPage() {
         title="Tồn kho vật tư theo nhóm"
         description="Gom các mã vật tư ERP cùng nhóm, tổng hợp tồn kho phục vụ đề xuất nhập thay thế"
       >
-        {canManage && <GroupedErpActions groups={groups} category={category} />}
+        {canManage && <GroupedErpActions category={category} />}
       </PageHeader>
 
       {/* Tabs tồn kho / chờ phân nhóm — loại vật tư chọn từ menu con sidebar */}
@@ -247,9 +245,7 @@ function CategoryIcon({ category, className }: { category: GroupingCategory; cla
   return <Icon className={className} />;
 }
 
-function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; category: GroupingCategory }) {
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const importErp = useImportGroupedErpMaterials();
+function GroupedErpActions({ category }: { category: GroupingCategory }) {
   const syncStocks = useSyncErpStocksFromQlvt();
   const createErp = useCreateGroupedErpMaterial();
   const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
@@ -315,30 +311,6 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
     }
   }
 
-  async function importExcel(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
-      toast.error("Chỉ chấp nhận file Excel .xlsx, .xls hoặc .csv");
-      return;
-    }
-
-    try {
-      const parsed = await readErpImportFile(file, category);
-      if (!parsed.length) {
-        toast.error("File import chưa có dòng hợp lệ. Cần đủ cột Mã, Tên, ĐVT, Loại vật tư, Số liệu ERP.");
-        return;
-      }
-      const result = await importErp.mutateAsync(parsed);
-      const detail = result.skipped ? `, bỏ qua ${result.skipped}` : "";
-      toast.success(`Đã nhập ${parsed.length - result.skipped} dòng ERP: tạo mới ${result.created}, cập nhật ${result.updated}${detail}`);
-      if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
-    } catch (error) {
-      toast.error((error as Error).message || "Không nhập được file Excel");
-    }
-  }
-
   async function saveNew() {
     if (!form) return;
     setFormError("");
@@ -368,21 +340,6 @@ function GroupedErpActions({ groups, category }: { groups: OilStockGroup[]; cate
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          downloadErpImportTemplate(category);
-          toast.success("Đã tạo file mẫu import");
-        }}
-      >
-        <Download className="h-4 w-4" /> File mẫu
-      </Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => importInputRef.current?.click()} disabled={importErp.isPending}>
-        {importErp.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Nhập Excel
-      </Button>
-      <input ref={importInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={importExcel} />
       <Button type="button" variant="outline" size="sm" onClick={requestQlvtSync} disabled={syncingQlvt || syncStocks.isPending} className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:text-cyan-900">
         {syncingQlvt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} Đồng bộ từ QLVT
       </Button>

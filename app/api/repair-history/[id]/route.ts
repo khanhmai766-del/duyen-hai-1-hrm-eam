@@ -38,12 +38,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json();
 
     const isApproving = body.approve === true;
-    if (isApproving && !(await hasPermissionLevel(user, "repair-approve", ["approve", "manage", "full"]))) {
+    if (isApproving && !(await hasPermissionLevel(user, "repair-approve", ["manage", "full"]))) {
       return fail("Chỉ Quản trị, Quản lý hoặc Trưởng ca mới được duyệt", 403);
     }
 
     const editLevel = await assignedPermissionLevel(user, "repair-edit");
-    const canEdit = ["manage", "full"].includes(editLevel) || (editLevel === "own" && existing.createdById === user.id);
+    const canEdit = ["manage", "full"].includes(editLevel) || (editLevel === "personal" && existing.createdById === user.id);
     if (!canEdit && !isApproving) return fail("Không đủ quyền chỉnh sửa", 403);
 
     const log = await prisma.repairLog.update({
@@ -82,7 +82,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!existing) return fail("Không tìm thấy phiếu sửa chữa", 404);
     await assertSeqEditable(user, existing.deviceSeq);
     const deleteLevel = await assignedPermissionLevel(user, "repair-delete");
-    if (!(deleteLevel === "full" || (["own", "manage"].includes(deleteLevel) && existing.createdById === user.id))) {
+    if (!(deleteLevel === "full" || deleteLevel === "manage" || (deleteLevel === "personal" && existing.createdById === user.id))) {
       return fail("Không đủ quyền xoá phiếu sửa chữa", 403);
     }
     await prisma.repairLog.delete({ where: { id: params.id } });

@@ -282,8 +282,9 @@ export default function DefectsPage() {
   const pageSizeFromUrl = Number.parseInt(searchParams.get("limit") ?? "", 10);
   const pageFromUrl = Number.parseInt(searchParams.get("page") ?? "", 10);
   const rbac = useRbacAccess();
-  const canManage = rbac.can("defect-manage", ["create", "manage", "full"]);
-  const canClose = rbac.can("defect-close", ["approve", "manage", "full"]);
+  const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
+  const canManage = rbac.can("defect-manage", ["manage", "full"]);
+  const canClose = rbac.can("defect-close", ["manage", "full"]);
   const canDelete = rbac.can("defect-delete", ["full"]);
 
   const del = useDeleteDefect();
@@ -527,7 +528,7 @@ export default function DefectsPage() {
             }}
           />
         )}
-        {canManage && (
+        {canCreate && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Thêm mới
           </Button>
@@ -627,7 +628,7 @@ export default function DefectsPage() {
             icon={ShieldAlert}
             title="Chưa có khiếm khuyết"
             description="Nhấn “Thêm mới” để ghi nhận khiếm khuyết thiết bị."
-            action={canManage ? { label: "Thêm mới", onClick: openCreate } : undefined}
+            action={canCreate ? { label: "Thêm mới", onClick: openCreate } : undefined}
           />
         ) : (
           <EmptyState

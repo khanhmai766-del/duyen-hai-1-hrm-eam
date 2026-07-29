@@ -9,11 +9,9 @@ import { DEFAULT_RBAC_MATRIX, type RbacLevel } from "@/lib/rbac-defaults";
 const RANK: Record<RbacLevel, number> = {
   none: 0,
   read: 1,
-  own: 2,
-  create: 3,
-  approve: 4,
-  manage: 5,
-  full: 6,
+  personal: 2,
+  manage: 3,
+  full: 4,
 };
 
 type RbacMe = {
@@ -24,7 +22,18 @@ type RbacMe = {
 let lastPermissionIdentity = "";
 
 function level(value: string | null | undefined): RbacLevel {
+  if (value === "approve") return "manage";
+  if (value === "create" || value === "own") return "personal";
   return value && value in RANK ? (value as RbacLevel) : "none";
+}
+
+function satisfiesAllowedLevels(current: RbacLevel, allowed: RbacLevel[]) {
+  if (allowed.includes(current)) return true;
+  if (current === "full") return allowed.some((required) => required !== "none");
+  if (current === "manage") {
+    return allowed.some((required) => ["read", "personal", "manage"].includes(required));
+  }
+  return false;
 }
 
 export function useRbacAccess() {
@@ -71,7 +80,7 @@ export function useRbacAccess() {
   );
 
   const can = React.useCallback(
-    (permissionId: string, levels: RbacLevel[]) => levels.includes(permissionLevel(permissionId)),
+    (permissionId: string, levels: RbacLevel[]) => satisfiesAllowedLevels(permissionLevel(permissionId), levels),
     [permissionLevel]
   );
 

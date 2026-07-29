@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "shift-operation-check-in", ["create", "manage", "full"], "Không đủ quyền tạo ca vận hành");
+    await requirePermissionLevel(user, "shift-operation-check-in", ["personal", "manage", "full"], "Không đủ quyền tạo ca vận hành");
     const body = await req.json();
     const shift = await prisma.shift.create({
       data: {

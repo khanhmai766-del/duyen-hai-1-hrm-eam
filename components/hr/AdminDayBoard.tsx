@@ -128,7 +128,7 @@ export default function AdminDayBoard() {
   const { data: session } = useSession();
   const myId = session?.user?.id;
   const rbac = useRbacAccess();
-  const canApprove = rbac.can("hc-attendance-approve", ["approve", "manage", "full"]);
+  const canApprove = rbac.can("hc-attendance-approve", ["manage", "full"]);
   const canViewArchive = canViewHcRegistrationArchive({
     role: session?.user?.role,
     position: session?.user?.position,

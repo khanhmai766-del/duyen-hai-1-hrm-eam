@@ -2,11 +2,16 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import {
+  managingPositionsForEquipmentSeq,
+  resolveEquipmentAccessForUser,
+} from "@/lib/server-access";
+import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
+import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { parseDateInput } from "@/lib/utils";
@@ -108,7 +113,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền thêm điểm theo dõi");
+    await requirePermissionLevel(user, "replacement-manage", ["personal", "manage", "full"], "Không đủ quyền thêm điểm theo dõi");
     const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
     const body = await req.json();
 
@@ -126,6 +131,26 @@ export async function POST(req: NextRequest) {
     const access = canAccessAllReplacements ? null : await resolveEquipmentAccessForUser(user);
     if (access?.hasExplicitScopes && !access.canEditDeviceLike({ device: deviceSeq, system })) {
       return fail("Cương vị của bạn không có quyền thao tác trên hệ thống/thiết bị này", 403);
+    }
+    let managingPosition = String(body.managingPosition ?? "").trim() || null;
+    if (deviceSeq) {
+      const nodes = await getCachedEquipmentNodeFull();
+      const positions = await managingPositionsForEquipmentSeq(deviceSeq, nodes);
+      if (!positions.length) {
+        return fail("Thiết bị chưa được phân cương vị quản lý trên cây thiết bị");
+      }
+      if (managingPosition) {
+        const requestedKey = normalizePositionScopeKey(managingPosition);
+        const matched = positions.find(
+          (position) => normalizePositionScopeKey(position) === requestedKey
+        );
+        if (!matched) {
+          return fail("Cương vị không còn được phân quyền quản lý thiết bị đã chọn");
+        }
+        managingPosition = matched;
+      } else {
+        managingPosition = positions[0];
+      }
     }
 
     const parsedInterval = Math.round(Number(body.intervalMonths));
@@ -146,7 +171,7 @@ export async function POST(req: NextRequest) {
         machine: material.machine,
         system,
         location: String(body.location ?? "").trim() || null,
-        managingPosition: String(body.managingPosition ?? "").trim() || null,
+        managingPosition,
         quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
         deviceCount: Math.max(1, Math.round(Number(body.deviceCount)) || 1),
         intervalMonths,

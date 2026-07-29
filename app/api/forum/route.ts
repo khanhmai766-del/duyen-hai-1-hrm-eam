@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "forum-write", ["create", "manage", "full"], "Không đủ quyền tạo chủ đề forum");
+    await requirePermissionLevel(user, "forum-write", ["personal", "manage", "full"], "Không đủ quyền tạo chủ đề forum");
     await ensureForumLifecycleColumns();
     const body = await req.json();
     const title = String(body.title ?? "").trim();

@@ -1,10 +1,15 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import {
+  managingPositionsForEquipmentSeq,
+  resolveEquipmentAccessForUser,
+} from "@/lib/server-access";
+import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
+import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { parseDateInput } from "@/lib/utils";
@@ -74,6 +79,27 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return fail("Chu kỳ phải là số tháng hợp lệ (>= 0; 0 = không theo dõi lịch)");
     }
     if (body.deviceId !== undefined && !body.deviceId) return fail("Chọn thiết bị");
+    const targetDeviceSeq =
+      body.deviceId !== undefined ? String(body.deviceId).trim() : existing.deviceSeq;
+    let managingPosition =
+      body.managingPosition !== undefined
+        ? String(body.managingPosition ?? "").trim() || null
+        : existing.managingPosition;
+    if (targetDeviceSeq) {
+      const nodes = await getCachedEquipmentNodeFull();
+      const positions = await managingPositionsForEquipmentSeq(targetDeviceSeq, nodes);
+      if (!positions.length) {
+        return fail("Thiết bị chưa được phân cương vị quản lý trên cây thiết bị");
+      }
+      const requestedKey = normalizePositionScopeKey(managingPosition ?? "");
+      const matched = positions.find(
+        (position) => normalizePositionScopeKey(position) === requestedKey
+      );
+      if (body.managingPosition !== undefined && managingPosition && !matched) {
+        return fail("Cương vị không còn được phân quyền quản lý thiết bị đã chọn");
+      }
+      managingPosition = matched ?? positions[0];
+    }
 
     const point = await prisma.materialReplacement.update({
       where: { id: params.id },
@@ -81,6 +107,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         deviceSeq: body.deviceId !== undefined ? body.deviceId : undefined,
         location: body.deviceId !== undefined ? null : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
+        managingPosition,
         intervalMonths,
         intervalNote: body.intervalNote !== undefined ? body.intervalNote?.trim() || null : undefined,
         lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : undefined,
@@ -109,7 +136,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["full"], "Không đủ quyền xoá điểm thay thế");
+    await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền xoá điểm thay thế");
     const existing = await prisma.materialReplacement.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
     await prisma.materialReplacement.delete({ where: { id: params.id } });

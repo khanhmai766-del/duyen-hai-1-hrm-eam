@@ -277,16 +277,16 @@ export function DocumentCatalogPage({
     category === "PID" ? "document-pid" :
     archiveCategoryPermissionId(category);
   const archiveTabPermission = archiveCategoryPermissionId(category);
-  const canImportProcedure = category === "PROCEDURE" && rbac.can("document-procedure", ["create", "manage", "full"]);
+  const canImportProcedure = category === "PROCEDURE" && rbac.can("document-procedure", ["personal", "manage", "full"]);
   const canCreate = documentPermission
-    ? rbac.can(documentPermission, ["create", "manage", "full"])
-    : rbac.can("archive-create-delete", ["create", "manage", "full"]);
+    ? rbac.can(documentPermission, ["personal", "manage", "full"])
+    : rbac.can("archive-create-delete", ["personal", "manage", "full"]);
   const canEdit = documentPermission
     ? rbac.can(documentPermission, ["manage", "full"])
     : allowStaffEdit && rbac.can("archive-edit", ["manage", "full"]);
   const canDelete = documentPermission
-    ? rbac.can(documentPermission, ["full"])
-    : rbac.can("archive-create-delete", ["full"]);
+    ? rbac.can(documentPermission, ["manage", "full"])
+    : rbac.can("archive-create-delete", ["manage", "full"]);
   const canBackup = archiveTabPermission ? rbac.can(archiveTabPermission, ["full"]) : rbac.can("archive-backup", ["full"]);
   const hasActions = canEdit || canDelete;
   const needsPositionOptions = showEquipmentScope || canImportProcedure;

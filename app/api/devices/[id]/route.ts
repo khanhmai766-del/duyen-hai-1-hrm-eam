@@ -273,7 +273,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-delete", ["full"], "Không đủ quyền xoá thiết bị");
+    await requirePermissionLevel(user, "device-delete", ["manage", "full"], "Không đủ quyền xoá thiết bị");
     const seq = decodeURIComponent(params.id);
     const node = await prisma.equipmentNode.findUnique({ where: { seq } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);

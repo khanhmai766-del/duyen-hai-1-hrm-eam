@@ -45,7 +45,7 @@ function splitCodes(value: string): string[] {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền nhập điểm thay thế");
+    await requirePermissionLevel(user, "replacement-manage", ["personal", "manage", "full"], "Không đủ quyền nhập điểm thay thế");
     const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
 
     const body = await req.json();

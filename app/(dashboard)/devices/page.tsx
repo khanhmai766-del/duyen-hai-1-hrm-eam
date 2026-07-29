@@ -111,9 +111,10 @@ function DevicesPageContent() {
   const router = useRouter();
   const params = useSearchParams();
   const rbac = useRbacAccess();
-  const canManageDevices = rbac.can("device-manage", ["create", "manage", "full"]);
+  const canCreateDevices = rbac.can("device-manage", ["personal", "manage", "full"]);
+  const canManageDevices = rbac.can("device-manage", ["manage", "full"]);
   const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
-  const canDeleteDevices = rbac.can("device-delete", ["full"]);
+  const canDeleteDevices = rbac.can("device-delete", ["manage", "full"]);
   const view = (params.get("view") as ViewMode) || "tree";
   const urlQ = params.get("q") ?? "";
   const urlSystemSeq = params.get("systemSeq") ?? "ALL";
@@ -177,14 +178,14 @@ function DevicesPageContent() {
   // `n` keyboard shortcut -> open form view (admin only)
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "n" && canManageDevices && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      if (e.key === "n" && canCreateDevices && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
         setView("form");
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, canManageDevices]);
+  }, [params, canCreateDevices]);
 
   const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
 
@@ -257,13 +258,13 @@ function DevicesPageContent() {
         <EquipmentTreeView
           canDelete={canDeleteDevices}
           canEdit={canEditDevices}
-          canCreate={canManageDevices}
+          canCreate={canCreateDevices}
           onCreateChild={openCreateForSystem}
         />
       ) : view === "detail" ? (
-        <QrCardsSection canManage={canManageDevices} q={debouncedQ} onQr={setQrDevice} />
+        <QrCardsSection canCreate={canCreateDevices} canDelete={canManageDevices} q={debouncedQ} onQr={setQrDevice} />
       ) : view === "form" ? (
-        canManageDevices ? (
+        canCreateDevices ? (
           <DeviceForm
             initialParentSeq={parentSeq || undefined}
             initialScope={parseScope(params.get("scope"))}
@@ -297,7 +298,7 @@ function DevicesPageContent() {
               icon={Cpu}
               title="Không có thiết bị"
               description="Không tìm thấy thiết bị phù hợp."
-              action={canManageDevices ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
+              action={canCreateDevices ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
             />
           ) : (
             <DashboardView devices={devices} byPosition={byPosition} />
@@ -314,7 +315,7 @@ function DevicesPageContent() {
 
 /** Tab "Thẻ": chỉ hiển thị các thiết bị ĐÃ ĐƯỢC CHỌN tạo thẻ QR — chọn từ cây thư mục,
  *  không sinh thẻ hàng loạt cho toàn bộ node lá như trước. */
-function QrCardsSection({ canManage, q, onQr }: { canManage: boolean; q: string; onQr: (d: DeviceListItem) => void }) {
+function QrCardsSection({ canCreate, canDelete, q, onQr }: { canCreate: boolean; canDelete: boolean; q: string; onQr: (d: DeviceListItem) => void }) {
   const { data, isLoading } = useDeviceQrCards();
   const add = useAddDeviceQrCard();
   const removeCard = useRemoveDeviceQrCard();
@@ -340,7 +341,7 @@ function QrCardsSection({ canManage, q, onQr }: { canManage: boolean; q: string;
 
   return (
     <div className="space-y-4">
-      {canManage && (
+      {canCreate && (
         <Card>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start">
             <div className="min-w-0 flex-1">
@@ -365,7 +366,7 @@ function QrCardsSection({ canManage, q, onQr }: { canManage: boolean; q: string;
       {isLoading ? (
         <TableSkeleton />
       ) : (
-        <DetailView devices={cards} canDelete={canManage} onQr={onQr} onDelete={setRemoveTarget} />
+        <DetailView devices={cards} canDelete={canDelete} onQr={onQr} onDelete={setRemoveTarget} />
       )}
 
       <ConfirmDialog

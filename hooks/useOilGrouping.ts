@@ -101,13 +101,6 @@ export type GroupedErpMaterialInput = {
   erpStock?: number;
 };
 
-export type GroupedErpImportResult = {
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: string[];
-};
-
 export type ErpStockUpdateInput = {
   code: string;
   erpStock: number | string | null;
@@ -206,21 +199,6 @@ export function useUpdateGroupedErpStock() {
       qc.invalidateQueries({ queryKey: ["materials"] });
       qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
       qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
-    },
-  });
-}
-
-export function useImportGroupedErpMaterials() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (rows: GroupedErpMaterialInput[]) =>
-      apiMutate<GroupedErpImportResult>("/api/vat-tu/oil-grouping/import", "POST", { rows }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
-      qc.invalidateQueries({ queryKey: ["oil-stock"] });
-      qc.invalidateQueries({ queryKey: ["oil-suggestions"] });
-      qc.invalidateQueries({ queryKey: ["materials"] });
-      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }

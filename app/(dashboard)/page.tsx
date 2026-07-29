@@ -153,7 +153,10 @@ export default function DashboardPage() {
       {/* Body cards mirror the compact 3-panel dashboard layout: nội bộ · link · liên lạc. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,0.92fr)] lg:items-stretch">
         <div className="min-w-0 [&>*]:h-full">
-          <OperationInfoCard canManage={rbac.can("operation-events", ["create", "manage", "full"])} />
+          <OperationInfoCard
+            canCreate={rbac.can("operation-events", ["personal", "manage", "full"])}
+            canManage={rbac.can("operation-events", ["manage", "full"])}
+          />
         </div>
         <div className="min-w-0 [&>*]:h-full">
           <SupportLinksCard />
@@ -1169,7 +1172,7 @@ function toDateInputValue(value: string | Date): string {
   return formatDateInput(value);
 }
 
-function OperationInfoCard({ canManage }: { canManage: boolean }) {
+function OperationInfoCard({ canCreate, canManage }: { canCreate: boolean; canManage: boolean }) {
   const { data, isLoading } = useOperations();
   const create = useCreateOperation();
   const update = useUpdateOperation();
@@ -1228,7 +1231,7 @@ function OperationInfoCard({ canManage }: { canManage: boolean }) {
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle>Thông tin nội bộ</CardTitle>
-        {canManage && (
+        {canCreate && (
           <Button size="sm" variant="outline" onClick={openCreate}>
             <Plus className="h-4 w-4" /> Thêm
           </Button>

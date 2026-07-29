@@ -126,8 +126,8 @@ export default function ShiftRosterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rbac = useRbacAccess();
-  const canManageRosterPdf = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
-  const canEditTimesheetPermission = rbac.can("timesheet-edit", ["approve", "manage", "full"]);
+  const canManageRosterPdf = rbac.can("shift-operation-approve", ["manage", "full"]);
+  const canEditTimesheetPermission = rbac.can("timesheet-edit", ["manage", "full"]);
 
   const [month, setMonth] = React.useState(() => {
     const d = new Date();
@@ -152,7 +152,7 @@ export default function ShiftRosterPage() {
   const canEditOwnTimesheet = Boolean(
     canEditAllTimesheet ||
       timesheet.data?.data?.canEditOwn ||
-      rbac.can("timesheet-edit", ["own", "approve", "manage", "full"])
+      rbac.can("timesheet-edit", ["personal", "manage", "full"])
   );
   const myUserId = session?.user?.id;
   const [editCell, setEditCell] = React.useState<{

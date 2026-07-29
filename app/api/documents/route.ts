@@ -39,19 +39,19 @@ function documentPermissionMessage(action: "xem" | "thêm" | "chỉnh sửa" | "
 }
 
 function readLevels() {
-  return ["read", "own", "create", "approve", "manage", "full"] as const;
+  return ["read", "personal", "manage", "full"] as const;
 }
 
 function createLevels() {
-  return ["create", "manage", "full"] as const;
+  return ["personal", "manage", "full"] as const;
 }
 
 function manageLevels() {
   return ["manage", "full"] as const;
 }
 
-function fullLevels() {
-  return ["full"] as const;
+function deleteLevels() {
+  return ["manage", "full"] as const;
 }
 
 function isOperationDocumentPermission(permissionId: string | null) {
@@ -72,7 +72,7 @@ async function requireDocumentPermission(
 
   const permissionId = documentPermissionId(category);
   if (permissionId) {
-    const levels = action === "read" ? readLevels() : action === "create" ? createLevels() : action === "manage" ? manageLevels() : fullLevels();
+    const levels = action === "read" ? readLevels() : action === "create" ? createLevels() : action === "manage" ? manageLevels() : deleteLevels();
     const verb = action === "read" ? "xem" : action === "create" ? "thêm" : action === "manage" ? "chỉnh sửa" : "xoá";
     const genericMessage = isOperationDocumentPermission(permissionId)
       ? action === "read"
@@ -99,7 +99,7 @@ async function requireDocumentPermission(
     await requirePermissionLevel(user, "archive-edit", [...manageLevels()], "Bạn không có quyền chỉnh sửa hồ sơ lưu trữ");
     return;
   }
-  await requirePermissionLevel(user, "archive-create-delete", [...fullLevels()], "Bạn không có quyền xoá hồ sơ lưu trữ");
+  await requirePermissionLevel(user, "archive-create-delete", [...deleteLevels()], "Bạn không có quyền xoá hồ sơ lưu trữ");
 }
 
 function documentEditPermissionId(category: string) {

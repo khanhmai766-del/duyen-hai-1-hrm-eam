@@ -102,8 +102,8 @@ export default function ForumPage() {
   const linkedReplyId = searchParams.get("replyId");
   const { data: session } = useSession();
   const rbac = useRbacAccess();
-  const canWriteForum = rbac.can("forum-write", ["create", "manage", "full"]);
-  const canModerateForum = rbac.can("forum-moderate", ["full"]);
+  const canWriteForum = rbac.can("forum-write", ["personal", "manage", "full"]);
+  const canModerateForum = rbac.can("forum-moderate", ["manage", "full"]);
   const currentUserId = session?.user?.id;
   const [category, setCategory] = React.useState("ALL");
   const [q, setQ] = React.useState("");

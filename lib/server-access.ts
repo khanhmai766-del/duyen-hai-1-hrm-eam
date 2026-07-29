@@ -89,18 +89,24 @@ export async function loadPositionSystemScopeRows(): Promise<PositionSystemScope
   }
 }
 
-/** Các cương vị có quyền chỉnh sửa hiệu lực trên thiết bị, ưu tiên cương vị được gán ở nhánh gần nhất. */
-export async function managingPositionsForEquipmentSeq(
-  seq: string,
-  nodes: NormalizedEquipmentNode[]
-): Promise<string[]> {
-  const scopes = await loadPositionSystemScopeRows();
+/**
+ * Trả về các cương vị quản lý hiệu lực cho từng thiết bị.
+ * Dùng chung một bộ resolver để tránh đọc scope và dựng cây lặp lại khi tải danh sách lớn.
+ */
+export function managingPositionsByEquipmentSeq(
+  seqs: string[],
+  nodes: NormalizedEquipmentNode[],
+  scopes: PositionSystemScope[]
+): Map<string, string[]> {
   const positions = Array.from(new Set(scopes.map((scope) => scope.position.trim()).filter(Boolean)));
-  const matching = positions.filter(
-    (position) => createPositionAccessResolver(position, nodes, scopes).accessForSeq(seq) === "edit"
+  const resolvers = new Map(
+    positions.map((position) => [
+      position,
+      createPositionAccessResolver(position, nodes, scopes),
+    ])
   );
 
-  const nearestScopeDepth = (position: string) => {
+  const nearestScopeDepth = (position: string, seq: string) => {
     let best = -1;
     for (const scope of scopesForPosition(scopes, position)) {
       if (seq === scope.systemSeq || seq.startsWith(`${scope.systemSeq}.`)) {
@@ -110,9 +116,27 @@ export async function managingPositionsForEquipmentSeq(
     return best;
   };
 
-  return matching.sort(
-    (a, b) => nearestScopeDepth(b) - nearestScopeDepth(a) || a.localeCompare(b, "vi")
+  return new Map(
+    seqs.map((seq) => {
+      const matching = positions
+        .filter((position) => resolvers.get(position)?.accessForSeq(seq) === "edit")
+        .sort(
+          (a, b) =>
+            nearestScopeDepth(b, seq) - nearestScopeDepth(a, seq) ||
+            a.localeCompare(b, "vi")
+        );
+      return [seq, matching];
+    })
   );
+}
+
+/** Các cương vị có quyền chỉnh sửa hiệu lực trên thiết bị, ưu tiên cương vị được gán ở nhánh gần nhất. */
+export async function managingPositionsForEquipmentSeq(
+  seq: string,
+  nodes: NormalizedEquipmentNode[]
+): Promise<string[]> {
+  const scopes = await loadPositionSystemScopeRows();
+  return managingPositionsByEquipmentSeq([seq], nodes, scopes).get(seq) ?? [];
 }
 
 function hasExplicitScopes(scopes: PositionSystemScope[], position: string) {

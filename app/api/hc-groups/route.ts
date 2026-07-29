@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "hc-attendance-group-create", ["create", "manage", "full"], "Không đủ quyền tạo nhóm hành chính");
+    await requirePermissionLevel(user, "hc-attendance-group-create", ["personal", "manage", "full"], "Không đủ quyền tạo nhóm hành chính");
     const body = await req.json();
     const { date, content, hours, unit, period } = body as { date: string; content: string; hours?: number; unit?: string; period?: string };
     if (!date || !content?.trim()) return fail("Thiếu ngày hoặc nội dung");

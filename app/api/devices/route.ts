@@ -2,14 +2,17 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
-  buildEquipmentTreeIndex,
   compareEquipmentSeq,
   getEquipmentDescendantSeqs,
   getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { normalizeText } from "@/lib/nav";
-import { filterEquipmentNodesForUser, loadPositionSystemScopeRows } from "@/lib/server-access";
+import {
+  filterEquipmentNodesForUser,
+  loadPositionSystemScopeRows,
+  managingPositionsByEquipmentSeq,
+} from "@/lib/server-access";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { getOrSetDeviceListCache, invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
@@ -32,7 +35,11 @@ function publicEquipmentUrl(seq: string) {
   return `${base}/public/equipment/${encodeURIComponent(seq)}`;
 }
 
-function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipmentNode | null) {
+function toDeviceRecord(
+  node: NormalizedEquipmentNode,
+  parent: NormalizedEquipmentNode | null,
+  managingPositions: string[] = []
+) {
   return {
     id: node.seq,
     code: node.seq,
@@ -40,7 +47,8 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
     kks: node.kks ?? null,
     system: parent?.name ?? null,
     systemSeq: parent?.seq ?? null,
-    managingPosition: null,
+    managingPosition: managingPositions[0] ?? null,
+    managingPositions,
     images: node.imageUrl ? [node.imageUrl] : [],
     attachedInfo: node.attachedInfo ?? null,
     documentUrl: node.documentUrl ?? null,
@@ -98,10 +106,11 @@ function deviceListCacheKey(
 function toDeviceRecordWithStats(
   node: NormalizedEquipmentNode,
   parent: NormalizedEquipmentNode | null,
-  stats?: DeviceUsageStats
+  stats?: DeviceUsageStats,
+  managingPositions: string[] = []
 ) {
   return {
-    ...toDeviceRecord(node, parent),
+    ...toDeviceRecord(node, parent, managingPositions),
     repairLogs: stats?.latestRepairAt ? [{ startedAt: stats.latestRepairAt.toISOString() }] : [],
     _count: { repairLogs: stats?.repairCount ?? 0 },
   };
@@ -114,14 +123,18 @@ async function getDeviceLikeRecords() {
   const index = getEquipmentTreeIndexFor(nodes);
   const leafNodes = nodes.filter((node) => (index.childrenOf.get(node.seq) ?? []).length === 0);
   const leafSeqs = leafNodes.map((node) => node.seq);
-  const repairStats = leafSeqs.length
-    ? await prisma.repairLog.groupBy({
-        by: ["deviceSeq"],
-        where: { deviceSeq: { in: leafSeqs } },
-        _count: { _all: true },
-        _max: { startedAt: true },
-      })
-    : [];
+  const [repairStats, scopes] = await Promise.all([
+    leafSeqs.length
+      ? prisma.repairLog.groupBy({
+          by: ["deviceSeq"],
+          where: { deviceSeq: { in: leafSeqs } },
+          _count: { _all: true },
+          _max: { startedAt: true },
+        })
+      : [],
+    loadPositionSystemScopeRows(),
+  ]);
+  const managingPositionsBySeq = managingPositionsByEquipmentSeq(leafSeqs, nodes, scopes);
   const statsBySeq = new Map(
     repairStats.map((item) => [
       item.deviceSeq,
@@ -134,33 +147,24 @@ async function getDeviceLikeRecords() {
     records: leafNodes.map((node) => {
       const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
       const parent = parentSeq ? index.bySeq.get(parentSeq) ?? null : null;
-      return toDeviceRecordWithStats(node, parent, statsBySeq.get(node.seq));
+      return toDeviceRecordWithStats(
+        node,
+        parent,
+        statsBySeq.get(node.seq),
+        managingPositionsBySeq.get(node.seq) ?? []
+      );
     }),
   };
 }
 
 async function getDeviceCountsByPosition(
-  devices: DeviceListRecord[],
-  index: ReturnType<typeof buildEquipmentTreeIndex>
+  devices: DeviceListRecord[]
 ) {
-  const scopes = await loadPositionSystemScopeRows();
-  const editPosBySeq = new Map<string, string[]>();
-  for (const scope of scopes) {
-    if (scope.access !== "edit") continue;
-    const positions = editPosBySeq.get(scope.systemSeq) ?? [];
-    positions.push(scope.position);
-    editPosBySeq.set(scope.systemSeq, positions);
-  }
-
   const counts = new Map<string, number>();
   for (const device of devices) {
-    const managing = new Set<string>();
-    let current: string | null | undefined = device.code;
-    while (current) {
-      for (const position of editPosBySeq.get(current) ?? []) managing.add(position);
-      current = index.parentOf.get(current) ?? null;
+    for (const position of device.managingPositions) {
+      counts.set(position, (counts.get(position) ?? 0) + 1);
     }
-    for (const position of managing) counts.set(position, (counts.get(position) ?? 0) + 1);
   }
 
   return Array.from(counts.entries())
@@ -224,7 +228,7 @@ export async function GET(req: NextRequest) {
           totalSystemDevices,
           systems,
           rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
-          byPosition: await getDeviceCountsByPosition(devices, visibleIndex),
+          byPosition: await getDeviceCountsByPosition(devices),
           source: "equipment-node",
         },
       };
@@ -237,7 +241,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["create", "manage", "full"], "Không đủ quyền thêm thiết bị");
+    await requirePermissionLevel(user, "device-manage", ["personal", "manage", "full"], "Không đủ quyền thêm thiết bị");
     const body = await req.json();
     const rawSeq = String(body.code ?? body.seq ?? "").trim();
     const name = String(body.name ?? "").trim();

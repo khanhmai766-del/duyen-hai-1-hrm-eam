@@ -29,7 +29,7 @@ export function ReplacementDrawer({
   onClose: () => void;
 }) {
   const rbac = useRbacAccess();
-  const canManage = rbac.can("replacement-manage", ["create", "manage", "full"]);
+  const canManage = rbac.can("replacement-manage", ["manage", "full"]);
   const { data, isLoading } = useReplacements(material ? { materialId: material.id } : {});
   // Điểm theo dõi là bản ghi RIÊNG (tạo từ nút "Thêm điểm"); xoá ở đây chỉ xoá điểm
   // theo dõi này — dòng khai báo thiết bị trong Danh mục vật tư là bản ghi khác, vẫn còn.

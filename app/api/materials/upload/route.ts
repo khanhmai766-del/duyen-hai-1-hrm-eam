@@ -20,7 +20,7 @@ const ALLOWED: Record<string, string> = {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền tải tệp vật tư");
+    await requirePermissionLevel(user, "material-manage", ["personal", "manage", "full"], "Không đủ quyền tải tệp vật tư");
 
     const form = await req.formData();
     const file = form.get("file");

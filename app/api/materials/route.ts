@@ -8,7 +8,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
+import { assignedPermissionLevel } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -215,7 +215,9 @@ async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const canAccessAllMaterials = await hasAssignedManagePermission(user, "material-manage");
+    const materialPermission = await assignedPermissionLevel(user, "material-manage");
+    if (materialPermission === "none") return fail("Không đủ quyền xem Danh mục Vận Hành 1", 403);
+    const canAccessAllMaterials = materialPermission === "manage" || materialPermission === "full";
     // ?machine=S1|S2|COMMON: lọc theo tổ máy ngay trong query (tab Danh mục vật tư).
     // ?include=usage: kèm lịch sử tiêu hao theo thiết bị (chỉ trang Reports cần).
     const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
@@ -260,20 +262,9 @@ export async function GET(req: NextRequest) {
       ...mapMaterial(material, documents.get(material.id), parentNameBySeq),
       machines: machinesByCode.get(material.code) ?? [material.machine],
     }));
-    // Khi KHÔNG tải usage nhưng vẫn phải xét quyền hiển thị: tra bản nhẹ 2 cột
-    // (materialId, deviceSeq) thay vì chở cả lịch sử tiêu hao về client.
-    const usageMap = new Map<string, string[]>();
-    if (!includeUsage && access?.hasExplicitScopes && materials.length) {
-      const usageRows = await prisma.equipmentMaterial.findMany({
-        where: { materialId: { in: materials.map((material) => material.id) } },
-        select: { materialId: true, deviceSeq: true },
-      });
-      for (const row of usageRows) {
-        const list = usageMap.get(row.materialId);
-        if (list) list.push(row.deviceSeq);
-        else usageMap.set(row.materialId, [row.deviceSeq]);
-      }
-    }
+    // Quyền Xem vẫn được tra cứu toàn bộ danh mục vật tư. Phạm vi cương vị chỉ
+    // giới hạn các quan hệ thiết bị/điểm thay thế, không được làm mất cả dòng vật tư
+    // (đặc biệt với cương vị chung như "Kỹ thuật viên" không có nhánh riêng).
     const filtered = access?.hasExplicitScopes
       ? data
           .map((material) => {
@@ -285,11 +276,6 @@ export async function GET(req: NextRequest) {
             });
             return { ...material, deviceMaterials, replacements };
           })
-          .filter((material) => {
-            if ((material.deviceMaterials ?? []).length || (material.replacements ?? []).length) return true;
-            if ((usageMap.get(material.id) ?? []).some((seq) => access.canViewSeq(seq))) return true;
-            return material.system ? access.visibleSystemNames.has(normalizeText(material.system)) : false;
-          })
       : data;
     return ok(filtered, { total: filtered.length });
   });
@@ -298,7 +284,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền thêm vật tư");
+    await requirePermissionLevel(user, "material-manage", ["personal", "manage", "full"], "Không đủ quyền thêm vật tư");
     const body = await req.json();
     const erpCodes = parseErpCodes(body);
     const primaryCode = erpCodes[0];
@@ -359,7 +345,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền cập nhật vật tư");
+    await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
     const erpCodes = body.erpCodes !== undefined || body.code !== undefined ? parseErpCodes(body) : undefined;
@@ -500,7 +486,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["create", "manage", "full"], "Không đủ quyền xoá vật tư");
+    await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền xoá vật tư");
 
     // Gom danh sách id cần xoá từ query (đơn) hoặc body (hàng loạt).
     const single = req.nextUrl.searchParams.get("id");

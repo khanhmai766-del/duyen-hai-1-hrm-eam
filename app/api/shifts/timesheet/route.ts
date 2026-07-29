@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, fail, ok, requireUser, handle } from "@/lib/api";
-import { assignedPermissionLevel, hasAssignedApprovePermission } from "@/lib/rbac-permissions";
+import { assignedPermissionLevel, hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { normalizeHcPeriod } from "@/lib/hc-period";
 
 export const dynamic = "force-dynamic";
@@ -88,11 +88,11 @@ function isDateInRetention(date: string) {
 }
 
 async function canEditTimesheet(user: { id?: string; role?: string }) {
-  return hasAssignedApprovePermission(user, EDIT_TIMESHEET_PERMISSION_ID);
+  return hasAssignedManagePermission(user, EDIT_TIMESHEET_PERMISSION_ID);
 }
 
 async function canEditOwnTimesheet(user: { id?: string; role?: string }) {
-  return (await assignedPermissionLevel(user, EDIT_TIMESHEET_PERMISSION_ID)) === "own";
+  return (await assignedPermissionLevel(user, EDIT_TIMESHEET_PERMISSION_ID)) === "personal";
 }
 
 async function ensureTimesheetOverrideTable() {

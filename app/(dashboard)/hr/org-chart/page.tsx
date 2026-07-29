@@ -156,7 +156,7 @@ export default function OrgChartPage() {
   const recall = useRecallCheckIn();
   const rbac = useRbacAccess();
 
-  const canApprove = rbac.can("shift-operation-approve", ["approve", "manage", "full"]);
+  const canApprove = rbac.can("shift-operation-approve", ["manage", "full"]);
   const currentMonthBounds = React.useMemo(() => {
     const now = new Date();
     const year = now.getFullYear();

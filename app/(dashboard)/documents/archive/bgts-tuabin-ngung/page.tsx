@@ -114,7 +114,7 @@ export default function BgtsTuabinNgungPage() {
   const saveMutation = useSaveBgtsTuabinNgung();
   const resetMutation = useResetBgtsTuabinNgungSignature();
   const rbac = useRbacAccess();
-  const canSave = rbac.can("archive-grid-separation", ["create", "manage", "full"]);
+  const canSave = rbac.can("archive-grid-separation", ["manage", "full"]);
   const isAdmin = session?.user?.role === "ADMIN";
 
   React.useEffect(() => {

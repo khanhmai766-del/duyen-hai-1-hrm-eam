@@ -1,7 +1,9 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import type { Material } from "@/types";
 
 export interface MaterialReplacementPoint {
@@ -48,12 +50,19 @@ export interface MaterialWithDevices extends Material {
  * Mutation invalidate theo prefix ["materials"] nên mọi biến thể đều được làm mới.
  */
 export function useMaterials(params: { machine?: string; includeUsage?: boolean } = {}) {
+  const { data: session, status } = useSession();
+  const rbac = useRbacAccess();
+  const permissionLevel = rbac.permissionLevel("material-manage");
   const qs = new URLSearchParams();
   if (params.machine) qs.set("machine", params.machine);
   if (params.includeUsage) qs.set("include", "usage");
   return useQuery({
-    queryKey: ["materials", params],
+    // Danh sách trả về phụ thuộc tài khoản, cấp RBAC và phạm vi cương vị.
+    // Không dùng chung cache giữa hai phiên đăng nhập trên cùng trình duyệt.
+    queryKey: ["materials", session?.user?.id, permissionLevel, params],
     queryFn: () => apiGet<MaterialWithDevices[]>(`/api/materials?${qs.toString()}`),
+    enabled: status === "authenticated" && !rbac.isLoading && permissionLevel !== "none",
+    refetchOnMount: "always",
   });
 }
 

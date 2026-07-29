@@ -78,7 +78,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "forum-write", ["create", "manage", "full"], "Không đủ quyền phản hồi forum");
+    await requirePermissionLevel(user, "forum-write", ["personal", "manage", "full"], "Không đủ quyền phản hồi forum");
     await ensureForumLifecycleColumns();
     await ensureForumReplyThreadColumn();
     const body = await req.json();

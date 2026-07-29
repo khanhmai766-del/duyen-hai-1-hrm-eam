@@ -170,7 +170,7 @@ export async function PUT(req: NextRequest) {
       if (policyError) return fail(policyError);
       const canManageUsers = await hasPermissionLevel(user, "user-manage", ["manage", "full"]);
       if (!canManageUsers) {
-        await requirePermissionLevel(user, "user-reset-viewer-password", ["approve", "manage", "full"], "Không đủ quyền reset mật khẩu Người xem");
+        await requirePermissionLevel(user, "user-reset-viewer-password", ["manage", "full"], "Không đủ quyền reset mật khẩu Người xem");
         if (before.role !== "VIEWER") return fail("Chỉ được reset mật khẩu tài khoản Người xem", 403);
       }
       const updated = await prisma.user.update({
@@ -259,7 +259,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "user-manage", ["full"], "Không đủ quyền xoá người dùng");
+    await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền xoá người dùng");
     const id = req.nextUrl.searchParams.get("id");
     const permanent = req.nextUrl.searchParams.get("permanent") === "true";
     if (!id) return fail("Thiếu id");
