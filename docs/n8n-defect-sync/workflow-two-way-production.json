@@ -1,0 +1,247 @@
+{
+  "name": "Ghi ngược khiếm khuyết DH1 - Production",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Chạy thử thủ công",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-980, 20]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 1 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Lịch mỗi phút (để tắt)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-980, 180],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://duyenhai1.vn/api/integrations/n8n/defects/outbox/claim?limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "claim",
+      "name": "Claim 1 sự kiện production",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-740, 80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.data?.[0];\nif (!event) return [];\nconst requestType = String(event.payload?.requestType ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();\nconst isElectric = requestType.includes('dien') || requestType.includes('i&c');\nreturn [{ json: {\n  event,\n  spreadsheetId: isElectric\n    ? '1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ'\n    : '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA',\n  sheetName: 'DH1',\n  copyOnly: false,\n} }];"
+      },
+      "id": "route-copy",
+      "name": "Chọn đúng Sheet chính thức",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-500, 80]
+    },
+    {
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $json.spreadsheetId }}/values/{{ encodeURIComponent($json.sheetName + '!A6:O') }}?majorDimension=ROWS",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "id": "read-copy",
+      "name": "Đọc A6:O Sheet chính thức",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-260, 80],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://duyenhai1.vn/api/integrations/n8n/defects/outbox/{{ $('Chọn đúng Sheet chính thức').item.json.event.id }}/plan",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ rows: $json.values ?? [] }) }}",
+        "options": {}
+      },
+      "id": "plan",
+      "name": "Lập kế hoạch ghi an toàn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-20, 80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Chọn đúng Sheet chính thức').item.json.spreadsheetId }}/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ valueInputOption: 'USER_ENTERED', data: $('Lập kế hoạch ghi an toàn').item.json.data.writes.map(write => ({ range: $('Chọn đúng Sheet chính thức').item.json.sheetName + '!' + write.range, majorDimension: 'ROWS', values: write.values })) }) }}",
+        "options": {}
+      },
+      "id": "write-values",
+      "name": "Ghi giá trị vào Sheet chính thức",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [700, 80],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "has-copy-format",
+              "leftValue": "={{ Boolean($('Lập kế hoạch ghi an toàn').item.json.data.copyFormat) }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-format",
+      "name": "Có hàng nhắc cần copy định dạng?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [220, 80]
+    },
+    {
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Chọn đúng Sheet chính thức').item.json.spreadsheetId }}?fields=sheets(properties(sheetId,title,gridProperties))",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {}
+      },
+      "id": "read-sheet-metadata",
+      "name": "Lấy metadata tab DH1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [420, -80],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sheetName = $('Chọn đúng Sheet chính thức').item.json.sheetName;\nconst sheet = ($json.sheets ?? []).find(item => item?.properties?.title === sheetName);\nif (!sheet) throw new Error(`Không tìm thấy tab ${sheetName} trong Sheet chính thức`);\nconst c = $('Lập kế hoạch ghi an toàn').item.json.data.copyFormat;\nconst rows = Number(sheet.properties?.gridProperties?.rowCount ?? 0);\nconst columns = Number(sheet.properties?.gridProperties?.columnCount ?? 0);\nif (rows < Math.max(c.sourceRow, c.targetRow) || columns < 26) {\n  throw new Error(`Tab ${sheetName} không đủ lưới để copy A:Z tới dòng ${c.targetRow}`);\n}\nreturn [{ json: { sheetId: sheet.properties.sheetId } }];"
+      },
+      "id": "select-dh1-sheet-id",
+      "name": "Chọn sheetId tab DH1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $('Chọn đúng Sheet chính thức').item.json.spreadsheetId }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const c = $('Lập kế hoạch ghi an toàn').item.json.data.copyFormat; const sheetId = $('Chọn sheetId tab DH1').item.json.sheetId; return JSON.stringify({ requests: [{ copyPaste: { source: { sheetId, startRowIndex: c.sourceRow - 1, endRowIndex: c.sourceRow, startColumnIndex: 0, endColumnIndex: 26 }, destination: { sheetId, startRowIndex: c.targetRow - 1, endRowIndex: c.targetRow, startColumnIndex: 0, endColumnIndex: 26 }, pasteType: 'PASTE_NORMAL' } }] }); })() }}",
+        "options": {}
+      },
+      "id": "copy-format",
+      "name": "Copy hàng mẫu A:Z",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [820, -80],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://duyenhai1.vn/api/integrations/n8n/defects/outbox/{{ $('Chọn đúng Sheet chính thức').item.json.event.id }}/ack",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "ack",
+      "name": "ACK sự kiện",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [940, 80],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "aqtXWwXwpZ58pFi7",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chạy thử thủ công": { "main": [[{ "node": "Claim 1 sự kiện production", "type": "main", "index": 0 }]] },
+    "Lịch mỗi phút (để tắt)": { "main": [[{ "node": "Claim 1 sự kiện production", "type": "main", "index": 0 }]] },
+    "Claim 1 sự kiện production": { "main": [[{ "node": "Chọn đúng Sheet chính thức", "type": "main", "index": 0 }]] },
+    "Chọn đúng Sheet chính thức": { "main": [[{ "node": "Đọc A6:O Sheet chính thức", "type": "main", "index": 0 }]] },
+    "Đọc A6:O Sheet chính thức": { "main": [[{ "node": "Lập kế hoạch ghi an toàn", "type": "main", "index": 0 }]] },
+    "Lập kế hoạch ghi an toàn": { "main": [[{ "node": "Có hàng nhắc cần copy định dạng?", "type": "main", "index": 0 }]] },
+    "Ghi giá trị vào Sheet chính thức": { "main": [[{ "node": "ACK sự kiện", "type": "main", "index": 0 }]] },
+    "Có hàng nhắc cần copy định dạng?": {
+      "main": [
+        [{ "node": "Lấy metadata tab DH1", "type": "main", "index": 0 }],
+        [{ "node": "Ghi giá trị vào Sheet chính thức", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lấy metadata tab DH1": { "main": [[{ "node": "Chọn sheetId tab DH1", "type": "main", "index": 0 }]] },
+    "Chọn sheetId tab DH1": { "main": [[{ "node": "Copy hàng mẫu A:Z", "type": "main", "index": 0 }]] },
+    "Copy hàng mẫu A:Z": { "main": [[{ "node": "Ghi giá trị vào Sheet chính thức", "type": "main", "index": 0 }]] },
+    "ACK sự kiện": { "main": [[{ "node": "Claim 1 sự kiện production", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "active": false,
+  "versionId": "two-way-production-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "copyOnly": true,
+    "mechanicalNote": "Hai Spreadsheet ID trong workflow là hai Sheet Cơ và Điện chính thức; chỉ bật lịch sau khi chạy thử thủ công thành công."
+  },
+  "tags": []
+}

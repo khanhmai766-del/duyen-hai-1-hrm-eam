@@ -55,9 +55,13 @@ Thêm vào `.env` của website:
 
 ```env
 N8N_DEFECT_SYNC_TOKEN="token-rieng-cua-n8n"
+N8N_DEFECT_TWO_WAY_SYNC_TOKEN="token-rieng-cho-chieu-ghi"
 ```
 
-Token này chỉ dùng cho kết nối hai chiều giữa website và n8n.
+Hai token chỉ dùng cho kết nối giữa website và n8n. Credential đọc Sheet dùng
+`N8N_DEFECT_SYNC_TOKEN`; credential claim/plan/ack hàng đợi ghi ngược dùng
+`N8N_DEFECT_TWO_WAY_SYNC_TOKEN`. Có thể đặt cùng giá trị trong lần chuyển tiếp
+đầu tiên, nhưng production nên tách riêng để dễ xoay khóa.
 
 Áp dụng schema:
 
@@ -70,6 +74,33 @@ npx prisma db execute \
   --schema prisma/schema.prisma
 npx prisma db execute \
   --file prisma/manual/optimize-defect-page-queries.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-common-sub-unit.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-reminder-log.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-reminder-shift-leader.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-repair-source-fields.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-request-sequence.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/migrate-defect-request-sequence-by-type.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-sync-outbox.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-two-way-sync-setting.sql \
+  --schema prisma/schema.prisma
+npx prisma db execute \
+  --file prisma/manual/add-defect-website-created.sql \
   --schema prisma/schema.prisma
 npx prisma generate
 ```
@@ -148,6 +179,19 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
 
 ## Workflow n8n
 
+Import hai workflow production:
+
+- `workflow-production-source-aware.json`: đọc hai Sheet chính thức vào website,
+  bao gồm đầy đủ dữ liệu Vận hành và 10 trường Sửa chữa ở cột 17–26.
+- `workflow-two-way-production.json`: claim hàng đợi từ website và ghi thay đổi
+  vào đúng Sheet Cơ hoặc Điện.
+
+Sau khi import, chọn lại credential `Header Auth account` và
+`Google Sheets account` cho tất cả node có cảnh báo. Chạy thủ công từng workflow
+thành công trước khi Publish và bật Schedule Trigger. Cờ đồng bộ hai chiều trên
+website mặc định tắt; chỉ bật sau khi đã kiểm tra đúng Sheet, đúng tab `DH1` và
+đúng tài khoản Google.
+
 1. Schedule Trigger kiểm tra định kỳ.
 2. Đọc `modifiedTime` của hai file bằng Google Drive API.
 3. Dừng ngay nếu cả hai mốc không đổi.
@@ -160,6 +204,26 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
 9. Nút `Đồng bộ bằng n8n` trên website gọi Production Webhook
    `/webhook/defects-manual-sync-dh1` qua backend, dùng Header Auth và yêu cầu
    đồng bộ cả hai nguồn. Token không được gửi xuống trình duyệt.
+
+### Chiều website → Google Sheet
+
+Workflow ghi ngược gọi lần lượt `claim → plan → Google Sheets batchUpdate →
+ack`. Không tự xây số dòng trong n8n: API `plan` chịu trách nhiệm tìm hàng gốc,
+chọn dòng trống và tạo danh sách ô cần ghi để tránh lệch dòng khi người dùng
+chèn/xóa trên Sheet.
+
+- Phiếu mới ghi vào hàng trống có sẵn hoặc hàng cuối.
+- Sửa phiếu cập nhật đúng hàng có `STT/năm`.
+- Nhắc lại không chèn hàng; ô Nhắc lại của hàng gốc có dạng:
+
+```text
+Số lần nhắc lại: 2
+Nhắc lại lần 1 ngày 28/07/2026
+Nhắc lại lần 2 ngày 29/07/2026
+```
+
+Nếu workflow lỗi trước `ack`, sự kiện vẫn được retry; không ACK thủ công khi
+chưa xác nhận Google Sheets đã ghi thành công.
 
 ### Chốt lịch sử sau 14 ngày
 
