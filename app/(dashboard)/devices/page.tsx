@@ -285,6 +285,7 @@ function QrCardsSection({ canCreate, canDelete, q, onQr }: { canCreate: boolean;
                 value={picked?.seq ?? ""}
                 onChange={(node) => setPicked(node ? { seq: node.seq, name: node.name } : null)}
                 includeLeaves
+                leafOnly
                 placeholder="Chọn thiết bị (thư mục con cuối cùng) từ cây..."
               />
               <p className="mt-1.5 text-xs text-muted-foreground">

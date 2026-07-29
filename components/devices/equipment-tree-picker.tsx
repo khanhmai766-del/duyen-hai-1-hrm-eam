@@ -231,9 +231,10 @@ export function EquipmentTreePicker({
       searchResults.filter((node) => {
         if (!accessFor(node.seq).visible) return false;
         if (rootSeq && !seqIsSameOrDescendant(node.seq, rootSeq)) return false;
+        if (leafOnly && node.hasChildren) return false;
         return includeLeaves || node.hasChildren;
       }),
-    [accessFor, includeLeaves, rootSeq, searchResults]
+    [accessFor, includeLeaves, leafOnly, rootSeq, searchResults]
   );
 
   const selectedName = selectedQuery.data?.data.name;
@@ -257,10 +258,10 @@ export function EquipmentTreePicker({
         type="button"
         onClick={() => {
           if (node.hasChildren && !searchMode) {
-            if (selectable) {
-              if (keepOpenOnSelect) onChange(node);
-              else pick(node);
-            }
+            // Node cha luôn dùng để điều hướng lazy-load. Nếu ô chọn cho phép
+            // chọn thư mục thì cập nhật giá trị nhưng vẫn giữ popup mở để người
+            // dùng có thể tiếp tục đi xuống thiết bị lá.
+            if (selectable && !leafOnly) onChange(node);
             toggle(node);
             return;
           }
