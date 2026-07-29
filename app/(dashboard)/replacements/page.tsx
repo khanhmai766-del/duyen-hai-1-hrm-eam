@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange } from "lucide-react";
+import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange, Activity } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -15,6 +15,10 @@ import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { ReplacementCalendar, dayKey } from "@/components/materials/replacement-calendar";
+import {
+  ReplacementStatusDashboard,
+  type ReplacementStatusPoint,
+} from "@/components/materials/replacement-status-dashboard";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
 import { Card } from "@/components/ui/card";
@@ -46,7 +50,7 @@ import {
 import { formatDate, formatDateInput, cn, initials } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 
-type TabKey = "schedule" | "history";
+type TabKey = "schedule" | "status" | "history";
 
 // Bộ lọc tổ máy: theo tab Danh mục vật tư mà vật tư thuộc về (Material.machine).
 const MACHINE_FILTERS = [
@@ -67,6 +71,133 @@ const EXPORT_HORIZONS = [
   { months: 6, label: "6 tháng" },
   { months: 12, label: "1 năm" },
 ] as const;
+
+function demoDate(offsetDays: number) {
+  const value = new Date();
+  value.setHours(8, 0, 0, 0);
+  value.setDate(value.getDate() + offsetDays);
+  return value.toISOString();
+}
+
+/** Dữ liệu trình diễn chỉ dùng ở localhost, không ghi vào PostgreSQL. */
+function buildLocalStatusDemo(): ReplacementStatusPoint[] {
+  return [
+    {
+      id: "demo-overdue-aph",
+      materialName: "Dầu Total Preslia 46",
+      materialCode: "1.31.53.020.VIE.00.000",
+      unit: "Lít",
+      machine: "S1",
+      category: "Dầu bôi trơn",
+      deviceCode: "DH1.S1.1.1.5.2.1",
+      deviceName: "Bồn dầu IDF A",
+      system: "Hệ thống khói gió",
+      managingPosition: "Lò phó",
+      nextDueAt: demoDate(-19),
+      lastReplacedAt: demoDate(-384),
+      intervalMonths: 12,
+      intervalNote: null,
+      quantity: 18,
+      deviceCount: 1,
+      isDemo: true,
+    },
+    {
+      id: "demo-overdue-mill",
+      materialName: "Dầu Shell Omala S2 GX220",
+      materialCode: "1.31.73.125.HKG.00.000",
+      unit: "Lít",
+      machine: "S1",
+      category: "Dầu bôi trơn",
+      deviceCode: "DH1.S1.1.12.1.2.1.11",
+      deviceName: "Động cơ phụ máy nghiền",
+      system: "Hệ thống nghiền than",
+      managingPosition: "Máy nghiền",
+      nextDueAt: demoDate(-4),
+      lastReplacedAt: demoDate(-430),
+      intervalMonths: 14,
+      intervalNote: "Kiểm tra rung trước khi thay",
+      quantity: 12,
+      deviceCount: 1,
+      isDemo: true,
+    },
+    {
+      id: "demo-soon-pump",
+      materialName: "Dầu EA Ultra Plus 301193",
+      materialCode: "1.31.03.119.IND.00.000",
+      unit: "Lít",
+      machine: "S1",
+      category: "Dầu bôi trơn",
+      deviceCode: "DH1.S1.2.3.4.1.6",
+      deviceName: "Bơm dầu bôi trơn HP-LP",
+      system: "Trạm dầu bôi trơn HP-LP",
+      managingPosition: "Máy nghiền",
+      nextDueAt: demoDate(8),
+      lastReplacedAt: demoDate(-357),
+      intervalMonths: 12,
+      intervalNote: null,
+      quantity: 10,
+      deviceCount: 1,
+      isDemo: true,
+    },
+    {
+      id: "demo-soon-fgd",
+      materialName: "Dầu Shell Tellus S2 MX46",
+      materialCode: "1.31.73.061.VIE.00.000",
+      unit: "Lít",
+      machine: "S1",
+      category: "Dầu bôi trơn",
+      deviceCode: "DH1.S1.3.2.2.8",
+      deviceName: "Bơm tuần hoàn FGD",
+      system: "Hệ thống khử SOx - FGD",
+      managingPosition: "FGD",
+      nextDueAt: demoDate(24),
+      lastReplacedAt: demoDate(-341),
+      intervalMonths: 12,
+      intervalNote: null,
+      quantity: 25,
+      deviceCount: 2,
+      isDemo: true,
+    },
+    {
+      id: "demo-ok-fan",
+      materialName: "Dầu Sinopec L-CKD 320",
+      materialCode: "1.11.11.004.SIN.00.000",
+      unit: "Lít",
+      machine: "S1",
+      category: "Dầu bôi trơn",
+      deviceCode: "DH1.S1.1.1.2.4",
+      deviceName: "Hộp giảm tốc quạt PAF B",
+      system: "Hệ thống khói gió",
+      managingPosition: "Lò phó",
+      nextDueAt: demoDate(76),
+      lastReplacedAt: demoDate(-289),
+      intervalMonths: 12,
+      intervalNote: null,
+      quantity: 16,
+      deviceCount: 1,
+      isDemo: true,
+    },
+    {
+      id: "demo-ok-esp",
+      materialName: "Dầu Total Carter EP 460",
+      materialCode: "1.31.73.047.SIN.00.000",
+      unit: "Lít",
+      machine: "S1",
+      category: "Dầu bôi trơn",
+      deviceCode: "DH1.S1.1.13.4.2",
+      deviceName: "Hộp giảm tốc búa gõ ESP",
+      system: "Hệ thống ESP",
+      managingPosition: "ESP",
+      nextDueAt: demoDate(148),
+      lastReplacedAt: demoDate(-217),
+      intervalMonths: 12,
+      intervalNote: "Theo dõi màu dầu",
+      quantity: 8,
+      deviceCount: 2,
+      isDemo: true,
+    },
+  ];
+}
 
 /** "YYYY-MM" của một mốc thời gian, dùng để lọc theo tháng/năm. */
 function ym(d: Date | string): string {
@@ -125,6 +256,37 @@ function ReplacementsPageContent() {
     c === categoryFilter ||
     (categoryFilter === "Hóa Chất" && (c === "Vật tư tiêu hao" || c === "Hóa chất"));
   const byCategory = byMachine.filter((p) => matchCategory(p.material.category));
+  const actualStatusPoints: ReplacementStatusPoint[] = byCategory.map((point) => {
+    const device = linkedDeviceOf(point);
+    return {
+      id: point.id,
+      materialName: point.material.name,
+      materialCode: point.material.code,
+      unit: point.material.unit,
+      machine: point.material.machine ?? point.machine,
+      category: point.material.category ?? null,
+      deviceCode: device?.code ?? null,
+      deviceName: device?.name ?? point.location ?? null,
+      system: device?.system ?? point.system ?? null,
+      managingPosition: point.managingPosition,
+      nextDueAt: point.nextDueAt,
+      lastReplacedAt: point.lastReplacedAt,
+      intervalMonths: point.intervalMonths,
+      intervalNote: point.intervalNote,
+      quantity: point.quantity,
+      deviceCount: point.deviceCount,
+    };
+  });
+  const demoSearch = debouncedSearchQ.trim().toLocaleLowerCase("vi");
+  const statusDemoPoints = process.env.NODE_ENV === "development"
+    ? buildLocalStatusDemo().filter((point) => {
+        const matchesMachine = machineFilter === "ALL" || point.machine === machineFilter;
+        const matchesCategory = matchCategory(point.category);
+        const haystack = `${point.materialName} ${point.materialCode} ${point.deviceCode ?? ""} ${point.deviceName ?? ""} ${point.system ?? ""}`.toLocaleLowerCase("vi");
+        return matchesMachine && matchesCategory && (!demoSearch || haystack.includes(demoSearch));
+      })
+    : [];
+  const statusPoints = [...actualStatusPoints, ...statusDemoPoints];
   // Lọc theo tháng/năm: chỉ các điểm có NGÀY ĐẾN HẠN trong tháng đang chọn.
   const byMonth = byCategory.filter((p) => ym(p.nextDueAt) === month);
   const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
@@ -297,8 +459,19 @@ function ReplacementsPageContent() {
       {/* Tabs + bộ lọc tìm kiếm cùng hàng (bên phải) */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
         <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
+        <TabBtn
+          active={tab === "status"}
+          onClick={() => {
+            setTab("status");
+            setMachineFilter("ALL");
+            setCategoryFilter("ALL");
+          }}
+          icon={Activity}
+          label="Trạng thái theo dõi"
+          count={statusPoints.length}
+        />
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
-        {tab === "schedule" ? (
+        {tab !== "history" ? (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
             <Select value={machineFilter} onValueChange={setMachineFilter}>
               <SelectTrigger className="sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
@@ -472,6 +645,8 @@ function ReplacementsPageContent() {
             </div>
           )}
         </div>
+      ) : tab === "status" ? (
+        <ReplacementStatusDashboard points={statusPoints} isLoading={isLoading} />
       ) : (
         <div className="space-y-6">
           {history.isLoading ? (
