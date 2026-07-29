@@ -19,7 +19,9 @@
     "admin:reset": "tsx scripts/reset-admin-password.ts",
     "sync:replacement-s2": "tsx scripts/sync-s2-replacement-details.ts",
     "migrate:files-to-s3": "tsx scripts/migrate-files-to-s3.ts",
-    "audit:s3:compact": "tsx scripts/compact-audit-s3.ts"
+    "audit:s3:compact": "tsx scripts/compact-audit-s3.ts",
+    "perf:audit": "node scripts/perf-audit.mjs",
+    "lint:dead": "knip"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -79,6 +81,8 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.16",
     "ffmpeg-static": "^5.3.0",
+    "knip": "^6.29.0",
+    "playwright-core": "^1.62.0",
     "postcss": "^8.4.47",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.14",

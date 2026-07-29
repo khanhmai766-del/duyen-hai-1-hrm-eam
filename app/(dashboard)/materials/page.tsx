@@ -1007,10 +1007,10 @@ function MaterialsPageContent() {
                   </div>
                 </div>
                 {!erpMaterialsQuery.isLoading && erpGroupOptions.length === 0 && (
-                  <p className="mt-1.5 text-xs text-red-600">Chưa có nhóm vật tư ERP thuộc loại "{erpCategoryFilter}". Vui lòng gom nhóm ERP trước.</p>
+                  <p className="mt-1.5 text-xs text-red-600">Chưa có nhóm vật tư ERP thuộc loại &quot;{erpCategoryFilter}&quot;. Vui lòng gom nhóm ERP trước.</p>
                 )}
                 {!erpMaterialsQuery.isLoading && erpGroupOptions.length > 0 && filteredErpGroups.length === 0 && (
-                  <p className="mt-1.5 text-xs text-muted-foreground">Không có nhóm vật tư nào khớp từ khoá trong loại "{erpCategoryFilter}".</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground">Không có nhóm vật tư nào khớp từ khoá trong loại &quot;{erpCategoryFilter}&quot;.</p>
                 )}
                 {selectedErpGroups.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">

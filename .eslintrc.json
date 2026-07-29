@@ -1,0 +1,4 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": [".next/", "node_modules/", "prisma/generated/", "scripts/perf-audit.mjs"]
+}

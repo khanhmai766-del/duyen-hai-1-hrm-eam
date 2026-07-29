@@ -1067,7 +1067,7 @@ export default function RolesPage() {
               />
             </div>
             <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-muted-foreground">
-              Sau khi thêm, phân quyền mới sẽ xuất hiện thành một cột trong ma trận bên dưới. Bật "Chỉnh quyền" để thiết lập chi tiết từng chức năng.
+              Sau khi thêm, phân quyền mới sẽ xuất hiện thành một cột trong ma trận bên dưới. Bật &quot;Chỉnh quyền&quot; để thiết lập chi tiết từng chức năng.
             </div>
           </div>
           <DialogFooter>

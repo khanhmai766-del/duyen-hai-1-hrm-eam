@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "next": true,
+  "entry": [
+    "app/**/{page,layout,route,loading,error,not-found,template,default}.{ts,tsx}",
+    "middleware.ts",
+    "prisma/seed.ts",
+    "scripts/**/*.{ts,mjs}"
+  ],
+  "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "hooks/**/*.ts", "lib/**/*.ts", "types/**/*.ts"],
+  "ignore": ["components/ui/**"],
+  "ignoreDependencies": ["playwright-core"],
+  "ignoreBinaries": ["pm2"]
+}

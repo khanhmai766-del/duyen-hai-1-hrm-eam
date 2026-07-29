@@ -775,11 +775,11 @@ export default function AdminUsersPage() {
           <DialogHeader>
             <DialogTitle>Xoá vĩnh viễn người dùng?</DialogTitle>
             <DialogDescription>
-              Thao tác này xoá hoàn toàn tài khoản "{permanentDelTarget?.name}" ({permanentDelTarget?.employeeId}) và các dữ liệu liên quan khỏi hệ thống. Không thể hoàn tác.
+              Thao tác này xoá hoàn toàn tài khoản &quot;{permanentDelTarget?.name}&quot; ({permanentDelTarget?.employeeId}) và các dữ liệu liên quan khỏi hệ thống. Không thể hoàn tác.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="permanent-delete-confirm">Nhập "xác nhận xóa" để tiếp tục</Label>
+            <Label htmlFor="permanent-delete-confirm">Nhập &quot;xác nhận xóa&quot; để tiếp tục</Label>
             <Input
               id="permanent-delete-confirm"
               value={permanentConfirm}
