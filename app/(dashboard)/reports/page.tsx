@@ -39,35 +39,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useDefectHistory } from "@/hooks/useDefectHistory";
-import { useDefects } from "@/hooks/useDefects";
-import { useDeviceSummaries } from "@/hooks/useDevices";
-import { useOilGroupingSummary } from "@/hooks/useOilGrouping";
-import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
-import { useReplacements } from "@/hooks/useReplacements";
-import { usePositions } from "@/hooks/useUsers";
-import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
-import { selectableManagingPositionOptions } from "@/lib/positions";
-import { normalizePositionScopeKey, normalizeScopeAccess, positionScopeOptions, scopesForPosition } from "@/lib/position-system-scopes";
-import { cn, dateRange, formatDate } from "@/lib/utils";
+import { useEquipmentDashboard } from "@/hooks/useEquipmentDashboard";
+import { DEFECT_REQUEST_TYPES } from "@/lib/constants";
+import { cn, formatDate } from "@/lib/utils";
+import type { EquipmentDashboardSignalRow } from "@/types/equipment-dashboard";
 
 const CHART_COLORS = ["#1E3A5F", "#0EA5E9", "#14B8A6", "#F59E0B", "#EF4444", "#64748B"];
 const DUYEN_HAI_3D_MODEL_URL =
   "https://sketchfab.com/models/bdc122add7754c989a976fdd5b01012d/embed";
 const DUYEN_HAI_VIRTUAL_TOUR_URL = "https://nddh.apptgs.vn/";
-
-type DeviceSignalRow = {
-  code: string;
-  name: string;
-  system: string;
-  managingPosition: string;
-  repairCount: number;
-  openDefectCount: number;
-  replacementWarn: number;
-  signalTotal: number;
-  riskScore: number;
-  recommendation: string;
-};
 
 export default function ReportsPage() {
   return (
@@ -84,66 +64,14 @@ function ReportsPageContent() {
   const [trendRequestFilter, setTrendRequestFilter] = React.useState("ALL");
   const [repairYearFilter, setRepairYearFilter] = React.useState(() => String(new Date().getFullYear()));
 
-  const dateRange = React.useMemo(() => makeDateRange(from, to), [from, to]);
-  const devicesQuery = useDeviceSummaries();
-  const defectsQuery = useDefects();
-  const historyQuery = useDefectHistory({ from: from || undefined, to: to || undefined });
-  const replacementsQuery = useReplacements({});
-  const oilGroupingSummaryQuery = useOilGroupingSummary();
-  const scopesQuery = usePositionSystemScopes();
-  const allPositions = usePositions();
-
-  const devices = devicesQuery.data?.data ?? [];
-  const defects = defectsQuery.data?.data ?? [];
-  const defectHistory = historyQuery.data?.data ?? [];
-  const replacements = replacementsQuery.data?.data ?? [];
-  const oilGroupingSummary = oilGroupingSummaryQuery.data?.data;
-  const positionScopes = scopesQuery.data?.data ?? [];
-  const dashboardPositionOptions = React.useMemo(
-    () => positionScopeOptions(selectableManagingPositionOptions(allPositions)),
-    [allPositions]
-  );
-  const allowedDeviceCodesByPosition = React.useMemo(() => {
-    const result = new Map<string, Set<string>>();
-    for (const position of dashboardPositionOptions) {
-      const allowed = new Set<string>();
-      const explicitScopes = scopesForPosition(positionScopes, position);
-      const normalizedPosition = normalizePositionScopeKey(position);
-
-      if (!explicitScopes.length) {
-        for (const device of devices) {
-          if (!device.managingPosition || normalizePositionScopeKey(device.managingPosition) === normalizedPosition) {
-            allowed.add(device.code);
-          }
-        }
-        result.set(position, allowed);
-        continue;
-      }
-
-      const accessBySeq = new Map(explicitScopes.map((scope) => [scope.systemSeq, normalizeScopeAccess(scope.access)] as const));
-      for (const device of devices) {
-        let current: string | null | undefined = device.code;
-        while (current) {
-          if (accessBySeq.has(current)) {
-            if (accessBySeq.get(current) !== "none") allowed.add(device.code);
-            break;
-          }
-          const dot = current.lastIndexOf(".");
-          current = dot > 0 ? current.slice(0, dot) : null;
-        }
-      }
-      result.set(position, allowed);
-    }
-    return result;
-  }, [dashboardPositionOptions, devices, positionScopes]);
-  const totalSystemDevices = Number(devicesQuery.data?.meta?.totalSystemDevices ?? devices.length);
-  const isLoading =
-    devicesQuery.isLoading ||
-    defectsQuery.isLoading ||
-    historyQuery.isLoading ||
-    replacementsQuery.isLoading ||
-    oilGroupingSummaryQuery.isLoading ||
-    scopesQuery.isLoading;
+  const dashboardQuery = useEquipmentDashboard({
+    from: from || undefined,
+    to: to || undefined,
+  });
+  const dashboardData = dashboardQuery.data?.data;
+  const dashboardPositionOptions = dashboardData?.positions ?? [];
+  const totalSystemDevices = dashboardData?.totalSystemDevices ?? 0;
+  const isLoading = dashboardQuery.isLoading && !dashboardData;
 
   React.useEffect(() => {
     if (systemPositionFilter === "ALL") return;
@@ -151,179 +79,66 @@ function ReportsPageContent() {
   }, [dashboardPositionOptions, systemPositionFilter]);
 
   const dashboard = React.useMemo(() => {
-    const deviceByCode = new Map(devices.map((device) => [device.code, device]));
-    const systems = unique(devices.map((device) => device.system).filter(Boolean) as string[]);
-    const positions = dashboardPositionOptions;
-    const matchesPosition = (device: { code: string; system?: string | null; systemSeq?: string | null; managingPosition?: string | null }) =>
-      systemPositionFilter === "ALL" ||
-      (allowedDeviceCodesByPosition.get(systemPositionFilter)?.has(device.code) ?? false);
-    const systemChartDevices =
-      systemPositionFilter === "ALL"
-        ? devices
-        : devices.filter(matchesPosition);
-    const systemChartDeviceCodes = new Set(systemChartDevices.map((device) => device.code));
-    const systemChartSystems = unique(systemChartDevices.map((device) => device.system).filter(Boolean) as string[]);
-    const visibleDefects = defects.filter((defect) => inDateRange(defect.detectedAt ?? defect.createdAt, dateRange));
-    const openDefects = defects.filter((defect) => defect.status !== "DA_XU_LY");
-    const urgentDefects = openDefects.filter((defect) => defect.severity === "1" || defect.severity === "2");
-
-    const dueGroups = replacements.reduce(
-      (acc, item) => {
-        const status = replacementDueStatus(item.nextDueAt);
-        acc[status] += 1;
-        return acc;
-      },
-      { OVERDUE: 0, DUE_SOON: 0, OK: 0 }
+    const currentYear = dashboardData?.currentYear ?? new Date().getFullYear();
+    const monthlyTrend =
+      dashboardData?.monthlyTrendByRequestType[trendRequestFilter] ??
+      dashboardData?.monthlyTrendByRequestType.ALL ??
+      [];
+    const hasMonthlyTrend = monthlyTrend.some(
+      (month) => month.detected > 0 || month.handled > 0
     );
-
-    const systemRows = systemChartSystems
-      .map((system) => {
-        const deviceCount = systemChartDevices.filter((device) => device.system === system).length;
-        const openDefectCount = openDefects.filter((defect) => {
-          const device = deviceByCode.get(defect.device ?? "");
-          return device?.system === system && systemChartDeviceCodes.has(device.code);
-        }).length;
-        const replacementWarn = replacements.filter((item) => {
-          const linkedDevice = item.device ?? item.material.deviceMaterials?.[0]?.device ?? null;
-          const itemSystem = linkedDevice?.system ?? item.system ?? item.material.system;
-          const matchPosition = matchesPosition(linkedDevice ?? { code: "", system: itemSystem ?? null });
-          return itemSystem === system && matchPosition && replacementDueStatus(item.nextDueAt) !== "OK";
-        }).length;
-        return { name: system, devices: deviceCount, defects: openDefectCount, warning: replacementWarn };
-      })
-      .sort((a, b) => b.devices - a.devices)
-      .slice(0, 8);
-
-    const positionRows = positions
-      .map((position) => ({
-        name: position,
-        value: allowedDeviceCodesByPosition.get(position)?.size ?? 0,
-      }))
-      .filter((row) => row.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-
-    const statusRows = [
-      { name: "Chưa xử lý", value: visibleDefects.filter((defect) => defect.status === "CHUA_XU_LY").length },
-      { name: "Có PCT", value: visibleDefects.filter((defect) => defect.status === "CO_PCT").length },
-      { name: "Chờ vật tư", value: visibleDefects.filter((defect) => defect.status === "CHO_VAT_TU").length },
-      { name: "Đã xử lý", value: visibleDefects.filter((defect) => defect.status === "DA_XU_LY").length },
-    ].filter((row) => row.value > 0);
-
-    const repairCountByDevice = new Map<string, number>();
-    defectHistory.forEach((row) => {
-      if (!row.device) return;
-      repairCountByDevice.set(row.device, (repairCountByDevice.get(row.device) ?? 0) + 1);
-    });
-
-    const allDeviceSignalRows = devices
-      .map((device) => {
-        const repairCount = repairCountByDevice.get(device.code) ?? device.repairCount ?? 0;
-        const openDefectCount = openDefects.filter((defect) => defect.device === device.code).length;
-        const replacementWarn = replacements.filter(
-          (item) => item.device?.code === device.code && replacementDueStatus(item.nextDueAt) !== "OK"
-        ).length;
-        const riskScore = repairCount + openDefectCount * 3 + replacementWarn * 2;
-        return {
-          code: device.code,
-          name: device.name,
-          system: device.system ?? "Chưa phân hệ",
-          managingPosition: device.managingPosition ?? "Chưa gán",
-          repairCount,
-          openDefectCount,
-          replacementWarn,
-          signalTotal: repairCount + openDefectCount + replacementWarn,
-          riskScore,
-          recommendation:
-            openDefectCount > 0
-              ? "Ưu tiên xử lý khiếm khuyết"
-              : replacementWarn > 0
-                ? "Theo dõi vật tư đến hạn"
-                : repairCount > 1
-                  ? "Rà soát lặp lại sửa chữa"
-                  : repairCount > 0
-                    ? "Theo dõi sau sửa chữa"
-                    : "Ổn định",
-        };
-      })
-      .sort((a, b) => b.riskScore - a.riskScore || b.signalTotal - a.signalTotal);
-    const deviceSignalRows = allDeviceSignalRows
-      .filter((device) => device.signalTotal > 0)
-      .slice(0, 8);
-    const defectChartRows = [...deviceSignalRows]
-      .filter((device) => device.openDefectCount > 0)
-      .sort((a, b) => b.openDefectCount - a.openDefectCount)
-      .slice(0, 8);
-    const replacementChartRows = [...deviceSignalRows]
-      .filter((device) => device.replacementWarn > 0)
-      .sort((a, b) => b.replacementWarn - a.replacementWarn)
-      .slice(0, 8);
-
-    const upcomingReplacements = replacements
-      .map((item) => ({
-        id: item.id,
-        material: item.material.name,
-        device: item.device ? `${item.device.code} - ${item.device.name}` : "Chưa gắn thiết bị",
-        system: item.device?.system ?? item.system ?? item.material.system ?? "Chưa phân hệ",
-        nextDueAt: item.nextDueAt,
-        daysLeft: daysUntilDue(item.nextDueAt),
-        status: replacementDueStatus(item.nextDueAt),
-      }))
-      .sort((a, b) => a.daysLeft - b.daysLeft)
-      .slice(0, 6);
-
-    // Xu hướng theo tháng (năm hiện tại): khiếm khuyết phát hiện vs lượt xử lý.
-    const currentYear = new Date().getFullYear();
-    const monthlyTrend = Array.from({ length: 12 }, (_, i) => ({ month: `Th${i + 1}`, detected: 0, handled: 0 }));
-    const trendDefects =
-      trendRequestFilter === "ALL" ? defects : defects.filter((defect) => defect.requestType === trendRequestFilter);
-    const trendDefectHistory =
-      trendRequestFilter === "ALL" ? defectHistory : defectHistory.filter((row) => row.requestType === trendRequestFilter);
-    trendDefects.forEach((defect) => {
-      const raw = defect.detectedAt ?? defect.createdAt;
-      const date = raw ? new Date(raw) : null;
-      if (date && !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear) monthlyTrend[date.getMonth()].detected += 1;
-    });
-    trendDefectHistory.forEach((row) => {
-      const date = row.performedAt ? new Date(row.performedAt) : null;
-      if (date && !Number.isNaN(date.getTime()) && date.getFullYear() === currentYear) monthlyTrend[date.getMonth()].handled += 1;
-    });
-    const hasMonthlyTrend = monthlyTrend.some((m) => m.detected > 0 || m.handled > 0);
-
-    // Lượt sửa chữa theo năm (từ lịch sử xử lý khiếm khuyết).
-    const yearMap = new Map<number, number>();
-    defectHistory.forEach((row) => {
-      const date = row.performedAt ? new Date(row.performedAt) : null;
-      if (date && !Number.isNaN(date.getTime())) yearMap.set(date.getFullYear(), (yearMap.get(date.getFullYear()) ?? 0) + 1);
-    });
     const selectedRepairYear = Number(repairYearFilter) || currentYear;
-    const repairYearOptions = Array.from(new Set([currentYear, selectedRepairYear, ...Array.from(yearMap.keys())]))
-      .filter((year) => Number.isFinite(year))
-      .sort((a, b) => b - a)
-      .map(String);
-    const selectedYearRepairs = yearMap.get(selectedRepairYear) ?? 0;
-    const yearlyTrend = selectedYearRepairs > 0 ? [{ year: String(selectedRepairYear), repairs: selectedYearRepairs }] : [];
+    const repairYearOptions = Array.from(
+      new Set([
+        String(currentYear),
+        String(selectedRepairYear),
+        ...(dashboardData?.repairYearCounts.map((row) => row.year) ?? []),
+      ])
+    ).sort((a, b) => Number(b) - Number(a));
+    const selectedYearRepairs =
+      dashboardData?.repairYearCounts.find(
+        (row) => Number(row.year) === selectedRepairYear
+      )?.repairs ?? 0;
 
     return {
-      systems,
-      positions,
-      openDefects,
-      urgentDefects,
-      dueGroups,
-      systemRows,
-      positionRows,
-      statusRows,
-      deviceSignalRows,
-      defectChartRows,
-      replacementChartRows,
-      upcomingReplacements,
+      systems: dashboardData?.systems ?? [],
+      positions: dashboardPositionOptions,
+      openDefectCount: dashboardData?.openDefectCount ?? 0,
+      urgentDefectCount: dashboardData?.urgentDefectCount ?? 0,
+      dueGroups: dashboardData?.dueGroups ?? {
+        OVERDUE: 0,
+        DUE_SOON: 0,
+        OK: 0,
+      },
+      materialSummary: dashboardData?.materialSummary ?? {
+        totalGroups: 0,
+        categoryCount: 0,
+      },
+      systemRows:
+        dashboardData?.systemRowsByPosition[systemPositionFilter] ??
+        dashboardData?.systemRowsByPosition.ALL ??
+        [],
+      positionRows: dashboardData?.positionRows ?? [],
+      statusRows: dashboardData?.statusRows ?? [],
+      defectChartRows: dashboardData?.defectChartRows ?? [],
+      replacementChartRows: dashboardData?.replacementChartRows ?? [],
+      upcomingReplacements: dashboardData?.upcomingReplacements ?? [],
       currentYear,
       monthlyTrend,
       hasMonthlyTrend,
       repairYearOptions,
-      yearlyTrend,
+      yearlyTrend:
+        selectedYearRepairs > 0
+          ? [{ year: String(selectedRepairYear), repairs: selectedYearRepairs }]
+          : [],
     };
-  }, [allowedDeviceCodesByPosition, dashboardPositionOptions, dateRange, defectHistory, defects, devices, replacements, repairYearFilter, systemPositionFilter, trendRequestFilter]);
+  }, [
+    dashboardData,
+    dashboardPositionOptions,
+    repairYearFilter,
+    systemPositionFilter,
+    trendRequestFilter,
+  ]);
 
   return (
     <div className="space-y-5 print:space-y-4">
@@ -391,8 +206,8 @@ function ReportsPageContent() {
         <MetricCard
           icon={AlertTriangle}
           label="Khiếm khuyết đang tồn đọng"
-          value={dashboard.openDefects.length}
-          detail={`${dashboard.urgentDefects.length} mức ưu tiên cao`}
+          value={dashboard.openDefectCount}
+          detail={`${dashboard.urgentDefectCount} mức ưu tiên cao`}
           tone="red"
           loading={isLoading}
           href="/defects"
@@ -409,8 +224,8 @@ function ReportsPageContent() {
         <MetricCard
           icon={PackageCheck}
           label="Số lượng vật tư"
-          value={oilGroupingSummary?.totalGroups ?? 0}
-          detail={`${oilGroupingSummary?.categoryCount ?? 5} danh mục vật tư ERP`}
+          value={dashboard.materialSummary.totalGroups}
+          detail={`${dashboard.materialSummary.categoryCount} danh mục vật tư ERP`}
           tone="green"
           loading={isLoading}
           href="/vat-tu/loai-dau?loai=dau-boi-tron"
@@ -774,12 +589,12 @@ function MaintenanceSignalPanel({
   summary,
 }: {
   loading?: boolean;
-  rows: DeviceSignalRow[];
+  rows: EquipmentDashboardSignalRow[];
   summary: {
     totalSignals: number;
     devicesWithSignals: number;
     openDefectDevices: number;
-    topRisk: DeviceSignalRow | null;
+    topRisk: EquipmentDashboardSignalRow | null;
   };
 }) {
   const maxRisk = Math.max(...rows.map((row) => row.riskScore), 1);
@@ -1087,25 +902,6 @@ function EmptyPanel({ text }: { text: string }) {
       {text}
     </div>
   );
-}
-
-function makeDateRange(from: string, to: string) {
-  const start = from ? dateRange(from).start : null;
-  const end = to ? dateRange(to).end : null;
-  return { start, end };
-}
-
-function inDateRange(value: Date | string | null | undefined, range: { start: Date | null; end: Date | null }) {
-  if (!value) return !range.start && !range.end;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-  if (range.start && date < range.start) return false;
-  if (range.end && date > range.end) return false;
-  return true;
-}
-
-function unique(values: string[]) {
-  return Array.from(new Set(values));
 }
 
 function shortLabel(value: string, maxLength: number) {
