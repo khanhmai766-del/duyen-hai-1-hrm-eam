@@ -396,14 +396,14 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "material-manage",
     group: "Vật tư",
     feature: "Danh mục Vận Hành 1",
-    note: "Cho phép hiện mục Danh mục Vận Hành 1 trên menu. Quyền Xem chỉ tra cứu; từ quyền Tạo trở lên được thêm, sửa, xoá, nhập và xuất dữ liệu vật tư.",
+    note: "Cho phép hiện mục Danh mục Vận Hành 1 trên menu. Quyền Xem chỉ tra cứu theo phạm vi cương vị; quyền Quản lý/Toàn quyền được xem và thao tác toàn bộ danh mục.",
     matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
     id: "replacement-manage",
     group: "Vật tư",
     feature: "Lịch thay thế vật tư",
-    note: "Cho phép hiện mục Lịch thay thế vật tư trên menu. Quyền Xem chỉ tra cứu; quyền Tạo/Quản lý được nhập lịch, tạo điểm và ghi nhận thay thế; Toàn quyền được xoá.",
+    note: "Cho phép hiện mục Lịch thay thế vật tư trên menu. Quyền Xem chỉ tra cứu theo phạm vi cương vị; quyền Quản lý/Toàn quyền được xem toàn bộ, nhập lịch, sửa và ghi nhận thay thế; Toàn quyền được xoá.",
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   },
   {

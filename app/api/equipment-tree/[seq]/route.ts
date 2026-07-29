@@ -5,6 +5,7 @@ import { assertSeqViewable } from "@/lib/server-access";
 import { normalizeEquipmentNodeName } from "@/lib/equipment-tree";
 import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScope, scopeCode, scopeKks } from "@/lib/equipment-units";
+import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,11 @@ export async function GET(req: NextRequest, { params }: { params: { seq: string 
     // `seq` luôn là mã chuẩn S1; phạm vi chỉ đổi mã hiển thị/KKS và phần ghi đè.
     const scope = parseScope(req.nextUrl.searchParams.get("machine"));
 
-    await assertSeqViewable(user, seq);
+    const canAccessAllNodes = await canBypassEquipmentPositionScope(
+      user,
+      req.nextUrl.searchParams.get("permissionScope")
+    );
+    if (!canAccessAllNodes) await assertSeqViewable(user, seq);
     const [node, overrideOf] = await Promise.all([
       prisma.equipmentNode.findUnique({
         where: { seq },

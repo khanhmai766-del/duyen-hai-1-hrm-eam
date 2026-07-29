@@ -8,6 +8,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -214,12 +215,13 @@ async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    const canAccessAllMaterials = await hasAssignedManagePermission(user, "material-manage");
     // ?machine=S1|S2|COMMON: lọc theo tổ máy ngay trong query (tab Danh mục vật tư).
     // ?include=usage: kèm lịch sử tiêu hao theo thiết bị (chỉ trang Reports cần).
     const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
     const includeUsage = req.nextUrl.searchParams.get("include") === "usage";
     const [access, materials] = await Promise.all([
-      resolveEquipmentAccessForUser(user),
+      canAccessAllMaterials ? Promise.resolve(null) : resolveEquipmentAccessForUser(user),
       prisma.material.findMany({
         where: machine ? { machine } : undefined,
         orderBy: { code: "asc" },
@@ -261,7 +263,7 @@ export async function GET(req: NextRequest) {
     // Khi KHÔNG tải usage nhưng vẫn phải xét quyền hiển thị: tra bản nhẹ 2 cột
     // (materialId, deviceSeq) thay vì chở cả lịch sử tiêu hao về client.
     const usageMap = new Map<string, string[]>();
-    if (!includeUsage && access.hasExplicitScopes && materials.length) {
+    if (!includeUsage && access?.hasExplicitScopes && materials.length) {
       const usageRows = await prisma.equipmentMaterial.findMany({
         where: { materialId: { in: materials.map((material) => material.id) } },
         select: { materialId: true, deviceSeq: true },
@@ -272,7 +274,7 @@ export async function GET(req: NextRequest) {
         else usageMap.set(row.materialId, [row.deviceSeq]);
       }
     }
-    const filtered = access.hasExplicitScopes
+    const filtered = access?.hasExplicitScopes
       ? data
           .map((material) => {
             const deviceMaterials = (material.deviceMaterials ?? []).filter((item: any) => access.canViewSeq(item.deviceSeq));

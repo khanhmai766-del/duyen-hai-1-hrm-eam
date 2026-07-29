@@ -7,6 +7,7 @@ import { normalizeText } from "@/lib/nav";
 import { seqInScope, type TreeScope } from "@/lib/equipment-units";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền nhập điểm thay thế");
+    const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
 
     const body = await req.json();
     const rows: ImportRow[] = Array.isArray(body.rows) ? body.rows.slice(0, 10_000) : [];
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
     const [materials, nodes, access] = await Promise.all([
       prisma.material.findMany({ select: { id: true, code: true, erpCodes: true, name: true, machine: true, unit: true, system: true } }),
       prisma.equipmentNode.findMany({ select: { seq: true, parentSeq: true, name: true, kks: true, externalId: true } }),
-      resolveEquipmentAccessForUser(user),
+      canAccessAllReplacements ? Promise.resolve(null) : resolveEquipmentAccessForUser(user),
     ]);
 
     const nodeBySeq = new Map(nodes.map((node) => [node.seq, node]));
@@ -178,7 +180,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 3) Kiểm tra quyền theo cương vị (đồng bộ với khi thêm điểm thủ công).
-      if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: resolvedSeq, system: resolvedSystem })) {
+      if (access?.hasExplicitScopes && !access.canEditDeviceLike({ device: resolvedSeq, system: resolvedSystem })) {
         return errors.push({ rowNumber, message: "Cương vị của bạn không có quyền thao tác trên hệ thống/thiết bị này" });
       }
 

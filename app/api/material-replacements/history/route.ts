@@ -6,6 +6,7 @@ import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeText } from "@/lib/nav";
 import { publicUserRef } from "@/lib/s3";
+import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,8 @@ const HISTORY_TAKE = 300;
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const access = await resolveEquipmentAccessForUser(user);
+    const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
+    const access = canAccessAllReplacements ? null : await resolveEquipmentAccessForUser(user);
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
 
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
         },
       },
     });
-    const visibleLogs = access.hasExplicitScopes
+    const visibleLogs = access?.hasExplicitScopes
       ? logs.filter((log) => {
           const replacement = log.replacement;
           if (!replacement) return false;

@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { parseDateInput } from "@/lib/utils";
 import { publicUserRef } from "@/lib/s3";
 
@@ -44,12 +45,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       include: DETAIL_INCLUDE,
     });
     if (!point) return fail("Không tìm thấy điểm thay thế", 404);
-    const access = await resolveEquipmentAccessForUser(user);
-    const viewable = point.deviceSeq
-      ? access.canViewSeq(point.deviceSeq)
-      : point.system
-        ? access.visibleSystemNames.has(normalizeText(point.system))
-        : !access.hasExplicitScopes;
+    const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
+    const access = canAccessAllReplacements ? null : await resolveEquipmentAccessForUser(user);
+    const viewable =
+      canAccessAllReplacements ||
+      (point.deviceSeq
+        ? access!.canViewSeq(point.deviceSeq)
+        : point.system
+          ? access!.visibleSystemNames.has(normalizeText(point.system))
+          : !access!.hasExplicitScopes);
     if (!viewable) return fail("Cương vị của bạn không có quyền xem điểm thay thế này", 403);
     return ok(mapPoint(point));
   });
@@ -62,14 +66,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json();
     const existing = await prisma.materialReplacement.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
-    const access = await resolveEquipmentAccessForUser(user);
-    if (
-      access.hasExplicitScopes &&
-      !access.canEditDeviceLike({ device: existing.deviceSeq, system: existing.system })
-    ) {
-      return fail("Cương vị của bạn không có quyền thao tác trên điểm thay thế này", 403);
-    }
-    if (body.deviceId) await assertSeqEditable(user, String(body.deviceId));
     // Đổi thiết bị của một điểm cũng phải nằm trong đúng cây của tổ máy sở hữu điểm.
     if (body.deviceId) assertSeqsInScope([String(body.deviceId)], existing.machine);
 
@@ -116,13 +112,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     await requirePermissionLevel(user, "replacement-manage", ["full"], "Không đủ quyền xoá điểm thay thế");
     const existing = await prisma.materialReplacement.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
-    const access = await resolveEquipmentAccessForUser(user);
-    if (
-      access.hasExplicitScopes &&
-      !access.canEditDeviceLike({ device: existing.deviceSeq, system: existing.system })
-    ) {
-      return fail("Cương vị của bạn không có quyền thao tác trên điểm thay thế này", 403);
-    }
     await prisma.materialReplacement.delete({ where: { id: params.id } });
     await audit(user.id, "DELETE_REPLACEMENT", "MaterialReplacement", params.id, auditDetailWithPosition(user));
     return ok({ id: params.id });

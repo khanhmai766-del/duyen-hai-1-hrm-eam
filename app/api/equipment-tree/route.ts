@@ -6,15 +6,22 @@ import { getCachedEquipmentNodeList, invalidateEquipmentNodeCache } from "@/lib/
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
 export const dynamic = "force-dynamic";
 
 // Toàn bộ cây danh mục thiết bị (phẳng) — client tự dựng cây từ seq/parentSeq.
-export async function GET() {
+export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
+    const canAccessAllNodes = await canBypassEquipmentPositionScope(
+      user,
+      req.nextUrl.searchParams.get("permissionScope")
+    );
     const normalizedNodes = await getCachedEquipmentNodeList();
-    const visibleNodes = await filterEquipmentNodesForUser(user, normalizedNodes);
+    const visibleNodes = canAccessAllNodes
+      ? normalizedNodes
+      : await filterEquipmentNodesForUser(user, normalizedNodes);
     return ok(visibleNodes.map((node) => ({
       seq: node.seq,
       parentSeq: node.parentSeq,

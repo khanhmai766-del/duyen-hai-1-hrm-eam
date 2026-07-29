@@ -12,6 +12,7 @@ import {
   useEquipmentNode,
   useTreeRoots,
   useTreeSearch,
+  type EquipmentPermissionScope,
   type TreeNode,
 } from "@/hooks/useEquipment";
 import { usePositionSystemScopes } from "@/hooks/usePositionSystemScopes";
@@ -94,6 +95,7 @@ export function EquipmentTreePicker({
   placeholder = "Chọn thư mục hệ thống",
   disabled = false,
   scope,
+  permissionScope,
   selectedValues = [],
   keepOpenOnSelect = false,
   allowClear = true,
@@ -115,14 +117,15 @@ export function EquipmentTreePicker({
    * quyền, cần thấy đủ 6 nhánh).
    */
   scope?: TreeScope;
+  permissionScope?: EquipmentPermissionScope;
   selectedValues?: string[];
   keepOpenOnSelect?: boolean;
   allowClear?: boolean;
   selectionLabel?: string;
 }) {
   const queryClient = useQueryClient();
-  const rootsQuery = useTreeRoots(scope);
-  const selectedQuery = useEquipmentNode(value || null, scope);
+  const rootsQuery = useTreeRoots(scope, permissionScope);
+  const selectedQuery = useEquipmentNode(value || null, scope, permissionScope);
   const scopesQuery = usePositionSystemScopes();
   const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
 
@@ -133,7 +136,7 @@ export function EquipmentTreePicker({
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebouncedValue(search, 300).trim();
   const searchActive = debouncedSearch.length >= 2;
-  const searchQuery = useTreeSearch(debouncedSearch, scope);
+  const searchQuery = useTreeSearch(debouncedSearch, scope, permissionScope);
 
   const roots = React.useMemo(() => rootsQuery.data?.data ?? [], [rootsQuery.data]);
   const searchResults = React.useMemo(
@@ -151,7 +154,7 @@ export function EquipmentTreePicker({
       if (childrenBySeq.has(seq)) return childrenBySeq.get(seq) ?? [];
       setLoadingSeqs((current) => new Set(current).add(seq));
       try {
-        const response = await fetchTreeChildren(queryClient, scope, seq);
+        const response = await fetchTreeChildren(queryClient, scope, seq, permissionScope);
         setChildrenBySeq((current) => new Map(current).set(seq, response.data));
         return response.data;
       } catch {
@@ -165,7 +168,7 @@ export function EquipmentTreePicker({
         });
       }
     },
-    [childrenBySeq, queryClient, scope]
+    [childrenBySeq, permissionScope, queryClient, scope]
   );
 
   // Đổi phạm vi (tổ máy) → nhánh đã tải thuộc cây cũ, phải bỏ đi để không trộn 2 cây.
@@ -173,7 +176,7 @@ export function EquipmentTreePicker({
     setChildrenBySeq(new Map());
     setExpanded(new Set());
     setSearch("");
-  }, [scope]);
+  }, [permissionScope, scope]);
 
   // rootSeq hiện ít dùng nhưng vẫn được hỗ trợ mà không quay lại tải toàn bộ cây.
   React.useEffect(() => {

@@ -62,6 +62,7 @@ export function ReplacementPointsEditor({
                 onChange={(node) => update(i, { deviceSeq: node?.seq ?? null, system: node?.name ?? null })}
                 includeLeaves
                 scope={scope}
+                permissionScope="material-manage"
                 placeholder="Chọn hệ thống / thiết bị"
               />
             </div>

@@ -16,6 +16,7 @@ import { getCachedEquipmentNodeFull, invalidateEquipmentNodeCache,  getEquipment
 import { recomputeChildCount } from "@/lib/equipment-child-count";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { canonicalSeq, MAX_EQUIPMENT_DEPTH, validateEquipmentSeq } from "@/lib/equipment-units";
+import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
 export const dynamic = "force-dynamic";
 
@@ -71,17 +72,26 @@ type DeviceListResult = {
 };
 
 function deviceListCacheKey(
-  user: { role?: string | null; position?: string | null },
-  params: { q: string; systemSeq?: string; systemName?: string }
+  user: { id?: string | null; role?: string | null; position?: string | null },
+  params: {
+    q: string;
+    systemSeq?: string;
+    systemName?: string;
+    permissionScope?: string;
+    canAccessAllDevices: boolean;
+  }
 ) {
   const scope = user.role === "ADMIN"
     ? "admin"
     : `${user.role ?? "user"}:${normalizeText(user.position ?? "")}`;
   return JSON.stringify({
+    userId: user.id ?? "",
     scope,
+    accessMode: params.canAccessAllDevices ? "rbac-global" : "position-scope",
     q: params.q,
     systemSeq: params.systemSeq ?? "",
     systemName: params.systemName ?? "",
+    permissionScope: params.permissionScope ?? "",
   });
 }
 
@@ -166,12 +176,20 @@ export async function GET(req: NextRequest) {
     const q = normalizeText(sp.get("q")?.trim() ?? "");
     const systemSeq = sp.get("systemSeq")?.trim();
     const systemName = sp.get("system")?.trim();
+    const permissionScope = sp.get("permissionScope")?.trim();
+    const canAccessAllDevices = await canBypassEquipmentPositionScope(user, permissionScope);
 
-    const cacheKey = deviceListCacheKey(user, { q, systemSeq, systemName });
+    const cacheKey = deviceListCacheKey(user, {
+      q,
+      systemSeq,
+      systemName,
+      permissionScope,
+      canAccessAllDevices,
+    });
     const result = await getOrSetDeviceListCache<DeviceListResult>(cacheKey, async () => {
       const { nodes, records } = await getDeviceLikeRecords();
       const totalSystemDevices = nodes.length;
-      const visibleNodes = await filterEquipmentNodesForUser(user, nodes);
+      const visibleNodes = canAccessAllDevices ? nodes : await filterEquipmentNodesForUser(user, nodes);
       const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
       const visibleIndex = getEquipmentTreeIndexFor(visibleNodes);
       const allowedSeqs = systemSeq

@@ -5,6 +5,7 @@ import { assertSeqViewable, equipmentSeqWhere, resolveEquipmentTreeAccess } from
 import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScopeParam, seqInScope } from "@/lib/equipment-units";
 import { TREE_SELECT, toTreeNode } from "@/lib/equipment-tree-lazy";
+import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,17 @@ export async function GET(req: NextRequest) {
     const parentSeq = (req.nextUrl.searchParams.get("parentSeq") ?? "").trim();
     if (!parentSeq) return fail("Thiếu parentSeq");
     const scope = parseScopeParam(req.nextUrl.searchParams.get("scope"));
+    const canAccessAllNodes = await canBypassEquipmentPositionScope(
+      user,
+      req.nextUrl.searchParams.get("permissionScope")
+    );
     // Chặn bung nhánh của phạm vi khác (vd mở nhánh dùng chung từ cây tổ máy S2).
     if (scope && !seqInScope(parentSeq, scope)) return fail("Thiết bị không thuộc phạm vi cây đang xem");
-    await assertSeqViewable(user, parentSeq);
+    if (!canAccessAllNodes) await assertSeqViewable(user, parentSeq);
 
-    const { filter } = await resolveEquipmentTreeAccess(user);
+    const { filter } = canAccessAllNodes
+      ? { filter: { kind: "all" as const } }
+      : await resolveEquipmentTreeAccess(user);
     const seqWhere = equipmentSeqWhere(filter, "seq");
     const where = seqWhere ? { AND: [{ parentSeq }, seqWhere] } : { parentSeq };
 

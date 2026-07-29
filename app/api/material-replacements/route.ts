@@ -8,6 +8,7 @@ import { replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,8 @@ function mapPoint(point: any) {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const access = await resolveEquipmentAccessForUser(user);
+    const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
+    const access = canAccessAllReplacements ? null : await resolveEquipmentAccessForUser(user);
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const materialId = sp.get("materialId");
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
       orderBy: { nextDueAt: "asc" },
       include: INCLUDE,
     });
-    const visiblePoints = access.hasExplicitScopes
+    const visiblePoints = access?.hasExplicitScopes
       ? points.filter((point) => {
           if (point.deviceSeq) return access.canViewSeq(point.deviceSeq);
           if (point.system) return access.visibleSystemNames.has(normalizeText(point.system));
@@ -107,6 +109,7 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "replacement-manage", ["create", "manage", "full"], "Không đủ quyền thêm điểm theo dõi");
+    const canAccessAllReplacements = await hasAssignedManagePermission(user, "replacement-manage");
     const body = await req.json();
 
     const materialId = String(body.materialId || "").trim();
@@ -120,8 +123,8 @@ export async function POST(req: NextRequest) {
     // đúng cây của tổ máy đó (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
     assertSeqsInScope([deviceSeq], material.machine);
 
-    const access = await resolveEquipmentAccessForUser(user);
-    if (access.hasExplicitScopes && !access.canEditDeviceLike({ device: deviceSeq, system })) {
+    const access = canAccessAllReplacements ? null : await resolveEquipmentAccessForUser(user);
+    if (access?.hasExplicitScopes && !access.canEditDeviceLike({ device: deviceSeq, system })) {
       return fail("Cương vị của bạn không có quyền thao tác trên hệ thống/thiết bị này", 403);
     }
 

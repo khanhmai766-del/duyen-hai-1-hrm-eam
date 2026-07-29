@@ -96,11 +96,18 @@ export interface DeviceWithRelations extends DeviceRecord {
   }>;
 }
 
-export function useDevices(params: { q?: string; system?: string; systemSeq?: string; enabled?: boolean }) {
+export function useDevices(params: {
+  q?: string;
+  system?: string;
+  systemSeq?: string;
+  enabled?: boolean;
+  permissionScope?: "material-manage" | "replacement-manage";
+}) {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
   if (params.system) qs.set("system", params.system);
   if (params.systemSeq) qs.set("systemSeq", params.systemSeq);
+  if (params.permissionScope) qs.set("permissionScope", params.permissionScope);
   const { enabled = true, ...queryParams } = params;
   return useQuery({
     queryKey: ["devices", queryParams],

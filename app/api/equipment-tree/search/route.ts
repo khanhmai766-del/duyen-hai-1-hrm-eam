@@ -6,6 +6,7 @@ import { scopeSearchTerms, scopeSeqWhere } from "@/lib/equipment-tree-scope";
 import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScopeParam } from "@/lib/equipment-units";
 import { toTreeNode } from "@/lib/equipment-tree-lazy";
+import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,10 @@ export async function GET(req: NextRequest) {
     const cursor = Number(sp.get("cursor")) || 0; // giá trị sort của item cuối trang trước
     if (q.length < 2) return ok([], { nextCursor: null });
 
-    const { filter } = await resolveEquipmentTreeAccess(user);
+    const canAccessAllNodes = await canBypassEquipmentPositionScope(user, sp.get("permissionScope"));
+    const { filter } = canAccessAllNodes
+      ? { filter: { kind: "all" as const } }
+      : await resolveEquipmentTreeAccess(user);
     const seqWhere = equipmentSeqWhere(filter, "seq");
     // Tìm không dấu trên cột searchText (đã chuẩn hóa lúc import: bỏ dấu + lowercase).
     // Ở cây S2, KKS người dùng gõ ("20HFE…") được dịch ngược về dạng S1 đang lưu.

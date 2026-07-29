@@ -33,43 +33,59 @@ export interface TreeNode {
 
 const TREE_STALE = 5 * 60 * 1000; // nhánh ít đổi → cache 5 phút, không refetch khi focus lại
 
+export type EquipmentPermissionScope = "material-manage" | "replacement-manage";
+
 // Bỏ trống `scope` = CẢ cây (đủ 6 nhánh) — bộ chọn thư mục khi cấu hình phân quyền cần vậy.
 const scopeKeyOf = (scope?: TreeScope) => scope ?? "ALL";
-const scopeParam = (scope?: TreeScope) => (scope ? `scope=${scope}&` : "");
+const treeParams = (scope?: TreeScope, permissionScope?: EquipmentPermissionScope) => {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  if (permissionScope) params.set("permissionScope", permissionScope);
+  const query = params.toString();
+  return query ? `${query}&` : "";
+};
 
 /** Chỉ tải các nhánh GỐC của phạm vi đang xem khi mở trang (không tải toàn bộ cây). */
-export function useTreeRoots(scope?: TreeScope) {
+export function useTreeRoots(scope?: TreeScope, permissionScope?: EquipmentPermissionScope) {
   return useQuery({
-    queryKey: ["equipment-tree", "roots", scopeKeyOf(scope)],
-    queryFn: () => apiGet<TreeNode[]>(`/api/equipment-tree/roots?${scopeParam(scope)}`),
+    queryKey: ["equipment-tree", "roots", scopeKeyOf(scope), permissionScope ?? "position-scope"],
+    queryFn: () => apiGet<TreeNode[]>(`/api/equipment-tree/roots?${treeParams(scope, permissionScope)}`),
     staleTime: TREE_STALE,
     refetchOnWindowFocus: false,
   });
 }
 
-export const treeChildrenKey = (scope: TreeScope | undefined, parentSeq: string) =>
-  ["equipment-tree", "children", scopeKeyOf(scope), parentSeq] as const;
+export const treeChildrenKey = (
+  scope: TreeScope | undefined,
+  parentSeq: string,
+  permissionScope?: EquipmentPermissionScope
+) => ["equipment-tree", "children", scopeKeyOf(scope), permissionScope ?? "position-scope", parentSeq] as const;
 
 /** Tải CON TRỰC TIẾP của một nút khi bung (dùng imperative qua queryClient, cache lại). */
-export function fetchTreeChildren(qc: QueryClient, scope: TreeScope | undefined, parentSeq: string) {
+export function fetchTreeChildren(
+  qc: QueryClient,
+  scope: TreeScope | undefined,
+  parentSeq: string,
+  permissionScope?: EquipmentPermissionScope
+) {
   return qc.fetchQuery({
-    queryKey: treeChildrenKey(scope, parentSeq),
+    queryKey: treeChildrenKey(scope, parentSeq, permissionScope),
     queryFn: () =>
       apiGet<TreeNode[]>(
-        `/api/equipment-tree/children?${scopeParam(scope)}parentSeq=${encodeURIComponent(parentSeq)}`
+        `/api/equipment-tree/children?${treeParams(scope, permissionScope)}parentSeq=${encodeURIComponent(parentSeq)}`
       ),
     staleTime: TREE_STALE,
   });
 }
 
 /** Tìm kiếm phía server, phân trang 50/lần (cursor theo sort). */
-export function useTreeSearch(q: string, scope?: TreeScope) {
+export function useTreeSearch(q: string, scope?: TreeScope, permissionScope?: EquipmentPermissionScope) {
   const query = q.trim();
   return useInfiniteQuery({
-    queryKey: ["equipment-tree", "search", scopeKeyOf(scope), query],
+    queryKey: ["equipment-tree", "search", scopeKeyOf(scope), permissionScope ?? "position-scope", query],
     queryFn: ({ pageParam }) =>
       apiGet<TreeNode[]>(
-        `/api/equipment-tree/search?${scopeParam(scope)}q=${encodeURIComponent(query)}&cursor=${pageParam ?? 0}`
+        `/api/equipment-tree/search?${treeParams(scope, permissionScope)}q=${encodeURIComponent(query)}&cursor=${pageParam ?? 0}`
       ),
     initialPageParam: 0 as number,
     getNextPageParam: (lastPage) => (lastPage.meta?.nextCursor ?? null) as number | null,
@@ -93,21 +109,34 @@ export interface EquipmentNodeDetail extends EquipmentNode {
  * cả cây (form nghiệp vụ cũ, admin). Mặc định vẫn bật để tương thích; nơi nào có thể hãy
  * truyền { enabled } để chỉ tải khi cần. Cây hiển thị chính đã chuyển sang lazy (useTreeRoots…).
  */
-export function useEquipmentTree(options?: { enabled?: boolean }) {
+export function useEquipmentTree(options?: {
+  enabled?: boolean;
+  permissionScope?: EquipmentPermissionScope;
+}) {
+  const permissionScope = options?.permissionScope;
   return useQuery({
-    queryKey: ["equipment-tree"],
-    queryFn: () => apiGet<EquipmentNode[]>("/api/equipment-tree"),
+    queryKey: ["equipment-tree", permissionScope ?? "position-scope"],
+    queryFn: () =>
+      apiGet<EquipmentNode[]>(
+        `/api/equipment-tree${permissionScope ? `?permissionScope=${encodeURIComponent(permissionScope)}` : ""}`
+      ),
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: options?.enabled ?? true,
   });
 }
 
-export function useEquipmentNode(seq: string | null | undefined, machine: TreeScope = "S1") {
+export function useEquipmentNode(
+  seq: string | null | undefined,
+  machine: TreeScope = "S1",
+  permissionScope?: EquipmentPermissionScope
+) {
   return useQuery({
-    queryKey: ["equipment-node", seq, machine],
+    queryKey: ["equipment-node", seq, machine, permissionScope ?? "position-scope"],
     queryFn: () =>
-      apiGet<EquipmentNodeDetail>(`/api/equipment-tree/${encodeURIComponent(seq!)}?machine=${machine}`),
+      apiGet<EquipmentNodeDetail>(
+        `/api/equipment-tree/${encodeURIComponent(seq!)}?machine=${machine}${permissionScope ? `&permissionScope=${encodeURIComponent(permissionScope)}` : ""}`
+      ),
     enabled: !!seq,
     staleTime: 5 * 60 * 1000,
   });

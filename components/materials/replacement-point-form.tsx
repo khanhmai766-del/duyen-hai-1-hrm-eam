@@ -34,7 +34,7 @@ export function ReplacementPointForm({
   onDone?: () => void;
 }) {
   const update = useUpdateReplacement();
-  const { data: devicesData } = useDevices({});
+  const { data: devicesData } = useDevices({ permissionScope: "replacement-manage" });
   const devices = devicesData?.data ?? [];
   const devicePositions = React.useMemo(
     () => Array.from(new Set(devices.map((device) => device.managingPosition).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b, "vi")),

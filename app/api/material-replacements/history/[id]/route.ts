@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { parseDateInput } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -14,14 +13,6 @@ async function assertCanEditLog(user: Awaited<ReturnType<typeof requireUser>>, i
     include: { replacement: { select: { id: true, deviceSeq: true, system: true } } },
   });
   if (!log) throw fail("Không tìm thấy ghi nhận thay thế", 404);
-
-  const access = await resolveEquipmentAccessForUser(user);
-  if (
-    access.hasExplicitScopes &&
-    (!log.replacement || !access.canEditDeviceLike({ device: log.replacement.deviceSeq, system: log.replacement.system }))
-  ) {
-    throw fail("Cương vị của bạn không có quyền thao tác trên ghi nhận thay thế này", 403);
-  }
   return log;
 }
 
