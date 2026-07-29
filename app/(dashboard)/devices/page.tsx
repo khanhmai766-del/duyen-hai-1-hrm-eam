@@ -7,7 +7,6 @@ import { QRCodeSVG } from "qrcode.react";
 import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
 import {
   LayoutGrid,
-  LayoutDashboard,
   FilePlus2,
   Cpu,
   Folder,
@@ -20,7 +19,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ShieldAlert,
-  UserCog,
   Network,
   Wrench,
   Package,
@@ -28,15 +26,6 @@ import {
   Loader2,
   type LucideIcon,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -68,7 +57,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDevices, useDeleteDevice, type DeviceListItem } from "@/hooks/useDevices";
+import { type DeviceListItem } from "@/hooks/useDevices";
 import { useDeviceQrCards, useAddDeviceQrCard, useRemoveDeviceQrCard } from "@/hooks/useDeviceQrCards";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { type EquipmentNode, type TreeNode } from "@/hooks/useEquipment";
@@ -77,12 +66,10 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
 import { formatDate, cn } from "@/lib/utils";
-import { Bar3DDefs, barFill } from "@/components/shared/bar-3d";
 
-type ViewMode = "tree" | "dashboard" | "table" | "detail" | "form";
+type ViewMode = "tree" | "detail" | "form";
 const VIEWS: { key: ViewMode; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
   { key: "tree", label: "Cây thiết bị", icon: Network },
-  { key: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
   { key: "detail", label: "Thẻ", icon: LayoutGrid },
   { key: "form", label: "Thêm mới", icon: FilePlus2, adminOnly: true },
 ];
@@ -118,51 +105,32 @@ function DevicesPageContent() {
   const canManageDevices = rbac.can("device-manage", ["manage", "full"]);
   const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
   const canDeleteDevices = rbac.can("device-delete", ["full"]);
-  const view = (params.get("view") as ViewMode) || "tree";
+  const requestedView = params.get("view");
+  const view: ViewMode = requestedView === "detail" || requestedView === "form" ? requestedView : "tree";
   const urlQ = params.get("q") ?? "";
-  const urlSystemSeq = params.get("systemSeq") ?? "ALL";
   const parentSeq = params.get("parentSeq") ?? "";
 
   const [q, setQ] = React.useState(urlQ);
   const [debouncedQ, setDebouncedQ] = React.useState(urlQ);
-  const [systemSeq, setSystemSeq] = React.useState(urlSystemSeq);
   const [qrDevice, setQrDevice] = React.useState<DeviceListItem | null>(null);
 
   React.useEffect(() => {
-    if (view !== "table") return;
+    if (!requestedView || requestedView === view) return;
     const sp = new URLSearchParams(params.toString());
-    sp.set("view", "dashboard");
+    sp.set("view", "tree");
+    sp.delete("systemSeq");
     router.replace(`/devices?${sp.toString()}`);
-  }, [params, router, view]);
+  }, [params, requestedView, router, view]);
 
   React.useEffect(() => {
     setQ(urlQ);
     setDebouncedQ(urlQ);
-    setSystemSeq(urlSystemSeq);
-  }, [urlQ, urlSystemSeq]);
+  }, [urlQ]);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
     return () => clearTimeout(t);
   }, [q]);
-
-  // Tab "Thẻ" (detail) KHÔNG tải toàn bộ ~6500 thiết bị nữa — chỉ tải danh sách thẻ đã chọn.
-  const shouldLoadDevices = view === "dashboard" || view === "table";
-  const { data, isLoading } = useDevices({
-    q: debouncedQ,
-    systemSeq: systemSeq === "ALL" ? undefined : systemSeq,
-    enabled: shouldLoadDevices,
-  });
-  const devices = data?.data ?? [];
-  const deviceMeta = data?.meta;
-  const systemOptions = deviceMeta?.rootSystems ?? [];
-  const selectedSystemNode = null as { seq: string; name: string } | null;
-  const byPosition = deviceMeta?.byPosition ?? [];
-  const equipmentTreeLoading = false;
-  const systemDisplayRows: SystemTreeRow[] = [];
-  const systemLeafRows: SystemTreeRow[] = [];
-  // Tập seq người dùng được Xem (gồm tổ tiên để vẫn thấy đường dẫn). null = không giới hạn (admin/cương vị chưa cấu hình).
-  // Lọc danh sách thẻ/lý lịch theo quyền Xem của cương vị (giống cây thiết bị).
 
   function setView(v: ViewMode) {
     const sp = new URLSearchParams(params.toString());
@@ -190,7 +158,7 @@ function DevicesPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, canCreateDevices]);
 
-  const visibleViews = VIEWS.filter((v) => v.key !== "table" && (!v.adminOnly || canManageDevices));
+  const visibleViews = VIEWS.filter((v) => !v.adminOnly || canManageDevices);
 
   // Xuất báo cáo cây thiết bị: tải toàn bộ node NGAY KHI bấm xuất (lazy) — không tải khi mở trang.
   // Chỉ xuất PHẠM VI đang xem (Tổ máy S1 / Tổ máy S2 / Dùng chung) cho khớp cây trên màn hình.
@@ -212,9 +180,6 @@ function DevicesPageContent() {
             title={`Danh mục cây thiết bị — ${TREE_SCOPES.find((s) => s.key === treeScope)?.label ?? treeScope}`}
             widths={{ seq: 12, level: 6, name: 40, parentName: 32, classification: 20, drawing: 16, hasProfile: 10 }}
           />
-        )}
-        {shouldLoadDevices && (
-          <ExportButton rows={devices.map((d) => ({ code: d.code, name: d.name, system: d.system ?? "", managingPosition: d.managingPosition ?? "" }))} filename="thiet-bi" />
         )}
       </PageHeader>
 
@@ -238,21 +203,9 @@ function DevicesPageContent() {
             );
           })}
         </div>
-        {(shouldLoadDevices || view === "detail") && (
+        {view === "detail" && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
             <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, hệ thống..." className="sm:w-72" shortcut />
-            {shouldLoadDevices && (
-              <select
-                value={systemSeq}
-                onChange={(e) => setSystemSeq(e.target.value)}
-                className="h-10 shrink-0 rounded-md border border-input bg-white px-3 text-sm"
-              >
-                <option value="ALL">Tất cả hệ thống</option>
-                {systemOptions.map((node) => (
-                  <option key={node.seq} value={node.seq}>{node.seq} · {node.name}</option>
-                ))}
-              </select>
-            )}
           </div>
         )}
       </div>
@@ -286,28 +239,7 @@ function DevicesPageContent() {
             <p className="text-sm text-muted-foreground">Bạn chưa có quyền thêm thiết bị mới.</p>
           </CardContent></Card>
         )
-      ) : (
-        <>
-          {(view as ViewMode) === "table" ? (
-            equipmentTreeLoading ? (
-              <TableSkeleton />
-            ) : (
-              <SystemTreeTableView rows={systemDisplayRows} selectedSystemName={selectedSystemNode?.name ?? "Tất cả hệ thống"} />
-            )
-          ) : isLoading ? (
-            <TableSkeleton />
-          ) : devices.length === 0 ? (
-            <EmptyState
-              icon={Cpu}
-              title="Không có thiết bị"
-              description="Không tìm thấy thiết bị phù hợp."
-              action={canCreateDevices ? { label: "Thêm thiết bị", onClick: () => setView("form") } : undefined}
-            />
-          ) : (
-            <DashboardView devices={devices} byPosition={byPosition} />
-          )}
-        </>
-      )}
+      ) : null}
 
       {qrDevice && (
         <QRModal open={!!qrDevice} onOpenChange={(o) => !o && setQrDevice(null)} device={qrDevice} />
@@ -1103,142 +1035,6 @@ function CardGridPagination({
         <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => onPage((current) => Math.min(totalPages, current + 1))} />
         <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => onPage(() => totalPages)} />
       </div>
-    </div>
-  );
-}
-
-function DashboardView({ devices, byPosition }: { devices: DeviceListItem[]; byPosition: Array<{ name: string; count: number }> }) {
-
-  const groupCount = (key: (d: DeviceListItem) => string | null | undefined) =>
-    Object.entries(
-      devices.reduce<Record<string, number>>((acc, d) => {
-        const k = key(d) || "(Chưa đặt)";
-        acc[k] = (acc[k] ?? 0) + 1;
-        return acc;
-      }, {})
-    )
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-
-  const bySystem = groupCount((d) => d.system).slice(0, 10);
-
-  // Số thiết bị mỗi cương vị "phải quản lý": lấy theo phân quyền hệ thống trực tiếp (scope quyền Sửa).
-  /*
-  const legacyByPosition = React.useMemo(() => {
-    const index = buildEquipmentTreeIndex(equipmentNodes);
-    const { parentOf } = index;
-    const editPosBySeq = new Map<string, string[]>();
-    for (const scope of scopes) {
-      if (scope.access === "edit") {
-        const arr = editPosBySeq.get(scope.systemSeq) ?? [];
-        arr.push(scope.position);
-        editPosBySeq.set(scope.systemSeq, arr);
-      }
-    }
-    const counts = new Map<string, number>();
-    for (const d of devices) {
-      const managing = new Set<string>();
-      // Cương vị có quyền Sửa hệ thống chứa thiết bị (kế thừa theo nhánh cha).
-      let cur: string | null | undefined = d.code;
-      while (cur) {
-        for (const pos of editPosBySeq.get(cur) ?? []) managing.add(pos);
-        cur = parentOf.get(cur) ?? null;
-      }
-      for (const pos of managing) counts.set(pos, (counts.get(pos) ?? 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-  }, [devices, scopes, equipmentNodes]);
-  */
-  const repairHotlist = [...devices]
-    .filter((d) => d._count.repairLogs > 0)
-    .sort((a, b) => b._count.repairLogs - a._count.repairLogs)
-    .slice(0, 6);
-
-  return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-      <Card className="xl:col-span-3">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Network className="h-4 w-4 text-accent" /> Phân bổ theo hệ thống
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto pb-1">
-            <div className="chart-3d h-[300px] min-w-[560px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bySystem} barCategoryGap="24%" margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-                  {Bar3DDefs({ colors: ["#2563EB"] })}
-                  <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="4 4" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-18} textAnchor="end" height={58} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={32} />
-                  <Tooltip />
-                  <Bar dataKey="count" name="Thiết bị" fill={barFill("#2563EB")} radius={[5, 5, 0, 0]} maxBarSize={34} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="xl:col-span-2">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-warning" /> Thiết bị sửa chữa nhiều
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {repairHotlist.length === 0 ? (
-            <div className="flex h-[236px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-center text-sm text-muted-foreground">
-              <Wrench className="h-8 w-8 text-muted-foreground/40" />
-              Chưa có lịch sử sửa chữa trong danh sách này.
-            </div>
-          ) : (
-            repairHotlist.map((d, index) => (
-              <Link
-                key={d.id}
-                href={`/devices/${d.id}`}
-                className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:border-accent/50 hover:bg-accent/5"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted font-mono text-xs font-bold text-muted-foreground">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-ink">{d.name}</span>
-                  <span className="block truncate font-mono text-xs text-muted-foreground">{d.code}</span>
-                </span>
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  {d._count.repairLogs} phiếu
-                </span>
-              </Link>
-            ))
-          )}
-        </CardContent>
-      </Card>
-      <Card className="xl:col-span-5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserCog className="h-4 w-4 text-success" /> Theo cương vị quản lý
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto pb-1">
-            <div className="chart-3d h-[320px] min-w-[620px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={byPosition} layout="vertical" margin={{ top: 8, right: 16, left: 42, bottom: 8 }}>
-                  {Bar3DDefs({ colors: ["#16A34A"] })}
-                  <CartesianGrid horizontal={false} stroke="#e2e8f0" strokeDasharray="4 4" />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="count" name="Thiết bị" fill={barFill("#16A34A")} radius={[0, 5, 5, 0]} maxBarSize={18} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

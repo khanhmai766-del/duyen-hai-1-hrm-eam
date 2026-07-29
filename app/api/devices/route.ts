@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
   compareEquipmentSeq,
-  getEquipmentDescendantSeqs,
   getNormalizedEquipmentNodes,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
@@ -88,9 +87,6 @@ type DeviceListResult = {
   meta: {
     total: number;
     totalSystemDevices: number;
-    systems: string[];
-    rootSystems: Array<{ seq: string; name: string }>;
-    byPosition: Array<{ name: string; count: number }>;
     source: string;
   };
 };
@@ -98,9 +94,6 @@ type DeviceListResult = {
 function deviceListCacheKey(
   user: { id?: string | null; role?: string | null; position?: string | null },
   params: {
-    q: string;
-    systemSeq?: string;
-    systemName?: string;
     permissionScope?: string;
     canAccessAllDevices: boolean;
   }
@@ -112,9 +105,6 @@ function deviceListCacheKey(
     userId: user.id ?? "",
     scope,
     accessMode: params.canAccessAllDevices ? "rbac-global" : "position-scope",
-    q: params.q,
-    systemSeq: params.systemSeq ?? "",
-    systemName: params.systemName ?? "",
     permissionScope: params.permissionScope ?? "",
   });
 }
@@ -173,30 +163,11 @@ async function getDeviceLikeRecords() {
   };
 }
 
-async function getDeviceCountsByPosition(
-  devices: DeviceListRecord[]
-) {
-  const counts = new Map<string, number>();
-  for (const device of devices) {
-    for (const position of device.managingPositions) {
-      counts.set(position, (counts.get(position) ?? 0) + 1);
-    }
-  }
-
-  return Array.from(counts.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
-}
-
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceView(user);
     const sp = req.nextUrl.searchParams;
-    const q = normalizeText(sp.get("q")?.trim() ?? "");
-    const systemSeq = sp.get("systemSeq")?.trim();
-    const systemName = sp.get("system")?.trim();
     const permissionScope = sp.get("permissionScope")?.trim();
     // "summary": chỉ các trường mà màn hình thống kê thực sự đọc. Trang Báo cáo phải duyệt
     // toàn bộ 21.948 thiết bị để tổng hợp, không lọc bớt được — nhưng ảnh/QR/tài liệu đính
@@ -205,9 +176,6 @@ export async function GET(req: NextRequest) {
     const canAccessAllDevices = await canBypassEquipmentPositionScope(user, permissionScope);
 
     const cacheKey = deviceListCacheKey(user, {
-      q,
-      systemSeq,
-      systemName,
       permissionScope,
       canAccessAllDevices,
     });
@@ -216,40 +184,16 @@ export async function GET(req: NextRequest) {
       const totalSystemDevices = nodes.length;
       const visibleNodes = canAccessAllDevices ? nodes : await filterEquipmentNodesForUser(user, nodes);
       const visibleSeqs = new Set(visibleNodes.map((node) => node.seq));
-      const visibleIndex = getEquipmentTreeIndexFor(visibleNodes);
-      const allowedSeqs = systemSeq
-        ? visibleSeqs.has(systemSeq)
-          ? getEquipmentDescendantSeqs(visibleNodes, systemSeq)
-          : new Set<string>()
-        : null;
 
       const devices = records
-        .filter((device) => {
-          if (!visibleSeqs.has(device.code)) return false;
-          if (allowedSeqs && !allowedSeqs.has(device.code)) return false;
-          if (!allowedSeqs && systemName && systemName !== "ALL" && device.system !== systemName) return false;
-          if (!q) return true;
-          return normalizeText([device.code, device.name, device.system].filter(Boolean).join(" ")).includes(q);
-        })
+        .filter((device) => visibleSeqs.has(device.code))
         .sort((a, b) => compareEquipmentSeq(a.code, b.code));
-
-      const systems = Array.from(
-        new Set(
-          records
-            .filter((device) => visibleSeqs.has(device.code))
-            .map((device) => device.system)
-            .filter((name): name is string => !!name)
-        )
-      ).sort((a, b) => a.localeCompare(b, "vi"));
 
       return {
         data: devices,
         meta: {
           total: devices.length,
           totalSystemDevices,
-          systems,
-          rootSystems: visibleIndex.roots.map((node) => ({ seq: node.seq, name: node.name })),
-          byPosition: await getDeviceCountsByPosition(devices),
           source: "equipment-node",
         },
       };
