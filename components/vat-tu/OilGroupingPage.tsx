@@ -10,13 +10,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { AlertTriangle, Ban, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, ChevronDown, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { canManageMaterialCatalog } from "@/lib/constants";
 import {
   useOilStock,
@@ -27,6 +28,7 @@ import {
   useCreateGroupedErpMaterial,
   useUpdateGroupedErpStock,
   useSyncErpStocksFromQlvt,
+  useQlvtSyncStatus,
   useDeletePendingGroupedErpMaterials,
   useUpdateOilGroup,
   useDeleteOilGroup,
@@ -39,9 +41,11 @@ import {
   type OilConfirmInput,
   type GroupedErpMaterialInput,
   type ErpStockUpdateInput,
+  type QlvtSyncStatus,
 } from "@/hooks/useOilGrouping";
 import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 import { normalizeText } from "@/lib/nav";
+import { cn } from "@/lib/utils";
 
 const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 3 });
 
@@ -245,7 +249,187 @@ function CategoryIcon({ category, className }: { category: GroupingCategory; cla
   return <Icon className={className} />;
 }
 
-function GroupedErpActions({ category }: { category: GroupingCategory }) {
+const qlvtTimeFmt = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const qlvtFullFmt = new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+function QlvtSyncStat({ label, value, flag = false }: { label: string; value?: number | null; flag?: boolean }) {
+  // Nhật ký đồng bộ legacy có thể chưa chứa đủ bộ đếm nên API trả thiếu field.
+  // Chuẩn hóa tại biên hiển thị để một dòng lịch sử cũ không làm sập cả trang.
+  const safeValue = Number.isFinite(value) ? Number(value) : 0;
+  return (
+    <div className="bg-muted/20 px-1 py-2 text-center">
+      <b className={cn(
+        "block text-[15px] font-bold leading-none tabular-nums",
+        safeValue === 0 ? "text-muted-foreground" : flag ? "text-amber-600" : "text-ink"
+      )}>
+        {safeValue.toLocaleString("vi-VN")}
+      </b>
+      <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+function QlvtSyncChip({
+  stage,
+  syncing,
+  onSync,
+}: {
+  stage: "idle" | "connecting" | "reading" | "updating";
+  syncing: boolean;
+  onSync: () => void;
+}) {
+  const statusQuery = useQlvtSyncStatus();
+  const [open, setOpen] = useState(false);
+  const [showLog, setShowLog] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const runs = statusQuery.data?.data ?? [];
+  const run = runs[0];
+  const previous = runs.slice(1);
+  const stale = run ? now - new Date(run.syncedAt).getTime() >= 4 * 60 * 60 * 1_000 : false;
+  const label = syncing
+    ? stage === "connecting"
+      ? "Đang kết nối…"
+      : stage === "reading"
+        ? "Đang đọc QLVT…"
+        : "Đang cập nhật…"
+    : !run
+      ? "Chưa đồng bộ"
+      : stale
+        ? "Cần đồng bộ"
+        : "Đã đồng bộ";
+  const dotTone = syncing ? "bg-sky-500" : !run ? "bg-slate-300" : stale ? "bg-amber-500" : "bg-emerald-500";
+
+  function runSync() {
+    setOpen(false);
+    onSync();
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex h-10 items-center gap-2 rounded-lg border bg-white px-3 text-sm font-semibold text-ink shadow-sm transition-colors",
+            open ? "border-accent ring-2 ring-accent/15" : "border-border hover:border-muted-foreground/30"
+          )}
+          title="Xem trạng thái đồng bộ tồn kho QLVT"
+        >
+          <span className="relative flex h-2 w-2 shrink-0">
+            {syncing && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-70" />}
+            <span className={cn("relative inline-flex h-2 w-2 rounded-full", dotTone)} />
+          </span>
+          {label}
+          {run && <span className="font-medium text-muted-foreground">{qlvtTimeFmt.format(new Date(run.syncedAt))}</span>}
+          <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" sideOffset={8} className="w-[390px] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-bold text-ink">
+              <span className={cn("h-2 w-2 shrink-0 rounded-full", dotTone)} />
+              {syncing ? label.replace("…", "") : !run ? "Chưa có lần đồng bộ nào" : stale ? "Dữ liệu đã quá 4 giờ" : "Đồng bộ thành công"}
+            </div>
+            {run && (
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                QLVT → DH1 · {qlvtFullFmt.format(new Date(run.syncedAt))}
+                <br />
+                {run.syncedBy}{run.position ? ` · ${run.position}` : ""}
+              </div>
+            )}
+          </div>
+          <Button variant="outline" size="sm" className="shrink-0" disabled={syncing || statusQuery.isLoading} onClick={runSync}>
+            {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+            {syncing ? "Đang chạy…" : "Đồng bộ ngay"}
+          </Button>
+        </div>
+
+        {run && (
+          <>
+            <div className="mt-3 grid grid-cols-5 gap-px overflow-hidden rounded-lg border border-border bg-border">
+              <QlvtSyncStat label="Đọc" value={run.sourceCount} />
+              <QlvtSyncStat label="Xử lý" value={run.updated} />
+              <QlvtSyncStat label="Đổi tồn" value={run.changed} />
+              <QlvtSyncStat label="Đổi kho" value={run.warehouseChanged} />
+              <QlvtSyncStat label="Chưa có" value={run.notFound} flag />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 px-3 py-2 text-center text-[11px] text-slate-600 ring-1 ring-slate-200">
+              <span><b className="text-slate-800">{run.unitChanged ?? 0}</b> đổi ĐVT</span>
+              <span><b className="text-slate-800">{run.inactiveSkipped ?? 0}</b> ngừng dùng</span>
+              <span><b className="text-slate-800">{run.skipped ?? 0}</b> dòng lỗi</span>
+            </div>
+          </>
+        )}
+
+        {!run && (
+          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+            Bấm “Đồng bộ ngay” để đọc tồn kho từ phiên QLVT đang đăng nhập và ghi nhận lịch sử lần đầu.
+          </p>
+        )}
+
+        {previous.length > 0 && (
+          <div className="mt-3 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setShowLog((value) => !value)}
+              aria-expanded={showLog}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-[13px] font-semibold text-ink transition-colors hover:bg-muted/50"
+            >
+              <History className="h-4 w-4 text-muted-foreground" />
+              {showLog ? "Ẩn nhật ký đồng bộ" : `Xem ${previous.length} lượt đồng bộ trước`}
+              <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", showLog && "rotate-180")} />
+            </button>
+            {showLog && (
+              <ul className="mt-2 space-y-1">
+                {previous.map((item: QlvtSyncStatus) => (
+                  <li key={item.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/40">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                    <span className="shrink-0 font-medium tabular-nums text-ink">{qlvtFullFmt.format(new Date(item.syncedAt))}</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.syncedBy}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{(item.sourceCount ?? 0).toLocaleString("vi-VN")} dòng</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function QlvtSyncAction() {
+  return <GroupedErpActions category="Dầu bôi trơn" showSync showCreate={false} />;
+}
+
+function GroupedErpActions({
+  category,
+  showSync = false,
+  showCreate = true,
+}: {
+  category: GroupingCategory;
+  showSync?: boolean;
+  showCreate?: boolean;
+}) {
   const syncStocks = useSyncErpStocksFromQlvt();
   const createErp = useCreateGroupedErpMaterial();
   const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
@@ -325,7 +509,7 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
       if (!rows.length) throw new Error("QLVT không trả về dòng tồn kho hợp lệ");
 
       setQlvtStage("updating");
-      const result = await syncStocks.mutateAsync(rows);
+      const result = await syncStocks.mutateAsync({ rows, sourceCount: extensionResult.sourceCount });
       toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho, ${result.warehouseChanged} mã đổi Kho, ${result.unitChanged} mã đổi ĐVT; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
       if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
     } catch (error) {
@@ -334,16 +518,6 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
       setQlvtStage("idle");
     }
   }
-
-  const syncButtonLabel = qlvtStage === "connecting"
-    ? "Đang kết nối QLVT"
-    : qlvtStage === "reading"
-      ? "Đang đọc tồn kho"
-      : qlvtStage === "updating"
-        ? "Đang cập nhật"
-        : syncIssue?.code === "QLVT_SESSION_EXPIRED"
-          ? "Tiếp tục đồng bộ"
-          : "Đồng bộ từ QLVT";
 
   async function saveNew() {
     if (!form) return;
@@ -374,14 +548,16 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={requestQlvtSync} disabled={syncingQlvt || syncStocks.isPending} className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:text-cyan-900">
-        {syncingQlvt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} {syncButtonLabel}
-      </Button>
-      <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
-        <Plus className="h-4 w-4" /> Thêm vật tư ERP
-      </Button>
+      {showSync && (
+        <QlvtSyncChip stage={qlvtStage} syncing={syncingQlvt || syncStocks.isPending} onSync={requestQlvtSync} />
+      )}
+      {showCreate && (
+        <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
+          <Plus className="h-4 w-4" /> Thêm vật tư ERP
+        </Button>
+      )}
 
-      <Dialog open={!!form} onOpenChange={(open) => { if (!open) { setForm(null); setFormError(""); } }}>
+      <Dialog open={showCreate && !!form} onOpenChange={(open) => { if (!open) { setForm(null); setFormError(""); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Thêm vật tư ERP</DialogTitle></DialogHeader>
           {form && (
@@ -430,7 +606,7 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showQlvtDisclosure} onOpenChange={setShowQlvtDisclosure}>
+      <Dialog open={showSync && showQlvtDisclosure} onOpenChange={setShowQlvtDisclosure}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Xác nhận đồng bộ dữ liệu QLVT</DialogTitle></DialogHeader>
           <div className="space-y-3 text-sm leading-6 text-slate-600">
@@ -445,7 +621,7 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!syncIssue} onOpenChange={(open) => !open && setSyncIssue(null)}>
+      <Dialog open={showSync && !!syncIssue} onOpenChange={(open) => !open && setSyncIssue(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-800">

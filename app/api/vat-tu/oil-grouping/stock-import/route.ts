@@ -1,13 +1,78 @@
 import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { audit, fail, handle, ok, requireUser } from "@/lib/api";
+import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { canManageMaterialCatalog } from "@/lib/constants";
 import { parseErpNumber } from "@/lib/parse-number";
 
 export const dynamic = "force-dynamic";
 
 type StockRow = { code?: unknown; erpStock?: unknown; warehouse?: unknown; unit?: unknown };
+
+function syncCountsFromDetail(detail: string | null) {
+  const current = detail?.match(
+    /Đọc (\d+) dòng QLVT, xử lý (\d+) mã \((\d+) mã đổi tồn, (\d+) mã đổi kho, (\d+) mã đổi ĐVT\), bỏ qua (\d+) mã ngừng sử dụng, (\d+) mã không có trong hệ thống và (\d+) dòng không hợp lệ/
+  );
+  if (current) {
+    return {
+      sourceCount: Number(current[1]),
+      updated: Number(current[2]),
+      changed: Number(current[3]),
+      warehouseChanged: Number(current[4]),
+      unitChanged: Number(current[5]),
+      inactiveSkipped: Number(current[6]),
+      notFound: Number(current[7]),
+      skipped: Number(current[8]),
+    };
+  }
+
+  // Tương thích các nhật ký đã ghi trước khi bổ sung số dòng nguồn.
+  const legacy = detail?.match(
+    /Cập nhật (\d+) mã \((\d+) mã đổi tồn, (\d+) mã đổi kho, (\d+) mã đổi ĐVT\), bỏ qua (\d+) mã ngừng sử dụng, (\d+) mã không có trong hệ thống và (\d+) dòng không hợp lệ/
+  );
+  return legacy ? {
+    sourceCount: Number(legacy[1]),
+    updated: Number(legacy[1]),
+    changed: Number(legacy[2]),
+    warehouseChanged: Number(legacy[3]),
+    unitChanged: Number(legacy[4]),
+    inactiveSkipped: Number(legacy[5]),
+    notFound: Number(legacy[6]),
+    skipped: Number(legacy[7]),
+  } : null;
+}
+
+export async function GET() {
+  return handle(async () => {
+    await requireUser();
+    const runs = await prisma.auditLog.findMany({
+      where: { action: "UPDATE_ERP_STOCK_FROM_QLVT", entity: "ErpMaterial" },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        createdAt: true,
+        detail: true,
+        user: {
+          select: {
+            name: true,
+            position: true,
+            currentPosition: true,
+          },
+        },
+      },
+    });
+
+    return ok(runs.map((run) => ({
+      id: run.id,
+      syncedAt: run.createdAt.toISOString(),
+      syncedBy: run.user.name,
+      position: run.user.currentPosition ?? run.user.position,
+      detail: run.detail,
+      ...syncCountsFromDetail(run.detail),
+    })));
+  });
+}
 
 export async function POST(req: NextRequest) {
   return handle(async () => {
@@ -18,6 +83,10 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const rows = Array.isArray(body?.rows) ? (body.rows as StockRow[]) : [];
+    const requestedSourceCount = Number(body?.sourceCount);
+    const sourceCount = Number.isSafeInteger(requestedSourceCount) && requestedSourceCount >= rows.length
+      ? requestedSourceCount
+      : rows.length;
     if (!rows.length) return fail("QLVT chưa trả về dòng vật tư hợp lệ");
 
     const existing = await prisma.erpMaterial.findMany({ select: { id: true, code: true, unit: true, erpStock: true, warehouse: true, isActive: true } });
@@ -79,14 +148,43 @@ export async function POST(req: NextRequest) {
     const changed = updates.filter((item) => item.before !== item.after).length;
     const warehouseChanged = updates.filter((item) => item.warehouse && item.warehouseBefore !== item.warehouse).length;
     const unitChanged = updates.filter((item) => item.unit && item.unitBefore !== item.unit).length;
+    const syncedAt = new Date();
+    const detail = auditDetailWithPosition(
+      user,
+      `Đọc ${sourceCount} dòng QLVT, xử lý ${updates.length} mã (${changed} mã đổi tồn, ${warehouseChanged} mã đổi kho, ${unitChanged} mã đổi ĐVT), bỏ qua ${inactiveSkipped} mã ngừng sử dụng, ${notFound} mã không có trong hệ thống và ${skipped} dòng không hợp lệ`
+    );
     await audit(
       user.id,
       "UPDATE_ERP_STOCK_FROM_QLVT",
       "ErpMaterial",
       undefined,
-      `Cập nhật ${updates.length} mã (${changed} mã đổi tồn, ${warehouseChanged} mã đổi kho, ${unitChanged} mã đổi ĐVT), bỏ qua ${inactiveSkipped} mã ngừng sử dụng, ${notFound} mã không có trong hệ thống và ${skipped} dòng không hợp lệ`
+      detail
     );
 
-    return ok({ updated: updates.length, changed, warehouseChanged, unitChanged, notFound, skipped, inactiveSkipped, errors });
+    return ok({
+      updated: updates.length,
+      changed,
+      warehouseChanged,
+      unitChanged,
+      notFound,
+      skipped,
+      inactiveSkipped,
+      errors,
+      sync: {
+        id: `pending-${syncedAt.getTime()}`,
+        syncedAt: syncedAt.toISOString(),
+        syncedBy: user.name ?? user.email ?? "Không xác định",
+        position: user.currentPosition ?? user.position ?? null,
+        detail,
+        sourceCount,
+        updated: updates.length,
+        changed,
+        warehouseChanged,
+        unitChanged,
+        inactiveSkipped,
+        notFound,
+        skipped,
+      },
+    });
   });
 }

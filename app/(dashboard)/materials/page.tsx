@@ -28,6 +28,7 @@ import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials,
 import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
+import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
@@ -575,6 +576,7 @@ function MaterialsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
+        {canManage && <QlvtSyncAction />}
         {canManage && (
           <Button variant="outline" onClick={() => setImportOpen(true)} title="Nhập/đồng bộ chi tiết điểm thay thế từ file Excel">
             <FileSpreadsheet className="h-4 w-4" /> Nhập điểm thay thế

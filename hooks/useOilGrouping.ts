@@ -117,7 +117,32 @@ export type ErpStockUpdateResult = {
   skipped: number;
   inactiveSkipped: number;
   errors: string[];
+  sync: QlvtSyncStatus;
 };
+
+export type QlvtSyncStatus = {
+  id: string;
+  syncedAt: string;
+  syncedBy: string;
+  position: string | null;
+  detail: string | null;
+  sourceCount: number;
+  updated: number;
+  changed: number;
+  warehouseChanged: number;
+  unitChanged: number;
+  inactiveSkipped: number;
+  notFound: number;
+  skipped: number;
+};
+
+export function useQlvtSyncStatus() {
+  return useQuery({
+    queryKey: ["qlvt-sync-status"],
+    queryFn: () => apiGet<QlvtSyncStatus[]>("/api/vat-tu/oil-grouping/stock-import"),
+    refetchInterval: 60_000,
+  });
+}
 
 export function useOilStock(category: GroupingCategory) {
   return useQuery({
@@ -207,9 +232,13 @@ export function useUpdateGroupedErpStock() {
 export function useSyncErpStocksFromQlvt() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (rows: ErpStockUpdateInput[]) =>
-      apiMutate<ErpStockUpdateResult>("/api/vat-tu/oil-grouping/stock-import", "POST", { rows }),
-    onSuccess: () => {
+    mutationFn: ({ rows, sourceCount }: { rows: ErpStockUpdateInput[]; sourceCount?: number }) =>
+      apiMutate<ErpStockUpdateResult>("/api/vat-tu/oil-grouping/stock-import", "POST", { rows, sourceCount }),
+    onSuccess: (result) => {
+      qc.setQueryData<{ data: QlvtSyncStatus[]; meta: unknown }>(["qlvt-sync-status"], (current) => ({
+        data: [result.sync, ...(current?.data ?? [])].slice(0, 5),
+        meta: current?.meta ?? null,
+      }));
       qc.invalidateQueries({ queryKey: ["grouped-erp-materials"] });
       qc.invalidateQueries({ queryKey: ["oil-stock"] });
       qc.invalidateQueries({ queryKey: ["materials"] });
