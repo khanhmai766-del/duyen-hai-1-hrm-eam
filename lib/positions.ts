@@ -184,6 +184,16 @@ export function announcementPositionLabel(position?: string | null) {
   return group?.canonical ?? clean;
 }
 
+/** So khớp cương vị nghiệp vụ, chấp nhận các bí danh và hậu tố tổ máy S1/S2. */
+export function announcementPositionsMatch(
+  left?: string | null,
+  right?: string | null
+) {
+  const leftLabel = announcementPositionLabel(left);
+  const rightLabel = announcementPositionLabel(right);
+  return Boolean(leftLabel && rightLabel && normalizeText(leftLabel) === normalizeText(rightLabel));
+}
+
 export function announcementPositionCode(position?: string | null): AnnouncementPositionCode | null {
   const label = announcementPositionLabel(position);
   const entry = Object.entries(ANNOUNCEMENT_POSITION_CODES).find(

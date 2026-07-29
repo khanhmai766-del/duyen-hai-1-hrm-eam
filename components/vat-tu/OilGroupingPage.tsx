@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Ban, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, Filter, FlaskConical, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -250,8 +250,10 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
   const createErp = useCreateGroupedErpMaterial();
   const [form, setForm] = useState<GroupedErpMaterialInput | null>(null);
   const [formError, setFormError] = useState("");
-  const [syncingQlvt, setSyncingQlvt] = useState(false);
+  const [qlvtStage, setQlvtStage] = useState<"idle" | "connecting" | "reading" | "updating">("idle");
+  const [syncIssue, setSyncIssue] = useState<{ code?: string; message: string; qlvtUrl?: string } | null>(null);
   const [showQlvtDisclosure, setShowQlvtDisclosure] = useState(false);
+  const syncingQlvt = qlvtStage !== "idle";
 
   function requestQlvtSync() {
     if (window.localStorage.getItem("qlvt-sync-disclosure-v1") === "accepted") {
@@ -267,11 +269,31 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
     void syncFromQlvt();
   }
 
+  function waitForQlvtExtension() {
+    return new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("message", onReady);
+        reject(new Error("Không tìm thấy tiện ích Đồng bộ QLVT. Hãy kiểm tra tiện ích đã được bật rồi tải lại trang này."));
+      }, 2_000);
+      function onReady(event: MessageEvent) {
+        if (event.source !== window || event.data?.source !== "DUYENHAI1_EXTENSION" || event.data?.type !== "QLVT_EXTENSION_READY") return;
+        window.clearTimeout(timeout);
+        window.removeEventListener("message", onReady);
+        resolve();
+      }
+      window.addEventListener("message", onReady);
+      window.postMessage({ source: "DUYENHAI1_WEB", type: "QLVT_EXTENSION_PING" }, window.location.origin);
+    });
+  }
+
   async function syncFromQlvt() {
     if (syncingQlvt) return;
-    setSyncingQlvt(true);
+    setSyncIssue(null);
+    setQlvtStage("connecting");
     const requestId = crypto.randomUUID();
     try {
+      await waitForQlvtExtension();
+      setQlvtStage("reading");
       const extensionResult = await new Promise<{
         ok: boolean;
         message?: string;
@@ -282,8 +304,8 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
       }>((resolve, reject) => {
         const timeout = window.setTimeout(() => {
           window.removeEventListener("message", onMessage);
-          reject(new Error("Không tìm thấy tiện ích Đồng bộ QLVT. Hãy cài hoặc tải lại tiện ích Chrome."));
-        }, 45_000);
+          reject(new Error("QLVT phản hồi quá thời gian. Hãy kiểm tra mạng công ty và thử lại."));
+        }, 90_000);
         function onMessage(event: MessageEvent) {
           if (event.source !== window || event.data?.source !== "DUYENHAI1_EXTENSION" || event.data?.type !== "QLVT_SYNC_RESPONSE" || event.data?.requestId !== requestId) return;
           window.clearTimeout(timeout);
@@ -295,21 +317,33 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
       });
 
       if (!extensionResult?.ok) {
-        if (extensionResult?.code === "QLVT_TAB_MISSING" && extensionResult.qlvtUrl) window.open(extensionResult.qlvtUrl, "_blank", "noopener,noreferrer");
-        throw new Error(extensionResult?.message || "Không lấy được dữ liệu từ QLVT");
+        const message = extensionResult?.message || "Không lấy được dữ liệu từ QLVT";
+        setSyncIssue({ code: extensionResult?.code, message, qlvtUrl: extensionResult?.qlvtUrl });
+        throw new Error(message);
       }
       const rows = extensionResult.rows ?? [];
       if (!rows.length) throw new Error("QLVT không trả về dòng tồn kho hợp lệ");
 
+      setQlvtStage("updating");
       const result = await syncStocks.mutateAsync(rows);
       toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho, ${result.warehouseChanged} mã đổi Kho, ${result.unitChanged} mã đổi ĐVT; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
       if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
     } catch (error) {
       toast.error((error as Error).message || "Không đồng bộ được tồn kho QLVT");
     } finally {
-      setSyncingQlvt(false);
+      setQlvtStage("idle");
     }
   }
+
+  const syncButtonLabel = qlvtStage === "connecting"
+    ? "Đang kết nối QLVT"
+    : qlvtStage === "reading"
+      ? "Đang đọc tồn kho"
+      : qlvtStage === "updating"
+        ? "Đang cập nhật"
+        : syncIssue?.code === "QLVT_SESSION_EXPIRED"
+          ? "Tiếp tục đồng bộ"
+          : "Đồng bộ từ QLVT";
 
   async function saveNew() {
     if (!form) return;
@@ -341,7 +375,7 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
   return (
     <>
       <Button type="button" variant="outline" size="sm" onClick={requestQlvtSync} disabled={syncingQlvt || syncStocks.isPending} className="border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 hover:text-cyan-900">
-        {syncingQlvt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} Đồng bộ từ QLVT
+        {syncingQlvt ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />} {syncButtonLabel}
       </Button>
       <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
         <Plus className="h-4 w-4" /> Thêm vật tư ERP
@@ -407,6 +441,29 @@ function GroupedErpActions({ category }: { category: GroupingCategory }) {
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowQlvtDisclosure(false)}>Hủy</Button>
             <Button type="button" onClick={acceptQlvtDisclosure}>Đồng ý và đồng bộ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!syncIssue} onOpenChange={(open) => !open && setSyncIssue(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="h-5 w-5" /> Chưa thể đồng bộ QLVT
+            </DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            {syncIssue?.message}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {syncIssue?.qlvtUrl && (
+              <Button type="button" variant="outline" onClick={() => window.open(syncIssue.qlvtUrl, "_blank", "noopener,noreferrer")}>
+                <ExternalLink className="h-4 w-4" /> Mở trang QLVT
+              </Button>
+            )}
+            <Button type="button" onClick={() => { setSyncIssue(null); void syncFromQlvt(); }}>
+              <RotateCcw className="h-4 w-4" /> {syncIssue?.code === "QLVT_SESSION_EXPIRED" ? "Đã đăng nhập – thử lại" : "Thử lại"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

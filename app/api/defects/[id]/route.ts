@@ -12,6 +12,7 @@ import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/
 import { validateDefectImages } from "@/lib/defect-images";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
+import { announcementPositionsMatch } from "@/lib/positions";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -36,9 +37,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!defect) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
 
     const access = await resolveEquipmentAccessForUser(user);
-    const canView = defect.deviceSeq
-      ? access.canViewSeq(defect.deviceSeq)
-      : access.canViewDeviceLike({ device: defect.device, system: defect.system });
+    // Phiếu đồng bộ chưa ánh xạ dùng cột Cương vị từ Sheet để phân quyền; khi
+    // đã ánh xạ thì chuyển sang áp scope cây thiết bị.
+    const canView =
+      defect.sourceType === "GOOGLE_SHEETS" && !defect.deviceSeq
+        ? announcementPositionsMatch(defect.system, user.currentPosition ?? user.position)
+        : defect.deviceSeq
+        ? access.canViewSeq(defect.deviceSeq)
+        : access.canViewDeviceLike({ device: defect.device, system: defect.system });
     if (access.hasExplicitScopes && !canView) {
       return fail("Cương vị của bạn không có quyền xem phiếu khiếm khuyết này", 403);
     }

@@ -10,10 +10,11 @@
 
 ## Sử dụng
 
-1. Mở và đăng nhập trang `https://qlvt.tpcduyenhai.com.vn/webapp/erp/page/EVN_INV_TONKHO/`.
-2. Giữ tab QLVT đang mở.
-3. Mở mục **Vật tư theo ERP** trên `https://duyenhai1.vn`.
-4. Nhấn **Đồng bộ từ QLVT**.
+1. Kết nối máy vào mạng công ty.
+2. Mở mục **Vật tư theo ERP** trên `https://duyenhai1.vn`.
+3. Nhấn **Đồng bộ từ QLVT**.
+4. Tiện ích tự tìm hoặc mở đúng trang tồn kho QLVT. Nếu phiên đã hết hạn,
+   đăng nhập QLVT rồi quay lại nhấn **Tiếp tục đồng bộ**.
 
 Tiện ích không đọc hoặc chuyển cookie, mật khẩu hay token sang PXVH1. Nó chỉ gọi API tồn kho ngay trong tab QLVT đã đăng nhập và trả về mã vật tư, kho, đơn vị tính, tồn kho.
 

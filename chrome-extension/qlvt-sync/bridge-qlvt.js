@@ -58,25 +58,88 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== "FETCH_QLVT_STOCK") return false;
 
   (async () => {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json; charset=UTF-8" },
-      body: JSON.stringify(PAYLOAD)
-    });
-    if (!response.ok) throw new Error(`QLVT phản hồi lỗi ${response.status}`);
+    let response;
+    try {
+      response = await fetch(API_URL, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify(PAYLOAD)
+      });
+    } catch {
+      sendResponse({
+        ok: false,
+        code: "QLVT_NETWORK_ERROR",
+        message: "Không kết nối được QLVT. Hãy kiểm tra máy đang dùng mạng công ty rồi thử lại."
+      });
+      return;
+    }
 
-    const wrapper = await response.json();
+    if (response.status === 401 || response.status === 403) {
+      sendResponse({
+        ok: false,
+        code: "QLVT_SESSION_EXPIRED",
+        message: "Phiên QLVT đã hết hạn. Vui lòng đăng nhập lại rồi tiếp tục đồng bộ."
+      });
+      return;
+    }
+    if (!response.ok) {
+      sendResponse({
+        ok: false,
+        code: "QLVT_SERVER_ERROR",
+        message: `QLVT phản hồi lỗi ${response.status}. Vui lòng thử lại sau.`
+      });
+      return;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    const responseText = await response.text();
+    if (response.redirected || contentType.includes("text/html") || /^\s*</.test(responseText)) {
+      sendResponse({
+        ok: false,
+        code: "QLVT_SESSION_EXPIRED",
+        message: "Phiên QLVT đã hết hạn. Vui lòng đăng nhập lại rồi tiếp tục đồng bộ."
+      });
+      return;
+    }
+
+    let wrapper;
+    try {
+      wrapper = JSON.parse(responseText);
+    } catch {
+      sendResponse({
+        ok: false,
+        code: "QLVT_RESPONSE_INVALID",
+        message: "QLVT trả về dữ liệu không hợp lệ. Vui lòng tải lại trang tồn kho rồi thử lại."
+      });
+      return;
+    }
     const raw = typeof wrapper?.d === "string" ? JSON.parse(wrapper.d) : wrapper?.d;
-    if (!Array.isArray(raw)) throw new Error("Phiên QLVT đã hết hạn hoặc dữ liệu trả về không hợp lệ");
+    if (!Array.isArray(raw)) {
+      sendResponse({
+        ok: false,
+        code: "QLVT_SESSION_EXPIRED",
+        message: "Phiên QLVT đã hết hạn hoặc không còn quyền xem tồn kho. Vui lòng đăng nhập lại."
+      });
+      return;
+    }
 
     const rows = normalizeRows(raw);
     if (!rows.length) {
       const sampleKeys = raw[0] && typeof raw[0] === "object" ? Object.keys(raw[0]).join(", ") : "không có dữ liệu";
-      throw new Error(`Không nhận diện được cột mã/tồn kho từ QLVT (${sampleKeys})`);
+      sendResponse({
+        ok: false,
+        code: "QLVT_DATA_EMPTY",
+        message: `QLVT không trả về dòng tồn kho có thể sử dụng (${sampleKeys}). Hệ thống chưa cập nhật dữ liệu.`
+      });
+      return;
     }
     sendResponse({ ok: true, rows, sourceCount: raw.length, receivedAt: new Date().toISOString() });
-  })().catch((error) => sendResponse({ ok: false, message: error?.message || "Không lấy được dữ liệu tồn kho QLVT" }));
+  })().catch((error) => sendResponse({
+    ok: false,
+    code: "QLVT_UNEXPECTED_ERROR",
+    message: error?.message || "Không lấy được dữ liệu tồn kho QLVT"
+  }));
 
   return true;
 });

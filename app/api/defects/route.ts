@@ -15,7 +15,7 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 import { nextDefectRequestNumber } from "@/lib/defect-request-number";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { normalizeText } from "@/lib/nav";
-import { announcementPositionLabel } from "@/lib/positions";
+import { announcementPositionLabel, announcementPositionsMatch } from "@/lib/positions";
 
 export const dynamic = "force-dynamic";
 
@@ -270,9 +270,18 @@ export async function GET(req: NextRequest) {
       .filter(
         (defect) =>
           !access.hasExplicitScopes ||
-          // Có deviceSeq → đã qua lọc SQL; chỉ phiếu chưa gắn thiết bị mới xét rule text cũ.
-          !!defect.deviceSeq ||
-          access.canViewDeviceLike({ device: defect.device, system: defect.system })
+          (
+            // Phiếu Google Sheets chưa ánh xạ chưa có deviceSeq chuẩn, nhưng Sheet
+            // đã có cột Cương vị (lưu ở system), nên chỉ trả về đúng cương vị đang
+            // làm việc. Sau khi ánh xạ, quyền xem bám theo cây thiết bị.
+            defect.sourceType === "GOOGLE_SHEETS" &&
+            !defect.deviceSeq
+              ? announcementPositionsMatch(defect.system, user.currentPosition ?? user.position)
+              // Có deviceSeq → đã qua lọc SQL; chỉ phiếu cũ chưa gắn thiết bị mới
+              // xét rule text tương thích.
+              : !!defect.deviceSeq ||
+                access.canViewDeviceLike({ device: defect.device, system: defect.system })
+          )
       )
       .filter(
         (defect) =>
