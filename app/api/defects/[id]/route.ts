@@ -60,6 +60,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+    const isInitialSheetMapping =
+      existing.sourceType === "GOOGLE_SHEETS"
+      && !existing.websiteCreated
+      && !existing.deviceSeq;
     const content = body.content === undefined ? String(existing.content ?? "").trim() : String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
     const relatedDeviceSeqs = body.relatedDeviceSeqs === undefined
@@ -73,10 +77,29 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       [body.device ?? undefined, ...(relatedDeviceSeqs ?? [])],
       String(body.unit ?? existing.unit ?? "")
     );
-    if (existing.device) await assertSeqEditable(user, existing.device);
-    if (body.device) await assertSeqEditable(user, String(body.device));
+    if (isInitialSheetMapping) {
+      // Quyền xem phiếu chưa ánh xạ đã bao gồm quan hệ quản lý (Trưởng ca,
+      // Trưởng kíp, Lò trưởng, Máy trưởng). Cho phép các cương vị đó thực hiện
+      // ánh xạ lần đầu, nhưng chỉ vào các nhánh thiết bị họ được phép xem.
+      if (!canViewUnmappedDefectPosition(existing.system, user.currentPosition ?? user.position)) {
+        return fail("Cương vị của bạn không có quyền ánh xạ phiếu khiếm khuyết này", 403);
+      }
+      const access = await resolveEquipmentAccessForUser(user);
+      const requestedSeqs = [
+        body.device === undefined ? null : String(body.device ?? "").trim(),
+        ...(relatedDeviceSeqs ?? []),
+      ].filter((seq): seq is string => !!seq);
+      if (access.hasExplicitScopes && requestedSeqs.some((seq) => !access.canViewSeq(seq))) {
+        return fail("Thiết bị được chọn nằm ngoài phạm vi quản lý của cương vị", 403);
+      }
+    } else {
+      if (existing.deviceSeq) await assertSeqEditable(user, existing.deviceSeq);
+      if (body.device) await assertSeqEditable(user, String(body.device));
+      if (relatedDeviceSeqs) {
+        await Promise.all(relatedDeviceSeqs.map((seq) => assertSeqEditable(user, seq)));
+      }
+    }
     if (relatedDeviceSeqs) {
-      await Promise.all(relatedDeviceSeqs.map((seq) => assertSeqEditable(user, seq)));
       const existingRelatedCount = await prisma.equipmentNode.count({ where: { seq: { in: relatedDeviceSeqs } } });
       if (existingRelatedCount !== relatedDeviceSeqs.length) return fail("Có thiết bị liên quan không tồn tại");
     }

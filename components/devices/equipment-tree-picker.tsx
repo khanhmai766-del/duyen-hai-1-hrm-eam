@@ -41,18 +41,18 @@ function seqIsSameOrDescendant(seq: string, ancestor: string) {
 /**
  * Bộ lọc quyền chạy trên materialized path (seq), không cần tải toàn bộ cây.
  * Tổ tiên của một scope được phép hiện để người dùng có thể mở tới nhánh được cấp quyền,
- * nhưng chỉ node thực sự có quyền "edit" mới được chọn.
+ * nhưng chỉ node đạt mức quyền yêu cầu mới được chọn.
  */
 function lazyPositionAccess(
   seq: string,
   position: string | null | undefined,
   scopes: PositionSystemScope[],
-  accessFilter?: "edit"
+  accessFilter?: "view" | "edit"
 ) {
   if (!accessFilter || !position) return { visible: true, selectable: true };
 
   const explicit = scopesForPosition(scopes, position);
-  const scopeConfigurationActive = scopes.some((scope) => normalizeScopeAccess(scope.access) === "edit");
+  const scopeConfigurationActive = scopes.some((scope) => normalizeScopeAccess(scope.access) !== "none");
   if (!scopeConfigurationActive && explicit.length === 0) return { visible: true, selectable: true };
 
   let inherited: "none" | "view" | "edit" = "none";
@@ -66,13 +66,15 @@ function lazyPositionAccess(
     }
   }
 
-  const selectable = inherited === "edit";
-  const leadsToEditableBranch = explicit.some(
+  const isAllowed = (access: "none" | "view" | "edit") =>
+    accessFilter === "edit" ? access === "edit" : access === "view" || access === "edit";
+  const selectable = isAllowed(inherited);
+  const leadsToAllowedBranch = explicit.some(
     (scope) =>
-      normalizeScopeAccess(scope.access) === "edit" &&
+      isAllowed(normalizeScopeAccess(scope.access)) &&
       seqIsSameOrDescendant(scope.systemSeq, seq)
   );
-  return { visible: selectable || leadsToEditableBranch, selectable };
+  return { visible: selectable || leadsToAllowedBranch, selectable };
 }
 
 /**
@@ -105,7 +107,7 @@ export function EquipmentTreePicker({
   onChange: (node: PickerEquipmentNode | null) => void;
   position?: string | null;
   rootSeq?: string | null;
-  accessFilter?: "edit";
+  accessFilter?: "view" | "edit";
   includeLeaves?: boolean;
   leafOnly?: boolean;
   maxSelectableDepth?: number;

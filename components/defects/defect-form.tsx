@@ -398,7 +398,10 @@ export function DefectForm({
                   <EquipmentTreePicker
                     value={form.deviceSystemSeq}
                     position={form.system || null}
-                    accessFilter="edit"
+                    // Phiếu Sheet chưa ánh xạ được các cương vị quản lý xử lý
+                    // trong phạm vi cây họ được xem. Sau khi đã ánh xạ, mọi lần
+                    // sửa tiếp theo vẫn phải theo quyền chỉnh sửa thiết bị.
+                    accessFilter={isSynced && !defect?.deviceSeq ? "view" : "edit"}
                     includeLeaves
                     leafOnly
                     selectedValues={[form.device, ...form.relatedDeviceSeqs].filter(Boolean)}
