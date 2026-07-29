@@ -60,22 +60,6 @@ function toDeviceRecord(
   };
 }
 
-/**
- * Bản rút gọn cho màn hình thống kê: đúng 5 trường mà trang Báo cáo đọc.
- * Bỏ images/attachedInfo/documentUrl/qrCodeData/repairLogs, bỏ luôn id (trùng hệt code),
- * kks và systemSeq (không nơi nào trong Báo cáo dùng) — với 21.948 thiết bị, mỗi trường
- * thừa là vài trăm KB trên đường truyền.
- */
-function toDeviceSummary(device: DeviceListRecord) {
-  return {
-    code: device.code,
-    name: device.name,
-    system: device.system,
-    managingPosition: device.managingPosition,
-    repairCount: device._count.repairLogs,
-  };
-}
-
 type DeviceUsageStats = {
   repairCount?: number;
   latestRepairAt?: Date | null;
@@ -169,10 +153,6 @@ export async function GET(req: NextRequest) {
     await requireDeviceView(user);
     const sp = req.nextUrl.searchParams;
     const permissionScope = sp.get("permissionScope")?.trim();
-    // "summary": chỉ các trường mà màn hình thống kê thực sự đọc. Trang Báo cáo phải duyệt
-    // toàn bộ 21.948 thiết bị để tổng hợp, không lọc bớt được — nhưng ảnh/QR/tài liệu đính
-    // kèm thì nó không đụng tới, mà đó lại là phần chiếm gần hết dung lượng trả về.
-    const summary = sp.get("view") === "summary";
     const canAccessAllDevices = await canBypassEquipmentPositionScope(user, permissionScope);
 
     const cacheKey = deviceListCacheKey(user, {
@@ -199,7 +179,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return ok(summary ? result.data.map(toDeviceSummary) : result.data, result.meta);
+    return ok(result.data, result.meta);
   });
 }
 
