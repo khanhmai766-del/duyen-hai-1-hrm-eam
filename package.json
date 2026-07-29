@@ -17,6 +17,7 @@
     "db:reset-equipment-tree": "node scripts/reset-equipment-tree.mjs",
     "import:equipment-tree": "node scripts/import-equipment-tree.mjs",
     "admin:reset": "tsx scripts/reset-admin-password.ts",
+    "sync:replacement-s2": "tsx scripts/sync-s2-replacement-details.ts",
     "migrate:files-to-s3": "tsx scripts/migrate-files-to-s3.ts",
     "audit:s3:compact": "tsx scripts/compact-audit-s3.ts"
   },
