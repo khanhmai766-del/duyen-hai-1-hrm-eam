@@ -178,7 +178,11 @@ export async function POST(req: NextRequest) {
     const point = await prisma.$transaction(async (tx) => {
       // Khoá tuần tự theo đúng vật tư + thiết bị để hai yêu cầu đồng thời không thể
       // cùng đọc một lượt trống rồi tạo vượt quá số lượng thiết bị đã khai báo.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${targetLockKey}))`;
+      // pg_advisory_xact_lock trả về PostgreSQL void; ép sang text để Prisma không
+      // lỗi P2010 khi giải mã kết quả của $queryRaw.
+      await tx.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${targetLockKey}))::text AS lock_result
+      `;
 
       const declaration = await tx.materialReplacement.findFirst({
         where: {
