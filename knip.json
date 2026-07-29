@@ -5,10 +5,10 @@
     "app/**/{page,layout,route,loading,error,not-found,template,default}.{ts,tsx}",
     "middleware.ts",
     "prisma/seed.ts",
-    "scripts/**/*.{ts,mjs}"
+    "scripts/**/*.{ts,mjs}",
+    "components/ui/**"
   ],
   "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "hooks/**/*.ts", "lib/**/*.ts", "types/**/*.ts"],
-  "ignore": ["components/ui/**"],
   "ignoreDependencies": ["playwright-core"],
   "ignoreBinaries": ["pm2"]
 }
