@@ -71,9 +71,7 @@ function DeviceDetailPageContent() {
     ? `/devices?view=tree&scope=${encodeURIComponent(deviceMachine)}&focusSeq=${encodeURIComponent(device.id)}`
     : "/devices?view=tree";
   const fullHistoryUrl = device
-    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}${
-        deviceMachine === "COMMON" ? "" : `&unit=${encodeURIComponent(deviceMachine)}`
-      }`
+    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}&mappedUnit=${encodeURIComponent(deviceMachine)}`
     : "/repair-history";
 
   async function createQrCard() {
@@ -300,7 +298,7 @@ function DeviceDetailPageContent() {
               </Button>
             )}
             <Button asChild variant="link" size="sm">
-              <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}`}>Xem danh sách</Link>
+              <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}`}>Xem danh sách</Link>
             </Button>
           </div>
         </CardHeader>
@@ -347,7 +345,7 @@ function DeviceDetailPageContent() {
               })}
               {device.currentDefects.length > 6 && (
                 <div className="col-span-full rounded-lg border border-dashed border-amber-200 bg-amber-50/60 px-4 py-3 text-center text-sm text-amber-800">
-                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}`} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
+                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}`} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
                 </div>
               )}
             </div>

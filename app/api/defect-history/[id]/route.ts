@@ -5,12 +5,13 @@ import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-a
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
 };
@@ -35,6 +36,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           ? (await prisma.equipmentNode.findUnique({ where: { seq: body.device.trim() }, select: { seq: true } }))?.seq ?? null
           : null
         : undefined;
+    const nextDeviceSeq = deviceSeq === undefined ? existing.deviceSeq : deviceSeq;
+    const nextUnit = body.unit !== undefined ? body.unit : existing.unit;
+    const mappedDeviceUnit = normalizeMappedUnit(
+      body.mappedDeviceUnit ?? existing.mappedDeviceUnit,
+      nextUnit,
+      nextDeviceSeq
+    );
+    if (nextDeviceSeq && (body.device !== undefined || body.unit !== undefined || body.mappedDeviceUnit !== undefined)) {
+      const mappingError = validateMappedDevice(nextDeviceSeq, mappedDeviceUnit, nextUnit);
+      if (mappingError) return fail(mappingError);
+    }
 
     const history = await prisma.defectHistory.update({
       where: { id: params.id },
@@ -42,6 +54,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         unit: body.unit !== undefined ? body.unit : undefined,
         device: body.device !== undefined ? body.device?.trim() || null : undefined,
         deviceSeq,
+        mappedDeviceUnit:
+          body.device !== undefined || body.unit !== undefined || body.mappedDeviceUnit !== undefined
+            ? mappedDeviceUnit
+            : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         requestType: body.requestType !== undefined ? body.requestType?.trim() || null : undefined,
         workOrderNumber: body.workOrderNumber !== undefined ? body.workOrderNumber?.trim() || null : undefined,

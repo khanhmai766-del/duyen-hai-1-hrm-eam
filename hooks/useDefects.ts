@@ -11,6 +11,7 @@ export interface DefectItem extends Defect {
   environmentSafetyImpact: string | null;
   relatedDevices: Array<{
     deviceSeq: string;
+    mappedUnit: string | null;
     device: { seq: string; name: string };
   }>;
   pendingHistory: {
@@ -23,6 +24,7 @@ export interface DefectListParams {
   page?: number;
   limit?: number;
   unit?: string;
+  mappedUnit?: string;
   requestType?: string;
   position?: string;
   mapping?: string;

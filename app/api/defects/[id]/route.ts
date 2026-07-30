@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { deleteFromS3, maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -14,13 +13,18 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { canViewUnmappedDefectPosition } from "@/lib/positions";
 import { positionCodeOf } from "@/lib/position-catalog";
+import {
+  normalizeMappedUnit,
+  validateMappedDevice,
+  type DefectDeviceMapping,
+} from "@/lib/defect-device-mapping";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
   node: { select: { seq: true, name: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
   pendingHistory: {
@@ -68,16 +72,49 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const content = body.content === undefined ? String(existing.content ?? "").trim() : String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
     const relatedDeviceSeqs = body.relatedDeviceSeqs === undefined
-      ? undefined
+      ? body.relatedDeviceMappings === undefined
+        ? undefined
+        : normalizeRelatedDeviceSeqs(
+            Array.isArray(body.relatedDeviceMappings)
+              ? body.relatedDeviceMappings.map((item: { deviceSeq?: unknown }) => item?.deviceSeq)
+              : [],
+            body.device ?? existing.deviceSeq ?? existing.device
+          )
       : normalizeRelatedDeviceSeqs(body.relatedDeviceSeqs, body.device ?? existing.deviceSeq ?? existing.device);
     if (relatedDeviceSeqs === null) {
       return fail(`Danh sách thiết bị liên quan không hợp lệ hoặc vượt quá ${MAX_DEFECT_RELATED_DEVICES} thiết bị`);
     }
-    // Tổ máy quyết định CÂY thiết bị được phép gắn (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
-    assertSeqsInScope(
-      [body.device ?? undefined, ...(relatedDeviceSeqs ?? [])],
-      String(body.unit ?? existing.unit ?? "")
-    );
+    const defectUnit = String(body.unit ?? existing.unit ?? "");
+    const mappedDeviceUnit = body.mappedDeviceUnit !== undefined
+      ? normalizeMappedUnit(body.mappedDeviceUnit, defectUnit, body.device ?? existing.deviceSeq)
+      : normalizeMappedUnit(existing.mappedDeviceUnit, defectUnit, existing.deviceSeq);
+    const rawRelatedMappings = Array.isArray(body.relatedDeviceMappings)
+      ? body.relatedDeviceMappings as Array<{ deviceSeq?: unknown; mappedUnit?: unknown }>
+      : [];
+    const relatedDeviceMappings: DefectDeviceMapping[] | undefined = relatedDeviceSeqs?.map((deviceSeq) => {
+      const raw = rawRelatedMappings.find((item) => String(item?.deviceSeq ?? "").trim() === deviceSeq);
+      return {
+        deviceSeq,
+        mappedUnit: normalizeMappedUnit(raw?.mappedUnit, defectUnit, deviceSeq),
+      };
+    });
+    const primarySeq = body.device !== undefined
+      ? String(body.device ?? "").trim()
+      : existing.deviceSeq ?? "";
+    const mappingFieldsRequested =
+      body.deviceSystemSeq !== undefined
+      || body.device !== undefined
+      || body.relatedDeviceSeqs !== undefined
+      || body.relatedDeviceMappings !== undefined
+      || body.mappedDeviceUnit !== undefined;
+    if (primarySeq && mappingFieldsRequested) {
+      const mappingError = validateMappedDevice(primarySeq, mappedDeviceUnit, defectUnit);
+      if (mappingError) return fail(mappingError);
+    }
+    for (const mapping of relatedDeviceMappings ?? []) {
+      const mappingError = validateMappedDevice(mapping.deviceSeq, mapping.mappedUnit, defectUnit);
+      if (mappingError) return fail(mappingError);
+    }
     if (isInitialSheetMapping) {
       // Quyền xem phiếu chưa ánh xạ đã bao gồm quan hệ quản lý (Trưởng ca,
       // Trưởng kíp, Lò trưởng, Máy trưởng). Cho phép các cương vị đó thực hiện
@@ -105,10 +142,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (existingRelatedCount !== relatedDeviceSeqs.length) return fail("Có thiết bị liên quan không tồn tại");
     }
     if (existing.sourceType === "GOOGLE_SHEETS" && !existing.websiteCreated) {
-      const mappingRequested =
-        body.deviceSystemSeq !== undefined
-        || body.device !== undefined
-        || body.relatedDeviceSeqs !== undefined;
+      const mappingRequested = mappingFieldsRequested;
       const requestedDeviceSeq = String(body.device ?? "").trim();
       const requestedSystemSeq = String(body.deviceSystemSeq ?? "").trim();
       if (mappingRequested && !requestedSystemSeq) return fail("Vui lòng chọn Hệ thống trước khi lưu ánh xạ");
@@ -203,6 +237,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           createdById: user.id,
           device: mappingRequested && body.device !== undefined ? body.device || null : undefined,
           deviceSeq,
+          mappedDeviceUnit: mappingRequested ? mappedDeviceUnit : undefined,
           severity,
           status,
           condition,
@@ -224,7 +259,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           relatedDevices: relatedDeviceSeqs
             ? {
                 deleteMany: {},
-                create: relatedDeviceSeqs.map((relatedSeq) => ({ deviceSeq: relatedSeq })),
+                create: (relatedDeviceMappings ?? []).map(({ deviceSeq, mappedUnit }) => ({ deviceSeq, mappedUnit })),
               }
             : undefined,
           },
@@ -315,6 +350,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           commonSubUnit,
           device: body.device !== undefined ? body.device || null : undefined,
           deviceSeq,
+          mappedDeviceUnit: body.device !== undefined || body.mappedDeviceUnit !== undefined
+            ? mappedDeviceUnit
+            : undefined,
           system: body.system !== undefined ? body.system || null : undefined,
           positionCode: body.system !== undefined ? positionCodeOf(body.system) : undefined,
           severity: body.severity !== undefined ? body.severity || null : undefined,
@@ -350,7 +388,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           relatedDevices: relatedDeviceSeqs
             ? {
                 deleteMany: {},
-                create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
+                create: (relatedDeviceMappings ?? []).map(({ deviceSeq, mappedUnit }) => ({ deviceSeq, mappedUnit })),
               }
             : undefined,
         },

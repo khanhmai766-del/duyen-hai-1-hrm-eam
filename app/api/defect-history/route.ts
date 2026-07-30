@@ -5,6 +5,7 @@ import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } f
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { dateRange, parseDateInput } from "@/lib/utils";
+import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ const INCLUDE = {
   // (~10 MB) chỉ để dựng bảng tra mã → tên cho các dòng đang hiển thị.
   node: { select: { seq: true, name: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
 };
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const system = searchParams.get("system");
     const unit = searchParams.get("unit");
+    const mappedUnit = searchParams.get("mappedUnit");
     const workOrderNumber = searchParams.get("workOrderNumber");
     const device = searchParams.get("device");
     const deviceSeq = searchParams.get("deviceSeq")?.trim();
@@ -39,13 +41,35 @@ export async function GET(req: NextRequest) {
     const andConditions: Record<string, unknown>[] = [];
     if (system) where.system = system;
     if (unit) where.unit = unit;
+    if (!deviceSeq && mappedUnit && ["S1", "S2", "COMMON"].includes(mappedUnit)) {
+      andConditions.push({
+        OR: [
+          { mappedDeviceUnit: mappedUnit },
+          { mappedDeviceUnit: null, unit: mappedUnit },
+          { relatedDevices: { some: { mappedUnit } } },
+        ],
+      });
+    }
     if (workOrderNumber) where.workOrderNumber = { contains: workOrderNumber, mode: "insensitive" };
     if (device) where.device = { contains: device, mode: "insensitive" };
     if (deviceSeq) {
       andConditions.push({
         OR: [
-          { deviceSeq },
-          { relatedDevices: { some: { deviceSeq } } },
+          {
+            deviceSeq,
+            ...(mappedUnit ? {
+              OR: [
+                { mappedDeviceUnit: mappedUnit },
+                { mappedDeviceUnit: null, unit: mappedUnit },
+              ],
+            } : {}),
+          },
+          ...(mappedUnit
+            ? [
+                { relatedDevices: { some: { deviceSeq, mappedUnit } } },
+                { unit: mappedUnit, relatedDevices: { some: { deviceSeq, mappedUnit: null } } },
+              ]
+            : [{ relatedDevices: { some: { deviceSeq } } }]),
         ],
       });
     }
@@ -100,12 +124,18 @@ export async function POST(req: NextRequest) {
     const deviceSeq = deviceValue
       ? (await prisma.equipmentNode.findUnique({ where: { seq: deviceValue }, select: { seq: true } }))?.seq ?? null
       : null;
+    const mappedDeviceUnit = normalizeMappedUnit(body.mappedDeviceUnit, body.unit, deviceSeq);
+    if (deviceSeq) {
+      const mappingError = validateMappedDevice(deviceSeq, mappedDeviceUnit, body.unit);
+      if (mappingError) return fail(mappingError);
+    }
 
     const history = await prisma.defectHistory.create({
       data: {
         unit: body.unit,
         device: deviceValue,
         deviceSeq,
+        mappedDeviceUnit: deviceSeq ? mappedDeviceUnit : null,
         system: body.system?.trim() || null,
         requestType: body.requestType?.trim() || null,
         workOrderNumber: body.workOrderNumber?.trim() || null,

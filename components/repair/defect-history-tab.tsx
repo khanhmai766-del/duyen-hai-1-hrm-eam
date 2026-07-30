@@ -49,6 +49,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const searchParams = useSearchParams();
   const deviceFromUrl = searchParams.get("device")?.trim() ?? "";
   const deviceSeqFromUrl = searchParams.get("deviceSeq")?.trim() ?? "";
+  const mappedUnitFromUrl = searchParams.get("mappedUnit")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.trim().toUpperCase() ?? "";
   const rbac = useRbacAccess();
   const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
@@ -59,6 +60,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const [filters, setFilters] = React.useState<DefectHistoryFilters>(() => ({
     ...(deviceFromUrl ? { device: deviceFromUrl } : {}),
     ...(deviceSeqFromUrl ? { deviceSeq: deviceSeqFromUrl } : {}),
+    ...(mappedUnitFromUrl ? { mappedUnit: mappedUnitFromUrl } : {}),
     ...(["S1", "S2", "COMMON"].includes(unitFromUrl) ? { unit: unitFromUrl } : {}),
   }));
   const { data, isLoading } = useDefectHistory(filters);
@@ -486,7 +488,9 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
         <DetailLine
           label="Thiết bị liên quan"
           value={row.relatedDevices.length > 0
-            ? row.relatedDevices.map((item) => `${item.device.name} (${item.deviceSeq})`).join("\n")
+            ? row.relatedDevices
+                .map((item) => `${item.device.name} (${item.deviceSeq} · ${item.mappedUnit ?? row.mappedDeviceUnit ?? row.unit})`)
+                .join("\n")
             : "—"}
           multiline
         />

@@ -8,6 +8,7 @@ export interface DefectHistoryItem extends DefectHistory {
   createdBy: { id: string; name: string; position: string | null; avatarUrl?: string | null };
   relatedDevices: Array<{
     deviceSeq: string;
+    mappedUnit: string | null;
     device: { seq: string; name: string };
   }>;
   /** Tên thiết bị lấy thẳng từ cây — khỏi phải tải cả danh mục để tra mã → tên. */
@@ -17,6 +18,7 @@ export interface DefectHistoryItem extends DefectHistory {
 export interface DefectHistoryFilters {
   system?: string;
   unit?: string;
+  mappedUnit?: string;
   workOrderNumber?: string;
   device?: string;
   deviceSeq?: string;

@@ -473,6 +473,7 @@ model Defect {
   unit                       String // Tổ máy: S1 | S2
   commonSubUnit              String? // Khi unit = COMMON: BOP | CHUNG — Sheet có 4 giá trị Tổ máy, tách riêng để không gộp mất thông tin
   deviceSeq                  String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
+  mappedDeviceUnit           String? // hồ sơ thiết bị được ánh xạ: S1 | S2 | COMMON; độc lập với unit của phiếu
   device                     String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
   system                     String? // Cương vị (chức vụ phụ trách)
   positionCode               String? // mã cương vị ổn định; system/sourcePositionRaw giữ nhãn gốc để hiển thị và đối soát
@@ -609,6 +610,7 @@ model DefectReminderLog {
 model DefectRelatedDevice {
   defectId  String
   deviceSeq String
+  mappedUnit String? // hồ sơ thiết bị liên quan: S1 | S2 | COMMON
   createdAt DateTime @default(now())
 
   defect Defect        @relation(fields: [defectId], references: [id], onDelete: Cascade)
@@ -626,6 +628,7 @@ model DefectHistory {
   defectId        String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
   unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
   deviceSeq       String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq) — dùng lọc quyền/nhánh bằng SQL
+  mappedDeviceUnit String? // snapshot hồ sơ thiết bị đã ánh xạ: S1 | S2 | COMMON
   device          String? // Thiết bị (mã thiết bị) — snapshot text, giữ lại khi node bị xóa
   system          String? // Cương vị (snapshot theo khiếm khuyết)
   requestType     String? // PCT (loại yêu cầu: Cơ | Điện | Hóa | …) — đồng bộ "Yêu Cầu"
@@ -767,6 +770,7 @@ model DefectSyncOutbox {
 model DefectHistoryRelatedDevice {
   historyId String
   deviceSeq String
+  mappedUnit String? // snapshot hồ sơ thiết bị liên quan: S1 | S2 | COMMON
   createdAt DateTime @default(now())
 
   history DefectHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)

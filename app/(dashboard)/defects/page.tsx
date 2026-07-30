@@ -273,6 +273,7 @@ export default function DefectsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
+  const mappedUnitFilter = searchParams.get("mappedUnit")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.toUpperCase();
   const requestFromUrl = searchParams.get("requestType")?.trim();
   const positionFromUrl = searchParams.get("position")?.trim();
@@ -352,6 +353,7 @@ export default function DefectsPage() {
     page,
     limit: pageSize,
     unit: unitFilter,
+    mappedUnit: mappedUnitFilter,
     requestType: requestFilter,
     position: positionFilter,
     status: statusFilter,
@@ -359,7 +361,7 @@ export default function DefectsPage() {
     repairResult: repairResultFilter,
     q: deferredSearch,
     deviceSeq: deviceSeqFilter,
-  }), [page, pageSize, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, deferredSearch, deviceSeqFilter]);
+  }), [page, pageSize, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, deferredSearch, deviceSeqFilter]);
   const { data, isLoading, isFetching } = useDefects(listParams);
   const pagedDefects = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
@@ -375,6 +377,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     const query = new URLSearchParams();
     if (deviceSeqFilter) query.set("deviceSeq", deviceSeqFilter);
+    if (mappedUnitFilter) query.set("mappedUnit", mappedUnitFilter);
     if (unitFilter !== "S1") query.set("unit", unitFilter);
     if (requestFilter !== "Cơ") query.set("requestType", requestFilter);
     if (positionFilter !== "ALL") query.set("position", positionFilter);
@@ -388,6 +391,7 @@ export default function DefectsPage() {
   }, [
     deferredSearch,
     deviceSeqFilter,
+    mappedUnitFilter,
     page,
     pageSize,
     positionFilter,
@@ -542,13 +546,13 @@ export default function DefectsPage() {
             <p className="truncate font-semibold text-ink">
               {deviceDisplayName ?? "Thiết bị"}
               <span className="ml-2 font-mono text-sm font-normal text-muted-foreground">
-                {scopeCode(deviceSeqFilter, parseScope(unitFilter))}
+                {scopeCode(deviceSeqFilter, parseScope(mappedUnitFilter || unitFilter))}
               </span>
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button asChild variant="outline" size="sm" className="bg-white">
-              <Link href={`/devices/${encodeURIComponent(deviceSeqFilter)}?machine=${parseScope(unitFilter)}`}>
+              <Link href={`/devices/${encodeURIComponent(deviceSeqFilter)}?machine=${parseScope(mappedUnitFilter || unitFilter)}`}>
                 Về lý lịch thiết bị
               </Link>
             </Button>
@@ -988,13 +992,20 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         {defect.sourceType === "GOOGLE_SHEETS" && (
           <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
         )}
-        {/* Mã hiển thị theo tổ máy của phiếu: S2 → DH1.S2… (DB vẫn lưu mã chuẩn DH1.S1). */}
-        <DetailLine label="Thiết bị đã ánh xạ" value={defect.device ? scopeCode(defect.device, parseScope(defect.unit)) : "—"} />
+        <DetailLine
+          label="Thiết bị đã ánh xạ"
+          value={defect.device
+            ? `${scopeCode(defect.device, parseScope(defect.mappedDeviceUnit ?? defect.unit))} · ${defect.mappedDeviceUnit ?? defect.unit}`
+            : "—"}
+        />
         <DetailLine
           label="Thiết bị liên quan"
           value={defect.relatedDevices.length > 0
             ? defect.relatedDevices
-                .map((item) => `${item.device.name} (${scopeCode(item.deviceSeq, parseScope(defect.unit))})`)
+                .map((item) => {
+                  const mappedUnit = item.mappedUnit ?? defect.mappedDeviceUnit ?? defect.unit;
+                  return `${item.device.name} (${scopeCode(item.deviceSeq, parseScope(mappedUnit))} · ${mappedUnit})`;
+                })
                 .join("\n")
             : "—"}
           multiline

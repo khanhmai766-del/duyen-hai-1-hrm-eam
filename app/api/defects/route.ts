@@ -3,7 +3,6 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
 import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -21,6 +20,11 @@ import {
   canViewUnmappedDefectPosition,
 } from "@/lib/positions";
 import { positionCodeOf } from "@/lib/position-catalog";
+import {
+  normalizeMappedUnit,
+  validateMappedDevice,
+  type DefectDeviceMapping,
+} from "@/lib/defect-device-mapping";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +33,7 @@ const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
   node: { select: { seq: true, name: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
   pendingHistory: {
@@ -41,6 +45,7 @@ const LIST_SELECT = {
   id: true,
   unit: true,
   deviceSeq: true,
+  mappedDeviceUnit: true,
   device: true,
   system: true,
   severity: true,
@@ -60,7 +65,7 @@ const LIST_SELECT = {
   createdBy: { select: { name: true } },
   pendingHistory: { select: { startedAt: true, finalizeAt: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { name: true } } },
   },
 } satisfies Prisma.DefectSelect;
 
@@ -75,7 +80,7 @@ const PAGE_SELECT = {
   },
   node: { select: { seq: true, name: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
 } satisfies Prisma.DefectSelect;
@@ -131,6 +136,7 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(params.get("limit") ?? "10", 10) || 10));
     const unit = params.get("unit")?.trim();
+    const mappedUnit = params.get("mappedUnit")?.trim();
     const requestType = params.get("requestType")?.trim();
     const position = params.get("position")?.trim();
     const mapping = params.get("mapping")?.trim();
@@ -151,7 +157,15 @@ export async function GET(req: NextRequest) {
       AND: [
         activeDefectWhere(),
         ...(scopeWhere ? [{ OR: [scopeWhere, { deviceSeq: null }] } as Prisma.DefectWhereInput] : []),
-        ...(unit ? [{ unit }] : []),
+        ...(!deviceSeq && mappedUnit && ["S1", "S2", "COMMON"].includes(mappedUnit)
+          ? [{
+              OR: [
+                { mappedDeviceUnit: mappedUnit },
+                { mappedDeviceUnit: null, unit: mappedUnit },
+                { relatedDevices: { some: { mappedUnit } } },
+              ],
+            } as Prisma.DefectWhereInput]
+          : unit ? [{ unit }] : []),
         ...(requestType && requestType !== "ALL" ? [{ requestType }] : []),
         ...(mapping === "MAPPED"
           ? [{ sourceType: "GOOGLE_SHEETS", deviceSeq: { not: null } }]
@@ -161,9 +175,22 @@ export async function GET(req: NextRequest) {
         ...(deviceSeq
           ? [{
               OR: [
-                { deviceSeq },
+                {
+                  deviceSeq,
+                  ...(mappedUnit ? {
+                    OR: [
+                      { mappedDeviceUnit: mappedUnit },
+                      { mappedDeviceUnit: null, unit: mappedUnit },
+                    ],
+                  } : {}),
+                },
                 { AND: [{ deviceSeq: null }, { device: deviceSeq }] },
-                { relatedDevices: { some: { deviceSeq } } },
+                ...(mappedUnit
+                  ? [
+                      { relatedDevices: { some: { deviceSeq, mappedUnit } } },
+                      { unit: mappedUnit, relatedDevices: { some: { deviceSeq, mappedUnit: null } } },
+                    ]
+                  : [{ relatedDevices: { some: { deviceSeq } } }]),
               ],
             } as Prisma.DefectWhereInput]
           : []),
@@ -389,13 +416,30 @@ export async function POST(req: NextRequest) {
     if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
       return fail("Vui lòng chọn BOP hoặc CHUNG");
     }
-    const relatedDeviceSeqs = normalizeRelatedDeviceSeqs(body.relatedDeviceSeqs, body.device);
+    const rawRelatedMappings = Array.isArray(body.relatedDeviceMappings)
+      ? body.relatedDeviceMappings as Array<{ deviceSeq?: unknown; mappedUnit?: unknown }>
+      : [];
+    const relatedDeviceSeqs = normalizeRelatedDeviceSeqs(
+      body.relatedDeviceSeqs ?? rawRelatedMappings.map((item) => item.deviceSeq),
+      body.device
+    );
     if (relatedDeviceSeqs === null) {
       return fail(`Danh sách thiết bị liên quan không hợp lệ hoặc vượt quá ${MAX_DEFECT_RELATED_DEVICES} thiết bị`);
     }
     if (!String(body.shiftLeaderId ?? "").trim()) return fail("Vui lòng chọn Trưởng ca");
-    // Tổ máy quyết định CÂY thiết bị được phép gắn (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
-    assertSeqsInScope([body.device, ...relatedDeviceSeqs], String(body.unit));
+    const mappedDeviceUnit = normalizeMappedUnit(body.mappedDeviceUnit, body.unit, body.device);
+    const relatedDeviceMappings: DefectDeviceMapping[] = relatedDeviceSeqs.map((deviceSeq) => {
+      const raw = rawRelatedMappings.find((item) => String(item?.deviceSeq ?? "").trim() === deviceSeq);
+      return { deviceSeq, mappedUnit: normalizeMappedUnit(raw?.mappedUnit, body.unit, deviceSeq) };
+    });
+    if (body.device) {
+      const mappingError = validateMappedDevice(String(body.device), mappedDeviceUnit, body.unit);
+      if (mappingError) return fail(mappingError);
+    }
+    for (const mapping of relatedDeviceMappings) {
+      const mappingError = validateMappedDevice(mapping.deviceSeq, mapping.mappedUnit, body.unit);
+      if (mappingError) return fail(mappingError);
+    }
     if (body.device) await assertSeqEditable(user, String(body.device));
     await Promise.all(relatedDeviceSeqs.map((seq) => assertSeqEditable(user, seq)));
     if (relatedDeviceSeqs.length > 0) {
@@ -434,6 +478,7 @@ export async function POST(req: NextRequest) {
           commonSubUnit,
           device: body.device || null,
           deviceSeq,
+          mappedDeviceUnit: deviceSeq ? mappedDeviceUnit : null,
           system: body.system || null,
           positionCode: positionCodeOf(body.system),
           severity: body.severity || null,
@@ -460,7 +505,7 @@ export async function POST(req: NextRequest) {
           environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
           createdById: user.id,
           relatedDevices: {
-            create: relatedDeviceSeqs.map((deviceSeq) => ({ deviceSeq })),
+            create: relatedDeviceMappings.map(({ deviceSeq, mappedUnit }) => ({ deviceSeq, mappedUnit })),
           },
         },
         include: INCLUDE,

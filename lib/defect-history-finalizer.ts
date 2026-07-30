@@ -93,7 +93,7 @@ export async function finalizePendingDefectHistories(
         include: {
           defect: {
             include: {
-              relatedDevices: { select: { deviceSeq: true } },
+              relatedDevices: { select: { deviceSeq: true, mappedUnit: true } },
             },
           },
         },
@@ -133,6 +133,7 @@ export async function finalizePendingDefectHistories(
           unit: defect.unit,
           device: defect.device,
           deviceSeq: defect.deviceSeq,
+          mappedDeviceUnit: defect.mappedDeviceUnit,
           system: defect.system,
           requestType: pending.requestType || defect.requestType,
           // Nội dung chính của lịch sử do Vận hành nhập khi xác nhận.
@@ -151,7 +152,7 @@ export async function finalizePendingDefectHistories(
           // Người nhập lịch sử là VHV cập nhật phiếu gần nhất.
           createdById: defect.createdById,
           relatedDevices: {
-            create: defect.relatedDevices.map(({ deviceSeq }) => ({ deviceSeq })),
+            create: defect.relatedDevices.map(({ deviceSeq, mappedUnit }) => ({ deviceSeq, mappedUnit })),
           },
         },
         select: { id: true },

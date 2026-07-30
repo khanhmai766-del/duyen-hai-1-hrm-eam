@@ -15,7 +15,7 @@ const HISTORY_COMPLETED_PENDING_DAYS = 2;
 const HISTORY_INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
 };
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const defect = await prisma.defect.findUnique({
       where: { id: params.id },
-      include: { relatedDevices: { select: { deviceSeq: true } } },
+      include: { relatedDevices: { select: { deviceSeq: true, mappedUnit: true } } },
     });
     if (!defect) return fail("Không tìm thấy khiếm khuyết", 404);
     const sheetOrigin = defect.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
@@ -134,6 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           unit: defect.unit,
           device: defect.device,
           deviceSeq: defect.deviceSeq, // khóa chuẩn kế thừa từ phiếu khiếm khuyết (Tầng 1)
+          mappedDeviceUnit: defect.mappedDeviceUnit,
           system: defect.system,
           requestType: body.requestType?.trim() || defect.requestType,
           content: body.content?.trim() || defect.content,
@@ -149,7 +150,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           images: [],
           createdById: user.id,
           relatedDevices: {
-            create: defect.relatedDevices.map(({ deviceSeq }) => ({ deviceSeq })),
+            create: defect.relatedDevices.map(({ deviceSeq, mappedUnit }) => ({ deviceSeq, mappedUnit })),
           },
         },
         include: HISTORY_INCLUDE,

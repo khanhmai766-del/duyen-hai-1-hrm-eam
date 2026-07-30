@@ -11,7 +11,7 @@ const INCLUDE = {
     select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true },
   },
   relatedDevices: {
-    select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+    select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
     orderBy: { createdAt: "asc" as const },
   },
 };

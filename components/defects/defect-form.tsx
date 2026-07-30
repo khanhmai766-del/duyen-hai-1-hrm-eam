@@ -33,6 +33,7 @@ import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import type { TreeScope } from "@/lib/equipment-units";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 import { positionsMatch } from "@/lib/position-catalog";
+import { allowedMappedUnits, normalizeMappedUnit } from "@/lib/defect-device-mapping";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -69,6 +70,11 @@ export function DefectForm({
   // đồng bộ vòng về từ Sheet. Chỉ phiếu có nguồn gốc thật sự từ Sheet mới dùng
   // màn hình ánh xạ cục bộ.
   const isSynced = defect?.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
+  const initialMappedUnit = normalizeMappedUnit(
+    defect?.mappedDeviceUnit,
+    defect?.unit ?? initialDevice?.unit,
+    defect?.deviceSeq ?? initialDevice?.code
+  );
   const create = useCreateDefect();
   const update = useUpdateDefect();
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
@@ -88,7 +94,14 @@ export function DefectForm({
     unit: defect?.unit ?? initialDevice?.unit ?? "",
     commonSubUnit: defect?.commonSubUnit ?? "",
     device: defect?.device ?? initialDevice?.code ?? "",
+    mappedDeviceUnit: initialMappedUnit,
     relatedDeviceSeqs: defect?.relatedDevices?.map((item) => item.deviceSeq) ?? [],
+    relatedDeviceUnits: Object.fromEntries(
+      (defect?.relatedDevices ?? []).map((item) => [
+        item.deviceSeq,
+        normalizeMappedUnit(item.mappedUnit, defect?.unit, item.deviceSeq),
+      ])
+    ) as Record<string, TreeScope>,
     deviceSystem: initialDevice?.system ?? "",
     deviceSystemSeq: initialDevice?.systemSeq ?? "",
     system: defect?.system ?? initialDevice?.managingPosition ?? "",
@@ -112,6 +125,11 @@ export function DefectForm({
     sourceDeviceRaw: defect?.sourceDeviceRaw ?? "",
     images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
   });
+  const [mappingScope, setMappingScope] = React.useState<TreeScope>(initialMappedUnit);
+  React.useEffect(() => {
+    const allowed = allowedMappedUnits(form.unit);
+    if (!allowed.includes(mappingScope)) setMappingScope(allowed[0]);
+  }, [form.unit, mappingScope]);
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -149,21 +167,22 @@ export function DefectForm({
     setForm((f) => {
       const commonSubUnit = u === "COMMON" ? f.commonSubUnit : "";
       if (f.unit === u) return { ...f, commonSubUnit };
-      const cleared = { deviceSystem: "", deviceSystemSeq: "", device: "", relatedDeviceSeqs: [] };
+      const cleared = {
+        deviceSystem: "",
+        deviceSystemSeq: "",
+        device: "",
+        mappedDeviceUnit: normalizeMappedUnit(undefined, u),
+        relatedDeviceSeqs: [],
+        relatedDeviceUnits: {},
+      };
       if (f.system && !isPositionAllowedForDefectUnit(u, f.system)) {
         return { ...f, unit: u, commonSubUnit, system: "", ...cleared };
       }
       return { ...f, unit: u, commonSubUnit, ...cleared };
     });
   }
-  // Phạm vi cây theo tổ máy đang chọn: khiếm khuyết S1 ánh xạ vào cây S1 (DH1.S1…),
-  // S2 vào cây S2 (DH1.S2…), COMMON vào nhánh dùng chung 5, 6.
-  const treeScope = React.useMemo<TreeScope | undefined>(
-    () => (DEFECT_UNITS as readonly string[]).includes(form.unit) ? (form.unit as TreeScope) : undefined,
-    [form.unit]
-  );
-  const selectedDeviceQuery = useEquipmentNode(form.device || null, treeScope);
-  const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, treeScope);
+  const selectedDeviceQuery = useEquipmentNode(form.device || null, form.mappedDeviceUnit);
+  const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, form.mappedDeviceUnit);
   React.useEffect(() => {
     const deviceName = selectedDeviceQuery.data?.data.name;
     if (!deviceName) return;
@@ -188,12 +207,22 @@ export function DefectForm({
     setForm((current) => {
       if (node.seq === current.device) {
         const [nextPrimary = "", ...remaining] = current.relatedDeviceSeqs;
-        return { ...current, device: nextPrimary, relatedDeviceSeqs: remaining };
+        return {
+          ...current,
+          device: nextPrimary,
+          mappedDeviceUnit: nextPrimary
+            ? current.relatedDeviceUnits[nextPrimary] ?? mappingScope
+            : normalizeMappedUnit(undefined, current.unit),
+          relatedDeviceSeqs: remaining,
+        };
       }
       if (current.relatedDeviceSeqs.includes(node.seq)) {
         return {
           ...current,
           relatedDeviceSeqs: current.relatedDeviceSeqs.filter((seq) => seq !== node.seq),
+          relatedDeviceUnits: Object.fromEntries(
+            Object.entries(current.relatedDeviceUnits).filter(([seq]) => seq !== node.seq)
+          ),
         };
       }
       if (!current.device) {
@@ -202,25 +231,41 @@ export function DefectForm({
           deviceSystem: "",
           deviceSystemSeq: node.parentSeq ?? "",
           device: node.seq,
+          mappedDeviceUnit: mappingScope,
           relatedDeviceSeqs: [],
+          relatedDeviceUnits: {},
         };
       }
       if (current.relatedDeviceSeqs.length >= 20) {
         toast.error("Mỗi khiếm khuyết chỉ được chọn tối đa 20 thiết bị liên quan");
         return current;
       }
-      return { ...current, relatedDeviceSeqs: [...current.relatedDeviceSeqs, node.seq] };
+      return {
+        ...current,
+        relatedDeviceSeqs: [...current.relatedDeviceSeqs, node.seq],
+        relatedDeviceUnits: { ...current.relatedDeviceUnits, [node.seq]: mappingScope },
+      };
     });
   }
   function removeMappedDevice(seq: string) {
     setForm((current) => {
       if (seq === current.device) {
         const [nextPrimary = "", ...remaining] = current.relatedDeviceSeqs;
-        return { ...current, device: nextPrimary, relatedDeviceSeqs: remaining };
+        return {
+          ...current,
+          device: nextPrimary,
+          mappedDeviceUnit: nextPrimary
+            ? current.relatedDeviceUnits[nextPrimary] ?? mappingScope
+            : normalizeMappedUnit(undefined, current.unit),
+          relatedDeviceSeqs: remaining,
+        };
       }
       return {
         ...current,
         relatedDeviceSeqs: current.relatedDeviceSeqs.filter((item) => item !== seq),
+        relatedDeviceUnits: Object.fromEntries(
+          Object.entries(current.relatedDeviceUnits).filter(([item]) => item !== seq)
+        ),
       };
     });
   }
@@ -274,7 +319,12 @@ export function DefectForm({
         if (form.deviceSystemSeq) {
           syncedPayload.deviceSystemSeq = form.deviceSystemSeq;
           syncedPayload.device = form.device || null;
+          syncedPayload.mappedDeviceUnit = form.mappedDeviceUnit;
           syncedPayload.relatedDeviceSeqs = form.relatedDeviceSeqs;
+          syncedPayload.relatedDeviceMappings = form.relatedDeviceSeqs.map((deviceSeq) => ({
+            deviceSeq,
+            mappedUnit: form.relatedDeviceUnits[deviceSeq] ?? form.mappedDeviceUnit,
+          }));
           syncedPayload.postRepairAwaitingMaterial = form.postRepairAwaitingMaterial;
         }
         // Chỉ gửi ảnh khi VHV chủ động lưu tại tab hình ảnh.
@@ -297,10 +347,15 @@ export function DefectForm({
       deviceSystemSeq: _deviceSystemSeq,
       reminderCount: _reminderCount,
       lastRemindedAt: _lastRemindedAt,
+      relatedDeviceUnits: _relatedDeviceUnits,
       ...defectForm
     } = form;
     const payload = {
       ...defectForm,
+      relatedDeviceMappings: form.relatedDeviceSeqs.map((deviceSeq) => ({
+        deviceSeq,
+        mappedUnit: form.relatedDeviceUnits[deviceSeq] ?? form.mappedDeviceUnit,
+      })),
       detectedAt: form.detectedAt || null,
     };
     try {
@@ -398,8 +453,25 @@ export function DefectForm({
                 <LockedValue primary={initialDevice.system || "Chưa xác định hệ thống"} secondary={initialDevice.systemSeq || undefined} />
               ) : (
                 <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-muted/25 p-2">
+                    {allowedMappedUnits(form.unit).map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        onClick={() => setMappingScope(unit)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                          mappingScope === unit
+                            ? "bg-navy text-white shadow-sm"
+                            : "bg-white text-muted-foreground hover:text-ink"
+                        )}
+                      >
+                        {unit === "COMMON" ? "Thiết bị COMMON" : `Thiết bị ${unit}`}
+                      </button>
+                    ))}
+                  </div>
                   <EquipmentTreePicker
-                    value={form.deviceSystemSeq}
+                    value={mappingScope === form.mappedDeviceUnit ? form.deviceSystemSeq : ""}
                     position={form.system || null}
                     // Phiếu Sheet chưa ánh xạ được các cương vị quản lý xử lý
                     // trong phạm vi cây họ được xem. Sau khi đã ánh xạ, mọi lần
@@ -410,15 +482,17 @@ export function DefectForm({
                     selectedValues={[form.device, ...form.relatedDeviceSeqs].filter(Boolean)}
                     keepOpenOnSelect
                     allowClear={false}
-                    scope={treeScope}
-                    disabled={!treeScope}
+                    scope={mappingScope}
+                    disabled={!form.unit}
                     selectionLabel={
                       form.device
                         ? `${form.deviceSystem || "Hệ thống đã chọn"} · ${1 + form.relatedDeviceSeqs.length} thiết bị`
                         : undefined
                     }
                     onChange={selectMappedDevice}
-                    placeholder={treeScope ? "Mở cây và chọn một hoặc nhiều thiết bị con" : "Chọn tổ máy trước"}
+                    placeholder={form.unit
+                      ? `Mở cây ${mappingScope} và chọn một hoặc nhiều thiết bị con`
+                      : "Chọn tổ máy trước"}
                   />
                   <p className="text-xs text-muted-foreground">
                     Thiết bị đầu tiên xác định Hệ thống chính; các thiết bị liên quan có thể thuộc Hệ thống khác.
@@ -432,8 +506,8 @@ export function DefectForm({
               ) : form.device ? (
                 <RelatedDeviceRow
                   seq={form.device}
-                  scope={treeScope}
-                  role="Thiết bị chính"
+                  scope={form.mappedDeviceUnit}
+                  role={`Thiết bị chính · ${form.mappedDeviceUnit}`}
                   onRemove={() => removeMappedDevice(form.device)}
                 />
               ) : (
@@ -451,8 +525,8 @@ export function DefectForm({
                         <RelatedDeviceRow
                           key={seq}
                           seq={seq}
-                          scope={treeScope}
-                          role="Thiết bị liên quan"
+                          scope={form.relatedDeviceUnits[seq] ?? form.mappedDeviceUnit}
+                          role={`Thiết bị liên quan · ${form.relatedDeviceUnits[seq] ?? form.mappedDeviceUnit}`}
                           onRemove={() => removeMappedDevice(seq)}
                         />
                       );
