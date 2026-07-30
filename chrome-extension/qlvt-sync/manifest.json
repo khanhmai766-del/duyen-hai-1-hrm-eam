@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Đồng bộ tồn kho QLVT - PXVH1",
-  "version": "1.0.4",
-  "description": "Cầu nối an toàn giữa QLVT Duyên Hải và hệ thống quản lý vật tư PXVH1.",
+  "name": "Đồng bộ QLVT & LIMS - PXVH1",
+  "version": "1.1.0",
+  "description": "Cầu nối an toàn giữa QLVT / LIMS Duyên Hải và hệ thống quản lý vật tư PXVH1.",
   "homepage_url": "https://duyenhai1.vn/public/qlvt-sync-privacy",
   "icons": {
     "16": "icons/icon-16.png",
@@ -12,22 +12,40 @@
   },
   "host_permissions": [
     "https://qlvt.tpcduyenhai.com.vn/*",
+    "https://portal.tpcduyenhai.com.vn/*",
     "https://duyenhai1.vn/*",
-    "http://localhost:3000/*"
+    "http://localhost:3000/*",
+    "http://localhost:3030/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://duyenhai1.vn/vat-tu/*", "http://localhost:3000/vat-tu/*"],
+      "matches": [
+        "https://duyenhai1.vn/*",
+        "http://localhost:3000/*",
+        "http://localhost:3030/*"
+      ],
       "js": ["bridge-app.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://qlvt.tpcduyenhai.com.vn/webapp/erp/page/EVN_INV_TONKHO/*"],
       "js": ["bridge-qlvt.js"],
-      "run_at": "document_idle"
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://portal.tpcduyenhai.com.vn/lims.xhtml*"],
+      "js": ["bridge-lims-page.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://portal.tpcduyenhai.com.vn/lims.xhtml*"],
+      "js": ["bridge-lims.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
     }
   ]
 }

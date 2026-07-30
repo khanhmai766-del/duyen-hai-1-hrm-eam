@@ -749,18 +749,18 @@ model DefectRequestSequence {
 // Transactional outbox cho chiều DH1 → Google Sheet. Không đặt FK với Defect để
 // vẫn giữ được dấu vết/retry nếu phiếu được chuyển lịch sử hoặc xóa sau đó.
 model DefectSyncOutbox {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   defectId      String
   eventType     String // CREATE | UPDATE | REMIND
   payload       Json
-  status        String   @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED
-  attemptCount  Int      @default(0)
-  nextAttemptAt DateTime @default(now())
+  status        String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
   claimedAt     DateTime?
   completedAt   DateTime?
   lastError     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([status, nextAttemptAt, createdAt])
   @@index([defectId, createdAt])
@@ -1337,4 +1337,32 @@ model OilTypeMappingLog {
 
   @@index([materialId])
   @@map("oil_type_mapping_logs")
+}
+
+// Kết quả phân tích dầu KHÔNG ĐẠT, đọc một chiều từ LIMS
+// (portal.tpcduyenhai.com.vn/lims.xhtml) qua tiện ích Chrome.
+// Chỉ lưu đúng các trường hiển thị ở bảng danh sách LIMS — không lấy chi tiết
+// chỉ tiêu. App chỉ ĐỌC: mọi thay đổi nghiệp vụ vẫn thực hiện trên LIMS.
+model OilAnalysisFailure {
+  id     String @id @default(cuid())
+  limsId String @unique // data-rk (GUID) của dòng trên LIMS — khoá đối chiếu
+
+  soPhieu    String // cột "Số", vd 23/07/26-04
+  khuVuc     String // Duyên Hải 1 / 3 / 3 Mở Rộng
+  donVi      String // cột "Đơn vị", vd PX Vận hành 1
+  tenMau     String // cột "Tên mẫu dầu"
+  ngayLayMau DateTime?
+  danhGia    String?
+  ykienPkt   String? // Ý kiến PKT
+  ykienQlvh  String? // Ý kiến QLVH — do PX Vận hành điền TRÊN LIMS, ở đây chỉ hiển thị
+  ngayTraKq  DateTime?
+
+  firstSeenAt DateTime @default(now()) // lần đầu đồng bộ về — dùng để đánh dấu "mới"
+  syncedAt    DateTime @default(now()) // lần đồng bộ gần nhất chạm vào bản ghi
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([khuVuc, donVi])
+  @@index([ngayTraKq])
+  @@map("oil_analysis_failures")
 }

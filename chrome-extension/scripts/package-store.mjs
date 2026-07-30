@@ -16,7 +16,13 @@ for (const script of manifest.content_scripts ?? []) {
 
 await rm(stageRoot, { recursive: true, force: true });
 await mkdir(path.join(stageRoot, "icons"), { recursive: true });
-for (const file of ["background.js", "bridge-app.js", "bridge-qlvt.js"]) {
+for (const file of [
+  "background.js",
+  "bridge-app.js",
+  "bridge-qlvt.js",
+  "bridge-lims-page.js",
+  "bridge-lims.js",
+]) {
   await cp(path.join(extensionRoot, file), path.join(stageRoot, file));
 }
 for (const size of [16, 32, 48, 128]) {

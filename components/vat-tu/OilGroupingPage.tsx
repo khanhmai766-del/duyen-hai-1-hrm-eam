@@ -489,7 +489,7 @@ function GroupedErpActions({
         const timeout = window.setTimeout(() => {
           window.removeEventListener("message", onMessage);
           reject(new Error("QLVT phản hồi quá thời gian. Hãy kiểm tra mạng công ty và thử lại."));
-        }, 90_000);
+        }, 300_000);
         function onMessage(event: MessageEvent) {
           if (event.source !== window || event.data?.source !== "DUYENHAI1_EXTENSION" || event.data?.type !== "QLVT_SYNC_RESPONSE" || event.data?.requestId !== requestId) return;
           window.clearTimeout(timeout);

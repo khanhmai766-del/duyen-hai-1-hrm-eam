@@ -129,6 +129,17 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Forum kỹ thuật", href: "/forum", icon: MessagesSquare, keywords: "forum dien dan trao doi ky thuat tai lieu quy trinh so do ban ve" },
     ],
   },
+  {
+    title: "TIỆN ÍCH",
+    items: [
+      {
+        label: "Kết quả phân tích dầu",
+        href: "/tien-ich/phan-tich-dau",
+        icon: FlaskConical,
+        keywords: "lims ket qua phan tich dau khong dat mau dau thi nghiem hoa y kien pkt qlvh oil analysis tien ich",
+      },
+    ],
+  },
 ];
 
 const STATISTICS_ALLOWED_SECTION_KEYS = new Set(["quan ly nguoi dung", "quan ly vat tu"]);

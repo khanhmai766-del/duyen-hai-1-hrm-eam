@@ -61,6 +61,13 @@ All handlers follow the same shape using helpers in `lib/api.ts`:
 ### Images & signatures
 Profile photos (`User.avatarUrl`), signatures (`User.signatureUrl`), device images, defect/announcement attachments are stored **inline as base64 data URLs** in Postgres text columns (client-side downscaled before save, e.g. avatars to 256×256). There is no object storage / upload endpoint for these.
 
+### External read-only syncs via the Chrome extension (`chrome-extension/qlvt-sync`)
+Two EVN internal systems are read through a single MV3 extension: the web page posts a same-origin message → `bridge-app.js` → `background.js` finds/opens the source tab → a per-source content script reads data **inside the already-logged-in tab** and returns rows. Cookies never leave the source tab; nothing is ever written back to the source system.
+- **QLVT** (`bridge-qlvt.js`) → `POST /api/vat-tu/oil-grouping/stock-import`. Easy case: QLVT exposes a JSON web service, one request returns all inventory.
+- **LIMS** (`bridge-lims.js` in ISOLATED world + `bridge-lims-page.js` in MAIN world) → `POST /api/lims/oil-analysis/import`, surfaced at `/tien-ich/phan-tich-dau` (nav section **TIỆN ÍCH**). LIMS is a stateful JSF/PrimeFaces app with **no API**, so the MAIN-world bridge drives PrimeFaces widgets and scrapes the result table while the isolated bridge owns `chrome.runtime` messaging. Read `chrome-extension/qlvt-sync/README.md` before touching it — it records the non-obvious traps (only developer-named widget ids are stable, LIMS's own column filters break its paginator, `pfAjaxComplete` is the only reliable "AJAX done" signal, and `đ`→`d` folding is mandatory or the `Đơn vị`/`Đánh giá` headers never match).
+
+When adding a JS file to the extension, also add it to the file list in `chrome-extension/scripts/package-store.mjs`, or the Web Store package ships broken.
+
 ### Self-service vs admin edits
 `/api/me` (PUT) lets any logged-in user edit their own `avatarUrl / signatureUrl / phone / email / employeeId`; only ADMIN may additionally change `name / position / department / role`. `/api/users` is the ADMIN-only CRUD for all users. The account page (`app/(dashboard)/account`) uses `/api/me`; `app/(dashboard)/admin/users` uses `/api/users`.
 
