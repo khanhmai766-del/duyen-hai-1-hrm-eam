@@ -34,6 +34,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DeviceForm } from "@/components/devices/device-form";
+import { DeviceGuideButton } from "@/components/devices/device-guide-button";
 import { EquipmentTreeView } from "@/components/devices/equipment-tree";
 import { defaultScopeOf, parseScope, scopeCode, seqInScope, TREE_SCOPES, type TreeScope } from "@/lib/equipment-units";
 import { QRModal } from "@/components/devices/qr-modal";
@@ -174,6 +175,7 @@ function DevicesPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
+        <DeviceGuideButton canManage={canManageDevices} />
         {view === "tree" && (
           <ExportButton
             getRows={getTreeExportRows}
