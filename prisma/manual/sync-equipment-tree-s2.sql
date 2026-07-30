@@ -13,7 +13,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS "EquipmentNode_externalId_key" ON "EquipmentNo
 CREATE INDEX IF NOT EXISTS "EquipmentNode_kks_idx" ON "EquipmentNode" ("kks");
 CREATE INDEX IF NOT EXISTS "EquipmentNode_name_idx" ON "EquipmentNode" ("name");
 
--- Hồ sơ theo tổ máy (bảng THƯA — chỉ có dòng khi "Tạo hồ sơ S2" / override)
+-- Ghi đè theo tổ máy (bảng THƯA, mặc định RỖNG — chỉ có dòng khi một tổ máy đặt
+-- tên/KKS/ảnh/tài liệu khác node gốc; phạm vi tổ máy tự suy từ số nhánh của seq)
 CREATE TABLE IF NOT EXISTS "EquipmentProfile" (
   id TEXT PRIMARY KEY,
   "nodeSeq" TEXT NOT NULL,

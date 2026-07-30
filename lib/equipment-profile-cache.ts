@@ -20,7 +20,7 @@ let generation = 0;
 
 async function load(): Promise<OverrideMap> {
   const rows = await prisma.equipmentProfile.findMany({
-    // Chỉ dòng THỰC SỰ ghi đè — bỏ qua hàng chục nghìn dòng chỉ đánh dấu "đã có hồ sơ".
+    // Cây chỉ cần tên/KKS; các ghi đè khác (ảnh/tài liệu) đọc ở màn hình chi tiết thiết bị.
     where: { OR: [{ name: { not: null } }, { kks: { not: null } }] },
     select: { nodeSeq: true, machine: true, name: true, kks: true },
   });

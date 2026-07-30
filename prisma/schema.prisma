@@ -302,7 +302,8 @@ model RepairLog {
   createdBy  User          @relation("CreatedBy", fields: [createdById], references: [id])
   approvedBy User?         @relation("ApprovedBy", fields: [approvedById], references: [id])
 
-  @@index([deviceSeq])
+  // Lọc theo riêng deviceSeq dùng chung index [deviceSeq, machine] — B-tree phục vụ
+  // được mọi tiền tố cột, nên không cần index đơn [deviceSeq] nữa.
   @@index([deviceSeq, machine])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
   @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "repairlog_deviceseq_prefix")
@@ -442,8 +443,8 @@ model MaterialReplacementLog {
   replacement MaterialReplacement @relation(fields: [replacementId], references: [id], onDelete: Cascade)
   doneBy      User                @relation("MrDoneBy", fields: [doneById], references: [id])
 
-  @@index([replacementId])
-  // Lịch sử "các lần thay tại điểm X, mới nhất trước" đọc thẳng từ index.
+  // Lịch sử "các lần thay tại điểm X, mới nhất trước" đọc thẳng từ index; lọc theo
+  // riêng replacementId cũng dùng chính index này (tiền tố cột đầu).
   @@index([replacementId, replacedAt(sort: Desc)])
   @@index([doneById])
   @@index([replacedAt])
@@ -461,8 +462,8 @@ model EquipmentMaterial {
   device   EquipmentNode @relation(fields: [deviceSeq], references: [seq], onDelete: Cascade)
   material Material      @relation(fields: [materialId], references: [id])
 
-  @@index([deviceSeq])
-  // Lịch sử "vật tư đã dùng cho thiết bị X, mới nhất trước" đọc thẳng từ index.
+  // Lịch sử "vật tư đã dùng cho thiết bị X, mới nhất trước" đọc thẳng từ index; lọc
+  // theo riêng deviceSeq cũng dùng chính index này (tiền tố cột đầu).
   @@index([deviceSeq, usedAt(sort: Desc)])
   @@index([materialId])
 }
@@ -542,16 +543,17 @@ model Defect {
   pendingHistory DefectHistoryPending?
   reminderLogs   DefectReminderLog[]
 
-  @@index([deviceSeq])
   @@index([positionCode])
+  // Bảng này phình nhanh nhất (mỗi ca trực đẻ thêm phiếu) nên chỉ giữ index KHÔNG
+  // trùng nhau: B-tree phục vụ được mọi tiền tố cột, nên [deviceSeq], [status] và
+  // [unit, status] đã nằm trong ba index composite ngay dưới đây.
+  //
   // Lịch sử "khiếm khuyết của thiết bị X, mới nhất trước" đọc thẳng từ index.
   @@index([deviceSeq, createdAt(sort: Desc)])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
   @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "defect_deviceseq_prefix")
   @@index([device])
   @@index([system])
-  @@index([status])
-  @@index([unit, status])
   @@index([detectedAt])
   @@index([shiftLeaderId])
   @@index([createdAt])
@@ -656,8 +658,8 @@ model DefectHistory {
   node           EquipmentNode?               @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
   relatedDevices DefectHistoryRelatedDevice[]
 
-  @@index([deviceSeq])
-  // Lịch sử "của thiết bị X, mới nhất trước" đọc thẳng từ index.
+  // Lịch sử "của thiết bị X, mới nhất trước" đọc thẳng từ index; lọc theo riêng
+  // deviceSeq cũng dùng chính index này (tiền tố cột đầu).
   @@index([deviceSeq, performedAt(sort: Desc)])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
   @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "defecthistory_deviceseq_prefix")
@@ -974,10 +976,13 @@ model EquipmentNode {
   @@index([name])
 }
 
-// Hồ sơ theo TỔ MÁY trên cây thiết bị dùng chung (phương án S2): một nút có thể có hồ sơ
-// S1 / S2 / COMMON. Bảng THƯA — chỉ tạo dòng khi bấm "Tạo hồ sơ S2 từ S1" hoặc khi một
-// tổ máy cần override thông tin riêng. Mã S2 (DH1.S1→DH1.S2) và KKS S2 (ký tự đầu 1→2)
-// là DẪN XUẤT từ node (lib/equipment-units.ts) — chỉ lưu tại đây khi người dùng sửa khác đi.
+// GHI ĐÈ theo TỔ MÁY trên cây thiết bị dùng chung. Bảng THƯA và mặc định RỖNG.
+//
+// Một nút KHÔNG cần dòng ở đây để "tồn tại" ở một tổ máy: phạm vi tổ máy suy ra từ số
+// nhánh của seq (machinesOf() — nhánh 5,6 → COMMON; còn lại → S1+S2), mã S2
+// (DH1.S1→DH1.S2) và KKS S2 (ký tự đầu 1→2) đều là DẪN XUẤT (lib/equipment-units.ts).
+// Chỉ tạo dòng khi một tổ máy đặt tên/KKS/ảnh/tài liệu KHÁC với node gốc.
+//
 // Dữ liệu nghiệp vụ KHÔNG nằm ở đây: repair/defect/vật tư/QR phân tổ máy bằng cột
 // machine/unit trên chính bảng nghiệp vụ (deviceSeq vẫn trỏ node → giữ lọc quyền theo nhánh).
 model EquipmentProfile {

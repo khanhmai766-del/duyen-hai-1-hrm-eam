@@ -1,22 +1,20 @@
-// Nhân bản hồ sơ tổ máy S2 từ S1 trên cây thiết bị dùng chung.
+// Nhân bản KHAI BÁO VẬT TƯ & ĐIỂM THAY THẾ từ tổ máy S1 sang S2.
 //
-//   1) Tạo EquipmentProfile(machine="S2") cho MỌI nút thuộc nhánh 1, 2, 3, 7
-//      (nhánh 5, 6 là COMMON — dùng chung 2 tổ máy, KHÔNG tách S2).
-//      Mã S2 (DH1.S1.x → DH1.S2.x) và KKS S2 (ký tự đầu 1 → 2) là DẪN XUẤT
-//      trong lib/equipment-units.ts — script không ghi trùng vào DB.
-//   2) Nhân bản MaterialReplacement machine="S1" → machine="S2", gồm cả
-//      dòng khai báo vật tư (isActive=false) lẫn điểm thay thế (isActive=true).
-//      materialId được ánh xạ sang vật tư CÙNG MÃ trong danh mục S2; vật tư S1
-//      chưa có bản S2 thì tạo bản sao vào danh mục S2 (giữ nguyên mọi trường).
+// MaterialReplacement machine="S1" → machine="S2", gồm cả dòng khai báo vật tư
+// (isActive=false) lẫn điểm thay thế (isActive=true). materialId được ánh xạ sang
+// vật tư CÙNG MÃ trong danh mục S2; vật tư S1 chưa có bản S2 thì tạo bản sao vào
+// danh mục S2 (giữ nguyên mọi trường).
 //
 // KHÔNG sao chép: lịch sử thay thế (MaterialReplacementLog), lịch sử sửa chữa,
 // khiếm khuyết, thẻ QR — đó là dữ liệu vận hành riêng của từng tổ máy.
 //
+// KHÔNG tạo EquipmentProfile: cấu trúc cây dùng chung, phạm vi tổ máy của một nút
+// suy ra từ số nhánh của seq (machinesOf() trong lib/equipment-units.ts). Bảng
+// EquipmentProfile chỉ dùng để LƯU GHI ĐÈ tên/KKS khi một tổ máy đặt khác đi.
+//
 // Chạy:
 //   node scripts/create-s2-from-s1.mjs               # dry-run, chỉ in báo cáo
 //   node scripts/create-s2-from-s1.mjs --apply       # ghi vào DB
-//   node scripts/create-s2-from-s1.mjs --apply --only=profiles
-//   node scripts/create-s2-from-s1.mjs --apply --only=replacements
 //   ... --keep-dates    giữ nguyên lastReplacedAt/nextDueAt của S1
 //                       (mặc định: xoá lastReplacedAt, nextDueAt = hôm nay + chu kỳ)
 //
@@ -29,21 +27,6 @@ const prisma = new PrismaClient();
 const argv = process.argv.slice(2);
 const APPLY = argv.includes("--apply");
 const KEEP_DATES = argv.includes("--keep-dates");
-const onlyArg = argv.find((a) => a.startsWith("--only="));
-const ONLY = onlyArg ? onlyArg.slice("--only=".length) : "all";
-const DO_PROFILES = ONLY === "all" || ONLY === "profiles";
-const DO_REPLACEMENTS = ONLY === "all" || ONLY === "replacements";
-
-// Nhánh được tách hồ sơ theo tổ máy (khớp COMMON_BRANCHES trong lib/equipment-units.ts:
-// nhánh 5 và 6 dùng chung nên không nằm ở đây).
-const S2_BRANCHES = ["1", "2", "3", "7"];
-
-const branchOf = (seq) => {
-  const m = seq.match(/^DH1\.S1\.(\d+)(?:\.|$)/);
-  return m ? m[1] : null;
-};
-const s2Code = (seq) => seq.replace(/^DH1\.S1/, "DH1.S2");
-const s2Kks = (kks) => (kks && kks.startsWith("1") ? `2${kks.slice(1)}` : kks);
 
 const addMonths = (date, months) => {
   const d = new Date(date);
@@ -57,47 +40,9 @@ const chunk = (arr, size) => {
   return out;
 };
 
-// ---------------------------------------------------------------- 1) hồ sơ S2
-async function createProfiles() {
-  console.log("\n=== 1) HỒ SƠ S2 TRÊN CÂY THIẾT BỊ ===");
-
-  const nodes = await prisma.equipmentNode.findMany({ select: { seq: true, name: true, kks: true } });
-  const targets = nodes.filter((n) => S2_BRANCHES.includes(branchOf(n.seq) ?? ""));
-  console.log(`Nút thuộc nhánh ${S2_BRANCHES.join(", ")}: ${targets.length} / ${nodes.length} nút toàn cây`);
-
-  const existing = await prisma.equipmentProfile.findMany({
-    where: { machine: "S2" },
-    select: { nodeSeq: true },
-  });
-  const have = new Set(existing.map((p) => p.nodeSeq));
-  const missing = targets.filter((n) => !have.has(n.seq));
-  console.log(`Đã có hồ sơ S2: ${have.size} · cần tạo thêm: ${missing.length}`);
-
-  const withKks = missing.filter((n) => n.kks && n.kks.trim());
-  const kksChanged = withKks.filter((n) => s2Kks(n.kks) !== n.kks);
-  console.log(`  KKS: ${withKks.length} nút có KKS, ${kksChanged.length} nút đổi ký tự đầu 1→2`);
-  console.log("  Ví dụ:");
-  for (const n of missing.slice(0, 5)) {
-    console.log(`    ${n.seq} → ${s2Code(n.seq)} · KKS ${n.kks ?? "—"} → ${s2Kks(n.kks) ?? "—"} · ${n.name}`);
-  }
-
-  if (!APPLY || !missing.length) return;
-
-  let created = 0;
-  for (const batch of chunk(missing, 1000)) {
-    const res = await prisma.equipmentProfile.createMany({
-      data: batch.map((n) => ({ id: randomUUID(), nodeSeq: n.seq, machine: "S2" })),
-      skipDuplicates: true,
-    });
-    created += res.count;
-    process.stdout.write(`\r  Đã tạo ${created}/${missing.length} hồ sơ S2...`);
-  }
-  console.log(`\n  ✅ Tạo ${created} hồ sơ S2.`);
-}
-
-// ------------------------------------------------- 2) khai báo vật tư & điểm thay thế
+// ---------------------------------------------- khai báo vật tư & điểm thay thế
 async function copyReplacements() {
-  console.log("\n=== 2) KHAI BÁO VẬT TƯ & ĐIỂM THAY THẾ S1 → S2 ===");
+  console.log("\n=== KHAI BÁO VẬT TƯ & ĐIỂM THAY THẾ S1 → S2 ===");
 
   const [sources, materials] = await Promise.all([
     prisma.materialReplacement.findMany({
@@ -244,8 +189,7 @@ async function main() {
   console.log(APPLY ? "🚀 CHẾ ĐỘ GHI (--apply)" : "🔍 CHẾ ĐỘ THỬ (dry-run) — thêm --apply để ghi vào DB");
   console.log(`   DB: ${(process.env.DATABASE_URL ?? "").replace(/:[^:@/]*@/, ":***@")}`);
 
-  if (DO_PROFILES) await createProfiles();
-  if (DO_REPLACEMENTS) await copyReplacements();
+  await copyReplacements();
 
   console.log("\nXong.");
 }
