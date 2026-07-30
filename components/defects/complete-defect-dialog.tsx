@@ -113,7 +113,7 @@ export function CompleteDefectDialog({
             {editingPending
               ? "Sửa thông tin lịch sử"
               : sheetTracked
-                ? "Xác nhận lưu lịch sử"
+                ? "Lưu lịch sử"
                 : "Hoàn thành khiếm khuyết"}
           </DialogTitle>
         </DialogHeader>
@@ -209,7 +209,7 @@ export function CompleteDefectDialog({
             {editingPending
               ? "Lưu và tính lại hạn chốt"
               : sheetTracked
-                ? "Xác nhận lưu lịch sử"
+                ? "Lưu lịch sử"
                 : "Hoàn thành"}
           </Button>
         </DialogFooter>

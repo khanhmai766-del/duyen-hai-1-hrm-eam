@@ -461,14 +461,18 @@ export function DeviceForm({
   /* ------------------------------------------------------- chế độ TẠO: khung 2 cột */
 
   const scopeHelp = SCOPE_CHOICES.find((choice) => choice.key === scope)?.help ?? "";
+  // `counted: false` = mục chưa tính vào tiến độ hồ sơ. Ảnh thiết bị đang chờ đợt
+  // phát triển sau nên không được hiện như một thiếu sót của người nhập.
   const checklist = [
-    { label: "Vị trí trong cây", done: !!form.code.trim(), optional: false },
-    { label: "Tên thiết bị", done: !!form.name.trim(), optional: false },
-    { label: "Mã KKS", done: !!kksTrimmed, optional: true },
-    { label: "Phân công quản lý", done: !!form.managingPosition, optional: true },
-    { label: "Ảnh thiết bị", done: form.images.length > 0, optional: true },
+    { label: "Vị trí trong cây", done: !!form.code.trim(), note: null, counted: true },
+    { label: "Tên thiết bị", done: !!form.name.trim(), note: null, counted: true },
+    { label: "Mã KKS", done: !!kksTrimmed, note: "Nên có", counted: true },
+    { label: "Phân công quản lý", done: !!form.managingPosition, note: "Nên có", counted: true },
+    { label: "Ảnh thiết bị", done: form.images.length > 0, note: "Bổ sung sau", counted: false },
   ];
-  const doneCount = checklist.filter((item) => item.done).length;
+  const countedItems = checklist.filter((item) => item.counted);
+  const doneCount = countedItems.filter((item) => item.done).length;
+  const totalCount = countedItems.length;
   const canSubmit = !!form.code.trim() && !!form.name.trim();
   const missingRequired = [
     !form.code.trim() ? "Mã thiết bị" : null,
@@ -648,20 +652,24 @@ export function DeviceForm({
               key={item.label}
               className={cn(
                 "flex items-center gap-2.5 py-1 text-[13px]",
-                item.done ? "text-ink" : "text-muted-foreground"
+                item.done ? "text-ink" : "text-muted-foreground",
+                !item.counted && !item.done && "opacity-60"
               )}
             >
               <span
                 className={cn(
                   "flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border transition-colors",
-                  item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-input"
+                  item.done && "border-emerald-500 bg-emerald-500 text-white",
+                  !item.done && item.counted && "border-input",
+                  // Mục chưa tính vào tiến độ: viền đứt để không đọc nhầm thành "còn thiếu".
+                  !item.done && !item.counted && "border-dashed border-input"
                 )}
               >
                 {item.done && <Check className="h-2.5 w-2.5" strokeWidth={4} />}
               </span>
               {item.label}
-              {item.optional && (
-                <span className="ml-auto text-[10.5px] font-semibold text-muted-foreground">Nên có</span>
+              {item.note && (
+                <span className="ml-auto text-[10.5px] font-semibold text-muted-foreground">{item.note}</span>
               )}
             </div>
           ))}
@@ -690,10 +698,10 @@ export function DeviceForm({
 
       {/* --------------------------------------------------- thanh hành động dính đáy */}
       <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center gap-3 border-t border-border bg-background/90 px-1 py-3 backdrop-blur lg:col-span-2">
-        <ProgressRing done={doneCount} total={checklist.length} />
+        <ProgressRing done={doneCount} total={totalCount} />
         <span className="text-[13px] text-muted-foreground">
           {canSubmit ? (
-            <>Đủ điều kiện lưu · hồ sơ hoàn thiện <b className="text-ink">{doneCount}/{checklist.length}</b></>
+            <>Đủ điều kiện lưu · hồ sơ hoàn thiện <b className="text-ink">{doneCount}/{totalCount}</b></>
           ) : (
             <>Còn thiếu: <b className="text-ink">{missingRequired.join(", ")}</b></>
           )}

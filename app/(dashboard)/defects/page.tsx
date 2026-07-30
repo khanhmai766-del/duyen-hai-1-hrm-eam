@@ -657,10 +657,11 @@ export default function DefectsPage() {
       ) : (
         <Card className="overflow-hidden">
           <PersistentHorizontalScroll>
-          <Table className="min-w-[1176px] table-fixed">
+          <Table className="min-w-[1196px] table-fixed">
             <TableHeader className="bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[56px] whitespace-nowrap px-1 text-center">Tổ máy</TableHead>
+                {/* Đủ chỗ cho nhãn dài nhất ("Common") nằm cùng hàng với nút mở chi tiết. */}
+                <TableHead className="w-[76px] whitespace-nowrap px-1 text-center">Tổ máy</TableHead>
                 <TableHead className="w-[96px] px-1.5 text-center">Số yêu cầu</TableHead>
                 <TableHead className="w-[104px] px-1.5 text-center">Cương vị</TableHead>
                 <TableHead className="w-[288px] px-2 text-center">Nội dung</TableHead>
@@ -705,7 +706,11 @@ export default function DefectsPage() {
                           >
                             {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                           </button>
-                          <span>{d.unit}</span>
+                          {/* "COMMON" dài gấp ba "S1" nên viết như chip lọc ("Common") và
+                              thu nhỏ riêng nhãn này để không tràn khỏi cột. */}
+                          <span className={cn(d.unit === "COMMON" && "text-[11px] tracking-tight")}>
+                            {d.unit === "COMMON" ? "Common" : d.unit}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="px-1.5 py-3 text-center text-[13px] text-ink">
@@ -817,7 +822,7 @@ export default function DefectsPage() {
                           {canClose && awaitingHistoryConfirmation && (
                             <Button
                               disabled={detailLoadingId === d.id}
-                              title="Xác nhận lưu lịch sử"
+                              title="Lưu lịch sử"
                               className="h-auto min-h-8 max-w-[104px] whitespace-normal !bg-amber-500 px-2 py-1.5 text-[10.5px] font-bold leading-3.5 text-white shadow-sm hover:!bg-amber-600 focus-visible:ring-amber-500"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -825,7 +830,7 @@ export default function DefectsPage() {
                               }}
                             >
                               <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                              <span>Xác nhận lưu lịch sử</span>
+                              <span>Lưu lịch sử</span>
                             </Button>
                           )}
                           {canClose && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
