@@ -123,6 +123,8 @@ export function parseN8nDefectRecords(value: unknown, source: N8nDefectSource) {
       severityRaw: text(row.severityRaw, `records[${index}].severityRaw`, 100),
       conditionRaw: text(row.conditionRaw, `records[${index}].conditionRaw`, 100),
       sourceStatusRaw: text(row.sourceStatusRaw, `records[${index}].sourceStatusRaw`, 2_000),
+      ktatReviewRaw: text(row.ktatReviewRaw, `records[${index}].ktatReviewRaw`),
+      boardDirectionRaw: text(row.boardDirectionRaw, `records[${index}].boardDirectionRaw`),
       repairOrderNumberRaw: text(row.repairOrderNumberRaw, `records[${index}].repairOrderNumberRaw`, 2_000),
       repairSolutionRaw: text(row.repairSolutionRaw, `records[${index}].repairSolutionRaw`),
       repairPlanRaw: text(row.repairPlanRaw, `records[${index}].repairPlanRaw`),

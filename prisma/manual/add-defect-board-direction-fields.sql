@@ -1,0 +1,3 @@
+ALTER TABLE "Defect"
+  ADD COLUMN IF NOT EXISTS "ktatReviewRaw" TEXT,
+  ADD COLUMN IF NOT EXISTS "boardDirectionRaw" TEXT;

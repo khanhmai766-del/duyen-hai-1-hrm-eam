@@ -19,13 +19,8 @@ function sourceSnapshot(defect: {
   sourceDeviceRaw: string | null;
   sourcePositionRaw: string | null;
   sourceStatusRaw: string | null;
-  repairResultRaw: string | null;
   repairOrderNumberRaw: string | null;
-  repairSolutionRaw: string | null;
-  repairPlanRaw: string | null;
-  repairUnitRaw: string | null;
   repairPerformedByRaw: string | null;
-  repairStartedAt: Date | null;
   repairPerformedContentRaw: string | null;
   repairNoteRaw: string | null;
   sourceStatusMismatch: boolean;
@@ -44,13 +39,8 @@ function sourceSnapshot(defect: {
     sourceDeviceRaw: defect.sourceDeviceRaw,
     sourcePositionRaw: defect.sourcePositionRaw,
     sourceStatusRaw: defect.sourceStatusRaw,
-    repairResultRaw: defect.repairResultRaw,
     repairOrderNumberRaw: defect.repairOrderNumberRaw,
-    repairSolutionRaw: defect.repairSolutionRaw,
-    repairPlanRaw: defect.repairPlanRaw,
-    repairUnitRaw: defect.repairUnitRaw,
     repairPerformedByRaw: defect.repairPerformedByRaw,
-    repairStartedAt: defect.repairStartedAt?.toISOString() ?? null,
     repairPerformedContentRaw: defect.repairPerformedContentRaw,
     repairNoteRaw: defect.repairNoteRaw,
     sourceStatusMismatch: defect.sourceStatusMismatch,

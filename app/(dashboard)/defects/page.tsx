@@ -1010,6 +1010,13 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             : "—"}
           multiline
         />
+        <div className="mt-4 border-t border-red-100 pt-3">
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-red-800">BGĐ chỉ đạo</h4>
+          <div className="space-y-2">
+            <DetailLine label="KTAT rà soát" value={defect.ktatReviewRaw || "—"} multiline />
+            <DetailLine label="BGĐ chỉ đạo" value={defect.boardDirectionRaw || "—"} multiline />
+          </div>
+        </div>
       </div>
       <div className={detailCardClass}>
         <div className="mb-3 border-b border-sky-100 pb-2">
@@ -1050,6 +1057,7 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         <DetailLine label="Giải pháp sửa chữa" value={defect.repairSolutionRaw || "—"} multiline />
         <DetailLine label="Kế hoạch thực hiện" value={defect.repairPlanRaw || "—"} multiline />
         <DetailLine label="Đơn vị sửa chữa" value={defect.repairUnitRaw || "—"} multiline />
+        <DetailLine label="Kết quả thực hiện" value={defect.repairResultRaw || "—"} multiline />
         <DetailLine label="Người thực hiện" value={defect.repairPerformedByRaw || "—"} multiline />
         <DetailLine label="Ngày thực hiện" value={formatDate(defect.repairStartedAt)} />
         <DetailLine label="Ngày hoàn thành" value={formatDate(defect.sourceCompletedAt)} />

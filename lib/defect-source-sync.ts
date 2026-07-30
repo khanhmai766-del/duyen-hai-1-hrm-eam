@@ -25,6 +25,8 @@ export type DefectSourceRecord = {
   severityRaw: string;
   conditionRaw: string;
   sourceStatusRaw: string;
+  ktatReviewRaw?: string;
+  boardDirectionRaw?: string;
   repairOrderNumberRaw?: string;
   repairSolutionRaw?: string;
   repairPlanRaw?: string;
@@ -307,6 +309,8 @@ export async function upsertPreparedDefectRecords(params: {
       sourceDeviceRaw: text(item.record.deviceRaw) || null,
       sourcePositionRaw: text(item.record.positionRaw) || null,
       sourceStatusRaw: text(item.record.sourceStatusRaw) || null,
+      ktatReviewRaw: text(item.record.ktatReviewRaw) || null,
+      boardDirectionRaw: text(item.record.boardDirectionRaw) || null,
       repairOrderNumberRaw: text(item.record.repairOrderNumberRaw) || null,
       repairSolutionRaw: text(item.record.repairSolutionRaw) || null,
       repairPlanRaw: text(item.record.repairPlanRaw) || null,
@@ -332,6 +336,8 @@ export async function upsertPreparedDefectRecords(params: {
       sourceDeviceRaw: sourceData.sourceDeviceRaw,
       sourcePositionRaw: sourceData.sourcePositionRaw,
       sourceStatusRaw: sourceData.sourceStatusRaw,
+      ktatReviewRaw: sourceData.ktatReviewRaw,
+      boardDirectionRaw: sourceData.boardDirectionRaw,
       repairOrderNumberRaw: sourceData.repairOrderNumberRaw,
       repairSolutionRaw: sourceData.repairSolutionRaw,
       repairPlanRaw: sourceData.repairPlanRaw,

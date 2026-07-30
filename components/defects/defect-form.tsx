@@ -77,7 +77,7 @@ export function DefectForm({
   );
   const create = useCreateDefect();
   const update = useUpdateDefect();
-  const [step, setStep] = React.useState<1 | 2 | 3>(1);
+  const [step, setStep] = React.useState<1 | 2 | 3 | 4>(1);
 
   // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
@@ -381,6 +381,7 @@ export function DefectForm({
             {["1", "2"].includes(form.severity) && (
               <TabBtn active={step === 3} onClick={() => setStep(3)} label="Hình ảnh khiếm khuyết" />
             )}
+            <TabBtn active={step === 4} onClick={() => setStep(4)} label="BGĐ chỉ đạo" />
           </>
         ) : (
           <>
@@ -674,7 +675,7 @@ export function DefectForm({
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                 <h3 className="font-bold text-emerald-900">Dữ liệu của bộ phận Sửa chữa</h3>
                 <p className="mt-1 text-sm text-emerald-800">
-                  Các nội dung dưới đây được đọc từ cột 17–26 trên Google Sheet.
+                  Các nội dung dưới đây được đọc từ cột 18–27 trên Google Sheet.
                 </p>
               </div>
 
@@ -798,6 +799,22 @@ export function DefectForm({
             </div>
           </div>
         )}
+        {isSynced && defect && (
+          <div className={cn(step === 4 ? "block" : "hidden")}>
+            <div className="mx-auto max-w-2xl space-y-4">
+              <div className="rounded-xl border border-red-200 bg-red-50/60 p-4">
+                <h3 className="font-bold text-red-900">BGĐ chỉ đạo</h3>
+                <p className="mt-1 text-sm text-red-800/80">
+                  Dữ liệu tham khảo được đọc từ cột 16–17 trên Google Sheet; website không ghi ngược hai nội dung này.
+                </p>
+              </div>
+              <div className="space-y-5 rounded-xl border border-border bg-white p-5 shadow-sm">
+                <SourcePreviewValue label="KTAT rà soát" value={defect.ktatReviewRaw || "—"} />
+                <SourcePreviewValue label="BGĐ chỉ đạo" value={defect.boardDirectionRaw || "—"} />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className={cn(!isSynced && step === 3 ? "block" : "hidden")}>
           <div className="mx-auto w-full max-w-2xl rounded-xl border border-border/80 bg-white p-5 shadow-sm">
@@ -896,6 +913,7 @@ export function DefectForm({
             </div>
           </div>
         </div>
+
       </div>
 
       {/* Footer */}

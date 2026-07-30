@@ -500,17 +500,19 @@ model Defect {
   sourceDeviceRaw            String? // Tên thiết bị nguyên văn trên Google Sheet
   sourcePositionRaw          String? // Cương vị nguyên văn trên Google Sheet
   sourceStatusRaw            String? // Trạng thái nguyên văn trên Google Sheet
-  repairOrderNumberRaw       String? // Số PCT/LCT (17) do bộ phận sửa chữa cập nhật
-  repairSolutionRaw          String? // Giải pháp sửa chữa (18)
-  repairPlanRaw              String? // Kế hoạch thực hiện (19)
-  repairUnitRaw              String? // Đơn vị sửa chữa (20)
-  repairResultRaw            String? // Kết quả thực hiện (21) do bộ phận sửa chữa cập nhật
-  repairPerformedByRaw       String? // Người thực hiện (22)
-  repairStartedAt            DateTime? // Ngày thực hiện (23)
+  ktatReviewRaw              String? // KTAT rà soát (16)
+  boardDirectionRaw          String? // BGĐ chỉ đạo (17)
+  repairOrderNumberRaw       String? // Số PCT/LCT (18) do bộ phận sửa chữa cập nhật
+  repairSolutionRaw          String? // Giải pháp sửa chữa (19)
+  repairPlanRaw              String? // Kế hoạch thực hiện (20)
+  repairUnitRaw              String? // Đơn vị sửa chữa (21)
+  repairResultRaw            String? // Kết quả thực hiện (22) do bộ phận sửa chữa cập nhật
+  repairPerformedByRaw       String? // Người thực hiện (23)
+  repairStartedAt            DateTime? // Ngày thực hiện (24)
   sourceStatusMismatch       Boolean   @default(false) // Kết quả sửa chữa khác tình trạng VH1
-  sourceCompletedAt          DateTime? // Ngày kết thúc theo Google Sheet
-  repairPerformedContentRaw  String? // Nội dung đã thực hiện (25)
-  repairNoteRaw              String? // Ghi chú sửa chữa (26)
+  sourceCompletedAt          DateTime? // Ngày kết thúc theo Google Sheet (25)
+  repairPerformedContentRaw  String? // Nội dung đã thực hiện (26)
+  repairNoteRaw              String? // Ghi chú sửa chữa (27)
   sourceHash                 String? // Dấu kiểm tra nội dung nguồn
   sourceSyncedAt             DateTime?
   sourceLastSeenAt           DateTime?

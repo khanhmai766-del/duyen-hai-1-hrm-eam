@@ -182,7 +182,8 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
 Import hai workflow production:
 
 - `workflow-production-source-aware.json`: đọc hai Sheet chính thức vào website,
-  bao gồm đầy đủ dữ liệu Vận hành và 10 trường Sửa chữa ở cột 17–26.
+  bao gồm dữ liệu Vận hành, hai trường tham khảo KTAT/BGĐ ở cột 16–17
+  và 10 trường Sửa chữa ở cột 18–27.
 - `workflow-two-way-batch-production.json`: claim tối đa 50 sự kiện, gom theo
   Sheet và ghi thay đổi vào đúng Sheet Cơ hoặc Điện bằng tối đa hai lượt đọc và
   hai lượt `batchUpdate`.

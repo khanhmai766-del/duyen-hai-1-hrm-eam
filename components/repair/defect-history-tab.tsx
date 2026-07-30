@@ -501,8 +501,11 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
           <div className="font-semibold text-blue-800">Thông tin Sửa chữa từ Google Sheet · chỉ tham khảo</div>
           <DetailLine label="Số PCT/LCT" value={repair.repairOrderNumberRaw || "—"} />
           <DetailLine label="Ngày hoàn thành" value={formatSnapshotDate(repair.sourceCompletedAt)} />
-          <DetailLine label="Nội dung sửa chữa" value={repair.repairPerformedContentRaw || "—"} multiline />
-          <DetailLine label="Kết quả sửa chữa" value={repair.repairResultRaw || "—"} multiline />
+          <DetailLine label="Người thực hiện" value={repair.repairPerformedByRaw || "—"} multiline />
+          <DetailLine label="Nội dung đã thực hiện" value={repair.repairPerformedContentRaw || "—"} multiline />
+          {repair.repairNoteRaw && (
+            <DetailLine label="Ghi chú Sửa chữa" value={repair.repairNoteRaw} multiline />
+          )}
         </div>
       )}
       <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
@@ -530,8 +533,9 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
 type RepairReference = {
   repairOrderNumberRaw?: string;
   sourceCompletedAt?: string;
+  repairPerformedByRaw?: string;
   repairPerformedContentRaw?: string;
-  repairResultRaw?: string;
+  repairNoteRaw?: string;
 };
 
 function repairReferenceOf(value: unknown): RepairReference | null {
@@ -541,8 +545,9 @@ function repairReferenceOf(value: unknown): RepairReference | null {
   const repair = {
     repairOrderNumberRaw: text("repairOrderNumberRaw"),
     sourceCompletedAt: text("sourceCompletedAt"),
+    repairPerformedByRaw: text("repairPerformedByRaw"),
     repairPerformedContentRaw: text("repairPerformedContentRaw"),
-    repairResultRaw: text("repairResultRaw"),
+    repairNoteRaw: text("repairNoteRaw"),
   };
   return Object.values(repair).some(Boolean) ? repair : null;
 }

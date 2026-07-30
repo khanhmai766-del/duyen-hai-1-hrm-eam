@@ -60,6 +60,8 @@ const LIST_SELECT = {
   postRepairAwaitingMaterial: true,
   sourceStatusMismatch: true,
   repairResultRaw: true,
+  ktatReviewRaw: true,
+  boardDirectionRaw: true,
   note: true,
   createdAt: true,
   createdBy: { select: { name: true } },
@@ -72,6 +74,15 @@ const LIST_SELECT = {
 const PAGE_SELECT = {
   ...LIST_SELECT,
   sourceStatusRaw: true,
+  repairOrderNumberRaw: true,
+  repairSolutionRaw: true,
+  repairPlanRaw: true,
+  repairUnitRaw: true,
+  repairPerformedByRaw: true,
+  repairStartedAt: true,
+  sourceCompletedAt: true,
+  repairPerformedContentRaw: true,
+  repairNoteRaw: true,
   reminderCount: true,
   createdBy: {
     // Danh sách chỉ dùng avatar đã đưa lên object storage; không đọc lại base64 cũ
