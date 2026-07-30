@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { audit, fail, handle, ok, requireUser } from "@/lib/api";
 import {
   buildEquipmentTreeIndex,
+  getEquipmentSeqsWithinDepth,
   type NormalizedEquipmentNode,
 } from "@/lib/equipment-tree";
 import { assertSeqEditable, assertSeqViewable, managingPositionsForEquipmentSeq } from "@/lib/server-access";
@@ -63,22 +64,24 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
   const machine = normalizedMachine && allowedMachines.includes(normalizedMachine)
     ? normalizedMachine
     : allowedMachines[0];
+  const profileSeqs = [...getEquipmentSeqsWithinDepth(nodes, node.seq, 2)];
+  const includesDescendants = profileSeqs.length > 1;
   // Thiết bị COMMON dùng chung một deviceSeq cho cả phiếu S1, S2 và COMMON.
   // Khi xem lịch sử của thiết bị dùng chung, không lọc theo unit để tránh bỏ sót
   // các phiếu đã chốt từ từng tổ máy. Thiết bị thường vẫn giữ đúng hồ sơ S1/S2.
   const mappedDeviceWhere = machine === "COMMON"
     ? {
         OR: [
-          { deviceSeq: node.seq },
-          { relatedDevices: { some: { deviceSeq: node.seq } } },
+          { deviceSeq: { in: profileSeqs } },
+          { relatedDevices: { some: { deviceSeq: { in: profileSeqs } } } },
         ],
       }
     : {
         OR: [
-          { deviceSeq: node.seq, mappedDeviceUnit: machine },
-          { deviceSeq: node.seq, mappedDeviceUnit: null, unit: machine },
-          { relatedDevices: { some: { deviceSeq: node.seq, mappedUnit: machine } } },
-          { relatedDevices: { some: { deviceSeq: node.seq, mappedUnit: null } }, unit: machine },
+          { deviceSeq: { in: profileSeqs }, mappedDeviceUnit: machine },
+          { deviceSeq: { in: profileSeqs }, mappedDeviceUnit: null, unit: machine },
+          { relatedDevices: { some: { deviceSeq: { in: profileSeqs }, mappedUnit: machine } } },
+          { relatedDevices: { some: { deviceSeq: { in: profileSeqs }, mappedUnit: null } }, unit: machine },
         ],
       };
   const parentSeq = index.parentOf.get(node.seq) ?? node.parentSeq ?? null;
@@ -135,6 +138,11 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
         requestNumber: true,
         detectedAt: true,
         note: true,
+        node: { select: { seq: true, name: true } },
+        relatedDevices: {
+          select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
       take: 50,
     }),
@@ -153,6 +161,11 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
         workOrderNumber: true,
         performedAt: true,
         createdBy: { select: { id: true, name: true } },
+        node: { select: { seq: true, name: true } },
+        relatedDevices: {
+          select: { deviceSeq: true, device: { select: { seq: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
       take: 20,
     }),
@@ -187,6 +200,8 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     qrCardCreatedAt: qrCard?.createdAt ?? null,
     currentDefects,
     defectHistory,
+    includesDescendants,
+    includedDeviceCount: profileSeqs.length,
     _count: { repairLogs: repairLogs.length },
   };
 }

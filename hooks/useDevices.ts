@@ -79,6 +79,8 @@ export interface DeviceWithRelations extends DeviceRecord {
     requestNumber?: string | null;
     detectedAt?: string | Date | null;
     note?: string | null;
+    node?: { seq: string; name: string } | null;
+    relatedDevices?: Array<{ deviceSeq: string; device: { seq: string; name: string } }>;
   }>;
   defectHistory: Array<{
     id: string;
@@ -90,7 +92,11 @@ export interface DeviceWithRelations extends DeviceRecord {
     workOrderNumber?: string | null;
     performedAt: string | Date;
     createdBy?: { id: string; name: string } | null;
+    node?: { seq: string; name: string } | null;
+    relatedDevices?: Array<{ deviceSeq: string; device: { seq: string; name: string } }>;
   }>;
+  includesDescendants?: boolean;
+  includedDeviceCount?: number;
 }
 
 export function useDevices(params: {

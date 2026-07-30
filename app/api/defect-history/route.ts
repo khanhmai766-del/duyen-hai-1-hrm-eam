@@ -6,6 +6,8 @@ import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { dateRange, parseDateInput } from "@/lib/utils";
 import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
+import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
+import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,12 @@ export async function GET(req: NextRequest) {
     const workOrderNumber = searchParams.get("workOrderNumber");
     const device = searchParams.get("device");
     const deviceSeq = searchParams.get("deviceSeq")?.trim();
+    const descendantDepth = deviceSeq
+      ? Math.min(2, Math.max(0, Number.parseInt(searchParams.get("includeDescendants") ?? "0", 10) || 0))
+      : 0;
+    const deviceSeqs = deviceSeq && descendantDepth > 0
+      ? [...getEquipmentSeqsWithinDepth(await getCachedEquipmentNodeFull(), deviceSeq, descendantDepth)]
+      : deviceSeq ? [deviceSeq] : [];
     const from = searchParams.get("from");
     const to = searchParams.get("to");
 
@@ -56,7 +64,7 @@ export async function GET(req: NextRequest) {
       andConditions.push({
         OR: [
           {
-            deviceSeq,
+            deviceSeq: { in: deviceSeqs },
             ...(mappedUnit ? {
               OR: [
                 { mappedDeviceUnit: mappedUnit },
@@ -66,10 +74,10 @@ export async function GET(req: NextRequest) {
           },
           ...(mappedUnit
             ? [
-                { relatedDevices: { some: { deviceSeq, mappedUnit } } },
-                { unit: mappedUnit, relatedDevices: { some: { deviceSeq, mappedUnit: null } } },
+                { relatedDevices: { some: { deviceSeq: { in: deviceSeqs }, mappedUnit } } },
+                { unit: mappedUnit, relatedDevices: { some: { deviceSeq: { in: deviceSeqs }, mappedUnit: null } } },
               ]
-            : [{ relatedDevices: { some: { deviceSeq } } }]),
+            : [{ relatedDevices: { some: { deviceSeq: { in: deviceSeqs } } } }]),
         ],
       });
     }
@@ -85,13 +93,37 @@ export async function GET(req: NextRequest) {
     if (scopeWhere) andConditions.push({ OR: [scopeWhere, { deviceSeq: null }] });
     if (andConditions.length) where.AND = andConditions;
 
-    const history = await prisma.defectHistory.findMany({
-      where,
-      orderBy: { performedAt: "desc" },
-      include: INCLUDE,
-      take: HISTORY_TAKE,
-    });
-    const data = history
+    const [history, pendingRows] = await Promise.all([
+      prisma.defectHistory.findMany({
+        where,
+        orderBy: { performedAt: "desc" },
+        include: INCLUDE,
+        take: HISTORY_TAKE,
+      }),
+      prisma.defectHistoryPending.findMany({
+        include: {
+          defect: {
+            include: {
+              createdBy: {
+                select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true },
+              },
+              node: { select: { seq: true, name: true } },
+              relatedDevices: {
+                select: {
+                  deviceSeq: true,
+                  mappedUnit: true,
+                  device: { select: { seq: true, name: true } },
+                },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          },
+        },
+        orderBy: { performedAt: "desc" },
+        take: HISTORY_TAKE,
+      }),
+    ]);
+    const finalizedData = history
       .filter(
         (item) =>
           !access.hasExplicitScopes ||
@@ -99,8 +131,96 @@ export async function GET(req: NextRequest) {
           !!item.deviceSeq ||
           access.canViewDeviceLike({ device: item.device, system: item.system })
       )
-      .map((item) => ({ ...item, createdBy: publicUserRef(item.createdBy) }));
-    return ok(data, { total: data.length, capped: history.length === HISTORY_TAKE });
+      .map((item) => ({
+        ...item,
+        historyStatus: "FINALIZED" as const,
+        finalizeAt: null,
+        pendingDefectId: null,
+        createdBy: publicUserRef(item.createdBy),
+      }));
+
+    const fromDate = from ? dateRange(from).start : null;
+    const toDate = to ? dateRange(to).end : null;
+    const normalizedWorkOrder = workOrderNumber?.toLocaleLowerCase("vi") ?? "";
+    const normalizedDevice = device?.toLocaleLowerCase("vi") ?? "";
+    const pendingData = pendingRows
+      .filter(({ defect, performedAt, workOrderNumber: pendingWorkOrder }) => {
+        if (access.hasExplicitScopes) {
+          const canView = defect.deviceSeq
+            ? access.canViewSeq(defect.deviceSeq)
+            : access.canViewDeviceLike({ device: defect.device, system: defect.system });
+          if (!canView) return false;
+        }
+        if (system && defect.system !== system) return false;
+        if (unit && defect.unit !== unit) return false;
+        if (
+          normalizedWorkOrder
+          && !(pendingWorkOrder ?? "").toLocaleLowerCase("vi").includes(normalizedWorkOrder)
+        ) return false;
+        if (
+          normalizedDevice
+          && !(defect.device ?? "").toLocaleLowerCase("vi").includes(normalizedDevice)
+        ) return false;
+        if (fromDate && performedAt < fromDate) return false;
+        if (toDate && performedAt > toDate) return false;
+
+        const relatedMatches = defect.relatedDevices.some((related) =>
+          deviceSeqs.includes(related.deviceSeq)
+          && (!mappedUnit || related.mappedUnit === mappedUnit || (!related.mappedUnit && defect.unit === mappedUnit))
+        );
+        if (deviceSeq) {
+          const primaryMatches =
+            !!defect.deviceSeq && deviceSeqs.includes(defect.deviceSeq)
+            && (!mappedUnit || defect.mappedDeviceUnit === mappedUnit || (!defect.mappedDeviceUnit && defect.unit === mappedUnit));
+          if (!primaryMatches && !relatedMatches) return false;
+        } else if (mappedUnit && ["S1", "S2", "COMMON"].includes(mappedUnit)) {
+          const mappedUnitMatches =
+            defect.mappedDeviceUnit === mappedUnit
+            || (!defect.mappedDeviceUnit && defect.unit === mappedUnit)
+            || defect.relatedDevices.some((related) => related.mappedUnit === mappedUnit);
+          if (!mappedUnitMatches) return false;
+        }
+        return true;
+      })
+      .map(({ defect, ...pending }) => ({
+        id: `pending:${pending.id}`,
+        defectId: defect.id,
+        unit: defect.unit,
+        deviceSeq: defect.deviceSeq,
+        mappedDeviceUnit: defect.mappedDeviceUnit,
+        device: defect.device,
+        system: defect.system,
+        requestType: pending.requestType || defect.requestType,
+        workOrderNumber: pending.workOrderNumber,
+        performedAt: pending.performedAt,
+        result: pending.result,
+        content: pending.content || defect.content,
+        requestNumber: defect.requestNumber,
+        reminderCount: defect.reminderCount,
+        lastRemindedAt: defect.lastRemindedAt,
+        reminderRaw: defect.reminderRaw,
+        sourceKey: defect.sourceKey,
+        sourceSnapshot: null,
+        images: [] as string[],
+        createdById: defect.createdById,
+        createdAt: pending.updatedAt,
+        createdBy: publicUserRef(defect.createdBy),
+        node: defect.node,
+        relatedDevices: defect.relatedDevices,
+        historyStatus: "PENDING" as const,
+        finalizeAt: pending.finalizeAt,
+        pendingDefectId: defect.id,
+      }));
+
+    const data = [...finalizedData, ...pendingData]
+      .sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime())
+      .slice(0, HISTORY_TAKE);
+    return ok(data, {
+      total: data.length,
+      finalizedTotal: data.filter((item) => item.historyStatus === "FINALIZED").length,
+      pendingTotal: data.filter((item) => item.historyStatus === "PENDING").length,
+      capped: history.length === HISTORY_TAKE || pendingRows.length === HISTORY_TAKE,
+    });
   });
 }
 

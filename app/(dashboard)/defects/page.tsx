@@ -7,17 +7,18 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, Trash2, CheckCircle2, BellRing, CloudOff, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { defectDetailQuery, useDefect, useDefects, useDefectSyncStatus, useDeleteDefect, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
+import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectSyncStatus, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
@@ -273,12 +274,14 @@ export default function DefectsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
+  const includeDescendants = Math.min(2, Math.max(0, Number.parseInt(searchParams.get("includeDescendants") ?? "0", 10) || 0));
   const mappedUnitFilter = searchParams.get("mappedUnit")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.toUpperCase();
   const requestFromUrl = searchParams.get("requestType")?.trim();
   const positionFromUrl = searchParams.get("position")?.trim();
   const statusFromUrl = searchParams.get("status")?.trim();
   const severityFromUrl = searchParams.get("severity")?.trim();
+  const mismatchFromUrl = searchParams.get("mismatch") === "true";
   const searchFromUrl = searchParams.get("q")?.trim();
   const pageSizeFromUrl = Number.parseInt(searchParams.get("limit") ?? "", 10);
   const pageFromUrl = Number.parseInt(searchParams.get("page") ?? "", 10);
@@ -286,9 +289,7 @@ export default function DefectsPage() {
   const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
   const canManage = rbac.can("defect-manage", ["manage", "full"]);
   const canClose = rbac.can("defect-close", ["manage", "full"]);
-  const canDelete = rbac.can("defect-delete", ["full"]);
-
-  const del = useDeleteDefect();
+  const cancelDefect = useCancelDefect();
   const remind = useRemindDefect();
   const usersQuery = useUsers();
   const shiftLeaders = React.useMemo(
@@ -343,6 +344,7 @@ export default function DefectsPage() {
   const [statusFilter, setStatusFilter] = React.useState(statusFromUrl || "ALL");
   const [severityFilter, setSeverityFilter] = React.useState(severityFromUrl || "ALL");
   const [repairResultFilter, setRepairResultFilter] = React.useState("ALL");
+  const [mismatchOnly, setMismatchOnly] = React.useState(mismatchFromUrl);
   const [tableSearch, setTableSearch] = React.useState(searchFromUrl || "");
   const [pageSize, setPageSize] = React.useState(
     PAGE_SIZES.includes(pageSizeFromUrl) ? pageSizeFromUrl : 10
@@ -359,9 +361,11 @@ export default function DefectsPage() {
     status: statusFilter,
     severity: severityFilter,
     repairResult: repairResultFilter,
+    mismatch: mismatchOnly,
     q: deferredSearch,
     deviceSeq: deviceSeqFilter,
-  }), [page, pageSize, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, deferredSearch, deviceSeqFilter]);
+    includeDescendants,
+  }), [page, pageSize, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
   const { data, isLoading, isFetching } = useDefects(listParams);
   const pagedDefects = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
@@ -377,12 +381,14 @@ export default function DefectsPage() {
   React.useEffect(() => {
     const query = new URLSearchParams();
     if (deviceSeqFilter) query.set("deviceSeq", deviceSeqFilter);
+    if (includeDescendants > 0) query.set("includeDescendants", String(includeDescendants));
     if (mappedUnitFilter) query.set("mappedUnit", mappedUnitFilter);
     if (unitFilter !== "S1") query.set("unit", unitFilter);
     if (requestFilter !== "Cơ") query.set("requestType", requestFilter);
     if (positionFilter !== "ALL") query.set("position", positionFilter);
     if (statusFilter !== "ALL") query.set("status", statusFilter);
     if (severityFilter !== "ALL") query.set("severity", severityFilter);
+    if (mismatchOnly) query.set("mismatch", "true");
     if (deferredSearch) query.set("q", deferredSearch);
     if (pageSize !== 10) query.set("limit", String(pageSize));
     if (page > 1) query.set("page", String(page));
@@ -391,7 +397,9 @@ export default function DefectsPage() {
   }, [
     deferredSearch,
     deviceSeqFilter,
+    includeDescendants,
     mappedUnitFilter,
+    mismatchOnly,
     page,
     pageSize,
     positionFilter,
@@ -402,7 +410,7 @@ export default function DefectsPage() {
     unitFilter,
   ]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace("/defects", { scroll: false });
     setUnitFilter("S1");
@@ -411,6 +419,7 @@ export default function DefectsPage() {
     setStatusFilter("ALL");
     setSeverityFilter("ALL");
     setRepairResultFilter("ALL");
+    setMismatchOnly(false);
     setTableSearch("");
   }
 
@@ -475,7 +484,8 @@ export default function DefectsPage() {
 
   const [formOpen, setFormOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
-  const [delTarget, setDelTarget] = React.useState<DefectItem | null>(null);
+  const [cancelTarget, setCancelTarget] = React.useState<DefectItem | null>(null);
+  const [cancelNote, setCancelNote] = React.useState("Vận hành hủy phiếu");
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
   const [remindTarget, setRemindTarget] = React.useState<DefectItem | null>(null);
   const [remindShiftLeaderId, setRemindShiftLeaderId] = React.useState("");
@@ -508,7 +518,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -611,6 +621,8 @@ export default function DefectsPage() {
           chips={activeFilterChips}
           total={total}
           scopeTotal={scopeTotal}
+          mismatchOnly={mismatchOnly}
+          onMismatchOnlyChange={setMismatchOnly}
           canReset={isFiltered}
           onReset={resetFilters}
         />
@@ -666,6 +678,14 @@ export default function DefectsPage() {
             <TableBody>
               {pagedDefects.map((d) => {
                 const expanded = expandedId === d.id;
+                const awaitingHistoryConfirmation =
+                  (d.sourceType === "GOOGLE_SHEETS" || d.websiteCreated) &&
+                  !d.cancelledAt &&
+                  !!d.deviceSeq &&
+                  !d.pendingHistory &&
+                  !d.postRepairAwaitingMaterial &&
+                  d.syncState !== "CONFIRMED" &&
+                  d.status === "DA_XU_LY";
                 return (
                   <React.Fragment key={d.id}>
                     <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : d.id)}>
@@ -718,6 +738,15 @@ export default function DefectsPage() {
                         <div className="whitespace-pre-wrap break-words text-left leading-6">
                           {d.content || "—"}
                         </div>
+                        {awaitingHistoryConfirmation && (
+                          <div
+                            className="mt-2 flex items-center gap-1.5 text-left text-[11px] font-semibold leading-4 text-amber-700"
+                            title="Phiếu đã xử lý và đã ánh xạ, đang chờ VHV xác nhận lưu lịch sử"
+                          >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+                            Chưa xác nhận lưu lịch sử
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="px-1 py-3 text-center">
                         {d.severity ? (
@@ -725,7 +754,14 @@ export default function DefectsPage() {
                         ) : "—"}
                       </TableCell>
                       <TableCell className="px-1 py-3 text-center">
-                        {d.syncState === "MISSING" ? (
+                        {d.cancelledAt ? (
+                          <span
+                            className="inline-flex rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200"
+                            title="Phiếu đã hủy và đang chờ ghi ngược trạng thái lên Google Sheet"
+                          >
+                            Đã hủy · Chờ đồng bộ
+                          </span>
+                        ) : d.syncState === "MISSING" ? (
                           <span
                             className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200"
                             title="Dòng dữ liệu này không còn xuất hiện trong lần đồng bộ Google Sheet gần nhất"
@@ -778,20 +814,73 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-1 py-3">
                         <div className="flex items-center justify-center gap-0">
-                          {canClose && (
-                            (d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated && !!d.deviceSeq && !d.pendingHistory && !d.postRepairAwaitingMaterial && d.syncState !== "CONFIRMED" && d.status === "DA_XU_LY") ||
-                            ((d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated) && d.status !== "DA_XU_LY")
-                          ) && (
-                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title="Hoàn thành" className="h-7 w-7 text-muted-foreground hover:bg-green-50 hover:text-green-600" onClick={(e) => { e.stopPropagation(); void openComplete(d); }}><CheckCircle2 className="h-4 w-4" /></Button>
+                          {canClose && awaitingHistoryConfirmation && (
+                            <Button
+                              disabled={detailLoadingId === d.id}
+                              title="Xác nhận lưu lịch sử"
+                              className="h-auto min-h-8 max-w-[104px] whitespace-normal !bg-amber-500 px-2 py-1.5 text-[10.5px] font-bold leading-3.5 text-white shadow-sm hover:!bg-amber-600 focus-visible:ring-amber-500"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openComplete(d);
+                              }}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                              <span>Xác nhận lưu lịch sử</span>
+                            </Button>
+                          )}
+                          {canClose && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
+                            <Button
+                              disabled={detailLoadingId === d.id}
+                              variant="ghost"
+                              size="icon"
+                              title="Hoàn thành khiếm khuyết"
+                              aria-label="Hoàn thành khiếm khuyết"
+                              className="h-7 w-7 text-muted-foreground hover:bg-green-50 hover:text-green-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openComplete(d);
+                              }}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
                           )}
                           {canManage && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated || !!d.deviceSeq) && d.status !== "DA_XU_LY" && (
                             <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindShiftLeaderId(""); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
+                          {canClose && d.pendingHistory && (
+                            <Button
+                              disabled={detailLoadingId === d.id}
+                              variant="ghost"
+                              size="icon"
+                              title="Sửa thông tin lịch sử"
+                              aria-label="Sửa thông tin lịch sử"
+                              className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openComplete(d);
+                              }}
+                            >
+                              <FileClock className="h-4 w-4" />
+                            </Button>
+                          )}
                           {canManage && (
                             <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated ? "Ánh xạ / cập nhật Vận hành" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
                           )}
-                          {canDelete && d.sourceType !== "GOOGLE_SHEETS" && (
-                            <Button variant="ghost" size="icon" title="Xoá" className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(d); }}><Trash2 className="h-4 w-4" /></Button>
+                          {canManage && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Hủy phiếu"
+                              aria-label="Hủy phiếu"
+                              className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCancelNote("Vận hành hủy phiếu");
+                                setCancelTarget(d);
+                              }}
+                            >
+                              <CircleX className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </TableCell>
@@ -911,23 +1000,58 @@ export default function DefectsPage() {
       </ConfirmDialog>
 
       <ConfirmDialog
-        open={!!delTarget}
-        onOpenChange={(o) => !o && setDelTarget(null)}
-        title="Xoá khiếm khuyết?"
-        description={delTarget ? `Xoá khiếm khuyết${delTarget.requestNumber ? ` “${delTarget.requestNumber}”` : ""}? Hành động này không thể hoàn tác.` : undefined}
-        confirmLabel="Xoá"
-        loading={del.isPending}
+        open={!!cancelTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+            setCancelNote("Vận hành hủy phiếu");
+          }
+        }}
+        title="Hủy phiếu khiếm khuyết?"
+        description={cancelTarget
+          ? `Phiếu${cancelTarget.requestNumber ? ` “${cancelTarget.requestNumber}”` : ""} sẽ chuyển sang Đã xử lý và không bị xóa khỏi hệ thống.`
+          : undefined}
+        confirmLabel="Hủy phiếu"
+        loading={cancelDefect.isPending}
         onConfirm={async () => {
-          if (!delTarget) return;
+          if (!cancelTarget) return;
+          if (!cancelNote.trim()) {
+            toast.error("Vui lòng nhập ghi chú khi hủy phiếu");
+            return;
+          }
           try {
-            await del.mutateAsync(delTarget.id);
-            toast.success("Đã xoá khiếm khuyết");
-            setDelTarget(null);
+            const updated = await cancelDefect.mutateAsync({
+              id: cancelTarget.id,
+              note: cancelNote.trim(),
+            });
+            toast.success(
+              updated.syncState === "CONFIRMED"
+                ? "Đã hủy phiếu"
+                : "Đã hủy phiếu, đang chờ đồng bộ lên Google Sheet"
+            );
+            setCancelTarget(null);
+            setCancelNote("Vận hành hủy phiếu");
           } catch (e) {
             toast.error((e as Error).message);
           }
         }}
-      />
+      >
+        <div className="space-y-2">
+          <label htmlFor="cancel-defect-note" className="text-sm font-medium">
+            Ghi chú hủy <span className="text-destructive">*</span>
+          </label>
+          <Textarea
+            id="cancel-defect-note"
+            value={cancelNote}
+            onChange={(event) => setCancelNote(event.target.value)}
+            rows={3}
+            placeholder="Nhập lý do hủy phiếu…"
+          />
+          <p className="text-xs leading-5 text-muted-foreground">
+            Trạng thái và ghi chú sẽ được ghi ngược lên Google Sheet khi đồng bộ hai chiều đang bật.
+          </p>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

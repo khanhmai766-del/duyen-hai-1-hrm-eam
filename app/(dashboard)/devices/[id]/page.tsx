@@ -71,8 +71,11 @@ function DeviceDetailPageContent() {
     ? `/devices?view=tree&scope=${encodeURIComponent(deviceMachine)}&focusSeq=${encodeURIComponent(device.id)}`
     : "/devices?view=tree";
   const fullHistoryUrl = device
-    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}&mappedUnit=${encodeURIComponent(deviceMachine)}`
+    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}&mappedUnit=${encodeURIComponent(deviceMachine)}${device.includesDescendants ? "&includeDescendants=2" : ""}`
     : "/repair-history";
+  const fullDefectsUrl = device
+    ? `/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}${device.includesDescendants ? "&includeDescendants=2" : ""}`
+    : "/defects";
 
   async function createQrCard() {
     try {
@@ -182,7 +185,14 @@ function DeviceDetailPageContent() {
         <div className="lg:col-span-8">
           <Card>
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Lịch sử sửa chữa</CardTitle>
+              <div>
+                <CardTitle>Lịch sử sửa chữa</CardTitle>
+                {device.includesDescendants && (
+                  <p className="mt-1 text-xs font-normal text-muted-foreground">
+                    Gồm thiết bị này và {device.includedDeviceCount! - 1} thiết bị con trong 2 cấp
+                  </p>
+                )}
+              </div>
               <Button asChild variant="link" size="sm">
                 <Link href={fullHistoryUrl}>Xem đầy đủ</Link>
               </Button>
@@ -198,6 +208,9 @@ function DeviceDetailPageContent() {
                           <p className="font-medium leading-tight text-ink">{item.content || "Chưa ghi nội dung thực hiện"}</p>
                           <MachineBadge machine={item.unit} />
                         </div>
+                        {device.includesDescendants && (
+                          <OriginatingDevice item={item} rootSeq={device.id} />
+                        )}
                         {item.result && <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-ink">Kết quả:</span> {item.result}</p>}
                         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                           <span>Ngày kết thúc: {formatDate(item.performedAt)}</span>
@@ -298,7 +311,7 @@ function DeviceDetailPageContent() {
               </Button>
             )}
             <Button asChild variant="link" size="sm">
-              <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}`}>Xem danh sách</Link>
+              <Link href={fullDefectsUrl}>Xem danh sách</Link>
             </Button>
           </div>
         </CardHeader>
@@ -335,6 +348,9 @@ function DeviceDetailPageContent() {
                       <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: `${status?.dot ?? "#64748b"}18`, color: status?.dot ?? "#64748b" }}>{status?.label ?? defect.status}</span>
                     </div>
                     <p className="mt-2 line-clamp-3 text-sm font-medium text-ink">{defect.content || "Chưa nhập nội dung khiếm khuyết"}</p>
+                    {device.includesDescendants && (
+                      <OriginatingDevice item={defect} rootSeq={device.id} />
+                    )}
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       {defect.detectedAt && <span>Phát hiện: {formatDate(defect.detectedAt)}</span>}
                       {defect.requestType && <span>Yêu cầu: {defect.requestType}</span>}
@@ -345,7 +361,7 @@ function DeviceDetailPageContent() {
               })}
               {device.currentDefects.length > 6 && (
                 <div className="col-span-full rounded-lg border border-dashed border-amber-200 bg-amber-50/60 px-4 py-3 text-center text-sm text-amber-800">
-                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={`/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}`} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
+                  Còn {device.currentDefects.length - 6} khiếm khuyết khác · <Link href={fullDefectsUrl} className="font-semibold text-accent hover:underline">Xem danh sách đầy đủ</Link>
                 </div>
               )}
             </div>
@@ -521,6 +537,31 @@ function Row({ label, value, icon: Icon }: { label: string; value: string; icon?
         {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}{value}
       </span>
     </div>
+  );
+}
+
+function OriginatingDevice({
+  item,
+  rootSeq,
+}: {
+  item: {
+    node?: { seq: string; name: string } | null;
+    relatedDevices?: Array<{ deviceSeq: string; device: { seq: string; name: string } }>;
+  };
+  rootSeq: string;
+}) {
+  const withinTwoLevels = (seq: string) =>
+    (seq === rootSeq || seq.startsWith(`${rootSeq}.`))
+    && seq.split(".").length - rootSeq.split(".").length <= 2;
+  const origin = item.node && withinTwoLevels(item.node.seq)
+    ? item.node
+    : item.relatedDevices?.find((related) => withinTwoLevels(related.deviceSeq))?.device;
+  if (!origin) return null;
+  return (
+    <p className="mt-2 text-xs text-blue-700">
+      <span className="font-semibold">Thiết bị phát sinh:</span> {origin.name}{" "}
+      <span className="font-mono text-[11px] text-blue-600">({origin.seq})</span>
+    </p>
   );
 }
 

@@ -159,3 +159,31 @@ export function getEquipmentDescendantSeqs(nodes: NormalizedEquipmentNode[], roo
   }
   return result;
 }
+
+/**
+ * Trả về node gốc và các node con trong số cấp giới hạn.
+ * Dùng cho lý lịch thiết bị cha để đọc dữ liệu theo nhánh mà không nhân bản bản ghi.
+ */
+export function getEquipmentSeqsWithinDepth(
+  nodes: NormalizedEquipmentNode[],
+  rootSeq: string,
+  maxDepth: number
+) {
+  const { childrenOf } = buildEquipmentTreeIndex(nodes);
+  const result = new Set<string>([rootSeq]);
+  const queue = (childrenOf.get(rootSeq) ?? []).map((node) => ({ node, depth: 1 }));
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (current.depth > maxDepth || result.has(current.node.seq)) continue;
+    result.add(current.node.seq);
+    if (current.depth < maxDepth) {
+      queue.push(
+        ...(childrenOf.get(current.node.seq) ?? []).map((node) => ({
+          node,
+          depth: current.depth + 1,
+        }))
+      );
+    }
+  }
+  return result;
+}

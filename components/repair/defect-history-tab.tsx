@@ -50,6 +50,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const deviceFromUrl = searchParams.get("device")?.trim() ?? "";
   const deviceSeqFromUrl = searchParams.get("deviceSeq")?.trim() ?? "";
   const mappedUnitFromUrl = searchParams.get("mappedUnit")?.trim() ?? "";
+  const includeDescendantsFromUrl = searchParams.get("includeDescendants")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.trim().toUpperCase() ?? "";
   const rbac = useRbacAccess();
   const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
@@ -61,11 +62,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     ...(deviceFromUrl ? { device: deviceFromUrl } : {}),
     ...(deviceSeqFromUrl ? { deviceSeq: deviceSeqFromUrl } : {}),
     ...(mappedUnitFromUrl ? { mappedUnit: mappedUnitFromUrl } : {}),
+    ...(includeDescendantsFromUrl ? { includeDescendants: includeDescendantsFromUrl } : {}),
     ...(["S1", "S2", "COMMON"].includes(unitFromUrl) ? { unit: unitFromUrl } : {}),
   }));
   const { data, isLoading } = useDefectHistory(filters);
   const del = useDeleteDefectHistory();
-  const rows = data?.data ?? [];
+  const rows = React.useMemo(() => data?.data ?? [], [data?.data]);
   // Tên thiết bị nay do /api/defect-history trả kèm (quan hệ node) — trước đây phải tải
   // TOÀN BỘ danh mục thiết bị (~10 MB) mỗi lần mở trang chỉ để dựng bảng tra mã → tên.
   const deviceNameByCode = React.useMemo(
@@ -155,7 +157,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     <div className="space-y-6">
       <PageHeader title="LỊCH SỬ SỬA CHỮA" description="Lịch sử khiếm khuyết thiết bị đã xử lý theo cương vị">
         <AnnualBackupExport
-          rows={visibleRows}
+          rows={visibleRows.filter((row) => row.historyStatus !== "PENDING")}
           columns={backupColumns}
           dateAccessor={(row) => row.performedAt}
           title="LỊCH SỬ SỬA CHỮA"
@@ -282,6 +284,15 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                         </TableCell>
                         <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
                           <div className="truncate" title={r.content ?? undefined}>{r.content || "—"}</div>
+                          {r.historyStatus === "PENDING" && (
+                            <div
+                              className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-blue-700"
+                              title={`Dự kiến chốt lịch sử vào ${formatDate(r.finalizeAt)}`}
+                            >
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" aria-hidden="true" />
+                              Chờ chốt lịch sử · {formatDate(r.finalizeAt)}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] text-muted-foreground">{formatDate(r.performedAt)}</TableCell>
                         <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
@@ -298,12 +309,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                         {actionCol && (
                           <TableCell className="px-2 py-3">
                             <div className="flex items-center justify-center gap-1">
-                              {canManage && (
+                              {canManage && r.historyStatus !== "PENDING" && (
                                 <Button variant="ghost" size="icon" title="Sửa" onClick={(e) => { e.stopPropagation(); setEditTarget(r); }}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               )}
-                              {canDelete && (
+                              {canDelete && r.historyStatus !== "PENDING" && (
                                 <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(r); }}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

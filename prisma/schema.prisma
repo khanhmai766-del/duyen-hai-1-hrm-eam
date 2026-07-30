@@ -523,6 +523,9 @@ model Defect {
   confirmedById              String? // Snapshot ID người xác nhận, không FK
   confirmedByName            String? // Snapshot tên người xác nhận
   confirmedHistoryId         String? // ID lịch sử đã sinh
+  cancelledAt                DateTime? // VHV hủy phiếu; không xóa vật lý để giữ liên kết đồng bộ hai chiều
+  cancelledById              String? // Snapshot ID người hủy, không FK
+  cancelledByName            String? // Snapshot tên người hủy
   shiftLeaderId              String? // Người giữ cương vị Trưởng ca tại thời điểm lập phiếu (không FK để giữ snapshot)
   shiftLeaderName            String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt                DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
@@ -553,6 +556,7 @@ model Defect {
   @@index([shiftLeaderId])
   @@index([createdAt])
   @@index([completedAt])
+  @@index([cancelledAt])
   @@index([status, completedAt(sort: Desc)])
   @@index([createdById])
   @@index([sourceType, syncState])

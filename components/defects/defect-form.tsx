@@ -70,6 +70,7 @@ export function DefectForm({
   // đồng bộ vòng về từ Sheet. Chỉ phiếu có nguồn gốc thật sự từ Sheet mới dùng
   // màn hình ánh xạ cục bộ.
   const isSynced = defect?.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
+  const operationFieldsLocked = isSynced && defect?.status === "DA_XU_LY";
   const initialMappedUnit = normalizeMappedUnit(
     defect?.mappedDeviceUnit,
     defect?.unit ?? initialDevice?.unit,
@@ -309,13 +310,17 @@ export function DefectForm({
       try {
         const syncedPayload: Record<string, unknown> = {
           id: defect!.id,
-          severity: form.severity,
-          status: form.status,
-          fireSafetyImpact: form.fireSafetyImpact,
-          environmentSafetyImpact: form.environmentSafetyImpact,
-          condition: form.condition,
           note: form.note,
         };
+        if (!operationFieldsLocked) {
+          Object.assign(syncedPayload, {
+            severity: form.severity,
+            status: form.status,
+            fireSafetyImpact: form.fireSafetyImpact,
+            environmentSafetyImpact: form.environmentSafetyImpact,
+            condition: form.condition,
+          });
+        }
         if (form.deviceSystemSeq) {
           syncedPayload.deviceSystemSeq = form.deviceSystemSeq;
           syncedPayload.device = form.device || null;
@@ -544,11 +549,15 @@ export function DefectForm({
               <div className="my-5 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
                 <div className="mb-4">
                   <p className="font-semibold text-blue-950">Cập nhật Vận hành</p>
-                  <p className="text-xs text-blue-800/75">Các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet.</p>
+                  <p className="text-xs text-blue-800/75">
+                    {operationFieldsLocked
+                      ? "Phiếu đã xử lý xong. Chỉ Ghi chú được phép thay đổi."
+                      : "Các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet."}
+                  </p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <StackField label="Mức Độ">
-                    <Select value={form.severity} onValueChange={(value) => set("severity", value)}>
+                    <Select value={form.severity} onValueChange={(value) => set("severity", value)} disabled={operationFieldsLocked}>
                       <SelectTrigger className="h-11"><SelectValue placeholder="Chọn mức độ" /></SelectTrigger>
                       <SelectContent>
                         {DEFECT_SEVERITY_ORDER.map((severity) => (
@@ -558,7 +567,7 @@ export function DefectForm({
                     </Select>
                   </StackField>
                   <StackField label="KQ Vận Hành">
-                    <Select value={form.status} onValueChange={(value) => set("status", value)}>
+                    <Select value={form.status} onValueChange={(value) => set("status", value)} disabled={operationFieldsLocked}>
                       <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {DEFECT_STATUS_ORDER.map((status) => (
@@ -568,19 +577,19 @@ export function DefectForm({
                     </Select>
                   </StackField>
                   <StackField label="Ảnh Hưởng PCCC">
-                    <Select value={form.fireSafetyImpact} onValueChange={(value) => set("fireSafetyImpact", value)}>
+                    <Select value={form.fireSafetyImpact} onValueChange={(value) => set("fireSafetyImpact", value)} disabled={operationFieldsLocked}>
                       <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                       <SelectContent>{YES_NO_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
                     </Select>
                   </StackField>
                   <StackField label="Môi Trường, ATVSLĐ">
-                    <Select value={form.environmentSafetyImpact} onValueChange={(value) => set("environmentSafetyImpact", value)}>
+                    <Select value={form.environmentSafetyImpact} onValueChange={(value) => set("environmentSafetyImpact", value)} disabled={operationFieldsLocked}>
                       <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                       <SelectContent>{YES_NO_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
                     </Select>
                   </StackField>
                   <StackField label="Điều Kiện Thực Hiện">
-                    <Select value={form.condition} onValueChange={(value) => set("condition", value)}>
+                    <Select value={form.condition} onValueChange={(value) => set("condition", value)} disabled={operationFieldsLocked}>
                       <SelectTrigger className="h-11"><SelectValue placeholder="Chọn điều kiện" /></SelectTrigger>
                       <SelectContent>{DEFECT_CONDITION_ORDER.map((value) => <SelectItem key={value} value={value}>{DEFECT_CONDITION[value]}</SelectItem>)}</SelectContent>
                     </Select>
@@ -617,7 +626,7 @@ export function DefectForm({
                   <span>
                     <span className="block text-sm font-semibold text-ink">Đánh dấu chờ vật tư</span>
                     <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                      Giữ phiếu trong mục Tồn đọng và chưa đưa vào lịch sử dù Google Sheet đã báo xử lý.
+                      Các phiếu trạng thái đã xử lý nhưng kết quả chờ vật tư.
                     </span>
                   </span>
                 </button>

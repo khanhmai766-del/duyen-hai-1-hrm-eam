@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, ChevronDown, Check } from "lucide-react";
+import { Search, X, ChevronDown, Check, Unplug } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,8 @@ export function DefectFilterBar({
   chips,
   total,
   scopeTotal,
+  mismatchOnly,
+  onMismatchOnlyChange,
   canReset,
   onReset,
 }: {
@@ -54,6 +56,8 @@ export function DefectFilterBar({
   chips: ActiveChip[];
   total: number;
   scopeTotal: number;
+  mismatchOnly: boolean;
+  onMismatchOnlyChange: (value: boolean) => void;
   canReset: boolean;
   onReset: () => void;
 }) {
@@ -141,6 +145,23 @@ export function DefectFilterBar({
             </span>
           ))}
           <div className="ml-auto flex items-center gap-3">
+            <button
+              type="button"
+              aria-pressed={mismatchOnly}
+              aria-label="Chỉ hiển thị kết quả chưa khớp giữa vận hành và sửa chữa"
+              title="Chỉ hiển thị kết quả chưa khớp giữa vận hành và sửa chữa"
+              onClick={() => onMismatchOnlyChange(!mismatchOnly)}
+              className={cn(
+                "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2",
+                mismatchOnly
+                  ? "border-red-200 bg-red-50 text-red-700 shadow-sm"
+                  : "border-border bg-white text-muted-foreground hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
+              )}
+            >
+              <Unplug className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Chưa khớp</span>
+              {mismatchOnly && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
+            </button>
             <span className="text-[13px] text-muted-foreground">
               <b className="tabular-nums text-ink">{total.toLocaleString("vi-VN")}</b>
               {" / "}

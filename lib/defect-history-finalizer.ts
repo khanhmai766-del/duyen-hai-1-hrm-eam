@@ -5,6 +5,14 @@ import { deleteFromS3 } from "@/lib/s3";
 const DEFAULT_BATCH_SIZE = 50;
 const MAX_BATCH_SIZE = 200;
 
+function firstNonBlank(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
 export interface FinalizePendingDefectHistoryResult {
   dueCount: number;
   finalizedCount: number;
@@ -126,18 +134,26 @@ export async function finalizePendingDefectHistories(
           mappedDeviceUnit: defect.mappedDeviceUnit,
           system: defect.system,
           requestType: pending.requestType || defect.requestType,
-          // Nội dung chính của lịch sử do Vận hành nhập khi xác nhận.
-          // Dữ liệu Sửa chữa mới nhất nằm riêng trong sourceSnapshot để tham khảo.
-          content: pending.content || defect.content,
+          // Luôn ưu tiên dữ liệu VHV. Nội dung phiếu gốc chỉ bù khi VHV không nhập.
+          content: firstNonBlank(pending.content, defect.content),
           requestNumber: defect.requestNumber,
           reminderCount: defect.reminderCount,
           lastRemindedAt: defect.lastRemindedAt,
           reminderRaw: defect.reminderRaw,
           sourceKey: defect.sourceKey,
           sourceSnapshot: sourceSnapshot(defect),
-          workOrderNumber: pending.workOrderNumber,
+          // Nếu VHV bỏ trống, lấy dữ liệu Sửa chữa mới nhất nhận được trong
+          // thời gian chờ chốt; không ghi đè giá trị VHV đã xác nhận.
+          workOrderNumber: firstNonBlank(
+            pending.workOrderNumber,
+            defect.repairOrderNumberRaw
+          ),
           performedAt: pending.performedAt,
-          result: pending.result,
+          // "Nội dung đã thực hiện" của Sửa chữa được bù sang "Kết quả thực hiện".
+          result: firstNonBlank(
+            pending.result,
+            defect.repairPerformedContentRaw
+          ),
           images: [],
           // Người nhập lịch sử là VHV cập nhật phiếu gần nhất.
           createdById: defect.createdById,

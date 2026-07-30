@@ -59,7 +59,7 @@ export type DefectUpsertStats = {
 };
 
 const CHUNK = 100;
-const COMPLETED_HISTORY_PENDING_DAYS = 2;
+const COMPLETED_HISTORY_PENDING_DAYS = 4;
 
 function text(value: unknown) {
   return String(value ?? "").trim();

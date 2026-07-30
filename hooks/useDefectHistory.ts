@@ -5,6 +5,9 @@ import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { DefectHistory } from "@prisma/client";
 
 export interface DefectHistoryItem extends DefectHistory {
+  historyStatus?: "FINALIZED" | "PENDING";
+  finalizeAt?: string | null;
+  pendingDefectId?: string | null;
   createdBy: { id: string; name: string; position: string | null; avatarUrl?: string | null };
   relatedDevices: Array<{
     deviceSeq: string;
@@ -22,6 +25,7 @@ export interface DefectHistoryFilters {
   workOrderNumber?: string;
   device?: string;
   deviceSeq?: string;
+  includeDescendants?: string;
   from?: string;
   to?: string;
 }

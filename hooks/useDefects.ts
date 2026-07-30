@@ -17,6 +17,11 @@ export interface DefectItem extends Defect {
   pendingHistory: {
     startedAt: string;
     finalizeAt: string;
+    workOrderNumber: string | null;
+    requestType: string | null;
+    performedAt: string;
+    content: string | null;
+    result: string | null;
   } | null;
 }
 
@@ -31,8 +36,10 @@ export interface DefectListParams {
   status?: string;
   severity?: string;
   repairResult?: string;
+  mismatch?: boolean;
   q?: string;
   deviceSeq?: string;
+  includeDescendants?: number;
 }
 
 export interface DefectListMeta {
@@ -123,6 +130,18 @@ export function useDeleteDefect() {
   });
 }
 
+export function useCancelDefect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      apiMutate<DefectItem>(`/api/defects/${id}/cancel`, "POST", { note }),
+    onSuccess: (updated) => {
+      qc.setQueryData(["defect", updated.id], { data: updated, meta: null });
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+    },
+  });
+}
+
 export function useRemindDefect() {
   const qc = useQueryClient();
   return useMutation({
@@ -197,6 +216,20 @@ export function useCompleteDefect() {
       apiMutate(`/api/defects/${id}/complete`, "POST", body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["defects"] });
+      qc.invalidateQueries({ queryKey: ["defect"] });
+      qc.invalidateQueries({ queryKey: ["defect-history"] });
+    },
+  });
+}
+
+export function useUpdatePendingDefectHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: CompleteDefectInput & { id: string }) =>
+      apiMutate(`/api/defects/${id}/complete`, "PUT", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["defects"] });
+      qc.invalidateQueries({ queryKey: ["defect"] });
       qc.invalidateQueries({ queryKey: ["defect-history"] });
     },
   });

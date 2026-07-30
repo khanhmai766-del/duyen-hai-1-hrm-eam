@@ -28,7 +28,15 @@ const INCLUDE = {
     orderBy: { createdAt: "asc" as const },
   },
   pendingHistory: {
-    select: { startedAt: true, finalizeAt: true },
+    select: {
+      startedAt: true,
+      finalizeAt: true,
+      workOrderNumber: true,
+      requestType: true,
+      performedAt: true,
+      content: true,
+      result: true,
+    },
   },
 };
 
@@ -167,6 +175,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const environmentSafetyImpact =
         body.environmentSafetyImpact === undefined ? undefined : normalizeImpactValue(body.environmentSafetyImpact);
       const note = body.note === undefined ? undefined : String(body.note ?? "").trim();
+      if (
+        existing.status === "DA_XU_LY"
+        && (
+          (severity !== undefined && severity !== existing.severity)
+          || (status !== undefined && status !== existing.status)
+          || (condition !== undefined && condition !== existing.condition)
+          || (fireSafetyImpact !== undefined && fireSafetyImpact !== existing.fireSafetyImpact)
+          || (environmentSafetyImpact !== undefined && environmentSafetyImpact !== existing.environmentSafetyImpact)
+        )
+      ) {
+        return fail("Phiếu đã xử lý xong, chỉ được phép thay đổi Ghi chú");
+      }
 
       const equipmentNodes = mappingRequested ? await prisma.equipmentNode.findMany({
         select: { seq: true, parentSeq: true },

@@ -16,14 +16,28 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
     if (existing.status === "SUCCESS") return ok(existing);
     if (existing.status !== "PROCESSING") return fail("Sự kiện không ở trạng thái đang xử lý", 409);
 
-    const event = await prisma.defectSyncOutbox.update({
-      where: { id: existing.id },
-      data: {
-        status: "SUCCESS",
-        completedAt: new Date(),
-        claimedAt: null,
-        lastError: null,
-      },
+    const cancellation =
+      existing.payload
+      && typeof existing.payload === "object"
+      && !Array.isArray(existing.payload)
+      && existing.payload.cancellation === true;
+    const event = await prisma.$transaction(async (tx) => {
+      const updated = await tx.defectSyncOutbox.update({
+        where: { id: existing.id },
+        data: {
+          status: "SUCCESS",
+          completedAt: new Date(),
+          claimedAt: null,
+          lastError: null,
+        },
+      });
+      if (cancellation) {
+        await tx.defect.updateMany({
+          where: { id: existing.defectId, cancelledAt: { not: null } },
+          data: { syncState: "CONFIRMED" },
+        });
+      }
+      return updated;
     });
     return ok(event);
   });

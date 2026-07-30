@@ -97,7 +97,10 @@ export function DefectHistoryDialog({
     if (!form.unit) return toast.error("Vui lòng chọn tổ máy");
     if (!form.performedAt) return toast.error("Vui lòng chọn ngày kết thúc");
     try {
-      if (isEdit) await update.mutateAsync({ id: record!.id, ...form });
+      if (isEdit) {
+        const { images: _images, ...editableFields } = form;
+        await update.mutateAsync({ id: record!.id, ...editableFields });
+      }
       else await create.mutateAsync(form);
       toast.success(isEdit ? "Đã cập nhật bản ghi lịch sử" : "Đã thêm bản ghi lịch sử");
       onOpenChange(false);
@@ -186,9 +189,11 @@ export function DefectHistoryDialog({
           <Field label="Kết quả thực hiện">
             <Textarea value={form.result} onChange={(e) => set("result", e.target.value)} rows={3} placeholder="Mô tả kết quả xử lý…" />
           </Field>
-          <Field label="Hình ảnh (tối đa 3)">
-            <MultiImagePicker value={form.images} onChange={(v) => set("images", v)} max={3} />
-          </Field>
+          {!isEdit && (
+            <Field label="Hình ảnh (tối đa 3)">
+              <MultiImagePicker value={form.images} onChange={(v) => set("images", v)} max={3} />
+            </Field>
+          )}
         </div>
 
         <DialogFooter>

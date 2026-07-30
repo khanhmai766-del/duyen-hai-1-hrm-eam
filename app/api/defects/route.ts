@@ -25,6 +25,8 @@ import {
   validateMappedDevice,
   type DefectDeviceMapping,
 } from "@/lib/defect-device-mapping";
+import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
+import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +60,9 @@ const LIST_SELECT = {
   websiteCreated: true,
   syncState: true,
   postRepairAwaitingMaterial: true,
+  cancelledAt: true,
+  cancelledById: true,
+  cancelledByName: true,
   sourceStatusMismatch: true,
   repairResultRaw: true,
   ktatReviewRaw: true,
@@ -99,7 +104,14 @@ const PAGE_SELECT = {
 function activeDefectWhere(): Prisma.DefectWhereInput {
   const completedCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   return {
-    OR: [
+    AND: [{
+      // Phiếu hủy chỉ còn ở Tồn đọng trong lúc chờ ACK ghi ngược lên Sheet.
+      OR: [
+        { cancelledAt: null },
+        { syncState: { not: "CONFIRMED" } },
+      ],
+    }, {
+      OR: [
       {
         sourceType: "GOOGLE_SHEETS",
         syncState: { not: "CONFIRMED" },
@@ -117,23 +129,25 @@ function activeDefectWhere(): Prisma.DefectWhereInput {
         postRepairAwaitingMaterial: false,
         completedAt: { gte: completedCutoff },
       },
-    ],
+      ],
+    }],
   };
 }
 
-function defectStatusWhere(status?: string): Prisma.DefectWhereInput | null {
-  if (!status || status === "ALL") return null;
-  if (status === "SOURCE_MISSING") {
-    return { sourceType: "GOOGLE_SHEETS", syncState: "MISSING" };
-  }
-  if (status === "TON_DONG" || status === "DA_XU_LY") return { status: "DA_XU_LY" };
-  return { status };
+function parseDefectRequestNumber(value: string | null) {
+  const match = value?.trim().match(/^(\d+)\/(\d{4})$/);
+  if (!match) return null;
+  const sequence = Number.parseInt(match[1], 10);
+  const year = Number.parseInt(match[2], 10);
+  return Number.isSafeInteger(sequence) && Number.isSafeInteger(year)
+    ? { sequence, year }
+    : null;
 }
 
-function defectQueryTiming(startedAt: number, mode: "database" | "compatibility", total: number) {
+function defectQueryTiming(startedAt: number, total: number) {
   const durationMs = Date.now() - startedAt;
   if (durationMs >= 750) {
-    console.warn("[slow defect list]", { durationMs, mode, total });
+    console.warn("[slow defect list]", { durationMs, total });
   }
   return durationMs;
 }
@@ -153,12 +167,17 @@ export async function GET(req: NextRequest) {
     const mapping = params.get("mapping")?.trim();
     const status = params.get("status")?.trim();
     const severity = params.get("severity")?.trim();
+    const mismatch = params.get("mismatch") === "true";
     // "KQ sửa chữa" là chuỗi tự do đồng bộ từ Google Sheet (Đã thực hiện xong, Chờ vật tư,
     // Thuê ngoài…) nên lọc theo giá trị nguyên văn, không map sang enum.
     const repairResult = params.get("repairResult")?.trim();
-    const repairResultWhere: Prisma.DefectWhereInput[] =
-      repairResult && repairResult !== "ALL" ? [{ repairResultRaw: repairResult }] : [];
     const deviceSeq = params.get("deviceSeq")?.trim();
+    const descendantDepth = deviceSeq
+      ? Math.min(2, Math.max(0, Number.parseInt(params.get("includeDescendants") ?? "0", 10) || 0))
+      : 0;
+    const deviceSeqs = deviceSeq && descendantDepth > 0
+      ? [...getEquipmentSeqsWithinDepth(await getCachedEquipmentNodeFull(), deviceSeq, descendantDepth)]
+      : deviceSeq ? [deviceSeq] : [];
     const query = normalizeText(params.get("q")?.trim() ?? "");
 
     // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây (index text_pattern_ops);
@@ -187,7 +206,7 @@ export async function GET(req: NextRequest) {
           ? [{
               OR: [
                 {
-                  deviceSeq,
+                  deviceSeq: { in: deviceSeqs },
                   ...(mappedUnit ? {
                     OR: [
                       { mappedDeviceUnit: mappedUnit },
@@ -195,105 +214,22 @@ export async function GET(req: NextRequest) {
                     ],
                   } : {}),
                 },
-                { AND: [{ deviceSeq: null }, { device: deviceSeq }] },
+                ...(descendantDepth === 0 ? [{ AND: [{ deviceSeq: null }, { device: deviceSeq }] }] : []),
                 ...(mappedUnit
                   ? [
-                      { relatedDevices: { some: { deviceSeq, mappedUnit } } },
-                      { unit: mappedUnit, relatedDevices: { some: { deviceSeq, mappedUnit: null } } },
+                      { relatedDevices: { some: { deviceSeq: { in: deviceSeqs }, mappedUnit } } },
+                      { unit: mappedUnit, relatedDevices: { some: { deviceSeq: { in: deviceSeqs }, mappedUnit: null } } },
                     ]
-                  : [{ relatedDevices: { some: { deviceSeq } } }]),
+                  : [{ relatedDevices: { some: { deviceSeq: { in: deviceSeqs } } } }]),
               ],
             } as Prisma.DefectWhereInput]
           : []),
       ],
     };
 
-    // Fast path cho quản trị/cương vị không bị giới hạn phạm vi: lọc, KPI, sắp xếp
-    // và phân trang ngay trong PostgreSQL. Tìm kiếm không dấu và scope thiết bị phức
-    // tạp vẫn dùng nhánh tương thích phía dưới để giữ nguyên kết quả nghiệp vụ.
-    const useDatabasePagination =
-      !access.hasExplicitScopes &&
-      !query &&
-      (!position || position === "ALL");
-
-    if (useDatabasePagination) {
-      const statusWhere = defectStatusWhere(status);
-      const filteredWhere: Prisma.DefectWhereInput = {
-        AND: [
-          where,
-          ...(statusWhere ? [statusWhere] : []),
-          ...(severity && severity !== "ALL" ? [{ severity }] : []),
-          ...repairResultWhere,
-        ],
-      };
-      const [total, scopeTotal, groupedStatus, tonDong, groupedRepair] = await Promise.all([
-        prisma.defect.count({ where: filteredWhere }),
-        prisma.defect.count({
-          where: {
-            AND: [
-              activeDefectWhere(),
-              ...(scopeWhere ? [{ OR: [scopeWhere, { deviceSeq: null }] } as Prisma.DefectWhereInput] : []),
-            ],
-          },
-        }),
-        prisma.defect.groupBy({
-          by: ["status"],
-          where,
-          _count: { _all: true },
-        }),
-        prisma.defect.count({ where: { AND: [where, { status: "DA_XU_LY" }] } }),
-        // Danh sách "KQ sửa chữa" thực có trong phạm vi đang xem (bỏ qua bộ lọc KQ sửa
-        // chữa để danh sách không tự thu hẹp còn đúng giá trị đang chọn).
-        prisma.defect.groupBy({
-          by: ["repairResultRaw"],
-          where,
-          _count: { _all: true },
-          orderBy: { _count: { repairResultRaw: "desc" } },
-        }),
-      ]);
-      const statusCount = new Map(groupedStatus.map((item) => [item.status, item._count._all]));
-      const repairResults = groupedRepair
-        .map((item) => item.repairResultRaw?.trim())
-        .filter((value): value is string => !!value);
-      const totalPages = Math.max(1, Math.ceil(total / limit));
-      const safePage = Math.min(page, totalPages);
-      const pageRows = await prisma.defect.findMany({
-        where: filteredWhere,
-        select: PAGE_SELECT,
-        orderBy: [
-          { sourceStatusMismatch: "desc" },
-          { deviceSeq: { sort: "asc", nulls: "first" } },
-          { detectedAt: { sort: "desc", nulls: "last" } },
-          { createdAt: "desc" },
-        ],
-        skip: (safePage - 1) * limit,
-        take: limit,
-      });
-
-      const durationMs = defectQueryTiming(queryStartedAt, "database", total);
-      return ok(
-        pageRows.map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) })),
-        {
-          total,
-          page: safePage,
-          limit,
-          totalPages,
-          scopeTotal,
-          kpi: {
-            chuaXuLy: statusCount.get("CHUA_XU_LY") ?? 0,
-            coPct: statusCount.get("CO_PCT") ?? 0,
-            choVatTu: statusCount.get("CHO_VAT_TU") ?? 0,
-            choNgungMay: statusCount.get("CHO_NGUNG_MAY") ?? 0,
-            tonDong,
-          },
-          repairResults,
-          queryMode: "database",
-          durationMs,
-        }
-      );
-    }
-
-    // Chỉ lấy tập trường nhẹ để lọc/đếm/sắp xếp. Quan hệ đầy đủ chỉ tải cho trang hiện tại.
+    // Lấy tập trường nhẹ để có thể xếp số yêu cầu theo giá trị số (năm giảm dần,
+    // STT giảm dần). PostgreSQL không thể xếp đúng "999/2026" và "1000/2026"
+    // bằng thứ tự chuỗi thông thường; quan hệ đầy đủ vẫn chỉ tải cho trang hiện tại.
     const [candidates, scopeTotal] = await Promise.all([
       prisma.defect.findMany({
         where,
@@ -364,6 +300,7 @@ export async function GET(req: NextRequest) {
         }
         if (severity && severity !== "ALL" && item.severity !== severity) return false;
         if (repairResult && repairResult !== "ALL" && (item.repairResultRaw ?? "") !== repairResult) return false;
+        if (mismatch && !item.sourceStatusMismatch) return false;
         if (!query) return true;
         return normalizeText([
           item.requestNumber,
@@ -379,10 +316,14 @@ export async function GET(req: NextRequest) {
         ].filter(Boolean).join(" ")).includes(query);
       })
       .sort((a, b) => {
-        if (a.sourceStatusMismatch !== b.sourceStatusMismatch) return a.sourceStatusMismatch ? -1 : 1;
-        const unmappedA = a.sourceType === "GOOGLE_SHEETS" && !a.deviceSeq;
-        const unmappedB = b.sourceType === "GOOGLE_SHEETS" && !b.deviceSeq;
-        if (unmappedA !== unmappedB) return unmappedA ? -1 : 1;
+        const requestA = parseDefectRequestNumber(a.requestNumber);
+        const requestB = parseDefectRequestNumber(b.requestNumber);
+        if (requestA && requestB) {
+          if (requestA.year !== requestB.year) return requestB.year - requestA.year;
+          if (requestA.sequence !== requestB.sequence) return requestB.sequence - requestA.sequence;
+        } else if (requestA || requestB) {
+          return requestA ? -1 : 1;
+        }
         const detectedA = a.detectedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
         const detectedB = b.detectedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
         return detectedB - detectedA || b.createdAt.getTime() - a.createdAt.getTime();
@@ -401,7 +342,7 @@ export async function GET(req: NextRequest) {
       .filter((item): item is NonNullable<typeof item> => !!item)
       .map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) }));
 
-    const durationMs = defectQueryTiming(queryStartedAt, "compatibility", total);
+    const durationMs = defectQueryTiming(queryStartedAt, total);
     return ok(data, {
       total,
       page: safePage,

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const events = await tx.defectSyncOutbox.findMany({
         where: { id: { in: eventIds } },
-        select: { id: true, status: true },
+        select: { id: true, defectId: true, status: true, payload: true },
       });
       if (events.length !== eventIds.length) throw new Error("Một hoặc nhiều sự kiện đồng bộ không tồn tại");
       if (events.some((event) => !["PROCESSING", "SUCCESS"].includes(event.status))) {
@@ -38,6 +38,24 @@ export async function POST(req: NextRequest) {
           lastError: null,
         },
       });
+      const cancellationDefectIds = events
+        .filter(
+          (event) =>
+            event.payload
+            && typeof event.payload === "object"
+            && !Array.isArray(event.payload)
+            && event.payload.cancellation === true
+        )
+        .map((event) => event.defectId);
+      if (cancellationDefectIds.length) {
+        await tx.defect.updateMany({
+          where: {
+            id: { in: cancellationDefectIds },
+            cancelledAt: { not: null },
+          },
+          data: { syncState: "CONFIRMED" },
+        });
+      }
       return { requested: eventIds.length, updated: updated.count };
     }).catch((error) => {
       throw fail(error instanceof Error ? error.message : "Không thể xác nhận lô đồng bộ", 409);
