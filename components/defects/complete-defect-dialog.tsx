@@ -47,16 +47,18 @@ export function CompleteDefectDialog({
   // đối chiếu KQ Sửa chữa để hiển thị đúng hạn mà backend sắp tạo.
   const pendingDays = defectResultStatusOf(defect?.repairResultRaw) === "DA_XU_LY" ? 2 : 14;
 
-  // Đây là nội dung Vận hành ghi vào lịch sử. Dữ liệu Sửa chữa từ Sheet chỉ
-  // hiển thị để đối chiếu, không tự điền hoặc khóa các trường này.
+  // Dùng dữ liệu Sửa chữa từ Sheet để điền sẵn các trường tương ứng. Đây chỉ
+  // là giá trị ban đầu; Vận hành vẫn được chỉnh sửa trước khi ghi lịch sử.
   React.useEffect(() => {
     if (defect) {
       setForm({
-        workOrderNumber: "",
+        workOrderNumber: defect.repairOrderNumberRaw?.trim() || "",
         requestType: defect.requestType ?? "",
-        performedAt: todayInput(),
-        content: "",
-        result: "",
+        performedAt: defect.sourceCompletedAt
+          ? formatDateInput(defect.sourceCompletedAt)
+          : todayInput(),
+        content: defect.repairPerformedContentRaw?.trim() || "",
+        result: defect.repairResultRaw?.trim() || "",
       });
     }
   }, [defect]);
@@ -157,8 +159,8 @@ export function CompleteDefectDialog({
               />
             </Field>
             <Field label="Kết quả thực hiện">
-              {hasSheetSourceData && (defect.repairResultRaw || defect.note || defect.sourceStatusRaw) && (
-                <SourceValue value={defect.repairResultRaw || defect.note || defect.sourceStatusRaw || ""} multiline />
+              {hasSheetSourceData && defect.repairResultRaw?.trim() && (
+                <SourceValue value={defect.repairResultRaw.trim()} multiline />
               )}
               <Textarea
                 value={form.result}
