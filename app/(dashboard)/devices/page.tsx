@@ -65,6 +65,7 @@ import { apiGet } from "@/lib/fetcher";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, uniqueVietnamesePositions } from "@/lib/positions";
+import { positionsMatch } from "@/lib/position-catalog";
 import { formatDate, cn } from "@/lib/utils";
 
 type ViewMode = "tree" | "detail" | "form";
@@ -636,7 +637,7 @@ function TableView({
     [devices]
   );
   const filteredDevices = React.useMemo(
-    () => (positionFilter === "ALL" ? devices : devices.filter((device) => normalizeText(announcementPositionLabel(device.managingPosition)) === normalizeText(positionFilter))),
+    () => (positionFilter === "ALL" ? devices : devices.filter((device) => positionsMatch(device.managingPosition, positionFilter))),
     [devices, positionFilter]
   );
   const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));

@@ -8,6 +8,7 @@ import { parseScopeParam } from "@/lib/equipment-units";
 import { TREE_SELECT, toTreeNode } from "@/lib/equipment-tree-lazy";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 import { requireDeviceView } from "@/lib/device-permissions";
+import { resolveEquipmentTreeRequestUser } from "@/lib/equipment-tree-request-access";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,13 @@ export async function GET(req: NextRequest) {
       user,
       req.nextUrl.searchParams.get("permissionScope")
     );
-    const treeUser = canAccessAllNodes ? { ...user, role: "ADMIN" } : user;
+    const requestedTreeUser = await resolveEquipmentTreeRequestUser(
+      user,
+      req.nextUrl.searchParams.get("positionScope")
+    );
+    const treeUser = canAccessAllNodes
+      ? { ...requestedTreeUser, role: "ADMIN" }
+      : requestedTreeUser;
     const [where, overrideOf] = await Promise.all([
       scope
         ? resolveScopeRootWhere(treeUser, scope)

@@ -32,6 +32,7 @@ import {
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import type { TreeScope } from "@/lib/equipment-units";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
+import { positionsMatch } from "@/lib/position-catalog";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -134,7 +135,9 @@ export function DefectForm({
   const visiblePositions = React.useMemo(
     () => {
       const allowed = positions.filter((p) => isPositionAllowedForDefectUnit(form.unit, p));
-      if (form.system && !allowed.includes(form.system)) return [form.system, ...allowed];
+      if (form.system && !allowed.some((position) => positionsMatch(position, form.system))) {
+        return [form.system, ...allowed];
+      }
       return allowed;
     },
     [positions, form.unit, form.system]

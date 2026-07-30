@@ -7,6 +7,7 @@ import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { invalidateEquipmentAccessCache } from "@/lib/server-access";
 import { invalidatePositionScopeCache } from "@/lib/position-scope-cache";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ type ScopeAccess = "none" | "view" | "edit";
 type ScopeRow = {
   id: string;
   position: string;
+  positionCode: string | null;
   systemSeq: string;
   access: ScopeAccess;
   createdAt: Date;
@@ -24,7 +26,7 @@ type ScopeRow = {
 // và tạo bằng db push.
 async function listScopes() {
   return prisma.$queryRaw<ScopeRow[]>`
-    SELECT "id", "position", "systemSeq", "access", "createdAt"
+    SELECT "id", "position", "positionCode", "systemSeq", "access", "createdAt"
     FROM "PositionSystemScope"
     ORDER BY "position" ASC, "systemSeq" ASC
   `;
@@ -43,7 +45,9 @@ export async function PUT(req: NextRequest) {
     const user = await requireUser();
     await requirePermissionLevel(user, "rbac-manage", ["full"], "Không đủ quyền cấu hình phạm vi thiết bị theo cương vị");
     const body = await req.json();
-    const position = normalizePositionScopeLabel(typeof body.position === "string" ? body.position : "");
+    const requestedPosition = normalizePositionScopeLabel(typeof body.position === "string" ? body.position : "");
+    const positionCode = positionCodeOf(requestedPosition);
+    const position = positionLabelOf(positionCode ?? requestedPosition);
 
     // Payload mới: entries [{ systemSeq, access }]. Vẫn nhận systemSeqs cũ (mặc định "edit").
     const rawEntries: Array<{ systemSeq: string; access: ScopeAccess }> = Array.isArray(body.entries)
@@ -80,7 +84,11 @@ export async function PUT(req: NextRequest) {
     const positionsToClear = Array.from(
       new Set(
         existingRows
-          .filter((row) => normalizePositionScopeKey(row.position) === positionKey)
+          .filter((row) =>
+            positionCode && row.positionCode
+              ? row.positionCode === positionCode
+              : normalizePositionScopeKey(row.position) === positionKey
+          )
           .map((row) => row.position)
       )
     );
@@ -89,9 +97,10 @@ export async function PUT(req: NextRequest) {
     }
     for (const [systemSeq, access] of bySeq) {
       await prisma.$executeRaw`
-        INSERT INTO "PositionSystemScope" ("id", "position", "systemSeq", "access")
-        VALUES (${randomUUID()}, ${position}, ${systemSeq}, ${access})
-        ON CONFLICT ("position", "systemSeq") DO UPDATE SET "access" = EXCLUDED."access"
+        INSERT INTO "PositionSystemScope" ("id", "position", "positionCode", "systemSeq", "access")
+        VALUES (${randomUUID()}, ${position}, ${positionCode}, ${systemSeq}, ${access})
+        ON CONFLICT ("position", "systemSeq") DO UPDATE
+        SET "access" = EXCLUDED."access", "positionCode" = EXCLUDED."positionCode"
       `;
     }
     await audit(

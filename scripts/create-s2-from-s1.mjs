@@ -199,6 +199,7 @@ async function copyReplacements() {
       quantity: r.quantity,
       deviceCount: r.deviceCount,
       managingPosition: r.managingPosition,
+      managingPositionCode: r.managingPositionCode,
       intervalMonths: r.intervalMonths,
       intervalNote: r.intervalNote,
       lastReplacedAt,

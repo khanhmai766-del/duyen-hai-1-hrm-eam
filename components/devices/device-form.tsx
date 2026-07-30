@@ -28,6 +28,7 @@ import {
   type TreeScope,
 } from "@/lib/equipment-units";
 import { announcementShiftRosterPositionOptions } from "@/lib/positions";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { cn } from "@/lib/utils";
 
 const NONE = "__none__";
@@ -66,7 +67,7 @@ export function DeviceForm({
     kks: device?.kks ?? "",
     system: device?.system ?? "",
     systemSeq: initialParentSeq ?? "",
-    managingPosition: device?.managingPosition ?? "",
+    managingPosition: positionLabelOf(device?.managingPosition),
     images: device?.images ?? [],
     attachedInfo: device?.attachedInfo ?? "",
     documentUrl: device?.documentUrl ?? "",
@@ -100,7 +101,8 @@ export function DeviceForm({
 
   // Đảm bảo cương vị hiện tại luôn có trong danh sách (kể cả khi đã đổi tên/xoá).
   const positionOptions =
-    form.managingPosition && !positions.includes(form.managingPosition)
+    form.managingPosition &&
+    !positions.some((position) => positionsMatch(position, form.managingPosition))
       ? [form.managingPosition, ...positions]
       : positions;
   // Ô chọn cây nhận MÃ CHUẨN (seq), không phải mã hiển thị theo tổ máy.

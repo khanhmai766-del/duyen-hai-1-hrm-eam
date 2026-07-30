@@ -9,6 +9,7 @@ import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +152,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     location: entry.location?.trim() || null,
     deviceCount: Math.max(1, Math.round(Number(entry.deviceCount)) || 1),
     managingPosition: entry.managingPosition?.trim() || null,
+    managingPositionCode: positionCodeOf(entry.managingPosition),
     // Thêm thiết bị theo dõi từ form KHÔNG tự kích hoạt đếm thời gian;
     // chỉ giữ trạng thái true khi dòng cũ đã được bật theo dõi trước đó.
     isActive: entry.isActive === true && intervalMonths > 0,

@@ -4,7 +4,7 @@ import {
   loadPositionSystemScopeRows,
   managingPositionsByEquipmentSeq,
 } from "@/lib/server-access";
-import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
+import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 
 async function main() {
   const points = await prisma.materialReplacement.findMany({
@@ -31,10 +31,7 @@ async function main() {
       continue;
     }
 
-    const currentKey = normalizePositionScopeKey(point.managingPosition ?? "");
-    const matchedCurrent = positions.find(
-      (position) => normalizePositionScopeKey(position) === currentKey
-    );
+    const matchedCurrent = positions.find((position) => positionsMatch(position, point.managingPosition));
     const managingPosition = matchedCurrent ?? positions[0];
     if (point.managingPosition === managingPosition) {
       unchanged++;
@@ -43,7 +40,7 @@ async function main() {
 
     await prisma.materialReplacement.update({
       where: { id: point.id },
-      data: { managingPosition },
+      data: { managingPosition, managingPositionCode: positionCodeOf(managingPosition) },
     });
     updated++;
   }

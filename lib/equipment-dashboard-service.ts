@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { DEFECT_REQUEST_TYPES, daysUntilDue, replacementDueStatus } from "@/lib/constants";
 import { getCachedEquipmentNodeList, getEquipmentTreeIndexFor } from "@/lib/equipment-node-cache";
 import { normalizeText } from "@/lib/nav";
+import { positionsMatch } from "@/lib/position-catalog";
 import { GROUPABLE_CATEGORIES } from "@/lib/oil-grouping-sync";
 import {
   announcementPositionsMatch,
@@ -231,7 +232,6 @@ async function buildEquipmentDashboard(
     device.managingPosition = assignedPositionByDevice.get(device.code)?.position ?? null;
   }
   for (const position of positionsWithoutScopes) {
-    const positionKey = normalizePositionScopeKey(position);
     allowedDeviceCodesByPosition.set(
       position,
       new Set(
@@ -239,7 +239,7 @@ async function buildEquipmentDashboard(
           .filter(
             (device) =>
               !device.managingPosition ||
-              normalizePositionScopeKey(device.managingPosition) === positionKey
+              positionsMatch(device.managingPosition, position)
           )
           .map((device) => device.code)
       )

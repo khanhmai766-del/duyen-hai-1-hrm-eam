@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useDeviceMaterialDeclarations";
 import { MATERIAL_CATEGORIES, isSelectableManagingPosition, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 
 const NONE = "__none__";
 
@@ -30,7 +31,19 @@ export function DeviceMaterialDeclarationDialog({
   device: { code: string; displayCode?: string; name: string; system: string | null; managingPosition: string | null };
   machine: string;
 }) {
-  const positions = usePositions().filter(isSelectableManagingPosition);
+  const availablePositions = usePositions();
+  const positions = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          availablePositions
+            .filter(isSelectableManagingPosition)
+            .map(positionLabelOf)
+            .filter(Boolean)
+        )
+      ),
+    [availablePositions]
+  );
   const optionsQuery = useDeviceMaterialOptions(device.code, machine, open);
   const create = useCreateDeviceMaterialDeclaration();
   const options = React.useMemo(() => optionsQuery.data?.data ?? [], [optionsQuery.data]);
@@ -55,7 +68,9 @@ export function DeviceMaterialDeclarationDialog({
   const [intervalMonths, setIntervalMonths] = React.useState("0");
   const [intervalNote, setIntervalNote] = React.useState("");
   const [lastReplacedAt, setLastReplacedAt] = React.useState("");
-  const [managingPosition, setManagingPosition] = React.useState(device.managingPosition ?? "");
+  const [managingPosition, setManagingPosition] = React.useState(
+    positionLabelOf(device.managingPosition)
+  );
   const [note, setNote] = React.useState("");
 
   React.useEffect(() => {
@@ -68,7 +83,7 @@ export function DeviceMaterialDeclarationDialog({
     setIntervalMonths("0");
     setIntervalNote("");
     setLastReplacedAt("");
-    setManagingPosition(device.managingPosition ?? "");
+    setManagingPosition(positionLabelOf(device.managingPosition));
     setNote("");
   }, [open, device.managingPosition]);
 
@@ -203,7 +218,10 @@ export function DeviceMaterialDeclarationDialog({
                   <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                    {(managingPosition && !positions.includes(managingPosition) ? [managingPosition, ...positions] : positions)
+                    {(managingPosition &&
+                    !positions.some((position) => positionsMatch(position, managingPosition))
+                      ? [managingPosition, ...positions]
+                      : positions)
                       .map((position) => <SelectItem key={position} value={position}>{position}</SelectItem>)}
                   </SelectContent>
                 </Select>

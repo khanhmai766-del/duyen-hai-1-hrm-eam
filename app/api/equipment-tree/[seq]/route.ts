@@ -7,6 +7,7 @@ import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScope, scopeCode, scopeKks } from "@/lib/equipment-units";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 import { requireDeviceView } from "@/lib/device-permissions";
+import { resolveEquipmentTreeRequestUser } from "@/lib/equipment-tree-request-access";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,14 @@ export async function GET(req: NextRequest, { params }: { params: { seq: string 
       user,
       req.nextUrl.searchParams.get("permissionScope")
     );
-    if (!canAccessAllNodes) await assertSeqViewable(user, seq);
+    const requestedTreeUser = await resolveEquipmentTreeRequestUser(
+      user,
+      req.nextUrl.searchParams.get("positionScope")
+    );
+    const treeUser = canAccessAllNodes
+      ? { ...requestedTreeUser, role: "ADMIN" }
+      : requestedTreeUser;
+    if (!canAccessAllNodes) await assertSeqViewable(treeUser, seq);
     const [node, overrideOf] = await Promise.all([
       prisma.equipmentNode.findUnique({
         where: { seq },

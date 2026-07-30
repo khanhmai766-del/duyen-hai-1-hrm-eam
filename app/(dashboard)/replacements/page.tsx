@@ -51,6 +51,7 @@ import {
 } from "@/lib/constants";
 import { formatDate, formatDateInput, cn, initials } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 
 type TabKey = "schedule" | "status" | "history";
 
@@ -321,7 +322,7 @@ function ReplacementsPageContent() {
       Array.from(
         new Set(
           logs
-            .map((log) => log.replacement?.managingPosition?.trim())
+            .map((log) => positionLabelOf(log.replacement?.managingPosition))
             .filter((position): position is string => Boolean(position))
         )
       ).sort((a, b) => a.localeCompare(b, "vi")),
@@ -333,7 +334,7 @@ function ReplacementsPageContent() {
     const replacedMonth = ym(l.replacedAt);
     const matchesPosition =
       historyPosition === "ALL" ||
-      l.replacement?.managingPosition === historyPosition;
+      positionsMatch(l.replacement?.managingPosition, historyPosition);
     return (
       replacedMonth >= historyFromMonth &&
       replacedMonth <= historyToMonth &&
@@ -353,7 +354,7 @@ function ReplacementsPageContent() {
     const qText = searchQ.trim().toLowerCase();
     const logsByPosition = historyPosition === "ALL"
       ? logs
-      : logs.filter((log) => log.replacement?.managingPosition === historyPosition);
+      : logs.filter((log) => positionsMatch(log.replacement?.managingPosition, historyPosition));
     if (!qText) return logsByPosition;
     return logsByPosition.filter((l) => {
       const device = l.replacement ? linkedDeviceOf(l.replacement) : null;

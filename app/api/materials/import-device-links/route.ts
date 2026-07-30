@@ -5,6 +5,7 @@ import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@
 import { normalizeText } from "@/lib/nav";
 import { seqInScope, type TreeScope } from "@/lib/equipment-units";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -207,6 +208,7 @@ export async function POST(req: NextRequest) {
           system: row.system,
           location: row.manualDeviceName,
           managingPosition: row.managingPosition,
+          managingPositionCode: positionCodeOf(row.managingPosition),
           intervalNote: row.intervalNote,
           intervalMonths: row.intervalMonths,
           quantity: row.quantity,

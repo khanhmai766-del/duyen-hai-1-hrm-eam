@@ -9,11 +9,11 @@ import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
-import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { parseDateInput } from "@/lib/utils";
 import { publicUserRef } from "@/lib/s3";
+import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
@@ -91,10 +91,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!positions.length) {
         return fail("Thiết bị chưa được phân cương vị quản lý trên cây thiết bị");
       }
-      const requestedKey = normalizePositionScopeKey(managingPosition ?? "");
-      const matched = positions.find(
-        (position) => normalizePositionScopeKey(position) === requestedKey
-      );
+      const matched = positions.find((position) => positionsMatch(position, managingPosition));
       if (body.managingPosition !== undefined && managingPosition && !matched) {
         return fail("Cương vị không còn được phân quyền quản lý thiết bị đã chọn");
       }
@@ -108,6 +105,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         location: body.deviceId !== undefined ? null : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
         managingPosition,
+        managingPositionCode: positionCodeOf(managingPosition),
         intervalMonths,
         intervalNote: body.intervalNote !== undefined ? body.intervalNote?.trim() || null : undefined,
         lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : undefined,

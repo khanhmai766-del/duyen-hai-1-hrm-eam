@@ -15,7 +15,12 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 import { nextDefectRequestNumber } from "@/lib/defect-request-number";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { normalizeText } from "@/lib/nav";
-import { announcementPositionLabel, canViewUnmappedDefectPosition } from "@/lib/positions";
+import {
+  announcementPositionLabel,
+  announcementPositionsMatch,
+  canViewUnmappedDefectPosition,
+} from "@/lib/positions";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -287,8 +292,7 @@ export async function GET(req: NextRequest) {
         (defect) =>
           !position ||
           position === "ALL" ||
-          normalizeText(announcementPositionLabel(defect.system)) ===
-            normalizeText(announcementPositionLabel(position))
+          announcementPositionsMatch(defect.system, position)
       );
 
     const kpi = {
@@ -431,6 +435,7 @@ export async function POST(req: NextRequest) {
           device: body.device || null,
           deviceSeq,
           system: body.system || null,
+          positionCode: positionCodeOf(body.system),
           severity: body.severity || null,
           severityCriteria: normalizeDefectSeverityCriteria(body.severity, body.severityCriteria),
           condition: body.condition || null,

@@ -120,8 +120,13 @@ async function mergePositionScopes(tx, keepSeq, duplicateSeqs) {
   for (const scope of scopes) {
     await tx.positionSystemScope.upsert({
       where: { position_systemSeq: { position: scope.position, systemSeq: keepSeq } },
-      update: {},
-      create: { position: scope.position, systemSeq: keepSeq },
+      update: { access: scope.access, positionCode: scope.positionCode },
+      create: {
+        position: scope.position,
+        positionCode: scope.positionCode,
+        systemSeq: keepSeq,
+        access: scope.access,
+      },
     });
   }
   if (scopes.length) {

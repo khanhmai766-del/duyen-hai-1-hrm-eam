@@ -8,6 +8,7 @@ import { seqInScope, type TreeScope } from "@/lib/equipment-units";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -275,6 +276,7 @@ export async function POST(req: NextRequest) {
             system: row.system,
             location: row.location,
             managingPosition: row.managingPosition,
+            managingPositionCode: positionCodeOf(row.managingPosition),
             deviceCount: row.deviceCount,
             quantity: row.quantity,
             intervalNote: row.intervalNote,

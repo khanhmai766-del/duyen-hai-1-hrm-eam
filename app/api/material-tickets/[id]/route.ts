@@ -9,6 +9,7 @@ import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
 import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { positionsMatch } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -39,14 +40,9 @@ const receiptSourceLabel = (source: unknown) =>
 const sameTicketNumber = (left?: string | null, right?: string | null) =>
   !!left?.trim() && !!right?.trim() && left.trim().toLocaleLowerCase("vi") === right.trim().toLocaleLowerCase("vi");
 
-const managementPositionKey = (value?: string | null) =>
-  normalizeText(value ?? "").replace(/\s+/g, " ").trim();
-
 /** Sửa/Xoá phiếu: ADMIN, cương vị được cấu hình bước "manage"; khi CHƯA cấu hình → người tạo phiếu (mặc định cũ). */
 function samePosition(a?: string | null, b?: string | null) {
-  const left = (a ?? "").trim().toLocaleLowerCase("vi");
-  const right = (b ?? "").trim().toLocaleLowerCase("vi");
-  return !!left && left === right;
+  return positionsMatch(a, b);
 }
 
 function isAssignedPosition(user: { position?: string | null }, t: { assignedPosition: string }) {
@@ -500,7 +496,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
         });
         const replacementPoint = replacementPoints.find(
-          (point) => managementPositionKey(point.managingPosition) === managementPositionKey(assignedPosition)
+          (point) => positionsMatch(point.managingPosition, assignedPosition)
         );
         if (!replacementPoint) return fail("Vật tư hoặc thiết bị đã chọn không thuộc cương vị được giao quản lý");
         if (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device)) {
@@ -769,7 +765,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         select: { id: true, materialId: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
       });
       const assignedDecls = decls.filter(
-        (decl) => managementPositionKey(decl.managingPosition) === managementPositionKey(t!.assignedPosition)
+        (decl) => positionsMatch(decl.managingPosition, t!.assignedPosition)
       );
       const declSet = new Set(assignedDecls.map((d) => `${d.materialId}::${d.deviceSeq}`));
       const replacementLabelMap = new Map(

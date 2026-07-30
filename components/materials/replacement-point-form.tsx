@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDevices } from "@/hooks/useDevices";
 import { useUpdateReplacement, type ReplacementItem } from "@/hooks/useReplacements";
 import { addMonths } from "@/lib/constants";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { formatDateInput } from "@/lib/utils";
 
 function toDateInput(v: Date | string | null | undefined): string {
@@ -32,6 +33,15 @@ function positionsOfDevice(device: {
       : [];
 }
 
+function deviceHasPosition(
+  device: Parameters<typeof positionsOfDevice>[0],
+  position: string
+) {
+  return positionsOfDevice(device).some((candidate) =>
+    positionsMatch(candidate, position)
+  );
+}
+
 export function ReplacementPointForm({
   materialId,
   point,
@@ -46,18 +56,26 @@ export function ReplacementPointForm({
 }) {
   const update = useUpdateReplacement();
   const { data: devicesData } = useDevices({ permissionScope: "replacement-manage" });
-  const devices = devicesData?.data ?? [];
+  const devices = React.useMemo(
+    () => devicesData?.data ?? [],
+    [devicesData?.data]
+  );
   const devicePositions = React.useMemo(
     () =>
-      Array.from(new Set(devices.flatMap(positionsOfDevice))).sort((a, b) =>
-        a.localeCompare(b, "vi")
-      ),
+      Array.from(
+        new Set(
+          devices
+            .flatMap(positionsOfDevice)
+            .map(positionLabelOf)
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, "vi")),
     [devices]
   );
 
   const [form, setForm] = React.useState({
     deviceId: point?.deviceId ?? "",
-    managingPosition: point?.managingPosition ?? "",
+    managingPosition: positionLabelOf(point?.managingPosition),
     system: point ? (point.system ?? "") : (defaultSystem ?? ""),
     intervalMonths: String(point?.intervalMonths ?? 6),
     intervalNote: point?.intervalNote ?? "",
@@ -74,7 +92,7 @@ export function ReplacementPointForm({
       devices.filter(
         (device) =>
           !form.managingPosition ||
-          positionsOfDevice(device).includes(form.managingPosition)
+          deviceHasPosition(device, form.managingPosition)
       ),
     [devices, form.managingPosition]
   );
@@ -90,11 +108,13 @@ export function ReplacementPointForm({
     setForm((f) => {
       const nextDeviceId = deviceId === NO_DEVICE ? "" : deviceId;
       const device = devices.find((d) => d.id === nextDeviceId);
-      const positions = device ? positionsOfDevice(device) : [];
+      const positions = device ? positionsOfDevice(device).map(positionLabelOf) : [];
       return {
         ...f,
         deviceId: nextDeviceId,
-        managingPosition: positions.includes(f.managingPosition)
+        managingPosition: positions.some((position) =>
+          positionsMatch(position, f.managingPosition)
+        )
           ? f.managingPosition
           : positions[0] ?? "",
         system: device?.system ?? "",
@@ -106,13 +126,13 @@ export function ReplacementPointForm({
       const managingPosition = position === NO_POSITION ? "" : position;
       const selectedDevice = devices.find((d) => d.id === f.deviceId);
       const positionDevices = devices.filter(
-        (d) => !managingPosition || positionsOfDevice(d).includes(managingPosition)
+        (d) => !managingPosition || deviceHasPosition(d, managingPosition)
       );
       const keepSystem = !f.system || positionDevices.some((d) => d.system === f.system);
       const nextSystem = keepSystem ? f.system : "";
       const keepDevice =
         !selectedDevice ||
-        ((!managingPosition || positionsOfDevice(selectedDevice).includes(managingPosition)) &&
+        ((!managingPosition || deviceHasPosition(selectedDevice, managingPosition)) &&
           (!nextSystem || selectedDevice.system === nextSystem));
       return {
         ...f,
@@ -128,7 +148,7 @@ export function ReplacementPointForm({
       const selectedDevice = devices.find((d) => d.id === f.deviceId);
       const keepDevice =
         !selectedDevice ||
-        ((!f.managingPosition || positionsOfDevice(selectedDevice).includes(f.managingPosition)) &&
+        ((!f.managingPosition || deviceHasPosition(selectedDevice, f.managingPosition)) &&
           (!system || selectedDevice.system === system));
       return {
         ...f,
@@ -142,8 +162,10 @@ export function ReplacementPointForm({
     if (!form.deviceId) return;
     const device = devices.find((d) => d.id === form.deviceId);
     if (!device) return;
-    const positions = positionsOfDevice(device);
-    const managingPosition = positions.includes(form.managingPosition)
+    const positions = positionsOfDevice(device).map(positionLabelOf);
+    const managingPosition = positions.some((position) =>
+      positionsMatch(position, form.managingPosition)
+    )
       ? form.managingPosition
       : positions[0] ?? "";
     const system = device.system ?? "";

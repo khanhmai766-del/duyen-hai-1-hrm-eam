@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { positionCodeOf } from "../lib/position-catalog";
 
 const prisma = new PrismaClient();
 const APPLY = process.argv.slice(2).includes("--apply");
@@ -63,6 +64,7 @@ function configData(source: ReplacementWithMaterial) {
     quantity: source.quantity,
     deviceCount: source.deviceCount,
     managingPosition: source.managingPosition,
+    managingPositionCode: positionCodeOf(source.managingPosition),
     intervalMonths: source.intervalMonths,
     intervalNote: source.intervalNote,
     note: source.note,

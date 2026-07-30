@@ -4,6 +4,7 @@ import {
   isSelectableManagingPosition,
 } from "../lib/constants";
 import { normalizeText } from "../lib/nav";
+import { positionCodeOf } from "../lib/position-catalog";
 
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes("--apply");
@@ -149,6 +150,7 @@ async function seed() {
     let assignmentIndex = 0;
     for (const { position, scope } of assignments) {
       assignmentIndex += 1;
+      const positionCode = positionCodeOf(position);
       const root = DEMO_ROOTS[scope];
       const systemSeq = `${root.seq}.${assignmentIndex}`;
       const systemName = `[DEMO] ${position} — ${scope === "COMMON" ? "Dùng chung" : "S1/S2"}`;
@@ -166,8 +168,8 @@ async function seed() {
 
       await tx.positionSystemScope.upsert({
         where: { position_systemSeq: { position, systemSeq } },
-        update: { access: "edit" },
-        create: { position, systemSeq, access: "edit" },
+        update: { access: "edit", positionCode },
+        create: { position, positionCode, systemSeq, access: "edit" },
       });
 
       for (const [deviceIndex, template] of DEVICE_TEMPLATES.entries()) {

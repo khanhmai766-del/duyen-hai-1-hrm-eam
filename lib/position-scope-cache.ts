@@ -22,11 +22,12 @@ let generation = 0;
 
 async function load(): Promise<PositionSystemScope[]> {
   const rows = await prisma.$queryRaw<
-    Array<{ id: string; position: string; systemSeq: string; access: string; createdAt: Date }>
-  >`SELECT "id", "position", "systemSeq", "access", "createdAt" FROM "PositionSystemScope"`;
+    Array<{ id: string; position: string; positionCode: string | null; systemSeq: string; access: string; createdAt: Date }>
+  >`SELECT "id", "position", "positionCode", "systemSeq", "access", "createdAt" FROM "PositionSystemScope"`;
   return rows.map((row) => ({
     id: row.id,
     position: row.position,
+    positionCode: row.positionCode,
     systemSeq: row.systemSeq,
     access: normalizeScopeAccess(row.access),
     createdAt: row.createdAt.toISOString(),

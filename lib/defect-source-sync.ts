@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 export type DefectSourceRecord = {
   sourceSpreadsheetId: string;
@@ -40,6 +41,7 @@ export type DefectSourceRecord = {
 export type PreparedDefectSourceRecord = {
   record: DefectSourceRecord;
   sourceKey: string;
+  legacySourceKey: string;
   detectedAt: Date;
   reminder: { count: number; lastDate: Date | null };
   hash: string;
@@ -125,7 +127,11 @@ function sourceHash(record: DefectSourceRecord) {
   return createHash("sha256").update(JSON.stringify(stableRecord)).digest("hex");
 }
 
-function sourceKeyOf(record: DefectSourceRecord, detectedAt: Date | null) {
+function sourceKeyOf(
+  record: DefectSourceRecord,
+  detectedAt: Date | null,
+  canonicalPosition = true
+) {
   const stt = text(record.stt).replace(/\.0$/, "");
   if (!stt || !detectedAt) return null;
   return [
@@ -135,7 +141,9 @@ function sourceKeyOf(record: DefectSourceRecord, detectedAt: Date | null) {
     stt,
     detectedAt.toISOString().slice(0, 10),
     unitOf(record.unit),
-    normalizeText(record.positionRaw),
+    canonicalPosition
+      ? positionCodeOf(record.positionRaw) ?? normalizeText(record.positionRaw)
+      : normalizeText(record.positionRaw),
     normalizeText(record.deviceRaw),
   ].join("|");
 }
@@ -144,12 +152,14 @@ export function prepareDefectSourceRecords(records: DefectSourceRecord[]) {
   const preparedRows = records.flatMap((record) => {
     const detectedAt = parseSourceDate(record.detectedAtRaw);
     const sourceKey = sourceKeyOf(record, detectedAt);
+    const legacySourceKey = sourceKeyOf(record, detectedAt, false);
     if (!sourceKey || !text(record.content)) return [];
     const reminder = reminderOf(record.reminderRaw);
     const stt = text(record.stt).replace(/\.0$/, "");
     return [{
       record,
       sourceKey,
+      legacySourceKey: legacySourceKey!,
       detectedAt: detectedAt!,
       reminder,
       hash: sourceHash(record),
@@ -182,13 +192,16 @@ export async function upsertPreparedDefectRecords(params: {
   const now = params.syncedAt ?? new Date();
   const syncSetting = await prisma.defectSyncSetting.findUnique({ where: { id: "singleton" } });
   const twoWaySyncEnabled = syncSetting?.twoWaySyncEnabled === true;
-  const keys = prepared.map((item) => item.sourceKey);
+  const keys = Array.from(new Set(
+    prepared.flatMap((item) => [item.sourceKey, item.legacySourceKey])
+  ));
   const existingRows = keys.length > 0
     ? await prisma.defect.findMany({
         where: { sourceKey: { in: keys } },
         select: {
           id: true,
           sourceKey: true,
+          positionCode: true,
           sourceHash: true,
           syncState: true,
           websiteCreated: true,
@@ -207,13 +220,15 @@ export async function upsertPreparedDefectRecords(params: {
       })
     : [];
   const existingByKey = new Map(existingRows.filter((row) => row.sourceKey).map((row) => [row.sourceKey!, row]));
+  const existingFor = (item: PreparedDefectSourceRecord) =>
+    existingByKey.get(item.sourceKey) ?? existingByKey.get(item.legacySourceKey);
 
   // Phiếu MANUAL tạo qua website (chưa từng qua Sheet nên sourceKey = null) có thể
   // đã được đẩy ra Sheet ở chiều ghi và giờ đọc lại đúng dòng đó. STT/năm là khóa
   // duy nhất theo nghiệp vụ nên dùng nó để nhận diện, gắn sourceKey vào thay vì
   // tạo một bản ghi Defect trùng.
   const unmatchedRequestNumbers = prepared
-    .filter((item) => !existingByKey.has(item.sourceKey))
+    .filter((item) => !existingFor(item))
     .map((item) => item.requestNumber);
   const manualCandidateRows = unmatchedRequestNumbers.length > 0
     ? await prisma.defect.findMany({
@@ -221,6 +236,8 @@ export async function upsertPreparedDefectRecords(params: {
         select: {
           id: true,
           requestNumber: true,
+          sourceKey: true,
+          positionCode: true,
           sourceHash: true,
           syncState: true,
           websiteCreated: true,
@@ -261,7 +278,7 @@ export async function upsertPreparedDefectRecords(params: {
   let confirmedSkippedCount = 0;
 
   for (const item of prepared) {
-    const matchedByKey = existingByKey.get(item.sourceKey);
+    const matchedByKey = existingFor(item);
     const matchedByRequestNumber = matchedByKey ? undefined : existingByRequestNumber.get(item.requestNumber);
     const existing = matchedByKey ?? matchedByRequestNumber;
     const sourceStatus = statusOf(item.record.sourceStatusRaw);
@@ -270,6 +287,7 @@ export async function upsertPreparedDefectRecords(params: {
       unit: unitOf(item.record.unit),
       commonSubUnit: commonSubUnitOf(item.record.unit),
       system: text(item.record.positionRaw).replace(/^\d+\.\s*/, "") || null,
+      positionCode: positionCodeOf(item.record.positionRaw),
       severity: ["1", "2", "3", "4"].includes(text(item.record.severityRaw)) ? text(item.record.severityRaw) : null,
       condition: ["A", "B"].includes(text(item.record.conditionRaw).toUpperCase()) ? text(item.record.conditionRaw).toUpperCase() : null,
       fireSafetyImpact: text(item.record.fireSafetyImpact) || null,
@@ -357,7 +375,12 @@ export async function upsertPreparedDefectRecords(params: {
       continue;
     }
 
-    if (existing.sourceHash === item.hash && existing.syncState === "ACTIVE") {
+    if (
+      existing.sourceHash === item.hash
+      && existing.syncState === "ACTIVE"
+      && existing.sourceKey === item.sourceKey
+      && existing.positionCode === sourceData.positionCode
+    ) {
       unchangedCount++;
       unchangedIds.push(existing.id);
       continue;
@@ -393,7 +416,9 @@ export async function upsertPreparedDefectRecords(params: {
         // Khi ghép phiếu website với dòng vừa ghi lên Sheet, chuyển sang chế độ
         // theo dõi Google Sheet nhưng giữ websiteCreated để không mất các thao
         // tác Nhắc lại/Hoàn thành.
-        ...(matchedByRequestNumber ? { sourceType: "GOOGLE_SHEETS" as const, sourceKey: item.sourceKey } : {}),
+        ...(matchedByRequestNumber || existing.sourceKey !== item.sourceKey
+          ? { sourceType: "GOOGLE_SHEETS" as const, sourceKey: item.sourceKey }
+          : {}),
         syncState: "ACTIVE",
         completedAt: twoWaySyncEnabled
           ? existing.completedAt

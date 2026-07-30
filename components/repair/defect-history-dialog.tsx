@@ -15,6 +15,7 @@ import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_UNITS, DEFECT_REQUEST_TYPES, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDateInput } from "@/lib/utils";
+import { positionsMatch } from "@/lib/position-catalog";
 
 function todayInput(): string {
   return formatDateInput();
@@ -51,7 +52,7 @@ export function DefectHistoryDialog({
   const devices = devicesData?.data ?? [];
   const [form, setForm] = React.useState({ ...EMPTY });
   const filteredDevices = React.useMemo(
-    () => devices.filter((d) => !form.system || d.managingPosition === form.system),
+    () => devices.filter((d) => !form.system || positionsMatch(d.managingPosition, form.system)),
     [devices, form.system]
   );
 
@@ -85,7 +86,7 @@ export function DefectHistoryDialog({
       return {
         ...f,
         system,
-        device: selectedDevice && selectedDevice.managingPosition !== system ? "" : f.device,
+        device: selectedDevice && !positionsMatch(selectedDevice.managingPosition, system) ? "" : f.device,
       };
     });
   }
@@ -139,7 +140,7 @@ export function DefectHistoryDialog({
                 <SelectContent>
                   <SelectItem value={NONE}>— Không chọn —</SelectItem>
                   {/* Đảm bảo giá trị hiện tại luôn hiện, kể cả khi chức vụ đã bị đổi tên/xoá. */}
-                  {(form.system && !positions.includes(form.system) ? [form.system, ...positions] : positions).map((p) => (
+                  {(form.system && !positions.some((position) => positionsMatch(position, form.system)) ? [form.system, ...positions] : positions).map((p) => (
                     <SelectItem key={p} value={p}>{p}</SelectItem>
                   ))}
                 </SelectContent>

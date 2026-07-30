@@ -395,24 +395,25 @@ model ErpMaterial {
 // Điểm thay thế của một vật tư: vật tư này thay cho 1 thiết bị (hoặc 1 vị trí
 // tự do) theo chu kỳ riêng. Dùng để theo dõi & cảnh báo thời điểm thay thế.
 model MaterialReplacement {
-  id               String    @id @default(cuid())
-  materialId       String
-  deviceSeq        String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
-  machine          String    @default("COMMON") // Tổ máy: S1 | S2 | COMMON — lịch thay thế theo hồ sơ tổ máy
-  location         String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
-  system           String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
-  quantity         Int       @default(1) // dung tích/số lượng cần thay CHO MỖI thiết bị (theo ĐVT của vật tư)
-  deviceCount      Int       @default(1) // số lượng thiết bị tại điểm này
-  managingPosition String? // cương vị quản lý (đồng bộ danh sách với form khiếm khuyết)
-  intervalMonths   Int // chu kỳ thay thế (tháng); 0 = chỉ khai báo, không theo dõi lịch
-  intervalNote     String? // ghi chú chu kỳ, vd "2500h"
-  lastReplacedAt   DateTime? // lần thay gần nhất (user nhập)
-  nextDueAt        DateTime // ngày đến hạn kế tiếp
-  note             String?
-  isActive         Boolean   @default(true)
-  createdById      String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  materialId           String
+  deviceSeq            String? // thiết bị theo EquipmentNode.seq (tuỳ chọn)
+  machine              String    @default("COMMON") // Tổ máy: S1 | S2 | COMMON — lịch thay thế theo hồ sơ tổ máy
+  location             String? // vị trí/ứng dụng tự do (tuỳ chọn) — dùng khi không gắn thiết bị
+  system               String? // hệ thống thiết bị (mặc định theo vật tư), vd "Máy Nghiền"
+  quantity             Int       @default(1) // dung tích/số lượng cần thay CHO MỖI thiết bị (theo ĐVT của vật tư)
+  deviceCount          Int       @default(1) // số lượng thiết bị tại điểm này
+  managingPosition     String? // cương vị quản lý (đồng bộ danh sách với form khiếm khuyết)
+  managingPositionCode String? // mã cương vị ổn định; giữ managingPosition làm nhãn tương thích dữ liệu cũ
+  intervalMonths       Int // chu kỳ thay thế (tháng); 0 = chỉ khai báo, không theo dõi lịch
+  intervalNote         String? // ghi chú chu kỳ, vd "2500h"
+  lastReplacedAt       DateTime? // lần thay gần nhất (user nhập)
+  nextDueAt            DateTime // ngày đến hạn kế tiếp
+  note                 String?
+  isActive             Boolean   @default(true)
+  createdById          String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   material  Material                 @relation(fields: [materialId], references: [id], onDelete: Cascade)
   device    EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
@@ -424,6 +425,7 @@ model MaterialReplacement {
   @@index([deviceSeq(ops: raw("text_pattern_ops"))], map: "matrep_deviceseq_prefix")
   @@index([materialId])
   @@index([system])
+  @@index([managingPositionCode])
   @@index([isActive, nextDueAt])
   @@index([createdById])
 }
@@ -473,6 +475,7 @@ model Defect {
   deviceSeq                  String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
   device                     String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ
   system                     String? // Cương vị (chức vụ phụ trách)
+  positionCode               String? // mã cương vị ổn định; system/sourcePositionRaw giữ nhãn gốc để hiển thị và đối soát
   severity                   String? // Mức độ: "1".."4"
   severityCriteria           String[]  @default([]) // Các ID tiêu chí chi tiết đã chọn theo mức độ
   condition                  String? // Điều kiện thực hiện: A | B
@@ -534,6 +537,7 @@ model Defect {
   reminderLogs   DefectReminderLog[]
 
   @@index([deviceSeq])
+  @@index([positionCode])
   // Lịch sử "khiếm khuyết của thiết bị X, mới nhất trước" đọc thẳng từ index.
   @@index([deviceSeq, createdAt(sort: Desc)])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
@@ -1002,14 +1006,16 @@ model DeviceQrCard {
 // Phạm vi hệ thống thiết bị được gán cho từng cương vị quản lý.
 // Dùng để lọc nhanh danh sách thiết bị khi tạo lịch sử sửa chữa, khiếm khuyết và vật tư.
 model PositionSystemScope {
-  id        String   @id @default(cuid())
-  position  String
-  systemSeq String
-  access    String   @default("view") // Mức quyền của cương vị với hệ thống: "view" | "edit"
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  position     String
+  positionCode String? // mã cương vị ổn định để bí danh khác nhau dùng chung một phạm vi
+  systemSeq    String
+  access       String   @default("view") // Mức quyền của cương vị với hệ thống: "view" | "edit"
+  createdAt    DateTime @default(now())
 
   @@unique([position, systemSeq])
   @@index([position])
+  @@index([positionCode])
   @@index([systemSeq])
 }
 

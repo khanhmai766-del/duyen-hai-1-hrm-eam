@@ -11,10 +11,10 @@ import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { replacementDueStatus } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { normalizeText } from "@/lib/nav";
-import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { hasAssignedManagePermission } from "@/lib/rbac-permissions";
 import { parseDateInput } from "@/lib/utils";
+import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -142,10 +142,7 @@ export async function POST(req: NextRequest) {
         return fail("Thiết bị chưa được phân cương vị quản lý trên cây thiết bị");
       }
       if (managingPosition) {
-        const requestedKey = normalizePositionScopeKey(managingPosition);
-        const matched = positions.find(
-          (position) => normalizePositionScopeKey(position) === requestedKey
-        );
+        const matched = positions.find((position) => positionsMatch(position, managingPosition));
         if (!matched) {
           return fail("Cương vị không còn được phân quyền quản lý thiết bị đã chọn");
         }
@@ -221,6 +218,7 @@ export async function POST(req: NextRequest) {
           system,
           location,
           managingPosition,
+          managingPositionCode: positionCodeOf(managingPosition),
           quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
           // Điểm theo dõi kế thừa giới hạn từ dòng khai báo, không tin giá trị client gửi lên.
           deviceCount: limit,

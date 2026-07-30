@@ -15,6 +15,7 @@ import {
 import { usePositions } from "@/hooks/useUsers";
 import { isPositionAllowedForDefectUnit, MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import { positionsMatch } from "@/lib/position-catalog";
 import {
   materialTicketMonthKey,
   materialTicketMonthLabel,
@@ -441,9 +442,6 @@ const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghi�
 const UNITS = ["S1", "S2", "COMMON"];
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
-const positionKey = (value?: string | null) =>
-  normalizeText(value ?? "").replace(/\s+/g, " ").trim();
-
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>("DE_XUAT");
   const [unit, setUnit] = useState("S1");
@@ -458,25 +456,24 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
-  const assignedKey = positionKey(assigned);
   const positionOptions = useMemo(
     () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
     [opts?.positions, unit]
   );
   const materialCards = useMemo(() => {
-    if (!assignedKey || !materialCategoryLabel) return [];
+    if (!assigned || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
       const matchesCategory = m.category === materialCategoryLabel;
       const matchesUnit = m.machine === unit;
-      const matchesPosition = m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      const matchesPosition = m.managingPositions.some((p) => positionsMatch(p, assigned));
       return matchesCategory && matchesUnit && matchesPosition;
     });
-  }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
+  }, [assigned, materialCategoryLabel, opts?.materials, unit]);
   const isProposalType = false; // mã vật tư chỉ được chọn ở bước Trưởng ca/Trưởng kíp
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
   const availableDeviceOptions = useMemo(
-    () => (selectedMaterial?.devices ?? []).filter((device) => positionKey(device.managingPosition) === assignedKey),
-    [assignedKey, selectedMaterial]
+    () => (selectedMaterial?.devices ?? []).filter((device) => positionsMatch(device.managingPosition, assigned)),
+    [assigned, selectedMaterial]
   );
   const replacementSystemOptions = useMemo(
     () => Array.from(new Set(availableDeviceOptions.map((device) => device.system?.trim()).filter(Boolean) as string[])),
@@ -795,24 +792,23 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
-  const assignedKey = positionKey(assigned);
   const positionOptions = useMemo(
     () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
     [opts?.positions, unit]
   );
   const materialCards = useMemo(() => {
-    if (!assignedKey || !materialCategoryLabel) return [];
+    if (!assigned || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
       const matchesCategory = m.category === materialCategoryLabel;
       const matchesUnit = m.machine === unit;
-      const matchesPosition = m.managingPositions.some((p) => positionKey(p) === assignedKey);
+      const matchesPosition = m.managingPositions.some((p) => positionsMatch(p, assigned));
       return matchesCategory && matchesUnit && matchesPosition;
     });
-  }, [assignedKey, materialCategoryLabel, opts?.materials, unit]);
+  }, [assigned, materialCategoryLabel, opts?.materials, unit]);
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
   const selectedDeviceOptions = useMemo(
-    () => (selectedMaterial?.devices ?? []).filter((device) => positionKey(device.managingPosition) === assignedKey),
-    [assignedKey, selectedMaterial]
+    () => (selectedMaterial?.devices ?? []).filter((device) => positionsMatch(device.managingPosition, assigned)),
+    [assigned, selectedMaterial]
   );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
@@ -1507,12 +1503,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   // Lọc vật tư theo LOẠI của phiếu: loại phiếu (Dầu bôi trơn/Lọc dầu/Hóa chất/Bi nghiền)
   // ánh xạ sang loại trong Danh mục vật tư (Material.category) rồi chỉ hiện đúng loại đó.
   const wantCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? null : null;
-  const ticketAssignedKey = positionKey(t.assignedPosition);
   const materialOptions = (opts?.materials ?? []).filter(
     (m) =>
       (!wantCategory || m.category === wantCategory) &&
       m.machine === t.unit &&
-      m.managingPositions.some((position) => positionKey(position) === ticketAssignedKey)
+      m.managingPositions.some((position) => positionsMatch(position, t.assignedPosition))
   );
   const replacementStockErrors = t.items.flatMap((item) => {
     const used = replacementRows.filter((row) => row.itemId === item.id).reduce((sum, row) => sum + row.quantity, 0);
@@ -1537,7 +1532,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         const rowMat = materialOptions.find((m) => m.id === it.materialId);
         const erpOptions = rowMat?.erpCodes?.length ? rowMat.erpCodes : rowMat ? [{ code: rowMat.code, erpStock: 0 }] : [];
         const deviceOptions = (rowMat?.devices ?? []).filter(
-          (device) => positionKey(device.managingPosition) === ticketAssignedKey
+          (device) => positionsMatch(device.managingPosition, t.assignedPosition)
         );
         return (
         <div key={i} className="frm-item">

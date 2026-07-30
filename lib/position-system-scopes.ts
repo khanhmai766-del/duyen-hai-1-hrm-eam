@@ -1,5 +1,7 @@
 import { normalizeText } from "@/lib/nav";
 import { EQUIPMENT_BLOCKS, blockForPosition } from "@/lib/constants";
+import { announcementPositionLabel } from "@/lib/positions";
+import { positionCodeOf, positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 
 export type ScopeAccess = "none" | "view" | "edit";
 export type NodeAccess = ScopeAccess;
@@ -7,6 +9,7 @@ export type NodeAccess = ScopeAccess;
 export type PositionSystemScope = {
   id: string;
   position: string;
+  positionCode?: string | null;
   systemSeq: string;
   access: ScopeAccess;
   createdAt: string;
@@ -79,15 +82,18 @@ export function normalizeScopeAccess(value: unknown): ScopeAccess {
 }
 
 export function normalizePositionScopeLabel(position?: string | null) {
-  return String(position ?? "")
+  const normalized = String(position ?? "")
     .trim()
     .replace(/[-\s]+s[12]$/i, "")
     .replace(/\s+/g, " ")
     .trim();
+  return positionLabelOf(normalized);
 }
 
 export function normalizePositionScopeKey(position?: string | null) {
-  return normalizeText(normalizePositionScopeLabel(position));
+  return normalizeText(
+    announcementPositionLabel(normalizePositionScopeLabel(position))
+  );
 }
 
 const UNRESTRICTED_EQUIPMENT_POSITION_KEYS = new Set([
@@ -127,9 +133,13 @@ export function positionScopeOptions(positions: string[]) {
 }
 
 export function scopesForPosition(scopes: PositionSystemScope[], position?: string | null) {
-  const normalized = normalizePositionScopeKey(position);
-  if (!normalized) return [];
-  return scopes.filter((scope) => normalizePositionScopeKey(scope.position) === normalized);
+  const code = positionCodeOf(position);
+  if (!code && !normalizePositionScopeKey(position)) return [];
+  return scopes.filter((scope) =>
+    code && scope.positionCode
+      ? scope.positionCode === code
+      : positionsMatch(scope.position, position)
+  );
 }
 
 function nodeIndex(nodes: EquipmentNodeLike[]) {

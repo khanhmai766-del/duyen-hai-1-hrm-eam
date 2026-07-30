@@ -13,6 +13,7 @@ import { validateDefectImages } from "@/lib/defect-images";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { canViewUnmappedDefectPosition } from "@/lib/positions";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -315,6 +316,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           device: body.device !== undefined ? body.device || null : undefined,
           deviceSeq,
           system: body.system !== undefined ? body.system || null : undefined,
+          positionCode: body.system !== undefined ? positionCodeOf(body.system) : undefined,
           severity: body.severity !== undefined ? body.severity || null : undefined,
           severityCriteria:
             body.severity !== undefined || body.severityCriteria !== undefined

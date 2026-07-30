@@ -10,7 +10,7 @@ import {
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
 import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
-import { normalizeText } from "@/lib/nav";
+import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
   materialTicketMonthKey,
@@ -18,9 +18,6 @@ import {
 } from "@/lib/material-ticket-sequence";
 
 export const dynamic = "force-dynamic";
-
-const positionKey = (value?: string | null) =>
-  normalizeText(value ?? "").replace(/\s+/g, " ").trim();
 
 const ITEM_INCLUDE = {
   items: {
@@ -172,7 +169,12 @@ export async function POST(req: NextRequest) {
       return fail(`Cương vị "${assignedPosition}" không thuộc tổ máy ${unit}`);
     }
     const totalScopeCount = await prisma.positionSystemScope.count();
-    const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
+    const assignedPositionCode = positionCodeOf(assignedPosition);
+    const scopeCount = await prisma.positionSystemScope.count({
+      where: assignedPositionCode
+        ? { OR: [{ positionCode: assignedPositionCode }, { position: assignedPosition }] }
+        : { position: assignedPosition },
+    });
     if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
 
     // Loại vật tư
@@ -207,7 +209,7 @@ export async function POST(req: NextRequest) {
       select: { deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
     });
     const replacementPoint = replacementPoints.find(
-      (point) => positionKey(point.managingPosition) === positionKey(assignedPosition)
+      (point) => positionsMatch(point.managingPosition, assignedPosition)
     );
     if (!replacementPoint) {
       return fail("Vật tư hoặc thiết bị đã chọn không thuộc cương vị được giao quản lý");

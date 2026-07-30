@@ -6,6 +6,7 @@ import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { DEFECT_UNITS, MATERIAL_CATEGORIES, addMonths } from "@/lib/constants";
 import { parseDateInput } from "@/lib/utils";
+import { positionCodeOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -90,11 +91,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const managingPosition = String(body.managingPosition ?? "").trim() || null;
     const declarationData = {
       machine,
       system: String(body.system ?? "").trim() || null,
       location: String(body.location ?? "").trim() || device.name,
-      managingPosition: String(body.managingPosition ?? "").trim() || null,
+      managingPosition,
+      managingPositionCode: positionCodeOf(managingPosition),
       quantity: Math.max(0, Math.round(Number(body.quantity)) || 0),
       deviceCount: Math.max(1, Math.round(Number(body.deviceCount)) || 1),
       intervalMonths,

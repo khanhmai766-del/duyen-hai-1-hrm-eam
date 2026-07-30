@@ -1,5 +1,9 @@
 // Centralized domain constants: statuses, roles, shift types, and their UI metadata.
 import { normalizeText } from "@/lib/nav";
+import {
+  positionAllowedForUnit,
+  positionLabelsForUnit,
+} from "@/lib/position-catalog";
 import { parseDateInput } from "@/lib/utils";
 
 export const REPAIR_STATUS = {
@@ -122,75 +126,17 @@ export type DefectUnit = (typeof DEFECT_UNITS)[number];
  * nên chính tả ở đây chỉ mang tính tham chiếu. S1/S2 dùng chung một nhóm vị trí vận hành.
  */
 export const DEFECT_UNIT_POSITIONS: Record<DefectUnit, readonly string[]> = {
-  S1: [
-    "Trưởng ca",
-    "TK Lò máy",
-    "Trưởng kíp điện",
-    "Trực chính điện",
-    "Trực phụ điện",
-    "Lò Trưởng",
-    "Máy Trưởng",
-    "Máy Phó",
-    "Trợ Thủ",
-    "Trạm bơm tuần hoàn",
-    "Lò Phó",
-    "Máy Nghiền",
-    "Thải Xỉ",
-    "ESP",
-    "FGD",
-    "Thiết bị đo lường điều khiển",
-  ],
-  S2: [
-    "Trưởng ca",
-    "TK Lò máy",
-    "Trưởng kíp điện",
-    "Trực chính điện",
-    "Trực phụ điện",
-    "Lò Trưởng",
-    "Máy Trưởng",
-    "Máy Phó",
-    "Trợ Thủ",
-    "Trạm bơm tuần hoàn",
-    "Lò Phó",
-    "Máy Nghiền",
-    "Thải Xỉ",
-    "ESP",
-    "FGD",
-    "Thiết bị đo lường điều khiển",
-  ],
-  COMMON: [
-    "Trưởng ca",
-    "TK Lò máy",
-    "Trưởng kíp điện",
-    "XLNT",
-    "XLN hỗn hợp",
-    "Trạm bơm nước thô",
-    "Thiết bị đo lường điều khiển",
-    "NH3- Lò hơi phụ",
-    "Khí nén - Nhà dầu",
-    "FGD",
-  ],
-} as const;
+  S1: positionLabelsForUnit("S1"),
+  S2: positionLabelsForUnit("S2"),
+  COMMON: positionLabelsForUnit("COMMON"),
+};
 
 export const DEFECT_COMMON_POSITIONS = [
   ...DEFECT_UNIT_POSITIONS.COMMON,
 ] as const;
 
-function normalizePositionKey(value: string) {
-  return normalizeText(value)
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export function isPositionAllowedForDefectUnit(unit: string | null | undefined, position: string) {
-  if (!unit || !DEFECT_UNITS.includes(unit as DefectUnit)) return true;
-  const allowed = DEFECT_UNIT_POSITIONS[unit as DefectUnit];
-  const positionKey = normalizePositionKey(position);
-  return allowed.some((item) => {
-    const allowedKey = normalizePositionKey(item);
-    return positionKey === allowedKey || positionKey.includes(allowedKey) || allowedKey.includes(positionKey);
-  });
+  return positionAllowedForUnit(unit, position);
 }
 
 /** Khi Tổ máy = COMMON, Sheet còn phân biệt thêm BOP | CHUNG (2 khái niệm khác nhau). */

@@ -7,6 +7,7 @@ import { parseScopeParam, seqInScope } from "@/lib/equipment-units";
 import { TREE_SELECT, toTreeNode } from "@/lib/equipment-tree-lazy";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
 import { requireDeviceView } from "@/lib/device-permissions";
+import { resolveEquipmentTreeRequestUser } from "@/lib/equipment-tree-request-access";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +23,20 @@ export async function GET(req: NextRequest) {
       user,
       req.nextUrl.searchParams.get("permissionScope")
     );
+    const requestedTreeUser = await resolveEquipmentTreeRequestUser(
+      user,
+      req.nextUrl.searchParams.get("positionScope")
+    );
+    const treeUser = canAccessAllNodes
+      ? { ...requestedTreeUser, role: "ADMIN" }
+      : requestedTreeUser;
     // Chặn bung nhánh của phạm vi khác (vd mở nhánh dùng chung từ cây tổ máy S2).
     if (scope && !seqInScope(parentSeq, scope)) return fail("Thiết bị không thuộc phạm vi cây đang xem");
-    if (!canAccessAllNodes) await assertSeqViewable(user, parentSeq);
+    if (!canAccessAllNodes) await assertSeqViewable(treeUser, parentSeq);
 
     const { filter } = canAccessAllNodes
       ? { filter: { kind: "all" as const } }
-      : await resolveEquipmentTreeAccess(user);
+      : await resolveEquipmentTreeAccess(treeUser);
     const seqWhere = equipmentSeqWhere(filter, "seq");
     const where = seqWhere ? { AND: [{ parentSeq }, seqWhere] } : { parentSeq };
 

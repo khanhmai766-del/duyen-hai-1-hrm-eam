@@ -126,8 +126,15 @@ export function EquipmentTreePicker({
   selectionLabel?: string;
 }) {
   const queryClient = useQueryClient();
-  const rootsQuery = useTreeRoots(scope, permissionScope);
-  const selectedQuery = useEquipmentNode(value || null, scope, permissionScope);
+  const positionScope =
+    accessFilter === "edit" ? position?.trim() || null : null;
+  const rootsQuery = useTreeRoots(scope, permissionScope, positionScope);
+  const selectedQuery = useEquipmentNode(
+    value || null,
+    scope,
+    permissionScope,
+    positionScope
+  );
   const scopesQuery = usePositionSystemScopes();
   const scopes = React.useMemo(() => scopesQuery.data?.data ?? [], [scopesQuery.data]);
 
@@ -138,7 +145,12 @@ export function EquipmentTreePicker({
   const [search, setSearch] = React.useState("");
   const debouncedSearch = useDebouncedValue(search, 300).trim();
   const searchActive = debouncedSearch.length >= 2;
-  const searchQuery = useTreeSearch(debouncedSearch, scope, permissionScope);
+  const searchQuery = useTreeSearch(
+    debouncedSearch,
+    scope,
+    permissionScope,
+    positionScope
+  );
 
   const roots = React.useMemo(() => rootsQuery.data?.data ?? [], [rootsQuery.data]);
   const searchResults = React.useMemo(
@@ -156,7 +168,13 @@ export function EquipmentTreePicker({
       if (childrenBySeq.has(seq)) return childrenBySeq.get(seq) ?? [];
       setLoadingSeqs((current) => new Set(current).add(seq));
       try {
-        const response = await fetchTreeChildren(queryClient, scope, seq, permissionScope);
+        const response = await fetchTreeChildren(
+          queryClient,
+          scope,
+          seq,
+          permissionScope,
+          positionScope
+        );
         setChildrenBySeq((current) => new Map(current).set(seq, response.data));
         return response.data;
       } catch {
@@ -170,7 +188,7 @@ export function EquipmentTreePicker({
         });
       }
     },
-    [childrenBySeq, permissionScope, queryClient, scope]
+    [childrenBySeq, permissionScope, positionScope, queryClient, scope]
   );
 
   // Đổi phạm vi (tổ máy) → nhánh đã tải thuộc cây cũ, phải bỏ đi để không trộn 2 cây.
@@ -178,7 +196,7 @@ export function EquipmentTreePicker({
     setChildrenBySeq(new Map());
     setExpanded(new Set());
     setSearch("");
-  }, [permissionScope, scope]);
+  }, [permissionScope, positionScope, scope]);
 
   // rootSeq hiện ít dùng nhưng vẫn được hỗ trợ mà không quay lại tải toàn bộ cây.
   React.useEffect(() => {
@@ -211,7 +229,10 @@ export function EquipmentTreePicker({
     [onChange]
   );
 
-  const initialRows = rootSeq ? childrenBySeq.get(rootSeq) ?? [] : roots;
+  const initialRows = React.useMemo(
+    () => (rootSeq ? childrenBySeq.get(rootSeq) ?? [] : roots),
+    [childrenBySeq, rootSeq, roots]
+  );
   const flatRows = React.useMemo(() => {
     const rows: Array<{ node: TreeNode; depth: number }> = [];
     const walk = (nodes: TreeNode[], depth: number) => {
@@ -240,7 +261,18 @@ export function EquipmentTreePicker({
   );
 
   const selectedName = selectedQuery.data?.data.name;
-  const loading = rootsQuery.isLoading || (rootSeq ? loadingSeqs.has(rootSeq) : false);
+  const loading =
+    rootsQuery.isLoading ||
+    (Boolean(accessFilter && position) && scopesQuery.isLoading) ||
+    (rootSeq ? loadingSeqs.has(rootSeq) : false);
+  const rootsError =
+    rootsQuery.error instanceof Error ? rootsQuery.error.message : null;
+  const scopesError =
+    scopesQuery.error instanceof Error ? scopesQuery.error.message : null;
+  const emptyTreeMessage =
+    accessFilter && position
+      ? `Không có thiết bị thuộc phạm vi cương vị “${position}” trong tổ máy đã chọn.`
+      : "Chưa có dữ liệu cây thiết bị.";
 
   function canSelect(node: TreeNode) {
     if (leafOnly && node.hasChildren) return false;
@@ -391,8 +423,16 @@ export function EquipmentTreePicker({
               <div className="flex items-center justify-center py-10 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
+            ) : searchQuery.isError ? (
+              <div className="px-4 py-10 text-center text-sm text-red-600">
+                {searchQuery.error instanceof Error
+                  ? searchQuery.error.message
+                  : "Không tải được kết quả tìm kiếm thiết bị."}
+              </div>
             ) : visibleSearchResults.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">Không tìm thấy thiết bị phù hợp.</div>
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                Không tìm thấy thiết bị phù hợp với cương vị và phạm vi đã chọn.
+              </div>
             ) : (
               <>
                 {visibleSearchResults.map((node) => row(node, 0, true))}
@@ -413,8 +453,16 @@ export function EquipmentTreePicker({
             <div className="flex items-center justify-center py-10 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
+          ) : rootsError || scopesError ? (
+            <div className="px-4 py-10 text-center text-sm text-red-600">
+              {rootsError ??
+                scopesError ??
+                "Không tải được phạm vi thiết bị theo cương vị."}
+            </div>
           ) : flatRows.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">Chưa có dữ liệu cây thiết bị.</div>
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {emptyTreeMessage}
+            </div>
           ) : (
             flatRows.map(({ node, depth }) => row(node, depth))
           )}

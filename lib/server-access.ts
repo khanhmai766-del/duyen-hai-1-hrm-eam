@@ -8,6 +8,7 @@ import { getCachedPositionSystemScopes } from "@/lib/position-scope-cache";
 import { positionAllowsOilSoot } from "@/lib/oil-soot-access";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
+import { positionLabelOf } from "@/lib/position-catalog";
 import {
   createPositionAccessResolver,
   normalizePositionScopeKey,
@@ -91,7 +92,13 @@ export function managingPositionsByEquipmentSeq(
   nodes: NormalizedEquipmentNode[],
   scopes: PositionSystemScope[]
 ): Map<string, string[]> {
-  const positions = Array.from(new Set(scopes.map((scope) => scope.position.trim()).filter(Boolean)));
+  const positions = Array.from(
+    new Set(
+      scopes
+        .map((scope) => positionLabelOf(scope.positionCode ?? scope.position))
+        .filter(Boolean)
+    )
+  );
   const resolvers = new Map(
     positions.map((position) => [
       position,

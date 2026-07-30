@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { getPositionScopes } from "@/lib/material-workflow";
 import { announcementShiftRosterPositionOptions } from "@/lib/positions";
+import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,15 @@ export async function GET() {
       select: {
         id: true, code: true, erpCodes: true, name: true, unit: true, quantity: true, category: true, machine: true,
         replacements: {
-          select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+          select: {
+            id: true,
+            deviceSeq: true,
+            location: true,
+            system: true,
+            managingPosition: true,
+            managingPositionCode: true,
+            device: { select: { name: true } },
+          },
           // Bản ghi khai báo (không theo dõi) đứng trước bản ghi lịch trùng điểm,
           // để dropdown giữ định danh ổn định khi khử trùng.
           orderBy: [{ isActive: "asc" }, { createdAt: "asc" }],
@@ -60,11 +69,14 @@ export async function GET() {
       const positions = new Set<string>();
       const mdevices: { seq: string; label: string; system: string | null; managingPosition: string | null }[] = [];
       for (const r of m.replacements) {
-        if (r.managingPosition) positions.add(r.managingPosition);
+        const managingPosition = positionLabelOf(r.managingPositionCode ?? r.managingPosition);
+        if (managingPosition) positions.add(managingPosition);
         // Điểm có tên nhập tay cần một giá trị riêng, kể cả khi cùng trỏ tới
         // một nút cây. Nếu dùng deviceSeq, dropdown sẽ gộp/mất các thiết bị này.
         const seq = r.location ? `manual:${r.id}` : (r.device ? r.deviceSeq! : `manual:${r.id}`);
-        const positionKey = r.managingPosition?.trim().toLocaleLowerCase("vi") ?? "";
+        const positionKey = positionCodeOf(r.managingPositionCode ?? r.managingPosition)
+          ?? r.managingPosition?.trim().toLocaleLowerCase("vi")
+          ?? "";
         const pointKey = r.location
           ? `location:${r.location.trim().toLocaleLowerCase("vi")}::${r.deviceSeq ?? r.system ?? ""}`
           : r.deviceSeq
@@ -77,7 +89,7 @@ export async function GET() {
           seq,
           label: r.location || r.device?.name || r.system || seq,
           system: r.system,
-          managingPosition: r.managingPosition,
+          managingPosition: managingPosition || null,
         });
       }
       const codes = (m.erpCodes?.length ? m.erpCodes : [m.code]).filter((code) => Boolean(code) && activeErpCodes.has(code));
