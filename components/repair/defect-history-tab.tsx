@@ -265,7 +265,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                 <TableHead className="min-w-[290px] bg-[#00558F]"><SortHeader label="Thiết bị" sortKey="device" sort={sort} onSort={toggleSort} /></TableHead>
                 <TableHead className="w-[110px] bg-[#00558F]"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[140px] bg-[#00558F]"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[210px] bg-[#00558F]"><SortHeader label="Cương vị / Người cập nhật" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[170px] bg-[#00558F]"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[155px] bg-[#00558F]"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 {actionCol && (
                   <TableHead className="w-[100px] bg-[#00558F] text-center text-[11px] font-semibold uppercase tracking-wider text-white">
@@ -322,9 +322,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                         <TableCell className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
                           {formatDate(r.performedAt)}
                         </TableCell>
+                        {/* Cương vị đã có ở panel chi tiết nên cột này chỉ còn người cập nhật. */}
                         <TableCell className="px-3 py-2.5">
-                          <div className="truncate text-[13px] text-ink" title={r.system ?? undefined}>{r.system ?? "—"}</div>
-                          <div className="mt-1">
+                          <div className="flex justify-center">
                             <UserByline user={r.createdBy} createdAt={r.createdAt} />
                           </div>
                         </TableCell>
