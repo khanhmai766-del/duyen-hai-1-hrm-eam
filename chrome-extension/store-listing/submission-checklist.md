@@ -23,7 +23,10 @@
 - [ ] Triển khai `https://duyenhai1.vn/public/qlvt-sync-privacy` và kiểm tra không yêu cầu đăng nhập.
 - [ ] Upload gói `qlvt-sync-store-v1.1.0.zip`.
 - [ ] Upload icon 128×128.
-- [ ] Upload ảnh 1280×800 cho luồng QLVT và LIMS; dùng dữ liệu demo hoặc che dữ liệu nghiệp vụ.
+- [x] Đã tạo hai ảnh 1280×800 bằng dữ liệu minh họa:
+  - `store-assets/screenshot-qlvt-sync-v1.1.0-1280x800.png`
+  - `store-assets/screenshot-lims-sync-v1.1.0-1280x800.png`
+- [ ] Upload hai ảnh trên vào Store theo thứ tự QLVT trước, LIMS sau.
 - [ ] Cập nhật tên, tóm tắt và mô tả theo `vi.md`.
 - [ ] Cập nhật Privacy Practices theo `privacy-declarations.md`.
 - [ ] Khai báo Website content và giải thích quyền `portal.tpcduyenhai.com.vn`.
