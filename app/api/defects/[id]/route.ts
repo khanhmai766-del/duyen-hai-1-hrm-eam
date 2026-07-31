@@ -71,12 +71,27 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền cập nhật khiếm khuyết");
-    if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
-      return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa", 503);
-    }
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
+    const operationUpdateAvailable = await isDefectSyncFeatureEnabled("UPDATE");
+    const operationFields = [
+      "severity",
+      "severityCriteria",
+      "status",
+      "fireSafetyImpact",
+      "environmentSafetyImpact",
+      "condition",
+      "note",
+      "images",
+      "postRepairAwaitingMaterial",
+    ];
+    if (
+      !operationUpdateAvailable
+      && operationFields.some((field) => body[field] !== undefined)
+    ) {
+      return fail("Cập nhật Vận hành đang tạm khóa; bạn vẫn có thể ánh xạ thiết bị", 503);
+    }
     const isInitialSheetMapping =
       existing.sourceType === "GOOGLE_SHEETS"
       && !existing.websiteCreated

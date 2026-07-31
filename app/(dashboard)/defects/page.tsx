@@ -909,8 +909,26 @@ export default function DefectsPage() {
                               <FileClock className="h-4 w-4" />
                             </Button>
                           )}
-                          {canManage && operationUpdateAvailable && (
-                            <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated ? "Ánh xạ / cập nhật Vận hành" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
+                          {canManage && (
+                            operationUpdateAvailable
+                            || (d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated)
+                          ) && (
+                            <Button
+                              disabled={detailLoadingId === d.id}
+                              variant="ghost"
+                              size="icon"
+                              title={
+                                d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated
+                                  ? operationUpdateAvailable
+                                    ? "Ánh xạ / cập nhật Vận hành"
+                                    : "Ánh xạ thiết bị"
+                                  : "Sửa"
+                              }
+                              className="h-7 w-7"
+                              onClick={(e) => { e.stopPropagation(); void openEdit(d); }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           )}
                           {canManage && operationUpdateAvailable && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
                             <Button

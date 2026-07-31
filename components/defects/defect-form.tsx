@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCreateDefect, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
+import { useCreateDefect, useDefectTwoWaySync, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import { useEquipmentNode } from "@/hooks/useEquipment";
 import {
@@ -70,7 +70,15 @@ export function DefectForm({
   // đồng bộ vòng về từ Sheet. Chỉ phiếu có nguồn gốc thật sự từ Sheet mới dùng
   // màn hình ánh xạ cục bộ.
   const isSynced = defect?.sourceType === "GOOGLE_SHEETS" && !defect.websiteCreated;
-  const operationFieldsLocked = isSynced && defect?.status === "DA_XU_LY";
+  const twoWaySync = useDefectTwoWaySync();
+  const syncSetting = twoWaySync.data?.data;
+  const operationUpdateAvailable = Boolean(
+    syncSetting?.twoWaySyncEnabled && syncSetting.operationUpdateEnabled
+  );
+  const operationFeatureLocked = isSynced && !operationUpdateAvailable;
+  const operationFieldsLocked = isSynced && (
+    defect?.status === "DA_XU_LY" || operationFeatureLocked
+  );
   const initialMappedUnit = normalizeMappedUnit(
     defect?.mappedDeviceUnit,
     defect?.unit ?? initialDevice?.unit,
@@ -312,10 +320,8 @@ export function DefectForm({
         return toast.error("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
       }
       try {
-        const syncedPayload: Record<string, unknown> = {
-          id: defect!.id,
-          note: form.note,
-        };
+        const syncedPayload: Record<string, unknown> = { id: defect!.id };
+        if (operationUpdateAvailable) syncedPayload.note = form.note;
         if (!operationFieldsLocked) {
           Object.assign(syncedPayload, {
             severity: form.severity,
@@ -334,13 +340,21 @@ export function DefectForm({
             deviceSeq,
             mappedUnit: form.relatedDeviceUnits[deviceSeq] ?? form.mappedDeviceUnit,
           }));
-          syncedPayload.postRepairAwaitingMaterial = form.postRepairAwaitingMaterial;
+          if (operationUpdateAvailable) {
+            syncedPayload.postRepairAwaitingMaterial = form.postRepairAwaitingMaterial;
+          }
         }
         // Chỉ gửi ảnh khi VHV chủ động lưu tại tab hình ảnh.
         // Lưu ánh xạ không được kích hoạt kiểm tra/tải lại ảnh.
-        if (step === 3) syncedPayload.images = form.images;
+        if (step === 3 && operationUpdateAvailable) syncedPayload.images = form.images;
         const updated = await update.mutateAsync(syncedPayload as { id: string } & Record<string, unknown>);
-        toast.success(step === 3 ? "Đã lưu hình ảnh khiếm khuyết" : "Đã lưu ánh xạ và KQ Vận hành");
+        toast.success(
+          step === 3
+            ? "Đã lưu hình ảnh khiếm khuyết"
+            : operationUpdateAvailable
+              ? "Đã lưu ánh xạ và KQ Vận hành"
+              : "Đã lưu ánh xạ thiết bị"
+        );
         if (step === 1 && onMappingSaved) onMappingSaved(updated);
         else onDone?.();
       } catch (error) {
@@ -558,7 +572,9 @@ export function DefectForm({
                 <div className="mb-4">
                   <p className="font-semibold text-blue-950">Cập nhật Vận hành</p>
                   <p className="text-xs text-blue-800/75">
-                    {operationFieldsLocked
+                    {operationFeatureLocked
+                      ? "Đồng bộ hai chiều đang tắt. Bạn vẫn có thể ánh xạ thiết bị; các trường Vận hành tạm khóa."
+                      : operationFieldsLocked
                       ? "Phiếu đã xử lý xong. Chỉ Ghi chú được phép thay đổi."
                       : "Các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet."}
                   </p>
@@ -603,7 +619,7 @@ export function DefectForm({
                     </Select>
                   </StackField>
                   <StackField label="Ghi Chú">
-                    <Input className="h-11" value={form.note} onChange={(event) => set("note", event.target.value)} />
+                    <Input className="h-11" value={form.note} disabled={operationFeatureLocked} onChange={(event) => set("note", event.target.value)} />
                   </StackField>
                 </div>
                 <p className="mt-3 text-xs text-blue-800/75">Nhắc lại được ghi riêng vào cột H bằng nút “Nhắc lại” trên danh sách.</p>
