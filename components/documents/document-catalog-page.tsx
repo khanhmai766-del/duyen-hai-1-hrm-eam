@@ -853,24 +853,26 @@ export function DocumentCatalogPage({
       <Card className="overflow-hidden">
         <div className={cn((historyTableLayout || wideNameNarrowLinkLayout) && "overflow-x-auto")}>
         <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed", hasIssueDateField && "min-w-[1260px] table-fixed", hasProcedureValidity && "min-w-[1280px] table-fixed")}>
-          <TableHeader className={cn(historyTableLayout && "bg-muted/40")}>
-            <TableRow className={cn("bg-muted/40 hover:bg-muted/40 [&_th]:whitespace-nowrap [&_th]:text-center", historyTableLayout && "hover:bg-transparent")}>
-              <TableHead className={cn("w-16 whitespace-nowrap text-center", historyTableLayout && "w-[170px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>
+          {/* Đầu bảng nền xanh EVN, đồng bộ với bảng Lịch sử sửa chữa. Đặt màu
+              chữ và đường ngăn ở cấp hàng để khỏi phải sửa từng ô tiêu đề. */}
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent [&_th]:whitespace-nowrap [&_th]:bg-[#00558F] [&_th]:border-r [&_th]:border-white/20 [&_th]:text-center [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-white [&>th:last-child]:border-r-0">
+              <TableHead className={cn("w-16 whitespace-nowrap text-center", historyTableLayout && "w-[170px]")}>
                 {historyTableLayout ? nameLabel : "STT"}
               </TableHead>
               {!historyTableLayout && <TableHead className={cn("whitespace-nowrap text-center", wideNameNarrowLinkLayout && "w-[390px]")}>{nameLabel}</TableHead>}
               {!historyTableLayout && hasProcedureValidity && <TableHead className="w-[190px] text-center">Loại QT</TableHead>}
-              {historyTableLayout && hasTagField && <TableHead className="w-[92px] text-center text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">{tagLabel}</TableHead>}
-              {hasYearField && <TableHead className={cn("w-[110px] text-center", historyTableLayout && "w-[82px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>{yearLabel}</TableHead>}
+              {historyTableLayout && hasTagField && <TableHead className="w-[92px] text-center">{tagLabel}</TableHead>}
+              {hasYearField && <TableHead className={cn("w-[110px] text-center", historyTableLayout && "w-[82px]")}>{yearLabel}</TableHead>}
               {showPositionColumn && <TableHead className="w-[170px] text-center">Cương vị</TableHead>}
               {showEquipmentScope && <TableHead className="w-[160px] text-center">Khối quản lý</TableHead>}
               {hasDateField && (
-                <TableHead className={cn("w-[150px] text-center", historyTableLayout && "w-[320px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>
+                <TableHead className={cn("w-[150px] text-center", historyTableLayout && "w-[320px]")}>
                   {historyTableLayout ? summaryLabel ?? progressLabel ?? linkLabel : dateLabel}
                 </TableHead>
               )}
               {historyTableLayout && (
-                <TableHead className="w-[128px] text-center text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">Người cập nhật</TableHead>
+                <TableHead className="w-[128px] text-center">Người cập nhật</TableHead>
               )}
               {!historyTableLayout && hasTagField && <TableHead className="w-[120px] text-center">{tagLabel}</TableHead>}
               {showCodeField && <TableHead className={cn("w-[180px] text-center", wideNameNarrowLinkLayout && "w-[150px]")}>{codeLabel}</TableHead>}
@@ -878,7 +880,7 @@ export function DocumentCatalogPage({
               {hasProcedureValidity && <TableHead className="w-[140px] text-center">Tình trạng</TableHead>}
               {!historyTableLayout && <TableHead className={cn(wideNameNarrowLinkLayout && "w-[210px]")}>{linkLabel}</TableHead>}
               {!historyTableLayout && hasAttachmentField && <TableHead className="w-[160px] text-center">{attachmentLabel}</TableHead>}
-              {hasActions && <TableHead className={cn("w-[120px] text-center", historyTableLayout && "w-[96px] text-[11px] font-semibold uppercase tracking-normal text-muted-foreground")}>Thao tác</TableHead>}
+              {hasActions && <TableHead className={cn("w-[120px] text-center", historyTableLayout && "w-[96px]")}>Thao tác</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -902,7 +904,10 @@ export function DocumentCatalogPage({
                 <React.Fragment key={item.id}>
                 <TableRow
                   className={cn(
-                    historyTableLayout && "cursor-pointer hover:bg-muted/30",
+                    // Rê chuột xanh nhạt như bảng Lịch sử sửa chữa; dòng hết hiệu
+                    // lực vẫn giữ nền đỏ để không mất tín hiệu cảnh báo.
+                    "hover:bg-sky-50/40",
+                    historyTableLayout && "cursor-pointer",
                     validity?.expired && "bg-red-50/80 hover:bg-red-50 [&_td]:border-red-100"
                   )}
                   onClick={() => historyTableLayout && setExpandedId(expanded ? null : item.id)}
@@ -1204,7 +1209,7 @@ export function DocumentCatalogPage({
         </Table>
         </div>
         {showPaginationFooter && !docs.isLoading && (
-          <div className="flex flex-col gap-3 border-t border-border bg-white px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <div>
               Hiển thị {displayFrom}-{displayTo} trong tổng số {rows.length} bản ghi
             </div>
