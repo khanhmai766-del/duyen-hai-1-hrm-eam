@@ -9,9 +9,6 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Minus,
   Search,
   ShieldCheck,
   Trash2,
@@ -19,7 +16,6 @@ import {
   Plus,
   Pencil,
   UserRound,
-  type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,7 +35,7 @@ import { DEFECT_UNITS, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
-type SortKey = "workOrderNumber" | "performedAt" | "unit" | "content" | "system" | "device" | "createdBy";
+type SortKey = "workOrderNumber" | "performedAt" | "unit" | "content" | "system" | "device" | "createdBy" | "locked";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -135,6 +131,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const firstShown = visibleRows.length ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, visibleRows.length);
   const actionCol = canManage || canDelete;
+  // 1 cột mở rộng + Thiết bị + Tổ máy + Kết thúc + Cương vị + Chốt lịch sử (+ Thao tác)
   const detailColSpan = actionCol ? 7 : 6;
   const hasActiveFilters = Object.values(filters).some(Boolean) || tableSearch.trim().length > 0;
   const backupColumns = React.useMemo(
@@ -216,15 +213,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
             </div>
           </div>
 
-          <div className="relative ml-auto w-64 min-w-64 shrink-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              placeholder="Tìm trong bảng..."
-              className="h-9 pl-9"
-            />
-          </div>
         </div>
       </Card>
 
@@ -238,84 +226,123 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         />
       ) : (
         <Card className="overflow-hidden">
+          {/* Thanh công cụ của bảng: số dòng bên trái, tìm kiếm bên phải */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Hiển thị</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-8 rounded-lg border border-input bg-white px-2 text-sm font-medium text-ink"
+                aria-label="Số dòng mỗi trang"
+              >
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              <span>dòng</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Tìm kiếm:</span>
+              <div className="relative w-60">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  placeholder="Tên thiết bị, nội dung, số phiếu..."
+                  className="h-9 rounded-xl pl-9"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
-          <Table className="min-w-[1050px] table-fixed">
-            <TableHeader className="bg-muted/40">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[110px] text-center"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[240px] text-center"><SortHeader label="Nội dung thực hiện" sortKey="content" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[130px] text-center"><SortHeader label="Ngày kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[150px] text-center"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[190px] text-center"><SortHeader label="Tên thiết bị" sortKey="device" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[130px] text-center"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                {actionCol && <TableHead className="w-[96px] text-center text-[11px] font-semibold uppercase tracking-normal text-muted-foreground">Thao tác</TableHead>}
+          <Table className="min-w-[1080px]">
+            {/* Đầu bảng nền xanh EVN, dính khi cuộn dọc trong vùng bảng */}
+            <TableHeader>
+              <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
+                <TableHead className="w-[52px] bg-[#00558F]" />
+                <TableHead className="min-w-[290px] bg-[#00558F]"><SortHeader label="Thiết bị" sortKey="device" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[110px] bg-[#00558F]"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[140px] bg-[#00558F]"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[210px] bg-[#00558F]"><SortHeader label="Cương vị / Người cập nhật" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[155px] bg-[#00558F]"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                {actionCol && (
+                  <TableHead className="w-[100px] bg-[#00558F] text-center text-[11px] font-semibold uppercase tracking-wider text-white">
+                    Thao tác
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {pagedRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={detailColSpan} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={detailColSpan} className="py-12 text-center text-sm text-muted-foreground">
                     Không tìm thấy bản ghi phù hợp.
                   </TableCell>
                 </TableRow>
               ) : (
                 pagedRows.map((r) => {
                   const expanded = expandedId === r.id;
+                  const deviceName = deviceNameByCode.get(r.device ?? "") ?? r.device ?? "—";
+                  const pending = r.historyStatus === "PENDING";
                   return (
                     <React.Fragment key={r.id}>
-                      <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => setExpandedId(expanded ? null : r.id)}>
-                        <TableCell className="whitespace-nowrap px-3 py-3 text-[13px] font-semibold text-ink">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setExpandedId(expanded ? null : r.id);
-                              }}
-                              className={cn(
-                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors",
-                                expanded ? "bg-rose-500" : "bg-emerald-500"
-                              )}
-                              title={expanded ? "Thu gọn" : "Mở chi tiết"}
-                            >
-                              {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                            </button>
-                            <span>{r.unit}</span>
+                      <TableRow
+                        className={cn("cursor-pointer", expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40")}
+                        onClick={() => setExpandedId(expanded ? null : r.id)}
+                      >
+                        <TableCell className="px-0 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedId(expanded ? null : r.id);
+                            }}
+                            aria-expanded={expanded}
+                            className={cn(
+                              "inline-flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm transition-all duration-200",
+                              expanded ? "rotate-45 bg-[#00558F]" : "bg-emerald-600 hover:bg-emerald-700"
+                            )}
+                            title={expanded ? "Thu gọn" : "Xem chi tiết"}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5">
+                          <div className="font-semibold leading-snug text-ink" title={deviceName}>{deviceName}</div>
+                          <div className="mt-0.5 font-mono text-[11.5px] tracking-tight text-muted-foreground">
+                            {r.device || "chưa có KKS"}
+                            {r.workOrderNumber ? ` · ${r.workOrderNumber}` : r.requestNumber ? ` · YC ${r.requestNumber}` : ""}
                           </div>
                         </TableCell>
-                        <TableCell className="px-3 py-3 text-center text-[13px] text-ink">
-                          <div className="truncate" title={r.content ?? undefined}>{r.content || "—"}</div>
-                          {r.historyStatus === "PENDING" && (
-                            <div
-                              className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-semibold text-blue-700"
-                              title={`Dự kiến chốt lịch sử vào ${formatDate(r.finalizeAt)}`}
-                            >
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" aria-hidden="true" />
-                              Chờ chốt lịch sử · {formatDate(r.finalizeAt)}
-                            </div>
+                        <TableCell className="px-3 py-2.5 text-center">
+                          <UnitBadge unit={r.unit} />
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
+                          {formatDate(r.performedAt)}
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5">
+                          <div className="truncate text-[13px] text-ink" title={r.system ?? undefined}>{r.system ?? "—"}</div>
+                          <div className="mt-1">
+                            <UserByline user={r.createdBy} createdAt={r.createdAt} />
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 text-center">
+                          <LockChip pending={pending} />
+                          {pending && (
+                            <div className="mt-1 font-mono text-[11px] text-muted-foreground">hạn {formatDate(r.finalizeAt)}</div>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap px-3 py-3 text-center text-[13px] text-muted-foreground">{formatDate(r.performedAt)}</TableCell>
-                        <TableCell className="px-3 py-3 text-center text-[13px] text-muted-foreground">
-                          <div className="truncate" title={r.system ?? undefined}>{r.system ?? "—"}</div>
-                        </TableCell>
-                        <TableCell className="px-3 py-3 text-center text-[13px]">
-                          <div className="truncate font-semibold text-ink" title={deviceNameByCode.get(r.device ?? "") ?? r.device ?? undefined}>
-                            {deviceNameByCode.get(r.device ?? "") ?? r.device ?? "—"}
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-3 py-3">
-                          <UserByline user={r.createdBy} createdAt={r.createdAt} />
-                        </TableCell>
                         {actionCol && (
-                          <TableCell className="px-2 py-3">
+                          <TableCell className="px-2 py-2.5">
                             <div className="flex items-center justify-center gap-1">
-                              {canManage && r.historyStatus !== "PENDING" && (
+                              {canManage && !pending && (
                                 <Button variant="ghost" size="icon" title="Sửa" onClick={(e) => { e.stopPropagation(); setEditTarget(r); }}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                               )}
-                              {canDelete && r.historyStatus !== "PENDING" && (
+                              {canDelete && !pending && (
                                 <Button variant="ghost" size="icon" title="Xoá" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDelTarget(r); }}>
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -325,9 +352,11 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                         )}
                       </TableRow>
                       {expanded && (
-                        <TableRow className="bg-muted/20 hover:bg-muted/20">
-                          <TableCell colSpan={detailColSpan} className="px-6 py-4">
-                            <ExpandedDetails row={r} />
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={detailColSpan} className="bg-slate-50/80 p-0">
+                            <div className="border-l-[3px] border-[#00558F] py-4 pl-6 pr-5">
+                              <ExpandedDetails row={r} deviceName={deviceName} />
+                            </div>
                           </TableCell>
                         </TableRow>
                       )}
@@ -338,34 +367,20 @@ export function DefectHistoryTab({ role }: { role?: string }) {
             </TableBody>
           </Table>
           </div>
-          <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+
+          <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div>
-              Hiển thị {firstShown}-{lastShown} trong tổng số {visibleRows.length} bản ghi
-              {tableSearch.trim() && <span> sau lọc</span>}
+              {visibleRows.length === 0 ? (
+                "Không có bản ghi nào"
+              ) : (
+                <>
+                  Hiển thị <b className="font-mono text-ink">{firstShown}</b>–<b className="font-mono text-ink">{lastShown}</b> trong tổng số{" "}
+                  <b className="font-mono text-ink">{visibleRows.length}</b> bản ghi
+                  {tableSearch.trim() && <span> sau lọc</span>}
+                </>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 md:ml-auto">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Hiển thị</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="h-8 rounded-md border border-input bg-white px-2 text-sm font-medium text-ink"
-                  aria-label="Số dòng mỗi trang"
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-                <span>dòng</span>
-              </div>
-              <PageButton icon={ChevronsLeft} label="Trang đầu" disabled={page <= 1} onClick={() => setPage(1)} />
-              <PageButton icon={ChevronLeft} label="Trang trước" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} />
-              <span className="mx-2 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-ink">
-                {page}/{totalPages}
-              </span>
-              <PageButton icon={ChevronRight} label="Trang sau" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} />
-              <PageButton icon={ChevronsRight} label="Trang cuối" disabled={page >= totalPages} onClick={() => setPage(totalPages)} />
-            </div>
+            <Pager page={page} totalPages={totalPages} onGo={setPage} />
           </div>
         </Card>
       )}
@@ -407,6 +422,8 @@ function compareRows(a: DefectHistoryItem, b: DefectHistoryItem, key: SortKey, d
 
 function sortValue(row: DefectHistoryItem, key: SortKey, deviceNameByCode: Map<string, string>): string | number {
   if (key === "performedAt") return new Date(row.performedAt).getTime();
+  // Đã chốt xếp trước Chờ chốt khi sắp tăng dần.
+  if (key === "locked") return row.historyStatus === "PENDING" ? 1 : 0;
   if (key === "createdBy") return row.createdBy?.name ?? "";
   if (key === "workOrderNumber") return row.workOrderNumber ?? "";
   if (key === "unit") return row.unit ?? "";
@@ -435,54 +452,118 @@ function SortHeader({
       type="button"
       onClick={() => onSort(sortKey)}
       className={cn(
-        "inline-flex w-full items-center gap-1 text-[11px] font-semibold uppercase leading-tight tracking-normal text-muted-foreground transition-colors hover:text-ink",
+        "inline-flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
         align === "center" && "justify-center"
       )}
     >
       <span>{label}</span>
-      <Icon className={cn("h-3.5 w-3.5", active && "text-accent")} />
+      <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
     </button>
   );
 }
 
-function PageButton({
-  icon: Icon,
-  label,
-  disabled,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-}) {
+/** Nhãn tổ máy: S1 xanh lá, S2 tím, dùng chung xám — theo mẫu lich-su-sua-chua. */
+function UnitBadge({ unit }: { unit: string }) {
+  const tone =
+    unit === "S1"
+      ? "bg-emerald-50 text-emerald-700"
+      : unit === "S2"
+        ? "bg-violet-100 text-violet-700"
+        : "bg-slate-100 text-slate-500";
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40"
-    >
-      <Icon className="h-4 w-4" />
-    </button>
+    <span className={cn("inline-block rounded px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-wider", tone)}>
+      {unit}
+    </span>
   );
 }
 
-function ExpandedDetails({ row }: { row: DefectHistoryItem }) {
+/**
+ * Trạng thái chốt lịch sử. CHỈ HIỂN THỊ — bản mẫu vẽ dạng công tắc bấm được,
+ * nhưng việc chốt do hệ thống tự làm khi tới hạn finalizeAt, người dùng không
+ * bật/tắt được, nên không dựng thành nút để khỏi hứa hẹn thao tác không có.
+ */
+function LockChip({ pending }: { pending: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center overflow-hidden rounded-md border",
+        pending ? "border-border" : "border-emerald-600"
+      )}
+      title={pending ? "Đang chờ tới hạn chốt lịch sử" : "Bản ghi đã chốt"}
+    >
+      {pending && <span className="h-full w-3 self-stretch bg-amber-500" aria-hidden="true" />}
+      <span
+        className={cn(
+          "px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wider",
+          pending ? "bg-white text-muted-foreground" : "bg-emerald-600 text-white"
+        )}
+      >
+        {pending ? "Chờ chốt" : "Đã chốt"}
+      </span>
+      {!pending && <span className="h-full w-3 self-stretch bg-white" aria-hidden="true" />}
+    </span>
+  );
+}
+
+/** Phân trang đánh số như bản mẫu: ‹ 1 2 … n › */
+function Pager({ page, totalPages, onGo }: { page: number; totalPages: number; onGo: (p: number) => void }) {
+  const items: Array<number | "gap"> = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= 1) items.push(i);
+    else if (Math.abs(i - page) === 2) items.push("gap");
+  }
+  const btn = "h-8 min-w-8 rounded-lg border border-border px-2 font-mono text-[13px] font-semibold transition-colors";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <button type="button" className={cn(btn, "text-muted-foreground hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40")} disabled={page <= 1} onClick={() => onGo(page - 1)} aria-label="Trang trước">
+        <ChevronLeft className="mx-auto h-4 w-4" />
+      </button>
+      {items.map((item, index) =>
+        item === "gap" ? (
+          <span key={`gap-${index}`} className="px-1 text-muted-foreground">…</span>
+        ) : (
+          <button
+            key={item}
+            type="button"
+            aria-current={item === page}
+            onClick={() => onGo(item)}
+            className={cn(btn, item === page ? "border-[#00558F] bg-[#00558F] text-white" : "text-muted-foreground hover:border-accent hover:text-accent")}
+          >
+            {item}
+          </button>
+        )
+      )}
+      <button type="button" className={cn(btn, "text-muted-foreground hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40")} disabled={page >= totalPages} onClick={() => onGo(page + 1)} aria-label="Trang sau">
+        <ChevronRight className="mx-auto h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function ExpandedDetails({ row, deviceName }: { row: DefectHistoryItem; deviceName: string }) {
   const repair = repairReferenceOf(row.sourceSnapshot);
   return (
-    <div className="max-w-[760px] space-y-2 px-1 py-1 text-[13px] leading-5">
-      <DetailLine label="Số Phiếu Công Tác" value={row.workOrderNumber || "—"} />
-        {(row.requestType || row.requestNumber) && (
-          <DetailLine
-            label="Loại / Số yêu cầu"
-            value={[row.requestType ? `PCT: ${row.requestType}` : null, row.requestNumber ? `YC: ${row.requestNumber}` : null]
-              .filter(Boolean)
-              .join("   ·   ")}
+    <div className="space-y-3 text-[13px] leading-5">
+      {/* Lưới các trường ngắn — theo bố cục .dgrid của bản mẫu */}
+      <div className="grid gap-x-7 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <DetailField label="Tên thiết bị" value={deviceName} />
+        <DetailField label="Mã KKS" value={row.device || "—"} mono />
+        <DetailField label="Số phiếu công tác" value={row.workOrderNumber || "—"} mono />
+        <DetailField label="Loại yêu cầu (PCT)" value={row.requestType || "—"} />
+        <DetailField label="Số yêu cầu" value={row.requestNumber || "—"} mono />
+        <DetailField label="Cương vị" value={row.system || "—"} />
+        <DetailField label="Tổ máy" value={row.mappedDeviceUnit || row.unit} />
+        <DetailField label="Ngày kết thúc" value={formatDate(row.performedAt)} mono />
+        <DetailField label="Người cập nhật" value={row.createdBy?.name || "—"} />
+        {row.reminderCount > 0 && (
+          <DetailField
+            label="Nhắc lại"
+            value={`${row.reminderCount} lần${row.lastRemindedAt ? ` · gần nhất ${formatDate(row.lastRemindedAt)}` : ""}`}
           />
         )}
+      </div>
+
+      <div className="max-w-[900px] space-y-2">
         <DetailLine
           label="Thiết bị liên quan"
           value={row.relatedDevices.length > 0
@@ -495,6 +576,7 @@ function ExpandedDetails({ row }: { row: DefectHistoryItem }) {
         <DetailLine label="Nội dung công tác" value={row.defectContent || "—"} multiline />
         <DetailLine label="Nội dung thực hiện" value={row.content || "—"} multiline />
         <DetailLine label="Kết quả thực hiện" value={row.result || "—"} multiline />
+      </div>
       {repair && (
         <div className="mt-3 space-y-2 rounded-md border border-blue-100 bg-blue-50/60 p-3">
           <div className="font-semibold text-blue-800">Thông tin Sửa chữa từ Google Sheet · chỉ tham khảo</div>
@@ -507,7 +589,18 @@ function ExpandedDetails({ row }: { row: DefectHistoryItem }) {
           )}
         </div>
       )}
-      <DetailLine label="Vận hành viên" value={row.createdBy?.name || "—"} />
+    </div>
+  );
+}
+
+/** Ô nhãn trên / giá trị dưới trong lưới chi tiết (theo .dfield của bản mẫu). */
+function DetailField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
+      <div className={cn("mt-0.5 truncate font-medium text-ink", mono && "font-mono text-[12.5px]")} title={value}>
+        {value}
+      </div>
     </div>
   );
 }
