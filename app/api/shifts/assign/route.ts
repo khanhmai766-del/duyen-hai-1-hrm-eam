@@ -4,36 +4,10 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { invalidateShiftCache } from "@/lib/shift-response-cache";
 import { dateRange, parseDateInput } from "@/lib/utils";
+import { attendanceWindowMessage, isDateInAttendanceWindow } from "@/lib/attendance-window";
 
-const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
-
-function vietnamMonthParts(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: VIETNAM_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return { year: Number(values.year), month: Number(values.month) };
-}
-
-function shiftDateMonthParts(value: string | Date) {
-  if (value instanceof Date) return vietnamMonthParts(value);
-  const match = value.match(/^(\d{4})-(\d{2})-\d{2}$/);
-  if (match) return { year: Number(match[1]), month: Number(match[2]) };
-  return vietnamMonthParts(parseDateInput(value));
-}
-
-function isCurrentVietnamMonth(value: string | Date, now = new Date()) {
-  const current = vietnamMonthParts(now);
-  const target = shiftDateMonthParts(value);
-  return target.year === current.year && target.month === current.month;
-}
-
-function currentMonthRestrictionMessage() {
-  return "Chỉ được điểm danh, thu hồi hoặc duyệt ca trong tháng hiện tại.";
-}
+// Cửa sổ thao tác chấm công (tháng hiện tại + tháng kế tiếp kể từ ngày 25) dùng
+// chung với trang sơ đồ ca — xem lib/attendance-window.ts.
 
 /**
  * Org-chart check-in ("Điểm danh"): places the current user into a seat
@@ -56,7 +30,7 @@ export async function POST(req: NextRequest) {
     if (!date || !shiftType || !unit || !positionLabel?.trim()) {
       return fail("Thiếu thông tin ca trực hoặc cương vị");
     }
-    if (!isCurrentVietnamMonth(date)) return fail(currentMonthRestrictionMessage(), 400);
+    if (!isDateInAttendanceWindow(date)) return fail(attendanceWindowMessage(), 400);
     await requirePermissionLevel(user, "shift-operation-check-in", ["personal", "manage", "full"], "Không đủ quyền điểm danh ca vận hành");
     const label = positionLabel.trim();
     const canApproveShift = await hasPermissionLevel(user, "shift-operation-approve", ["manage", "full"]);
@@ -152,7 +126,7 @@ export async function DELETE(req: NextRequest) {
         include: { shift: { select: { date: true, isAttendanceLocked: true } } },
       });
       if (!target) return fail("Không tìm thấy phân công", 404);
-      if (!isCurrentVietnamMonth(target.shift.date)) return fail(currentMonthRestrictionMessage(), 400);
+      if (!isDateInAttendanceWindow(target.shift.date)) return fail(attendanceWindowMessage(), 400);
       await prisma.shiftAssignment.updateMany({ where: { parentId: id }, data: { parentId: target.parentId } });
       await prisma.shiftAssignment.delete({ where: { id } });
       if (!target.shift.isAttendanceLocked || !target.isApproved) {
@@ -168,7 +142,7 @@ export async function DELETE(req: NextRequest) {
     const shiftType = sp.get("shiftType");
     const unit = sp.get("unit");
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
-    if (!isCurrentVietnamMonth(date)) return fail(currentMonthRestrictionMessage(), 400);
+    if (!isDateInAttendanceWindow(date)) return fail(attendanceWindowMessage(), 400);
 
     const { start, end } = dateRange(date);
 
@@ -215,7 +189,7 @@ export async function PUT(req: NextRequest) {
       ids?: string[];
     };
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
-    if (!isCurrentVietnamMonth(date)) return fail(currentMonthRestrictionMessage(), 400);
+    if (!isDateInAttendanceWindow(date)) return fail(attendanceWindowMessage(), 400);
 
     const { start, end } = dateRange(date);
 

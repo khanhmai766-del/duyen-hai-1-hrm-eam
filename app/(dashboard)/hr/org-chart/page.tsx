@@ -21,6 +21,7 @@ import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useUsers } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { SHIFT_TYPE, SHIFT_TYPE_ORDER } from "@/lib/constants";
+import { attendanceWindow, attendanceWindowMessage } from "@/lib/attendance-window";
 import { ORG_CHIEF, ORG_LEADS, ORG_SEAT_TITLES, type OrgTone } from "@/lib/org-template";
 import { normalizeText } from "@/lib/nav";
 import { cn, initials } from "@/lib/utils";
@@ -157,17 +158,11 @@ export default function OrgChartPage() {
   const rbac = useRbacAccess();
 
   const canApprove = rbac.can("shift-operation-approve", ["manage", "full"]);
-  const currentMonthBounds = React.useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    return {
-      min: localDate(new Date(year, month, 1)),
-      max: localDate(new Date(year, month + 1, 0)),
-    };
-  }, []);
+  // Tháng hiện tại, và mở thêm tháng kế tiếp kể từ ngày 25 để bố trí ca trước.
+  // Cùng nguồn quy tắc với API /api/shifts/assign nên hai bên không lệch mốc.
+  const currentMonthBounds = React.useMemo(() => attendanceWindow(), []);
   const selectedDateAllowed = date >= currentMonthBounds.min && date <= currentMonthBounds.max;
-  const monthRestrictionTitle = "Chỉ được điểm danh, thu hồi hoặc duyệt ca trong tháng hiện tại";
+  const monthRestrictionTitle = React.useMemo(() => attendanceWindowMessage(), []);
 
   React.useEffect(() => {
     if (!checkInSuccessMessage) return;
