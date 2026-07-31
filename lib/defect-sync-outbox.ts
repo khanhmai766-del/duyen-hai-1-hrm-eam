@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "crypto";
 import { Prisma } from "@prisma/client";
 import { defectSheetPositionLabel } from "@/lib/defect-position-sheet-labels";
+import { DEFECT_SYNC_FEATURES } from "@/lib/defect-two-way-sync";
 
 export const DEFECT_SYNC_EVENT_TYPES = ["CREATE", "UPDATE", "REMIND"] as const;
 export type DefectSyncEventType = (typeof DEFECT_SYNC_EVENT_TYPES)[number];
@@ -85,7 +86,8 @@ export async function enqueueDefectSyncEvent(
   }
 ) {
   const setting = await tx.defectSyncSetting.findUnique({ where: { id: "singleton" } });
-  if (!setting?.twoWaySyncEnabled) return null;
+  const featureKey = DEFECT_SYNC_FEATURES[params.eventType];
+  if (!setting?.twoWaySyncEnabled || !setting[featureKey]) return null;
 
   // Khi người dùng bấm lưu nhiều lần trước lúc n8n chạy, chỉ cần ghi trạng thái
   // mới nhất. Nếu CREATE còn chờ thì cập nhật luôn snapshot CREATE; nếu đã có

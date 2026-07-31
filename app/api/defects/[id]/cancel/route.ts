@@ -5,6 +5,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { publicUserRef } from "@/lib/s3";
+import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ["manage", "full"],
       "Không đủ quyền hủy phiếu khiếm khuyết"
     );
+    if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
+      return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa", 503);
+    }
     const body = await req.json().catch(() => ({}));
     const note = String(body.note ?? "").trim();
     if (!note) return fail("Vui lòng nhập ghi chú khi hủy phiếu");

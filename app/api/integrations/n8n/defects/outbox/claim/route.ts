@@ -57,6 +57,18 @@ export async function POST(req: NextRequest) {
           FROM "DefectSyncOutbox"
           WHERE "status" IN ('PENDING', 'FAILED')
             AND "nextAttemptAt" <= NOW()
+            AND EXISTS (
+              SELECT 1
+              FROM "DefectSyncSetting" AS setting
+              WHERE setting."id" = 'singleton'
+                AND setting."twoWaySyncEnabled" = TRUE
+                AND CASE "DefectSyncOutbox"."eventType"
+                  WHEN 'UPDATE' THEN setting."operationUpdateEnabled"
+                  WHEN 'CREATE' THEN setting."websiteCreateEnabled"
+                  WHEN 'REMIND' THEN setting."websiteRemindEnabled"
+                  ELSE FALSE
+                END
+            )
           ORDER BY "createdAt" ASC
           FOR UPDATE SKIP LOCKED
           LIMIT ${limit}

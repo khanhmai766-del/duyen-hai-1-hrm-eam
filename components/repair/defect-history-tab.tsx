@@ -25,7 +25,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -63,7 +62,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     ...(deviceSeqFromUrl ? { deviceSeq: deviceSeqFromUrl } : {}),
     ...(mappedUnitFromUrl ? { mappedUnit: mappedUnitFromUrl } : {}),
     ...(includeDescendantsFromUrl ? { includeDescendants: includeDescendantsFromUrl } : {}),
-    ...(["S1", "S2", "COMMON"].includes(unitFromUrl) ? { unit: unitFromUrl } : {}),
+    // Khi vào trang từ menu, mặc định hiển thị tổ máy S1.
+    // Vẫn ưu tiên tham số URL để các liên kết mở sẵn S2/COMMON hoạt động như cũ.
+    unit: ["S1", "S2", "COMMON"].includes(unitFromUrl) ? unitFromUrl : "S1",
   }));
   const { data, isLoading } = useDefectHistory(filters);
   const del = useDeleteDefectHistory();
@@ -76,7 +77,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     [rows]
   );
 
-  const [lightbox, setLightbox] = React.useState<string | null>(null);
   const [delTarget, setDelTarget] = React.useState<DefectHistoryItem | null>(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<DefectHistoryItem | null>(null);
@@ -108,6 +108,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               r.device,
               deviceNameByCode.get(r.device ?? ""),
               r.result,
+              r.defectContent,
               r.content,
               r.createdBy?.name,
               r.createdBy?.position,
@@ -145,9 +146,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       { key: "unit", header: "Tổ máy", width: 10, align: "center" as const, value: (r: DefectHistoryItem) => r.unit },
       { key: "system", header: "Cương vị", width: 22, value: (r: DefectHistoryItem) => r.system },
       { key: "deviceName", header: "Tên thiết bị", width: 28, value: (r: DefectHistoryItem) => deviceNameByCode.get(r.device ?? "") ?? r.device },
+      { key: "defectContent", header: "Nội dung công tác", width: 36, value: (r: DefectHistoryItem) => r.defectContent },
       { key: "content", header: "Nội dung thực hiện", width: 36, value: (r: DefectHistoryItem) => r.content },
       { key: "result", header: "Kết quả thực hiện", width: 36, value: (r: DefectHistoryItem) => r.result },
-      { key: "images", header: "Số ảnh", width: 9, align: "center" as const, value: (r: DefectHistoryItem) => r.images?.length ?? 0 },
       { key: "operator", header: "Vận hành viên", width: 24, value: (r: DefectHistoryItem) => r.createdBy?.name },
     ],
     [deviceNameByCode]
@@ -326,7 +327,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                       {expanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20">
                           <TableCell colSpan={detailColSpan} className="px-6 py-4">
-                            <ExpandedDetails row={r} onImage={setLightbox} />
+                            <ExpandedDetails row={r} />
                           </TableCell>
                         </TableRow>
                       )}
@@ -372,20 +373,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       <DefectHistoryDialog open={createOpen} onOpenChange={setCreateOpen} />
       <DefectHistoryDialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)} record={editTarget} />
 
-      {/* Lightbox xem ảnh lớn */}
-      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="max-w-3xl p-2">
-          {lightbox && (
-            <div className="relative">
-              <button onClick={() => setLightbox(null)} className="absolute right-2 top-2 rounded-full bg-ink/70 p-1 text-white hover:bg-ink" aria-label="Đóng">
-                <X className="h-4 w-4" />
-              </button>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={lightbox} alt="Ảnh khiếm khuyết" className="max-h-[80vh] w-full rounded-md object-contain" />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <ConfirmDialog
         open={!!delTarget}
@@ -483,7 +470,7 @@ function PageButton({
   );
 }
 
-function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (src: string) => void }) {
+function ExpandedDetails({ row }: { row: DefectHistoryItem }) {
   const repair = repairReferenceOf(row.sourceSnapshot);
   return (
     <div className="max-w-[760px] space-y-2 px-1 py-1 text-[13px] leading-5">
@@ -505,6 +492,7 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
             : "—"}
           multiline
         />
+        <DetailLine label="Nội dung công tác" value={row.defectContent || "—"} multiline />
         <DetailLine label="Nội dung thực hiện" value={row.content || "—"} multiline />
         <DetailLine label="Kết quả thực hiện" value={row.result || "—"} multiline />
       {repair && (
@@ -519,23 +507,6 @@ function ExpandedDetails({ row, onImage }: { row: DefectHistoryItem; onImage: (s
           )}
         </div>
       )}
-      <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
-        <div className="whitespace-nowrap font-semibold text-ink">Hình ảnh kèm theo:</div>
-        <div>
-          {row.images.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {row.images.map((src, i) => (
-                <button key={i} type="button" onClick={() => onImage(src)} className="shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`Ảnh ${i + 1}`} className="h-14 w-14 rounded-md border border-border object-cover transition-transform hover:scale-105" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
       <DetailLine label="Vận hành viên" value={row.createdBy?.name || "—"} />
     </div>
   );

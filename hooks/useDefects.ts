@@ -4,7 +4,24 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 import type { Defect, DefectSyncRun, DefectSyncSetting } from "@prisma/client";
 
+export interface DefectSyncTrafficMetrics {
+  todayTotal: number;
+  todayUpdate: number;
+  todayCreate: number;
+  todayRemind: number;
+  todaySuccess: number;
+  todayFailed: number;
+  waiting: number;
+  averageDurationMs: number | null;
+}
+
+export interface DefectTwoWaySyncStatus extends DefectSyncSetting {
+  metrics: DefectSyncTrafficMetrics;
+}
+
 export interface DefectItem extends Defect {
+  severity2UpgradeCandidate?: boolean;
+  severityUpgradeWaitingDays?: number;
   createdBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
   node: { seq: string; name: string } | null;
   fireSafetyImpact: string | null;
@@ -37,6 +54,7 @@ export interface DefectListParams {
   severity?: string;
   repairResult?: string;
   mismatch?: boolean;
+  upgradeCandidate?: boolean;
   q?: string;
   deviceSeq?: string;
   includeDescendants?: number;
@@ -48,6 +66,7 @@ export interface DefectListMeta {
   limit: number;
   totalPages: number;
   scopeTotal: number;
+  upgradeCandidateTotal?: number;
   kpi: {
     chuaXuLy: number;
     coPct: number;
@@ -187,7 +206,7 @@ export function useSyncDefects() {
 export function useDefectTwoWaySync(enabled = true) {
   return useQuery({
     queryKey: ["defect-two-way-sync"],
-    queryFn: () => apiGet<DefectSyncSetting>("/api/defects/two-way-sync"),
+    queryFn: () => apiGet<DefectTwoWaySyncStatus>("/api/defects/two-way-sync"),
     enabled,
   });
 }
@@ -195,7 +214,10 @@ export function useDefectTwoWaySync(enabled = true) {
 export function useSetDefectTwoWaySync() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (enabled: boolean) => apiMutate<DefectSyncSetting>("/api/defects/two-way-sync", "PUT", { enabled }),
+    mutationFn: ({ key, enabled }: {
+      key: "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled";
+      enabled: boolean;
+    }) => apiMutate<DefectTwoWaySyncStatus>("/api/defects/two-way-sync", "PUT", { key, enabled }),
     onSuccess: (setting) => qc.setQueryData(["defect-two-way-sync"], { data: setting, meta: undefined }),
   });
 }

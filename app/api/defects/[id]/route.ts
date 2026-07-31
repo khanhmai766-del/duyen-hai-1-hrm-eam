@@ -18,6 +18,7 @@ import {
   validateMappedDevice,
   type DefectDeviceMapping,
 } from "@/lib/defect-device-mapping";
+import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -70,6 +71,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền cập nhật khiếm khuyết");
+    if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
+      return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa", 503);
+    }
     const body = await req.json();
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy phiếu khiếm khuyết", 404);

@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import { useCreateDefectHistory, useUpdateDefectHistory, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useDevices } from "@/hooks/useDevices";
@@ -25,7 +24,7 @@ function toDateInput(v: Date | string | null | undefined): string {
 }
 
 const NONE = "__none__";
-const EMPTY = { unit: "", device: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), content: "", result: "", images: [] as string[] };
+const EMPTY = { unit: "", device: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), defectContent: "", content: "", result: "" };
 
 /**
  * Hộp thoại Thêm mới / Chỉnh sửa một bản ghi lịch sử khiếm khuyết.
@@ -67,9 +66,9 @@ export function DefectHistoryDialog({
             requestType: record.requestType ?? "",
             workOrderNumber: record.workOrderNumber ?? "",
             performedAt: toDateInput(record.performedAt),
+            defectContent: record.defectContent ?? "",
             content: record.content ?? "",
             result: record.result ?? "",
-            images: record.images ?? [],
           }
         : { ...EMPTY }
     );
@@ -98,8 +97,7 @@ export function DefectHistoryDialog({
     if (!form.performedAt) return toast.error("Vui lòng chọn ngày kết thúc");
     try {
       if (isEdit) {
-        const { images: _images, ...editableFields } = form;
-        await update.mutateAsync({ id: record!.id, ...editableFields });
+        await update.mutateAsync({ id: record!.id, ...form });
       }
       else await create.mutateAsync(form);
       toast.success(isEdit ? "Đã cập nhật bản ghi lịch sử" : "Đã thêm bản ghi lịch sử");
@@ -183,17 +181,15 @@ export function DefectHistoryDialog({
           <Field label="Ngày kết thúc *">
             <Input type="date" value={form.performedAt} onChange={(e) => set("performedAt", e.target.value)} />
           </Field>
+          <Field label="Nội dung công tác">
+            <Textarea value={form.defectContent} onChange={(e) => set("defectContent", e.target.value)} rows={3} placeholder="Nội dung của khiếm khuyết thiết bị…" />
+          </Field>
           <Field label="Nội dung thực hiện">
             <Textarea value={form.content} onChange={(e) => set("content", e.target.value)} rows={3} placeholder="Mô tả nội dung công việc thực hiện…" />
           </Field>
           <Field label="Kết quả thực hiện">
             <Textarea value={form.result} onChange={(e) => set("result", e.target.value)} rows={3} placeholder="Mô tả kết quả xử lý…" />
           </Field>
-          {!isEdit && (
-            <Field label="Hình ảnh (tối đa 3)">
-              <MultiImagePicker value={form.images} onChange={(v) => set("images", v)} max={3} />
-            </Field>
-          )}
         </div>
 
         <DialogFooter>

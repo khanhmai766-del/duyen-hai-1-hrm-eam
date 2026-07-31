@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, ChevronDown, Check, Unplug } from "lucide-react";
+import { Search, X, ChevronDown, Check, Unplug, ArrowUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,10 @@ export function DefectFilterBar({
   scopeTotal,
   mismatchOnly,
   onMismatchOnlyChange,
+  upgradeCandidatesOnly,
+  onUpgradeCandidatesOnlyChange,
+  upgradeCandidateTotal,
+  showUpgradeCandidates,
   canReset,
   onReset,
 }: {
@@ -58,6 +62,10 @@ export function DefectFilterBar({
   scopeTotal: number;
   mismatchOnly: boolean;
   onMismatchOnlyChange: (value: boolean) => void;
+  upgradeCandidatesOnly: boolean;
+  onUpgradeCandidatesOnlyChange: (value: boolean) => void;
+  upgradeCandidateTotal: number;
+  showUpgradeCandidates: boolean;
   canReset: boolean;
   onReset: () => void;
 }) {
@@ -112,7 +120,7 @@ export function DefectFilterBar({
                 unit === value ? "bg-navy text-white shadow-sm" : "text-muted-foreground hover:text-ink"
               )}
             >
-              {value === "COMMON" ? "Common" : value}
+              {value === "ALL" ? "Tất cả" : value === "COMMON" ? "Common" : value}
             </button>
           ))}
         </div>
@@ -144,24 +152,51 @@ export function DefectFilterBar({
               )}
             </span>
           ))}
-          <div className="ml-auto flex items-center gap-3">
-            <button
-              type="button"
-              aria-pressed={mismatchOnly}
-              aria-label="Chỉ hiển thị kết quả chưa khớp giữa vận hành và sửa chữa"
-              title="Chỉ hiển thị kết quả chưa khớp giữa vận hành và sửa chữa"
-              onClick={() => onMismatchOnlyChange(!mismatchOnly)}
-              className={cn(
-                "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2",
-                mismatchOnly
-                  ? "border-red-200 bg-red-50 text-red-700 shadow-sm"
-                  : "border-border bg-white text-muted-foreground hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+            <div className="flex shrink-0 items-center gap-2">
+              {showUpgradeCandidates && (
+                <button
+                  type="button"
+                  aria-pressed={upgradeCandidatesOnly}
+                  aria-label="Chỉ hiển thị phiếu cần xem xét nâng lên Mức 2"
+                  title="Phiếu Mức 3/4 đã qua tối thiểu 7 ngày kể từ lần nhắc thứ hai"
+                  onClick={() => onUpgradeCandidatesOnlyChange(!upgradeCandidatesOnly)}
+                  className={cn(
+                    "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 focus-visible:ring-offset-2",
+                    upgradeCandidatesOnly
+                      ? "border-amber-300 bg-amber-100 text-amber-800 shadow-sm"
+                      : "border-border bg-white text-muted-foreground hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800"
+                  )}
+                >
+                  <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+                  <span className="hidden sm:inline">Cần nâng M2</span>
+                  <span className={cn(
+                    "rounded-full px-1.5 tabular-nums",
+                    upgradeCandidatesOnly ? "bg-amber-200/70" : "bg-muted"
+                  )}>
+                    {upgradeCandidateTotal}
+                  </span>
+                  {upgradeCandidatesOnly && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
+                </button>
               )}
-            >
-              <Unplug className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Chưa khớp</span>
-              {mismatchOnly && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
-            </button>
+              <button
+                type="button"
+                aria-pressed={mismatchOnly}
+                aria-label="Chỉ hiển thị kết quả chưa khớp giữa vận hành và sửa chữa"
+                title="Chỉ hiển thị kết quả chưa khớp giữa vận hành và sửa chữa"
+                onClick={() => onMismatchOnlyChange(!mismatchOnly)}
+                className={cn(
+                  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2",
+                  mismatchOnly
+                    ? "border-red-200 bg-red-50 text-red-700 shadow-sm"
+                    : "border-border bg-white text-muted-foreground hover:border-red-200 hover:bg-red-50/60 hover:text-red-700"
+                )}
+              >
+                <Unplug className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Chưa khớp</span>
+                {mismatchOnly && <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />}
+              </button>
+            </div>
             <span className="text-[13px] text-muted-foreground">
               <b className="tabular-nums text-ink">{total.toLocaleString("vi-VN")}</b>
               {" / "}

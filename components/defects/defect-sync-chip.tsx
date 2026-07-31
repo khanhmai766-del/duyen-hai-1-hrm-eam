@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { DefectSyncRun } from "@prisma/client";
-import { RefreshCw, ChevronDown, CloudDownload, History } from "lucide-react";
+import { RefreshCw, ChevronDown, CloudDownload, History, Activity, Pencil, Plus, BellRing } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -94,7 +94,7 @@ export function DefectSyncChip({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" sideOffset={8} className="w-[380px] p-4">
+      <PopoverContent align="end" sideOffset={8} className="w-[430px] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-bold text-ink">
@@ -218,47 +218,162 @@ function TwoWayWarnDot({ enabled }: { enabled: boolean }) {
   );
 }
 
-/** Cờ dự phòng đồng bộ hai chiều — cùng hook/API như bản banner cũ, chỉ đổi cách hiển thị. */
 function TwoWaySyncRow() {
   const query = useDefectTwoWaySync();
   const setEnabled = useSetDefectTwoWaySync();
-  const enabled = query.data?.data?.twoWaySyncEnabled ?? false;
+  const setting = query.data?.data;
+  const enabled = setting?.twoWaySyncEnabled ?? false;
 
-  async function toggle() {
+  async function toggle(
+    key: "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled",
+    current: boolean,
+    label: string
+  ) {
     try {
-      await setEnabled.mutateAsync(!enabled);
-      toast.success(!enabled ? "Đã bật đồng bộ hai chiều (dự phòng)" : "Đã tắt đồng bộ hai chiều");
+      await setEnabled.mutateAsync({ key, enabled: !current });
+      toast.success(`Đã ${!current ? "bật" : "tắt"} ${label}`);
     } catch (error) {
       toast.error((error as Error).message);
     }
   }
 
   return (
-    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5">
-      <div className="min-w-0">
-        <div className="text-[13px] font-bold text-amber-900">Đồng bộ hai chiều (dự phòng)</div>
-        <p className="mt-0.5 text-xs leading-snug text-amber-800/80">
-          Dành cho giai đoạn sau. Hiện khiếm khuyết chỉ đồng bộ một chiều Google Sheet → DH1.
-        </p>
+    <div className="mt-3 space-y-3 border-t border-border pt-3">
+      <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
+        <FeatureToggle
+          label="Đồng bộ hai chiều"
+          description="Công tắc tổng cho chiều DH1 → Google Sheet"
+          enabled={enabled}
+          loading={query.isLoading || setEnabled.isPending}
+          onToggle={() => toggle("twoWaySyncEnabled", enabled, "đồng bộ hai chiều")}
+        />
+        <div className="mt-3 space-y-2 border-t border-blue-200/70 pt-3">
+          <FeatureToggle
+            icon={Pencil}
+            label="Cập nhật Vận hành"
+            description="Ghi ngược các trường Vận hành"
+            enabled={setting?.operationUpdateEnabled ?? false}
+            loading={query.isLoading || setEnabled.isPending}
+            disabled={!enabled}
+            onToggle={() => toggle(
+              "operationUpdateEnabled",
+              setting?.operationUpdateEnabled ?? false,
+              "Cập nhật Vận hành"
+            )}
+          />
+          <FeatureToggle
+            icon={Plus}
+            label="Thêm mới từ website"
+            description="Tạo dòng khiếm khuyết mới trên Sheet"
+            enabled={setting?.websiteCreateEnabled ?? false}
+            loading={query.isLoading || setEnabled.isPending}
+            disabled={!enabled}
+            onToggle={() => toggle(
+              "websiteCreateEnabled",
+              setting?.websiteCreateEnabled ?? false,
+              "Thêm mới từ website"
+            )}
+          />
+          <FeatureToggle
+            icon={BellRing}
+            label="Nhắc lại từ website"
+            description="Ghi lần nhắc lại vào Google Sheet"
+            enabled={setting?.websiteRemindEnabled ?? false}
+            loading={query.isLoading || setEnabled.isPending}
+            disabled={!enabled}
+            onToggle={() => toggle(
+              "websiteRemindEnabled",
+              setting?.websiteRemindEnabled ?? false,
+              "Nhắc lại từ website"
+            )}
+          />
+        </div>
+      </div>
+
+      {setting?.metrics && (
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <Activity className="h-3.5 w-3.5" />
+            Lưu lượng ghi ngược hôm nay
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <TrafficStat label="Cập nhật" value={setting.metrics.todayUpdate} />
+            <TrafficStat label="Thêm mới" value={setting.metrics.todayCreate} />
+            <TrafficStat label="Nhắc lại" value={setting.metrics.todayRemind} />
+            <TrafficStat label="Đang chờ" value={setting.metrics.waiting} warn />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>
+              Thành công <b className="text-emerald-700">{setting.metrics.todaySuccess}</b>
+              {" · "}
+              Thất bại <b className="text-rose-700">{setting.metrics.todayFailed}</b>
+            </span>
+            <span>
+              TB {setting.metrics.averageDurationMs === null
+                ? "—"
+                : `${(setting.metrics.averageDurationMs / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} giây`}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeatureToggle({
+  icon: Icon,
+  label,
+  description,
+  enabled,
+  loading,
+  disabled = false,
+  onToggle,
+}: {
+  icon?: typeof Pencil;
+  label: string;
+  description: string;
+  enabled: boolean;
+  loading: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className={cn("flex items-center justify-between gap-3", disabled && "opacity-50")}>
+      <div className="flex min-w-0 items-start gap-2">
+        {Icon && <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />}
+        <div className="min-w-0">
+          <div className="text-[13px] font-bold text-ink">{label}</div>
+          <p className="text-[11px] leading-snug text-muted-foreground">{description}</p>
+        </div>
       </div>
       <button
         type="button"
-        onClick={toggle}
-        disabled={query.isLoading || setEnabled.isPending}
-        title={enabled ? "Tắt đồng bộ hai chiều" : "Bật đồng bộ hai chiều"}
+        onClick={onToggle}
+        disabled={loading || disabled}
+        title={`${enabled ? "Tắt" : "Bật"} ${label}`}
+        aria-label={`${enabled ? "Tắt" : "Bật"} ${label}`}
         aria-pressed={enabled}
         className={cn(
-          "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-60",
+          "relative h-[22px] w-10 shrink-0 rounded-full transition-colors duration-200 disabled:cursor-not-allowed",
           enabled ? "bg-emerald-500" : "bg-slate-300"
         )}
       >
-        <span
-          className={cn(
-            "absolute left-0.5 top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200",
-            enabled ? "translate-x-[18px]" : "translate-x-0"
-          )}
-        />
+        <span className={cn(
+          "absolute left-0.5 top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200",
+          enabled ? "translate-x-[18px]" : "translate-x-0"
+        )} />
       </button>
+    </div>
+  );
+}
+
+function TrafficStat({ label, value, warn = false }: { label: string; value: number; warn?: boolean }) {
+  return (
+    <div className="rounded-md bg-white px-1 py-2 ring-1 ring-border/70">
+      <b className={cn("block text-base tabular-nums", warn && value > 0 ? "text-amber-700" : "text-ink")}>
+        {value.toLocaleString("vi-VN")}
+      </b>
+      <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
     </div>
   );
 }

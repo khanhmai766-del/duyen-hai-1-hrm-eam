@@ -5,6 +5,7 @@ import { publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
+import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 const INCLUDE = {
   createdBy: {
@@ -25,6 +26,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       ["manage", "full"],
       "Không đủ quyền nhắc lại khiếm khuyết"
     );
+    if (!(await isDefectSyncFeatureEnabled("REMIND"))) {
+      return fail("Tính năng nhắc lại từ website đang tạm khóa", 503);
+    }
 
     const existing = await prisma.defect.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy khiếm khuyết", 404);

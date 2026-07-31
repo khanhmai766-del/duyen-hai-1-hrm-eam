@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
+import { publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { dateRange, parseDateInput } from "@/lib/utils";
 import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
@@ -194,7 +194,8 @@ export async function GET(req: NextRequest) {
         workOrderNumber: pending.workOrderNumber,
         performedAt: pending.performedAt,
         result: pending.result,
-        content: pending.content || defect.content,
+        defectContent: defect.content,
+        content: pending.content || defect.repairPerformedContentRaw,
         requestNumber: defect.requestNumber,
         reminderCount: defect.reminderCount,
         lastRemindedAt: defect.lastRemindedAt,
@@ -234,11 +235,6 @@ export async function POST(req: NextRequest) {
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
     if (body.device) await assertSeqEditable(user, String(body.device));
 
-    const images = await maybeUploadDataUrlList(
-      Array.isArray(body.images) ? body.images.filter(Boolean).slice(0, 3) : [],
-      "defect-history/images",
-      "image"
-    );
     // Khóa liên kết chuẩn với cây: chỉ gán khi "device" là seq có thật.
     const deviceValue = body.device?.trim() || null;
     const deviceSeq = deviceValue
@@ -261,9 +257,10 @@ export async function POST(req: NextRequest) {
         workOrderNumber: body.workOrderNumber?.trim() || null,
         performedAt: body.performedAt ? parseDateInput(body.performedAt) : new Date(),
         result: body.result?.trim() || null,
+        defectContent: body.defectContent?.trim() || null,
         content: body.content?.trim() || null,
         requestNumber: body.requestNumber?.trim() || null,
-        images,
+        images: [],
         createdById: user.id,
       },
       include: INCLUDE,

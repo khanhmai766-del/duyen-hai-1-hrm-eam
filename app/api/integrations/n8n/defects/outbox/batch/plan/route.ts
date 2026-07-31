@@ -3,6 +3,7 @@ import { fail, handle, ok } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { buildDefectSheetBatchWritePlan } from "@/lib/defect-sheet-write-plan";
 import { verifyDefectOutboxToken } from "@/lib/defect-sync-outbox";
+import { isDefectSyncEventEnabled } from "@/lib/defect-two-way-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,14 @@ export async function POST(req: NextRequest) {
     );
     if (events.some((event) => event.status !== "PROCESSING")) {
       return fail("Một hoặc nhiều sự kiện không ở trạng thái đang xử lý", 409);
+    }
+    const featureStates = await Promise.all(
+      [...new Set(events.map((event) => event.eventType))].map((eventType) =>
+        isDefectSyncEventEnabled(eventType)
+      )
+    );
+    if (featureStates.some((enabled) => !enabled)) {
+      return fail("Lô chứa loại đồng bộ đang tạm tắt", 409);
     }
     const requestTypes = new Set(events.map((event) => requestTypeOf(event.payload)));
     if (requestTypes.size !== 1 || requestTypes.has("")) {

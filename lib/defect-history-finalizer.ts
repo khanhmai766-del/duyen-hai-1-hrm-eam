@@ -134,8 +134,9 @@ export async function finalizePendingDefectHistories(
           mappedDeviceUnit: defect.mappedDeviceUnit,
           system: defect.system,
           requestType: pending.requestType || defect.requestType,
-          // Luôn ưu tiên dữ liệu VHV. Nội dung phiếu gốc chỉ bù khi VHV không nhập.
-          content: firstNonBlank(pending.content, defect.content),
+          // Giữ riêng nội dung công tác gốc và nội dung VHV đã thực hiện.
+          defectContent: defect.content,
+          content: firstNonBlank(pending.content, defect.repairPerformedContentRaw),
           requestNumber: defect.requestNumber,
           reminderCount: defect.reminderCount,
           lastRemindedAt: defect.lastRemindedAt,

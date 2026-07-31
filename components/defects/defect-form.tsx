@@ -290,6 +290,10 @@ export function DefectForm({
     const missing = missingGeneral();
     if (missing) { setStep(1); return toast.error(`Vui lòng chọn ${missing}`); }
     if (!form.severity) { setStep(2); return toast.error("Vui lòng chọn Mức độ"); }
+    if (!isEdit && form.severityCriteria.length === 0) {
+      setStep(2);
+      return toast.error("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
+    }
     if (!form.requestType) {
       setStep(3);
       return toast.error("Vui lòng chọn Yêu cầu");
@@ -347,6 +351,10 @@ export function DefectForm({
     const missing = missingGeneral();
     if (missing) { setStep(1); return toast.error(`Vui lòng chọn ${missing}`); }
     if (!form.severity) { setStep(2); return toast.error("Vui lòng chọn Mức độ"); }
+    if (!isEdit && form.severityCriteria.length === 0) {
+      setStep(2);
+      return toast.error("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
+    }
     const {
       deviceSystem: _deviceSystem,
       deviceSystemSeq: _deviceSystemSeq,
@@ -748,7 +756,14 @@ export function DefectForm({
               return (
                 <div className="mt-4 rounded-xl border border-border bg-white p-4 shadow-sm">
                   <div className="border-b border-border pb-3">
-                    <h4 className="font-bold text-ink">{config.title}</h4>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="font-bold text-ink">{config.title}</h4>
+                      {!isEdit && (
+                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+                          Chọn ít nhất 1 tiêu chí
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{config.guidance}</p>
                   </div>
                   <div className="mt-3 space-y-2" role="group" aria-label={`Tiêu chí Mức ${form.severity}`}>

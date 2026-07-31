@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
-import { maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
+import { publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
@@ -21,9 +21,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền cập nhật lịch sử khiếm khuyết");
     const body = await req.json();
-    const images = Array.isArray(body.images)
-      ? await maybeUploadDataUrlList(body.images.filter(Boolean).slice(0, 3), "defect-history/images", "image")
-      : undefined;
     const existing = await prisma.defectHistory.findUnique({ where: { id: params.id } });
     if (!existing) return fail("Không tìm thấy lịch sử khiếm khuyết", 404);
     if (existing.device) await assertSeqEditable(user, existing.device);
@@ -63,9 +60,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         workOrderNumber: body.workOrderNumber !== undefined ? body.workOrderNumber?.trim() || null : undefined,
         performedAt: body.performedAt !== undefined ? (body.performedAt ? parseDateInput(body.performedAt) : undefined) : undefined,
         result: body.result !== undefined ? body.result?.trim() || null : undefined,
+        defectContent: body.defectContent !== undefined ? body.defectContent?.trim() || null : undefined,
         content: body.content !== undefined ? body.content?.trim() || null : undefined,
         requestNumber: body.requestNumber !== undefined ? body.requestNumber?.trim() || null : undefined,
-        images,
       },
       include: INCLUDE,
     });

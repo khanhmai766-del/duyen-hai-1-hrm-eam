@@ -27,6 +27,8 @@ import {
 } from "@/lib/defect-device-mapping";
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
+import { daysSinceSecondReminder, isSeverity2UpgradeCandidate } from "@/lib/defect-severity-upgrade";
+import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +67,13 @@ const LIST_SELECT = {
   cancelledByName: true,
   sourceStatusMismatch: true,
   repairResultRaw: true,
+  reminderCount: true,
+  lastRemindedAt: true,
+  reminderLogs: {
+    orderBy: { occurredAt: "asc" as const },
+    take: 2,
+    select: { occurredAt: true },
+  },
   ktatReviewRaw: true,
   boardDirectionRaw: true,
   note: true,
@@ -152,6 +161,21 @@ function defectQueryTiming(startedAt: number, total: number) {
   return durationMs;
 }
 
+function severityUpgradeInput<T extends {
+  reminderCount: number;
+  lastRemindedAt: Date | null;
+  reminderLogs: Array<{ occurredAt: Date }>;
+}>(defect: T) {
+  return {
+    ...defect,
+    // Phiếu mới có đầy đủ log nên lấy chính xác lần thứ hai. Với dữ liệu nhắc cũ
+    // chưa có log chi tiết, dùng lần nhắc gần nhất làm mốc bảo thủ, tránh gợi ý sớm.
+    secondRemindedAt:
+      defect.reminderLogs[1]?.occurredAt
+      ?? (defect.reminderCount >= 2 ? defect.lastRemindedAt : null),
+  };
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const queryStartedAt = Date.now();
@@ -168,6 +192,7 @@ export async function GET(req: NextRequest) {
     const status = params.get("status")?.trim();
     const severity = params.get("severity")?.trim();
     const mismatch = params.get("mismatch") === "true";
+    const upgradeCandidate = params.get("upgradeCandidate") === "true";
     // "KQ sửa chữa" là chuỗi tự do đồng bộ từ Google Sheet (Đã thực hiện xong, Chờ vật tư,
     // Thuê ngoài…) nên lọc theo giá trị nguyên văn, không map sang enum.
     const repairResult = params.get("repairResult")?.trim();
@@ -284,9 +309,17 @@ export async function GET(req: NextRequest) {
       if (value) repairCount.set(value, (repairCount.get(value) ?? 0) + 1);
     }
     const repairResults = [...repairCount.entries()].sort((a, b) => b[1] - a[1]).map(([value]) => value);
+    const candidateNow = new Date();
+    const upgradeCandidateTotal = base.filter((item) =>
+      isSeverity2UpgradeCandidate(severityUpgradeInput(item), candidateNow)
+    ).length;
 
     const filtered = base
       .filter((item) => {
+        if (
+          upgradeCandidate
+          && !isSeverity2UpgradeCandidate(severityUpgradeInput(item), candidateNow)
+        ) return false;
         if (status && status !== "ALL") {
           if (status === "SOURCE_MISSING") {
             if (!(item.sourceType === "GOOGLE_SHEETS" && item.syncState === "MISSING")) return false;
@@ -316,6 +349,15 @@ export async function GET(req: NextRequest) {
         ].filter(Boolean).join(" ")).includes(query);
       })
       .sort((a, b) => {
+        if (upgradeCandidate) {
+          const reminderDifference = b.reminderCount - a.reminderCount;
+          if (reminderDifference !== 0) return reminderDifference;
+          const ageDifference =
+            daysSinceSecondReminder(severityUpgradeInput(b), candidateNow)
+            - daysSinceSecondReminder(severityUpgradeInput(a), candidateNow);
+          if (ageDifference !== 0) return ageDifference;
+          if (a.severity !== b.severity) return a.severity === "3" ? -1 : 1;
+        }
         const requestA = parseDefectRequestNumber(a.requestNumber);
         const requestB = parseDefectRequestNumber(b.requestNumber);
         if (requestA && requestB) {
@@ -340,7 +382,12 @@ export async function GET(req: NextRequest) {
     const data = ids
       .map((id) => byId.get(id))
       .filter((item): item is NonNullable<typeof item> => !!item)
-      .map((defect) => ({ ...defect, createdBy: publicUserRef(defect.createdBy) }));
+      .map((defect) => ({
+        ...defect,
+        severity2UpgradeCandidate: isSeverity2UpgradeCandidate(severityUpgradeInput(defect), candidateNow),
+        severityUpgradeWaitingDays: daysSinceSecondReminder(severityUpgradeInput(defect), candidateNow),
+        createdBy: publicUserRef(defect.createdBy),
+      }));
 
     const durationMs = defectQueryTiming(queryStartedAt, total);
     return ok(data, {
@@ -349,6 +396,7 @@ export async function GET(req: NextRequest) {
       limit,
       totalPages,
       scopeTotal,
+      upgradeCandidateTotal,
       kpi,
       repairResults,
       queryMode: "compatibility",
@@ -361,6 +409,9 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-manage", ["personal", "manage", "full"], "Không đủ quyền ghi nhận khiếm khuyết");
+    if (!(await isDefectSyncFeatureEnabled("CREATE"))) {
+      return fail("Tính năng thêm mới khiếm khuyết từ website đang tạm khóa", 503);
+    }
     const body = await req.json();
 
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
@@ -421,6 +472,10 @@ export async function POST(req: NextRequest) {
     if (!requestType) return fail("Vui lòng chọn loại phiếu");
     const content = String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
+    const severity = String(body.severity ?? "").trim();
+    if (!["1", "2", "3", "4"].includes(severity)) return fail("Vui lòng chọn mức độ khiếm khuyết");
+    const severityCriteria = normalizeDefectSeverityCriteria(severity, body.severityCriteria);
+    if (severityCriteria.length === 0) return fail("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
 
     const defect = await prisma.$transaction(async (tx) => {
       const requestNumber = await nextDefectRequestNumber(tx, requestYear, requestType);
@@ -433,8 +488,8 @@ export async function POST(req: NextRequest) {
           mappedDeviceUnit: deviceSeq ? mappedDeviceUnit : null,
           system: body.system || null,
           positionCode: positionCodeOf(body.system),
-          severity: body.severity || null,
-          severityCriteria: normalizeDefectSeverityCriteria(body.severity, body.severityCriteria),
+          severity,
+          severityCriteria,
           condition: body.condition || null,
           requestType,
           requestNumber,

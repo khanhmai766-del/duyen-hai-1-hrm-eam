@@ -643,7 +643,8 @@ model DefectHistory {
   workOrderNumber String? // Số phiếu công tác thực hiện
   performedAt     DateTime // Ngày thực hiện
   result          String? // Kết quả thực hiện
-  content         String? // Nội dung khiếm khuyết (snapshot)
+  defectContent   String? // Nội dung công tác từ phiếu khiếm khuyết (snapshot)
+  content         String? // Nội dung thực hiện
   requestNumber   String? // Số yêu cầu (snapshot)
   reminderCount   Int       @default(0) // Số lần nhắc lại (snapshot)
   lastRemindedAt  DateTime? // Thời điểm nhắc lại gần nhất (snapshot)
@@ -736,11 +737,14 @@ model DefectSyncSeen {
 // giai đoạn phát triển sau; hiện tại luồng đồng bộ chỉ đọc một chiều Sheet → DB.
 // Bảng chỉ có một dòng duy nhất (id cố định "singleton"), mặc định tắt.
 model DefectSyncSetting {
-  id                String   @id @default("singleton")
-  twoWaySyncEnabled Boolean  @default(false)
-  updatedAt         DateTime @updatedAt
-  updatedById       String?
-  updatedByName     String?
+  id                     String   @id @default("singleton")
+  twoWaySyncEnabled      Boolean  @default(false)
+  operationUpdateEnabled Boolean  @default(true)
+  websiteCreateEnabled   Boolean  @default(false)
+  websiteRemindEnabled   Boolean  @default(false)
+  updatedAt              DateTime @updatedAt
+  updatedById            String?
+  updatedByName          String?
 }
 
 // Bộ cấp STT phiếu khiếm khuyết theo năm phát hiện và loại phiếu. Cơ/Điện có

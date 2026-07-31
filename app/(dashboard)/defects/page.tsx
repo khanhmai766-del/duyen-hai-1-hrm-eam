@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -18,13 +18,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectSyncStatus, useRemindDefect, useSyncDefects, type DefectItem } from "@/hooks/useDefects";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectSyncStatus, useDefectTwoWaySync, useRemindDefect, useSyncDefects, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
   DEFECT_SEVERITY,
   DEFECT_SEVERITY_ORDER,
+  DEFECT_SEVERITY_CRITERIA,
   DEFECT_REQUEST_TYPES,
   isSelectableManagingPosition,
 } from "@/lib/constants";
@@ -281,7 +283,9 @@ export default function DefectsPage() {
   const positionFromUrl = searchParams.get("position")?.trim();
   const statusFromUrl = searchParams.get("status")?.trim();
   const severityFromUrl = searchParams.get("severity")?.trim();
+  const repairResultFromUrl = searchParams.get("repairResult")?.trim();
   const mismatchFromUrl = searchParams.get("mismatch") === "true";
+  const upgradeCandidateFromUrl = searchParams.get("upgradeCandidate") === "true";
   const searchFromUrl = searchParams.get("q")?.trim();
   const pageSizeFromUrl = Number.parseInt(searchParams.get("limit") ?? "", 10);
   const pageFromUrl = Number.parseInt(searchParams.get("page") ?? "", 10);
@@ -306,6 +310,17 @@ export default function DefectsPage() {
   const canRunSync = rbac.can("defect-manage", ["full"]);
   const canViewSync = rbac.can("defect-manage", ["manage", "full"]);
   const canManageTwoWaySync = rbac.can("defect-two-way-sync", ["full"]);
+  const twoWaySync = useDefectTwoWaySync();
+  const syncFeatures = twoWaySync.data?.data;
+  const operationUpdateAvailable = Boolean(
+    syncFeatures?.twoWaySyncEnabled && syncFeatures.operationUpdateEnabled
+  );
+  const websiteCreateAvailable = Boolean(
+    syncFeatures?.twoWaySyncEnabled && syncFeatures.websiteCreateEnabled
+  );
+  const websiteRemindAvailable = Boolean(
+    syncFeatures?.twoWaySyncEnabled && syncFeatures.websiteRemindEnabled
+  );
   const syncStatus = useDefectSyncStatus(canViewSync);
   const latestSyncRun = syncStatus.data?.data?.[0];
   const syncRunning = latestSyncRun?.status === "RUNNING";
@@ -335,16 +350,17 @@ export default function DefectsPage() {
   const positions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
-  // Tổ máy không có "Tất cả" — mặc định S1.
-  const [unitFilter, setUnitFilter] = React.useState<"S1" | "S2" | "COMMON">(
-    unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
+  // Mặc định S1; người dùng có thể chọn ALL để xem toàn bộ tổ máy.
+  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">(
+    unitFromUrl === "ALL" || unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
   );
   const [requestFilter, setRequestFilter] = React.useState(requestFromUrl || "Cơ");
   const [positionFilter, setPositionFilter] = React.useState(positionFromUrl || "ALL");
   const [statusFilter, setStatusFilter] = React.useState(statusFromUrl || "ALL");
   const [severityFilter, setSeverityFilter] = React.useState(severityFromUrl || "ALL");
-  const [repairResultFilter, setRepairResultFilter] = React.useState("ALL");
+  const [repairResultFilter, setRepairResultFilter] = React.useState(repairResultFromUrl || "ALL");
   const [mismatchOnly, setMismatchOnly] = React.useState(mismatchFromUrl);
+  const [upgradeCandidatesOnly, setUpgradeCandidatesOnly] = React.useState(upgradeCandidateFromUrl);
   const [tableSearch, setTableSearch] = React.useState(searchFromUrl || "");
   const [pageSize, setPageSize] = React.useState(
     PAGE_SIZES.includes(pageSizeFromUrl) ? pageSizeFromUrl : 10
@@ -362,10 +378,11 @@ export default function DefectsPage() {
     severity: severityFilter,
     repairResult: repairResultFilter,
     mismatch: mismatchOnly,
+    upgradeCandidate: upgradeCandidatesOnly,
     q: deferredSearch,
     deviceSeq: deviceSeqFilter,
     includeDescendants,
-  }), [page, pageSize, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
+  }), [page, pageSize, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
   const { data, isLoading, isFetching } = useDefects(listParams);
   const pagedDefects = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
@@ -388,7 +405,9 @@ export default function DefectsPage() {
     if (positionFilter !== "ALL") query.set("position", positionFilter);
     if (statusFilter !== "ALL") query.set("status", statusFilter);
     if (severityFilter !== "ALL") query.set("severity", severityFilter);
+    if (repairResultFilter !== "ALL") query.set("repairResult", repairResultFilter);
     if (mismatchOnly) query.set("mismatch", "true");
+    if (upgradeCandidatesOnly) query.set("upgradeCandidate", "true");
     if (deferredSearch) query.set("q", deferredSearch);
     if (pageSize !== 10) query.set("limit", String(pageSize));
     if (page > 1) query.set("page", String(page));
@@ -400,17 +419,19 @@ export default function DefectsPage() {
     includeDescendants,
     mappedUnitFilter,
     mismatchOnly,
+    upgradeCandidatesOnly,
     page,
     pageSize,
     positionFilter,
     requestFilter,
+    repairResultFilter,
     router,
     severityFilter,
     statusFilter,
     unitFilter,
   ]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || upgradeCandidatesOnly || tableSearch.trim() !== "";
   function resetFilters() {
     router.replace("/defects", { scroll: false });
     setUnitFilter("S1");
@@ -420,6 +441,7 @@ export default function DefectsPage() {
     setSeverityFilter("ALL");
     setRepairResultFilter("ALL");
     setMismatchOnly(false);
+    setUpgradeCandidatesOnly(false);
     setTableSearch("");
   }
 
@@ -430,7 +452,7 @@ export default function DefectsPage() {
       {
         key: "unit",
         label: "Tổ máy",
-        value: unitFilter === "COMMON" ? "Common" : unitFilter,
+        value: unitFilter === "ALL" ? "Tất cả" : unitFilter === "COMMON" ? "Common" : unitFilter,
         onClear: unitFilter !== "S1" ? () => setUnitFilter("S1") : undefined,
       },
       {
@@ -488,6 +510,7 @@ export default function DefectsPage() {
   const [cancelNote, setCancelNote] = React.useState("Vận hành hủy phiếu");
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
   const [remindTarget, setRemindTarget] = React.useState<DefectItem | null>(null);
+  const [upgradeTarget, setUpgradeTarget] = React.useState<DefectItem | null>(null);
   const [remindShiftLeaderId, setRemindShiftLeaderId] = React.useState("");
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = React.useState<string | null>(null);
@@ -518,7 +541,7 @@ export default function DefectsPage() {
   React.useEffect(() => {
     setExpandedId(null);
     setPage(1);
-  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, tableSearch, pageSize]);
+  }, [deviceSeqFilter, unitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, tableSearch, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -542,7 +565,7 @@ export default function DefectsPage() {
             }}
           />
         )}
-        {canCreate && (
+        {canCreate && websiteCreateAvailable && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Thêm mới
           </Button>
@@ -577,7 +600,7 @@ export default function DefectsPage() {
         <DefectFilterBar
           search={tableSearch}
           onSearchChange={setTableSearch}
-          units={["S1", "S2", "COMMON"]}
+          units={["ALL", "S1", "S2", "COMMON"]}
           unit={unitFilter}
           onUnitChange={(value) => setUnitFilter(value as typeof unitFilter)}
           dropdowns={[
@@ -597,19 +620,6 @@ export default function DefectsPage() {
               onChange: setPositionFilter,
             },
             {
-              label: "KQ sửa chữa",
-              value: repairResultFilter,
-              // Danh sách dựng động từ dữ liệu thực (cột đồng bộ từ Google Sheet, không
-              // phải enum cố định) — giữ lại giá trị đang chọn kể cả khi nó rơi khỏi tập
-              // hiện tại để dropdown không mất mục đang lọc.
-              options: Array.from(
-                new Set([...(data?.meta?.repairResults ?? []), ...(repairResultFilter !== "ALL" ? [repairResultFilter] : [])])
-              ).map((value) => ({ value, label: value })),
-              allValue: "ALL",
-              allLabel: "Tất cả kết quả sửa chữa",
-              onChange: setRepairResultFilter,
-            },
-            {
               label: "Mức độ",
               value: severityFilter,
               options: DEFECT_SEVERITY_ORDER.map((s) => ({ value: s, label: DEFECT_SEVERITY[s] })),
@@ -623,6 +633,10 @@ export default function DefectsPage() {
           scopeTotal={scopeTotal}
           mismatchOnly={mismatchOnly}
           onMismatchOnlyChange={setMismatchOnly}
+          upgradeCandidatesOnly={upgradeCandidatesOnly}
+          onUpgradeCandidatesOnlyChange={setUpgradeCandidatesOnly}
+          upgradeCandidateTotal={data?.meta?.upgradeCandidateTotal ?? 0}
+          showUpgradeCandidates={canManage && operationUpdateAvailable}
           canReset={isFiltered}
           onReset={resetFilters}
         />
@@ -644,7 +658,7 @@ export default function DefectsPage() {
             icon={ShieldAlert}
             title="Chưa có khiếm khuyết"
             description="Nhấn “Thêm mới” để ghi nhận khiếm khuyết thiết bị."
-            action={canCreate ? { label: "Thêm mới", onClick: openCreate } : undefined}
+            action={canCreate && websiteCreateAvailable ? { label: "Thêm mới", onClick: openCreate } : undefined}
           />
         ) : (
           <EmptyState
@@ -669,7 +683,18 @@ export default function DefectsPage() {
                     chỉ còn là nhãn, không kèm phễu lọc riêng nữa. */}
                 <TableHead className="w-[68px] px-1 text-center">Mức độ</TableHead>
                 <TableHead className="w-[112px] px-1 text-center">Vận hành</TableHead>
-                <TableHead className="w-[120px] px-1.5 text-center">Sửa chữa</TableHead>
+                <TableHead className="w-[120px] px-1.5 text-center">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span>Sửa chữa</span>
+                    <RepairResultColumnFilter
+                      value={repairResultFilter}
+                      options={Array.from(
+                        new Set([...(data?.meta?.repairResults ?? []), ...(repairResultFilter !== "ALL" ? [repairResultFilter] : [])])
+                      )}
+                      onChange={setRepairResultFilter}
+                    />
+                  </div>
+                </TableHead>
                 <TableHead className="w-[64px] px-1 text-center">Nhắc lại</TableHead>
                 <TableHead className="w-[84px] px-1 text-center">Phát hiện</TableHead>
                 <TableHead className="w-[72px] px-1 text-center">Cập nhật</TableHead>
@@ -755,7 +780,23 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-1 py-3 text-center">
                         {d.severity ? (
-                          <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
+                          <div className="flex items-center justify-center gap-1">
+                            <span title={DEFECT_SEVERITY[d.severity as keyof typeof DEFECT_SEVERITY]} className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", SEVERITY_TONE[d.severity] ?? "bg-muted text-ink")}>{d.severity}</span>
+                            {canManage && operationUpdateAvailable && d.severity2UpgradeCandidate && (
+                              <button
+                                type="button"
+                                title="Phiếu đủ điều kiện xem xét nâng lên Mức 2"
+                                aria-label="Xem xét nâng khiếm khuyết lên Mức 2"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setUpgradeTarget(d);
+                                }}
+                                className="flex h-6 w-6 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.75} />
+                              </button>
+                            )}
+                          </div>
                         ) : "—"}
                       </TableCell>
                       <TableCell className="px-1 py-3 text-center">
@@ -819,7 +860,7 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-1 py-3">
                         <div className="flex items-center justify-center gap-0">
-                          {canClose && awaitingHistoryConfirmation && (
+                          {canClose && operationUpdateAvailable && awaitingHistoryConfirmation && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               title="Lưu lịch sử"
@@ -833,7 +874,7 @@ export default function DefectsPage() {
                               <span>Lưu lịch sử</span>
                             </Button>
                           )}
-                          {canClose && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
+                          {canClose && operationUpdateAvailable && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               variant="ghost"
@@ -849,10 +890,10 @@ export default function DefectsPage() {
                               <CheckCircle2 className="h-4 w-4" />
                             </Button>
                           )}
-                          {canManage && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated || !!d.deviceSeq) && d.status !== "DA_XU_LY" && (
+                          {canManage && websiteRemindAvailable && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated || !!d.deviceSeq) && d.status !== "DA_XU_LY" && (
                             <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindShiftLeaderId(""); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
-                          {canClose && d.pendingHistory && (
+                          {canClose && operationUpdateAvailable && d.pendingHistory && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               variant="ghost"
@@ -868,10 +909,10 @@ export default function DefectsPage() {
                               <FileClock className="h-4 w-4" />
                             </Button>
                           )}
-                          {canManage && (
+                          {canManage && operationUpdateAvailable && (
                             <Button disabled={detailLoadingId === d.id} variant="ghost" size="icon" title={d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated ? "Ánh xạ / cập nhật Vận hành" : "Sửa"} className="h-7 w-7" onClick={(e) => { e.stopPropagation(); void openEdit(d); }}><Pencil className="h-4 w-4" /></Button>
                           )}
-                          {canManage && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
+                          {canManage && operationUpdateAvailable && !d.cancelledAt && !d.pendingHistory && d.status !== "DA_XU_LY" && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -964,6 +1005,7 @@ export default function DefectsPage() {
       )}
 
       <CompleteDefectDialog defect={completeTarget} onClose={() => setCompleteTarget(null)} />
+      <SeverityUpgradeDialog target={upgradeTarget} onClose={() => setUpgradeTarget(null)} />
 
       <ConfirmDialog
         open={!!remindTarget}
@@ -1252,6 +1294,175 @@ const KPI_TONES = {
   green: { bg: "from-emerald-50 to-emerald-100", num: "text-emerald-700", icon: "text-emerald-500", shadow: "shadow-emerald-500/25 hover:shadow-emerald-500/40" },
   violet: { bg: "from-violet-50 to-violet-100", num: "text-violet-600", icon: "text-violet-400", shadow: "shadow-violet-500/25 hover:shadow-violet-500/40" },
 } as const;
+
+function RepairResultColumnFilter({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  const active = value !== "ALL";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Lọc theo kết quả sửa chữa"
+          title={active ? `Đang lọc: ${value}` : "Lọc theo kết quả sửa chữa"}
+          className={cn(
+            "flex h-6 w-7 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
+            active
+              ? "border-blue-300 bg-blue-100 text-accent shadow-sm"
+              : "border-border bg-white text-muted-foreground hover:border-blue-300 hover:bg-blue-50 hover:text-accent"
+          )}
+        >
+          <Filter className="h-3.5 w-3.5" fill={active ? "currentColor" : "none"} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="max-h-[320px] w-[280px] overflow-y-auto">
+        <DropdownMenuLabel>Kết quả sửa chữa</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onChange("ALL")} className="gap-2">
+          <Check className={cn("h-4 w-4", value === "ALL" ? "opacity-100" : "opacity-0")} />
+          Tất cả kết quả sửa chữa
+        </DropdownMenuItem>
+        {options.map((option) => (
+          <DropdownMenuItem key={option} onSelect={() => onChange(option)} className="gap-2">
+            <Check className={cn("h-4 w-4 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
+            <span className="whitespace-normal">{option}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SeverityUpgradeDialog({
+  target,
+  onClose,
+}: {
+  target: DefectItem | null;
+  onClose: () => void;
+}) {
+  const update = useUpdateDefect();
+  const [criteria, setCriteria] = React.useState<string[]>(["2a"]);
+  const options = DEFECT_SEVERITY_CRITERIA["2"].options;
+
+  React.useEffect(() => {
+    if (target) setCriteria(["2a"]);
+  }, [target]);
+
+  function toggleCriterion(id: string) {
+    setCriteria((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  }
+
+  async function confirmUpgrade() {
+    if (!target) return;
+    if (criteria.length === 0) {
+      toast.error("Vui lòng chọn ít nhất 1 tiêu chí Mức 2");
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        id: target.id,
+        severity: "2",
+        severityCriteria: criteria,
+      });
+      toast.success(`Đã nâng phiếu${target.requestNumber ? ` ${target.requestNumber}` : ""} lên Mức 2`);
+      onClose();
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-ink">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+              <ArrowUp className="h-4 w-4" strokeWidth={2.75} />
+            </span>
+            Xem xét nâng lên Mức 2
+          </DialogTitle>
+          <DialogDescription>
+            Phiếu đủ điều kiện gợi ý; người có quyền xác nhận mức độ phù hợp.
+          </DialogDescription>
+        </DialogHeader>
+
+        {target && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-center">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Mức hiện tại</div>
+                <div className="mt-1 text-xl font-black text-amber-900">Mức {target.severity}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Sau nhắc lần 2</div>
+                <div className="mt-1 text-xl font-black text-amber-900">{target.severityUpgradeWaitingDays ?? 0} ngày</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Đã nhắc</div>
+                <div className="mt-1 text-xl font-black text-amber-900">{target.reminderCount} lần</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-bold text-ink">Tiêu chí Mức 2</span>
+                <span className="text-xs font-semibold text-rose-700">Chọn ít nhất 1 tiêu chí</span>
+              </div>
+              <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
+                {options.map((option) => {
+                  const checked = criteria.includes(option.id);
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => toggleCriterion(option.id)}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-sm leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                        checked
+                          ? "border-blue-300 bg-blue-50 text-ink"
+                          : "border-border bg-white text-ink hover:bg-muted/50"
+                      )}
+                    >
+                      <span className={cn(
+                        "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                        checked ? "border-navy bg-navy text-white" : "border-input bg-white text-transparent"
+                      )}>
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                      <span>{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Để sau</Button>
+          <Button
+            onClick={confirmUpgrade}
+            disabled={update.isPending}
+            className="bg-amber-600 text-white hover:bg-amber-700 focus-visible:ring-amber-500"
+          >
+            {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+            Xác nhận nâng Mức 2
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /**
  * KPI card 3D: nghiêng theo con trỏ (perspective tilt), phân lớp chiều sâu
