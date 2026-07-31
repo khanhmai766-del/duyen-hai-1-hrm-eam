@@ -7,7 +7,6 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
-import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 const HISTORY_PENDING_DAYS = 14;
 const HISTORY_COMPLETED_PENDING_DAYS = 4;
@@ -30,9 +29,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-close", ["manage", "full"], "Không đủ quyền hoàn thành phiếu khiếm khuyết");
-    if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
-      return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa", 503);
-    }
     const body = await req.json().catch(() => ({}));
 
     const defect = await prisma.defect.findUnique({
@@ -204,9 +200,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ["manage", "full"],
       "Không đủ quyền sửa thông tin lịch sử"
     );
-    if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
-      return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa", 503);
-    }
     const body = await req.json().catch(() => ({}));
     const defect = await prisma.defect.findUnique({
       where: { id: params.id },

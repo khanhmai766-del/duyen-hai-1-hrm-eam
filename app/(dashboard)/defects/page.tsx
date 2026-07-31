@@ -860,7 +860,7 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-1 py-3">
                         <div className="flex items-center justify-center gap-0">
-                          {canClose && operationUpdateAvailable && awaitingHistoryConfirmation && (
+                          {canClose && awaitingHistoryConfirmation && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               title="Lưu lịch sử"
@@ -874,7 +874,7 @@ export default function DefectsPage() {
                               <span>Lưu lịch sử</span>
                             </Button>
                           )}
-                          {canClose && operationUpdateAvailable && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
+                          {canClose && d.sourceType !== "GOOGLE_SHEETS" && !d.websiteCreated && d.status !== "DA_XU_LY" && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               variant="ghost"
@@ -893,7 +893,7 @@ export default function DefectsPage() {
                           {canManage && websiteRemindAvailable && (d.sourceType !== "GOOGLE_SHEETS" || d.websiteCreated || !!d.deviceSeq) && d.status !== "DA_XU_LY" && (
                             <Button variant="ghost" size="icon" title="Nhắc lại" className="h-7 w-7 text-muted-foreground hover:bg-amber-50 hover:text-amber-700" onClick={(e) => { e.stopPropagation(); setRemindShiftLeaderId(""); setRemindTarget(d); }}><BellRing className="h-4 w-4" /></Button>
                           )}
-                          {canClose && operationUpdateAvailable && d.pendingHistory && (
+                          {canClose && d.pendingHistory && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               variant="ghost"
