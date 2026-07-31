@@ -21,5 +21,9 @@ export async function canBypassEquipmentPositionScope(
   value: string | null | undefined
 ) {
   const permissionId = materialEquipmentPermission(value);
+  // Theo dõi/thay thế vật tư luôn bám phạm vi cương vị. Chỉ ADMIN đang ở chế
+  // độ QT còn giữ role ADMIN; khi chuyển NV requireUser hạ role hiệu lực xuống
+  // MANAGER nên cây thiết bị tự thu hẹp đúng cương vị đang làm việc.
+  if (permissionId === "replacement-manage") return user.role === "ADMIN";
   return permissionId ? hasAssignedManagePermission(user, permissionId) : false;
 }

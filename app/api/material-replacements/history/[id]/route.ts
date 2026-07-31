@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { canEditMaterialReplacement } from "@/lib/material-replacement-access";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,10 @@ async function assertCanEditLog(user: Awaited<ReturnType<typeof requireUser>>, i
     include: { replacement: { select: { id: true, deviceSeq: true, system: true } } },
   });
   if (!log) throw fail("Không tìm thấy ghi nhận thay thế", 404);
+  const access = await resolveEquipmentAccessForUser(user);
+  if (!log.replacement || !canEditMaterialReplacement(access, log.replacement)) {
+    throw fail("Cương vị của bạn không có quyền thao tác lịch sử thay thế này", 403);
+  }
   return log;
 }
 

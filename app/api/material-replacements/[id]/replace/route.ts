@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { canEditMaterialReplacement } from "@/lib/material-replacement-access";
 
 /**
  * Ghi nhận một lần thay thế vật tư tại điểm thay thế (chỉ ADMIN/Trưởng ca):
@@ -21,6 +23,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       include: { material: { select: { id: true, code: true, quantity: true } } },
     });
     if (!point) return fail("Không tìm thấy điểm thay thế", 404);
+    const access = await resolveEquipmentAccessForUser(user);
+    if (!canEditMaterialReplacement(access, point)) {
+      return fail("Cương vị của bạn không có quyền ghi nhận thay thế tại điểm này", 403);
+    }
 
     const replacedAt = body.replacedAt ? parseDateInput(body.replacedAt) : new Date();
     const qty = body.quantity != null && body.quantity !== "" ? Number(body.quantity) : null;
