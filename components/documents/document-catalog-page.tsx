@@ -740,27 +740,11 @@ export function DocumentCatalogPage({
       </PageHeader>
       {afterHeader}
 
-      {!hideToolbar && (
+      {/* Thanh lọc chỉ còn các bộ lọc; ô tìm kiếm chuyển xuống thanh công cụ
+          ngay trên bảng, giống trang Lịch sử sửa chữa. */}
+      {!hideToolbar && (hasTagField || hasYearField || showEquipmentScope) && (
       <Card className="p-4">
-        <div
-          className={cn(
-            "grid gap-3",
-            hasYearField || hasTagField
-              ? "xl:grid-cols-[1fr_auto]"
-              : hasProcedureValidity
-              ? "xl:grid-cols-[1fr_220px_180px_190px]"
-              : "xl:grid-cols-[1fr_220px_190px]"
-          )}
-        >
-          <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(event) => setQ(event.target.value)}
-            className="pl-9"
-            placeholder={`Tìm theo ${nameLabel.toLowerCase()}, số hiệu, link tài liệu...`}
-          />
-          </div>
+        <div className="flex flex-wrap items-center gap-3">
           {(hasTagField || hasYearField) && (
             <div className="flex flex-wrap items-center gap-2">
               {beforeTagFilter}
@@ -801,7 +785,7 @@ export function DocumentCatalogPage({
           {showEquipmentScope && (
             <>
               <Select value={positionFilter} onValueChange={setPositionFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full sm:w-[220px]">
                   <SelectValue placeholder={hasProcedureValidity ? "Lọc quy trình theo cương vị" : "Lọc cương vị"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -815,7 +799,7 @@ export function DocumentCatalogPage({
               </Select>
               {hasProcedureValidity && (
                 <Select value={procedureTypeFilter} onValueChange={setProcedureTypeFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Loại QT" />
                   </SelectTrigger>
                   <SelectContent>
@@ -829,7 +813,7 @@ export function DocumentCatalogPage({
                 </Select>
               )}
               <Select value={blockFilter} onValueChange={setBlockFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full sm:w-[190px]">
                   <SelectValue placeholder="Lọc khối quản lý" />
                 </SelectTrigger>
                 <SelectContent>
@@ -851,6 +835,46 @@ export function DocumentCatalogPage({
         customContent
       ) : (
       <Card className="overflow-hidden">
+        {/* Thanh công cụ của bảng: số dòng bên trái, tìm kiếm bên phải — cùng
+            bố cục với bảng Lịch sử sửa chữa. */}
+        {!hideToolbar && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-3">
+            {showPaginationFooter ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Hiển thị</span>
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setPageIndex(1);
+                    setExpandedId(null);
+                  }}
+                  className="h-8 rounded-lg border border-input bg-white px-2 text-sm font-medium text-ink"
+                  aria-label="Số dòng mỗi trang"
+                >
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                <span>dòng</span>
+              </div>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Tìm kiếm:</span>
+              <div className="relative w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={q}
+                  onChange={(event) => setQ(event.target.value)}
+                  className="h-9 rounded-xl pl-9"
+                  placeholder={`Tìm theo ${nameLabel.toLowerCase()}, số hiệu...`}
+                />
+              </div>
+            </div>
+          </div>
+        )}
         <div className={cn((historyTableLayout || wideNameNarrowLinkLayout) && "overflow-x-auto")}>
         <Table className={cn(historyTableLayout && "min-w-[900px] table-fixed", wideNameNarrowLinkLayout && "min-w-[1120px] table-fixed", hasIssueDateField && "min-w-[1260px] table-fixed", hasProcedureValidity && "min-w-[1280px] table-fixed")}>
           {/* Đầu bảng nền xanh EVN, đồng bộ với bảng Lịch sử sửa chữa. Đặt màu
@@ -1213,28 +1237,8 @@ export function DocumentCatalogPage({
             <div>
               Hiển thị {displayFrom}-{displayTo} trong tổng số {rows.length} bản ghi
             </div>
+            {/* Ô chọn số dòng đã chuyển lên thanh công cụ đầu bảng. */}
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <span>Hiển thị</span>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  setPageIndex(1);
-                  setExpandedId(null);
-                }}
-              >
-                <SelectTrigger className="h-9 w-[72px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZE_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span>dòng</span>
               <Button
                 type="button"
                 variant="outline"
