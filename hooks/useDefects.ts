@@ -12,6 +12,15 @@ export interface DefectSyncTrafficMetrics {
   todaySuccess: number;
   todayFailed: number;
   waiting: number;
+  queued: number;
+  processing: number;
+  queuedUpdate: number;
+  queuedCreate: number;
+  queuedRemind: number;
+  processingUpdate: number;
+  processingCreate: number;
+  processingRemind: number;
+  oldestWaitingAt: string | null;
   averageDurationMs: number | null;
 }
 
@@ -214,10 +223,11 @@ export function useDefectTwoWaySync(enabled = true) {
 export function useSetDefectTwoWaySync() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, enabled }: {
+    mutationFn: ({ key, enabled, pendingAction }: {
       key: "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled";
       enabled: boolean;
-    }) => apiMutate<DefectTwoWaySyncStatus>("/api/defects/two-way-sync", "PUT", { key, enabled }),
+      pendingAction?: "resume" | "discard";
+    }) => apiMutate<DefectTwoWaySyncStatus>("/api/defects/two-way-sync", "PUT", { key, enabled, pendingAction }),
     onSuccess: (setting) => qc.setQueryData(["defect-two-way-sync"], { data: setting, meta: undefined }),
   });
 }

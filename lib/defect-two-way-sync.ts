@@ -55,13 +55,15 @@ export async function isDefectSyncEventEnabled(eventType: string) {
 export async function getDefectSyncTrafficMetrics() {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  const [todayRows, waiting] = await Promise.all([
+  const [todayRows, waitingRows] = await Promise.all([
     prisma.defectSyncOutbox.findMany({
       where: { createdAt: { gte: startOfToday } },
       select: { eventType: true, status: true, createdAt: true, completedAt: true },
     }),
-    prisma.defectSyncOutbox.count({
+    prisma.defectSyncOutbox.findMany({
       where: { status: { in: ["PENDING", "PROCESSING", "FAILED"] } },
+      orderBy: { createdAt: "asc" },
+      select: { eventType: true, status: true, createdAt: true },
     }),
   ]);
   const successfulDurations = todayRows.flatMap((row) =>
@@ -79,7 +81,16 @@ export async function getDefectSyncTrafficMetrics() {
     todayRemind: count((row) => row.eventType === "REMIND"),
     todaySuccess: count((row) => row.status === "SUCCESS"),
     todayFailed: count((row) => row.status === "FAILED"),
-    waiting,
+    waiting: waitingRows.length,
+    queued: waitingRows.filter((row) => row.status !== "PROCESSING").length,
+    processing: waitingRows.filter((row) => row.status === "PROCESSING").length,
+    queuedUpdate: waitingRows.filter((row) => row.status !== "PROCESSING" && row.eventType === "UPDATE").length,
+    queuedCreate: waitingRows.filter((row) => row.status !== "PROCESSING" && row.eventType === "CREATE").length,
+    queuedRemind: waitingRows.filter((row) => row.status !== "PROCESSING" && row.eventType === "REMIND").length,
+    processingUpdate: waitingRows.filter((row) => row.status === "PROCESSING" && row.eventType === "UPDATE").length,
+    processingCreate: waitingRows.filter((row) => row.status === "PROCESSING" && row.eventType === "CREATE").length,
+    processingRemind: waitingRows.filter((row) => row.status === "PROCESSING" && row.eventType === "REMIND").length,
+    oldestWaitingAt: waitingRows[0]?.createdAt ?? null,
     averageDurationMs: successfulDurations.length
       ? Math.round(successfulDurations.reduce((sum, value) => sum + value, 0) / successfulDurations.length)
       : null,

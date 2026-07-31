@@ -6,6 +6,14 @@ import { RefreshCw, ChevronDown, CloudDownload, History, Activity, Pencil, Plus,
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useDefectTwoWaySync, useSetDefectTwoWaySync } from "@/hooks/useDefects";
 import { cn } from "@/lib/utils";
 
@@ -221,20 +229,53 @@ function TwoWayWarnDot({ enabled }: { enabled: boolean }) {
 function TwoWaySyncRow() {
   const query = useDefectTwoWaySync();
   const setEnabled = useSetDefectTwoWaySync();
+  type SettingKey = "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled";
+  const [queueDecision, setQueueDecision] = React.useState<{
+    key: SettingKey;
+    label: string;
+    count: number;
+  } | null>(null);
   const setting = query.data?.data;
   const enabled = setting?.twoWaySyncEnabled ?? false;
 
   async function toggle(
-    key: "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled",
+    key: SettingKey,
     current: boolean,
-    label: string
+    label: string,
+    pendingAction?: "resume" | "discard"
   ) {
     try {
-      await setEnabled.mutateAsync({ key, enabled: !current });
+      await setEnabled.mutateAsync({ key, enabled: !current, pendingAction });
+      setQueueDecision(null);
       toast.success(`Đã ${!current ? "bật" : "tắt"} ${label}`);
     } catch (error) {
       toast.error((error as Error).message);
     }
+  }
+
+  function requestToggle(key: SettingKey, current: boolean, label: string) {
+    if (current) {
+      void toggle(key, true, label);
+      return;
+    }
+    const metricKeys = {
+      twoWaySyncEnabled: ["queued", "processing"],
+      operationUpdateEnabled: ["queuedUpdate", "processingUpdate"],
+      websiteCreateEnabled: ["queuedCreate", "processingCreate"],
+      websiteRemindEnabled: ["queuedRemind", "processingRemind"],
+    } as const;
+    const [queuedKey, processingKey] = metricKeys[key];
+    const queued = setting?.metrics[queuedKey] ?? 0;
+    const processing = setting?.metrics[processingKey] ?? 0;
+    if (processing > 0) {
+      toast.error(`Còn ${processing} thay đổi đang xử lý, chưa thể bật lại`);
+      return;
+    }
+    if (queued > 0) {
+      setQueueDecision({ key, label, count: queued });
+      return;
+    }
+    void toggle(key, false, label);
   }
 
   return (
@@ -245,7 +286,7 @@ function TwoWaySyncRow() {
           description="Công tắc tổng cho chiều DH1 → Google Sheet"
           enabled={enabled}
           loading={query.isLoading || setEnabled.isPending}
-          onToggle={() => toggle("twoWaySyncEnabled", enabled, "đồng bộ hai chiều")}
+          onToggle={() => requestToggle("twoWaySyncEnabled", enabled, "đồng bộ hai chiều")}
         />
         <div className="mt-3 space-y-2 border-t border-blue-200/70 pt-3">
           <FeatureToggle
@@ -255,7 +296,7 @@ function TwoWaySyncRow() {
             enabled={setting?.operationUpdateEnabled ?? false}
             loading={query.isLoading || setEnabled.isPending}
             disabled={!enabled}
-            onToggle={() => toggle(
+            onToggle={() => requestToggle(
               "operationUpdateEnabled",
               setting?.operationUpdateEnabled ?? false,
               "Cập nhật Vận hành"
@@ -268,7 +309,7 @@ function TwoWaySyncRow() {
             enabled={setting?.websiteCreateEnabled ?? false}
             loading={query.isLoading || setEnabled.isPending}
             disabled={!enabled}
-            onToggle={() => toggle(
+            onToggle={() => requestToggle(
               "websiteCreateEnabled",
               setting?.websiteCreateEnabled ?? false,
               "Thêm mới từ website"
@@ -281,7 +322,7 @@ function TwoWaySyncRow() {
             enabled={setting?.websiteRemindEnabled ?? false}
             loading={query.isLoading || setEnabled.isPending}
             disabled={!enabled}
-            onToggle={() => toggle(
+            onToggle={() => requestToggle(
               "websiteRemindEnabled",
               setting?.websiteRemindEnabled ?? false,
               "Nhắc lại từ website"
@@ -316,6 +357,52 @@ function TwoWaySyncRow() {
           </div>
         </div>
       )}
+
+      <Dialog
+        open={queueDecision !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setQueueDecision(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Còn thay đổi cũ chưa gửi</DialogTitle>
+            <DialogDescription>
+              Hàng đợi đang có {queueDecision?.count ?? 0} thay đổi thuộc tính năng này
+              {setting?.metrics.oldestWaitingAt
+                ? `, cũ nhất từ ${fullFmt.format(new Date(setting.metrics.oldestWaitingAt))}`
+                : ""}.
+              Nếu Google Sheet đã được chỉnh trong thời gian tắt, gửi tiếp có thể ghi đè dữ liệu trên Sheet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            Chọn “Bỏ hàng đợi cũ” để lấy Google Sheet làm nguồn chuẩn ở lần đồng bộ tiếp theo.
+            Chỉ chọn “Tiếp tục gửi” khi chắc chắn dữ liệu website mới là dữ liệu cần giữ.
+          </div>
+          <DialogFooter className="gap-2 sm:space-x-0">
+            <Button variant="outline" onClick={() => setQueueDecision(null)}>
+              Chưa bật
+            </Button>
+            <Button
+              variant="outline"
+              disabled={setEnabled.isPending}
+              onClick={() => {
+                if (queueDecision) void toggle(queueDecision.key, false, queueDecision.label, "discard");
+              }}
+            >
+              Bỏ hàng đợi cũ
+            </Button>
+            <Button
+              disabled={setEnabled.isPending}
+              onClick={() => {
+                if (queueDecision) void toggle(queueDecision.key, false, queueDecision.label, "resume");
+              }}
+            >
+              Tiếp tục gửi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

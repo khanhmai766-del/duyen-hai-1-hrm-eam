@@ -194,6 +194,8 @@ export async function upsertPreparedDefectRecords(params: {
   const now = params.syncedAt ?? new Date();
   const syncSetting = await prisma.defectSyncSetting.findUnique({ where: { id: "singleton" } });
   const twoWaySyncEnabled = syncSetting?.twoWaySyncEnabled === true;
+  const operationWriteEnabled =
+    twoWaySyncEnabled && syncSetting?.operationUpdateEnabled === true;
   const keys = Array.from(new Set(
     prepared.flatMap((item) => [item.sourceKey, item.legacySourceKey])
   ));
@@ -353,6 +355,14 @@ export async function upsertPreparedDefectRecords(params: {
       sourceSyncedAt: sourceData.sourceSyncedAt,
       sourceLastSeenAt: sourceData.sourceLastSeenAt,
     };
+    const sourceOperationData = {
+      fireSafetyImpact: sourceData.fireSafetyImpact,
+      environmentSafetyImpact: sourceData.environmentSafetyImpact,
+      severity: sourceData.severity,
+      condition: sourceData.condition,
+      status: sourceData.status,
+      note: sourceData.note,
+    };
 
     if (!existing) {
       creates.push({
@@ -386,6 +396,17 @@ export async function upsertPreparedDefectRecords(params: {
       && existing.syncState === "ACTIVE"
       && existing.sourceKey === item.sourceKey
       && existing.positionCode === sourceData.positionCode
+      && (
+        operationWriteEnabled
+        || (
+          existing.fireSafetyImpact === sourceData.fireSafetyImpact
+          && existing.environmentSafetyImpact === sourceData.environmentSafetyImpact
+          && existing.severity === sourceData.severity
+          && existing.condition === sourceData.condition
+          && existing.status === sourceData.status
+          && existing.note === sourceData.note
+        )
+      )
     ) {
       unchangedCount++;
       unchangedIds.push(existing.id);
@@ -406,17 +427,24 @@ export async function upsertPreparedDefectRecords(params: {
       data: {
         ...(twoWaySyncEnabled
           ? existing.websiteCreated
-            ? sourceObservationData
+            ? {
+                ...sourceObservationData,
+                ...(!operationWriteEnabled ? sourceOperationData : {}),
+              }
             : {
                 ...sourceData,
                 // Phiếu cũ nguồn Sheet: website sở hữu H và J:O sau khi bật
                 // hai chiều; các cột Vận hành còn lại vẫn tiếp tục đọc từ Sheet.
-                fireSafetyImpact: existing.fireSafetyImpact,
-                environmentSafetyImpact: existing.environmentSafetyImpact,
-                severity: existing.severity,
-                condition: existing.condition,
-                status: existing.status,
-                note: existing.note,
+                ...(operationWriteEnabled
+                  ? {
+                      fireSafetyImpact: existing.fireSafetyImpact,
+                      environmentSafetyImpact: existing.environmentSafetyImpact,
+                      severity: existing.severity,
+                      condition: existing.condition,
+                      status: existing.status,
+                      note: existing.note,
+                    }
+                  : sourceOperationData),
               }
           : sourceData),
         // Khi ghép phiếu website với dòng vừa ghi lên Sheet, chuyển sang chế độ
