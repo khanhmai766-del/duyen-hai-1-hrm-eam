@@ -350,9 +350,10 @@ export default function DefectsPage() {
   const positions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
-  // Mặc định S1; người dùng có thể chọn ALL để xem toàn bộ tổ máy.
-  const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">(
-    unitFromUrl === "ALL" || unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
+  // Luôn xem theo MỘT tổ máy, mặc định S1 (không còn lựa chọn "Tất cả").
+  // Link cũ mang ?unit=ALL vẫn mở được, chỉ rơi về S1.
+  const [unitFilter, setUnitFilter] = React.useState<"S1" | "S2" | "COMMON">(
+    unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
   );
   const [requestFilter, setRequestFilter] = React.useState(requestFromUrl || "Cơ");
   const [positionFilter, setPositionFilter] = React.useState(positionFromUrl || "ALL");
@@ -452,7 +453,7 @@ export default function DefectsPage() {
       {
         key: "unit",
         label: "Tổ máy",
-        value: unitFilter === "ALL" ? "Tất cả" : unitFilter === "COMMON" ? "Common" : unitFilter,
+        value: unitFilter === "COMMON" ? "Common" : unitFilter,
         onClear: unitFilter !== "S1" ? () => setUnitFilter("S1") : undefined,
       },
       {
@@ -610,7 +611,7 @@ export default function DefectsPage() {
         <DefectFilterBar
           search={tableSearch}
           onSearchChange={setTableSearch}
-          units={["ALL", "S1", "S2", "COMMON"]}
+          units={["S1", "S2", "COMMON"]}
           unit={unitFilter}
           onUnitChange={(value) => setUnitFilter(value as typeof unitFilter)}
           dropdowns={[

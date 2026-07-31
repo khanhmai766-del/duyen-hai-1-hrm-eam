@@ -186,19 +186,19 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
             <div className="inline-flex shrink-0 rounded-lg border border-border bg-white p-0.5">
-              {(["ALL", ...DEFECT_UNITS] as const).map((u) => {
-                const active = (filters.unit ?? "") === (u === "ALL" ? "" : u);
+              {DEFECT_UNITS.map((u) => {
+                const active = (filters.unit ?? "") === u;
                 return (
                   <button
                     key={u}
                     type="button"
-                    onClick={() => setFilter("unit", u === "ALL" ? "" : u)}
+                    onClick={() => setFilter("unit", u)}
                     className={cn(
                       "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                       active ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
                     )}
                   >
-                    {u === "ALL" ? "Tất cả" : u}
+                    {u}
                   </button>
                 );
               })}
