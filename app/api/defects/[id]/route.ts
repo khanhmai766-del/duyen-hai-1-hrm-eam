@@ -77,7 +77,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const operationUpdateAvailable = await isDefectSyncFeatureEnabled("UPDATE");
     const operationFields = [
       "severity",
-      "severityCriteria",
       "status",
       "fireSafetyImpact",
       "environmentSafetyImpact",
@@ -177,6 +176,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const severity = body.severity === undefined ? undefined : String(body.severity);
       if (severity !== undefined && !["1", "2", "3", "4"].includes(severity)) {
         return fail("Mức độ khiếm khuyết không hợp lệ");
+      }
+      const severityCriteria = body.severityCriteria === undefined
+        ? undefined
+        : normalizeDefectSeverityCriteria(
+            severity ?? existing.severity,
+            body.severityCriteria
+          );
+      if (
+        body.severityCriteria !== undefined
+        && existing.status !== "DA_XU_LY"
+        && severityCriteria?.length === 0
+      ) {
+        return fail("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
       }
       const status = body.status === undefined ? undefined : String(body.status);
       if (
@@ -278,6 +290,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           deviceSeq,
           mappedDeviceUnit: mappingRequested ? mappedDeviceUnit : undefined,
           severity,
+          severityCriteria,
           status,
           condition,
           fireSafetyImpact,

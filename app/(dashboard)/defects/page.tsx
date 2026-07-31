@@ -27,6 +27,7 @@ import {
   DEFECT_SEVERITY,
   DEFECT_SEVERITY_ORDER,
   DEFECT_SEVERITY_CRITERIA,
+  DEFECT_CONDITION,
   DEFECT_REQUEST_TYPES,
   isSelectableManagingPosition,
 } from "@/lib/constants";
@@ -1215,6 +1216,14 @@ function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
           <h3 className="text-sm font-bold uppercase tracking-wide text-sky-800">Theo dõi Vận hành</h3>
           <p className="text-xs text-muted-foreground">Ảnh hưởng, lịch sử nhắc lại và ghi chú</p>
         </div>
+        <DetailLine
+          label="Mức độ"
+          value={DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] || defect.severity || "—"}
+        />
+        <DetailLine
+          label="Điều kiện thực hiện"
+          value={DEFECT_CONDITION[defect.condition as keyof typeof DEFECT_CONDITION] || defect.condition || "—"}
+        />
         <DetailLine label="Ảnh hưởng PCCC" value={defect.fireSafetyImpact || "—"} />
         <DetailLine label="Môi trường, ATVSLĐ" value={defect.environmentSafetyImpact || "—"} />
         <DetailLine label="Ngày nhắc gần nhất" value={defect.lastRemindedAt ? formatDate(defect.lastRemindedAt) : "—"} />

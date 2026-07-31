@@ -170,7 +170,7 @@ export const DEFECT_SEVERITY_CRITERIA = {
     title: "Mức ưu tiên cao, xử lý sớm không để kéo dài",
     guidance: "Áp dụng đối với các khiếm khuyết ảnh hưởng đến công suất, độ khả dụng, độ tin cậy nhưng chưa gây ảnh hưởng trực tiếp, tức thời như Mức 1.",
     options: [
-      { id: "2a", label: "Phiếu Mức 3 hoặc Mức 4 đã qua tối thiểu 7 ngày kể từ lần nhắc lại thứ hai." },
+      { id: "2a", label: "Phiếu yêu cầu mức thấp bị nhắc lại từ 2 lần trở lên (từ 7–30 ngày kể từ ngày ra phiếu, tùy mức độ)." },
       { id: "2b", label: "Suy giảm khả năng dự phòng của thiết bị hoặc hệ thống quan trọng." },
       { id: "2c", label: "Có nguy cơ ảnh hưởng đến công suất hoặc độ khả dụng nếu không xử lý kịp thời." },
       { id: "2d", label: "Thiết bị phụ trợ quan trọng vận hành không ổn định, thông số bất thường nhưng vẫn trong giới hạn cho phép." },
