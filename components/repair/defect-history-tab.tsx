@@ -86,6 +86,21 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     setFilters((f) => ({ ...f, [k]: v || undefined }));
   }
 
+  /**
+   * Xoá lọc về mặc định: tổ máy quay lại S1 (bộ lọc này luôn phải có một giá
+   * trị), giữ nguyên các tham số đến từ URL để link mở sẵn thiết bị không hỏng.
+   */
+  function resetFilters() {
+    setFilters((f) => ({
+      ...(f.device ? { device: f.device } : {}),
+      ...(f.deviceSeq ? { deviceSeq: f.deviceSeq } : {}),
+      ...(f.mappedUnit ? { mappedUnit: f.mappedUnit } : {}),
+      ...(f.includeDescendants ? { includeDescendants: f.includeDescendants } : {}),
+      unit: "S1",
+    }));
+    setTableSearch("");
+  }
+
   function toggleSort(key: SortKey) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }
@@ -133,7 +148,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const actionCol = canManage || canDelete;
   // 1 cột mở rộng + Thiết bị + Tổ máy + Kết thúc + Cương vị + Chốt lịch sử (+ Thao tác)
   const detailColSpan = actionCol ? 7 : 6;
-  const hasActiveFilters = Object.values(filters).some(Boolean) || tableSearch.trim().length > 0;
+  // Tổ máy LUÔN có giá trị (mặc định S1) nên không tính là đang lọc, nếu không
+  // nút Xoá bộ lọc sẽ sáng vĩnh viễn và ô "Chưa có lịch sử" không bao giờ hiện.
+  const hasActiveFilters =
+    Boolean(filters.system || filters.from || filters.to || filters.workOrderNumber || filters.device || filters.deviceSeq)
+    || (filters.unit ?? "S1") !== "S1"
+    || tableSearch.trim().length > 0;
   const backupColumns = React.useMemo(
     () => [
       { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: DefectHistoryItem, index: number) => index + 1 },
@@ -167,53 +187,58 @@ export function DefectHistoryTab({ role }: { role?: string }) {
         )}
       </PageHeader>
 
-      <Card className="p-3 md:p-4">
-        <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1 xl:overflow-visible xl:pb-0">
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Cương vị:</span>
-            <Select value={filters.system ?? "ALL"} onValueChange={(v) => setFilter("system", v === "ALL" ? "" : v)}>
-              <SelectTrigger className="h-9 w-40 md:w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả</SelectItem>
-                {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Tổ máy:</span>
-            <div className="inline-flex shrink-0 rounded-lg border border-border bg-white p-0.5">
-              {DEFECT_UNITS.map((u) => {
-                const active = (filters.unit ?? "") === u;
-                return (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setFilter("unit", u)}
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                      active ? "bg-navy text-white" : "text-muted-foreground hover:text-ink"
-                    )}
-                  >
-                    {u}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Từ ngày:</span>
-              <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-9 w-40 bg-white" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">Đến ngày:</span>
-              <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-9 w-40 bg-white" />
-            </div>
-          </div>
-
+      {/* Thanh lọc theo bản mẫu lich-su-sua-chua: nhãn IN HOA cỡ nhỏ, các nút
+          tổ máy dính liền thành một khối, nút Xoá bộ lọc đẩy sát phải. */}
+      <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <FilterLabel>Cương vị</FilterLabel>
+          <Select value={filters.system ?? "ALL"} onValueChange={(v) => setFilter("system", v === "ALL" ? "" : v)}>
+            <SelectTrigger className="h-8 w-40 rounded-md text-[13px] md:w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả</SelectItem>
+              {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
+
+        <div className="flex items-center gap-2">
+          <FilterLabel>Tổ máy</FilterLabel>
+          <div className="inline-flex overflow-hidden rounded-md border border-input bg-white">
+            {DEFECT_UNITS.map((u) => {
+              const active = (filters.unit ?? "") === u;
+              return (
+                <button
+                  key={u}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFilter("unit", u)}
+                  className={cn(
+                    "border-r border-input px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0",
+                    active ? "bg-[#00558F] text-white" : "text-ink/70 hover:bg-muted hover:text-ink"
+                  )}
+                >
+                  {u}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <FilterLabel>Từ ngày</FilterLabel>
+          <Input type="date" value={filters.from ?? ""} onChange={(e) => setFilter("from", e.target.value)} className="h-8 w-[150px] rounded-md bg-white text-[13px]" />
+          <FilterLabel>Đến ngày</FilterLabel>
+          <Input type="date" value={filters.to ?? ""} onChange={(e) => setFilter("to", e.target.value)} className="h-8 w-[150px] rounded-md bg-white text-[13px]" />
+        </div>
+
+        <button
+          type="button"
+          onClick={resetFilters}
+          disabled={!hasActiveFilters}
+          className="ml-auto h-8 rounded-md border border-input bg-white px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40"
+        >
+          Xoá bộ lọc
+        </button>
       </Card>
 
       {isLoading ? (
@@ -459,6 +484,15 @@ function SortHeader({
       <span>{label}</span>
       <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
     </button>
+  );
+}
+
+/** Nhãn của một ô lọc: IN HOA, cỡ nhỏ, giãn chữ nhẹ — theo .flabel của bản mẫu. */
+function FilterLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+      {children}
+    </span>
   );
 }
 
