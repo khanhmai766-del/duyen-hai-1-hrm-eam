@@ -596,6 +596,16 @@ export default function DefectsPage() {
         </div>
       )}
 
+      {/* Thẻ KPI đứng trước thanh lọc: người dùng nhìn số liệu tổng quan rồi mới
+          bấm thẻ để lọc, nên thứ tự này khớp với thao tác thực tế. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <DefectKpi label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tone="rose" active={statusFilter === "CHUA_XU_LY"} onClick={() => toggleStatus("CHUA_XU_LY")} />
+        <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
+        <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
+        <DefectKpi label="Chờ ngừng máy" value={choNgungMay} icon={CirclePause} tone="orange" active={statusFilter === "CHO_NGUNG_MAY"} onClick={() => toggleStatus("CHO_NGUNG_MAY")} />
+        <DefectKpi label="Tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
+      </div>
+
       {!isLoading && scopeTotal > 0 && (
         <DefectFilterBar
           search={tableSearch}
@@ -641,14 +651,6 @@ export default function DefectsPage() {
           onReset={resetFilters}
         />
       )}
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <DefectKpi label="Chưa thực hiện" value={chuaXuLy} icon={CircleDashed} tone="rose" active={statusFilter === "CHUA_XU_LY"} onClick={() => toggleStatus("CHUA_XU_LY")} />
-        <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
-        <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
-        <DefectKpi label="Chờ ngừng máy" value={choNgungMay} icon={CirclePause} tone="orange" active={statusFilter === "CHO_NGUNG_MAY"} onClick={() => toggleStatus("CHO_NGUNG_MAY")} />
-        <DefectKpi label="Tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
-      </div>
 
       {isLoading ? (
         <TableSkeleton rows={6} />
