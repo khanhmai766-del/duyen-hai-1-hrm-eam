@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ok, fail, requireUser, handle, audit } from "@/lib/api";
+import { ok, fail, requireUser, handle, audit, requireRole } from "@/lib/api";
 import { deleteFromS3, keyFromPublicUrl, s3ProxyUrl, uploadBufferToS3 } from "@/lib/s3";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,11 +33,11 @@ export async function GET() {
   });
 }
 
-/** POST — người quản lý thiết bị tải lên/thay thế tệp PDF hướng dẫn. */
+/** POST — chỉ Quản trị hệ thống được tải lên/thay thế tệp PDF hướng dẫn. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền tải tài liệu hướng dẫn");
+    requireRole(user, ["ADMIN"]);
 
     const form = await req.formData();
     const file = form.get("file");
@@ -77,11 +76,11 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** DELETE — người quản lý thiết bị gỡ tệp PDF hướng dẫn hiện tại. */
+/** DELETE — chỉ Quản trị hệ thống được gỡ tệp PDF hướng dẫn hiện tại. */
 export async function DELETE() {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "device-manage", ["manage", "full"], "Không đủ quyền xoá tài liệu hướng dẫn");
+    requireRole(user, ["ADMIN"]);
     const previous = await readMeta();
     if (previous?.url) await deleteFromS3(previous.url);
     await prisma.rbacConfig.deleteMany({ where: { key: DEVICE_GUIDE_META_KEY } });

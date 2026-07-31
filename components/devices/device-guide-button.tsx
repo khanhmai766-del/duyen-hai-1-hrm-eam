@@ -22,7 +22,7 @@ import {
  * Nút mở tài liệu hướng dẫn tạo mới thiết bị (PDF trên S3, cùng thư mục với
  * lịch trực ca). Chỉ nạp dữ liệu khi người dùng mở hộp thoại.
  */
-export function DeviceGuideButton({ canManage }: { canManage: boolean }) {
+export function DeviceGuideButton({ canManage }: { canManage: boolean /* chỉ ADMIN */ }) {
   const [open, setOpen] = React.useState(false);
   const { data, isLoading } = useDeviceGuide({ enabled: open });
   const upload = useUploadDeviceGuide();
@@ -144,7 +144,7 @@ export function DeviceGuideButton({ canManage }: { canManage: boolean }) {
                 <div className="mt-1 text-sm text-muted-foreground">
                   {canManage
                     ? "Tải lên tệp PDF hướng dẫn tạo mới thiết bị."
-                    : "Tài liệu sẽ được người quản lý thiết bị cập nhật. Vui lòng quay lại sau."}
+                    : "Tài liệu sẽ được Quản trị hệ thống cập nhật. Vui lòng quay lại sau."}
                 </div>
               </div>
             </div>

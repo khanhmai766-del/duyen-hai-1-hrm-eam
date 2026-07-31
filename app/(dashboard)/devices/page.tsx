@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { EquipmentCardEditDialog } from "@/components/devices/equipment-card-edit-dialog";
 import {
@@ -103,6 +104,10 @@ function DevicesPageContent() {
   const router = useRouter();
   const params = useSearchParams();
   const rbac = useRbacAccess();
+  const { data: session } = useSession();
+  // Tài liệu hướng dẫn dùng chung toàn phân xưởng: chỉ Quản trị hệ thống được
+  // thay hoặc xoá, các cương vị khác chỉ xem và tải xuống.
+  const isSystemAdmin = session?.user?.role === "ADMIN";
   const canCreateDevices = rbac.can("device-manage", ["personal", "manage", "full"]);
   const canManageDevices = rbac.can("device-manage", ["manage", "full"]);
   const canEditDevices = rbac.can("device-manage", ["manage", "full"]);
@@ -175,7 +180,7 @@ function DevicesPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG TIN THIẾT BỊ" description="Lý lịch & quản lý tài sản thiết bị nhà máy">
-        <DeviceGuideButton canManage={canManageDevices} />
+        <DeviceGuideButton canManage={isSystemAdmin} />
         {view === "tree" && (
           <ExportButton
             getRows={getTreeExportRows}
