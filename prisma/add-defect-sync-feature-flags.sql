@@ -11,10 +11,10 @@ INSERT INTO "DefectSyncSetting" (
   "websiteRemindEnabled",
   "updatedAt"
 )
-VALUES ('singleton', TRUE, TRUE, FALSE, FALSE, NOW())
+VALUES ('singleton', FALSE, TRUE, FALSE, FALSE, NOW())
 ON CONFLICT ("id") DO UPDATE
 SET
-  "twoWaySyncEnabled" = TRUE,
+  "twoWaySyncEnabled" = FALSE,
   "operationUpdateEnabled" = TRUE,
   "websiteCreateEnabled" = FALSE,
   "websiteRemindEnabled" = FALSE,
