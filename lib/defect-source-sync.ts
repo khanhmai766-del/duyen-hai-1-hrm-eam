@@ -207,6 +207,7 @@ export async function upsertPreparedDefectRecords(params: {
           sourceKey: true,
           positionCode: true,
           sourceHash: true,
+          sourceStatusMismatch: true,
           syncState: true,
           websiteCreated: true,
           status: true,
@@ -243,6 +244,7 @@ export async function upsertPreparedDefectRecords(params: {
           sourceKey: true,
           positionCode: true,
           sourceHash: true,
+          sourceStatusMismatch: true,
           syncState: true,
           websiteCreated: true,
           status: true,
@@ -396,6 +398,10 @@ export async function upsertPreparedDefectRecords(params: {
       && existing.syncState === "ACTIVE"
       && existing.sourceKey === item.sourceKey
       && existing.positionCode === sourceData.positionCode
+      && existing.sourceStatusMismatch === (
+        repairStatus !== null
+        && repairStatus !== (operationWriteEnabled ? existing.status : sourceData.status)
+      )
       && (
         operationWriteEnabled
         || (

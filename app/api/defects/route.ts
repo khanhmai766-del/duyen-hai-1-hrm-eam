@@ -29,6 +29,7 @@ import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 import { daysSinceSecondReminder, isSeverity2UpgradeCandidate } from "@/lib/defect-severity-upgrade";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
+import { defectResultStatusOf } from "@/lib/defect-result-status";
 
 export const dynamic = "force-dynamic";
 
@@ -292,7 +293,14 @@ export async function GET(req: NextRequest) {
           !position ||
           position === "ALL" ||
           announcementPositionsMatch(defect.system, position)
-      );
+      )
+      .map((defect) => {
+        const repairStatus = defectResultStatusOf(defect.repairResultRaw);
+        return {
+          ...defect,
+          sourceStatusMismatch: repairStatus !== null && repairStatus !== defect.status,
+        };
+      });
 
     const kpi = {
       chuaXuLy: base.filter((item) => item.status === "CHUA_XU_LY").length,
