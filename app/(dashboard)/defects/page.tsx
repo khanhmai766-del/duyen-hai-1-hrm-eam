@@ -566,7 +566,7 @@ export default function DefectsPage() {
           />
         )}
         {canCreate && websiteCreateAvailable && (
-          <Button onClick={openCreate}>
+          <Button size="toolbar" onClick={openCreate}>
             <Plus className="h-4 w-4" /> Thêm mới
           </Button>
         )}

@@ -92,7 +92,7 @@ export default function BroadcastAdminPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="THÔNG BÁO HỆ THỐNG" description="Phát thông báo dạng hộp thoại giữa màn hình cho mọi người dùng">
-        <Button onClick={openCreate}>
+        <Button size="toolbar" onClick={openCreate}>
           <Plus className="h-4 w-4" /> Tạo thông báo
         </Button>
       </PageHeader>

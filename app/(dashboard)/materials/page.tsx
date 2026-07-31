@@ -578,15 +578,15 @@ function MaterialsPageContent() {
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && <QlvtSyncAction />}
         {canManage && (
-          <Button variant="outline" onClick={() => setImportOpen(true)} title="Nhập/đồng bộ chi tiết điểm thay thế từ file Excel">
+          <Button variant="soft" size="toolbar" onClick={() => setImportOpen(true)} title="Nhập/đồng bộ chi tiết điểm thay thế từ file Excel">
             <FileSpreadsheet className="h-4 w-4" /> Nhập điểm thay thế
           </Button>
         )}
-        <Button variant="outline" onClick={exportReplacementPointsCsv} title="Xuất CSV chi tiết điểm thay thế của các vật tư đang hiển thị">
+        <Button variant="soft" size="toolbar" onClick={exportReplacementPointsCsv} title="Xuất CSV chi tiết điểm thay thế của các vật tư đang hiển thị">
           <Download className="h-4 w-4" /> Xuất điểm thay thế
         </Button>
         {canCreate && (
-          <Button onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
+          <Button size="toolbar" onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
           </Button>
         )}
@@ -630,7 +630,7 @@ function MaterialsPageContent() {
         </DropdownMenu>
         <div className="ml-auto flex items-center gap-2 pb-2">
           <Select value={machineTab} onValueChange={changeMachineTab}>
-            <SelectTrigger className="w-[132px]" aria-label="Lọc theo tổ máy">
+            <SelectTrigger className="h-9 w-[132px] rounded-xl" aria-label="Lọc theo tổ máy">
               <SelectValue>{activeMachineTab.label}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -640,7 +640,7 @@ function MaterialsPageContent() {
             </SelectContent>
           </Select>
           <Select value={blockFilter} onValueChange={setBlockFilter}>
-            <SelectTrigger className="w-[150px]" aria-label="Lọc theo khối quản lý">
+            <SelectTrigger className="h-9 w-[150px] rounded-xl" aria-label="Lọc theo khối quản lý">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

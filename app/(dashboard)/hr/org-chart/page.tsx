@@ -268,7 +268,7 @@ export default function OrgChartPage() {
         )}
         {canApprove && (
           <Button
-            size="sm"
+            size="toolbar"
             onClick={() => setApproveOpen(true)}
             disabled={!selectedDateAllowed}
             title={!selectedDateAllowed ? monthRestrictionTitle : undefined}
@@ -280,8 +280,8 @@ export default function OrgChartPage() {
         {isCheckedIn ? (
           recallLocked ? (
             <Button
-              size="sm"
-              variant="outline"
+              size="toolbar"
+              variant="soft"
               disabled
               className="cursor-not-allowed text-muted-foreground"
               title="Chấm công đã được Quản trị / Quản lý / Trưởng ca duyệt — bạn không thể thu hồi điểm danh"
@@ -290,7 +290,7 @@ export default function OrgChartPage() {
             </Button>
           ) : (
             <Button
-              size="sm"
+              size="toolbar"
               variant="destructive"
               onClick={handleRecall}
               disabled={recall.isPending || !selectedDateAllowed}
@@ -302,21 +302,21 @@ export default function OrgChartPage() {
           )
         ) : (
           <Button
-            size="sm"
-            variant={attendanceLocked || !selectedDateAllowed ? "outline" : "accent"}
+            size="toolbar"
+            variant={attendanceLocked || !selectedDateAllowed ? "soft" : "accent"}
             onClick={() => setCheckInOpen(true)}
             disabled={attendanceLocked || !selectedDateAllowed}
             className={attendanceLocked ? "cursor-not-allowed text-muted-foreground" : undefined}
             title={attendanceLocked ? "Ca trực đã duyệt hết — điểm danh đã khóa" : !selectedDateAllowed ? monthRestrictionTitle : undefined}
           >
             {attendanceLocked ? <Lock className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-            {attendanceLocked ? "Đã khóa điểm danh" : !selectedDateAllowed ? "Ngoài tháng hiện tại" : "Điểm danh"}
+            {attendanceLocked ? "Đã khóa điểm danh" : !selectedDateAllowed ? "Ngoài kỳ chấm công" : "Điểm danh"}
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={openViewer}>
+        <Button size="toolbar" variant="soft" onClick={openViewer}>
           <Tv className="h-4 w-4" /> Viewer
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setShareOpen(true)}>
+        <Button size="toolbar" variant="soft" onClick={() => setShareOpen(true)}>
           <QrCode className="h-4 w-4" /> Link QR
         </Button>
       </PageHeader>

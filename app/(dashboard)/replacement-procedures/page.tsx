@@ -29,7 +29,7 @@ export default function ReplacementProceduresPage() {
         title="QUY TRÌNH THAY THẾ VẬT TƯ"
         description={`Phiếu đề xuất & Ứng vật tư${position ? ` · Bạn: ${position}` : ""}`}
       >
-        <label className="flex h-10 w-full min-w-[260px] max-w-[320px] items-center rounded-md border border-input bg-white px-3 text-muted-foreground shadow-sm shadow-slate-900/5 sm:w-[300px]">
+        <label className="flex h-9 w-full min-w-[260px] max-w-[320px] items-center rounded-xl border border-input bg-white px-3 text-muted-foreground shadow-sm shadow-slate-900/5 sm:w-[300px]">
           <Search className="h-4 w-4 shrink-0" />
           <input
             value={ticketSearch}
@@ -40,17 +40,17 @@ export default function ReplacementProceduresPage() {
           />
         </label>
         {canManageWorkflow && (
-          <Button variant="outline" onClick={() => setRolesOpen(true)}>
+          <Button variant="soft" size="toolbar" onClick={() => setRolesOpen(true)}>
             <UserCog className="h-4 w-4" /> Phân quyền quy trình
           </Button>
         )}
-        <Button variant="outline" asChild>
+        <Button variant="soft" size="toolbar" asChild>
           <a href={PROCEDURE_FLOW_PDF_URL} target="_blank" rel="noreferrer">
             <FileText className="h-4 w-4" /> Lưu đồ thực hiện
           </a>
         </Button>
         {canCreate && (
-          <Button onClick={() => setCreating(true)}>
+          <Button size="toolbar" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" /> Tạo đề xuất
           </Button>
         )}

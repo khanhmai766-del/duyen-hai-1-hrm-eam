@@ -481,7 +481,7 @@ function ReplacementsPageContent() {
         {tab !== "history" ? (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
             <Select value={machineFilter} onValueChange={setMachineFilter}>
-              <SelectTrigger className="sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 rounded-xl sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {MACHINE_FILTERS.map((m) => (
                   <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
@@ -489,7 +489,7 @@ function ReplacementsPageContent() {
               </SelectContent>
             </Select>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="sm:w-44" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 rounded-xl sm:w-44" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
                 {CATEGORY_FILTERS.map((c) => (

@@ -202,10 +202,10 @@ export function AnnualBackupExport<T>({
           ))}
         </select>
       </label>
-      <Button type="button" variant="outline" size="sm" onClick={exportExcel} title="Xuất Excel chuẩn báo cáo" className="h-9 rounded-xl bg-white/90 font-semibold text-navy">
+      <Button type="button" variant="soft" size="toolbar" onClick={exportExcel} title="Xuất Excel chuẩn báo cáo">
         <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel
       </Button>
-      <Button type="button" variant="outline" size="sm" onClick={exportPdf} title="In hoặc lưu thành PDF" className="h-9 rounded-xl bg-white/90 font-semibold text-navy">
+      <Button type="button" variant="soft" size="toolbar" onClick={exportPdf} title="In hoặc lưu thành PDF">
         <Printer className="h-4 w-4 text-amber-600" /> PDF
       </Button>
     </div>

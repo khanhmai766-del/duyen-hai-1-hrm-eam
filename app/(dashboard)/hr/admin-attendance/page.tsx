@@ -161,10 +161,10 @@ export default function AdminAttendancePage() {
               setDate(value);
               setFollowToday(value === vietnamDateInput());
             }}
-            className="w-44"
+            className="h-9 w-44 rounded-xl"
           />
         </div>
-        <Button variant="accent" onClick={openSelfCheckIn} disabled={isLoading}>
+        <Button variant="accent" size="toolbar" onClick={openSelfCheckIn} disabled={isLoading}>
           <UserCheck className="h-4 w-4" /> Chấm công hành chính
         </Button>
         {canCreateHcGroup && (

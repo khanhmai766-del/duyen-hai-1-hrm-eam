@@ -36,7 +36,8 @@ export function SearchBar({ value, onChange, placeholder = "Tìm kiếm...", cla
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-10 w-full rounded-md border border-input bg-white pl-9 pr-9 text-sm outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+        // Cùng cỡ với size="toolbar" của Button để hàng công cụ không so le.
+        className="h-9 w-full rounded-xl border border-input bg-white pl-9 pr-9 text-sm outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
       {value && (
         <button

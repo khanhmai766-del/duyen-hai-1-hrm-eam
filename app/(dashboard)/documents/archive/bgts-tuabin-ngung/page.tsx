@@ -352,7 +352,7 @@ export default function BgtsTuabinNgungPage() {
     <div className="space-y-5">
       <PageHeader title="BGTS TUABIN NGỪNG" description="Nhập thông số DCS theo ngày và xuất lại bảng Excel đúng mẫu">
         <Link href="/documents/archive">
-          <Button variant="outline">
+          <Button variant="soft" size="toolbar">
             <ArrowLeft className="h-4 w-4" />
             Quay lại Thư mục lưu trữ
           </Button>

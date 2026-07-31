@@ -444,7 +444,7 @@ function TreeScopeBody({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm theo tên, số thứ tự, KKS…"
-              className="h-9 pl-9 pr-8"
+              className="h-9 rounded-xl pl-9 pr-8"
             />
             {search && (
               <button
@@ -463,7 +463,7 @@ function TreeScopeBody({
                 type="button"
                 onClick={expandAllRoots}
                 title="Mở nhóm gốc"
-                className="flex h-9 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+                className="flex h-9 items-center gap-1.5 rounded-xl border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
               >
                 <ChevronsUpDown className="h-4 w-4" /> Mở gốc
               </button>
@@ -471,7 +471,7 @@ function TreeScopeBody({
                 type="button"
                 onClick={() => setExpanded(new Set())}
                 title="Thu gọn tất cả"
-                className="flex h-9 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+                className="flex h-9 items-center gap-1.5 rounded-xl border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-accent hover:text-accent"
               >
                 <ChevronsDownUp className="h-4 w-4" /> Thu gọn
               </button>

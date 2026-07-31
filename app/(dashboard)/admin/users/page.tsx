@@ -325,7 +325,7 @@ export default function AdminUsersPage() {
           )}
         </div>
         <Select value={positionFilter} onValueChange={setPositionFilter}>
-          <SelectTrigger className="h-9 w-52" aria-label="Lọc theo chức vụ"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 w-52 rounded-xl" aria-label="Lọc theo chức vụ"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tất cả chức vụ</SelectItem>
             {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -333,10 +333,10 @@ export default function AdminUsersPage() {
         </Select>
         {canManageUsers && (
           <>
-            <Button variant="outline" onClick={() => window.open("/admin/export-users", "_blank")}>
+            <Button variant="soft" size="toolbar" onClick={() => window.open("/admin/export-users", "_blank")}>
               <Download className="h-4 w-4" /> Xuất danh sách
             </Button>
-            <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
+            <Button size="toolbar" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Thêm người dùng</Button>
           </>
         )}
       </PageHeader>

@@ -399,7 +399,7 @@ export default function ShiftRosterPage() {
     <div className="space-y-6">
       <PageHeader title="LỊCH TRỰC CA" description="Lịch trực ca & bảng công của phân xưởng Vận hành 1">
         {/* View toggle: official roster PDF vs approved timesheet */}
-        <div className="flex rounded-lg border border-border p-1">
+        <div className="flex h-9 items-center rounded-xl border border-border p-1">
           <button
             onClick={() => changeView("roster")}
             className={cn(
@@ -422,7 +422,7 @@ export default function ShiftRosterPage() {
         {view === "timesheet" && canEditAllTimesheet && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="soft" size="toolbar">
                 <Download className="h-4 w-4" /> Xuất
               </Button>
             </DropdownMenuTrigger>

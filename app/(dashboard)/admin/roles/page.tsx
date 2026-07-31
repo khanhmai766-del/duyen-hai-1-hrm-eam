@@ -846,15 +846,15 @@ export default function RolesPage() {
       >
         {isAdmin && (
           <>
-            <Button type="button" variant={editMode ? "default" : "outline"} onClick={() => setEditMode((value) => !value)}>
+            <Button type="button" size="toolbar" variant={editMode ? "default" : "soft"} onClick={() => setEditMode((value) => !value)}>
               <Settings2 className="h-4 w-4" />
               {editMode ? "Đang chỉnh" : "Chỉnh quyền"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setAddOpen(true)}>
+            <Button type="button" size="toolbar" variant="soft" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" />
               Thêm phân quyền
             </Button>
-            <Button type="button" onClick={() => setAssignOpen(true)}>
+            <Button type="button" size="toolbar" onClick={() => setAssignOpen(true)}>
               <Users className="h-4 w-4" />
               Gán quyền user
             </Button>

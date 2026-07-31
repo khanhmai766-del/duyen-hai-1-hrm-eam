@@ -200,11 +200,7 @@ export function ExportButton({ rows = [], getRows, filename = "bao-cao", title, 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 rounded-xl border-sky-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#eef7ff_100%)] px-3 font-semibold text-navy shadow-[0_8px_18px_rgba(30,64,175,0.12)] hover:border-sky-300 hover:text-accent"
-        >
+        <Button variant="soft" size="toolbar">
           <Download className="h-4 w-4" /> Xuất
         </Button>
       </DropdownMenuTrigger>

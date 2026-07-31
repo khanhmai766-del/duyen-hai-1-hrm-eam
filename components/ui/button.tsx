@@ -14,6 +14,12 @@ const buttonVariants = cva(
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
           "border border-input bg-background/90 shadow-sm shadow-slate-900/5 hover:border-accent/40 hover:bg-muted hover:text-ink hover:shadow-md",
+        // Nút phụ trên thanh công cụ / đầu trang (Hướng dẫn, Xuất, Nhập, Đồng bộ…).
+        // Gradient tuỳ biến không được cầu nối dark-mode trong globals.css bắt được
+        // nên phải khai báo biến thể tối ngay tại đây, nếu không nền trắng sẽ chói
+        // trên trang nền tối.
+        soft:
+          "border border-sky-200/80 bg-[linear-gradient(135deg,#ffffff_0%,#eef7ff_100%)] font-semibold text-navy shadow-[0_8px_18px_rgba(30,64,175,0.12)] hover:border-sky-300 hover:text-accent dark:border-sky-400/25 dark:bg-[linear-gradient(135deg,hsl(222_22%_16%)_0%,hsl(217_30%_21%)_100%)] dark:shadow-[0_8px_18px_rgba(0,0,0,0.38)] dark:hover:border-sky-400/45",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/90",
         ghost: "hover:bg-muted hover:text-ink",
         link: "text-accent underline-offset-4 hover:underline",
@@ -23,6 +29,10 @@ const buttonVariants = cva(
         sm: "h-8 rounded-md px-3 text-xs",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
+        // Cỡ chuẩn cho hàng nút đầu trang và thanh công cụ ngay dưới nó — mọi
+        // trang dùng chung để các nút không so le chiều cao và độ bo góc.
+        toolbar: "h-9 rounded-xl px-3",
+        "toolbar-icon": "h-9 w-9 rounded-xl",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

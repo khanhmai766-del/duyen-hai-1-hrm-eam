@@ -146,10 +146,7 @@ function ReportsPageContent() {
         title="DASHBOARD QUẢN LÝ THIẾT BỊ"
         description="Tổng quan tài sản, khiếm khuyết, lịch sửa chữa và cảnh báo vật tư thay thế"
       >
-        <Button
-          asChild
-          className="h-9 rounded-lg bg-[linear-gradient(135deg,#047857_0%,#0891b2_100%)] px-3 text-white shadow-[0_8px_18px_rgba(8,145,178,0.2)] hover:shadow-[0_10px_22px_rgba(8,145,178,0.28)]"
-        >
+        <Button asChild variant="soft" size="toolbar">
           <a
             href={DUYEN_HAI_VIRTUAL_TOUR_URL}
             target="_blank"
@@ -159,7 +156,7 @@ function ReportsPageContent() {
             Virtual Tour Công ty Nhiệt Điện Duyên Hải
           </a>
         </Button>
-        <Button asChild className="h-9 rounded-lg px-3 text-white">
+        <Button asChild variant="soft" size="toolbar">
           <a href={DUYEN_HAI_3D_MODEL_URL} target="_blank" rel="noopener noreferrer">
             <Box className="h-4 w-4" />
             Mô phỏng 3D Duyên Hải 1

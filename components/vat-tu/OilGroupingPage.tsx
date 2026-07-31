@@ -552,7 +552,7 @@ function GroupedErpActions({
         <QlvtSyncChip stage={qlvtStage} syncing={syncingQlvt || syncStocks.isPending} onSync={requestQlvtSync} />
       )}
       {showCreate && (
-        <Button onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
+        <Button size="toolbar" onClick={() => { setFormError(""); setForm({ code: "", name: "", unit: CATEGORY_META[category].defaultUnit, category, erpStock: 0 }); }}>
           <Plus className="h-4 w-4" /> Thêm vật tư ERP
         </Button>
       )}
