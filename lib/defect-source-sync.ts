@@ -275,6 +275,27 @@ export async function upsertPreparedDefectRecords(params: {
     throw new Error(`Không thể tự ghép phiếu do trùng số yêu cầu: ${duplicated.join(", ")}`);
   }
 
+  // Chỉ giữ các trường Vận hành trên website khi thay đổi UPDATE
+  // thực sự còn trong hàng đợi. Khi đã ACK thành công, Sheet lại được
+  // phép cập nhật vòng về website ở lần pull tiếp theo.
+  const existingDefectIds = Array.from(new Set(
+    [...existingRows, ...manualCandidateRows].map((row) => row.id)
+  ));
+  const pendingWebsiteUpdateRows = operationWriteEnabled && existingDefectIds.length > 0
+    ? await prisma.defectSyncOutbox.findMany({
+        where: {
+          defectId: { in: existingDefectIds },
+          eventType: "UPDATE",
+          status: { in: ["PENDING", "PROCESSING", "FAILED"] },
+        },
+        select: { defectId: true },
+        distinct: ["defectId"],
+      })
+    : [];
+  const pendingWebsiteUpdateDefectIds = new Set(
+    pendingWebsiteUpdateRows.map((row) => row.defectId)
+  );
+
   const creates: Prisma.DefectCreateManyInput[] = [];
   const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
   const unchangedIds: string[] = [];
@@ -330,9 +351,14 @@ export async function upsertPreparedDefectRecords(params: {
       sourceSyncedAt: now,
       sourceLastSeenAt: now,
     };
-    // Khi đã bật hai chiều, website là nguồn chuẩn của cột VH1 (1–15). Pull-sync
-    // chỉ ghi nhận vị trí/ảnh chụp nguồn và các cột kết quả do bộ phận sửa chữa
-    // quản lý; tuyệt đối không lấy sửa tay trên Sheet để ghi đè nghiệp vụ website.
+    const keepWebsiteOperationData = Boolean(
+      existing && operationWriteEnabled && pendingWebsiteUpdateDefectIds.has(existing.id)
+    );
+    const effectiveStatus = keepWebsiteOperationData && existing
+      ? existing.status
+      : sourceData.status;
+    // Dữ liệu quan sát/kết quả sửa chữa luôn nhận từ Sheet. Riêng các
+    // trường Vận hành chỉ giữ bản website trong lúc UPDATE còn chờ ghi.
     const sourceObservationData = {
       sourceSpreadsheetId: sourceData.sourceSpreadsheetId,
       sourceSheetName: sourceData.sourceSheetName,
@@ -349,7 +375,7 @@ export async function upsertPreparedDefectRecords(params: {
       repairResultRaw: sourceData.repairResultRaw,
       repairPerformedByRaw: sourceData.repairPerformedByRaw,
       repairStartedAt: sourceData.repairStartedAt,
-      sourceStatusMismatch: repairStatus !== null && repairStatus !== existing?.status,
+      sourceStatusMismatch: repairStatus !== null && repairStatus !== effectiveStatus,
       sourceCompletedAt: sourceData.sourceCompletedAt,
       repairPerformedContentRaw: sourceData.repairPerformedContentRaw,
       repairNoteRaw: sourceData.repairNoteRaw,
@@ -400,10 +426,10 @@ export async function upsertPreparedDefectRecords(params: {
       && existing.positionCode === sourceData.positionCode
       && existing.sourceStatusMismatch === (
         repairStatus !== null
-        && repairStatus !== (operationWriteEnabled ? existing.status : sourceData.status)
+        && repairStatus !== effectiveStatus
       )
       && (
-        operationWriteEnabled
+        keepWebsiteOperationData
         || (
           existing.fireSafetyImpact === sourceData.fireSafetyImpact
           && existing.environmentSafetyImpact === sourceData.environmentSafetyImpact
@@ -435,13 +461,13 @@ export async function upsertPreparedDefectRecords(params: {
           ? existing.websiteCreated
             ? {
                 ...sourceObservationData,
-                ...(!operationWriteEnabled ? sourceOperationData : {}),
+                ...(!keepWebsiteOperationData ? sourceOperationData : {}),
               }
             : {
                 ...sourceData,
-                // Phiếu cũ nguồn Sheet: website sở hữu H và J:O sau khi bật
-                // hai chiều; các cột Vận hành còn lại vẫn tiếp tục đọc từ Sheet.
-                ...(operationWriteEnabled
+                // UPDATE đang chờ thì website thắng; hết hàng đợi thì J:O
+                // được phép đồng bộ ngược từ Sheet về website.
+                ...(keepWebsiteOperationData
                   ? {
                       fireSafetyImpact: existing.fireSafetyImpact,
                       environmentSafetyImpact: existing.environmentSafetyImpact,
@@ -453,6 +479,7 @@ export async function upsertPreparedDefectRecords(params: {
                   : sourceOperationData),
               }
           : sourceData),
+        sourceStatusMismatch: repairStatus !== null && repairStatus !== effectiveStatus,
         // Khi ghép phiếu website với dòng vừa ghi lên Sheet, chuyển sang chế độ
         // theo dõi Google Sheet nhưng giữ websiteCreated để không mất các thao
         // tác Nhắc lại/Hoàn thành.
