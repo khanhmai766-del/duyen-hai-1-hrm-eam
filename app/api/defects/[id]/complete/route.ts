@@ -137,7 +137,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           mappedDeviceUnit: defect.mappedDeviceUnit,
           system: defect.system,
           requestType: body.requestType?.trim() || defect.requestType,
-          content: body.content?.trim() || defect.content,
+          // Tách nội dung khiếm khuyết gốc khỏi nội dung VHV đã thực hiện.
+          defectContent: defect.content,
+          content: body.content?.trim() || null,
           requestNumber: defect.requestNumber,
           reminderCount: defect.reminderCount,
           lastRemindedAt: defect.lastRemindedAt,
@@ -204,7 +206,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const defect = await prisma.defect.findUnique({
       where: { id: params.id },
       include: {
-        pendingHistory: { select: { id: true } },
+        pendingHistory: { select: { id: true, startedAt: true, finalizeAt: true } },
       },
     });
     if (!defect) return fail("Không tìm thấy khiếm khuyết", 404);
@@ -219,11 +221,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!body.performedAt) return fail("Vui lòng chọn ngày kết thúc");
 
     const performedAt = parseDateInput(body.performedAt);
-    const startedAt = new Date();
-    const pendingDays = defectResultStatusOf(body.result || defect.repairResultRaw) === "DA_XU_LY"
-      ? HISTORY_COMPLETED_PENDING_DAYS
-      : HISTORY_PENDING_DAYS;
-    const finalizeAt = new Date(startedAt.getTime() + pendingDays * 24 * 60 * 60 * 1000);
+    // Sửa thông tin không khởi động lại chu kỳ chờ. Quy tắc rút 14
+    // xuống 4 ngày khi Sheet báo đã xử lý được thực hiện ở source sync.
+    const { startedAt, finalizeAt } = defect.pendingHistory;
 
     const pending = await prisma.$transaction(async (tx) => {
       // Dùng cùng khóa với tiến trình chốt để việc sửa và chốt không thể chạy
@@ -247,15 +247,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           result: body.result?.trim() || null,
           confirmedById: user.id,
           confirmedByName: user.name,
-          startedAt,
-          finalizeAt,
         },
       });
       await tx.defect.update({
         where: { id: defect.id },
         data: {
           createdById: user.id,
-          confirmedAt: startedAt,
           confirmedById: user.id,
           confirmedByName: user.name,
         },

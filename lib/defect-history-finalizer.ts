@@ -68,7 +68,12 @@ export async function finalizePendingDefectHistories(
   const batchSize = Math.min(MAX_BATCH_SIZE, Math.max(1, Math.trunc(requestedBatchSize)));
   const now = new Date();
   const dueRows = await prisma.defectHistoryPending.findMany({
-    where: { finalizeAt: { lte: now } },
+    where: {
+      finalizeAt: { lte: now },
+      // Phiếu chờ vật tư không được chiếm chỗ trong batch. Khi VHV bỏ
+      // cờ, finalizeAt đã quá hạn nên phiếu tự vào lượt cron kế tiếp.
+      defect: { is: { postRepairAwaitingMaterial: false } },
+    },
     select: { id: true },
     orderBy: { finalizeAt: "asc" },
     take: batchSize,
