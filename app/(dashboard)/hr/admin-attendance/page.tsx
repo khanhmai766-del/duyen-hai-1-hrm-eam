@@ -168,7 +168,7 @@ export default function AdminAttendancePage() {
           <UserCheck className="h-4 w-4" /> Chấm công hành chính
         </Button>
         {canCreateHcGroup && (
-          <Button onClick={() => setAddOpen(true)}>
+          <Button size="toolbar" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" /> Thêm nhóm
           </Button>
         )}

@@ -239,7 +239,7 @@ export default function OilAnalysisPage() {
         description={`Mẫu dầu Không Đạt của ${TARGET_DON_VI}, đọc một chiều từ LIMS. Ý kiến QLVH vẫn nhập trực tiếp trên LIMS.`}
       >
         <LimsSyncChip stage={stage} syncing={syncing || importFromLims.isPending} canSync={canSync} onSync={requestSync} />
-        <Button variant="outline" asChild>
+        <Button variant="soft" size="toolbar" asChild>
           <a href={LIMS_URL} target="_blank" rel="noreferrer">
             <ExternalLink className="h-4 w-4" /> Mở LIMS
           </a>

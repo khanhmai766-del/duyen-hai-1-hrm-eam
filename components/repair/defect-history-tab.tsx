@@ -183,7 +183,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           filenamePrefix="lich-su-sua-chua"
         />
         {canCreate && (
-          <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Thêm mới</Button>
+          <Button size="toolbar" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Thêm mới</Button>
         )}
       </PageHeader>
 

@@ -704,7 +704,7 @@ export function DocumentCatalogPage({
         {(canCreate || canImportProcedure) && (
           <>
             {canImportProcedure && (
-              <Button type="button" variant="outline" onClick={downloadProcedureImportTemplate}>
+              <Button type="button" variant="soft" size="toolbar" onClick={downloadProcedureImportTemplate}>
                 <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
                 File Excel mẫu
               </Button>
@@ -713,7 +713,8 @@ export function DocumentCatalogPage({
               <>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="soft"
+                  size="toolbar"
                   onClick={() => procedureImportInputRef.current?.click()}
                   disabled={procedureImporting}
                 >
@@ -730,7 +731,7 @@ export function DocumentCatalogPage({
               </>
             )}
             {canCreate && (
-              <Button onClick={openCreate}>
+              <Button size="toolbar" onClick={openCreate}>
                 <Plus className="h-4 w-4" />
                 {addLabel}
               </Button>

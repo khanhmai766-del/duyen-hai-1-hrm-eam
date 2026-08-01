@@ -35,7 +35,7 @@ export default function DeviceRepairHistoryPage() {
       </Button>
 
       <PageHeader title={`Lịch sử: ${device.name}`} description={`${device.code}${device.system ? ` · ${device.system}` : ""}`}>
-        <Button asChild variant="outline"><Link href={`/devices/${device.id}`}>Lý lịch thiết bị</Link></Button>
+        <Button asChild variant="soft" size="toolbar"><Link href={`/devices/${device.id}`}>Lý lịch thiết bị</Link></Button>
       </PageHeader>
 
       <div className="flex flex-wrap gap-2">
