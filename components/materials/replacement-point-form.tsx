@@ -82,6 +82,7 @@ export function ReplacementPointForm({
     lastReplacedAt: toDateInput(point?.lastReplacedAt),
     nextDueAt: toDateInput(point?.nextDueAt),
     note: point?.note ?? "",
+    samplingOnly: point?.samplingOnly === true,
   });
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
@@ -203,6 +204,7 @@ export function ReplacementPointForm({
       lastReplacedAt: form.lastReplacedAt || null,
       nextDueAt: form.nextDueAt || null,
       note: form.note,
+      samplingOnly: form.samplingOnly,
     };
     try {
       if (!point) return toast.error("Không tìm thấy điểm thay thế cần cập nhật");
@@ -263,6 +265,24 @@ export function ReplacementPointForm({
       <Field label="Ghi chú chu kỳ">
         <Input value={form.intervalNote} onChange={(e) => set("intervalNote", e.target.value)} placeholder="VD: 2500h" />
       </Field>
+
+      {/* Đổi được nhóm sau khi tạo: điểm lỡ khai là thay thế định kỳ có thể
+          chuyển sang chỉ lấy mẫu mà không phải xoá rồi tạo lại. */}
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5 sm:col-span-2">
+        <input
+          type="checkbox"
+          checked={form.samplingOnly}
+          onChange={(e) => set("samplingOnly", e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#00558F]"
+        />
+        <span className="text-sm leading-5">
+          <span className="font-semibold text-ink">Vật tư lấy mẫu định kỳ</span>
+          <span className="block text-xs text-muted-foreground">
+            Theo O&amp;M chỉ lấy mẫu, theo dõi hoặc châm bổ sung — không thay thế định kỳ.
+            Vẫn nhắc theo chu kỳ nhưng hiển thị riêng và không tính vào cảnh báo quá hạn thay thế.
+          </span>
+        </span>
+      </label>
 
       <Field label="Lần thay gần nhất">
         <Input type="date" value={form.lastReplacedAt} onChange={(e) => onLastChange(e.target.value)} />
