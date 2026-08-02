@@ -341,24 +341,24 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           </div>
 
           <div className="overflow-x-auto">
-          <Table className="min-w-[1210px]">
+          <Table className="min-w-[1160px]">
             {/* Đầu bảng nền xanh EVN, dính khi cuộn dọc trong vùng bảng */}
             <TableHeader>
               <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
                 <TableHead className="w-[52px] bg-[#00558F]" />
-                <TableHead className="min-w-[290px] bg-[#00558F]"><SortHeader label="Thiết bị" sortKey="device" sort={sort} onSort={toggleSort} /></TableHead>
-                <TableHead className="w-[130px] bg-[#00558F]">
+                <TableHead className="min-w-[280px] bg-[#00558F]"><SortHeader label="Thiết bị" sortKey="device" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[136px] min-w-[136px] bg-[#00558F] px-2">
                   <div className="flex items-center justify-center gap-1.5">
                     <SortHeader label="Yêu cầu" sortKey="requestType" sort={sort} onSort={toggleSort} align="center" inline />
                     <RequestTypeColumnFilter value={requestTypeFilter} onChange={setRequestTypeFilter} />
                   </div>
                 </TableHead>
-                <TableHead className="w-[110px] bg-[#00558F]"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[140px] bg-[#00558F]"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[170px] bg-[#00558F]"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[155px] bg-[#00558F]"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[96px] bg-[#00558F] px-2"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[130px] bg-[#00558F] px-2"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[160px] bg-[#00558F] px-2"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[145px] bg-[#00558F] px-2"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 {actionCol && (
-                  <TableHead className="w-[100px] bg-[#00558F] text-center text-[11px] font-semibold uppercase tracking-wider text-white">
+                  <TableHead className="w-[92px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
                     Thao tác
                   </TableHead>
                 )}
@@ -582,7 +582,7 @@ function SortHeader({
         align === "center" && "justify-center"
       )}
     >
-      <span>{label}</span>
+      <span className="whitespace-nowrap">{label}</span>
       <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
     </button>
   );
