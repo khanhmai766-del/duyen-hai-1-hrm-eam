@@ -67,23 +67,35 @@ export async function finalizePendingDefectHistories(
 ): Promise<FinalizePendingDefectHistoryResult> {
   const batchSize = Math.min(MAX_BATCH_SIZE, Math.max(1, Math.trunc(requestedBatchSize)));
   const now = new Date();
-  const dueRows = await prisma.defectHistoryPending.findMany({
-    where: {
-      finalizeAt: { lte: now },
-      // Phiếu chờ vật tư không được chiếm chỗ trong batch. Khi VHV bỏ
-      // cờ, finalizeAt đã quá hạn nên phiếu tự vào lượt cron kế tiếp.
-      defect: { is: { postRepairAwaitingMaterial: false } },
-    },
-    select: { id: true },
-    orderBy: { finalizeAt: "asc" },
-    take: batchSize,
-  });
+  const [dueRows, awaitingMaterialCount] = await Promise.all([
+    prisma.defectHistoryPending.findMany({
+      where: {
+        finalizeAt: { lte: now },
+        // Phiếu chờ vật tư không được chiếm chỗ trong batch. Khi VHV bỏ
+        // cờ, finalizeAt đã quá hạn nên phiếu tự vào lượt cron kế tiếp.
+        defect: { is: { postRepairAwaitingMaterial: false } },
+      },
+      select: { id: true },
+      orderBy: { finalizeAt: "asc" },
+      take: batchSize,
+    }),
+    // Đếm riêng số phiếu đã tới hạn nhưng bị giữ lại vì chờ vật tư. Từ khi
+    // truy vấn trên lọc sẵn, nhánh POSTPONED trong giao dịch chỉ còn bắt được
+    // trường hợp phiếu bị gắn cờ xen giữa hai bước, nên nếu không đếm ở đây
+    // thì n8n luôn nhận postponedCount = 0 và không thấy tồn đọng.
+    prisma.defectHistoryPending.count({
+      where: {
+        finalizeAt: { lte: now },
+        defect: { is: { postRepairAwaitingMaterial: true } },
+      },
+    }),
+  ]);
 
   const result: FinalizePendingDefectHistoryResult = {
     dueCount: dueRows.length,
     finalizedCount: 0,
     cancelledCount: 0,
-    postponedCount: 0,
+    postponedCount: awaitingMaterialCount,
   };
 
   for (const due of dueRows) {
