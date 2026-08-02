@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
-import { normalizeText } from "@/lib/nav";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
+import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -224,22 +224,36 @@ export async function GET(req: NextRequest) {
     const user = await requireUser();
     const materialPermission = await assignedPermissionLevel(user, "material-manage");
     if (materialPermission === "none") return fail("Không đủ quyền xem Danh mục Vận Hành 1", 403);
-    const canAccessAllMaterials = materialPermission === "manage" || materialPermission === "full";
     // ?machine=S1|S2|COMMON: lọc theo tổ máy ngay trong query (tab Danh mục vật tư).
     // ?include=usage: kèm lịch sử tiêu hao theo thiết bị (chỉ trang Reports cần).
     const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
     const includeUsage = req.nextUrl.searchParams.get("include") === "usage";
-    const [access, materials] = await Promise.all([
-      canAccessAllMaterials ? Promise.resolve(null) : resolveEquipmentAccessForUser(user),
-      prisma.material.findMany({
-        where: machine ? { machine } : undefined,
-        orderBy: { code: "asc" },
-        include: {
-          replacements: MATERIAL_INCLUDE.replacements,
-          ...(includeUsage ? { deviceMaterials: MATERIAL_INCLUDE.deviceMaterials } : {}),
+    const access = await resolveEquipmentAccessForUser(user);
+    const materialAccess = materialCatalogAccessWhere(access);
+
+    const materials = await prisma.material.findMany({
+      where: {
+        ...(machine ? { machine } : {}),
+        // Vật tư chỉ xuất hiện khi có ít nhất một thiết bị đã khai báo trong phạm
+        // vi Xem/Sửa của cương vị hiện tại.
+        replacements: { some: materialAccess.declaration },
+      },
+      orderBy: { code: "asc" },
+      include: {
+        replacements: {
+          ...MATERIAL_INCLUDE.replacements,
+          where: materialAccess.replacement,
         },
-      }),
-    ]);
+        ...(includeUsage
+          ? {
+              deviceMaterials: {
+                ...MATERIAL_INCLUDE.deviceMaterials,
+                where: materialAccess.usage,
+              },
+            }
+          : {}),
+      },
+    });
     const documents = await materialDocumentMap(materials.map((material) => material.id));
     // Tra tên node cha 1 lần cho mọi thiết bị của các điểm thay thế → cột "Hệ thống".
     const parentSeqs = Array.from(
@@ -269,22 +283,10 @@ export async function GET(req: NextRequest) {
       ...mapMaterial(material, documents.get(material.id), parentNameBySeq),
       machines: machinesByCode.get(material.code) ?? [material.machine],
     }));
-    // Quyền Xem vẫn được tra cứu toàn bộ danh mục vật tư. Phạm vi cương vị chỉ
-    // giới hạn các quan hệ thiết bị/điểm thay thế, không được làm mất cả dòng vật tư
-    // (đặc biệt với cương vị chung như "Kỹ thuật viên" không có nhánh riêng).
-    const filtered = access?.hasExplicitScopes
-      ? data
-          .map((material) => {
-            const deviceMaterials = (material.deviceMaterials ?? []).filter((item: any) => access.canViewSeq(item.deviceSeq));
-            const replacements = (material.replacements ?? []).filter((item: any) => {
-              if (item.deviceSeq) return access.canViewSeq(item.deviceSeq);
-              if (item.system) return access.visibleSystemNames.has(normalizeText(item.system));
-              return false;
-            });
-            return { ...material, deviceMaterials, replacements };
-          })
-      : data;
-    return ok(filtered, { total: filtered.length });
+    return ok(data, {
+      total: data.length,
+      equipmentScopeApplied: access.hasExplicitScopes,
+    });
   });
 }
 

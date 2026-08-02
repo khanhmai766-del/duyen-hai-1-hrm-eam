@@ -675,7 +675,7 @@ function MaterialsPageContent() {
           description={
             isFiltered
               ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}" (${machineLabel}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
-              : `Chưa có vật tư nào thuộc loại "${categoryFilter}" trong ${machineLabel}.`
+              : `Chưa có vật tư nào thuộc loại "${categoryFilter}" được khai báo cho thiết bị trong phạm vi Xem/Sửa của cương vị hiện tại (${machineLabel}).`
           }
           action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setBlockFilter("ALL"); } } : undefined}
         />
