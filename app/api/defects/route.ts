@@ -115,6 +115,11 @@ function activeDefectWhere(): Prisma.DefectWhereInput {
   const completedCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   return {
     AND: [{
+      // Đã xác nhận lưu lịch sử thì phiếu chuyển hẳn sang trang Lịch sử sửa
+      // chữa (hiện ở đó với trạng thái Chờ chốt), không còn nằm ở bảng Khiếm
+      // khuyết nữa để tránh một phiếu xuất hiện ở hai nơi.
+      pendingHistory: { is: null },
+    }, {
       // Phiếu hủy chỉ còn ở Tồn đọng trong lúc chờ ACK ghi ngược lên Sheet.
       OR: [
         { cancelledAt: null },

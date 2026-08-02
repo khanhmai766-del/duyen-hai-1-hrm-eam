@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export function CompleteDefectDialog({
   defect: DefectItem | null;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const complete = useCompleteDefect();
   const updatePending = useUpdatePendingDefectHistory();
   // Chỉ cần TÊN của đúng một thiết bị. Trước đây dùng useDevices({}) — tải toàn bộ 21.948
@@ -87,13 +89,23 @@ export function CompleteDefectDialog({
       };
       if (editingPending) await updatePending.mutateAsync(payload);
       else await complete.mutateAsync(payload);
-      toast.success(
-        editingPending
-          ? `Đã cập nhật; hạn chốt lịch sử được tính lại sau ${pendingDays} ngày`
-          : sheetTracked
-          ? `Đã xác nhận; phiếu sẽ được chốt lịch sử sau ${pendingDays} ngày`
-          : "Đã hoàn thành & ghi lịch sử thiết bị"
-      );
+      if (editingPending) {
+        // Hạn chốt giữ nguyên theo lần xác nhận đầu, sửa thông tin không dời hạn.
+        toast.success("Đã cập nhật thông tin chờ chốt lịch sử");
+      } else {
+        // Phiếu rời khỏi bảng Khiếm khuyết ngay sau bước này nên phải nói rõ
+        // nó nằm ở đâu, kèm lối mở thẳng sang trang Lịch sử sửa chữa.
+        toast.success("Đã chuyển phiếu sang Lịch sử sửa chữa", {
+          description: sheetTracked
+            ? `Phiếu không còn ở bảng Khiếm khuyết. Tra cứu ở Lịch sử sửa chữa, lọc Chờ chốt — hệ thống tự chốt sau ${pendingDays} ngày.`
+            : "Phiếu không còn ở bảng Khiếm khuyết. Tra cứu ở Lịch sử sửa chữa.",
+          duration: 8000,
+          action: {
+            label: "Mở lịch sử",
+            onClick: () => router.push("/repair-history"),
+          },
+        });
+      }
       onClose();
     } catch (e) {
       toast.error((e as Error).message);

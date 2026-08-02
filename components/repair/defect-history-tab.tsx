@@ -15,6 +15,7 @@ import {
   X,
   Plus,
   Pencil,
+  FileClock,
   UserRound,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,9 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
+import { DefectExpandedDetailsById } from "@/components/defects/defect-expanded-details";
+import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
+import { useDefect } from "@/hooks/useDefects";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -39,6 +43,16 @@ type SortKey = "workOrderNumber" | "performedAt" | "unit" | "content" | "system"
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [10, 25, 50, 100];
+
+/**
+ * Phiếu đã xác nhận lưu lịch sử nằm ở đây với trạng thái Chờ chốt, nên mặc
+ * định mở đúng nhóm đó — VHV vừa bấm lưu là thấy ngay phiếu của mình.
+ */
+const HISTORY_STATUSES = [
+  { value: "PENDING" as const, label: "Chờ chốt" },
+  { value: "FINALIZED" as const, label: "Đã chốt" },
+];
+type HistoryStatusFilter = (typeof HISTORY_STATUSES)[number]["value"];
 
 export function DefectHistoryTab({ role }: { role?: string }) {
   const searchParams = useSearchParams();
@@ -79,6 +93,8 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const [tableSearch, setTableSearch] = React.useState("");
   const [pageSize, setPageSize] = React.useState(10);
   const [page, setPage] = React.useState(1);
+  const [statusFilter, setStatusFilter] = React.useState<HistoryStatusFilter>("PENDING");
+  const [pendingEditDefectId, setPendingEditDefectId] = React.useState<string | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [sort, setSort] = React.useState<{ key: SortKey; dir: SortDir }>({ key: "performedAt", dir: "desc" });
 
@@ -106,9 +122,14 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   }
 
   const visibleRows = React.useMemo(() => {
+    // Chờ chốt và Đã chốt là hai nhóm tách bạch: bản nháp chờ chốt hiện chi tiết
+    // theo phiếu khiếm khuyết, bản đã chốt hiện chi tiết theo bản ghi lịch sử.
+    const byStatus = rows.filter((r) =>
+      statusFilter === "PENDING" ? r.historyStatus === "PENDING" : r.historyStatus !== "PENDING"
+    );
     const q = normalizeText(tableSearch);
     const searched = q
-      ? rows.filter((r) =>
+      ? byStatus.filter((r) =>
           normalizeText(
             [
               r.workOrderNumber,
@@ -128,10 +149,10 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               .join(" ")
           ).includes(q)
         )
-      : rows;
+      : byStatus;
 
     return [...searched].sort((a, b) => compareRows(a, b, sort.key, sort.dir, deviceNameByCode));
-  }, [rows, tableSearch, sort, deviceNameByCode]);
+  }, [rows, statusFilter, tableSearch, sort, deviceNameByCode]);
 
   const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
   React.useEffect(() => {
@@ -140,7 +161,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   React.useEffect(() => {
     setPage(1);
     setExpandedId(null);
-  }, [filters, tableSearch, pageSize, sort]);
+  }, [filters, statusFilter, tableSearch, pageSize, sort]);
 
   const pagedRows = visibleRows.slice((page - 1) * pageSize, page * pageSize);
   const firstShown = visibleRows.length ? (page - 1) * pageSize + 1 : 0;
@@ -200,6 +221,29 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <FilterLabel>Trạng thái</FilterLabel>
+          <div className="inline-flex overflow-hidden rounded-md border border-input bg-white">
+            {HISTORY_STATUSES.map((option) => {
+              const active = statusFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setStatusFilter(option.value)}
+                  className={cn(
+                    "border-r border-input px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0",
+                    active ? "bg-[#00558F] text-white" : "text-ink/70 hover:bg-muted hover:text-ink"
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -373,6 +417,19 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                         {actionCol && (
                           <TableCell className="px-2 py-2.5">
                             <div className="flex items-center justify-center gap-1">
+                              {canManage && pending && r.pendingDefectId && (
+                                // Thao tác này trước nằm ở bảng Khiếm khuyết; phiếu đã dời
+                                // sang đây nên nút sửa thông tin chờ chốt phải theo cùng.
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Sửa thông tin lịch sử"
+                                  className="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                  onClick={(e) => { e.stopPropagation(); setPendingEditDefectId(r.pendingDefectId!); }}
+                                >
+                                  <FileClock className="h-4 w-4" />
+                                </Button>
+                              )}
                               {canManage && !pending && (
                                 <Button variant="ghost" size="icon" title="Sửa" onClick={(e) => { e.stopPropagation(); setEditTarget(r); }}>
                                   <Pencil className="h-4 w-4" />
@@ -391,7 +448,13 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                         <TableRow className="hover:bg-transparent">
                           <TableCell colSpan={detailColSpan} className="bg-slate-50/80 p-0">
                             <div className="border-l-[3px] border-[#00558F] py-4 pl-6 pr-5">
-                              <ExpandedDetails row={r} deviceName={deviceName} />
+                              {/* Chờ chốt: dữ liệu còn nằm ở phiếu khiếm khuyết nên hiện
+                                  đúng 3 bảng của phiếu. Đã chốt: đọc từ bản ghi lịch sử. */}
+                              {pending && r.pendingDefectId ? (
+                                <DefectExpandedDetailsById id={r.pendingDefectId} />
+                              ) : (
+                                <ExpandedDetails row={r} deviceName={deviceName} />
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -423,6 +486,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
 
       <DefectHistoryDialog open={createOpen} onOpenChange={setCreateOpen} />
       <DefectHistoryDialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)} record={editTarget} />
+      {pendingEditDefectId && (
+        <PendingHistoryEditDialog defectId={pendingEditDefectId} onClose={() => setPendingEditDefectId(null)} />
+      )}
 
 
       <ConfirmDialog
@@ -497,6 +563,25 @@ function SortHeader({
       <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
     </button>
   );
+}
+
+/**
+ * Hộp thoại sửa thông tin bản nháp chờ chốt. Bảng lịch sử chỉ giữ id của phiếu
+ * khiếm khuyết nên phải tải chi tiết phiếu rồi mới mở được đúng hộp thoại cũ.
+ */
+function PendingHistoryEditDialog({ defectId, onClose }: { defectId: string; onClose: () => void }) {
+  const detail = useDefect(defectId);
+  const defect = detail.data?.data ?? null;
+
+  React.useEffect(() => {
+    if (detail.isError) {
+      toast.error("Không tải được phiếu khiếm khuyết của bản ghi này");
+      onClose();
+    }
+  }, [detail.isError, onClose]);
+
+  if (!defect) return null;
+  return <CompleteDefectDialog defect={defect} onClose={onClose} />;
 }
 
 /** Nhãn của một ô lọc: IN HOA, cỡ nhỏ, giãn chữ nhẹ — theo .flabel của bản mẫu. */
