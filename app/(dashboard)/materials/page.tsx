@@ -2074,12 +2074,15 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                   <div className="text-muted-foreground">Thiết bị: {tracking.device?.name || tracking.location}</div>
                 )}
               </div>
-              <Field label="Lần thay gần nhất">
-                <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
-              </Field>
-              <Field label="Chu kỳ thay thế (tháng)">
-                <Input type="number" min={0} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
-              </Field>
+              {/* Hai ô đi liền một cặp khi khai báo nên xếp cùng hàng cho dễ đối chiếu. */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Lần thay gần nhất">
+                  <Input type="date" value={trackDate} onChange={(e) => setTrackDate(e.target.value)} />
+                </Field>
+                <Field label="Chu kỳ thay thế (tháng)">
+                  <Input type="number" min={0} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
+                </Field>
+              </div>
               <Field label="Ghi chú">
                 <Textarea
                   rows={3}
