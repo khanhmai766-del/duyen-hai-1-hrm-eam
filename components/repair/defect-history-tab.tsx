@@ -16,6 +16,8 @@ import {
   Plus,
   Pencil,
   FileClock,
+  Filter,
+  Check,
   UserRound,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -35,7 +37,15 @@ import { useDefect } from "@/hooks/useDefects";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { DEFECT_UNITS, isSelectableManagingPosition } from "@/lib/constants";
+import { DEFECT_REQUEST_TYPES, DEFECT_UNITS, isSelectableManagingPosition } from "@/lib/constants";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
@@ -94,6 +104,8 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const [pageSize, setPageSize] = React.useState(10);
   const [page, setPage] = React.useState(1);
   const [statusFilter, setStatusFilter] = React.useState<HistoryStatusFilter>("PENDING");
+  // Mặc định Cơ theo thói quen tra cứu; "ALL" để xem tất cả loại yêu cầu.
+  const [requestTypeFilter, setRequestTypeFilter] = React.useState("Cơ");
   const [pendingEditDefectId, setPendingEditDefectId] = React.useState<string | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [sort, setSort] = React.useState<{ key: SortKey; dir: SortDir }>({ key: "performedAt", dir: "desc" });
@@ -114,6 +126,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       ...(f.includeDescendants ? { includeDescendants: f.includeDescendants } : {}),
       unit: "S1",
     }));
+    setRequestTypeFilter("Cơ");
     setTableSearch("");
   }
 
@@ -124,9 +137,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const visibleRows = React.useMemo(() => {
     // Chờ chốt và Đã chốt là hai nhóm tách bạch: bản nháp chờ chốt hiện chi tiết
     // theo phiếu khiếm khuyết, bản đã chốt hiện chi tiết theo bản ghi lịch sử.
-    const byStatus = rows.filter((r) =>
-      statusFilter === "PENDING" ? r.historyStatus === "PENDING" : r.historyStatus !== "PENDING"
-    );
+    const byStatus = rows
+      .filter((r) => (statusFilter === "PENDING" ? r.historyStatus === "PENDING" : r.historyStatus !== "PENDING"))
+      .filter((r) => requestTypeFilter === "ALL" || (r.requestType ?? "") === requestTypeFilter);
     const q = normalizeText(tableSearch);
     const searched = q
       ? byStatus.filter((r) =>
@@ -152,7 +165,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       : byStatus;
 
     return [...searched].sort((a, b) => compareRows(a, b, sort.key, sort.dir, deviceNameByCode));
-  }, [rows, statusFilter, tableSearch, sort, deviceNameByCode]);
+  }, [rows, statusFilter, requestTypeFilter, tableSearch, sort, deviceNameByCode]);
 
   const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
   React.useEffect(() => {
@@ -161,7 +174,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   React.useEffect(() => {
     setPage(1);
     setExpandedId(null);
-  }, [filters, statusFilter, tableSearch, pageSize, sort]);
+  }, [filters, statusFilter, requestTypeFilter, tableSearch, pageSize, sort]);
 
   const pagedRows = visibleRows.slice((page - 1) * pageSize, page * pageSize);
   const firstShown = visibleRows.length ? (page - 1) * pageSize + 1 : 0;
@@ -175,6 +188,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const hasActiveFilters =
     Boolean(filters.system || filters.from || filters.to || filters.workOrderNumber || filters.device || filters.deviceSeq)
     || (filters.unit ?? "S1") !== "S1"
+    || requestTypeFilter !== "Cơ"
     || tableSearch.trim().length > 0;
   const backupColumns = React.useMemo(
     () => [
@@ -333,7 +347,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
                 <TableHead className="w-[52px] bg-[#00558F]" />
                 <TableHead className="min-w-[290px] bg-[#00558F]"><SortHeader label="Thiết bị" sortKey="device" sort={sort} onSort={toggleSort} /></TableHead>
-                <TableHead className="w-[130px] bg-[#00558F]"><SortHeader label="Loại yêu cầu" sortKey="requestType" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[130px] bg-[#00558F]">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <SortHeader label="Yêu cầu" sortKey="requestType" sort={sort} onSort={toggleSort} align="center" inline />
+                    <RequestTypeColumnFilter value={requestTypeFilter} onChange={setRequestTypeFilter} />
+                  </div>
+                </TableHead>
                 <TableHead className="w-[110px] bg-[#00558F]"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[140px] bg-[#00558F]"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[170px] bg-[#00558F]"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
@@ -541,12 +560,15 @@ function SortHeader({
   sort,
   onSort,
   align = "left",
+  inline = false,
 }: {
   label: string;
   sortKey: SortKey;
   sort: { key: SortKey; dir: SortDir };
   onSort: (key: SortKey) => void;
   align?: "left" | "center";
+  /** Bỏ w-full khi tiêu đề còn phải nhường chỗ cho nút lọc bên cạnh. */
+  inline?: boolean;
 }) {
   const active = sort.key === sortKey;
   const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
@@ -555,7 +577,8 @@ function SortHeader({
       type="button"
       onClick={() => onSort(sortKey)}
       className={cn(
-        "inline-flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
+        "inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
+        !inline && "w-full",
         align === "center" && "justify-center"
       )}
     >
@@ -590,6 +613,48 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
     <span className="whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
       {children}
     </span>
+  );
+}
+
+/**
+ * Lọc theo loại yêu cầu ngay trên tiêu đề cột, dạng phễu — giống bộ lọc Kết quả
+ * sửa chữa ở bảng Khiếm khuyết. Nền đầu bảng màu xanh nên nút đảo màu so với
+ * bản ở trang kia để vẫn đọc được.
+ */
+function RequestTypeColumnFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const active = value !== "ALL";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Lọc theo loại yêu cầu"
+          title={active ? `Đang lọc: ${value}` : "Lọc theo loại yêu cầu"}
+          className={cn(
+            "flex h-6 w-7 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+            active
+              ? "border-white bg-white text-[#00558F] shadow-sm"
+              : "border-white/40 bg-white/10 text-white/80 hover:bg-white/25 hover:text-white"
+          )}
+        >
+          <Filter className="h-3.5 w-3.5" fill={active ? "currentColor" : "none"} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="w-[220px]">
+        <DropdownMenuLabel>Loại yêu cầu</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onChange("ALL")} className="gap-2">
+          <Check className={cn("h-4 w-4", value === "ALL" ? "opacity-100" : "opacity-0")} />
+          Tất cả
+        </DropdownMenuItem>
+        {DEFECT_REQUEST_TYPES.map((option) => (
+          <DropdownMenuItem key={option} onSelect={() => onChange(option)} className="gap-2">
+            <Check className={cn("h-4 w-4 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
+            <span>{option}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
