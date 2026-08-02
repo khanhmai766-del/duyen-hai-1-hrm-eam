@@ -14,7 +14,7 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { ReplacementBadge } from "@/components/materials/replacement-badge";
+import { ReplacementBadge, SamplingOnlyChip } from "@/components/materials/replacement-badge";
 import { ReplacementCalendar, dayKey } from "@/components/materials/replacement-calendar";
 import {
   ReplacementStatusDashboard,
@@ -614,8 +614,9 @@ function ReplacementsPageContent() {
                                 {p.material.name}
                               </div>
                               <div className="font-mono text-[11px] text-navy">{p.material.code}</div>
+                              {p.samplingOnly && <SamplingOnlyChip className="mt-1" />}
                             </div>
-                            <ReplacementBadge nextDueAt={p.nextDueAt} withText />
+                            <ReplacementBadge nextDueAt={p.nextDueAt} withText samplingOnly={p.samplingOnly} />
                           </div>
                           <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1.5">

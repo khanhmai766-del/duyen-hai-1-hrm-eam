@@ -408,6 +408,10 @@ model MaterialReplacement {
   managingPositionCode String? // mã cương vị ổn định; giữ managingPosition làm nhãn tương thích dữ liệu cũ
   intervalMonths       Int // chu kỳ thay thế (tháng); 0 = chỉ khai báo, không theo dõi lịch
   intervalNote         String? // ghi chú chu kỳ, vd "2500h"
+  // Vật tư theo O&M chỉ LẤY MẪU/theo dõi/châm bổ sung chứ không thay định kỳ.
+  // Vẫn có chu kỳ và vẫn nhắc đến hạn, nhưng hiển thị riêng và không cộng vào
+  // cảnh báo quá hạn thay thế để khỏi làm loãng cảnh báo thật.
+  samplingOnly         Boolean   @default(false)
   lastReplacedAt       DateTime? // lần thay gần nhất (user nhập)
   nextDueAt            DateTime // ngày đến hạn kế tiếp
   note                 String?

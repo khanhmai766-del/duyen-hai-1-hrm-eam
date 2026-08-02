@@ -308,6 +308,7 @@ async function buildEquipmentDashboard(
           deviceSeq: true,
           system: true,
           nextDueAt: true,
+          samplingOnly: true,
           material: { select: { name: true, system: true } },
           device: { select: { seq: true, name: true } },
         },
@@ -352,8 +353,10 @@ async function buildEquipmentDashboard(
   const urgentDefects = openDefects.filter(
     (defect) => defect.severity === "1" || defect.severity === "2"
   );
+  // Điểm chỉ lấy mẫu định kỳ không vào các nhóm cảnh báo thay thế của dashboard.
+  const trackedReplacements = visibleReplacements.filter((item) => !item.samplingOnly);
   const dueGroups = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
-  for (const item of visibleReplacements) {
+  for (const item of trackedReplacements) {
     dueGroups[replacementDueStatus(item.nextDueAt)] += 1;
   }
 
@@ -368,7 +371,7 @@ async function buildEquipmentDashboard(
     openDefectsByDevice.set(seq, (openDefectsByDevice.get(seq) ?? 0) + 1);
   }
   const replacementWarningsByDevice = new Map<string, number>();
-  for (const item of visibleReplacements) {
+  for (const item of trackedReplacements) {
     if (!item.deviceSeq || replacementDueStatus(item.nextDueAt) === "OK") continue;
     replacementWarningsByDevice.set(
       item.deviceSeq,
@@ -437,7 +440,7 @@ async function buildEquipmentDashboard(
       const row = rows.get(system);
       if (row) row.defects += count;
     }
-    for (const item of visibleReplacements) {
+    for (const item of trackedReplacements) {
       if (replacementDueStatus(item.nextDueAt) === "OK") continue;
       if (allowed && (!item.deviceSeq || !allowed.has(item.deviceSeq))) continue;
       const system =
@@ -532,7 +535,7 @@ async function buildEquipmentDashboard(
     repairYearCounts.unshift({ year: String(currentYear), repairs: 0 });
   }
 
-  const upcomingReplacements = visibleReplacements
+  const upcomingReplacements = trackedReplacements
     .map((item) => {
       const linkedDevice = item.deviceSeq ? deviceByCode.get(item.deviceSeq) : null;
       return {

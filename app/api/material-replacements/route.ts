@@ -90,13 +90,23 @@ export async function GET(req: NextRequest) {
     });
     const visiblePoints = points.filter((point) => canViewMaterialReplacement(access, point));
 
-    const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
-    for (const p of visiblePoints) counts[replacementDueStatus(p.nextDueAt)]++;
+    // Điểm chỉ lấy mẫu định kỳ không tính vào bộ đếm cảnh báo thay thế: trễ kỳ
+    // lấy mẫu nhẹ hơn hẳn quá hạn thay vật tư, gộp chung sẽ làm loãng cảnh báo.
+    const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0, SAMPLING: 0 };
+    for (const p of visiblePoints) {
+      if (p.samplingOnly) counts.SAMPLING++;
+      else counts[replacementDueStatus(p.nextDueAt)]++;
+    }
 
     let filtered = visiblePoints;
     if (due && due !== "ALL") {
-      if (due === "WARN") filtered = visiblePoints.filter((p) => replacementDueStatus(p.nextDueAt) !== "OK");
-      else filtered = visiblePoints.filter((p) => replacementDueStatus(p.nextDueAt) === due);
+      if (due === "SAMPLING") filtered = visiblePoints.filter((p) => p.samplingOnly);
+      // WARN nuôi chuông cảnh báo ở thanh trên cùng nên loại điểm chỉ lấy mẫu.
+      else if (due === "WARN") {
+        filtered = visiblePoints.filter((p) => !p.samplingOnly && replacementDueStatus(p.nextDueAt) !== "OK");
+      } else {
+        filtered = visiblePoints.filter((p) => !p.samplingOnly && replacementDueStatus(p.nextDueAt) === due);
+      }
     }
 
     return ok(filtered.map(mapPoint), { total: filtered.length, counts, warn: counts.OVERDUE + counts.DUE_SOON });
@@ -219,6 +229,8 @@ export async function POST(req: NextRequest) {
           deviceCount: limit,
           intervalMonths,
           intervalNote: String(body.intervalNote ?? "").trim() || null,
+          // Điểm chỉ lấy mẫu/theo dõi theo O&M, không phải thay thế định kỳ.
+          samplingOnly: body.samplingOnly === true,
           lastReplacedAt,
           nextDueAt,
           note: String(body.note ?? "").trim() || null,

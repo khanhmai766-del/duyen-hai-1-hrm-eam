@@ -19,6 +19,8 @@ export interface MaterialReplacementPoint {
   quantity: number;
   intervalMonths: number;
   intervalNote: string | null;
+  /** Theo O&M chỉ lấy mẫu/theo dõi/châm bổ sung, không thay thế định kỳ. */
+  samplingOnly?: boolean;
   lastReplacedAt: string | Date | null;
   nextDueAt: string | Date;
   note: string | null;

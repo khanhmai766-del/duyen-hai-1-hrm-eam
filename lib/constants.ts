@@ -362,6 +362,17 @@ export const REPL_DUE = {
   OK: { label: "Còn hạn", badge: "bg-green-100 text-green-800", dot: "#16A34A" },
 } as const;
 
+/**
+ * Cùng ba mốc thời gian như REPL_DUE nhưng dành cho điểm CHỈ LẤY MẪU định kỳ:
+ * tông xanh dương và chữ theo nghiệp vụ lấy mẫu, để không lẫn với vật tư quá
+ * hạn thay thế (vốn là cảnh báo nghiêm trọng hơn).
+ */
+export const SAMPLING_DUE = {
+  OVERDUE: { label: "Trễ kỳ lấy mẫu", badge: "bg-sky-100 text-sky-800", dot: "#0284C7" },
+  DUE_SOON: { label: "Sắp tới kỳ lấy mẫu", badge: "bg-sky-50 text-sky-700", dot: "#38BDF8" },
+  OK: { label: "Trong kỳ", badge: "bg-slate-100 text-slate-600", dot: "#94A3B8" },
+} as const;
+
 export type ReplDueKey = keyof typeof REPL_DUE;
 export const REPL_DUE_ORDER: ReplDueKey[] = ["OVERDUE", "DUE_SOON", "OK"];
 

@@ -1939,11 +1939,13 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
   const [trackDate, setTrackDate] = React.useState("");
   const [trackMonths, setTrackMonths] = React.useState(12);
   const [trackNote, setTrackNote] = React.useState("");
+  const [trackSamplingOnly, setTrackSamplingOnly] = React.useState(false);
 
   function openTracking(p: PanelPoint) {
     setTrackDate(formatDateInput(new Date()));
     setTrackMonths(p.intervalMonths);
     setTrackNote("");
+    setTrackSamplingOnly(false);
     setTracking(p);
   }
 
@@ -1951,7 +1953,13 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
     if (!tracking) return;
     try {
       const months = Math.max(0, Math.round(trackMonths));
-      if (months === 0) return toast.error("Chu kỳ 0 không theo dõi lịch thay thế");
+      if (months === 0) {
+        return toast.error(
+          trackSamplingOnly
+            ? "Điểm lấy mẫu định kỳ vẫn cần chu kỳ (tháng) để nhắc tới kỳ"
+            : "Chu kỳ 0 không theo dõi lịch thay thế"
+        );
+      }
       const due = new Date(trackDate ? `${trackDate}T08:00:00` : Date.now());
       due.setMonth(due.getMonth() + months);
       await createPoint.mutateAsync({
@@ -1966,8 +1974,9 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         lastReplacedAt: trackDate || formatDateInput(new Date()),
         nextDueAt: formatDateInput(due),
         note: trackNote.trim() || null,
+        samplingOnly: trackSamplingOnly,
       });
-      toast.success("Đã thêm điểm theo dõi");
+      toast.success(trackSamplingOnly ? "Đã thêm điểm lấy mẫu định kỳ" : "Đã thêm điểm theo dõi");
       setTracking(null);
       onOpenTracking?.();
     } catch (e) {
@@ -2083,6 +2092,23 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                   <Input type="number" min={0} value={trackMonths} onChange={(e) => setTrackMonths(Number(e.target.value))} />
                 </Field>
               </div>
+              {/* Nhóm vật tư theo O&M chỉ lấy mẫu/châm bổ sung, không thay định kỳ. */}
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={trackSamplingOnly}
+                  onChange={(e) => setTrackSamplingOnly(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#00558F]"
+                />
+                <span className="text-sm leading-5">
+                  <span className="font-semibold text-ink">Vật tư lấy mẫu định kỳ</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Theo O&amp;M chỉ lấy mẫu, theo dõi hoặc châm bổ sung — không thay thế định kỳ.
+                    Vẫn nhắc theo chu kỳ nhưng hiển thị riêng và không tính vào cảnh báo quá hạn thay thế.
+                  </span>
+                </span>
+              </label>
+
               <Field label="Ghi chú">
                 <Textarea
                   rows={3}
