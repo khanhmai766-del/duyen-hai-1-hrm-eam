@@ -35,7 +35,7 @@ import { DEFECT_UNITS, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/nav";
 
-type SortKey = "workOrderNumber" | "performedAt" | "unit" | "content" | "system" | "device" | "createdBy" | "locked";
+type SortKey = "workOrderNumber" | "performedAt" | "unit" | "content" | "system" | "device" | "createdBy" | "locked" | "requestType";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -146,8 +146,9 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const firstShown = visibleRows.length ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, visibleRows.length);
   const actionCol = canManage || canDelete;
-  // 1 cột mở rộng + Thiết bị + Tổ máy + Kết thúc + Cương vị + Chốt lịch sử (+ Thao tác)
-  const detailColSpan = actionCol ? 7 : 6;
+  // Mở rộng + Thiết bị + Loại yêu cầu + Tổ máy + Kết thúc + Người cập nhật
+  // + Chốt lịch sử (+ Thao tác)
+  const detailColSpan = actionCol ? 8 : 7;
   // Tổ máy LUÔN có giá trị (mặc định S1) nên không tính là đang lọc, nếu không
   // nút Xoá bộ lọc sẽ sáng vĩnh viễn và ô "Chưa có lịch sử" không bao giờ hiện.
   const hasActiveFilters =
@@ -282,12 +283,13 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           </div>
 
           <div className="overflow-x-auto">
-          <Table className="min-w-[1080px]">
+          <Table className="min-w-[1210px]">
             {/* Đầu bảng nền xanh EVN, dính khi cuộn dọc trong vùng bảng */}
             <TableHeader>
               <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
                 <TableHead className="w-[52px] bg-[#00558F]" />
                 <TableHead className="min-w-[290px] bg-[#00558F]"><SortHeader label="Thiết bị" sortKey="device" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[130px] bg-[#00558F]"><SortHeader label="Loại yêu cầu" sortKey="requestType" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[110px] bg-[#00558F]"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[140px] bg-[#00558F]"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[170px] bg-[#00558F]"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
@@ -340,6 +342,15 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                             {r.device || "chưa có KKS"}
                             {r.workOrderNumber ? ` · ${r.workOrderNumber}` : r.requestNumber ? ` · YC ${r.requestNumber}` : ""}
                           </div>
+                        </TableCell>
+                        <TableCell className="px-3 py-2.5 text-center">
+                          {r.requestType ? (
+                            <span className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]">
+                              {r.requestType}
+                            </span>
+                          ) : (
+                            <span className="text-[13px] text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="px-3 py-2.5 text-center">
                           <UnitBadge unit={r.unit} />
@@ -451,6 +462,7 @@ function sortValue(row: DefectHistoryItem, key: SortKey, deviceNameByCode: Map<s
   if (key === "locked") return row.historyStatus === "PENDING" ? 1 : 0;
   if (key === "createdBy") return row.createdBy?.name ?? "";
   if (key === "workOrderNumber") return row.workOrderNumber ?? "";
+  if (key === "requestType") return row.requestType ?? "";
   if (key === "unit") return row.unit ?? "";
   if (key === "content") return row.content ?? "";
   if (key === "system") return row.system ?? "";
@@ -583,12 +595,13 @@ function ExpandedDetails({ row, deviceName }: { row: DefectHistoryItem; deviceNa
         <DetailField label="Tên thiết bị" value={deviceName} />
         <DetailField label="Mã KKS" value={row.device || "—"} mono />
         <DetailField label="Số phiếu công tác" value={row.workOrderNumber || "—"} mono />
-        <DetailField label="Loại yêu cầu (PCT)" value={row.requestType || "—"} />
+        {/* Loại yêu cầu đã lên thành cột riêng của bảng nên nhường chỗ này cho
+            người cập nhật, khỏi phải kéo mắt xuống cuối lưới mới thấy. */}
+        <DetailField label="Người cập nhật" value={row.createdBy?.name || "—"} />
         <DetailField label="Số yêu cầu" value={row.requestNumber || "—"} mono />
         <DetailField label="Cương vị" value={row.system || "—"} />
         <DetailField label="Tổ máy" value={row.mappedDeviceUnit || row.unit} />
         <DetailField label="Ngày kết thúc" value={formatDate(row.performedAt)} mono />
-        <DetailField label="Người cập nhật" value={row.createdBy?.name || "—"} />
         {row.reminderCount > 0 && (
           <DetailField
             label="Nhắc lại"
