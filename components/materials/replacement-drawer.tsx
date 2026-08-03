@@ -92,7 +92,7 @@ export function ReplacementDrawer({
                     <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
                       <Cpu className="h-3.5 w-3.5 text-navy" />
                       {p.device ? (
-                        <Link href={`/devices/${p.device.id}`} className="hover:underline">{p.device.code} — {p.device.name}</Link>
+                        <Link href={`/devices/${p.device.id}`} className="hover:underline">{p.device.name}</Link>
                       ) : (
                         <span className="truncate">Chưa chọn thiết bị</span>
                       )}

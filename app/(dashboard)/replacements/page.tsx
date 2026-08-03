@@ -240,6 +240,7 @@ function ReplacementsPageContent() {
   const [due, setDue] = React.useState("ALL");
   // Mặc định vào thẳng nhóm dùng nhiều nhất: Tổ máy S1 · Dầu bôi trơn.
   const [machineFilter, setMachineFilter] = React.useState("S1");
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [categoryFilter, setCategoryFilter] = React.useState<string>(CATEGORY_FILTERS[0]);
   // Ngày đang chọn trên lịch ("YYYY-MM-DD") — lọc panel danh sách bên phải.
   const [selectedDay, setSelectedDay] = React.useState<string | null>(null);
@@ -256,12 +257,26 @@ function ReplacementsPageContent() {
     p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
   // Lọc theo tổ máy của vật tư (vật tư nằm ở tab S1/S2/COMMON nào trong Danh mục).
   const byMachine = machineFilter === "ALL" ? all : all.filter((p) => (p.material.machine ?? "COMMON") === machineFilter);
+  const localStatusDemo = process.env.NODE_ENV === "development" ? buildLocalStatusDemo() : [];
+  const positionOptions = Array.from(
+    new Set(
+      [
+        ...byMachine.map((point) => positionLabelOf(point.managingPosition)),
+        ...localStatusDemo
+          .filter((point) => machineFilter === "ALL" || point.machine === machineFilter)
+          .map((point) => positionLabelOf(point.managingPosition)),
+      ].filter((position): position is string => Boolean(position))
+    )
+  ).sort((a, b) => a.localeCompare(b, "vi"));
+  const byPosition = positionFilter === "ALL"
+    ? byMachine
+    : byMachine.filter((point) => positionsMatch(point.managingPosition, positionFilter));
   // Lọc theo loại vật tư (khớp cả tên biến thể cũ, như tab Danh mục vật tư).
   const matchCategory = (c: string | null | undefined) =>
     categoryFilter === "ALL" ||
     c === categoryFilter ||
     (categoryFilter === "Hóa Chất" && (c === "Vật tư tiêu hao" || c === "Hóa chất"));
-  const byCategory = byMachine.filter((p) => matchCategory(p.material.category));
+  const byCategory = byPosition.filter((p) => matchCategory(p.material.category));
   const actualStatusPoints: ReplacementStatusPoint[] = byCategory.map((point) => {
     const device = linkedDeviceOf(point);
     return {
@@ -284,12 +299,13 @@ function ReplacementsPageContent() {
     };
   });
   const demoSearch = debouncedSearchQ.trim().toLocaleLowerCase("vi");
-  const statusDemoPoints = process.env.NODE_ENV === "development"
-    ? buildLocalStatusDemo().filter((point) => {
+  const statusDemoPoints = localStatusDemo.length > 0
+    ? localStatusDemo.filter((point) => {
         const matchesMachine = machineFilter === "ALL" || point.machine === machineFilter;
+        const matchesPosition = positionFilter === "ALL" || positionsMatch(point.managingPosition, positionFilter);
         const matchesCategory = matchCategory(point.category);
         const haystack = `${point.materialName} ${point.materialCode} ${point.deviceCode ?? ""} ${point.deviceName ?? ""} ${point.system ?? ""}`.toLocaleLowerCase("vi");
-        return matchesMachine && matchesCategory && (!demoSearch || haystack.includes(demoSearch));
+        return matchesMachine && matchesPosition && matchesCategory && (!demoSearch || haystack.includes(demoSearch));
       })
     : [];
   const statusPoints = [...actualStatusPoints, ...statusDemoPoints];
@@ -471,6 +487,7 @@ function ReplacementsPageContent() {
           onClick={() => {
             setTab("status");
             setMachineFilter("S1");
+            setPositionFilter("ALL");
             setCategoryFilter("Dầu bôi trơn");
           }}
           icon={Activity}
@@ -480,11 +497,28 @@ function ReplacementsPageContent() {
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
         {tab !== "history" ? (
           <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
-            <Select value={machineFilter} onValueChange={setMachineFilter}>
+            <Select
+              value={machineFilter}
+              onValueChange={(value) => {
+                setMachineFilter(value);
+                setPositionFilter("ALL");
+              }}
+            >
               <SelectTrigger className="h-9 rounded-xl sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {MACHINE_FILTERS.map((m) => (
                   <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={positionFilter} onValueChange={setPositionFilter}>
+              <SelectTrigger className="h-9 rounded-xl sm:w-48" aria-label="Lọc theo cương vị">
+                <SelectValue placeholder="Chọn cương vị" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                {positionOptions.map((position) => (
+                  <SelectItem key={position} value={position}>{position}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -622,8 +656,8 @@ function ReplacementsPageContent() {
                             <div className="flex items-center gap-1.5">
                               <Cpu className="h-3.5 w-3.5 shrink-0 text-navy" />
                               {device ? (
-                                <Link href={`/devices/${device.id}`} className="truncate hover:underline" title={`${device.code} — ${device.name}`}>
-                                  {device.code} — {device.name}
+                                <Link href={`/devices/${device.id}`} className="truncate hover:underline" title={device.name}>
+                                  {device.name}
                                 </Link>
                               ) : (
                                 <span>Chưa chọn thiết bị</span>
