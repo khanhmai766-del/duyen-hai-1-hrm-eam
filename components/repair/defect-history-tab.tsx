@@ -32,6 +32,7 @@ import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { DefectExpandedDetailsById } from "@/components/defects/defect-expanded-details";
+import { LockChip } from "@/components/shared/lock-chip";
 import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
 import { useDefect } from "@/hooks/useDefects";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
@@ -669,34 +670,6 @@ function UnitBadge({ unit }: { unit: string }) {
   return (
     <span className={cn("inline-block rounded px-2.5 py-0.5 text-[12px] font-semibold uppercase tracking-wider", tone)}>
       {unit}
-    </span>
-  );
-}
-
-/**
- * Trạng thái chốt lịch sử. CHỈ HIỂN THỊ — bản mẫu vẽ dạng công tắc bấm được,
- * nhưng việc chốt do hệ thống tự làm khi tới hạn finalizeAt, người dùng không
- * bật/tắt được, nên không dựng thành nút để khỏi hứa hẹn thao tác không có.
- */
-function LockChip({ pending }: { pending: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center overflow-hidden rounded-md border",
-        pending ? "border-border" : "border-emerald-600"
-      )}
-      title={pending ? "Đang chờ tới hạn chốt lịch sử" : "Bản ghi đã chốt"}
-    >
-      {pending && <span className="h-full w-3 self-stretch bg-amber-500" aria-hidden="true" />}
-      <span
-        className={cn(
-          "px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wider",
-          pending ? "bg-white text-muted-foreground" : "bg-emerald-600 text-white"
-        )}
-      >
-        {pending ? "Chờ chốt" : "Đã chốt"}
-      </span>
-      {!pending && <span className="h-full w-3 self-stretch bg-white" aria-hidden="true" />}
     </span>
   );
 }

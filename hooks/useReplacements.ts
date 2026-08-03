@@ -39,6 +39,27 @@ export interface ReplacementFilters {
 
 export interface ReplacementLogItem extends MaterialReplacementLog {
   doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
+  /** Điểm theo dõi đã bị gỡ/xoá — dòng đang hiển thị bằng snapshot của chính log. */
+  pointRemoved?: boolean;
+  /**
+   * Nội dung thực hiện đọc SỐNG từ lịch sử khiếm khuyết của phiếu (chờ chốt hoặc đã
+   * chốt). Null với dòng ghi thủ công. Vì đọc sống nên phiếu được sửa/chốt lúc nào là
+   * dòng lịch sử thay thế đổi theo lúc đó.
+   */
+  defectHistory?: {
+    status: "PENDING" | "FINALIZED";
+    workOrderNumber: string | null;
+    requestType: string | null;
+    performedAt: string | Date;
+    content: string | null;
+    result: string | null;
+    /** Hạn tự chốt lịch sử; chỉ có khi đang PENDING. */
+    finalizeAt: string | Date | null;
+  } | null;
+  /**
+   * Khi điểm còn liên kết thì đây là dữ liệu của điểm; khi đã bị gỡ, server dựng lại
+   * từ snapshot trên log nên giao diện không phải phân biệt hai trường hợp.
+   */
   replacement: {
     system: string | null;
     managingPosition: string | null;

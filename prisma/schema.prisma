@@ -352,6 +352,7 @@ model Material {
   replacements    MaterialReplacement[]
   ticketItems     MaterialTicketItem[]
   defectRequests  DefectMaterialRequest[]
+  replacementLogs MaterialReplacementLog[]
 
   @@unique([code, machine])
   @@index([system])
@@ -440,21 +441,44 @@ model MaterialReplacement {
 
 // Lịch sử mỗi lần thay thế vật tư tại một điểm thay thế.
 model MaterialReplacementLog {
-  id            String   @id @default(cuid())
-  replacementId String
+  id String @id @default(cuid())
+  // Liên kết MỀM tới điểm thay thế: điểm theo dõi có vòng đời riêng (bị gỡ sau mỗi
+  // lần ghi nhận, có thể bị xoá khi khai báo lại) nhưng lịch sử thì phải bất biến.
+  // Vì vậy nullable + SetNull, và mọi thứ cần để hiển thị đều nằm ở snapshot dưới.
+  replacementId String?
   replacedAt    DateTime @default(now())
   doneById      String
   quantity      Int?
   note          String?
 
-  replacement MaterialReplacement @relation(fields: [replacementId], references: [id], onDelete: Cascade)
-  doneBy      User                @relation("MrDoneBy", fields: [doneById], references: [id])
+  // Snapshot tại thời điểm ghi nhận — đủ để dòng lịch sử tự đứng một mình.
+  materialId       String?
+  deviceSeq        String? // mã thiết bị trên cây, giữ cả khi điểm đã bị gỡ
+  machine          String? // S1 | S2 | COMMON
+  systemLabel      String? // "TRẠM DẦU BÔI TRƠN HP-LP"
+  deviceLabel      String? // "Bồn dầu LP/HP thùng nghiền A"
+  managingPosition String?
+  intervalMonths   Int?
+  intervalNote     String?
+  unitLabel        String? // ĐVT vật tư: "Lít", "Cái"…
+  // Nguồn gốc: rỗng nếu ghi thủ công, có số yêu cầu nếu sinh từ SYC thay thế vật tư.
+  defectId         String?
+  requestNumber    String?
+
+  replacement MaterialReplacement? @relation(fields: [replacementId], references: [id], onDelete: SetNull)
+  material    Material?            @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  doneBy      User                 @relation("MrDoneBy", fields: [doneById], references: [id])
 
   // Lịch sử "các lần thay tại điểm X, mới nhất trước" đọc thẳng từ index; lọc theo
   // riêng replacementId cũng dùng chính index này (tiền tố cột đầu).
   @@index([replacementId, replacedAt(sort: Desc)])
   @@index([doneById])
   @@index([replacedAt])
+  // Lịch sử thay thế của một thiết bị / một vật tư, đọc thẳng từ index kể cả khi
+  // điểm theo dõi đã bị gỡ (replacementId = null).
+  @@index([deviceSeq, replacedAt(sort: Desc)])
+  @@index([materialId])
+  @@index([defectId])
 }
 
 // Cầu nối "Chi tiết điểm thay thế" (Danh mục vật tư) → Số yêu cầu khiếm khuyết.

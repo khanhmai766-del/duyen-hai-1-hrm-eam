@@ -111,7 +111,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           await enqueueDefectSyncEvent(tx, { defect: updated, eventType: "UPDATE" });
         }
         if (shouldRecordReplacement) {
-          await recordMaterialRequestReplacements(tx, { defectId: defect.id, userId: user.id, replacedAt: performedAt });
+          await recordMaterialRequestReplacements(tx, {
+            defectId: defect.id,
+            userId: user.id,
+            replacedAt: performedAt,
+            defect: { id: defect.id, requestNumber: defect.requestNumber },
+            note: body.content?.trim() || body.result?.trim() || null,
+          });
         }
         return created;
       });

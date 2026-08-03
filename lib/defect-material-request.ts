@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import { MAX_DEFECT_RELATED_DEVICES } from "@/lib/defect-related-devices";
+import { buildReplacementLogData } from "@/lib/material-replacement-log";
 
 /** Tối đa 1 thiết bị chính + N thiết bị liên quan trong cùng một SYC. */
 export const MAX_MATERIAL_REQUEST_POINTS = MAX_DEFECT_RELATED_DEVICES + 1;
@@ -110,59 +111,99 @@ export function buildMaterialRequestContent(points: MaterialRequestPoint[]) {
   ].join("\n");
 }
 
+const LOG_SOURCE_SELECT = {
+  id: true,
+  materialId: true,
+  deviceSeq: true,
+  machine: true,
+  system: true,
+  location: true,
+  managingPosition: true,
+  intervalMonths: true,
+  intervalNote: true,
+  material: { select: { unit: true } },
+  device: { select: { name: true, parentSeq: true } },
+} satisfies Prisma.MaterialReplacementSelect;
+
 /**
- * Đóng vòng lặp khi SYC thay thế được xác nhận hoàn thành: ghi nhận đã thay tại các
- * điểm của phiếu và đẩy hạn kế tiếp lên một chu kỳ.
+ * Đóng vòng lặp khi SYC thay thế được xác nhận hoàn thành.
  *
- * Log KHÔNG ghi lên dòng khai báo (isActive=false) — bảng "Chi tiết điểm thay thế"
- * lọc theo `_count.logs === 0` nên làm vậy sẽ khiến bản khai báo biến mất. Log phải
- * rơi vào ĐIỂM ĐANG THEO DÕI (isActive=true) sinh ra từ cùng vật tư + cùng thiết bị.
- * Điểm khai báo chưa bật theo dõi thì bỏ qua, không có gì để dời hạn.
+ * Tách đôi hai việc trước đây bị buộc chung:
+ *  1. GHI LỊCH SỬ — luôn chạy, vì đó là sự thật đã xảy ra. Dòng log mang đủ snapshot
+ *     nên đọc được kể cả khi không có điểm theo dõi nào, hoặc điểm bị xoá về sau.
+ *  2. GỠ ĐIỂM THEO DÕI — chỉ khi tìm được điểm đang theo dõi khớp vật tư + thiết bị.
+ *     Dùng đúng vòng đời của app: ghi nhận xong thì điểm rời danh sách theo dõi
+ *     (isActive=false), dòng khai báo hiện lại nút "Thêm điểm" để nạp chu kỳ mới.
  *
- * Trả về số điểm đã ghi nhận.
+ * Log CHỈ neo vào điểm đang theo dõi. Không có thì `replacementId = null` — snapshot
+ * đã đủ để hiển thị. Không được neo vào dòng khai báo: bảng "Chi tiết điểm thay thế"
+ * lọc `_count.logs === 0` nên làm vậy là dòng khai báo biến mất khỏi danh mục.
+ *
+ * Trả về { logged, released } để nơi gọi báo lại cho người dùng.
  */
 export async function recordMaterialRequestReplacements(
   tx: Prisma.TransactionClient,
-  params: { defectId: string; userId: string; replacedAt: Date }
+  params: {
+    defectId: string;
+    userId: string;
+    replacedAt: Date;
+    defect?: { id: string; requestNumber: string | null } | null;
+    /** Nội dung VHV vừa xác nhận ở hộp thoại hoàn thành, dùng làm ghi chú của dòng. */
+    note?: string | null;
+  }
 ) {
   const links = await tx.defectMaterialRequest.findMany({
-    where: { defectId: params.defectId, replacementId: { not: null } },
-    select: { quantity: true, replacement: { select: { materialId: true, deviceSeq: true } } },
+    where: { defectId: params.defectId },
+    select: {
+      quantity: true,
+      pointLabel: true,
+      materialId: true,
+      replacement: { select: LOG_SOURCE_SELECT },
+    },
   });
-  if (links.length === 0) return 0;
+  if (links.length === 0) return { logged: 0, released: 0 };
 
-  let recorded = 0;
+  let logged = 0;
+  let released = 0;
   for (const link of links) {
-    if (!link.replacement?.deviceSeq) continue;
-    const tracked = await tx.materialReplacement.findFirst({
-      where: {
-        isActive: true,
-        materialId: link.replacement.materialId,
-        deviceSeq: link.replacement.deviceSeq,
-      },
-      select: { id: true, intervalMonths: true },
-      orderBy: { nextDueAt: "asc" },
-    });
-    if (!tracked) continue;
+    const declaration = link.replacement;
+    // Điểm khai báo đã bị xoá khỏi danh mục sau khi ra phiếu — không còn đủ dữ liệu
+    // vị trí để dựng snapshot, bỏ qua thay vì ghi một dòng lịch sử khuyết thông tin.
+    if (!declaration) continue;
 
-    const nextDueAt = new Date(params.replacedAt);
-    nextDueAt.setMonth(nextDueAt.getMonth() + Math.max(1, tracked.intervalMonths));
+    const tracked = declaration.deviceSeq
+      ? await tx.materialReplacement.findFirst({
+          where: { isActive: true, materialId: declaration.materialId, deviceSeq: declaration.deviceSeq },
+          select: LOG_SOURCE_SELECT,
+          orderBy: { nextDueAt: "asc" },
+        })
+      : null;
+
     await tx.materialReplacementLog.create({
-      data: {
-        replacementId: tracked.id,
-        replacedAt: params.replacedAt,
+      data: buildReplacementLogData({
+        // Giá trị snapshot lấy từ điểm theo dõi nếu có, không thì từ dòng khai báo…
+        point: tracked ?? declaration,
+        // …nhưng chỉ NEO vào điểm theo dõi, không bao giờ neo vào dòng khai báo.
+        replacementId: tracked?.id ?? null,
         doneById: params.userId,
+        replacedAt: params.replacedAt,
         quantity: link.quantity || null,
-        note: "Ghi nhận từ số yêu cầu thay thế vật tư",
-      },
+        note: params.note?.trim() || "Ghi nhận từ số yêu cầu thay thế vật tư",
+        systemLabel: link.pointLabel.split(" · ")[0] || declaration.system,
+        defect: params.defect ?? null,
+      }),
     });
-    await tx.materialReplacement.update({
-      where: { id: tracked.id },
-      data: { lastReplacedAt: params.replacedAt, nextDueAt },
-    });
-    recorded += 1;
+    logged += 1;
+
+    if (tracked) {
+      await tx.materialReplacement.update({
+        where: { id: tracked.id },
+        data: { isActive: false, lastReplacedAt: params.replacedAt },
+      });
+      released += 1;
+    }
   }
-  return recorded;
+  return { logged, released };
 }
 
 type PointReader = Pick<PrismaClient, "materialReplacement"> | Prisma.TransactionClient;

@@ -23,6 +23,8 @@ import {
 import { ReplacementScheduleImportDialog } from "@/components/materials/replacement-schedule-import-dialog";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
+import { ReplacementHistoryDetails } from "@/components/materials/replacement-history-details";
+import { LockChip } from "@/components/shared/lock-chip";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -323,6 +325,7 @@ function ReplacementsPageContent() {
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
   const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
+  const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
   const [editLogTarget, setEditLogTarget] = React.useState<ReplacementLogItem | null>(null);
   const [delLogTarget, setDelLogTarget] = React.useState<ReplacementLogItem | null>(null);
   const [scheduleImportOpen, setScheduleImportOpen] = React.useState(false);
@@ -360,7 +363,8 @@ function ReplacementsPageContent() {
   const filteredLogs = searchQ.trim()
     ? logsInMonthRange.filter((l) => {
         const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
-        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
+        // Tìm được cả theo số yêu cầu, số phiếu công tác và nội dung/kết quả thực hiện.
+        return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""} ${l.requestNumber ?? ""} ${l.defectHistory?.workOrderNumber ?? ""} ${l.defectHistory?.content ?? ""} ${l.defectHistory?.result ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
       })
     : logsInMonthRange;
   const historyRangeLabel = historyFromMonth === historyToMonth
@@ -405,7 +409,40 @@ function ReplacementsPageContent() {
         align: "center" as const,
         value: (l: ReplacementLogItem) => (l.quantity != null ? `${l.quantity} ${l.replacement?.material.unit ?? ""}` : ""),
       },
-      { key: "note", header: "Ghi chú", width: 34, value: (l: ReplacementLogItem) => l.note },
+      {
+        key: "requestNumber",
+        header: "Số yêu cầu",
+        width: 14,
+        align: "center" as const,
+        value: (l: ReplacementLogItem) => l.requestNumber ?? "",
+      },
+      {
+        key: "historyStatus",
+        header: "Trạng thái",
+        width: 12,
+        align: "center" as const,
+        value: (l: ReplacementLogItem) =>
+          l.defectHistory ? (l.defectHistory.status === "FINALIZED" ? "Đã chốt" : "Chờ chốt") : "",
+      },
+      {
+        key: "workOrderNumber",
+        header: "Số PCT",
+        width: 16,
+        align: "center" as const,
+        value: (l: ReplacementLogItem) => l.defectHistory?.workOrderNumber ?? "",
+      },
+      {
+        key: "note",
+        header: "Nội dung thực hiện",
+        width: 34,
+        value: (l: ReplacementLogItem) => l.defectHistory?.content || l.note,
+      },
+      {
+        key: "result",
+        header: "Kết quả thực hiện",
+        width: 30,
+        value: (l: ReplacementLogItem) => l.defectHistory?.result ?? "",
+      },
       { key: "doneBy", header: "Người thực hiện", width: 24, value: (l: ReplacementLogItem) => l.doneBy.name },
     ],
     []
@@ -721,34 +758,96 @@ function ReplacementsPageContent() {
               <Table>
                 <TableHeader className="bg-muted/40">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Vật tư</TableHead>
-                    <TableHead>Thiết bị</TableHead>
-                    <TableHead className="text-center">Hệ thống</TableHead>
+                    <TableHead className="w-10" />
+                    <TableHead>Vật tư / Thiết bị</TableHead>
+                    <TableHead className="text-center">Nguồn</TableHead>
                     <TableHead className="text-center">Ngày thay</TableHead>
                     <TableHead className="text-center">Số lượng</TableHead>
-                    <TableHead>Ghi chú</TableHead>
-                    <TableHead className="text-center">Người thực hiện</TableHead>
+                    <TableHead className="text-center">Người ghi nhận</TableHead>
+                    <TableHead className="text-center">Chốt lịch sử</TableHead>
                     <TableHead className="text-center">Thao tác</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell>
-                        <div className="font-medium text-ink">{l.replacement?.material.name ?? "—"}</div>
-                        <div className="font-mono text-xs text-navy">{l.replacement?.material.code ?? ""}</div>
+                  {filteredLogs.map((l) => {
+                    const expanded = expandedLogId === l.id;
+                    const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
+                    const pending = l.defectHistory?.status === "PENDING";
+                    return (
+                    <React.Fragment key={l.id}>
+                    <TableRow
+                      className={cn("cursor-pointer", expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40")}
+                      onClick={() => setExpandedLogId(expanded ? null : l.id)}
+                    >
+                      <TableCell className="px-0 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setExpandedLogId(expanded ? null : l.id); }}
+                          aria-expanded={expanded}
+                          title={expanded ? "Thu gọn" : "Xem chi tiết"}
+                          className={cn(
+                            "inline-flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm transition-all duration-200",
+                            expanded ? "rotate-45 bg-[#00558F]" : "bg-emerald-600 hover:bg-emerald-700"
+                          )}
+                        >
+                          <Repeat className="h-3.5 w-3.5" />
+                        </button>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {l.replacement && linkedDeviceOf(l.replacement) ? `${linkedDeviceOf(l.replacement)!.code} — ${linkedDeviceOf(l.replacement)!.name}` : "—"}
+                      {/* Gộp vật tư + thiết bị vào một ô như cột THIẾT BỊ của Lịch sử sửa chữa;
+                          hệ thống và cương vị đã có trong panel chi tiết nên bỏ khỏi bảng. */}
+                      <TableCell className="px-3 py-2.5">
+                        <div className="font-semibold leading-snug text-ink">
+                          {l.replacement?.material.name ?? "—"}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[11.5px] tracking-tight text-muted-foreground">
+                          {device?.code || l.deviceSeq || "chưa gắn thiết bị"}
+                          {device?.name ? ` · ${device.name}` : l.deviceLabel ? ` · ${l.deviceLabel}` : ""}
+                        </div>
+                        {l.pointRemoved && (
+                          <div className="mt-0.5 text-[10.5px] italic text-muted-foreground/70">
+                            điểm theo dõi đã gỡ
+                          </div>
+                        )}
                       </TableCell>
-                      <TableCell className="text-center text-sm text-muted-foreground">{l.replacement && linkedDeviceOf(l.replacement)?.system ? linkedDeviceOf(l.replacement)!.system : "—"}</TableCell>
-                      <TableCell className="text-center text-sm text-ink">{formatDate(l.replacedAt)}</TableCell>
-                      <TableCell className="text-center text-sm">{l.quantity != null ? `${l.quantity} ${l.replacement?.material.unit ?? ""}` : "—"}</TableCell>
-                      <TableCell className="max-w-[240px] truncate text-sm text-muted-foreground" title={l.note ?? undefined}>{l.note || "—"}</TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="px-3 py-2.5 text-center">
+                        {l.requestNumber ? (
+                          <Link
+                            href={`/defects?q=${encodeURIComponent(l.requestNumber)}`}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Mở số yêu cầu thay thế vật tư"
+                            className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F] hover:bg-sky-100"
+                          >
+                            {l.requestNumber}
+                          </Link>
+                        ) : (
+                          <span className="text-[12.5px] text-muted-foreground">Ghi thủ công</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
+                        {formatDate(l.replacedAt)}
+                      </TableCell>
+                      <TableCell className="px-3 py-2.5 text-center text-sm">
+                        {l.quantity != null ? `${l.quantity.toLocaleString("vi-VN")} ${l.unitLabel ?? l.replacement?.material.unit ?? ""}` : "—"}
+                      </TableCell>
+                      <TableCell className="px-3 py-2.5 text-center">
                         <UserAvatar user={l.doneBy} />
                       </TableCell>
-                      <TableCell className="text-center">
+                      {/* Chỉ dòng sinh từ SYC mới có khái niệm chốt lịch sử. */}
+                      <TableCell className="px-3 py-2.5 text-center">
+                        {l.defectHistory ? (
+                          <>
+                            <LockChip pending={pending} />
+                            {pending && l.defectHistory.finalizeAt && (
+                              <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                                hạn {formatDate(l.defectHistory.finalizeAt)}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[12.5px] text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center gap-2">
                           {canManage && (
                             <Button
@@ -778,7 +877,18 @@ function ReplacementsPageContent() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    {expanded && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={8} className="bg-slate-50/80 p-0">
+                          <div className="border-l-[3px] border-[#00558F] py-4 pl-6 pr-5">
+                            <ReplacementHistoryDetails log={l} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Card>

@@ -5,6 +5,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { canEditMaterialReplacement } from "@/lib/material-replacement-access";
+import { buildReplacementLogData } from "@/lib/material-replacement-log";
 
 /**
  * Ghi nhận một lần thay thế vật tư tại điểm thay thế (chỉ ADMIN/Trưởng ca):
@@ -20,7 +21,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const point = await prisma.materialReplacement.findUnique({
       where: { id: params.id },
-      include: { material: { select: { id: true, code: true, quantity: true } } },
+      include: {
+        material: { select: { id: true, code: true, quantity: true, unit: true } },
+        device: { select: { name: true, parentSeq: true } },
+      },
     });
     if (!point) return fail("Không tìm thấy điểm thay thế", 404);
     const access = await resolveEquipmentAccessForUser(user);
@@ -34,13 +38,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const ops: any[] = [
       prisma.materialReplacementLog.create({
-        data: {
+        // Snapshot đầy đủ ngay tại đây: điểm này sắp bị gỡ khỏi danh sách theo dõi và
+        // có thể bị xoá hẳn về sau, nhưng dòng lịch sử thì phải đọc được vĩnh viễn.
+        data: buildReplacementLogData({
+          point,
           replacementId: point.id,
           doneById: user.id,
           replacedAt,
           quantity: useQty,
-          note: body.note?.trim() || null,
-        },
+          note: body.note,
+        }),
       }),
       // Gỡ điểm khỏi danh sách theo dõi (giữ lại để truy vết lịch sử).
       prisma.materialReplacement.update({
