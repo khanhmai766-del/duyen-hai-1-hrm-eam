@@ -46,6 +46,10 @@ export function CompleteDefectDialog({
   });
   const sheetTracked = defect?.sourceType === "GOOGLE_SHEETS" || defect?.websiteCreated;
   const editingPending = Boolean(defect?.pendingHistory);
+  // Đóng vòng lặp với Danh mục vật tư: mặc định tick sẵn vì phiếu thay thế xong
+  // gần như luôn đi kèm việc dời hạn của điểm theo dõi.
+  const [recordReplacement, setRecordReplacement] = React.useState(true);
+  React.useEffect(() => { setRecordReplacement(true); }, [defect?.id]);
   const hasSheetSourceData = defect?.sourceType === "GOOGLE_SHEETS";
   const pendingDays = defectResultStatusOf(
     editingPending ? form.result : defect?.repairResultRaw
@@ -86,6 +90,8 @@ export function CompleteDefectDialog({
         performedAt: form.performedAt,
         content: form.content,
         result: form.result,
+        // Chỉ có tác dụng với SYC thay thế vật tư và chỉ khi hoàn thành lần đầu.
+        recordReplacement: !editingPending && defect.isMaterialRequest ? recordReplacement : undefined,
       };
       if (editingPending) await updatePending.mutateAsync(payload);
       else await complete.mutateAsync(payload);
@@ -138,6 +144,23 @@ export function CompleteDefectDialog({
               <ReadOnly label="Cương vị" value={defect.system ?? "—"} />
             </div>
             <ReadOnly label="Khối quản lý" value={blockForPosition(defect.system)} />
+            {defect.isMaterialRequest && !editingPending && (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={recordReplacement}
+                  onChange={(e) => setRecordReplacement(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#00558F]"
+                />
+                <span className="text-sm leading-5">
+                  <span className="font-semibold text-ink">Ghi nhận đã thay thế vật tư</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Ghi lần thay vào lịch sử của các điểm thuộc phiếu này và dời hạn kế tiếp thêm
+                    một chu kỳ. Bỏ tick nếu thực tế chưa thay xong — điểm sẽ vẫn báo đến hạn.
+                  </span>
+                </span>
+              </label>
+            )}
             {sheetTracked && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
                 Phiếu vẫn nằm trong Tồn đọng và tiếp tục nhận dữ liệu sửa chữa từ Google Sheet trong {pendingDays} ngày.

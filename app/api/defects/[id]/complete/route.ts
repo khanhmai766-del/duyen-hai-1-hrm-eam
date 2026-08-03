@@ -7,6 +7,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
+import { recordMaterialRequestReplacements } from "@/lib/defect-material-request";
 
 const HISTORY_PENDING_DAYS = 14;
 const HISTORY_COMPLETED_PENDING_DAYS = 4;
@@ -65,6 +66,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const performedAt = body.performedAt ? parseDateInput(body.performedAt) : new Date();
+    // SYC thay thế vật tư: người dùng chủ động tick "Ghi nhận đã thay thế" ở hộp
+    // thoại hoàn thành. Không tự động, vì việc này dời hạn của Danh mục vật tư.
+    const shouldRecordReplacement = Boolean(body.recordReplacement) && defect.isMaterialRequest;
 
     if (sheetTracked) {
       const startedAt = new Date();
@@ -105,6 +109,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         });
         if (defect.websiteCreated) {
           await enqueueDefectSyncEvent(tx, { defect: updated, eventType: "UPDATE" });
+        }
+        if (shouldRecordReplacement) {
+          await recordMaterialRequestReplacements(tx, { defectId: defect.id, userId: user.id, replacedAt: performedAt });
         }
         return created;
       });
@@ -176,6 +183,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
       if (defect.websiteCreated) {
         await enqueueDefectSyncEvent(tx, { defect: updatedDefect, eventType: "UPDATE" });
+      }
+      if (shouldRecordReplacement) {
+        await recordMaterialRequestReplacements(tx, { defectId: defect.id, userId: user.id, replacedAt: performedAt });
       }
       return createdHistory;
     });

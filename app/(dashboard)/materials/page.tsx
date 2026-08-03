@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import * as XLSX from "xlsx";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -31,7 +33,7 @@ import { ReplacementPointsEditor } from "@/components/materials/replacement-poin
 import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
+import { MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
@@ -52,6 +54,13 @@ const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon:
   { key: "Hóa Chất", icon: FlaskConical },
   { key: "Bi Nghiền Than", icon: CircleDot },
 ];
+
+// Form khiếm khuyết chỉ nạp khi thật sự mở panel "Ra SYC thay thế" — nó kéo theo
+// cây thiết bị và danh sách người dùng, không đáng tải cùng trang Danh mục vật tư.
+const DefectForm = dynamic(
+  () => import("@/components/defects/defect-form").then((module) => module.DefectForm),
+  { ssr: false }
+);
 
 const fmtNumber = (value: number) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
 
@@ -1935,6 +1944,36 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
 
+  // ── Ra số yêu cầu thay thế ────────────────────────────────────────────────
+  // Chọn nhiều điểm → MỘT phiếu. Ràng buộc: cùng tổ máy + cùng cương vị quản lý
+  // (server kiểm lại), vì một phiếu chỉ mang được một cặp giá trị này lên Sheet.
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [requestOpen, setRequestOpen] = React.useState(false);
+  const selectablePoints = React.useMemo(() => points.filter((p) => !!p.deviceSeq), [points]);
+  const anchor = React.useMemo(
+    () => (selectedIds.length > 0 ? points.find((p) => p.id === selectedIds[0]) ?? null : null),
+    [points, selectedIds]
+  );
+  const canSelect = React.useCallback(
+    (p: PanelPoint) => {
+      if (!p.deviceSeq) return false;
+      if (!anchor || anchor.id === p.id || selectedIds.includes(p.id)) return true;
+      return (
+        (p.machine ?? "COMMON") === (anchor.machine ?? "COMMON")
+        && normalizeText(p.managingPosition ?? "") === normalizeText(anchor.managingPosition ?? "")
+      );
+    },
+    [anchor, selectedIds]
+  );
+  const toggleSelected = (id: string) =>
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  const selectedPoints = React.useMemo(
+    () => selectedIds.map((id) => points.find((p) => p.id === id)).filter(Boolean) as PanelPoint[],
+    [points, selectedIds]
+  );
+
   const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
   const [trackDate, setTrackDate] = React.useState("");
   const [trackMonths, setTrackMonths] = React.useState(12);
@@ -1998,14 +2037,34 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
     <div className="space-y-3">
       {m.documentUrl && <MaterialDocumentLink url={m.documentUrl} name={m.documentName} />}
       <div className="overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
-        <div className="border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Chi tiết điểm thay thế ({points.length})
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Chi tiết điểm thay thế ({points.length})
+          </span>
+          {selectedIds.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Đã chọn {selectedIds.length} điểm</span>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelectedIds([])}>
+                Bỏ chọn
+              </Button>
+              <Button type="button" size="sm" className="h-7 px-3 text-xs" onClick={() => setRequestOpen(true)}>
+                <FileText className="h-3.5 w-3.5" /> Ra SYC thay thế
+              </Button>
+            </div>
+          ) : (
+            selectablePoints.length > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                Tick chọn điểm để ra số yêu cầu thay thế — chọn nhiều điểm cùng tổ máy &amp; cương vị sẽ gộp vào một phiếu.
+              </span>
+            )
+          )}
         </div>
         <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border text-muted-foreground">
               {/* nowrap toàn bảng: mỗi ô nội dung nằm gọn 1 dòng, cột tự co giãn theo nội dung. */}
+              <th className="w-9 px-2 py-2" aria-label="Chọn điểm ra số yêu cầu" />
               <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Hệ thống / thiết bị</th>
               <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Thiết bị</th>
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Cương vị quản lý</th>
@@ -2013,6 +2072,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
               <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ O&M</th>
               <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ thay thế</th>
               <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Số lượng cần thay</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Số yêu cầu</th>
               <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Theo dõi</th>
             </tr>
           </thead>
@@ -2037,8 +2097,27 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                   : capacityReached
                     ? "Chỉ được thêm lại sau khi điểm đang theo dõi bị xoá hoặc được ghi nhận vào lịch sử thay thế"
                     : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này";
+              const selectable = canSelect(p);
+              const checked = selectedIds.includes(p.id);
               return (
-                <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
+                <tr key={p.id} className={cn("border-b border-border/50 last:border-0 hover:bg-muted/20", checked && "bg-accent/5")}>
+                  <td className="px-2 py-2.5 text-center">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!selectable}
+                      onChange={() => toggleSelected(p.id)}
+                      className="h-4 w-4 cursor-pointer accent-[#00558F] disabled:cursor-not-allowed disabled:opacity-35"
+                      aria-label={`Chọn điểm ${p.device?.name || p.location || ""} để ra số yêu cầu`}
+                      title={
+                        !p.deviceSeq
+                          ? "Điểm chưa gắn hệ thống/thiết bị nên không ra được số yêu cầu"
+                          : !selectable
+                            ? "Chỉ gộp được các điểm cùng tổ máy và cùng cương vị quản lý"
+                            : "Chọn điểm này để ra số yêu cầu thay thế"
+                      }
+                    />
+                  </td>
                   {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
                   <td className="px-4 py-2.5 font-medium uppercase text-ink whitespace-nowrap">{p.device?.system || p.system || p.device?.name || "—"}</td>
                   {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
@@ -2051,6 +2130,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                   </td>
                   <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
                   <td className="px-3 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                  {/* Tra cứu ngược: các SYC thay thế đã ra cho chính điểm này. */}
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <ReplacementRequestChips requests={p.defectRequests} />
+                  </td>
                   <td className="px-4 py-2.5 text-center">
                     <button
                       type="button"
@@ -2069,6 +2152,66 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         </table>
         </div>
       </div>
+
+      {/* Panel nhập khiếm khuyết trượt từ phải — dùng chung DefectForm với màn Khiếm khuyết,
+          chỉ khác ở chỗ được mồi sẵn bằng các điểm thay thế đã chọn. */}
+      {requestOpen && selectedPoints.length > 0 && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-ink/45 backdrop-blur-[1px]" onClick={() => setRequestOpen(false)} />
+          <div className="absolute inset-y-0 right-0 flex min-h-0 w-full max-w-2xl flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-gradient-to-r from-emerald-50/80 to-white p-4">
+              <div>
+                <h2 className="text-lg font-bold text-ink">Ra số yêu cầu thay thế vật tư</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {selectedPoints.length} điểm · {m.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRequestOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-white hover:text-ink"
+                aria-label="Đóng"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <DefectForm
+              lockDevice
+              initialDevice={{
+                code: selectedPoints[0].deviceSeq ?? "",
+                name: selectedPoints[0].device?.name || selectedPoints[0].location || "",
+                // Điểm ở cấp thư mục thì chính nó là "hệ thống chính" của phiếu.
+                system: selectedPoints[0].deviceIsFolder
+                  ? selectedPoints[0].device?.name ?? null
+                  : selectedPoints[0].device?.system ?? selectedPoints[0].system ?? null,
+                systemSeq: selectedPoints[0].deviceSeq ?? null,
+                managingPosition: selectedPoints[0].managingPosition ?? null,
+                unit: selectedPoints[0].machine ?? m.machine ?? null,
+              }}
+              initialMaterialRequest={{
+                replacementIds: selectedPoints.map((p) => p.id),
+                materialName: m.name,
+                materialUnit: m.unit,
+                primaryIsFolder: !!selectedPoints[0].deviceIsFolder,
+                points: selectedPoints.map((p) => ({
+                  id: p.id,
+                  label: [p.device?.system || p.system, p.device?.name || p.location]
+                    .filter(Boolean)
+                    .filter((part, index, all) => all.indexOf(part) === index)
+                    .join(" · "),
+                  quantity: p.quantity * (p.deviceCount || 1),
+                })),
+                suggestedContent: buildReplacementRequestContent(m, selectedPoints),
+              }}
+              onDone={() => {
+                setRequestOpen(false);
+                setSelectedIds([]);
+              }}
+              onCancel={() => setRequestOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <Dialog open={!!tracking} onOpenChange={(open) => !open && setTracking(null)}>
         <DialogContent className="sm:max-w-md">
@@ -2130,6 +2273,65 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+type PanelReplacementPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
+
+/**
+ * Nội dung gợi ý cho SYC thay thế — bản client, chỉ để người dùng thấy và sửa trước
+ * khi lưu. Server dựng lại chuỗi tương đương khi ô nội dung bị bỏ trống.
+ */
+function buildReplacementRequestContent(material: MaterialWithDevices, points: PanelReplacementPoint[]) {
+  if (points.length === 0) return "";
+  const labelOf = (p: PanelReplacementPoint) =>
+    [p.device?.system || p.system, p.device?.name || p.location]
+      .filter(Boolean)
+      .filter((part, index, all) => all.indexOf(part) === index)
+      .join(" · ") || "Chưa xác định vị trí";
+  const totalOf = (p: PanelReplacementPoint) => p.quantity * (p.deviceCount || 1);
+  const total = points.reduce((sum, p) => sum + totalOf(p), 0);
+
+  if (points.length === 1) {
+    const p = points[0];
+    const detail = [
+      p.intervalMonths > 0 ? `chu kỳ ${p.intervalMonths} tháng` : null,
+      p.intervalNote ? `O&M ${p.intervalNote}` : null,
+      p.lastReplacedAt ? `lần thay gần nhất ${formatDate(p.lastReplacedAt)}` : null,
+    ].filter(Boolean).join(", ");
+    return `Thay thế ${material.name} — ${totalOf(p).toLocaleString("vi-VN")} ${material.unit} tại ${labelOf(p)}${detail ? ` (${detail})` : ""}.`;
+  }
+  return [
+    `Thay thế ${material.name} cho ${points.length} vị trí — tổng ${total.toLocaleString("vi-VN")} ${material.unit}:`,
+    ...points.map((p) => `- ${labelOf(p)}: ${totalOf(p).toLocaleString("vi-VN")} ${material.unit}`),
+  ].join("\n");
+}
+
+/** Các SYC thay thế đã ra cho một điểm — bấm để mở thẳng phiếu bên màn Khiếm khuyết. */
+function ReplacementRequestChips({ requests }: { requests?: PanelReplacementPoint["defectRequests"] }) {
+  const items = (requests ?? []).filter((item) => !item.defect.cancelledAt);
+  if (items.length === 0) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1">
+      {items.map((item) => {
+        const done = item.defect.status === "DA_XU_LY";
+        return (
+          <Link
+            key={item.id}
+            href={`/defects?q=${encodeURIComponent(item.defect.requestNumber ?? "")}`}
+            title={`${DEFECT_STATUS[item.defect.status as keyof typeof DEFECT_STATUS]?.label ?? item.defect.status}${item.defect.requestType ? ` · ${item.defect.requestType}` : ""}`}
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 transition-colors",
+              done
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
+                : "bg-amber-50 text-amber-800 ring-amber-200 hover:bg-amber-100"
+            )}
+          >
+            {item.defect.requestNumber ?? "—"}
+          </Link>
+        );
+      })}
     </div>
   );
 }

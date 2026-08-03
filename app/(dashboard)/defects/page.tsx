@@ -744,6 +744,17 @@ export default function DefectsPage() {
                       </TableCell>
                       <TableCell className="px-1.5 py-3 text-center text-[13px] text-ink">
                         <div className="truncate" title={d.requestNumber ?? undefined}>{d.requestNumber || "—"}</div>
+                        {/* Phiếu ra từ "Chi tiết điểm thay thế" của Danh mục vật tư. */}
+                        {d.isMaterialRequest && (
+                          <div className="mt-1 flex justify-center">
+                            <span
+                              className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-sky-200"
+                              title="Số yêu cầu thay thế vật tư, tạo từ Danh mục vật tư"
+                            >
+                              SYC vật tư
+                            </span>
+                          </div>
+                        )}
                         {d.sourceType === "GOOGLE_SHEETS" && (
                           <div className="mt-1 flex flex-wrap items-center justify-center gap-1">
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Google Sheet</span>

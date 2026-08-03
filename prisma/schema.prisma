@@ -351,6 +351,7 @@ model Material {
   deviceMaterials EquipmentMaterial[]
   replacements    MaterialReplacement[]
   ticketItems     MaterialTicketItem[]
+  defectRequests  DefectMaterialRequest[]
 
   @@unique([code, machine])
   @@index([system])
@@ -424,6 +425,8 @@ model MaterialReplacement {
   device    EquipmentNode?           @relation(fields: [deviceSeq], references: [seq], onDelete: SetNull)
   createdBy User                     @relation("MrCreatedBy", fields: [createdById], references: [id])
   logs      MaterialReplacementLog[]
+  // Các SYC thay thế đã ra cho chính điểm khai báo này.
+  defectRequests DefectMaterialRequest[]
 
   @@index([deviceSeq])
   // Index prefix cho truy vấn cả nhánh cây: WHERE deviceSeq LIKE '1.2.%'
@@ -452,6 +455,33 @@ model MaterialReplacementLog {
   @@index([replacementId, replacedAt(sort: Desc)])
   @@index([doneById])
   @@index([replacedAt])
+}
+
+// Cầu nối "Chi tiết điểm thay thế" (Danh mục vật tư) → Số yêu cầu khiếm khuyết.
+// Một SYC có thể phủ NHIỀU điểm cùng tổ máy + cùng cương vị (vd 6 bồn dầu LP/HP).
+//
+// quantity/unitLabel/pointLabel là SNAPSHOT lúc ra phiếu, cố ý không đọc lại qua
+// quan hệ: phiếu đã đẩy lên Google Sheet thì nội dung phải bất biến kể cả khi
+// điểm khai báo bị sửa hoặc xoá sau đó (replacementId khi đó chỉ bị SetNull).
+model DefectMaterialRequest {
+  id            String   @id @default(cuid())
+  defectId      String
+  replacementId String?
+  materialId    String
+  quantity      Int      @default(0) // = quantity × deviceCount của điểm, theo ĐVT vật tư
+  unitLabel     String   @default("") // ĐVT snapshot: "Lít", "Cái"…
+  pointLabel    String   @default("") // "TRẠM DẦU BÔI TRƠN HP-LP · Bồn dầu LP/HP thùng nghiền A"
+  createdAt     DateTime @default(now())
+
+  defect      Defect               @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  replacement MaterialReplacement? @relation(fields: [replacementId], references: [id], onDelete: SetNull)
+  material    Material             @relation(fields: [materialId], references: [id])
+
+  // Một điểm chỉ được gắn một lần vào cùng một phiếu.
+  @@unique([defectId, replacementId])
+  @@index([defectId])
+  @@index([replacementId])
+  @@index([materialId])
 }
 
 model EquipmentMaterial {
@@ -524,6 +554,9 @@ model Defect {
   sourceChangedAfterConfirm  Boolean   @default(false)
   syncState                  String    @default("ACTIVE") // ACTIVE | CONFIRMED | MISSING
   postRepairAwaitingMaterial Boolean   @default(false) // VHV giữ phiếu đã xử lý ở Tồn đọng do còn chờ vật tư
+  // Phiếu ra số để THAY THẾ VẬT TƯ, sinh từ "Chi tiết điểm thay thế" của Danh mục vật tư.
+  // Cờ phẳng để danh sách gắn nhãn/lọc mà không phải join DefectMaterialRequest.
+  isMaterialRequest          Boolean   @default(false)
   confirmedAt                DateTime?
   confirmedById              String? // Snapshot ID người xác nhận, không FK
   confirmedByName            String? // Snapshot tên người xác nhận
@@ -546,6 +579,7 @@ model Defect {
   relatedDevices DefectRelatedDevice[]
   pendingHistory DefectHistoryPending?
   reminderLogs   DefectReminderLog[]
+  materialRequests DefectMaterialRequest[]
 
   @@index([positionCode])
   // Bảng này phình nhanh nhất (mỗi ca trực đẻ thêm phiếu) nên chỉ giữ index KHÔNG

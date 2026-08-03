@@ -23,8 +23,23 @@ const MATERIAL_INCLUDE = {
     // Phân biệt dòng khai báo (chưa có lịch sử) với điểm đã ghi nhận và chuyển vào lịch sử.
     // Cả hai đều có isActive=false, nhưng chỉ dòng khai báo được hiện ở bảng chi tiết.
     include: {
-      device: { select: EQUIPMENT_DEVICE_SELECT },
+      // childCount phân biệt THƯ MỤC với thiết bị cấp cuối — SYC thay thế hiển thị
+      // khác nhau ở hai trường hợp này (xem DefectMaterialRequestSeed.primaryIsFolder).
+      device: { select: { ...EQUIPMENT_DEVICE_SELECT, childCount: true } },
       _count: { select: { logs: true } },
+      // SYC thay thế đã ra cho điểm này — hiện chip tra cứu ngay trên bảng chi tiết.
+      // Chỉ lấy phiếu mới nhất: bảng chỉ cần biết "đang có phiếu nào".
+      defectRequests: {
+        take: 3,
+        orderBy: { createdAt: "desc" as const },
+        select: {
+          id: true,
+          quantity: true,
+          defect: {
+            select: { id: true, requestNumber: true, requestType: true, status: true, cancelledAt: true },
+          },
+        },
+      },
     },
     orderBy: { nextDueAt: "asc" as const },
   },
@@ -101,7 +116,8 @@ function mapMaterial<T extends { id?: string; quantity: number; deviceMaterials?
     const device = equipmentNodeToDevice(r.device);
     // "Hệ thống" của thiết bị = tên node cha trong cây (giống trang lý lịch thiết bị).
     if (device && r.device?.parentSeq) device.system = parentNameBySeq?.get(r.device.parentSeq) ?? null;
-    return { ...r, deviceId: r.deviceSeq, device };
+    // equipmentNodeToDevice không giữ childCount nên nâng lên thành cờ phẳng ở dòng điểm.
+    return { ...r, deviceId: r.deviceSeq, device, deviceIsFolder: (r.device?.childCount ?? 0) > 0 };
   });
   // Tổng nhu cầu 1 chu kỳ = Σ (dung tích × số thiết bị) các DÒNG KHAI BÁO (isActive=false);
   // điểm theo dõi thời gian (isActive=true) là bản sao nên không cộng lặp.

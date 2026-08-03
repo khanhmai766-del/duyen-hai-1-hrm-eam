@@ -135,6 +135,10 @@ export function useCreateDefect() {
       if (typeof variables.device === "string" && variables.device) {
         qc.invalidateQueries({ queryKey: ["device", variables.device] });
       }
+      // SYC thay thế: bảng "Chi tiết điểm thay thế" phải hiện chip số yêu cầu ngay.
+      if (Array.isArray(variables.replacementIds) && variables.replacementIds.length > 0) {
+        qc.invalidateQueries({ queryKey: ["materials"] });
+      }
     },
   });
 }
@@ -239,6 +243,8 @@ export interface CompleteDefectInput {
   content?: string;
   result?: string;
   images?: string[];
+  /** SYC thay thế vật tư: ghi lần thay và dời hạn cho các điểm thuộc phiếu. */
+  recordReplacement?: boolean;
 }
 
 export function useCompleteDefect() {
@@ -250,6 +256,10 @@ export function useCompleteDefect() {
       qc.invalidateQueries({ queryKey: ["defects"] });
       qc.invalidateQueries({ queryKey: ["defect"] });
       qc.invalidateQueries({ queryKey: ["defect-history"] });
+      // Danh mục vật tư & lịch thay thế đổi theo khi phiếu ghi nhận đã thay.
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["replacements"] });
+      qc.invalidateQueries({ queryKey: ["replacement-history"] });
     },
   });
 }

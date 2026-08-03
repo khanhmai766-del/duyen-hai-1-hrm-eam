@@ -42,9 +42,25 @@ function toDateInput(v: Date | string | null | undefined): string {
 const NONE = "__none__";
 const YES_NO_OPTIONS = ["Có", "Không"] as const;
 
+/**
+ * Mồi cho phiếu ra từ "Chi tiết điểm thay thế" của Danh mục vật tư.
+ * Tổ máy / cương vị / thiết bị đã chốt theo bản khai báo nên khoá lại; server còn
+ * dựng lại lần nữa từ `replacementIds` nên client không thể đổi lệch.
+ */
+export type DefectMaterialRequestSeed = {
+  replacementIds: string[];
+  materialName: string;
+  materialUnit: string;
+  /** Node gắn phiếu là THƯ MỤC (điểm khai báo ở cấp hệ thống) — chỉ SYC thay thế mới cho phép. */
+  primaryIsFolder: boolean;
+  points: Array<{ id: string; label: string; quantity: number }>;
+  suggestedContent: string;
+};
+
 export function DefectForm({
   defect,
   initialDevice,
+  initialMaterialRequest,
   lockDevice = false,
   onDone,
   onMappingSaved,
@@ -60,6 +76,7 @@ export function DefectForm({
     managingPosition?: string | null;
     unit?: string | null;
   } | null;
+  initialMaterialRequest?: DefectMaterialRequestSeed | null;
   lockDevice?: boolean;
   onDone?: () => void;
   onMappingSaved?: (defect: DefectItem) => void;
@@ -122,7 +139,7 @@ export function DefectForm({
     // Phiếu mới phải để VHV chủ động chọn Cơ/Điện để tránh ghi nhầm Sheet.
     requestType: defect?.requestType ?? "",
     requestNumber: defect?.requestNumber ?? "",
-    content: defect?.content ?? "",
+    content: defect?.content ?? initialMaterialRequest?.suggestedContent ?? "",
     status: defect?.status ?? "CHUA_XU_LY",
     detectedAt: toDateInput(defect?.detectedAt),
     reminderCount: defect?.reminderCount ?? 0,
@@ -384,7 +401,7 @@ export function DefectForm({
       relatedDeviceUnits: _relatedDeviceUnits,
       ...defectForm
     } = form;
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...defectForm,
       relatedDeviceMappings: form.relatedDeviceSeqs.map((deviceSeq) => ({
         deviceSeq,
@@ -392,13 +409,29 @@ export function DefectForm({
       })),
       detectedAt: form.detectedAt || null,
     };
+    // SYC thay thế vật tư: chỉ gửi danh sách điểm; server tự dựng lại tổ máy/cương
+    // vị/thiết bị từ Danh mục nên các giá trị tương ứng ở trên chỉ để hiển thị.
+    if (initialMaterialRequest) payload.replacementIds = initialMaterialRequest.replacementIds;
     try {
       if (isEdit) await update.mutateAsync({ id: defect!.id, ...payload });
       else await create.mutateAsync(payload);
       toast.success(isEdit ? "Đã cập nhật khiếm khuyết" : "Đã lưu khiếm khuyết");
       onDone?.();
     } catch (e) {
-      toast.error((e as Error).message);
+      const message = (e as Error).message;
+      // Điểm đã có phiếu dang dở — hỏi lại rồi ra phiếu mới nếu người dùng đồng ý.
+      if (initialMaterialRequest && !isEdit && message.includes("Xác nhận để vẫn ra phiếu mới")) {
+        if (!window.confirm(`${message}\n\nBạn vẫn muốn ra số yêu cầu mới?`)) return;
+        try {
+          await create.mutateAsync({ ...payload, allowDuplicate: true });
+          toast.success("Đã lưu khiếm khuyết");
+          onDone?.();
+        } catch (retryError) {
+          toast.error((retryError as Error).message);
+        }
+        return;
+      }
+      toast.error(message);
     }
   }
 
@@ -429,6 +462,31 @@ export function DefectForm({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
         <div className={cn(step === 1 ? "block" : "hidden")}>
           <div className="mx-auto max-w-xl space-y-5">
+            {initialMaterialRequest && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold text-emerald-950">SYC thay thế vật tư</p>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                    {initialMaterialRequest.points.length} điểm
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-medium text-ink">{initialMaterialRequest.materialName}</p>
+                <ul className="mt-2 space-y-1">
+                  {initialMaterialRequest.points.map((point) => (
+                    <li key={point.id} className="flex items-baseline justify-between gap-3 text-xs text-emerald-900/85">
+                      <span className="min-w-0 flex-1 truncate" title={point.label}>{point.label}</span>
+                      <span className="shrink-0 font-semibold tabular-nums">
+                        {point.quantity.toLocaleString("vi-VN")} {initialMaterialRequest.materialUnit}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs leading-relaxed text-emerald-800/75">
+                  Tổ máy, cương vị và thiết bị lấy thẳng từ điểm đã khai báo trong Danh mục vật tư
+                  nên không sửa được ở đây — nhờ vậy phiếu luôn nằm đúng vị trí trên cây thiết bị.
+                </p>
+              </div>
+            )}
             <Row label="Tổ Máy *">
               {lockDevice && initialDevice ? (
                 <LockedValue
@@ -475,13 +533,20 @@ export function DefectForm({
               </Row>
             )}
             <Row label="Cương Vị *">
-              <Select value={form.system || NONE} onValueChange={setSystem} disabled={isSynced}>
-                <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                  {visiblePositions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {initialMaterialRequest ? (
+                <LockedValue
+                  primary={form.system || "Chưa khai báo cương vị"}
+                  secondary="Theo cương vị quản lý của điểm thay thế"
+                />
+              ) : (
+                <Select value={form.system || NONE} onValueChange={setSystem} disabled={isSynced}>
+                  <SelectTrigger><SelectValue placeholder="Chọn cương vị" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>— Không chọn —</SelectItem>
+                    {visiblePositions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
             </Row>
             <Row label={isSynced ? "Hệ Thống Chính *" : "Hệ Thống Chính"}>
               {lockDevice && initialDevice ? (
@@ -536,7 +601,18 @@ export function DefectForm({
               )}
             </Row>
             <Row label={isSynced ? "Thiết Bị *" : "Thiết Bị"}>
-              {lockDevice && initialDevice ? (
+              {initialMaterialRequest?.primaryIsFolder ? (
+                // Điểm khai báo dừng ở cấp thư mục: không có thiết bị con để gắn.
+                // Phiếu neo vào chính thư mục đó và cột "Thiết bị" trên Google Sheet
+                // nhận tên thư mục — quy ước riêng của SYC thay thế vật tư.
+                <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/60 px-3 py-2.5">
+                  <div className="text-sm font-medium text-amber-900">Không có thiết bị cấp cuối</div>
+                  <div className="mt-0.5 text-xs leading-relaxed text-amber-800/80">
+                    Điểm thay thế được khai báo ở cấp hệ thống. Phiếu gắn vào{" "}
+                    <b>{initialDevice?.name ?? "hệ thống"}</b> và đây cũng là giá trị ghi vào cột Thiết bị.
+                  </div>
+                </div>
+              ) : lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.name} secondary={initialDevice.displayCode ?? initialDevice.code} />
               ) : form.device ? (
                 <RelatedDeviceRow
@@ -551,7 +627,9 @@ export function DefectForm({
                 </div>
               )}
             </Row>
-            <Row label="Thiết Bị Liên Quan">
+            {/* Với SYC thay thế, các điểm còn lại đã là thiết bị liên quan do server gán —
+                khối tóm tắt phía trên đã liệt kê đủ nên không hiện lại ô chọn tay. */}
+            <Row label="Thiết Bị Liên Quan" hidden={!!initialMaterialRequest}>
               <div className="space-y-3">
                 {form.relatedDeviceSeqs.length > 0 ? (
                   <div className="space-y-2">
@@ -1061,7 +1139,8 @@ function TabBtn({ active, onClick, label }: { active: boolean; onClick: () => vo
   );
 }
 
-function Row({ label, children, compact = false }: { label: string; children: React.ReactNode; compact?: boolean }) {
+function Row({ label, children, compact = false, hidden = false }: { label: string; children: React.ReactNode; compact?: boolean; hidden?: boolean }) {
+  if (hidden) return null;
   return (
     <div className={cn("grid items-center gap-4", compact ? "grid-cols-[88px_1fr]" : "grid-cols-[180px_1fr]")}>
       <Label className="whitespace-nowrap text-right text-muted-foreground">{label}</Label>

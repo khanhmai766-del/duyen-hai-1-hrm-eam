@@ -30,6 +30,7 @@ import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 import { daysSinceSecondReminder, isSeverity2UpgradeCandidate } from "@/lib/defect-severity-upgrade";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
+import { resolveMaterialRequest, type ResolvedMaterialRequest } from "@/lib/defect-material-request";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ const LIST_SELECT = {
   websiteCreated: true,
   syncState: true,
   postRepairAwaitingMaterial: true,
+  isMaterialRequest: true,
   cancelledAt: true,
   cancelledById: true,
   cancelledByName: true,
@@ -427,6 +429,46 @@ export async function POST(req: NextRequest) {
     }
     const body = await req.json();
 
+    // SYC thay thế vật tư: client chỉ gửi danh sách id điểm khai báo. Server đọc lại
+    // Danh mục và TỰ DỰNG LẠI tổ máy / cương vị / thiết bị, ghi đè mọi giá trị client
+    // gửi kèm — nhờ vậy phiếu luôn trỏ đúng node đã khai báo, không thể ráng nhầm.
+    // Điểm khai báo ở cấp THƯ MỤC vẫn được chấp nhận (chỉ riêng loại phiếu này).
+    let materialRequest: ResolvedMaterialRequest | null = null;
+    if (body.replacementIds !== undefined && body.replacementIds !== null) {
+      const resolved = await resolveMaterialRequest(prisma, body.replacementIds);
+      if (typeof resolved === "string") return fail(resolved);
+      materialRequest = resolved;
+      body.unit = resolved.unit;
+      body.system = resolved.managingPosition ?? "";
+      body.device = resolved.primarySeq;
+      body.mappedDeviceUnit = resolved.unit;
+      body.relatedDeviceSeqs = resolved.relatedSeqs;
+      body.relatedDeviceMappings = resolved.relatedSeqs.map((deviceSeq) => ({
+        deviceSeq,
+        mappedUnit: resolved.unit,
+      }));
+      body.sourceDeviceRaw = resolved.primaryName;
+      if (!String(body.content ?? "").trim()) body.content = resolved.suggestedContent;
+
+      // Cảnh báo (không chặn) khi điểm đã có SYC còn dang dở — tránh ra trùng số cho
+      // cùng một lần thay. Người dùng xác nhận thì gửi lại kèm allowDuplicate.
+      if (!body.allowDuplicate) {
+        const open = await prisma.defectMaterialRequest.findFirst({
+          where: {
+            replacementId: { in: resolved.rows.map((row) => row.replacementId) },
+            defect: { status: { not: "DA_XU_LY" }, cancelledAt: null },
+          },
+          select: { pointLabel: true, defect: { select: { requestNumber: true } } },
+        });
+        if (open) {
+          return fail(
+            `Điểm "${open.pointLabel}" đã có số yêu cầu ${open.defect.requestNumber ?? "?"} chưa xử lý xong. Xác nhận để vẫn ra phiếu mới.`,
+            409
+          );
+        }
+      }
+    }
+
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
     const commonSubUnit = body.unit === "COMMON" ? String(body.commonSubUnit ?? "").trim() : null;
     if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
@@ -524,16 +566,26 @@ export async function POST(req: NextRequest) {
           fireSafetyImpact: normalizeImpactValue(body.fireSafetyImpact),
           environmentSafetyImpact: normalizeImpactValue(body.environmentSafetyImpact),
           createdById: user.id,
+          isMaterialRequest: !!materialRequest,
           relatedDevices: {
             create: relatedDeviceMappings.map(({ deviceSeq, mappedUnit }) => ({ deviceSeq, mappedUnit })),
           },
+          materialRequests: materialRequest ? { create: materialRequest.rows } : undefined,
         },
         include: INCLUDE,
       });
       await enqueueDefectSyncEvent(tx, { defect: created, eventType: "CREATE" });
       return created;
     });
-    await audit(user.id, "CREATE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user));
+    await audit(
+      user.id,
+      materialRequest ? "CREATE_MATERIAL_DEFECT" : "CREATE_DEFECT",
+      "Defect",
+      defect.id,
+      materialRequest
+        ? `${auditDetailWithPosition(user)} · SYC thay thế ${materialRequest.rows.length} điểm`
+        : auditDetailWithPosition(user)
+    );
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });
 }

@@ -26,6 +26,23 @@ export interface MaterialReplacementPoint {
   note: string | null;
   _count?: { logs: number };
   device: { id: string; code: string; name: string; system: string | null } | null;
+  /** Node gắn điểm là THƯ MỤC (còn thiết bị con) chứ không phải thiết bị cấp cuối. */
+  deviceIsFolder?: boolean;
+  /** Tổ máy sở hữu điểm khai báo: S1 | S2 | COMMON — quyết định cây thiết bị của SYC. */
+  machine?: string;
+  managingPositionCode?: string | null;
+  /** Các SYC thay thế đã ra cho chính điểm này (mới nhất trước, tối đa 3). */
+  defectRequests?: Array<{
+    id: string;
+    quantity: number;
+    defect: {
+      id: string;
+      requestNumber: string | null;
+      requestType: string | null;
+      status: string;
+      cancelledAt: string | Date | null;
+    };
+  }>;
 }
 
 export interface MaterialWithDevices extends Material {
