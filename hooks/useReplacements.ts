@@ -203,17 +203,9 @@ export function useDeleteReplacement() {
   });
 }
 
-export function useRecordReplacement() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }: ReplacementInput & { id: string }) =>
-      apiMutate<ReplacementItem>(`/api/material-replacements/${id}/replace`, "POST", body),
-    onSuccess: (_d, vars) => {
-      invalidate(qc);
-      qc.invalidateQueries({ queryKey: ["replacement", vars.id] });
-    },
-  });
-}
+// Không còn hook ghi nhận thay thế thủ công: lịch sử thay thế CHỈ được sinh khi
+// hoàn thành số yêu cầu thay thế vật tư, để mỗi lần thay đều truy ngược được về
+// một phiếu khiếm khuyết có số. Hai hook dưới chỉ sửa/xoá dòng lịch sử đã có.
 
 export function useUpdateReplacementLog() {
   const qc = useQueryClient();

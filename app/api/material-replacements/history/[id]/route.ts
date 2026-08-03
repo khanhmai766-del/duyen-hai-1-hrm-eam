@@ -16,7 +16,14 @@ async function assertCanEditLog(user: Awaited<ReturnType<typeof requireUser>>, i
   });
   if (!log) throw fail("Không tìm thấy ghi nhận thay thế", 404);
   const access = await resolveEquipmentAccessForUser(user);
-  if (!log.replacement || !canEditMaterialReplacement(access, log.replacement)) {
+  // Điểm theo dõi bị gỡ sau mỗi lần ghi nhận và có thể bị xoá hẳn, khi đó
+  // replacementId = null. Phải xét quyền theo snapshot trên chính dòng lịch sử,
+  // nếu không mọi dòng sinh từ SYC đều bị chặn 403 khi sửa/xoá.
+  const scope = {
+    deviceSeq: log.deviceSeq ?? log.replacement?.deviceSeq ?? null,
+    system: log.systemLabel ?? log.replacement?.system ?? null,
+  };
+  if (!canEditMaterialReplacement(access, scope)) {
     throw fail("Cương vị của bạn không có quyền thao tác lịch sử thay thế này", 403);
   }
   return log;

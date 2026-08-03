@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { REPL_DUE, SAMPLING_DUE, replacementDueStatus, daysUntilDue, type ReplDueKey } from "@/lib/constants";
 
 /** Diễn giải số ngày còn lại đến hạn thay thế. */
-export function replDueText(nextDueAt: Date | string): string {
+function replDueText(nextDueAt: Date | string): string {
   const d = daysUntilDue(nextDueAt);
   if (d < 0) return `Quá hạn ${Math.abs(d)} ngày`;
   if (d === 0) return "Đến hạn hôm nay";

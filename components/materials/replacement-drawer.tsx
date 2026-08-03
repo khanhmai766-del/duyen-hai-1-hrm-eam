@@ -3,13 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { X, Pencil, Trash2, RefreshCw, Cpu, CalendarClock, Repeat } from "lucide-react";
+import { X, Pencil, Trash2, Eye, Cpu, CalendarClock, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
-import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
+import { ReplacementPointDetailsDialog } from "@/components/materials/replacement-point-details-dialog";
 import {
   useReplacements,
   useDeleteReplacement,
@@ -44,7 +44,7 @@ export function ReplacementDrawer({
   const counts = (data?.meta?.counts as { OVERDUE: number; DUE_SOON: number; OK: number }) ?? { OVERDUE: 0, DUE_SOON: 0, OK: 0 };
 
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
-  const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
+  const [detailTarget, setDetailTarget] = React.useState<ReplacementItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
 
   if (!material) return null;
@@ -110,11 +110,10 @@ export function ReplacementDrawer({
                 {p.note && <p className="mt-2 rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground">{p.note}</p>}
 
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {canManage && (
-                    <Button size="sm" variant="accent" onClick={() => setRecordTarget(p)}>
-                      <RefreshCw className="h-3.5 w-3.5" /> Ghi nhận thay
-                    </Button>
-                  )}
+                  {/* Chỉ xem — lịch sử thay thế chỉ sinh từ số yêu cầu thay thế vật tư. */}
+                  <Button size="sm" variant="accent" onClick={() => setDetailTarget(p)}>
+                    <Eye className="h-3.5 w-3.5" /> Xem chi tiết
+                  </Button>
                   {canManage && (
                     <Button size="sm" variant="ghost" onClick={() => setEditTarget(p)}><Pencil className="h-3.5 w-3.5" /></Button>
                   )}
@@ -143,8 +142,8 @@ export function ReplacementDrawer({
         </DialogContent>
       </Dialog>
 
-      {/* Record replacement */}
-      <RecordReplacementDialog point={recordTarget} onClose={() => setRecordTarget(null)} />
+      {/* Xem chi tiết điểm thay thế (chỉ đọc) */}
+      <ReplacementPointDetailsDialog point={detailTarget} onClose={() => setDetailTarget(null)} />
 
       {/* Delete */}
       <ConfirmDialog

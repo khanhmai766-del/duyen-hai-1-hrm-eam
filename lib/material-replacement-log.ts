@@ -67,18 +67,3 @@ export function buildReplacementLogData(params: {
     requestNumber: params.defect?.requestNumber ?? null,
   };
 }
-
-/** Trường snapshot cần đọc để dựng lại dòng lịch sử khi điểm đã bị gỡ. */
-export const REPLACEMENT_LOG_SNAPSHOT_SELECT = {
-  materialId: true,
-  deviceSeq: true,
-  machine: true,
-  systemLabel: true,
-  deviceLabel: true,
-  managingPosition: true,
-  intervalMonths: true,
-  intervalNote: true,
-  unitLabel: true,
-  defectId: true,
-  requestNumber: true,
-} as const;

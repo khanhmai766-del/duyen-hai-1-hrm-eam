@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, RefreshCw, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange, Activity, Upload } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange, Activity, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -22,7 +22,7 @@ import {
 } from "@/components/materials/replacement-status-dashboard";
 import { ReplacementScheduleImportDialog } from "@/components/materials/replacement-schedule-import-dialog";
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
-import { RecordReplacementDialog } from "@/components/materials/record-replacement-dialog";
+import { ReplacementPointDetailsDialog } from "@/components/materials/replacement-point-details-dialog";
 import { ReplacementHistoryDetails } from "@/components/materials/replacement-history-details";
 import { LockChip } from "@/components/shared/lock-chip";
 import { Card } from "@/components/ui/card";
@@ -323,7 +323,7 @@ function ReplacementsPageContent() {
   );
 
   const [editTarget, setEditTarget] = React.useState<ReplacementItem | null>(null);
-  const [recordTarget, setRecordTarget] = React.useState<ReplacementItem | null>(null);
+  const [detailTarget, setDetailTarget] = React.useState<ReplacementItem | null>(null);
   const [delTarget, setDelTarget] = React.useState<ReplacementItem | null>(null);
   const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
   const [editLogTarget, setEditLogTarget] = React.useState<ReplacementLogItem | null>(null);
@@ -707,25 +707,22 @@ function ReplacementsPageContent() {
                               Đến hạn: <span className="font-semibold text-ink">{formatDate(p.nextDueAt)}</span>
                             </div>
                           </div>
-                          {(canManage || canDelete) && (
-                            <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
-                              {canManage && (
-                                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-accent hover:bg-accent/10" onClick={() => setRecordTarget(p)}>
-                                  <RefreshCw className="h-3.5 w-3.5" /> Ghi nhận
-                                </Button>
-                              )}
+                          <div className="mt-2 flex items-center gap-1 border-t border-border/60 pt-2">
+                            {/* Chỉ xem — lịch sử thay thế chỉ sinh từ SYC thay thế vật tư. */}
+                            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-accent hover:bg-accent/10" onClick={() => setDetailTarget(p)}>
+                              <Eye className="h-3.5 w-3.5" /> Xem chi tiết
+                            </Button>
                               {canManage && (
                                 <Button variant="ghost" size="sm" className="h-7 gap-1 px-2" onClick={() => setEditTarget(p)}>
                                   <Pencil className="h-3.5 w-3.5" /> Sửa
                                 </Button>
                               )}
-                              {canDelete && (
-                                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(p)}>
-                                  <Trash2 className="h-3.5 w-3.5" /> Xoá
-                                </Button>
-                              )}
-                            </div>
-                          )}
+                            {canDelete && (
+                              <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDelTarget(p)}>
+                                <Trash2 className="h-3.5 w-3.5" /> Xoá
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })
@@ -910,7 +907,7 @@ function ReplacementsPageContent() {
         </DialogContent>
       </Dialog>
 
-      <RecordReplacementDialog point={recordTarget} onClose={() => setRecordTarget(null)} />
+      <ReplacementPointDetailsDialog point={detailTarget} onClose={() => setDetailTarget(null)} />
 
       <ReplacementLogEditDialog log={editLogTarget} onClose={() => setEditLogTarget(null)} />
 
