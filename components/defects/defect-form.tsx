@@ -34,6 +34,8 @@ import type { TreeScope } from "@/lib/equipment-units";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 import { positionsMatch } from "@/lib/position-catalog";
 import { allowedMappedUnits, normalizeMappedUnit } from "@/lib/defect-device-mapping";
+import { MaterialRequestPicker, buildSeedFromPoints } from "@/components/defects/material-request-picker";
+import type { ReplacementPointOption } from "@/hooks/useReplacements";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -53,6 +55,9 @@ export type DefectMaterialRequestSeed = {
   materialUnit: string;
   /** Node gắn phiếu là THƯ MỤC (điểm khai báo ở cấp hệ thống) — chỉ SYC thay thế mới cho phép. */
   primaryIsFolder: boolean;
+  /** Hệ thống chính và tên node chính, chỉ để hiển thị — server tự dựng lại khi lưu. */
+  primarySystemName: string;
+  primaryDeviceName: string;
   points: Array<{ id: string; label: string; quantity: number }>;
   suggestedContent: string;
 };
@@ -104,6 +109,14 @@ export function DefectForm({
   const create = useCreateDefect();
   const update = useUpdateDefect();
   const [step, setStep] = React.useState<1 | 2 | 3 | 4>(1);
+  // Hai đường vào cùng một cơ chế: mồi sẵn từ Danh mục vật tư (prop), hoặc người dùng
+  // tự tick "SYC thay thế vật tư" ngay tại đây rồi chọn điểm (state).
+  const [materialRequest, setMaterialRequest] = React.useState<DefectMaterialRequestSeed | null>(
+    initialMaterialRequest ?? null
+  );
+  // Chỉ phiếu mới, không phải phiếu Sheet, và không đến từ Danh mục mới có cửa phụ.
+  const canPickMaterialRequest = !isEdit && !isSynced && !initialMaterialRequest;
+  const [pickerOpen, setPickerOpen] = React.useState(false);
 
   // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
@@ -190,6 +203,8 @@ export function DefectForm({
   // Mỗi tổ máy ánh xạ vào một CÂY thiết bị riêng (S1/S2 = nhánh 1,2,3,7; COMMON = nhánh 5,6)
   // nên đổi tổ máy phải bỏ luôn thiết bị đã chọn — thiết bị cũ thuộc cây khác.
   function selectUnit(u: string) {
+    // Điểm thay thế đã chọn thuộc đúng một tổ máy; đổi tổ máy là bỏ lựa chọn cũ.
+    if (canPickMaterialRequest && form.unit !== u) setMaterialRequest(null);
     setForm((f) => {
       const commonSubUnit = u === "COMMON" ? f.commonSubUnit : "";
       if (f.unit === u) return { ...f, commonSubUnit };
@@ -220,8 +235,40 @@ export function DefectForm({
     setForm((current) => ({ ...current, deviceSystem: systemName }));
   }, [form.deviceSystem, selectedSystemQuery.data]);
 
+  // Bỏ tick = huỷ hẳn lựa chọn; nội dung gợi ý cũng phải rút lại để không còn
+  // sót mô tả vật tư trên một phiếu khiếm khuyết thường.
+  function toggleMaterialRequestMode() {
+    setPickerOpen((open) => {
+      if (open) {
+        setForm((current) => ({
+          ...current,
+          content: current.content === materialRequest?.suggestedContent ? "" : current.content,
+        }));
+        setMaterialRequest(null);
+      }
+      return !open;
+    });
+  }
+
+  function applyPickedPoints(points: ReplacementPointOption[]) {
+    const seed = buildSeedFromPoints(points);
+    setForm((current) => ({
+      ...current,
+      // Chỉ ghi đè khi ô nội dung còn trống hoặc đang giữ nguyên gợi ý cũ —
+      // câu người dùng tự viết không bị mất khi tick thêm/bớt điểm.
+      content:
+        !current.content.trim() || current.content === materialRequest?.suggestedContent
+          ? seed?.suggestedContent ?? ""
+          : current.content,
+    }));
+    setMaterialRequest(seed);
+  }
+
   function setSystem(v: string) {
-    set("system", v === NONE ? "" : v);
+    const next = v === NONE ? "" : v;
+    // Danh sách điểm được lọc theo cương vị, đổi cương vị thì lựa chọn cũ hết hiệu lực.
+    if (canPickMaterialRequest && next !== form.system) setMaterialRequest(null);
+    set("system", next);
   }
 
   function selectMappedDevice(node: PickerEquipmentNode | null) {
@@ -411,7 +458,7 @@ export function DefectForm({
     };
     // SYC thay thế vật tư: chỉ gửi danh sách điểm; server tự dựng lại tổ máy/cương
     // vị/thiết bị từ Danh mục nên các giá trị tương ứng ở trên chỉ để hiển thị.
-    if (initialMaterialRequest) payload.replacementIds = initialMaterialRequest.replacementIds;
+    if (materialRequest) payload.replacementIds = materialRequest.replacementIds;
     try {
       if (isEdit) await update.mutateAsync({ id: defect!.id, ...payload });
       else await create.mutateAsync(payload);
@@ -420,7 +467,7 @@ export function DefectForm({
     } catch (e) {
       const message = (e as Error).message;
       // Điểm đã có phiếu dang dở — hỏi lại rồi ra phiếu mới nếu người dùng đồng ý.
-      if (initialMaterialRequest && !isEdit && message.includes("Xác nhận để vẫn ra phiếu mới")) {
+      if (materialRequest && !isEdit && message.includes("Xác nhận để vẫn ra phiếu mới")) {
         if (!window.confirm(`${message}\n\nBạn vẫn muốn ra số yêu cầu mới?`)) return;
         try {
           await create.mutateAsync({ ...payload, allowDuplicate: true });
@@ -462,21 +509,21 @@ export function DefectForm({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
         <div className={cn(step === 1 ? "block" : "hidden")}>
           <div className="mx-auto max-w-xl space-y-5">
-            {initialMaterialRequest && (
+            {materialRequest && (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-semibold text-emerald-950">SYC thay thế vật tư</p>
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                    {initialMaterialRequest.points.length} điểm
+                    {materialRequest.points.length} điểm
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-medium text-ink">{initialMaterialRequest.materialName}</p>
+                <p className="mt-1 text-sm font-medium text-ink">{materialRequest.materialName}</p>
                 <ul className="mt-2 space-y-1">
-                  {initialMaterialRequest.points.map((point) => (
+                  {materialRequest.points.map((point) => (
                     <li key={point.id} className="flex items-baseline justify-between gap-3 text-xs text-emerald-900/85">
                       <span className="min-w-0 flex-1 truncate" title={point.label}>{point.label}</span>
                       <span className="shrink-0 font-semibold tabular-nums">
-                        {point.quantity.toLocaleString("vi-VN")} {initialMaterialRequest.materialUnit}
+                        {point.quantity.toLocaleString("vi-VN")} {materialRequest.materialUnit}
                       </span>
                     </li>
                   ))}
@@ -549,7 +596,12 @@ export function DefectForm({
               )}
             </Row>
             <Row label={isSynced ? "Hệ Thống Chính *" : "Hệ Thống Chính"}>
-              {lockDevice && initialDevice ? (
+              {materialRequest ? (
+                <LockedValue
+                  primary={materialRequest.primarySystemName || "Chưa xác định hệ thống"}
+                  secondary="Theo điểm thay thế đã chọn"
+                />
+              ) : lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.system || "Chưa xác định hệ thống"} secondary={initialDevice.systemSeq || undefined} />
               ) : (
                 <div className="space-y-2">
@@ -601,7 +653,7 @@ export function DefectForm({
               )}
             </Row>
             <Row label={isSynced ? "Thiết Bị *" : "Thiết Bị"}>
-              {initialMaterialRequest?.primaryIsFolder ? (
+              {materialRequest?.primaryIsFolder ? (
                 // Điểm khai báo dừng ở cấp thư mục: không có thiết bị con để gắn.
                 // Phiếu neo vào chính thư mục đó và cột "Thiết bị" trên Google Sheet
                 // nhận tên thư mục — quy ước riêng của SYC thay thế vật tư.
@@ -609,9 +661,11 @@ export function DefectForm({
                   <div className="text-sm font-medium text-amber-900">Không có thiết bị cấp cuối</div>
                   <div className="mt-0.5 text-xs leading-relaxed text-amber-800/80">
                     Điểm thay thế được khai báo ở cấp hệ thống. Phiếu gắn vào{" "}
-                    <b>{initialDevice?.name ?? "hệ thống"}</b> và đây cũng là giá trị ghi vào cột Thiết bị.
+                    <b>{materialRequest.primaryDeviceName || "hệ thống"}</b> và đây cũng là giá trị ghi vào cột Thiết bị.
                   </div>
                 </div>
+              ) : materialRequest ? (
+                <LockedValue primary={materialRequest.primaryDeviceName} secondary="Theo điểm thay thế đã chọn" />
               ) : lockDevice && initialDevice ? (
                 <LockedValue primary={initialDevice.name} secondary={initialDevice.displayCode ?? initialDevice.code} />
               ) : form.device ? (
@@ -629,7 +683,7 @@ export function DefectForm({
             </Row>
             {/* Với SYC thay thế, các điểm còn lại đã là thiết bị liên quan do server gán —
                 khối tóm tắt phía trên đã liệt kê đủ nên không hiện lại ô chọn tay. */}
-            <Row label="Thiết Bị Liên Quan" hidden={!!initialMaterialRequest}>
+            <Row label="Thiết Bị Liên Quan" hidden={!!materialRequest}>
               <div className="space-y-3">
                 {form.relatedDeviceSeqs.length > 0 ? (
                   <div className="space-y-2">
@@ -791,6 +845,44 @@ export function DefectForm({
                     </span>
                   </span>
                 </button>
+              </Row>
+            )}
+            {canPickMaterialRequest && (
+              <Row label="SYC Thay Thế Vật Tư">
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={pickerOpen}
+                    onClick={toggleMaterialRequestMode}
+                    className={cn(
+                      "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
+                      pickerOpen ? "border-emerald-300 bg-emerald-50/70" : "border-border bg-white hover:border-emerald-200"
+                    )}
+                  >
+                    <span className={cn(
+                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+                      pickerOpen ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white"
+                    )}>
+                      {pickerOpen && <Check className="h-3.5 w-3.5" />}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">Phiếu này để thay thế / bổ sung vật tư</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                        Chọn từ các điểm thay thế đã khai báo — thiết bị và hệ thống lấy theo bản khai báo
+                        nên phiếu nằm đúng vị trí trên cây, tra cứu chung với lịch sử thay thế.
+                      </span>
+                    </span>
+                  </button>
+                  {pickerOpen && (
+                    <MaterialRequestPicker
+                      machine={form.unit}
+                      position={form.system}
+                      selectedIds={materialRequest?.replacementIds ?? []}
+                      onChange={applyPickedPoints}
+                    />
+                  )}
+                </div>
               </Row>
             )}
             <Row label="Điều Kiện Thực Hiện *">

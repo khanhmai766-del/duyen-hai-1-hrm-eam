@@ -2193,6 +2193,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 materialName: m.name,
                 materialUnit: m.unit,
                 primaryIsFolder: !!selectedPoints[0].deviceIsFolder,
+                primarySystemName: selectedPoints[0].deviceIsFolder
+                  ? selectedPoints[0].device?.name ?? ""
+                  : selectedPoints[0].device?.system ?? selectedPoints[0].system ?? "",
+                primaryDeviceName: selectedPoints[0].device?.name || selectedPoints[0].location || "",
                 points: selectedPoints.map((p) => ({
                   id: p.id,
                   label: [p.device?.system || p.system, p.device?.name || p.location]

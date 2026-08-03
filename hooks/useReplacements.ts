@@ -58,6 +58,52 @@ export function useReplacementHistory(filters: { q?: string } = {}) {
   });
 }
 
+/** Một điểm khai báo có thể chọn để ra SYC thay thế ngay trong form khiếm khuyết. */
+export interface ReplacementPointOption {
+  id: string;
+  materialId: string;
+  materialName: string;
+  materialCode: string;
+  materialUnit: string;
+  category: string | null;
+  deviceSeq: string | null;
+  deviceName: string;
+  deviceIsFolder: boolean;
+  systemName: string;
+  managingPosition: string | null;
+  machine: string;
+  /** Tổng lượng cần thay tại điểm = dung tích × số thiết bị. */
+  quantity: number;
+  intervalMonths: number;
+  intervalNote: string | null;
+  lastReplacedAt: string | null;
+  nextDueAt: string;
+  dueStatus: "OVERDUE" | "DUE_SOON" | "OK" | null;
+  /** Số yêu cầu còn dang dở của chính điểm này, nếu có. */
+  openRequestNumber: string | null;
+}
+
+/**
+ * Điểm khai báo lọc theo tổ máy + cương vị đang chọn ở form khiếm khuyết.
+ * Không đủ hai tham số thì không gọi API — server cũng trả rỗng.
+ */
+export function useReplacementPointOptions(
+  filters: { machine?: string; position?: string; category?: string },
+  options?: { enabled?: boolean }
+) {
+  const ready = Boolean(filters.machine && filters.position);
+  const qs = new URLSearchParams();
+  if (filters.machine) qs.set("machine", filters.machine);
+  if (filters.position) qs.set("position", filters.position);
+  if (filters.category) qs.set("category", filters.category);
+  return useQuery({
+    queryKey: ["replacement-point-options", filters],
+    queryFn: () => apiGet<ReplacementPointOption[]>(`/api/material-replacements/points?${qs.toString()}`),
+    enabled: ready && (options?.enabled ?? true),
+    staleTime: 60_000,
+  });
+}
+
 export interface ReplacementMeta {
   total: number;
   counts: { OVERDUE: number; DUE_SOON: number; OK: number };
