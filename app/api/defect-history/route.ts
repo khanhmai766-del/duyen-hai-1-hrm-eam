@@ -8,6 +8,7 @@ import { dateRange, parseDateInput } from "@/lib/utils";
 import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
+import { positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,40 @@ const INCLUDE = {
 // Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
 const HISTORY_TAKE = 300;
 
+/**
+ * DefectHistory.system là snapshot cương vị từ nhiều nguồn: có thể là nhãn chuẩn,
+ * nhãn Sheet có STT hoặc nhãn kèm hậu tố S1/S2. Dựng đủ biến thể để lọc ngay
+ * trong SQL trước giới hạn HISTORY_TAKE, sau đó vẫn kiểm tra bằng positionsMatch.
+ */
+function positionFilterValues(position: string) {
+  const catalog = positionCatalogItem(position);
+  const sourceValues = [
+    position,
+    catalog?.label,
+    ...(catalog?.aliases ?? []),
+    ...Object.values(catalog?.sheetLabels ?? {}),
+  ];
+  const values = new Set<string>();
+  for (const source of sourceValues) {
+    const value = source?.trim();
+    if (!value) continue;
+    const withoutOrder = value.replace(/^\s*\d+\s*[.)-]?\s*/, "").trim();
+    const base = withoutOrder.replace(/\s+S[12]$/i, "").trim();
+    for (const candidate of [value, withoutOrder, base, `${base} S1`, `${base} S2`]) {
+      if (candidate) values.add(candidate);
+    }
+  }
+  return [...values];
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
     const { searchParams } = new URL(req.url);
-    const system = searchParams.get("system");
+    // `system` là tên tham số cũ; thực chất cột này lưu snapshot cương vị.
+    const position = searchParams.get("position")?.trim() || searchParams.get("system")?.trim();
+    const matchingPositionValues = position ? positionFilterValues(position) : [];
     const unit = searchParams.get("unit");
     const mappedUnit = searchParams.get("mappedUnit");
     const workOrderNumber = searchParams.get("workOrderNumber");
@@ -47,7 +76,9 @@ export async function GET(req: NextRequest) {
 
     const where: Record<string, unknown> = {};
     const andConditions: Record<string, unknown>[] = [];
-    if (system) where.system = system;
+    if (matchingPositionValues.length) {
+      where.system = { in: matchingPositionValues, mode: "insensitive" };
+    }
     if (unit) where.unit = unit;
     if (!deviceSeq && mappedUnit && ["S1", "S2", "COMMON"].includes(mappedUnit)) {
       andConditions.push({
@@ -101,6 +132,9 @@ export async function GET(req: NextRequest) {
         take: HISTORY_TAKE,
       }),
       prisma.defectHistoryPending.findMany({
+        where: matchingPositionValues.length
+          ? { defect: { system: { in: matchingPositionValues, mode: "insensitive" } } }
+          : undefined,
         include: {
           defect: {
             include: {
@@ -131,6 +165,7 @@ export async function GET(req: NextRequest) {
           !!item.deviceSeq ||
           access.canViewDeviceLike({ device: item.device, system: item.system })
       )
+      .filter((item) => !position || positionsMatch(item.system, position))
       .map((item) => ({
         ...item,
         historyStatus: "FINALIZED" as const,
@@ -151,7 +186,7 @@ export async function GET(req: NextRequest) {
             : access.canViewDeviceLike({ device: defect.device, system: defect.system });
           if (!canView) return false;
         }
-        if (system && defect.system !== system) return false;
+        if (position && !positionsMatch(defect.system, position)) return false;
         if (unit && defect.unit !== unit) return false;
         if (
           normalizedWorkOrder

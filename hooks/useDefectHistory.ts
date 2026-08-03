@@ -19,6 +19,8 @@ export interface DefectHistoryItem extends DefectHistory {
 }
 
 export interface DefectHistoryFilters {
+  position?: string;
+  /** @deprecated Dùng position; giữ lại để tương thích liên kết cũ. */
   system?: string;
   unit?: string;
   mappedUnit?: string;

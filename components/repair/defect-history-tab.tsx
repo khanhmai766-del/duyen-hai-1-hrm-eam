@@ -187,7 +187,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   // Tổ máy LUÔN có giá trị (mặc định S1) nên không tính là đang lọc, nếu không
   // nút Xoá bộ lọc sẽ sáng vĩnh viễn và ô "Chưa có lịch sử" không bao giờ hiện.
   const hasActiveFilters =
-    Boolean(filters.system || filters.from || filters.to || filters.workOrderNumber || filters.device || filters.deviceSeq)
+    Boolean(filters.position || filters.from || filters.to || filters.workOrderNumber || filters.device || filters.deviceSeq)
     || (filters.unit ?? "S1") !== "S1"
     || requestTypeFilter !== "Cơ"
     || tableSearch.trim().length > 0;
@@ -229,7 +229,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
         <div className="flex items-center gap-2">
           <FilterLabel>Cương vị</FilterLabel>
-          <Select value={filters.system ?? "ALL"} onValueChange={(v) => setFilter("system", v === "ALL" ? "" : v)}>
+          <Select value={filters.position ?? "ALL"} onValueChange={(v) => setFilter("position", v === "ALL" ? "" : v)}>
             <SelectTrigger className="h-8 w-40 rounded-md text-[13px] md:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Tất cả</SelectItem>

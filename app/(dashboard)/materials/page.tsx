@@ -2060,20 +2060,31 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
           )}
         </div>
         <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full min-w-[1280px] table-fixed text-[13px]">
+          <colgroup>
+            <col className="w-[3%]" />
+            <col className="w-[19%]" />
+            <col className="w-[15%]" />
+            <col className="w-[11%]" />
+            <col className="w-[7%]" />
+            <col className="w-[9%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[6%]" />
+            <col className="w-[10%]" />
+          </colgroup>
           <thead>
             <tr className="border-b border-border text-muted-foreground">
-              {/* nowrap toàn bảng: mỗi ô nội dung nằm gọn 1 dòng, cột tự co giãn theo nội dung. */}
-              <th className="w-9 px-2 py-2" aria-label="Chọn điểm ra số yêu cầu" />
-              <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Hệ thống / thiết bị</th>
-              <th className="px-4 py-2 text-left font-semibold whitespace-nowrap">Thiết bị</th>
-              <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Cương vị quản lý</th>
-              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">SL thiết bị</th>
+              <th className="px-2 py-2" aria-label="Chọn điểm ra số yêu cầu" />
+              <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Hệ thống / thiết bị</th>
+              <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Thiết bị</th>
+              <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Cương vị</th>
+              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">SL thiết bị</th>
               <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ O&M</th>
-              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ thay thế</th>
-              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Số lượng cần thay</th>
-              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Số yêu cầu</th>
-              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Theo dõi</th>
+              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ thay thế</th>
+              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Số lượng cần thay</th>
+              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Số yêu cầu</th>
+              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Theo dõi</th>
             </tr>
           </thead>
           <tbody>
@@ -2119,28 +2130,38 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                     />
                   </td>
                   {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
-                  <td className="px-4 py-2.5 font-medium uppercase text-ink whitespace-nowrap">{p.device?.system || p.system || p.device?.name || "—"}</td>
+                  <td className="overflow-hidden px-3 py-2.5 font-medium uppercase text-ink">
+                    <span className="block truncate" title={p.device?.system || p.system || p.device?.name || undefined}>
+                      {p.device?.system || p.system || p.device?.name || "—"}
+                    </span>
+                  </td>
                   {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
-                  <td className="px-4 py-2.5 text-ink whitespace-nowrap">{p.device?.name || p.location || "—"}</td>
-                  <td className="px-3 py-2.5 text-ink whitespace-nowrap">{p.managingPosition || "—"}</td>
-                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.deviceCount ?? 1}</td>
+                  <td className="overflow-hidden px-3 py-2.5 text-ink">
+                    <span className="block truncate" title={p.device?.name || p.location || undefined}>
+                      {p.device?.name || p.location || "—"}
+                    </span>
+                  </td>
+                  <td className="overflow-hidden px-3 py-2.5 text-ink">
+                    <span className="block truncate" title={p.managingPosition || undefined}>{p.managingPosition || "—"}</span>
+                  </td>
+                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">{p.deviceCount ?? 1}</td>
                   {/* Ghi chú O&M quá dài thì cắt bớt kèm tooltip, tránh 1 ô kéo vỡ cả bảng. */}
-                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">
+                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">
                     <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
-                  <td className="px-3 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
+                  <td className="px-2 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                   {/* Tra cứu ngược: các SYC thay thế đã ra cho chính điểm này. */}
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-2 py-2.5 text-center whitespace-nowrap">
                     <ReplacementRequestChips requests={p.defectRequests} />
                   </td>
-                  <td className="px-4 py-2.5 text-center">
+                  <td className="px-2 py-2.5 text-center">
                     <button
                       type="button"
                       disabled={createPoint.isPending || p.intervalMonths === 0 || capacityReached}
                       onClick={() => openTracking(p)}
                       title={trackingTitle}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-accent px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
                     >
                       <Plus className="h-3.5 w-3.5" /> {trackingLabel}
                     </button>
