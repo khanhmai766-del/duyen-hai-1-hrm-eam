@@ -4,10 +4,10 @@ import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { invalidateShiftCache } from "@/lib/shift-response-cache";
 import { dateRange, parseDateInput } from "@/lib/utils";
-import { attendanceWindowMessage, isDateInAttendanceWindow } from "@/lib/attendance-window";
 
-// Cửa sổ thao tác chấm công (tháng hiện tại + tháng kế tiếp kể từ ngày 25) dùng
-// chung với trang sơ đồ ca — xem lib/attendance-window.ts.
+// Không giới hạn ngày thao tác: người trực cần điểm danh trước cho ca sắp tới và
+// xem/sửa lại ca đã đi. Việc khoá vẫn còn, nhưng theo trạng thái ca (đã duyệt
+// chấm công) chứ không theo mốc tháng.
 
 /**
  * Org-chart check-in ("Điểm danh"): places the current user into a seat
@@ -30,7 +30,6 @@ export async function POST(req: NextRequest) {
     if (!date || !shiftType || !unit || !positionLabel?.trim()) {
       return fail("Thiếu thông tin ca trực hoặc cương vị");
     }
-    if (!isDateInAttendanceWindow(date)) return fail(attendanceWindowMessage(), 400);
     await requirePermissionLevel(user, "shift-operation-check-in", ["personal", "manage", "full"], "Không đủ quyền điểm danh ca vận hành");
     const label = positionLabel.trim();
     const canApproveShift = await hasPermissionLevel(user, "shift-operation-approve", ["manage", "full"]);
@@ -126,7 +125,6 @@ export async function DELETE(req: NextRequest) {
         include: { shift: { select: { date: true, isAttendanceLocked: true } } },
       });
       if (!target) return fail("Không tìm thấy phân công", 404);
-      if (!isDateInAttendanceWindow(target.shift.date)) return fail(attendanceWindowMessage(), 400);
       await prisma.shiftAssignment.updateMany({ where: { parentId: id }, data: { parentId: target.parentId } });
       await prisma.shiftAssignment.delete({ where: { id } });
       if (!target.shift.isAttendanceLocked || !target.isApproved) {
@@ -142,7 +140,6 @@ export async function DELETE(req: NextRequest) {
     const shiftType = sp.get("shiftType");
     const unit = sp.get("unit");
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
-    if (!isDateInAttendanceWindow(date)) return fail(attendanceWindowMessage(), 400);
 
     const { start, end } = dateRange(date);
 
@@ -189,7 +186,6 @@ export async function PUT(req: NextRequest) {
       ids?: string[];
     };
     if (!date || !shiftType || !unit) return fail("Thiếu thông tin ca trực");
-    if (!isDateInAttendanceWindow(date)) return fail(attendanceWindowMessage(), 400);
 
     const { start, end } = dateRange(date);
 
