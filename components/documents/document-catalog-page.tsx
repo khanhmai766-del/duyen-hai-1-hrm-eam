@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import * as XLSX from "xlsx";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, Loader2, Minus, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, FileSpreadsheet, FileText, ListFilter, Loader2, Minus, Pencil, Plus, RotateCcw, Search, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -365,6 +365,7 @@ export function DocumentCatalogPage({
     () => Array.from(new Set([...yearOptions, activeYearFilter].filter(Boolean))).sort((a, b) => Number(b) - Number(a)),
     [activeYearFilter, yearOptions]
   );
+  const procedureFilterCount = [positionFilter, procedureTypeFilter, blockFilter].filter((value) => value !== ALL_FILTER).length;
 
   React.useEffect(() => {
     setExpandedId(null);
@@ -706,49 +707,167 @@ export function DocumentCatalogPage({
             filenamePrefix={backupFilenamePrefix ?? "thu-muc-luu-tru"}
           />
         )}
-        {(canCreate || canImportProcedure) && (
-          <>
-            {canImportProcedure && (
-              <Button type="button" variant="soft" size="toolbar" onClick={downloadProcedureImportTemplate}>
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                File Excel mẫu
+        {hasProcedureValidity && showEquipmentScope && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
+                <span className="flex items-center gap-2">
+                  <ListFilter className="h-4 w-4 text-sky-600" />
+                  Bộ lọc
+                  {procedureFilterCount > 0 && (
+                    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-navy px-1.5 text-[10px] font-bold text-white">
+                      {procedureFilterCount}
+                    </span>
+                  )}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
               </Button>
-            )}
-            {canImportProcedure && (
-              <>
-                <Button
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+            >
+              <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900">Nội dung bảng quy trình</p>
+              </div>
+              <div className="space-y-3 p-4">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Cương vị áp dụng</Label>
+                  <Select value={positionFilter} onValueChange={setPositionFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-white">
+                      <SelectValue placeholder="Lọc quy trình theo cương vị" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_FILTER}>Tất cả quy trình</SelectItem>
+                      {positionOptions.map((position) => (
+                        <SelectItem key={position} value={position}>{position}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Loại quy trình</Label>
+                  <Select value={procedureTypeFilter} onValueChange={setProcedureTypeFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-white">
+                      <SelectValue placeholder="Chọn loại quy trình" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_FILTER}>Tất cả loại QT</SelectItem>
+                      {PROCEDURE_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Khối quản lý</Label>
+                  <Select value={blockFilter} onValueChange={setBlockFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-white">
+                      <SelectValue placeholder="Chọn khối quản lý" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_FILTER}>Tất cả khối</SelectItem>
+                      {blockOptions.map((block) => (
+                        <SelectItem key={block} value={block}>{block}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                  <span className="text-[11px] text-slate-500">
+                    {procedureFilterCount > 0 ? `${procedureFilterCount} điều kiện đang áp dụng` : "Chưa áp dụng điều kiện lọc"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={procedureFilterCount === 0}
+                    onClick={() => {
+                      setPositionFilter(ALL_FILTER);
+                      setProcedureTypeFilter(ALL_FILTER);
+                      setBlockFilter(ALL_FILTER);
+                    }}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" /> Xóa lọc
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+        {canImportProcedure && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="soft" size="toolbar" className="group min-w-[132px] justify-between">
+                <span className="flex items-center gap-2">
+                  {procedureImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 text-sky-600" />}
+                  Nhập dữ liệu
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={8}
+              className="w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+            >
+              <div className="border-b border-emerald-100 bg-[linear-gradient(135deg,#f8fffc_0%,#ecfdf5_100%)] px-4 py-3.5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">Dữ liệu Excel</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900">Nhập danh mục quy trình</p>
+              </div>
+              <div className="grid gap-2 p-3">
+                <button
                   type="button"
-                  variant="soft"
-                  size="toolbar"
                   onClick={() => procedureImportInputRef.current?.click()}
                   disabled={procedureImporting}
+                  className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-left transition hover:border-sky-300 hover:bg-sky-50 disabled:pointer-events-none disabled:opacity-60"
                 >
-                  {procedureImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 text-sky-600" />}
-                  Nhập Excel
-                </Button>
-                <input
-                  ref={procedureImportInputRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={handleProcedureImportFile}
-                />
-              </>
-            )}
-            {canCreate && (
-              <Button size="toolbar" onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                {addLabel}
-              </Button>
-            )}
-          </>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-sky-600 shadow-sm">
+                    {procedureImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-800">Nhập từ Excel</span>
+                    <span className="block text-[11px] text-slate-500">Chọn tệp .xlsx hoặc .xls</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadProcedureImportTemplate}
+                  className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-emerald-600 shadow-sm">
+                    <FileSpreadsheet className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-800">Tải file Excel mẫu</span>
+                    <span className="block text-[11px] text-slate-500">Dùng đúng cấu trúc dữ liệu chuẩn</span>
+                  </span>
+                </button>
+              </div>
+            </PopoverContent>
+            <input
+              ref={procedureImportInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleProcedureImportFile}
+            />
+          </Popover>
+        )}
+        {canCreate && (
+          <Button size="toolbar" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            {addLabel}
+          </Button>
         )}
       </PageHeader>
       {afterHeader}
 
       {/* Thanh lọc chỉ còn các bộ lọc; ô tìm kiếm chuyển xuống thanh công cụ
           ngay trên bảng, giống trang Lịch sử sửa chữa. */}
-      {!hideToolbar && (hasTagField || hasYearField || showEquipmentScope) && (
+      {!hideToolbar && !hasProcedureValidity && (hasTagField || hasYearField || showEquipmentScope) && (
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           {(hasTagField || hasYearField) && (

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, CalendarRange, Activity, Upload } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ListFilter, RotateCcw, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
@@ -370,6 +371,10 @@ function ReplacementsPageContent() {
   const historyRangeLabel = historyFromMonth === historyToMonth
     ? `tháng ${ymLabel(historyFromMonth)}`
     : `từ tháng ${ymLabel(historyFromMonth)} đến tháng ${ymLabel(historyToMonth)}`;
+  const currentMonth = ym(new Date());
+  const replacementFilterCount = tab === "history"
+    ? Number(historyFromMonth !== currentMonth || historyToMonth !== currentMonth) + Number(historyPosition !== "ALL")
+    : Number(machineFilter !== "S1") + Number(positionFilter !== "ALL") + Number(categoryFilter !== CATEGORY_FILTERS[0]);
   const historyBackupRows = React.useMemo(() => {
     const qText = searchQ.trim().toLowerCase();
     const logsByPosition = historyPosition === "ALL"
@@ -484,6 +489,139 @@ function ReplacementsPageContent() {
           className="w-full sm:w-72 lg:w-80"
           shortcut
         />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
+              <span className="flex items-center gap-2">
+                <ListFilter className="h-4 w-4 text-sky-600" />
+                Bộ lọc
+                {replacementFilterCount > 0 && (
+                  <span className="grid h-5 min-w-5 place-items-center rounded-full bg-navy px-1.5 text-[10px] font-bold text-white">
+                    {replacementFilterCount}
+                  </span>
+                )}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={8}
+            className={cn(
+              "overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]",
+              tab === "history" ? "w-[min(26rem,calc(100vw-2rem))]" : "w-[min(22rem,calc(100vw-2rem))]"
+            )}
+          >
+            <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
+              <p className="mt-0.5 text-sm font-bold text-slate-900">
+                {tab === "history" ? "Lịch sử thay thế" : tab === "status" ? "Trạng thái theo dõi" : "Lịch thay thế"}
+              </p>
+            </div>
+            <div className="space-y-3 p-4">
+              {tab !== "history" ? (
+                <>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                    <Select
+                      value={machineFilter}
+                      onValueChange={(value) => {
+                        setMachineFilter(value);
+                        setPositionFilter("ALL");
+                      }}
+                    >
+                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {MACHINE_FILTERS.map((machine) => (
+                          <SelectItem key={machine.key} value={machine.key}>{machine.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
+                    <Select value={positionFilter} onValueChange={setPositionFilter}>
+                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo cương vị">
+                        <SelectValue placeholder="Chọn cương vị" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                        {positionOptions.map((position) => (
+                          <SelectItem key={position} value={position}>{position}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Loại vật tư</Label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
+                        {CATEGORY_FILTERS.map((category) => (
+                          <SelectItem key={category} value={category}>{category}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <MonthRangeFilter
+                    from={historyFromMonth}
+                    to={historyToMonth}
+                    onFromChange={(value) => {
+                      setHistoryFromMonth(value);
+                      if (value > historyToMonth) setHistoryToMonth(value);
+                    }}
+                    onToChange={(value) => {
+                      setHistoryToMonth(value);
+                      if (value < historyFromMonth) setHistoryFromMonth(value);
+                    }}
+                  />
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
+                    <Select value={historyPosition} onValueChange={setHistoryPosition}>
+                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo cương vị">
+                        <SelectValue placeholder="Chọn cương vị" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                        {historyPositions.map((position) => (
+                          <SelectItem key={position} value={position}>{position}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                <span className="text-[11px] text-slate-500">
+                  {replacementFilterCount > 0 ? `${replacementFilterCount} điều kiện đang áp dụng` : "Đang dùng thiết lập mặc định"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={replacementFilterCount === 0}
+                  onClick={() => {
+                    if (tab === "history") {
+                      setHistoryFromMonth(currentMonth);
+                      setHistoryToMonth(currentMonth);
+                      setHistoryPosition("ALL");
+                    } else {
+                      setMachineFilter("S1");
+                      setPositionFilter("ALL");
+                      setCategoryFilter(CATEGORY_FILTERS[0]);
+                    }
+                  }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Xóa lọc
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         {tab === "schedule" && (
           <ExportButton
             rows={exportRows}
@@ -534,81 +672,19 @@ function ReplacementsPageContent() {
           count={statusPoints.length}
         />
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
-        {tab !== "history" ? (
-          <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
-            <Select
-              value={machineFilter}
-              onValueChange={(value) => {
-                setMachineFilter(value);
-                setPositionFilter("ALL");
-              }}
+        <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
+          {tab === "schedule" && canCreate && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-xl border-sky-200 bg-white px-4 text-accent shadow-sm hover:border-accent hover:bg-sky-50"
+              onClick={() => setScheduleImportOpen(true)}
             >
-              <SelectTrigger className="h-9 rounded-xl sm:w-44" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MACHINE_FILTERS.map((m) => (
-                  <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={positionFilter} onValueChange={setPositionFilter}>
-              <SelectTrigger className="h-9 rounded-xl sm:w-48" aria-label="Lọc theo cương vị">
-                <SelectValue placeholder="Chọn cương vị" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả cương vị</SelectItem>
-                {positionOptions.map((position) => (
-                  <SelectItem key={position} value={position}>{position}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 rounded-xl sm:w-44" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
-                {CATEGORY_FILTERS.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {tab === "schedule" && canCreate && (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 rounded-xl border-sky-200 bg-white px-4 text-accent shadow-sm hover:border-accent hover:bg-sky-50"
-                onClick={() => setScheduleImportOpen(true)}
-              >
-                <Upload className="h-4 w-4" />
-                Nhập lịch theo dõi
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
-            <MonthRangeFilter
-              from={historyFromMonth}
-              to={historyToMonth}
-              onFromChange={(value) => {
-                setHistoryFromMonth(value);
-                if (value > historyToMonth) setHistoryToMonth(value);
-              }}
-              onToChange={(value) => {
-                setHistoryToMonth(value);
-                if (value < historyFromMonth) setHistoryFromMonth(value);
-              }}
-            />
-            <Select value={historyPosition} onValueChange={setHistoryPosition}>
-              <SelectTrigger className="h-11 w-[210px] rounded-xl bg-white" aria-label="Lọc theo cương vị">
-                <SelectValue placeholder="Chọn cương vị" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả cương vị</SelectItem>
-                {historyPositions.map((position) => (
-                  <SelectItem key={position} value={position}>{position}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+              <Upload className="h-4 w-4" />
+              Nhập lịch theo dõi
+            </Button>
+          )}
+        </div>
       </div>
 
       {tab === "schedule" ? (
@@ -1044,29 +1120,27 @@ function MonthRangeFilter({
   onToChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <CalendarRange className="hidden h-4 w-4 shrink-0 text-sky-700 sm:block" />
-      <label className="flex items-center gap-1.5">
-        <span className="text-xs font-semibold text-muted-foreground">Từ tháng</span>
+    <div className="grid grid-cols-2 gap-2.5">
+      <label className="grid min-w-0 gap-1.5">
+        <span className="text-xs font-semibold text-slate-600">Từ tháng</span>
         <input
           type="month"
           value={from}
           max={to}
           onChange={(event) => event.target.value && onFromChange(event.target.value)}
           aria-label="Từ tháng"
-          className="h-9 w-[190px] min-w-[190px] rounded-md border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 w-full min-w-0 rounded-xl border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
-      <span className="hidden text-muted-foreground sm:inline">–</span>
-      <label className="flex items-center gap-1.5">
-        <span className="text-xs font-semibold text-muted-foreground">Đến tháng</span>
+      <label className="grid min-w-0 gap-1.5">
+        <span className="text-xs font-semibold text-slate-600">Đến tháng</span>
         <input
           type="month"
           value={to}
           min={from}
           onChange={(event) => event.target.value && onToChange(event.target.value)}
           aria-label="Đến tháng"
-          className="h-9 w-[190px] min-w-[190px] rounded-md border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 w-full min-w-0 rounded-xl border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
     </div>

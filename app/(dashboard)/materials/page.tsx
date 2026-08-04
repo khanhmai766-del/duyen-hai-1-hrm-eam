@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -117,6 +118,7 @@ function MaterialsPageContent() {
   const [editingDetails, setEditingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [detailRows, setDetailRows] = React.useState<MaterialReplacementInput[]>([]);
   const [importOpen, setImportOpen] = React.useState(false);
+  const [replacementDataOpen, setReplacementDataOpen] = React.useState(false);
   const [deletingDetails, setDeletingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [selectedDetailIds, setSelectedDetailIds] = React.useState<Set<string>>(new Set());
   const [erpSearch, setErpSearch] = React.useState("");
@@ -586,14 +588,63 @@ function MaterialsPageContent() {
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
         {canManage && <QlvtSyncAction />}
-        {canManage && (
-          <Button variant="soft" size="toolbar" onClick={() => setImportOpen(true)} title="Nhập/đồng bộ chi tiết điểm thay thế từ file Excel">
-            <FileSpreadsheet className="h-4 w-4" /> Nhập điểm thay thế
-          </Button>
-        )}
-        <Button variant="soft" size="toolbar" onClick={exportReplacementPointsCsv} title="Xuất CSV chi tiết điểm thay thế của các vật tư đang hiển thị">
-          <Download className="h-4 w-4" /> Xuất điểm thay thế
-        </Button>
+        <Popover open={replacementDataOpen} onOpenChange={setReplacementDataOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="soft" size="toolbar" className="group min-w-[180px] justify-between">
+              <span className="flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4 text-sky-600" />
+                Dữ liệu điểm thay thế
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={8}
+            className="w-[min(21rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+          >
+            <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Dữ liệu Excel</p>
+              <p className="mt-0.5 text-sm font-bold text-slate-900">Điểm thay thế vật tư</p>
+            </div>
+            <div className="grid gap-2 p-3">
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplacementDataOpen(false);
+                    setImportOpen(true);
+                  }}
+                  className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-left transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-sm"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-sky-600 shadow-sm">
+                    <Upload className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-bold text-slate-800">Nhập điểm thay thế</span>
+                    <span className="block text-[11px] text-slate-500">Thêm hoặc đồng bộ từ file Excel</span>
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setReplacementDataOpen(false);
+                  exportReplacementPointsCsv();
+                }}
+                className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-left transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-emerald-600 shadow-sm">
+                  <Download className="h-4 w-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold text-slate-800">Xuất điểm thay thế</span>
+                  <span className="block text-[11px] text-slate-500">Theo đúng bộ lọc đang hiển thị</span>
+                </span>
+              </button>
+            </div>
+          </PopoverContent>
+        </Popover>
         {canCreate && (
           <Button size="toolbar" onClick={() => { setIsNew(true); setEdit({ unit: "Cái", quantity: 0, minStock: 0, category: categoryFilter, machines: ["S1", "S2", "COMMON"], replacements: [] }); }}>
             <Plus className="h-4 w-4" /> Thêm vật tư
