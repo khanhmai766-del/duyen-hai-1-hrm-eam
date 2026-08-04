@@ -42,5 +42,9 @@ UPDATE "RbacConfig" AS c
                    ELSE COALESCE(c.value::jsonb -> 'userOverrides', '[]'::jsonb)
                  END
                )::text
- WHERE jsonb_typeof(c.value::jsonb -> 'permissions') = 'array'
+-- Bảng "RbacConfig" còn chứa vài cấu hình khác (roster-schedule, device-guide-doc)
+-- với JSON khác dạng. Phải khoá đúng dòng ma trận phân quyền, nếu không phép ép
+-- kiểu ::jsonb chạy trúng một dòng lạ là hỏng cả câu lệnh.
+ WHERE c.key = 'rbac-permissions'
+   AND jsonb_typeof(c.value::jsonb -> 'permissions') = 'array'
    AND (c.value LIKE '%archive-major-repair%' OR c.value LIKE '%archive-soot-blower-data%');
