@@ -365,7 +365,11 @@ export function DocumentCatalogPage({
     () => Array.from(new Set([...yearOptions, activeYearFilter].filter(Boolean))).sort((a, b) => Number(b) - Number(a)),
     [activeYearFilter, yearOptions]
   );
-  const procedureFilterCount = [positionFilter, procedureTypeFilter, blockFilter].filter((value) => value !== ALL_FILTER).length;
+  const documentFilterCount = [
+    positionFilter,
+    blockFilter,
+    ...(hasProcedureValidity ? [procedureTypeFilter] : []),
+  ].filter((value) => value !== ALL_FILTER).length;
 
   React.useEffect(() => {
     setExpandedId(null);
@@ -707,16 +711,16 @@ export function DocumentCatalogPage({
             filenamePrefix={backupFilenamePrefix ?? "thu-muc-luu-tru"}
           />
         )}
-        {hasProcedureValidity && showEquipmentScope && (
+        {showEquipmentScope && (
           <Popover>
             <PopoverTrigger asChild>
               <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
                 <span className="flex items-center gap-2">
                   <ListFilter className="h-4 w-4 text-sky-600" />
                   Bộ lọc
-                  {procedureFilterCount > 0 && (
+                  {documentFilterCount > 0 && (
                     <span className="grid h-5 min-w-5 place-items-center rounded-full bg-navy px-1.5 text-[10px] font-bold text-white">
-                      {procedureFilterCount}
+                      {documentFilterCount}
                     </span>
                   )}
                 </span>
@@ -730,37 +734,41 @@ export function DocumentCatalogPage({
             >
               <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
-                <p className="mt-0.5 text-sm font-bold text-slate-900">Nội dung bảng quy trình</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900">
+                  {hasProcedureValidity ? "Nội dung bảng quy trình" : category === "PID" ? "Nội dung bảng sơ đồ P&ID" : "Nội dung bảng tài liệu"}
+                </p>
               </div>
               <div className="space-y-3 p-4">
                 <div className="grid gap-1.5">
                   <Label className="text-xs font-semibold text-slate-600">Cương vị áp dụng</Label>
                   <Select value={positionFilter} onValueChange={setPositionFilter}>
                     <SelectTrigger className="h-10 w-full rounded-xl bg-white">
-                      <SelectValue placeholder="Lọc quy trình theo cương vị" />
+                      <SelectValue placeholder={hasProcedureValidity ? "Lọc quy trình theo cương vị" : "Lọc theo cương vị"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL_FILTER}>Tất cả quy trình</SelectItem>
+                      <SelectItem value={ALL_FILTER}>{hasProcedureValidity ? "Tất cả quy trình" : "Tất cả cương vị"}</SelectItem>
                       {positionOptions.map((position) => (
                         <SelectItem key={position} value={position}>{position}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs font-semibold text-slate-600">Loại quy trình</Label>
-                  <Select value={procedureTypeFilter} onValueChange={setProcedureTypeFilter}>
-                    <SelectTrigger className="h-10 w-full rounded-xl bg-white">
-                      <SelectValue placeholder="Chọn loại quy trình" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ALL_FILTER}>Tất cả loại QT</SelectItem>
-                      {PROCEDURE_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {hasProcedureValidity && (
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Loại quy trình</Label>
+                    <Select value={procedureTypeFilter} onValueChange={setProcedureTypeFilter}>
+                      <SelectTrigger className="h-10 w-full rounded-xl bg-white">
+                        <SelectValue placeholder="Chọn loại quy trình" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_FILTER}>Tất cả loại QT</SelectItem>
+                        {PROCEDURE_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-1.5">
                   <Label className="text-xs font-semibold text-slate-600">Khối quản lý</Label>
                   <Select value={blockFilter} onValueChange={setBlockFilter}>
@@ -777,13 +785,13 @@ export function DocumentCatalogPage({
                 </div>
                 <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                   <span className="text-[11px] text-slate-500">
-                    {procedureFilterCount > 0 ? `${procedureFilterCount} điều kiện đang áp dụng` : "Chưa áp dụng điều kiện lọc"}
+                    {documentFilterCount > 0 ? `${documentFilterCount} điều kiện đang áp dụng` : "Chưa áp dụng điều kiện lọc"}
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={procedureFilterCount === 0}
+                    disabled={documentFilterCount === 0}
                     onClick={() => {
                       setPositionFilter(ALL_FILTER);
                       setProcedureTypeFilter(ALL_FILTER);
@@ -867,7 +875,7 @@ export function DocumentCatalogPage({
 
       {/* Thanh lọc chỉ còn các bộ lọc; ô tìm kiếm chuyển xuống thanh công cụ
           ngay trên bảng, giống trang Lịch sử sửa chữa. */}
-      {!hideToolbar && !hasProcedureValidity && (hasTagField || hasYearField || showEquipmentScope) && (
+      {!hideToolbar && !showEquipmentScope && (hasTagField || hasYearField || showEquipmentScope) && (
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           {(hasTagField || hasYearField) && (
