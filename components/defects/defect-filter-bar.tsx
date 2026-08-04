@@ -107,9 +107,9 @@ export function DefectFilterBar({
 
         <span className="hidden h-7 w-px shrink-0 bg-border lg:block" />
 
-        {/* Tổ máy: bấm nhiều nhất nên để lộ sẵn thay vì giấu trong dropdown */}
+        {/* Tổ máy: bấm nhiều nhất nên để lộ sẵn thay vì giấu trong dropdown.
+            Không cần nhãn — S1 / S2 / Common đã tự nói rõ đây là tổ máy. */}
         <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-lg border border-border bg-muted/40 p-1">
-          <span className="px-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tổ máy</span>
           {units.map((value) => (
             <button
               key={value}

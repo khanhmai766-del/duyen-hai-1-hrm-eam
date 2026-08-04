@@ -227,7 +227,9 @@ export const DEFECT_CONDITION = {
 export const DEFECT_CONDITION_ORDER = ["A", "B"] as const;
 
 /** Loại yêu cầu (chuyên môn). */
-export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "Hóa", "Hành Chính IT", "Khác"] as const;
+// Danh sách đầy đủ cho form nhập. Bộ lọc của trang Khiếm khuyết KHÔNG dùng hằng này
+// mà lấy theo từng phần Cơ/Điện — xem lib/defect-section.ts.
+export const DEFECT_REQUEST_TYPES = ["Cơ", "Điện", "Môi Trường", "Hóa", "Hành Chính IT", "Khác"] as const;
 
 /** Khối quản lý — suy ra từ cương vị quản lý theo quy tắc nghiệp vụ. */
 export const EQUIPMENT_BLOCKS = ["Khối Lò Hơi", "Khối Turbine", "Khối BOP", "Khối Điện", "Khối I&C"] as const;

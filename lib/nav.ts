@@ -24,6 +24,7 @@ import {
   Filter,
   FlaskConical,
   CircleDot,
+  Zap,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -70,7 +71,17 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/reports", icon: BarChart3, keywords: "report bao cao thong ke analytics dashboard thiet bi" },
       { label: "Thông tin thiết bị", href: "/devices", icon: Cpu, permissionIds: ["device-view"], keywords: "device thiet bi may moc esp fgd boiler turbine" },
-      { label: "Khiếm khuyết thiết bị", href: "/defects", icon: ShieldAlert, keywords: "defect su co fault khiem khuyet" },
+      {
+        // Hai phần bám đúng hai Google Sheet nguồn (sheet Cơ và sheet Điện).
+        label: "Khiếm khuyết thiết bị",
+        href: "/defects?phan=co",
+        icon: ShieldAlert,
+        keywords: "defect su co fault khiem khuyet co dien",
+        children: [
+          { label: "Phần Cơ", href: "/defects?phan=co", icon: Wrench, keywords: "khiem khuyet phan co syc sheet co moi truong hoa" },
+          { label: "Phần Điện", href: "/defects?phan=dien", icon: Zap, keywords: "khiem khuyet phan dien syc sheet dien moi truong hanh chinh it" },
+        ],
+      },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
       {
         label: "Thư mục lưu trữ",

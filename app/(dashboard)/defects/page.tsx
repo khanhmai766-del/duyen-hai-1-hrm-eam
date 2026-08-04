@@ -28,9 +28,14 @@ import {
   DEFECT_SEVERITY_ORDER,
   DEFECT_SEVERITY_CRITERIA,
   DEFECT_CONDITION,
-  DEFECT_REQUEST_TYPES,
   isSelectableManagingPosition,
 } from "@/lib/constants";
+import {
+  DEFECT_SECTIONS,
+  defaultRequestTypeOf,
+  isRequestTypeInSection,
+  parseDefectSection,
+} from "@/lib/defect-section";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { DefectSyncChip } from "@/components/defects/defect-sync-chip";
 import { DefectFilterBar, type ActiveChip } from "@/components/defects/defect-filter-bar";
@@ -281,7 +286,12 @@ export default function DefectsPage() {
   const includeDescendants = Math.min(2, Math.max(0, Number.parseInt(searchParams.get("includeDescendants") ?? "0", 10) || 0));
   const mappedUnitFilter = searchParams.get("mappedUnit")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.toUpperCase();
-  const requestFromUrl = searchParams.get("requestType")?.trim();
+  // Phần Cơ / phần Điện — quyết định sheet nguồn và danh sách loại yêu cầu được lọc.
+  const section = parseDefectSection(searchParams.get("phan"));
+  const sectionConfig = DEFECT_SECTIONS[section];
+  const rawRequestFromUrl = searchParams.get("requestType")?.trim();
+  // Chuyển phần mà giữ loại yêu cầu của phần cũ thì bảng sẽ rỗng — bỏ giá trị lạ.
+  const requestFromUrl = isRequestTypeInSection(section, rawRequestFromUrl) ? rawRequestFromUrl : undefined;
   const positionFromUrl = searchParams.get("position")?.trim();
   const statusFromUrl = searchParams.get("status")?.trim();
   const severityFromUrl = searchParams.get("severity")?.trim();
@@ -356,7 +366,14 @@ export default function DefectsPage() {
   const [unitFilter, setUnitFilter] = React.useState<"ALL" | "S1" | "S2" | "COMMON">(
     unitFromUrl === "ALL" || unitFromUrl === "S1" || unitFromUrl === "S2" || unitFromUrl === "COMMON" ? unitFromUrl : "S1"
   );
-  const [requestFilter, setRequestFilter] = React.useState(requestFromUrl || "Cơ");
+  const [requestFilter, setRequestFilter] = React.useState(requestFromUrl || defaultRequestTypeOf(section));
+  // Điều hướng sang phần kia (sidebar đổi query param) phải kéo bộ lọc về mặc định
+  // của phần mới, vì "Cơ" không tồn tại bên Điện và ngược lại.
+  React.useEffect(() => {
+    setRequestFilter((current) =>
+      isRequestTypeInSection(section, current) ? current : defaultRequestTypeOf(section)
+    );
+  }, [section]);
   const [positionFilter, setPositionFilter] = React.useState(positionFromUrl || "ALL");
   const [statusFilter, setStatusFilter] = React.useState(statusFromUrl || "ALL");
   const [severityFilter, setSeverityFilter] = React.useState(severityFromUrl || "ALL");
@@ -372,6 +389,7 @@ export default function DefectsPage() {
   const listParams = React.useMemo(() => ({
     page,
     limit: pageSize,
+    section,
     unit: unitFilter,
     mappedUnit: mappedUnitFilter,
     requestType: requestFilter,
@@ -384,7 +402,7 @@ export default function DefectsPage() {
     q: deferredSearch,
     deviceSeq: deviceSeqFilter,
     includeDescendants,
-  }), [page, pageSize, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
+  }), [page, pageSize, section, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
   const { data, isLoading, isFetching } = useDefects(listParams);
   const pagedDefects = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
@@ -403,7 +421,8 @@ export default function DefectsPage() {
     if (includeDescendants > 0) query.set("includeDescendants", String(includeDescendants));
     if (mappedUnitFilter) query.set("mappedUnit", mappedUnitFilter);
     if (unitFilter !== "S1") query.set("unit", unitFilter);
-    if (requestFilter !== "Cơ") query.set("requestType", requestFilter);
+    query.set("phan", section);
+    if (requestFilter !== defaultRequestTypeOf(section)) query.set("requestType", requestFilter);
     if (positionFilter !== "ALL") query.set("position", positionFilter);
     if (statusFilter !== "ALL") query.set("status", statusFilter);
     if (severityFilter !== "ALL") query.set("severity", severityFilter);
@@ -428,16 +447,17 @@ export default function DefectsPage() {
     requestFilter,
     repairResultFilter,
     router,
+    section,
     severityFilter,
     statusFilter,
     unitFilter,
   ]);
 
-  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== "Cơ" || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || upgradeCandidatesOnly || tableSearch.trim() !== "";
+  const isFiltered = deviceSeqFilter !== "" || unitFilter !== "S1" || requestFilter !== defaultRequestTypeOf(section) || positionFilter !== "ALL" || statusFilter !== "ALL" || severityFilter !== "ALL" || repairResultFilter !== "ALL" || mismatchOnly || upgradeCandidatesOnly || tableSearch.trim() !== "";
   function resetFilters() {
-    router.replace("/defects", { scroll: false });
+    router.replace(`/defects?phan=${section}`, { scroll: false });
     setUnitFilter("S1");
-    setRequestFilter("Cơ");
+    setRequestFilter(defaultRequestTypeOf(section));
     setPositionFilter("ALL");
     setStatusFilter("ALL");
     setSeverityFilter("ALL");
@@ -547,7 +567,10 @@ export default function DefectsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="KHIẾM KHUYẾT THIẾT BỊ" description="Theo dõi sự cố & khiếm khuyết thiết bị đang tồn đọng">
+      <PageHeader
+        title={`KHIẾM KHUYẾT THIẾT BỊ — ${sectionConfig.label.toUpperCase()}`}
+        description={`Phiếu đồng bộ từ Google Sheet ${sectionConfig.source === "CO" ? "Cơ" : "Điện"} · theo dõi sự cố & khiếm khuyết đang tồn đọng`}
+      >
         {/* Trạng thái + thao tác đồng bộ gói trong 1 chip, bấm mới mở chi tiết —
             thay cho 2 banner cũ chiếm trọn chiều ngang phía trên bộ lọc. */}
         {canViewSync && (
@@ -620,7 +643,7 @@ export default function DefectsPage() {
               label: "Yêu cầu",
               value: requestFilter,
               // Luôn phải có 1 loại yêu cầu (Cơ/Điện/… ) — không có mục "Tất cả".
-              options: DEFECT_REQUEST_TYPES.map((type) => ({ value: type, label: type })),
+              options: sectionConfig.requestTypes.map((type) => ({ value: type, label: type })),
               onChange: setRequestFilter,
             },
             {

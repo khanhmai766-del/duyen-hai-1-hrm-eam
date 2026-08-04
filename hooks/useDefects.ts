@@ -54,6 +54,8 @@ export interface DefectItem extends Defect {
 export interface DefectListParams {
   page?: number;
   limit?: number;
+  /** "co" | "dien" — chọn Google Sheet nguồn tương ứng (xem lib/defect-section.ts). */
+  section?: string;
   unit?: string;
   mappedUnit?: string;
   requestType?: string;

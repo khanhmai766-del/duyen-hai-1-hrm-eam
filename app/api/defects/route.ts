@@ -31,6 +31,8 @@ import { daysSinceSecondReminder, isSeverity2UpgradeCandidate } from "@/lib/defe
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { resolveMaterialRequest, type ResolvedMaterialRequest } from "@/lib/defect-material-request";
+import { DEFECT_SECTIONS, type DefectSectionKey } from "@/lib/defect-section";
+import { N8N_DEFECT_SOURCE_SPREADSHEET_IDS } from "@/lib/defect-n8n-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -195,6 +197,21 @@ export async function GET(req: NextRequest) {
     const unit = params.get("unit")?.trim();
     const mappedUnit = params.get("mappedUnit")?.trim();
     const requestType = params.get("requestType")?.trim();
+    // Phần Cơ / phần Điện = đúng hai Google Sheet nguồn. Phiếu tạo trên website chưa
+    // đồng bộ vòng về thì chưa có sourceSpreadsheetId, nên nhận diện tạm theo loại
+    // yêu cầu của phần đó — nếu không phiếu vừa lập sẽ biến mất khỏi danh sách.
+    const section = params.get("section")?.trim().toLowerCase();
+    const sectionConfig = section && section in DEFECT_SECTIONS
+      ? DEFECT_SECTIONS[section as DefectSectionKey]
+      : null;
+    const sectionWhere: Prisma.DefectWhereInput | null = sectionConfig
+      ? {
+          OR: [
+            { sourceSpreadsheetId: N8N_DEFECT_SOURCE_SPREADSHEET_IDS[sectionConfig.source] },
+            { sourceSpreadsheetId: null, requestType: { in: [...sectionConfig.requestTypes] } },
+          ],
+        }
+      : null;
     const position = params.get("position")?.trim();
     const mapping = params.get("mapping")?.trim();
     const status = params.get("status")?.trim();
@@ -229,6 +246,7 @@ export async function GET(req: NextRequest) {
               ],
             } as Prisma.DefectWhereInput]
           : unit ? [{ unit }] : []),
+        ...(sectionWhere ? [sectionWhere] : []),
         ...(requestType && requestType !== "ALL" ? [{ requestType }] : []),
         ...(mapping === "MAPPED"
           ? [{ sourceType: "GOOGLE_SHEETS", deviceSeq: { not: null } }]
