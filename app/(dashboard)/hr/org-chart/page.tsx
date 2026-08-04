@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat, Printer, QrCode, Copy, ExternalLink } from "lucide-react";
-import { PageHeader } from "@/components/shared/page-header";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -253,64 +252,71 @@ export default function OrgChartPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="SƠ ĐỒ TỔ CHỨC CA VẬN HÀNH" description="Phân công vị trí trực vận hành theo ca">
-        {assignments.length > 0 && (
-          <Badge variant={approved === assignments.length ? "accent" : "secondary"} className="gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5" /> {approved}/{assignments.length} đã duyệt
-          </Badge>
-        )}
-        {canApprove && (
-          <Button
-            size="toolbar"
-            onClick={() => setApproveOpen(true)}
-            className="text-white hover:text-white [&_svg]:text-white"
-          >
-            <ClipboardCheck className="h-4 w-4" /> Duyệt chấm công
-          </Button>
-        )}
-        {isCheckedIn ? (
-          recallLocked ? (
+    <div className="space-y-4 sm:space-y-6">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold leading-tight tracking-tight text-ink sm:text-2xl">SƠ ĐỒ TỔ CHỨC CA VẬN HÀNH</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Phân công vị trí trực vận hành theo ca</p>
+        </div>
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end sm:gap-2.5">
+          {assignments.length > 0 && (
+            <Badge variant={approved === assignments.length ? "accent" : "secondary"} className="h-9 justify-center gap-1.5 px-3">
+              <CheckCircle2 className="h-3.5 w-3.5" /> {approved}/{assignments.length} đã duyệt
+            </Badge>
+          )}
+          {canApprove && (
             <Button
               size="toolbar"
-              variant="soft"
-              disabled
-              className="cursor-not-allowed text-muted-foreground"
-              title="Chấm công đã được Quản trị / Quản lý / Trưởng ca duyệt — bạn không thể thu hồi điểm danh"
+              onClick={() => setApproveOpen(true)}
+              className="w-full text-white hover:text-white sm:w-auto [&_svg]:text-white"
             >
-              <Lock className="h-4 w-4" /> Đã duyệt — khoá thu hồi
+              <ClipboardCheck className="h-4 w-4" /> Duyệt chấm công
             </Button>
+          )}
+          {isCheckedIn ? (
+            recallLocked ? (
+              <Button
+                size="toolbar"
+                variant="soft"
+                disabled
+                className="w-full cursor-not-allowed text-muted-foreground sm:w-auto"
+                title="Chấm công đã được Quản trị / Quản lý / Trưởng ca duyệt — bạn không thể thu hồi điểm danh"
+              >
+                <Lock className="h-4 w-4" /> Đã duyệt — khoá thu hồi
+              </Button>
+            ) : (
+              <Button
+                size="toolbar"
+                variant="destructive"
+                onClick={handleRecall}
+                disabled={recall.isPending}
+                className="w-full sm:w-auto"
+              >
+                {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
+                Thu hồi điểm danh
+              </Button>
+            )
           ) : (
             <Button
               size="toolbar"
-              variant="destructive"
-              onClick={handleRecall}
-              disabled={recall.isPending}
+              variant={attendanceLocked ? "soft" : "accent"}
+              onClick={() => setCheckInOpen(true)}
+              disabled={attendanceLocked}
+              className={cn("w-full sm:w-auto", attendanceLocked && "cursor-not-allowed text-muted-foreground")}
+              title={attendanceLocked ? "Ca trực đã duyệt hết — điểm danh đã khóa" : undefined}
             >
-              {recall.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
-              Thu hồi điểm danh
+              {attendanceLocked ? <Lock className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+              {attendanceLocked ? "Đã khóa điểm danh" : "Điểm danh"}
             </Button>
-          )
-        ) : (
-          <Button
-            size="toolbar"
-            variant={attendanceLocked ? "soft" : "accent"}
-            onClick={() => setCheckInOpen(true)}
-            disabled={attendanceLocked}
-            className={attendanceLocked ? "cursor-not-allowed text-muted-foreground" : undefined}
-            title={attendanceLocked ? "Ca trực đã duyệt hết — điểm danh đã khóa" : undefined}
-          >
-            {attendanceLocked ? <Lock className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-            {attendanceLocked ? "Đã khóa điểm danh" : "Điểm danh"}
+          )}
+          <Button size="toolbar" variant="soft" onClick={openViewer} className="w-full sm:w-auto">
+            <Tv className="h-4 w-4" /> Viewer
           </Button>
-        )}
-        <Button size="toolbar" variant="soft" onClick={openViewer}>
-          <Tv className="h-4 w-4" /> Viewer
-        </Button>
-        <Button size="toolbar" variant="soft" onClick={() => setShareOpen(true)}>
-          <QrCode className="h-4 w-4" /> Link QR
-        </Button>
-      </PageHeader>
+          <Button size="toolbar" variant="soft" onClick={() => setShareOpen(true)} className="w-full sm:w-auto">
+            <QrCode className="h-4 w-4" /> Link QR
+          </Button>
+        </div>
+      </header>
 
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} date={date} shiftType={shiftType} unit={unit} onSuccess={showCheckInSuccessMessage} />
       <CheckInSuccessOverlay message={checkInSuccessMessage} />
@@ -396,21 +402,21 @@ export default function OrgChartPage() {
       )}
 
       {/* Controls */}
-      <Card className="overflow-x-auto p-3">
-        <div className="flex min-w-full items-center gap-x-3 gap-y-2 whitespace-nowrap">
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Ngày:</span>
+      <Card className="p-3 sm:p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:items-end">
+          <div className="grid min-w-0 gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ngày trực</span>
             {/* Lịch mở toàn bộ: xem lại ca đã đi và điểm danh trước cho ca sắp tới. */}
             <Input
               type="date"
               value={date}
               onChange={(e) => { setDate(e.target.value); setAutoFollow(false); }}
-              className="h-9 w-44 shrink-0 bg-white text-sm"
+              className="h-10 w-full bg-white text-sm lg:w-44"
             />
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Ca:</span>
-            <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
+          <div className="grid min-w-0 gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ca trực</span>
+            <div className="grid h-10 grid-cols-3 rounded-lg border border-border bg-white p-0.5">
               {SHIFT_TYPE_ORDER.map((s) => (
                 <button
                   key={s}
@@ -424,10 +430,10 @@ export default function OrgChartPage() {
               ))}
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Đơn vị:</span>
+          <div className="grid min-w-0 gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Đơn vị</span>
             <Select value={unit} onValueChange={setUnit}>
-              <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10 w-full bg-white lg:w-36"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
               </SelectContent>
@@ -435,9 +441,9 @@ export default function OrgChartPage() {
           </div>
 
           {/* Real-time follow indicator / restore button */}
-          <div className="ml-auto flex shrink-0 items-center">
+          <div className="flex items-end sm:col-span-2 lg:col-span-1 lg:ml-auto">
             {autoFollow ? (
-              <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+              <span className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 sm:w-auto sm:rounded-full">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -447,7 +453,7 @@ export default function OrgChartPage() {
             ) : (
               <button
                 onClick={() => setAutoFollow(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-ink"
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-ink sm:w-auto sm:rounded-full"
                 title="Quay lại ca trực hiện tại theo giờ thực"
               >
                 <Clock className="h-3.5 w-3.5" /> Về ca hiện tại
@@ -1283,35 +1289,37 @@ function OrgTemplateChart({
       className={cn(
         presentation
           ? "flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-xl border border-border bg-white p-2"
-          : "space-y-4 overflow-x-auto rounded-xl border border-border bg-white p-4"
+          : "space-y-3 rounded-xl border border-border bg-white p-2.5 sm:space-y-4 sm:p-4 lg:overflow-x-auto"
       )}
     >
-      <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex min-w-[1180px] items-stretch gap-4")}>
-        <div className={cn(presentation ? "flex min-w-0 flex-1 flex-col gap-2" : "min-w-0 flex-1 space-y-4")}>
+      <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex flex-col items-stretch gap-3 lg:min-w-[1180px] lg:flex-row lg:gap-4")}>
+        <div className={cn(presentation ? "flex min-w-0 flex-1 flex-col gap-2" : "min-w-0 flex-1 space-y-3 sm:space-y-4")}>
           {/* Chief */}
           <SeatBar title={ORG_CHIEF} occupants={byTitle.get(ORG_CHIEF)} tone="chief" presentation={presentation} />
 
           {/* Leads + their seat columns */}
-          <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex flex-col gap-4 lg:flex-row lg:items-stretch")}>
+          <div className={cn(presentation ? "flex min-h-0 flex-1 items-stretch gap-2" : "flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-stretch")}>
             {ORG_LEADS.map((lead) => (
               <div
                 key={lead.title}
                 className={cn(
-                  presentation ? "flex min-w-0 flex-col gap-1.5 rounded-lg p-1.5" : "min-w-[260px] space-y-2 rounded-lg p-2",
+                  presentation ? "flex min-w-0 flex-col gap-1.5 rounded-lg p-1.5" : "w-full min-w-0 space-y-2 rounded-lg p-2 lg:min-w-[260px]",
                   TONE_STYLES[lead.tone].block
                 )}
                 style={{ flex: lead.columns.length }}
               >
                 <SeatBar title={lead.title} occupants={byTitle.get(lead.title)} tone={lead.tone} presentation={presentation} />
                 <div
-                  className={cn(presentation ? "grid min-h-0 flex-1 gap-1.5" : "grid gap-2")}
-                  style={{ gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }}
+                  className={cn(presentation ? "grid min-h-0 flex-1 gap-1.5" : "grid grid-cols-1 gap-2 lg:[grid-template-columns:repeat(var(--lead-columns),minmax(0,1fr))]")}
+                  style={presentation
+                    ? { gridTemplateColumns: `repeat(${lead.columns.length}, minmax(0, 1fr))` }
+                    : ({ "--lead-columns": lead.columns.length } as React.CSSProperties)}
                 >
                   {lead.columns.map((col, i) => (
                     <div
                       key={i}
-                      className={cn(presentation ? "grid min-h-0 gap-1.5" : "grid gap-2")}
-                      style={{ gridAutoRows: presentation ? "minmax(0, 1fr)" : "minmax(5.5rem, auto)" }}
+                      className={cn(presentation ? "grid min-h-0 gap-1.5" : "grid auto-rows-[minmax(3.5rem,auto)] gap-2 sm:auto-rows-[minmax(4.5rem,auto)] lg:auto-rows-[minmax(5.5rem,auto)]")}
+                      style={presentation ? { gridAutoRows: "minmax(0, 1fr)" } : undefined}
                     >
                       {col.map((seat) => (
                         <Seat
@@ -1432,7 +1440,7 @@ function ManagementColumn({
     <aside
       className={cn(
         "h-fit shrink-0 self-start rounded-xl border border-indigo-200 bg-indigo-50/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.75),0_18px_40px_-30px_rgba(79,70,229,0.65)]",
-        presentation ? "w-[190px] p-1.5 xl:w-[220px]" : "w-[240px] p-2"
+        presentation ? "w-[190px] p-1.5 xl:w-[220px]" : "w-full p-2 lg:w-[240px]"
       )}
     >
       <div className={cn(presentation ? "flex min-h-0 flex-col gap-1.5" : "space-y-2")}>
@@ -1516,7 +1524,7 @@ function SeatBar({
     <div
       className={cn(
         "group shrink-0 rounded-lg border text-center transition-all duration-300",
-        presentation ? "flex flex-col px-2 py-1.5" : "px-3 py-2",
+        presentation ? "flex flex-col px-2 py-1.5" : "px-2.5 py-2 sm:px-3",
         s.bar,
         filled && s.filled
       )}
@@ -1547,7 +1555,7 @@ function Seat({
     <div
       className={cn(
         "group relative rounded-xl border text-center transition-all duration-300",
-        presentation ? "flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 py-1" : "px-2 py-2.5",
+        presentation ? "flex min-h-0 flex-1 flex-col overflow-hidden px-1.5 py-1" : "px-2 py-2 sm:py-2.5",
         filled
           ? cn(s.cell, "hover:-translate-y-0.5", s.filled)
           : cn("border-dashed bg-muted/20 opacity-90", s.cell)
@@ -1618,7 +1626,7 @@ function Occupants({
     );
   }
   return (
-    <div className="mt-1.5 flex flex-wrap justify-center gap-x-3 gap-y-2">
+    <div className="mt-1.5 flex flex-wrap justify-center gap-x-2 gap-y-1.5 sm:gap-x-3 sm:gap-y-2">
       {occupants.map((o) => (
         <div
           key={o.id}
@@ -1637,7 +1645,7 @@ function Occupants({
             <div
               className={cn(
                 "relative flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy to-accent font-bold text-white shadow-[0_8px_18px_-6px_rgba(15,23,42,0.55)] ring-2 ring-white transition-transform duration-300 will-change-transform group-hover:scale-110 group-hover:[transform:rotateY(12deg)_rotateX(6deg)]",
-                presentation ? "h-8 w-8 text-[9px] xl:h-10 xl:w-10 xl:text-[10px]" : "h-12 w-12 text-[11px]"
+                presentation ? "h-8 w-8 text-[9px] xl:h-10 xl:w-10 xl:text-[10px]" : "h-10 w-10 text-[10px] sm:h-12 sm:w-12 sm:text-[11px]"
               )}
             >
               {o.user.avatarUrl ? (

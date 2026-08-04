@@ -351,6 +351,7 @@ export default function NotificationsPage() {
   const [debouncedSearch, setDebouncedSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [showInvalidArchive, setShowInvalidArchive] = React.useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
 
   // Gõ tìm kiếm chỉ lọc lại sau 250ms — tránh lọc + render lại theo từng phím.
   React.useEffect(() => {
@@ -648,30 +649,30 @@ export default function NotificationsPage() {
   );
 
   return (
-    <div className="space-y-4 pb-8">
-      <section className="relative overflow-hidden rounded-2xl bg-[#102b4d] px-5 py-5 text-white shadow-[0_12px_28px_rgba(15,39,72,0.16)] sm:px-6">
+    <div className="space-y-3 pb-8 sm:space-y-4">
+      <section className="relative overflow-hidden rounded-2xl bg-[#102b4d] px-4 py-4 text-white shadow-[0_12px_28px_rgba(15,39,72,0.16)] sm:px-6 sm:py-5">
         <div className="pointer-events-none absolute -right-8 -top-20 h-52 w-52 rounded-full bg-white/[0.035]" />
         <div className="pointer-events-none absolute right-24 top-0 h-full w-px bg-white/[0.05]" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative flex flex-col gap-3 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-[0.22em] text-blue-100">
               <span className="h-1.5 w-1.5 rounded-full bg-orange-400" /> Trung tâm điều hành
             </div>
-            <h1 className="text-2xl font-black tracking-[-0.035em] sm:text-[28px]">Mệnh lệnh sản xuất</h1>
-            <p className="mt-1 max-w-2xl text-xs font-medium leading-5 text-blue-100/90">
+            <h1 className="text-xl font-black tracking-[-0.035em] sm:text-[28px]">Mệnh lệnh sản xuất</h1>
+            <p className="mt-1 max-w-2xl text-[11px] font-medium leading-[1.55] text-blue-100/90 sm:text-xs sm:leading-5">
               Theo dõi chỉ đạo vận hành, đối tượng thực hiện và tiến độ xác nhận trên một màn hình.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[340px]">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:min-w-[340px]">
             {[
               ["Hiệu lực", effectiveCount],
               ["Hết hiệu lực", pendingArchiveCount],
               ["Đã lưu", archivedBulletins.length],
               ["Đang hiển thị", sortedFiltered.length],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-100/75">{label}</div>
-                <div className={cn("mt-0.5 text-base font-extrabold tabular-nums", label === "Hết hiệu lực" && Number(value) > 0 && "text-orange-300")}>{value}</div>
+              <div key={label} className="rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:rounded-xl sm:px-3 sm:py-2.5">
+                <div className="text-[8px] font-semibold uppercase tracking-wide text-blue-100/75 sm:text-[9px]">{label}</div>
+                <div className={cn("mt-0.5 text-sm font-extrabold tabular-nums sm:text-base", label === "Hết hiệu lực" && Number(value) > 0 && "text-orange-300")}>{value}</div>
               </div>
             ))}
           </div>
@@ -681,7 +682,77 @@ export default function NotificationsPage() {
       {/* Mệnh lệnh sản xuất: người có quyền quản lý được đăng/sửa/xoá; mọi người đều xem. */}
       <section className="space-y-3">
         {/* Thanh tìm kiếm + bộ lọc (năm / phân loại) + đăng mệnh lệnh */}
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_4px_14px_rgba(15,39,72,0.05)]">
+        <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-[0_4px_14px_rgba(15,39,72,0.05)]">
+          <div className="flex items-center gap-2 sm:hidden">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm mệnh lệnh..."
+                className="h-10 border-slate-200 bg-slate-50/70 pl-9 shadow-none focus-visible:bg-white"
+              />
+            </div>
+            <Button
+              type="button"
+              size="toolbar"
+              variant={mobileFiltersOpen ? "default" : "outline"}
+              className="h-10 shrink-0 px-3"
+              aria-expanded={mobileFiltersOpen}
+              aria-controls="mobile-announcement-filters"
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Bộ lọc
+              {mobileFiltersOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+
+          {mobileFiltersOpen && (
+            <div id="mobile-announcement-filters" className="mt-2 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-2 border-t border-slate-100 pt-2 sm:hidden">
+              <Select value={yearFilter} onValueChange={setYearFilter}>
+                <SelectTrigger className="h-9 w-full border-slate-200 bg-slate-50/70 shadow-none"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả năm</SelectItem>
+                  {years.map((y) => <SelectItem key={y} value={String(y)}>Năm {y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={positionFilter} onValueChange={setPositionFilter}>
+                <SelectTrigger className="h-9 w-full border-slate-200 bg-slate-50/70 shadow-none"><SelectValue placeholder="Cương vị" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                  {positionOptions.map((position) => (
+                    <SelectItem key={position} value={position}>{position}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isManager && (
+                <ExportButton
+                  rows={exportRows}
+                  filename={showInvalidArchive ? "menh-lenh-het-hieu-luc" : "menh-lenh-san-xuat"}
+                  title={showInvalidArchive ? "Mệnh lệnh hết hiệu lực" : "Mệnh lệnh sản xuất"}
+                  className="w-full justify-center"
+                />
+              )}
+              <Button
+                size="sm"
+                variant={showInvalidArchive ? "default" : "outline"}
+                className={cn("w-full border-slate-200", !isManager && "col-span-2")}
+                onClick={() => setShowInvalidArchive((value) => !value)}
+              >
+                <Archive className="h-4 w-4" />
+                {showInvalidArchive ? "Đang hiện hành" : "Kho hết hiệu lực"}
+                <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{archivedBulletins.length}</span>
+              </Button>
+              {canManageAnnouncements && (
+                <Button size="sm" className="col-span-2 w-full bg-gradient-to-r from-[#135596] to-cyan-600 shadow-[0_5px_14px_rgba(19,85,150,0.2)] hover:from-[#0f477f] hover:to-cyan-700" onClick={() => openCreate("BULLETIN")}>
+                  <Plus className="h-4 w-4" /> Đăng mệnh lệnh <ArrowUpRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
+
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
           <span className="hidden items-center gap-1.5 border-r border-slate-200 px-1.5 text-[11px] font-semibold text-slate-500 sm:inline-flex">
             <SlidersHorizontal className="h-3.5 w-3.5" /> Bộ lọc
           </span>
@@ -733,6 +804,7 @@ export default function NotificationsPage() {
                 <Plus className="h-4 w-4" /> Đăng mệnh lệnh <ArrowUpRight className="h-3.5 w-3.5" />
               </Button>
             )}
+          </div>
           </div>
         </div>
 
