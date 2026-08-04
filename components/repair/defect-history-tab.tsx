@@ -4,6 +4,7 @@ import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
@@ -87,7 +88,15 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     // Vẫn ưu tiên tham số URL để các liên kết mở sẵn S2/COMMON hoạt động như cũ.
     unit: ["S1", "S2", "COMMON"].includes(unitFromUrl) ? unitFromUrl : "S1",
   }));
-  const { data, isLoading } = useDefectHistory(filters);
+  // Mặc định Cơ theo thói quen tra cứu; "ALL" để xem tất cả loại yêu cầu.
+  const [requestTypeFilter, setRequestTypeFilter] = React.useState("Cơ");
+  // "Yêu cầu" phải đi kèm lên server: lọc ở client thì trần HISTORY_TAKE đã cắt mất
+  // dữ liệu trước khi client kịp lọc (S1 có 532 bản Cơ đã chốt, chỉ nhận về 300).
+  const queryFilters = React.useMemo(
+    () => ({ ...filters, ...(requestTypeFilter !== "ALL" ? { requestType: requestTypeFilter } : {}) }),
+    [filters, requestTypeFilter]
+  );
+  const { data, isLoading } = useDefectHistory(queryFilters);
   const del = useDeleteDefectHistory();
   const rows = React.useMemo(() => data?.data ?? [], [data?.data]);
   // Tên thiết bị nay do /api/defect-history trả kèm (quan hệ node) — trước đây phải tải
@@ -105,8 +114,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const [pageSize, setPageSize] = React.useState(10);
   const [page, setPage] = React.useState(1);
   const [statusFilter, setStatusFilter] = React.useState<HistoryStatusFilter>("PENDING");
-  // Mặc định Cơ theo thói quen tra cứu; "ALL" để xem tất cả loại yêu cầu.
-  const [requestTypeFilter, setRequestTypeFilter] = React.useState("Cơ");
   const [pendingEditDefectId, setPendingEditDefectId] = React.useState<string | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [sort, setSort] = React.useState<{ key: SortKey; dir: SortDir }>({ key: "performedAt", dir: "desc" });
@@ -300,6 +307,17 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           Xoá bộ lọc
         </button>
       </Card>
+
+      {/* Chạm trần truy vấn: nói thẳng ra thay vì âm thầm trả thiếu dòng. */}
+      {data?.meta?.capped === true && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <span>
+            Kết quả đã chạm giới hạn truy vấn nên có thể chưa hiện đủ. Thu hẹp bằng
+            cương vị, khoảng ngày hoặc loại yêu cầu để xem chính xác.
+          </span>
+        </div>
+      )}
 
       {isLoading ? (
         <TableSkeleton rows={8} />

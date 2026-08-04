@@ -24,7 +24,11 @@ const INCLUDE = {
   },
 };
 // Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
-const HISTORY_TAKE = 300;
+// Trần an toàn cho mỗi nhánh. Sau khi tổ máy + cương vị + loại yêu cầu đều được lọc
+// trong SQL, tập kết quả thực tế nhỏ hơn nhiều (lớn nhất hiện nay: S1 + Cơ = 532 bản
+// đã chốt), nên 1000 vừa đủ dư vừa không thổi phồng payload. `meta.capped` báo lên
+// giao diện khi vẫn chạm trần để người dùng biết cần thu hẹp bộ lọc.
+const HISTORY_TAKE = 1000;
 
 /**
  * DefectHistory.system là snapshot cương vị từ nhiều nguồn: có thể là nhãn chuẩn,
@@ -73,6 +77,10 @@ export async function GET(req: NextRequest) {
       : deviceSeq ? [deviceSeq] : [];
     const from = searchParams.get("from");
     const to = searchParams.get("to");
+    // Trước đây "Yêu cầu" chỉ lọc ở client, nên trần HISTORY_TAKE cắt mất dữ liệu
+    // TRƯỚC khi client kịp lọc: S1 có 818 bản đã chốt, lấy 300 rồi mới lọc Cơ →
+    // hiện chưa tới 300/532 dòng thật. Phải lọc ngay trong SQL.
+    const requestType = searchParams.get("requestType")?.trim();
 
     const where: Record<string, unknown> = {};
     const andConditions: Record<string, unknown>[] = [];
@@ -80,6 +88,7 @@ export async function GET(req: NextRequest) {
       where.system = { in: matchingPositionValues, mode: "insensitive" };
     }
     if (unit) where.unit = unit;
+    if (requestType) where.requestType = requestType;
     if (!deviceSeq && mappedUnit && ["S1", "S2", "COMMON"].includes(mappedUnit)) {
       andConditions.push({
         OR: [
@@ -124,6 +133,33 @@ export async function GET(req: NextRequest) {
     if (scopeWhere) andConditions.push({ OR: [scopeWhere, { deviceSeq: null }] });
     if (andConditions.length) where.AND = andConditions;
 
+    // Điều kiện của nhánh CHỜ CHỐT, dựng riêng cho dễ đọc. Tất cả phải nằm trong SQL
+    // và chạy TRƯỚC `take`, nếu không trần sẽ cắt mất dữ liệu trước khi lọc.
+    const pendingDefectWhere: Record<string, unknown> = {};
+    if (matchingPositionValues.length) {
+      pendingDefectWhere.system = { in: matchingPositionValues, mode: "insensitive" };
+    }
+    if (unit) pendingDefectWhere.unit = unit;
+
+    const pendingWhere: Record<string, unknown> = {};
+    if (Object.keys(pendingDefectWhere).length) pendingWhere.defect = pendingDefectWhere;
+    // requestType hiệu lực = pending.requestType; rỗng thì kế thừa của phiếu gốc.
+    if (requestType) {
+      pendingWhere.OR = [
+        { requestType },
+        { requestType: null, defect: { requestType } },
+      ];
+    }
+    if (workOrderNumber) {
+      pendingWhere.workOrderNumber = { contains: workOrderNumber, mode: "insensitive" };
+    }
+    if (from || to) {
+      pendingWhere.performedAt = {
+        ...(from ? { gte: dateRange(from).start } : {}),
+        ...(to ? { lte: dateRange(to).end } : {}),
+      };
+    }
+
     const [history, pendingRows] = await Promise.all([
       prisma.defectHistory.findMany({
         where,
@@ -132,9 +168,10 @@ export async function GET(req: NextRequest) {
         take: HISTORY_TAKE,
       }),
       prisma.defectHistoryPending.findMany({
-        where: matchingPositionValues.length
-          ? { defect: { system: { in: matchingPositionValues, mode: "insensitive" } } }
-          : undefined,
+        // Mọi điều kiện thu hẹp được đều phải nằm trong SQL, TRƯỚC `take`. Trước đây
+        // chỉ có cương vị ở đây còn tổ máy/ngày/PCT lọc bằng JS sau khi đã cắt 300
+        // dòng mới nhất của CẢ BA tổ máy — S1 có 188 phiếu chờ chốt mà chỉ hiện 87.
+        where: pendingWhere,
         include: {
           defect: {
             include: {
@@ -248,9 +285,11 @@ export async function GET(req: NextRequest) {
         pendingDefectId: defect.id,
       }));
 
+    // KHÔNG cắt lần nữa trên danh sách gộp: hai nhóm được xem ở hai tab riêng, cắt
+    // chung theo performedAt khiến nhóm có ngày cũ hơn bị nhóm kia ăn hết chỗ
+    // (Chờ chốt S1/Cơ có 9 phiếu nhưng chỉ hiện 8). Mỗi nhánh đã có trần riêng.
     const data = [...finalizedData, ...pendingData]
-      .sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime())
-      .slice(0, HISTORY_TAKE);
+      .sort((a, b) => b.performedAt.getTime() - a.performedAt.getTime());
     return ok(data, {
       total: data.length,
       finalizedTotal: data.filter((item) => item.historyStatus === "FINALIZED").length,

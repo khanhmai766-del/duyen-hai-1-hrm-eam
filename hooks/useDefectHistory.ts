@@ -23,6 +23,8 @@ export interface DefectHistoryFilters {
   /** @deprecated Dùng position; giữ lại để tương thích liên kết cũ. */
   system?: string;
   unit?: string;
+  /** Cơ | Điện | … — lọc ngay trong SQL, không để trần HISTORY_TAKE cắt trước. */
+  requestType?: string;
   mappedUnit?: string;
   workOrderNumber?: string;
   device?: string;
