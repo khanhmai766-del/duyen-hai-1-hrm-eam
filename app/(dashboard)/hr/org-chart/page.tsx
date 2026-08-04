@@ -5,8 +5,9 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Check, Repeat, Printer, QrCode, Copy, ExternalLink } from "lucide-react";
+import { CheckCircle2, UserCheck, Loader2, Phone, UserMinus, Tv, X, ClipboardCheck, Plus, ArrowLeft, Clock, Lock, Unlock, Check, Repeat, Printer, QrCode, Copy, ExternalLink } from "lucide-react";
 import { CardSkeleton } from "@/components/shared/skeletons";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useShift, useCheckInOrg, useRecallCheckIn, useApproveAttendance, useRemoveAssignment } from "@/hooks/useShifts";
+import { useShift, useCheckInOrg, useRecallCheckIn, useApproveAttendance, useRemoveAssignment, useSetAttendanceLock } from "@/hooks/useShifts";
 import { useHcGroups, type HcMember, type HcGroup } from "@/hooks/useHcAttendance";
 import { useCurrentPosition } from "@/hooks/useCurrentPosition";
 import { useUsers } from "@/hooks/useUsers";
@@ -28,6 +29,11 @@ import type { ShiftAssignmentWithUser, CheckInWithUser } from "@/types";
 const HOURS_OPTIONS = [4, 6, 8];
 const ORG_CHART_VIEWER_KEY = "pp:org-chart-viewer-active";
 const VIEWER_REFRESH_INTERVAL_MS = 10_000;
+
+function phoneHref(phone: string) {
+  const normalized = phone.trim().replace(/[^\d+]/g, "");
+  return `tel:${normalized || phone.trim()}`;
+}
 
 const UNITS = ["Vận hành 1", "Vận hành 2"];
 
@@ -126,7 +132,7 @@ export default function OrgChartPage() {
   const initial = realtimeShift();
   const [date, setDate] = React.useState(initial.date);
   const [shiftType, setShiftType] = React.useState<string>(initial.shiftType);
-  const [unit, setUnit] = React.useState<string>(UNITS[0]);
+  const unit = UNITS[0];
   // While true, date + shift follow the real clock; any manual change turns it off.
   const [autoFollow, setAutoFollow] = React.useState(true);
 
@@ -150,9 +156,11 @@ export default function OrgChartPage() {
   const [checkInSuccessMessage, setCheckInSuccessMessage] = React.useState("");
   const [viewer, setViewer] = React.useState(false);
   const [approveOpen, setApproveOpen] = React.useState(false);
+  const [lockTarget, setLockTarget] = React.useState<boolean | null>(null);
   const [shareOpen, setShareOpen] = React.useState(false);
   const [origin, setOrigin] = React.useState("");
   const recall = useRecallCheckIn();
+  const attendanceLock = useSetAttendanceLock();
   const rbac = useRbacAccess();
 
   const canApprove = rbac.can("shift-operation-approve", ["manage", "full"]);
@@ -232,6 +240,7 @@ export default function OrgChartPage() {
   const checkIns = shift?.checkIns ?? [];
   const approved = assignments.filter((a) => a.isApproved).length;
   const attendanceLocked = Boolean(shift?.isAttendanceLocked);
+  const canLockAttendance = assignments.length > 0 && approved === assignments.length;
 
   // Whether the logged-in user already has a seat in this shift → toggles the
   // "Điểm danh" (check in) ↔ "Thu hồi điểm danh" (recall) button.
@@ -251,6 +260,17 @@ export default function OrgChartPage() {
     }
   }
 
+  async function handleAttendanceLock() {
+    if (lockTarget == null) return;
+    try {
+      await attendanceLock.mutateAsync({ date, shiftType, unit, locked: lockTarget });
+      toast.success(lockTarget ? "Đã khóa điểm danh" : "Đã mở khóa điểm danh");
+      setLockTarget(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -259,11 +279,6 @@ export default function OrgChartPage() {
           <p className="mt-1 text-sm text-muted-foreground">Phân công vị trí trực vận hành theo ca</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end sm:gap-2.5">
-          {assignments.length > 0 && (
-            <Badge variant={approved === assignments.length ? "accent" : "secondary"} className="h-9 justify-center gap-1.5 px-3">
-              <CheckCircle2 className="h-3.5 w-3.5" /> {approved}/{assignments.length} đã duyệt
-            </Badge>
-          )}
           {canApprove && (
             <Button
               size="toolbar"
@@ -273,7 +288,20 @@ export default function OrgChartPage() {
               <ClipboardCheck className="h-4 w-4" /> Duyệt chấm công
             </Button>
           )}
-          {isCheckedIn ? (
+          {canApprove && (
+            <Button
+              size="toolbar"
+              variant={attendanceLocked ? "outline" : "soft"}
+              onClick={() => setLockTarget(!attendanceLocked)}
+              disabled={attendanceLock.isPending || (!attendanceLocked && !canLockAttendance)}
+              className="w-full sm:w-auto"
+              title={!attendanceLocked && !canLockAttendance ? "Chỉ khóa khi toàn bộ điểm danh đã được duyệt" : undefined}
+            >
+              {attendanceLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              {attendanceLocked ? "Mở khóa điểm danh" : "Khóa điểm danh"}
+            </Button>
+          )}
+          {(!canApprove || !attendanceLocked) && (isCheckedIn ? (
             recallLocked ? (
               <Button
                 size="toolbar"
@@ -308,8 +336,8 @@ export default function OrgChartPage() {
               {attendanceLocked ? <Lock className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
               {attendanceLocked ? "Đã khóa điểm danh" : "Điểm danh"}
             </Button>
-          )}
-          <Button size="toolbar" variant="soft" onClick={openViewer} className="w-full sm:w-auto">
+          ))}
+          <Button size="toolbar" variant="soft" onClick={openViewer} className="hidden w-full lg:inline-flex lg:w-auto">
             <Tv className="h-4 w-4" /> Viewer
           </Button>
           <Button size="toolbar" variant="soft" onClick={() => setShareOpen(true)} className="w-full sm:w-auto">
@@ -320,6 +348,18 @@ export default function OrgChartPage() {
 
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} date={date} shiftType={shiftType} unit={unit} onSuccess={showCheckInSuccessMessage} />
       <CheckInSuccessOverlay message={checkInSuccessMessage} />
+      <ConfirmDialog
+        open={lockTarget != null}
+        onOpenChange={(open) => !open && setLockTarget(null)}
+        title={lockTarget ? "Khóa điểm danh ca trực?" : "Mở khóa điểm danh ca trực?"}
+        description={lockTarget
+          ? `Sau khi khóa, ${assignments.length} nhân sự đã duyệt sẽ được chốt. Muốn bổ sung, xóa hoặc thay đổi duyệt phải mở khóa trước.`
+          : "Sau khi mở khóa, người dùng có thể điểm danh hoặc thu hồi; người có quyền duyệt có thể bổ sung và điều chỉnh nhân sự."}
+        confirmLabel={lockTarget ? "Khóa điểm danh" : "Mở khóa"}
+        destructive={Boolean(lockTarget)}
+        loading={attendanceLock.isPending}
+        onConfirm={handleAttendanceLock}
+      />
       <ApproveAttendanceDialog
         open={approveOpen}
         onOpenChange={setApproveOpen}
@@ -327,6 +367,7 @@ export default function OrgChartPage() {
         shiftType={shiftType}
         unit={unit}
         assignments={assignments}
+        attendanceLocked={attendanceLocked}
       />
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent className="max-w-md">
@@ -402,27 +443,27 @@ export default function OrgChartPage() {
       )}
 
       {/* Controls */}
-      <Card className="p-3 sm:p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:items-end">
-          <div className="grid min-w-0 gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ngày trực</span>
+      <Card className="p-3 sm:p-4 lg:p-3">
+        <div className="grid grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] gap-2 sm:grid-cols-2 sm:gap-3 lg:flex lg:items-center">
+          <div className="grid min-w-0 gap-1.5 lg:flex lg:items-center lg:gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:whitespace-nowrap">Ngày trực</span>
             {/* Lịch mở toàn bộ: xem lại ca đã đi và điểm danh trước cho ca sắp tới. */}
             <Input
               type="date"
               value={date}
               onChange={(e) => { setDate(e.target.value); setAutoFollow(false); }}
-              className="h-10 w-full bg-white text-sm lg:w-44"
+              className="h-10 min-w-0 w-full bg-white text-sm lg:w-44"
             />
           </div>
-          <div className="grid min-w-0 gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ca trực</span>
+          <div className="grid min-w-0 gap-1.5 lg:flex lg:items-center lg:gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:whitespace-nowrap">Ca trực</span>
             <div className="grid h-10 grid-cols-3 rounded-lg border border-border bg-white p-0.5">
               {SHIFT_TYPE_ORDER.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => { setShiftType(s); setAutoFollow(false); }}
-                  className={cn("rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                  className={cn("rounded-md px-1.5 py-1.5 text-xs font-medium transition-colors sm:px-2.5 sm:text-sm",
                     shiftType === s ? "bg-navy text-white" : "text-muted-foreground hover:text-ink")}
                 >
                   {SHIFT_TYPE[s].label}
@@ -430,20 +471,21 @@ export default function OrgChartPage() {
               ))}
             </div>
           </div>
-          <div className="grid min-w-0 gap-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Đơn vị</span>
-            <Select value={unit} onValueChange={setUnit}>
-              <SelectTrigger className="h-10 w-full bg-white lg:w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Real-time follow indicator / restore button */}
-          <div className="flex items-end sm:col-span-2 lg:col-span-1 lg:ml-auto">
+          {/* Trạng thái duyệt + theo dõi thời gian thực */}
+          <div className="col-span-2 grid grid-cols-2 items-end gap-2 sm:flex sm:items-center sm:justify-end lg:col-span-1 lg:ml-auto">
+            {assignments.length > 0 && (
+              <Badge
+                variant={approved === assignments.length ? "accent" : "secondary"}
+                className="h-10 w-full justify-center gap-1.5 px-2 text-[11px] sm:h-9 sm:w-auto sm:px-3 sm:text-xs"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> {approved}/{assignments.length} đã duyệt
+              </Badge>
+            )}
             {autoFollow ? (
-              <span className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 sm:w-auto sm:rounded-full">
+              <span className={cn(
+                "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200 sm:h-9 sm:w-auto sm:rounded-full sm:px-3 sm:text-xs",
+                assignments.length === 0 && "col-span-2"
+              )}>
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -453,7 +495,10 @@ export default function OrgChartPage() {
             ) : (
               <button
                 onClick={() => setAutoFollow(true)}
-                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-ink sm:w-auto sm:rounded-full"
+                className={cn(
+                  "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-border px-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-ink sm:h-9 sm:w-auto sm:rounded-full sm:px-3 sm:text-xs",
+                  assignments.length === 0 && "col-span-2"
+                )}
                 title="Quay lại ca trực hiện tại theo giờ thực"
               >
                 <Clock className="h-3.5 w-3.5" /> Về ca hiện tại
@@ -642,9 +687,15 @@ function CheckInDialog({
           </div>
 
           <Row label="Số điện thoại">
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink">
-              <Phone className="h-3.5 w-3.5 text-muted-foreground" /> {me?.phone ?? "—"}
-            </span>
+            {me?.phone ? (
+              <a
+                href={phoneHref(me.phone)}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-1 text-sm font-medium text-ink transition-colors hover:text-accent active:bg-sky-50"
+                aria-label={`Gọi số ${me.phone}`}
+              >
+                <Phone className="h-3.5 w-3.5 text-muted-foreground" /> {me.phone}
+              </a>
+            ) : <span>—</span>}
           </Row>
         </div>
 
@@ -957,6 +1008,7 @@ function ApproveAttendanceDialog({
   shiftType,
   unit,
   assignments,
+  attendanceLocked,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -964,6 +1016,7 @@ function ApproveAttendanceDialog({
   shiftType: string;
   unit: string;
   assignments: ShiftAssignmentWithUser[];
+  attendanceLocked: boolean;
 }) {
   const approve = useApproveAttendance();
   const remove = useRemoveAssignment();
@@ -987,7 +1040,7 @@ function ApproveAttendanceDialog({
   async function approveAll() {
     try {
       const res: any = await approve.mutateAsync({ date, shiftType, unit });
-      toast.success(`Đã duyệt ${res?.data?.approved ?? ""} chấm công và khóa điểm danh`.trim());
+      toast.success(`Đã duyệt ${res?.data?.approved ?? ""} chấm công`.trim());
       setConfirmApproveOpen(false);
     } catch (e) {
       toast.error((e as Error).message);
@@ -1021,7 +1074,7 @@ function ApproveAttendanceDialog({
     }
   }
 
-  const seatProps = { byTitle, onAdd: setPicker, onApprove: approveOne, onRemove: removeOne };
+  const seatProps = { byTitle, onAdd: setPicker, onApprove: approveOne, onRemove: removeOne, disabled: attendanceLocked };
 
   return (
     <>
@@ -1040,6 +1093,13 @@ function ApproveAttendanceDialog({
                 Tổng <span className="font-semibold text-ink">{total}</span> điểm danh · còn{" "}
                 <span className="font-semibold text-warning">{pending}</span> chờ duyệt
               </div>
+
+              {attendanceLocked && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Ca đã khóa điểm danh. Hãy đóng cửa sổ và bấm “Mở khóa điểm danh” trước khi thêm, xóa hoặc thay đổi trạng thái duyệt.
+                </div>
+              )}
 
               <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
                 <EditableSeat title={ORG_CHIEF} tone="chief" {...seatProps} />
@@ -1069,9 +1129,9 @@ function ApproveAttendanceDialog({
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>
-                <Button onClick={() => setConfirmApproveOpen(true)} disabled={approve.isPending || total === 0}>
+                <Button onClick={() => setConfirmApproveOpen(true)} disabled={attendanceLocked || approve.isPending || total === 0 || pending === 0}>
                   {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  <CheckCircle2 className="h-4 w-4" /> Duyệt hết
+                  <CheckCircle2 className="h-4 w-4" /> Duyệt tất cả
                 </Button>
               </DialogFooter>
             </>
@@ -1082,17 +1142,17 @@ function ApproveAttendanceDialog({
       <Dialog open={confirmApproveOpen} onOpenChange={setConfirmApproveOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Xác nhận duyệt chấm công</DialogTitle>
+            <DialogTitle>Xác nhận duyệt tất cả chấm công</DialogTitle>
             <DialogDescription>
-              Duyệt toàn bộ {total} điểm danh của ca này và khóa người dùng tự điểm danh thêm.
-              Người có quyền duyệt vẫn có thể bổ sung nhân sự khi có thay đổi đột xuất.
+              Duyệt toàn bộ {pending} điểm danh đang chờ của ca này. Sau khi không còn bản ghi chờ duyệt,
+              sử dụng nút “Khóa điểm danh” riêng để chốt ca.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:justify-end">
             <Button variant="outline" onClick={() => setConfirmApproveOpen(false)} disabled={approve.isPending}>
               Hủy
             </Button>
-            <Button onClick={approveAll} disabled={approve.isPending || total === 0}>
+            <Button onClick={approveAll} disabled={approve.isPending || attendanceLocked || total === 0 || pending === 0}>
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Xác nhận
             </Button>
@@ -1114,6 +1174,7 @@ function EditableSeat({
   onAdd,
   onApprove,
   onRemove,
+  disabled = false,
   style,
 }: {
   title: string;
@@ -1122,6 +1183,7 @@ function EditableSeat({
   onAdd: (title: string) => void;
   onApprove: (id: string) => void;
   onRemove: (id: string) => void;
+  disabled?: boolean;
   style?: React.CSSProperties;
 }) {
   const s = TONE_STYLES[tone];
@@ -1135,7 +1197,7 @@ function EditableSeat({
             <div className={cn("text-xs font-bold leading-tight", o.isApproved ? "text-ink" : "text-warning")}>
               {o.user.name}
             </div>
-            <div className="mt-1 flex items-center justify-center gap-1">
+            {!disabled && <div className="mt-1 flex items-center justify-center gap-1">
               {!o.isApproved && (
                 <button
                   onClick={() => onApprove(o.id)}
@@ -1150,16 +1212,18 @@ function EditableSeat({
               >
                 Xóa
               </button>
-            </div>
+            </div>}
           </div>
         ))}
       </div>
-      <button
-        onClick={() => onAdd(title)}
-        className="mt-1.5 inline-flex items-center gap-0.5 rounded border border-dashed border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-accent hover:text-accent"
-      >
-        <Plus className="h-3 w-3" /> Thêm
-      </button>
+      {!disabled && (
+        <button
+          onClick={() => onAdd(title)}
+          className="mt-1.5 inline-flex items-center gap-0.5 rounded border border-dashed border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-accent hover:text-accent"
+        >
+          <Plus className="h-3 w-3" /> Thêm
+        </button>
+      )}
     </div>
   );
 }
@@ -1496,10 +1560,14 @@ function ManagementPerson({
           {user.name}
         </div>
         {user.phone && (
-          <div className={cn("mt-0.5 flex min-w-0 items-center gap-0.5 font-bold text-slate-950", presentation ? "text-[8px] xl:text-[9px]" : "text-[10px]")}>
+          <a
+            href={phoneHref(user.phone)}
+            className={cn("mt-0.5 flex min-w-0 items-center gap-0.5 rounded px-0.5 font-bold text-slate-950 transition-colors hover:text-accent active:bg-white/70", presentation ? "text-[8px] xl:text-[9px]" : "min-h-6 text-[10px]")}
+            aria-label={`Gọi ${user.name}: ${user.phone}`}
+          >
             <Phone className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{user.phone}</span>
-          </div>
+          </a>
         )}
       </div>
     </div>
@@ -1680,9 +1748,13 @@ function Occupants({
             {o.user.name}
           </span>
           {!presentation && o.user.phone && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-slate-950">
+            <a
+              href={phoneHref(o.user.phone)}
+              className="inline-flex min-h-6 items-center gap-0.5 rounded px-1 text-[10px] font-bold text-slate-950 transition-colors hover:text-accent active:bg-white/70"
+              aria-label={`Gọi ${o.user.name}: ${o.user.phone}`}
+            >
               <Phone className="h-2.5 w-2.5" /> {o.user.phone}
-            </span>
+            </a>
           )}
         </div>
       ))}
@@ -1751,10 +1823,14 @@ function CompactOccupant({
           {occupant.user.name}
         </div>
         {occupant.user.phone && (
-          <div className="mt-0.5 flex min-w-0 items-center gap-0.5 text-[8px] font-bold leading-none text-slate-950 xl:text-[9px]">
+          <a
+            href={phoneHref(occupant.user.phone)}
+            className="mt-0.5 flex min-w-0 items-center gap-0.5 rounded px-0.5 text-[8px] font-bold leading-none text-slate-950 transition-colors hover:text-accent active:bg-white/70 xl:text-[9px]"
+            aria-label={`Gọi ${occupant.user.name}: ${occupant.user.phone}`}
+          >
             <Phone className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{occupant.user.phone}</span>
-          </div>
+          </a>
         )}
       </div>
     </div>

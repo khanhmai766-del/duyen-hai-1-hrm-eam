@@ -55,9 +55,8 @@ export async function POST(req: NextRequest) {
         include: { assignments: true },
       });
     }
-    const managerAddingUser = !!body.userId && canApproveShift;
-    if (shift.isAttendanceLocked && !managerAddingUser) {
-      return fail("Ca trực đã được duyệt hết và khóa điểm danh.", 403);
+    if (shift.isAttendanceLocked) {
+      return fail("Ca trực đã khóa điểm danh. Người có quyền duyệt cần mở khóa trước khi bổ sung nhân sự.", 403);
     }
 
     // Decide where the seat hangs in the hierarchy.
@@ -125,11 +124,12 @@ export async function DELETE(req: NextRequest) {
         include: { shift: { select: { date: true, isAttendanceLocked: true } } },
       });
       if (!target) return fail("Không tìm thấy phân công", 404);
+      if (target.shift.isAttendanceLocked) {
+        return fail("Ca trực đã khóa điểm danh. Hãy mở khóa trước khi xóa nhân sự.", 403);
+      }
       await prisma.shiftAssignment.updateMany({ where: { parentId: id }, data: { parentId: target.parentId } });
       await prisma.shiftAssignment.delete({ where: { id } });
-      if (!target.shift.isAttendanceLocked || !target.isApproved) {
-        await prisma.checkIn.deleteMany({ where: { shiftId: target.shiftId, userId: target.userId } });
-      }
+      await prisma.checkIn.deleteMany({ where: { shiftId: target.shiftId, userId: target.userId } });
       await audit(user.id, "REMOVE_CHECKIN", "ShiftAssignment", id, "Xoá điểm danh");
       invalidateShiftCache();
       return ok({ removed: 1 });
@@ -147,6 +147,9 @@ export async function DELETE(req: NextRequest) {
       where: { date: { gte: start, lte: end }, shiftType: shiftType as any, unit },
     });
     if (!shift) return fail("Không tìm thấy ca trực", 404);
+    if (shift.isAttendanceLocked) {
+      return fail("Ca trực đã khóa điểm danh. Hãy liên hệ người có quyền duyệt để mở khóa.", 403);
+    }
 
     const mine = await prisma.shiftAssignment.findMany({ where: { shiftId: shift.id, userId: user.id } });
 
@@ -193,18 +196,70 @@ export async function PUT(req: NextRequest) {
       where: { date: { gte: start, lte: end }, shiftType: shiftType as any, unit },
     });
     if (!shift) return fail("Không tìm thấy ca trực", 404);
+    if (shift.isAttendanceLocked) {
+      return fail("Ca trực đã khóa điểm danh. Hãy mở khóa trước khi thay đổi trạng thái duyệt.", 403);
+    }
 
     const where = Array.isArray(ids) && ids.length
       ? { id: { in: ids }, shiftId: shift.id }
       : { shiftId: shift.id };
     const res = await prisma.shiftAssignment.updateMany({ where, data: { isApproved: true } });
     const approveAll = !(Array.isArray(ids) && ids.length);
-    if (approveAll) {
-      await prisma.shift.update({ where: { id: shift.id }, data: { isAttendanceLocked: true } });
-    }
 
     await audit(user.id, "APPROVE_CHECKIN", "Shift", shift.id, approveAll ? `Duyệt hết chấm công (${res.count})` : `Duyệt chấm công (${res.count})`);
     invalidateShiftCache();
-    return ok({ approved: res.count, locked: approveAll });
+    return ok({ approved: res.count, locked: false });
+  });
+}
+
+/**
+ * Khóa / mở khóa điểm danh là thao tác độc lập với duyệt chấm công.
+ * Chỉ được khóa khi ca có nhân sự và toàn bộ phân công đã được duyệt.
+ */
+export async function PATCH(req: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    await requirePermissionLevel(user, "shift-operation-approve", ["manage", "full"], "Không đủ quyền khóa hoặc mở khóa điểm danh");
+    const body = await req.json();
+    const { date, shiftType, unit, locked } = body as {
+      date: string;
+      shiftType: string;
+      unit: string;
+      locked: boolean;
+    };
+    if (!date || !shiftType || !unit || typeof locked !== "boolean") {
+      return fail("Thiếu thông tin ca trực hoặc trạng thái khóa");
+    }
+
+    const { start, end } = dateRange(date);
+    const shift = await prisma.shift.findFirst({
+      where: { date: { gte: start, lte: end }, shiftType: shiftType as any, unit },
+      include: { assignments: { select: { isApproved: true } } },
+    });
+    if (!shift) return fail("Không tìm thấy ca trực", 404);
+
+    if (locked) {
+      if (shift.assignments.length === 0) {
+        return fail("Không thể khóa ca chưa có người điểm danh");
+      }
+      const pending = shift.assignments.filter((assignment) => !assignment.isApproved).length;
+      if (pending > 0) {
+        return fail(`Không thể khóa: còn ${pending} điểm danh chưa được duyệt`);
+      }
+    }
+
+    if (shift.isAttendanceLocked !== locked) {
+      await prisma.shift.update({ where: { id: shift.id }, data: { isAttendanceLocked: locked } });
+      await audit(
+        user.id,
+        locked ? "LOCK_ATTENDANCE" : "UNLOCK_ATTENDANCE",
+        "Shift",
+        shift.id,
+        locked ? `Khóa điểm danh (${shift.assignments.length} nhân sự)` : "Mở khóa điểm danh"
+      );
+      invalidateShiftCache();
+    }
+
+    return ok({ locked, assignments: shift.assignments.length });
   });
 }

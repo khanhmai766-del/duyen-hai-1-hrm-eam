@@ -196,6 +196,19 @@ export function useApproveAttendance() {
   });
 }
 
+export function useSetAttendanceLock() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { date: string; shiftType: string; unit: string; locked: boolean }) =>
+      apiMutate("/api/shifts/assign", "PATCH", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shift"] });
+      qc.invalidateQueries({ queryKey: ["timesheet"] });
+      qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+    },
+  });
+}
+
 export function useRemoveAssignment() {
   const qc = useQueryClient();
   return useMutation({
