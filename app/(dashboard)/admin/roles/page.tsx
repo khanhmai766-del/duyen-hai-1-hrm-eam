@@ -447,24 +447,10 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   },
   {
-    id: "archive-major-repair",
-    group: "Tài liệu số",
-    feature: "Lưu trữ - sửa chữa lớn",
-    note: "Phân quyền riêng cho tab Sửa chữa lớn: xem, thêm, sửa, xoá và backup theo cấp quyền.",
-    matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
-  },
-  {
     id: "archive-oil-gun-data",
     group: "Tài liệu số",
     feature: "Lưu trữ - dữ liệu vòi dầu",
     note: "Phân quyền riêng cho tab Dữ liệu vòi dầu, bao gồm cập nhật trạng thái/khiếm khuyết vòi dầu.",
-    matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
-  },
-  {
-    id: "archive-soot-blower-data",
-    group: "Tài liệu số",
-    feature: "Lưu trữ - dữ liệu vòi thổi bụi",
-    note: "Phân quyền riêng cho tab Dữ liệu vòi thổi bụi: xem, thêm, sửa, xoá và backup theo cấp quyền.",
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "manage", VIEWER: "read" },
   },
   {
@@ -519,7 +505,11 @@ function mergeDefaultPermissions(rows: PermissionRow[]) {
     "rbac-manage": existingById.get("user-admin")?.matrix,
   };
   const defaultIds = new Set(DEFAULT_PERMISSIONS.map((row) => row.id));
+  // Quyền đã bỏ hẳn. Phải liệt kê ở đây, nếu không cấu hình cũ đã lưu trong DB sẽ
+  // được coi là "quyền tự thêm" và dòng bị xoá lại hiện ra trong ma trận.
   const legacyIds = new Set([
+    "archive-major-repair",
+    "archive-soot-blower-data",
     "dashboard-read",
     "overview-dashboard-read",
     "overview-reports-read",

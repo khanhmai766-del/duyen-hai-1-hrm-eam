@@ -515,3 +515,37 @@
     padding-left: 0 !important;
   }
 }
+
+/* Popup "Tiến trình tách lưới": khi bấm In, ẩn hẳn trang nền và bỏ giới hạn
+   cuộn của popup — nếu không, máy in chỉ ra đúng một màn hình đầu tiên.
+   Body được gắn .printing-timeline ngay trước window.print() và gỡ sau đó. */
+@media print {
+  body.printing-timeline > *:not(:has(.timeline-print)) {
+    display: none !important;
+  }
+  /* Lớp phủ mờ của dialog nằm cùng portal — không in ra thành mảng tối. */
+  body.printing-timeline div:has(> .timeline-print) > *:not(.timeline-print) {
+    display: none !important;
+  }
+  body.printing-timeline .timeline-print {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-timeline .timeline-print .timeline-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  body.printing-timeline .timeline-print .sticky {
+    position: static !important;
+  }
+}

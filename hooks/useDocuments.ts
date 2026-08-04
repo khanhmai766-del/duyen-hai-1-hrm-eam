@@ -10,9 +10,7 @@ export type DocumentCategory =
   | "GRID_SEPARATION"
   | "STARTUP_DATA"
   | "BOILER_CALIBRATION"
-  | "MAJOR_REPAIR"
-  | "OIL_GUN_DATA"
-  | "SOOT_BLOWER_DATA";
+  | "OIL_GUN_DATA";
 
 export interface DigitalDocumentUser {
   id: string | null;
@@ -33,6 +31,8 @@ export interface DigitalDocument {
   procedureType: string | null;
   reason: string | null;
   progress: string | null;
+  /** Bản bóc tách có cấu trúc của `progress` (JSON). Rỗng = chưa bóc tách. */
+  timelineJson: string | null;
   note: string | null;
   attachmentUrls: string[];
   createdBy?: DigitalDocumentUser | null;
@@ -53,6 +53,7 @@ export interface DigitalDocumentInput {
   procedureType?: string | null;
   reason?: string | null;
   progress?: string | null;
+  timelineJson?: string | null;
   note?: string | null;
   attachmentUrls?: string[];
 }

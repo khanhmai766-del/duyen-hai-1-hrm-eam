@@ -1,8 +1,8 @@
 import { normalizePositionScopeKey } from "@/lib/position-system-scopes";
 
-// Hai danh mục vòi đốt / vòi thổi bụi chỉ dành cho các chức vụ dưới đây (+ ADMIN).
+// Danh mục vòi đốt chỉ dành cho các chức vụ dưới đây (+ ADMIN).
 // Dùng chung cho client (ẩn tab) và server (chặn API).
-export const OIL_SOOT_GATED_CATEGORIES = new Set<string>(["OIL_GUN_DATA", "SOOT_BLOWER_DATA"]);
+export const OIL_SOOT_GATED_CATEGORIES = new Set<string>(["OIL_GUN_DATA"]);
 
 // Khớp diacritic-insensitive, tự bỏ hậu tố tổ máy (S1/S2). "KTV" là alias của "Kỹ thuật viên".
 export const OIL_SOOT_ALLOWED_POSITIONS = [

@@ -41,6 +41,8 @@ import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { normalizeText } from "@/lib/nav";
 import { announcementPositionLabel, announcementPositionOptions } from "@/lib/positions";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { SeparationTimelineView } from "@/components/documents/separation-timeline-view";
+import { SeparationTimelineEditor } from "@/components/documents/separation-timeline-editor";
 
 type DocumentForm = {
   title: string;
@@ -49,6 +51,7 @@ type DocumentForm = {
   documentUrl: string;
   reason: string;
   progress: string;
+  timelineJson: string;
   note: string;
   managingPosition: string;
   managingPositions: string[];
@@ -66,6 +69,7 @@ const EMPTY_FORM: DocumentForm = {
   documentUrl: "",
   reason: "",
   progress: "",
+  timelineJson: "",
   note: "",
   managingPosition: "",
   managingPositions: [],
@@ -197,6 +201,8 @@ interface DocumentCatalogPageProps {
   reasonPlaceholder?: string;
   progressLabel?: string;
   progressPlaceholder?: string;
+  /** Dựng tiến trình thành dòng thời gian ở panel chi tiết (tách lưới / khởi động). */
+  showTimeline?: boolean;
   noteLabel?: string;
   notePlaceholder?: string;
   summaryLabel?: string;
@@ -247,6 +253,7 @@ export function DocumentCatalogPage({
   reasonPlaceholder,
   progressLabel,
   progressPlaceholder,
+  showTimeline = false,
   noteLabel,
   notePlaceholder,
   summaryLabel,
@@ -601,6 +608,7 @@ export function DocumentCatalogPage({
           procedureType: normalizeProcedureType(item.procedureType),
           reason: null,
           progress: null,
+          timelineJson: null,
           note: null,
           attachmentUrls: [],
         });
@@ -624,6 +632,7 @@ export function DocumentCatalogPage({
       documentUrl: item.documentUrl,
       reason: item.reason ?? "",
       progress: item.progress ?? "",
+      timelineJson: item.timelineJson ?? "",
       note: item.note ?? "",
       managingPosition: showEquipmentScope ? documentPositionLabel(item.managingPosition) || LEGACY_COMMON_POSITION : item.managingPosition ?? "",
       managingPositions: showEquipmentScope && hasProcedureValidity ? documentPositions(item.managingPosition) : [],
@@ -647,6 +656,7 @@ export function DocumentCatalogPage({
         documentUrl: form.documentUrl,
         reason: hasReasonField ? form.reason || null : null,
         progress: hasProgressField ? form.progress || null : null,
+        timelineJson: showTimeline ? form.timelineJson || null : null,
         note: hasNoteField ? form.note || null : null,
         managingPosition: showEquipmentScope
           ? hasProcedureValidity
@@ -1132,7 +1142,63 @@ export function DocumentCatalogPage({
                     </TableCell>
                   )}
                 </TableRow>
-                {historyTableLayout && expanded && (
+                {historyTableLayout && expanded && showTimeline && (
+                  <TableRow className="bg-white hover:bg-white">
+                    <TableCell colSpan={tableColumnCount} className="border-t bg-white p-0">
+                      {/* Bố cục panel chi tiết của tab tách lưới / khởi động: tiêu đề lớn
+                          kèm nút mở tiến trình, lưới trường, rồi các khối chữ dài tách
+                          riêng ra thẻ — khối chữ dài nhồi vào lưới nhãn:giá trị thì
+                          không đọc nổi. */}
+                      <div className="border-l-[3px] border-[#00558F] bg-slate-50 px-6 py-4 text-ink">
+                        <SeparationTimelineView
+                          progress={item.progress}
+                          timelineJson={item.timelineJson}
+                          defaultDate={item.issueDate}
+                          label={detailSummaryLabel}
+                          title={item.title}
+                          unit={item.decisionNumber}
+                          recordedAt={item.managementBlock}
+                          updatedBy={rowUser?.name}
+                        />
+
+                        <div className="mt-4 grid gap-x-7 gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
+                          <DetailField label="Tên thư mục" value={item.title} />
+                          <DetailField label="Năm" value={item.managingPosition} mono />
+                          <DetailField
+                            label="Ngày ghi nhận"
+                            value={formatArchiveRecordDate(item.managementBlock, dateInputType)}
+                            mono
+                          />
+                          <DetailField label="Tổ máy" value={item.decisionNumber} />
+                          <DetailField label="Người cập nhật" value={rowUser?.name} />
+                          {hasProgressField && (
+                            <DetailField label={linkLabel}>
+                              {item.documentUrl ? (
+                                <a
+                                  href={item.documentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={item.documentUrl}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="inline-flex items-center gap-1.5 font-medium text-[#00558F] hover:underline"
+                                >
+                                  {linkDisplayName(item.documentUrl)}
+                                  <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                                </a>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </DetailField>
+                          )}
+                        </div>
+
+                        {hasReasonField && <DetailNote label={reasonLabel} text={item.reason} />}
+                        {hasNoteField && item.note && <DetailNote label={noteLabel} text={item.note} />}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {historyTableLayout && expanded && !showTimeline && (
                   <TableRow className="bg-white hover:bg-white">
                     <TableCell colSpan={tableColumnCount} className="border-t bg-white px-7 py-4">
                       <div className="grid gap-2 text-[13px] leading-6 text-ink">
@@ -1306,7 +1372,11 @@ export function DocumentCatalogPage({
       )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className={cn("max-w-xl", isCompactArchiveForm && "max-w-lg")}>
+        {/* Tab có dòng thời gian cần khung rộng: lưới soạn mốc có 6 cột, ở khổ
+            max-w-lg thì cột nội dung bị bóp còn vài pixel. */}
+        <DialogContent
+          className={cn("max-w-xl", isCompactArchiveForm && "max-w-lg", showTimeline && "max-w-5xl")}
+        >
           <DialogHeader>
             <DialogTitle>{editing ? "Chỉnh sửa tài liệu" : addLabel}</DialogTitle>
           </DialogHeader>
@@ -1558,6 +1628,8 @@ export function DocumentCatalogPage({
             {hasProgressField && (
               <div className="grid gap-1.5">
                 <Label>{progressLabel}</Label>
+                {/* Bản gốc luôn giữ nguyên ở đây; editor bên dưới chỉ sinh thêm bản
+                    có cấu trúc. Hỏng bóc tách thì vẫn còn nguyên văn để đối chiếu. */}
                 <Textarea
                   value={form.progress}
                   onChange={(event) => setForm((state) => ({ ...state, progress: event.target.value }))}
@@ -1565,6 +1637,19 @@ export function DocumentCatalogPage({
                   className="min-h-20 resize-y"
                 />
               </div>
+            )}
+            {showTimeline && (
+              // Editor tự mang tiêu đề riêng nên không bọc thêm Label ở đây.
+              <SeparationTimelineEditor
+                value={form.timelineJson}
+                rawProgress={form.progress}
+                defaultDate={form.issueDate || null}
+                label={progressLabel}
+                context={[title, form.title, form.decisionNumber ? `Tổ máy ${form.decisionNumber}` : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+                onChange={(timelineJson) => setForm((state) => ({ ...state, timelineJson: timelineJson ?? "" }))}
+              />
             )}
             <div className="grid gap-1.5">
               <Label>{linkLabel}{requireLink ? " *" : ""}</Label>
@@ -1920,6 +2005,55 @@ function initials(name: string) {
     .slice(-2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+}
+
+/** Một trường trong lưới chi tiết: nhãn mono nhỏ ở trên, giá trị ở dưới. */
+function DetailField({
+  label,
+  value,
+  mono,
+  children,
+}: {
+  label?: string;
+  value?: string | null;
+  mono?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-0.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+      <div className={cn("text-[13.5px] font-medium", mono && "font-mono")}>
+        {children ?? (value ? value : <span className="text-muted-foreground">—</span>)}
+      </div>
+    </div>
+  );
+}
+
+/** Khối chữ dài (nguyên nhân, ghi chú) — tách ra thẻ riêng cho dễ đọc. */
+function DetailNote({ label, text }: { label?: string; text?: string | null }) {
+  return (
+    <div className="mt-3.5 rounded-lg border border-border bg-white px-3.5 py-3">
+      <div className="mb-1 font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+      <p className="whitespace-pre-wrap text-[13.5px] leading-[1.65] text-ink">{text || "—"}</p>
+    </div>
+  );
+}
+
+/** Tên gọi dễ đọc cho đường dẫn, thay vì dán nguyên URL dài. */
+function linkDisplayName(url: string): string {
+  try {
+    const { hostname, pathname } = new URL(url);
+    if (/docs\.google\.com$/.test(hostname)) {
+      if (pathname.startsWith("/spreadsheets")) return "Bảng tính Google Sheets";
+      if (pathname.startsWith("/document")) return "Tài liệu Google Docs";
+      return "Tài liệu Google";
+    }
+    if (/drive\.google\.com$/.test(hostname)) return "Thư mục Google Drive";
+    if (/\.pdf$/i.test(pathname)) return "Tài liệu PDF";
+    return hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function unitBadgeClass(unit: string | null | undefined) {

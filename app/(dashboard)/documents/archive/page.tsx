@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Droplet, Flame, TrendingUp, Unplug, Wind } from "lucide-react";
+import { Droplet, Flame, TrendingUp, Unplug } from "lucide-react";
 import { DocumentCatalogPage } from "@/components/documents/document-catalog-page";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
@@ -14,11 +14,10 @@ import { OIL_SOOT_GATED_CATEGORIES, positionAllowsOilSoot } from "@/lib/oil-soot
 import { archiveCategoryPermissionId } from "@/lib/archive-permissions";
 import { cn } from "@/lib/utils";
 
+// Hai nhóm "Sửa chữa lớn" và "Dữ liệu vòi thổi bụi" đã bỏ khỏi giao diện.
+// Dữ liệu cũ trong DB vẫn còn nguyên, API và phân quyền vẫn nhận hai nhóm này.
 type ArchiveTab = {
-  key: Extract<
-    DocumentCategory,
-    "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "MAJOR_REPAIR" | "OIL_GUN_DATA" | "SOOT_BLOWER_DATA"
-  >;
+  key: Extract<DocumentCategory, "GRID_SEPARATION" | "STARTUP_DATA" | "BOILER_CALIBRATION" | "OIL_GUN_DATA">;
   label: string;
   icon: React.ElementType;
   description: string;
@@ -52,28 +51,12 @@ const ARCHIVE_TABS: ArchiveTab[] = [
     emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu hiệu chỉnh lò tại đây.",
   },
   {
-    key: "MAJOR_REPAIR",
-    label: "Sửa chữa lớn",
-    icon: WrenchScrewdriverIcon,
-    description: "Lưu trữ đường dẫn tài liệu sửa chữa lớn phục vụ tra cứu và tổng hợp vận hành",
-    emptyTitle: "Chưa có dữ liệu sửa chữa lớn",
-    emptyDescription: "Admin có thể thêm tên thư mục và link tài liệu sửa chữa lớn tại đây.",
-  },
-  {
     key: "OIL_GUN_DATA",
     label: "Dữ liệu vòi đốt",
     icon: Droplet,
     description: "Lưu trữ đường dẫn dữ liệu vòi dầu phục vụ tra cứu và tổng hợp vận hành",
     emptyTitle: "Chưa có dữ liệu vòi dầu",
     emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu vòi dầu tại đây.",
-  },
-  {
-    key: "SOOT_BLOWER_DATA",
-    label: "Dữ liệu vòi thổi bụi",
-    icon: Wind,
-    description: "Lưu trữ đường dẫn dữ liệu vòi thổi bụi phục vụ tra cứu và tổng hợp vận hành",
-    emptyTitle: "Chưa có dữ liệu vòi thổi bụi",
-    emptyDescription: "Admin có thể thêm tên thư mục và link dữ liệu vòi thổi bụi tại đây.",
   },
 ];
 const UNIT_TAGS = [
@@ -84,15 +67,20 @@ const GRID_SEPARATION_NAME_OPTIONS = [
   { label: "Tách lưới sự cố", value: "Tách lưới sự cố" },
   { label: "Tách lưới có kế hoạch", value: "Tách lưới có kế hoạch" },
 ];
+const STARTUP_NAME_OPTIONS = [
+  { label: "Khởi động sau sự cố", value: "Khởi động sau sự cố" },
+  { label: "Khởi động có kế hoạch", value: "Khởi động có kế hoạch" },
+];
+// Hai tab này cùng một nghiệp vụ (nhật ký thao tác theo mốc thời gian) nên dùng
+// chung cấu hình: có Nguyên nhân, có Tiến trình dựng thành dòng thời gian.
+const TIMELINE_TABS = new Set(["GRID_SEPARATION", "STARTUP_DATA"]);
 const CURRENT_YEAR = new Date().getFullYear();
 const ARCHIVE_YEAR_OPTIONS = Array.from({ length: 8 }, (_, index) => String(CURRENT_YEAR - index));
 const BACKUP_FILENAME_PREFIX: Record<ArchiveTab["key"], string> = {
   GRID_SEPARATION: "backup-du-lieu-tach-luoi",
   STARTUP_DATA: "backup-du-lieu-khoi-dong",
   BOILER_CALIBRATION: "backup-du-lieu-hieu-chinh-lo",
-  MAJOR_REPAIR: "backup-sua-chua-lon",
   OIL_GUN_DATA: "backup-du-lieu-voi-dau",
-  SOOT_BLOWER_DATA: "backup-du-lieu-voi-thoi-bui",
 };
 
 export default function ArchiveDocumentsPage() {
@@ -100,8 +88,8 @@ export default function ArchiveDocumentsPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const currentPosition = useCurrentPosition();
-  // Được xem 2 tab vòi đốt/vòi thổi bụi nếu: ADMIN, hoặc có ít nhất một chức vụ
-  // (chính hoặc phụ) nằm trong danh sách cho phép.
+  // Được xem tab vòi đốt nếu: ADMIN, hoặc có ít nhất một chức vụ (chính hoặc phụ)
+  // nằm trong danh sách cho phép.
   const canSeeOilSootTabs = React.useMemo(
     () => isAdmin || positionAllowsOilSoot(currentPosition.options),
     [isAdmin, currentPosition.options]
@@ -126,9 +114,7 @@ export default function ArchiveDocumentsPage() {
     activeTab === "BOILER_CALIBRATION" ||
     activeTab === "GRID_SEPARATION" ||
     activeTab === "STARTUP_DATA" ||
-    activeTab === "MAJOR_REPAIR" ||
-    activeTab === "OIL_GUN_DATA" ||
-    activeTab === "SOOT_BLOWER_DATA";
+    activeTab === "OIL_GUN_DATA";
 
   if (!rbac.isLoading && visibleTabs.length === 0) {
     return (
@@ -145,7 +131,7 @@ export default function ArchiveDocumentsPage() {
       title="THƯ MỤC LƯU TRỮ"
       description="Lưu trữ đường dẫn dữ liệu phục vụ tra cứu và tổng hợp vận hành"
       nameLabel="Tên thư mục"
-      nameOptions={activeTab === "GRID_SEPARATION" ? GRID_SEPARATION_NAME_OPTIONS : undefined}
+      nameOptions={activeTab === "GRID_SEPARATION" ? GRID_SEPARATION_NAME_OPTIONS : activeTab === "STARTUP_DATA" ? STARTUP_NAME_OPTIONS : undefined}
       codeLabel="Mã thư mục"
       linkLabel={
         activeTab === "BOILER_CALIBRATION"
@@ -153,13 +139,9 @@ export default function ArchiveDocumentsPage() {
           : activeTab === "GRID_SEPARATION"
             ? "Link xử lý (nếu có)"
             : activeTab === "STARTUP_DATA"
-              ? "Ghi chú"
-              : activeTab === "MAJOR_REPAIR"
-                ? "Link tài liệu sửa chữa"
-                : activeTab === "OIL_GUN_DATA"
-                  ? "Link dữ liệu vòi dầu"
-                  : activeTab === "SOOT_BLOWER_DATA"
-                    ? "Link dữ liệu vòi thổi bụi"
+              ? "Link xử lý (nếu có)"
+              : activeTab === "OIL_GUN_DATA"
+                ? "Link dữ liệu vòi dầu"
                 : "Link thư mục"
       }
       requireLink={activeTab !== "GRID_SEPARATION" && activeTab !== "STARTUP_DATA"}
@@ -173,22 +155,20 @@ export default function ArchiveDocumentsPage() {
       dateLabel={usesArchiveTimelineLayout ? "Ngày ghi nhận" : undefined}
       dateInputType={activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA" ? "datetime-local" : "date"}
       requireDate={usesArchiveTimelineLayout}
-      contentMode={activeTab === "BOILER_CALIBRATION" || activeTab === "STARTUP_DATA" ? "text" : "link"}
+      contentMode={activeTab === "BOILER_CALIBRATION" ? "text" : "link"}
       contentPlaceholder={
         activeTab === "BOILER_CALIBRATION"
           ? "Nhập nội dung hiệu chỉnh..."
           : activeTab === "GRID_SEPARATION"
             ? "https://... hoặc link xử lý / biên bản"
             : activeTab === "STARTUP_DATA"
-              ? "Nhập ghi chú..."
+              ? "https://... hoặc link xử lý / biên bản"
               : activeTab === "OIL_GUN_DATA"
                 ? "https://... hoặc link dữ liệu vòi dầu"
-                : activeTab === "SOOT_BLOWER_DATA"
-                  ? "https://... hoặc link dữ liệu vòi thổi bụi"
-              : "https://... hoặc link Google Drive / PDF"
+                : "https://... hoặc link Google Drive / PDF"
       }
-      reasonLabel={activeTab === "GRID_SEPARATION" ? "Nguyên nhân" : undefined}
-      reasonPlaceholder={activeTab === "GRID_SEPARATION" ? "Nhập nguyên nhân tách lưới..." : undefined}
+      reasonLabel={TIMELINE_TABS.has(activeTab) ? "Nguyên nhân" : undefined}
+      reasonPlaceholder={activeTab === "GRID_SEPARATION" ? "Nhập nguyên nhân tách lưới..." : activeTab === "STARTUP_DATA" ? "Nhập nguyên nhân khởi động..." : undefined}
       progressLabel={
         activeTab === "GRID_SEPARATION"
           ? "Tiến trình tách lưới"
@@ -203,10 +183,10 @@ export default function ArchiveDocumentsPage() {
             ? "Nhập tiến trình khởi động..."
             : undefined
       }
-      noteLabel={activeTab === "GRID_SEPARATION" ? "Ghi chú" : undefined}
-      notePlaceholder={activeTab === "GRID_SEPARATION" ? "Nhập ghi chú..." : undefined}
-      summaryLabel={activeTab === "GRID_SEPARATION" ? "Nguyên nhân" : undefined}
-      summaryField={activeTab === "GRID_SEPARATION" ? "reason" : undefined}
+      noteLabel={TIMELINE_TABS.has(activeTab) ? "Ghi chú" : undefined}
+      notePlaceholder={TIMELINE_TABS.has(activeTab) ? "Nhập ghi chú..." : undefined}
+      summaryLabel={TIMELINE_TABS.has(activeTab) ? "Nguyên nhân" : undefined}
+      summaryField={TIMELINE_TABS.has(activeTab) ? "reason" : undefined}
       attachmentLabel={activeTab === "BOILER_CALIBRATION" ? "Hình ảnh biên bản" : undefined}
       maxAttachments={activeTab === "BOILER_CALIBRATION" ? 2 : undefined}
       defaultName={
@@ -214,23 +194,20 @@ export default function ArchiveDocumentsPage() {
           ? "Hiệu chỉnh Lò"
           : activeTab === "STARTUP_DATA"
             ? "Khởi động tổ máy"
-            : activeTab === "MAJOR_REPAIR"
-              ? "Sửa chữa lớn"
-              : activeTab === "OIL_GUN_DATA"
-                ? "Dữ liệu vòi đốt"
-                : activeTab === "SOOT_BLOWER_DATA"
-                  ? "Dữ liệu vòi thổi bụi"
-                  : undefined
+            : activeTab === "OIL_GUN_DATA"
+              ? "Dữ liệu vòi đốt"
+              : undefined
       }
       yearLabel={usesArchiveTimelineLayout ? "Năm" : undefined}
       yearOptions={usesArchiveTimelineLayout ? ARCHIVE_YEAR_OPTIONS : undefined}
       requireYear={usesArchiveTimelineLayout}
+      showTimeline={TIMELINE_TABS.has(activeTab)}
       historyTableLayout={usesArchiveTimelineLayout}
       showPaginationFooter={activeTab === "GRID_SEPARATION" || activeTab === "STARTUP_DATA"}
       allowStaffEdit
       showAnnualBackupExport={activeTab !== "OIL_GUN_DATA"}
       customContent={activeTab === "OIL_GUN_DATA" ? <OilGunBoard /> : undefined}
-      hideToolbar={activeTab === "OIL_GUN_DATA" || activeTab === "SOOT_BLOWER_DATA"}
+      hideToolbar={activeTab === "OIL_GUN_DATA"}
       backupSubtitle={`Báo cáo backup ${activeConfig.label.toLowerCase()} theo năm`}
       backupFilenamePrefix={BACKUP_FILENAME_PREFIX[activeTab]}
       beforeTagFilter={
@@ -256,24 +233,6 @@ export default function ArchiveDocumentsPage() {
         </div>
       }
     />
-  );
-}
-
-// Icon cờ lê + tua vít (Heroicons "wrench-screwdriver") — dùng cho tab Sửa chữa lớn.
-function WrenchScrewdriverIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
-    </svg>
   );
 }
 

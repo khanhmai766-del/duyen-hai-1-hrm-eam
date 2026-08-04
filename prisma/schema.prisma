@@ -949,7 +949,12 @@ model DigitalDocument {
   managementBlock  String?
   procedureType    String?
   reason           String?
+  // Tiến trình tách lưới / khởi động dạng văn bản tự do. KHÔNG bao giờ xoá kể cả
+  // sau khi đã bóc tách — đây là bản gốc để đối chiếu khi parser hiểu sai.
   progress         String?
+  // Bản đã bóc tách của `progress`: JSON các mốc thời gian có cấu trúc, do người
+  // dùng soát và xác nhận một lần. Rỗng = chưa bóc tách, giao diện hiện văn bản thô.
+  timelineJson     String?
   note             String?
   attachmentUrls   String?
   createdById      String?

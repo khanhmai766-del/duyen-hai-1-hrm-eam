@@ -11,9 +11,9 @@ import { assertOilSootAccess } from "@/lib/server-access";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CATEGORIES = new Set(["PROCEDURE", "PID", "ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION", "MAJOR_REPAIR", "OIL_GUN_DATA", "SOOT_BLOWER_DATA"]);
+const CATEGORIES = new Set(["PROCEDURE", "PID", "ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION", "OIL_GUN_DATA"]);
 const OPTIONAL_DOCUMENT_URL_CATEGORIES = new Set(["GRID_SEPARATION", "STARTUP_DATA"]);
-const ARCHIVE_EDIT_CATEGORIES = new Set(["ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION", "MAJOR_REPAIR", "OIL_GUN_DATA", "SOOT_BLOWER_DATA"]);
+const ARCHIVE_EDIT_CATEGORIES = new Set(["ARCHIVE", "GRID_SEPARATION", "STARTUP_DATA", "BOILER_CALIBRATION", "OIL_GUN_DATA"]);
 const OPERATION_DOCUMENT_CATEGORIES = new Set(["PROCEDURE", "PID"]);
 
 function documentPermissionId(category: string) {
@@ -26,9 +26,7 @@ function documentPermissionLabel(category: string) {
   if (category === "GRID_SEPARATION") return "dữ liệu tách lưới";
   if (category === "STARTUP_DATA") return "dữ liệu khởi động";
   if (category === "BOILER_CALIBRATION") return "dữ liệu hiệu chỉnh lò";
-  if (category === "MAJOR_REPAIR") return "sửa chữa lớn";
   if (category === "OIL_GUN_DATA") return "dữ liệu vòi dầu";
-  if (category === "SOOT_BLOWER_DATA") return "dữ liệu vòi thổi bụi";
   if (category === "PROCEDURE") return "quy trình";
   if (category === "PID") return "sơ đồ P&ID";
   return "hồ sơ lưu trữ";
@@ -63,7 +61,7 @@ async function requireDocumentPermission(
   category: string,
   action: "read" | "create" | "manage" | "delete"
 ) {
-  // Vòi đốt / vòi thổi bụi: chặn cứng theo chức vụ. Đọc → chỉ cần chức vụ (thay RBAC);
+  // Vòi đốt: chặn cứng theo chức vụ. Đọc → chỉ cần chức vụ (thay RBAC);
   // ghi → chức vụ + RBAC như thường.
   if (OIL_SOOT_GATED_CATEGORIES.has(category)) {
     await assertOilSootAccess(user);
@@ -134,6 +132,7 @@ function normalizeBody(body: Record<string, unknown>) {
     procedureType: String(body.procedureType ?? "").trim() || null,
     reason: String(body.reason ?? "").trim() || null,
     progress: String(body.progress ?? "").trim() || null,
+    timelineJson: String(body.timelineJson ?? "").trim() || null,
     note: String(body.note ?? "").trim() || null,
     attachmentUrls,
   };
@@ -161,6 +160,7 @@ export async function GET(req: NextRequest) {
           d."procedureType",
           d."reason",
           d."progress",
+          d."timelineJson",
           d."note",
           COALESCE(NULLIF(d."attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls",
           d."createdAt",
@@ -219,9 +219,9 @@ export async function POST(req: NextRequest) {
     const id = randomUUID();
     const rows = await prisma.$queryRawUnsafe(
       `
-        INSERT INTO "DigitalDocument" (id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "note", "attachmentUrls", "createdById", "updatedById")
-        VALUES ($1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14)
-        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
+        INSERT INTO "DigitalDocument" (id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "timelineJson", "note", "attachmentUrls", "createdById", "updatedById")
+        VALUES ($1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15)
+        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "timelineJson", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
       `,
       id,
       category,
@@ -234,6 +234,7 @@ export async function POST(req: NextRequest) {
       payload.procedureType,
       payload.reason,
       payload.progress,
+      payload.timelineJson,
       payload.note,
       JSON.stringify(payload.attachmentUrls),
       user.id
@@ -277,12 +278,13 @@ export async function PUT(req: NextRequest) {
           "procedureType" = $9,
           "reason" = $10,
           "progress" = $11,
-          "note" = $12,
-          "attachmentUrls" = $13,
-          "updatedById" = $14,
+          "timelineJson" = $12,
+          "note" = $13,
+          "attachmentUrls" = $14,
+          "updatedById" = $15,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE id = $1 AND category = $2
-        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
+        RETURNING id, category, title, "decisionNumber", "issueDate", "documentUrl", "managingPosition", "managementBlock", "procedureType", "reason", "progress", "timelineJson", "note", COALESCE(NULLIF("attachmentUrls", '')::json, '[]'::json) AS "attachmentUrls", "createdAt", "updatedAt"
       `,
       id,
       category,
@@ -295,6 +297,7 @@ export async function PUT(req: NextRequest) {
       payload.procedureType,
       payload.reason,
       payload.progress,
+      payload.timelineJson,
       payload.note,
       JSON.stringify(payload.attachmentUrls),
       user.id
