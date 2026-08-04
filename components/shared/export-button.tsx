@@ -1,15 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import * as XLSX from "xlsx";
-import { Download, FileSpreadsheet, Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { ExportMenu } from "@/components/shared/export-menu";
 import { printHtmlReport } from "@/lib/print-report";
 
 interface ExportButtonProps {
@@ -20,6 +14,10 @@ interface ExportButtonProps {
   title?: string;
   /** Gợi ý độ rộng cột PDF theo đơn vị ch (số ký tự). Cột không khai báo sẽ tự chia phần còn lại. */
   widths?: Record<string, number>;
+  periodControl?: ReactNode;
+  periodLabel?: string;
+  periodDescription?: string;
+  className?: string;
 }
 
 const LABELS: Record<string, string> = {
@@ -115,7 +113,17 @@ function escapeHtml(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-export function ExportButton({ rows = [], getRows, filename = "bao-cao", title, widths }: ExportButtonProps) {
+export function ExportButton({
+  rows = [],
+  getRows,
+  filename = "bao-cao",
+  title,
+  widths,
+  periodControl,
+  periodLabel,
+  periodDescription,
+  className,
+}: ExportButtonProps) {
   async function resolveRows(): Promise<Record<string, unknown>[] | null> {
     let data = rows;
     if (getRows) {
@@ -198,20 +206,13 @@ export function ExportButton({ rows = [], getRows, filename = "bao-cao", title, 
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="soft" size="toolbar">
-          <Download className="h-4 w-4" /> Xuất
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuItem onClick={exportExcel} className="gap-2">
-          <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel (.xlsx)
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportPdf} className="gap-2">
-          <Printer className="h-4 w-4 text-amber-600" /> PDF
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ExportMenu
+      periodControl={periodControl}
+      periodLabel={periodLabel}
+      periodDescription={periodDescription}
+      onExportExcel={exportExcel}
+      onExportPdf={exportPdf}
+      className={className}
+    />
   );
 }

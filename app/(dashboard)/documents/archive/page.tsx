@@ -74,8 +74,14 @@ const STARTUP_NAME_OPTIONS = [
 // Hai tab này cùng một nghiệp vụ (nhật ký thao tác theo mốc thời gian) nên dùng
 // chung cấu hình: có Nguyên nhân, có Tiến trình dựng thành dòng thời gian.
 const TIMELINE_TABS = new Set(["GRID_SEPARATION", "STARTUP_DATA"]);
+const ARCHIVE_START_YEAR = 2024;
 const CURRENT_YEAR = new Date().getFullYear();
-const ARCHIVE_YEAR_OPTIONS = Array.from({ length: 8 }, (_, index) => String(CURRENT_YEAR - index));
+// Dữ liệu tách lưới/khởi động bắt đầu quản lý từ năm 2024; danh sách tự mở
+// rộng thêm khi sang năm mới và luôn xếp năm gần nhất lên đầu.
+const ARCHIVE_YEAR_OPTIONS = Array.from(
+  { length: Math.max(1, CURRENT_YEAR - ARCHIVE_START_YEAR + 1) },
+  (_, index) => String(CURRENT_YEAR - index)
+);
 const BACKUP_FILENAME_PREFIX: Record<ArchiveTab["key"], string> = {
   GRID_SEPARATION: "backup-du-lieu-tach-luoi",
   STARTUP_DATA: "backup-du-lieu-khoi-dong",

@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import * as XLSX from "xlsx";
-import { CalendarDays, FileSpreadsheet, Printer } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ExportMenu } from "@/components/shared/export-menu";
 import { printHtmlReport } from "@/lib/print-report";
 
 export interface BackupColumn<T> {
@@ -186,28 +185,26 @@ export function AnnualBackupExport<T>({
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <label className="flex h-9 items-center gap-2 rounded-xl border border-sky-200 bg-white/90 px-2 text-xs font-medium text-muted-foreground shadow-sm">
-        <CalendarDays className="h-3.5 w-3.5 text-navy" />
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="h-6 bg-transparent text-xs font-semibold text-ink outline-none"
-          aria-label="Chọn năm backup"
-        >
-          {(years.length ? years : [year]).map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Button type="button" variant="soft" size="toolbar" onClick={exportExcel} title="Xuất Excel chuẩn báo cáo">
-        <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Excel
-      </Button>
-      <Button type="button" variant="soft" size="toolbar" onClick={exportPdf} title="In hoặc lưu thành PDF">
-        <Printer className="h-4 w-4 text-amber-600" /> PDF
-      </Button>
-    </div>
+    <ExportMenu
+      className={className}
+      periodLabel="Năm báo cáo"
+      periodDescription="Dữ liệu trong file được lọc theo năm đã chọn."
+      periodControl={
+        <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
+          <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Chọn năm báo cáo">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(years.length ? years : [year]).map((item) => (
+              <SelectItem key={item} value={String(item)}>
+                Năm {item}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+      onExportExcel={exportExcel}
+      onExportPdf={exportPdf}
+    />
   );
 }

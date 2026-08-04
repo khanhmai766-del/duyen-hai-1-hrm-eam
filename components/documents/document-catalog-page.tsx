@@ -519,11 +519,6 @@ export function DocumentCatalogPage({
     setPageIndex((current) => Math.min(current, pageCount));
   }, [pageCount]);
 
-  function shiftYear(delta: number) {
-    const current = Number(activeYearFilter || new Date().getFullYear());
-    setYearFilter(String(current + delta));
-  }
-
   function openCreate() {
     setEditing(null);
     setForm({
@@ -775,21 +770,18 @@ export function DocumentCatalogPage({
                 </Select>
               )}
               {hasYearField && (
-                <div className="flex items-center gap-1">
-              <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => shiftYear(-1)} aria-label="Năm trước">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Input
-                type="number"
-                value={activeYearFilter}
-                onChange={(event) => setYearFilter(event.target.value)}
-                className="h-10 w-32 text-center font-medium"
-                aria-label="Lọc theo năm"
-              />
-              <Button type="button" variant="outline" size="icon" className="h-10 w-10 shrink-0" onClick={() => shiftYear(1)} aria-label="Năm sau">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-                </div>
+                <Select value={activeYearFilter} onValueChange={setYearFilter}>
+                  <SelectTrigger className="h-10 w-36" aria-label="Lọc theo năm">
+                    <SelectValue placeholder="Chọn năm" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formYearOptions.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        Năm {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           )}
@@ -1385,7 +1377,7 @@ export function DocumentCatalogPage({
               className={cn(
                 "grid gap-4",
                 isCompactArchiveForm
-                  ? "sm:grid-cols-[minmax(0,1fr)_128px]"
+                  ? "sm:grid-cols-2 lg:grid-cols-[minmax(240px,1fr)_112px_164px_minmax(250px,1fr)]"
                   : useHistoryFormLayout && hasTagField
                   ? "sm:grid-cols-[1fr_150px]"
                   : hasYearField && "sm:grid-cols-[1fr_160px]"
@@ -1460,6 +1452,43 @@ export function DocumentCatalogPage({
                   </Select>
                 </div>
               )}
+              {isCompactArchiveForm && (
+                <div className="grid min-w-0 gap-1.5">
+                  <Label>{tagLabel}{requireTag ? " *" : ""}</Label>
+                  <div className="flex flex-nowrap gap-2">
+                    {tagOptions.map((option) => {
+                      const active = form.decisionNumber === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setForm((state) => ({ ...state, decisionNumber: option.value }))}
+                          className={cn(
+                            "inline-flex h-10 min-w-16 flex-1 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition-colors",
+                            active
+                              ? "border-navy bg-navy text-white shadow-sm"
+                              : "border-slate-200 bg-white text-muted-foreground hover:border-navy/40 hover:text-navy"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {isCompactArchiveForm && (
+                <div className="grid min-w-0 gap-1.5">
+                  <Label>{dateLabel}{requireDate ? " *" : ""}</Label>
+                  <Input
+                    type={dateInputType}
+                    value={form.recordDate}
+                    onChange={(event) => setForm((state) => ({ ...state, recordDate: event.target.value }))}
+                    className="w-full min-w-0"
+                  />
+                </div>
+              )}
             </div>
             {showEquipmentScope && (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1527,13 +1556,11 @@ export function DocumentCatalogPage({
                 </Select>
               </div>
             )}
-            {((hasTagField && (!historyTableLayout || isCompactArchiveForm)) || hasDateField || (hasYearField && useHistoryFormLayout)) && (
+            {!isCompactArchiveForm && ((hasTagField && !historyTableLayout) || hasDateField || (hasYearField && useHistoryFormLayout)) && (
               <div
                 className={cn(
                   "grid gap-4",
-                  isCompactArchiveForm
-                    ? "sm:grid-cols-[180px_minmax(0,1fr)]"
-                    : hasDateField && hasYearField && useHistoryFormLayout
+                  hasDateField && hasYearField && useHistoryFormLayout
                     ? "sm:grid-cols-[minmax(0,1fr)_160px]"
                     : hasDateField && hasTagField && !historyTableLayout && "sm:grid-cols-2"
                 )}

@@ -485,24 +485,26 @@ function ReplacementsPageContent() {
           shortcut
         />
         {tab === "schedule" && (
-          <>
-            <Select value={horizon} onValueChange={setHorizon}>
-              <SelectTrigger className="h-9 w-36 rounded-xl" aria-label="Khoảng thời gian xuất danh sách">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPORT_HORIZONS.map((h) => (
-                  <SelectItem key={h.months} value={String(h.months)}>{h.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <ExportButton
-              rows={exportRows}
-              filename={`vat-tu-can-thay-the-${horizonMonths === 12 ? "1-nam" : `${horizonMonths}-thang`}`}
-              title={`VẬT TƯ CẦN THAY THẾ TRONG ${horizonLabel.toUpperCase()}`}
-              widths={{ material: 26, target: 22, device: 18, quantity: 7, dvt: 6, interval: 11, lastReplaced: 11, nextDue: 11, status: 10, cuongViQuanLy: 14 }}
-            />
-          </>
+          <ExportButton
+            rows={exportRows}
+            filename={`vat-tu-can-thay-the-${horizonMonths === 12 ? "1-nam" : `${horizonMonths}-thang`}`}
+            title={`VẬT TƯ CẦN THAY THẾ TRONG ${horizonLabel.toUpperCase()}`}
+            widths={{ material: 26, target: 22, device: 18, quantity: 7, dvt: 6, interval: 11, lastReplaced: 11, nextDue: 11, status: 10, cuongViQuanLy: 14 }}
+            periodLabel="Khoảng thời gian dự báo"
+            periodDescription="Xuất các điểm đã quá hạn và sắp đến hạn trong khoảng đã chọn."
+            periodControl={
+              <Select value={horizon} onValueChange={setHorizon}>
+                <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Khoảng thời gian xuất danh sách">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPORT_HORIZONS.map((h) => (
+                    <SelectItem key={h.months} value={String(h.months)}>{h.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
         )}
         {tab === "history" && (
           <AnnualBackupExport
