@@ -150,28 +150,46 @@ export default function AdminAttendancePage() {
         <ArrowLeft className="h-4 w-4" /> Quản lý nhân sự / Ca vận hành
       </Link>
 
-      <PageHeader title="QUẢN LÝ HÀNH CHÍNH" description="Theo dõi nhân viên đi hành chính — dữ liệu lưu 1 tháng gần nhất">
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground">Thời gian</Label>
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => {
-              const value = e.target.value;
-              setDate(value);
-              setFollowToday(value === vietnamDateInput());
-            }}
-            className="h-9 w-44 rounded-xl"
-          />
-        </div>
-        <Button variant="accent" size="toolbar" onClick={openSelfCheckIn} disabled={isLoading}>
-          <UserCheck className="h-4 w-4" /> Chấm công hành chính
-        </Button>
-        {canCreateHcGroup && (
-          <Button size="toolbar" onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4" /> Thêm nhóm
+      <PageHeader title="QUẢN LÝ HÀNH CHÍNH" description="Theo dõi nhân viên đi hành chính">
+        <div className="flex w-full min-w-0 flex-nowrap items-center gap-1.5 sm:w-auto sm:gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none sm:gap-2">
+            <Label className="shrink-0 text-xs text-muted-foreground sm:text-sm">Thời gian</Label>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDate(value);
+                setFollowToday(value === vietnamDateInput());
+              }}
+              className="h-9 min-w-0 flex-1 rounded-xl px-2 text-sm sm:w-44 sm:flex-none sm:px-3"
+            />
+          </div>
+          <Button
+            variant="accent"
+            size="toolbar"
+            onClick={openSelfCheckIn}
+            disabled={isLoading}
+            className="shrink-0 gap-1.5 px-2 sm:gap-2 sm:px-3"
+            aria-label="Chấm công"
+            title="Chấm công"
+          >
+            <UserCheck className="h-4 w-4" />
+            <span>Chấm công</span>
           </Button>
-        )}
+          {canCreateHcGroup && (
+            <Button
+              size="toolbar-icon"
+              onClick={() => setAddOpen(true)}
+              className="shrink-0 sm:w-auto sm:px-3"
+              aria-label="Thêm nhóm"
+              title="Thêm nhóm"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Thêm nhóm</span>
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       {isLoading ? (
@@ -267,13 +285,21 @@ function HanhChinhCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-        <div>
-          <div className="font-semibold text-ink">Hành chính</div>
-          <div className="text-xs text-muted-foreground">Nhân viên đi hành chính trong ngày</div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-border p-4 sm:flex sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="font-semibold text-ink">Nhân sự hành chính</div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={approved === entries.length && entries.length > 0 ? "accent" : "secondary"} className="gap-1.5">
+        <Badge
+          variant={approved === entries.length && entries.length > 0 ? "accent" : "secondary"}
+          className="shrink-0 gap-1.5 whitespace-nowrap sm:hidden"
+        >
+          <UserCheck className="h-3.5 w-3.5" /> {approved}/{entries.length} đã duyệt
+        </Badge>
+        <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-auto">
+          <Badge
+            variant={approved === entries.length && entries.length > 0 ? "accent" : "secondary"}
+            className="hidden gap-1.5 sm:inline-flex"
+          >
             <UserCheck className="h-3.5 w-3.5" /> {approved}/{entries.length} đã duyệt
           </Badge>
           {myEntry && (

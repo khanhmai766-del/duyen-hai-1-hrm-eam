@@ -10,7 +10,7 @@
 // =====================================================================
 import * as React from "react";
 import { useSession } from "next-auth/react";
-import { Archive, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Loader2, Pencil, Search } from "lucide-react";
+import { Archive, Ban, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, Pencil, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   useHcRegistrations,
@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 
 type RegistrationActionMode = "edit" | "reject" | "cancel";
@@ -244,61 +245,47 @@ export default function AdminDayBoard() {
   return (
     <div className="w-full min-w-0">
       {/* ===== Header — dùng PageHeader chuẩn của site để đồng bộ kiểu chữ ===== */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <PageHeader
-          title="ĐĂNG KÝ ĐI HÀNH CHÍNH"
-          description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6); sau 16h30 khóa ngày cách hôm nay 2 ngày · ${canApprove ? "Bạn đang có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
-        >
-          {canViewArchive && (
-            <button
-              type="button"
-              onClick={() => setArchiveOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-            >
-              <Archive className="h-4 w-4" /> Kho lưu trữ
-            </button>
-          )}
-        </PageHeader>
+          title="ĐĂNG KÝ HÀNH CHÍNH"
+          description={`Gửi trước tối thiểu 2 ngày (Thứ 2 – Thứ 6) · ${canApprove ? "Bạn có quyền duyệt đăng ký" : "Đăng ký của bạn sẽ chờ người có quyền duyệt"}`}
+        />
+        {canViewArchive && (
+          <button
+            type="button"
+            onClick={() => setArchiveOpen(true)}
+            className="hidden shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:inline-flex"
+          >
+            <Archive className="h-4 w-4" /> Kho lưu trữ
+          </button>
+        )}
       </div>
 
       {/* ===== Dải tuần ===== */}
-      <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-xs text-slate-600">
-        <span className="font-semibold text-slate-700">Trạng thái xử lý:</span>
-        <span className="inline-flex items-center gap-1.5">
+      <div className="mb-3 flex flex-nowrap items-center gap-3 overflow-x-auto whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-[11px] text-slate-600 sm:flex-wrap sm:gap-x-5 sm:gap-y-2 sm:px-3.5 sm:text-xs">
+        <span className="shrink-0 font-semibold text-slate-700">Trạng thái:</span>
+        <span className="inline-flex shrink-0 items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
           Xanh lá: đã duyệt, không duyệt hoặc đã hủy
         </span>
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex shrink-0 items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-red-100" />
-          Đỏ: còn đăng ký chờ xử lý
+          Đỏ: đăng ký chờ xử lý
         </span>
       </div>
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 sm:gap-3">
         <button
           type="button"
           onClick={() => moveDateRange(-1)}
           disabled={rangeStart <= todayIso}
           aria-label="Xem lùi 1 ngày"
           title="Xem lùi 1 ngày"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-35"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-35 sm:h-9 sm:w-9"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <span className="text-xs font-semibold text-slate-500">
-          {fmtVN(week[0])} – {fmtVN(week[6])}
-        </span>
-        <button
-          type="button"
-          onClick={() => moveDateRange(1)}
-          aria-label="Xem thêm 1 ngày"
-          title="Xem thêm 1 ngày"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
-      </div>
-      <div className="grid grid-cols-7 gap-2 mb-6">
-        {week.map((dIso) => {
+        <div className="grid min-w-0 grid-cols-5 gap-1 sm:grid-cols-7 sm:gap-2">
+          {week.map((dIso, dayIndex) => {
           const d = new Date(dIso + "T00:00:00");
           const dayRegistrations = regsByDate.get(dIso) ?? [];
           const hasPending = dayRegistrations.some((r) => r.registrationStatus === "PENDING");
@@ -315,12 +302,17 @@ export default function AdminDayBoard() {
             ? "ring-2 ring-blue-500 ring-offset-2 shadow-md"
             : "";
           const accentText = hasPending ? "text-red-700" : isHandled ? "text-emerald-700" : isToday ? "text-blue-600" : "text-muted-foreground";
-          return (
-            <button
-              key={dIso}
-              onClick={() => setSelDate(dIso)}
-              className={`relative rounded-2xl border px-2 pt-3 pb-2.5 text-center transition-all ${cardTone} ${selectedTone}`}
-            >
+            return (
+              <button
+                key={dIso}
+                onClick={() => setSelDate(dIso)}
+                className={cn(
+                  "relative rounded-2xl border px-1 pb-2.5 pt-3 text-center transition-all sm:px-2",
+                  dayIndex >= 5 && "hidden sm:block",
+                  cardTone,
+                  selectedTone,
+                )}
+              >
               <div className={`text-[11px] font-bold tracking-widest ${accentText}`}>
                 {DAY_NAMES[d.getDay()]}
                 {isToday ? " · NAY" : ""}
@@ -349,17 +341,39 @@ export default function AdminDayBoard() {
                   🔒
                 </span>
               )}
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => moveDateRange(1)}
+          aria-label="Xem thêm 1 ngày"
+          title="Xem thêm 1 ngày"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:h-9 sm:w-9"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
 
       <div className="grid lg:grid-cols-5 gap-5">
         {/* ===== Form đăng ký ===== */}
         <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-5 h-fit">
-          <div className="text-sm font-bold text-ink mb-4">Đăng ký cho ngày {fmtVN(selDate)}</div>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="text-sm font-bold text-ink">Đăng ký cho ngày {fmtVN(selDate)}</div>
+            {canViewArchive && (
+              <button
+                type="button"
+                onClick={() => setArchiveOpen(true)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:hidden"
+                aria-label="Mở kho lưu trữ"
+                title="Kho lưu trữ"
+              >
+                <Archive className="h-4 w-4" />
+              </button>
+            )}
+          </div>
 
-          <div className="text-xs font-semibold text-muted-foreground mb-1.5">Buổi</div>
           <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border text-sm font-semibold sm:grid-cols-4 mb-4">
             {(Object.keys(SESSION_LABEL) as SessionKey[]).map((s) => (
               <button
@@ -461,12 +475,11 @@ export default function AdminDayBoard() {
                 const canEdit = r.registrationStatus === "PENDING" && (canApprove || r.userId === myId);
                 return (
                   <div key={r.id} className={`bg-card border border-border rounded-2xl p-4 ${["CANCELLED", "REJECTED"].includes(r.registrationStatus) ? "opacity-70" : ""}`}>
-                    <div className="flex items-start gap-3">
+                    <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
                       <Avatar reg={r} size="w-10 h-10 text-sm" ring="border-white" />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-ink">{r.user.name}</span>
-                          {r.user.position && <span className="text-xs text-muted-foreground">{r.user.position}</span>}
                           <span className="text-[11px] font-semibold bg-muted text-muted-foreground rounded px-2 py-0.5">{sessionLabelOf(r)}</span>
                           <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                         </div>
@@ -514,24 +527,63 @@ export default function AdminDayBoard() {
                         )}
                       </div>
                       {!panelOpen && r.registrationStatus === "PENDING" && (
-                        <div className="flex max-w-64 shrink-0 flex-wrap justify-end gap-2">
-                          {canEdit && (
-                            <button onClick={() => openAction(r, "edit")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-40">
-                              <Pencil className="h-3.5 w-3.5" /> Sửa
-                            </button>
-                          )}
+                        <div className="flex w-full shrink-0 items-center justify-end gap-1.5 sm:w-auto">
                           {canApprove && (
-                            <>
-                          <button onClick={() => approve(r)} disabled={busy} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-40">
-                            ✔ Duyệt
-                          </button>
-                              <button onClick={() => openAction(r, "reject")} disabled={busy} className="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-bold text-orange-700 hover:bg-orange-50 disabled:opacity-40">
-                                Không duyệt
+                            <div
+                              role="group"
+                              aria-label="Phê duyệt đăng ký"
+                              className="flex min-w-0 flex-1 divide-x divide-emerald-700/30 overflow-hidden rounded-lg border border-emerald-600 shadow-sm sm:flex-none"
+                            >
+                              <button
+                                onClick={() => approve(r)}
+                                disabled={busy}
+                                className="inline-flex h-8 flex-1 items-center justify-center gap-1 whitespace-nowrap bg-emerald-600 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+                              >
+                                <Check className="h-3 w-3" /> Duyệt
                               </button>
-                          <button onClick={() => openAction(r, "cancel")} disabled={busy} className="px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 text-xs font-bold disabled:opacity-40">
-                            Hủy
-                          </button>
-                            </>
+                              <button
+                                onClick={() => openAction(r, "reject")}
+                                disabled={busy}
+                                className="inline-flex h-8 flex-1 items-center justify-center gap-1 whitespace-nowrap bg-white px-2.5 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-50 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+                              >
+                                <Ban className="h-3 w-3" /> Không duyệt
+                              </button>
+                            </div>
+                          )}
+                          {(canEdit || canApprove) && (
+                            <DropdownMenu>
+                              <div className="flex shrink-0 overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
+                                <span className="flex h-8 min-w-9 items-center justify-center border-r border-slate-300 px-2 text-xs font-bold tracking-widest text-slate-600" aria-hidden="true">
+                                  ...
+                                </span>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    className="inline-flex h-8 w-7 items-center justify-center text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                    aria-label="Mở thêm tác vụ"
+                                  >
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                              </div>
+                              <DropdownMenuContent align="end" className="min-w-40">
+                                {canEdit && (
+                                  <DropdownMenuItem onSelect={() => openAction(r, "edit")} disabled={busy}>
+                                    <Pencil className="h-4 w-4" /> Sửa
+                                  </DropdownMenuItem>
+                                )}
+                                {canApprove && (
+                                  <DropdownMenuItem
+                                    onSelect={() => openAction(r, "cancel")}
+                                    disabled={busy}
+                                    className="text-rose-600 focus:text-rose-700"
+                                  >
+                                    <X className="h-4 w-4" /> Hủy
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                         </div>
                       )}
