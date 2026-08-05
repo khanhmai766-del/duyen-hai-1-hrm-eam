@@ -10,11 +10,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { AlertTriangle, Ban, ChevronDown, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, ChevronDown, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -203,11 +204,33 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
           <td className="px-3 py-2.5 text-right font-semibold">{fmt(item.erpStock)}</td>
           <td className="px-3 py-2.5 text-slate-600">{item.oilType ? `${item.oilType.code.startsWith(STANDALONE_GROUP_PREFIX) ? "Nhóm riêng" : item.oilType.code} · ${item.oilType.name}` : "Chưa phân nhóm"}</td>
           <td className="px-3 py-2.5 text-center">{item.isActive ? <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">Đang sử dụng</span> : <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Ngừng sử dụng</span>}</td>
-          {canManage && <td className="px-3 py-2.5"><div className="flex justify-center gap-1">
-            <Button variant="ghost" size="icon" title="Sửa vật tư" onClick={() => setEdit({ ...item })}><Pencil className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" title={item.isActive ? "Ngừng sử dụng" : "Khôi phục sử dụng"} className={item.isActive ? "text-amber-700 hover:bg-amber-50" : "text-emerald-700 hover:bg-emerald-50"} onClick={() => setChangingStatus(item)}>{item.isActive ? <Ban className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}</Button>
-            <Button variant="ghost" size="icon" title="Xoá vật tư" className="text-muted-foreground hover:bg-red-50 hover:text-destructive" onClick={() => setDeleting(item)}><Trash2 className="h-4 w-4" /></Button>
-          </div></td>}
+          {canManage && <td className="px-3 py-2.5 text-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" title="Mở tác vụ" aria-label={`Mở tác vụ cho ${item.name}`} className="h-8 w-9">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onSelect={() => setEdit({ ...item })}>
+                  <Pencil className="h-4 w-4" />
+                  <span>Sửa vật tư</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className={item.isActive ? "text-amber-700 focus:text-amber-700" : "text-emerald-700 focus:text-emerald-700"}
+                  onSelect={() => setChangingStatus(item)}
+                >
+                  {item.isActive ? <Ban className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                  <span>{item.isActive ? "Ngừng sử dụng" : "Khôi phục sử dụng"}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(item)}>
+                  <Trash2 className="h-4 w-4" />
+                  <span>Xoá vật tư</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </td>}
         </tr>)}</tbody>
       </table></div>
       {!filtered.length && <div className="py-12 text-center text-slate-400">Không có vật tư phù hợp.</div>}
