@@ -11,16 +11,19 @@ export interface DeviceMaterialOption {
   category: string | null;
   machine: string;
   quantity: number;
+  materialIdsByMachine: Record<string, string>;
+  machines: string[];
 }
 
-export function useDeviceMaterialOptions(deviceSeq: string, machine: string, enabled = true) {
+export function useDeviceMaterialOptions(deviceSeq: string, machines: string[], enabled = true) {
+  const machineKey = machines.join(",");
   return useQuery({
-    queryKey: ["device-material-options", deviceSeq, machine],
+    queryKey: ["device-material-options", deviceSeq, machineKey],
     queryFn: () =>
       apiGet<DeviceMaterialOption[]>(
-        `/api/device-material-declarations?deviceSeq=${encodeURIComponent(deviceSeq)}&machine=${encodeURIComponent(machine)}`
+        `/api/device-material-declarations?deviceSeq=${encodeURIComponent(deviceSeq)}&machines=${encodeURIComponent(machineKey)}`
       ),
-    enabled: enabled && Boolean(deviceSeq && machine),
+    enabled: enabled && Boolean(deviceSeq && machines.length),
     // Luôn tải mới khi mở dialog — danh mục có thể vừa được bổ sung (kể cả từ máy khác),
     // payload chỉ vài chục dòng nên không đáng kể.
     staleTime: 0,
@@ -30,7 +33,9 @@ export function useDeviceMaterialOptions(deviceSeq: string, machine: string, ena
 export type DeviceMaterialDeclarationInput = {
   deviceSeq: string;
   materialId: string;
-  machine: string;
+  machine?: string;
+  machines: string[];
+  materialIdsByMachine: Record<string, string>;
   system?: string | null;
   location?: string | null;
   managingPosition?: string | null;

@@ -32,6 +32,12 @@ export function DeviceMaterialDeclarationDialog({
   machine: string;
 }) {
   const availablePositions = usePositions();
+  const canApplyBothUnits = machine === "S1" || machine === "S2";
+  const [machineMode, setMachineMode] = React.useState<"CURRENT" | "BOTH">("CURRENT");
+  const selectedMachines = React.useMemo(
+    () => machineMode === "BOTH" && canApplyBothUnits ? ["S1", "S2"] : [machine],
+    [canApplyBothUnits, machine, machineMode]
+  );
   const positions = React.useMemo(
     () =>
       Array.from(
@@ -44,7 +50,7 @@ export function DeviceMaterialDeclarationDialog({
       ),
     [availablePositions]
   );
-  const optionsQuery = useDeviceMaterialOptions(device.code, machine, open);
+  const optionsQuery = useDeviceMaterialOptions(device.code, selectedMachines, open);
   const create = useCreateDeviceMaterialDeclaration();
   const options = React.useMemo(() => optionsQuery.data?.data ?? [], [optionsQuery.data]);
   // Đồng bộ với tab Danh mục vật tư PXVH1: luôn hiện đủ các loại chuẩn
@@ -76,6 +82,7 @@ export function DeviceMaterialDeclarationDialog({
   React.useEffect(() => {
     if (!open) return;
     setCategory("");
+    setMachineMode("CURRENT");
     setMaterialId("");
     setSearch("");
     setQuantity("1");
@@ -85,7 +92,7 @@ export function DeviceMaterialDeclarationDialog({
     setLastReplacedAt("");
     setManagingPosition(positionLabelOf(device.managingPosition));
     setNote("");
-  }, [open, device.managingPosition]);
+  }, [open, device.managingPosition, machine]);
 
   React.useEffect(() => {
     if (!categories.length) return;
@@ -112,7 +119,8 @@ export function DeviceMaterialDeclarationDialog({
       await create.mutateAsync({
         deviceSeq: device.code,
         materialId,
-        machine,
+        machines: selectedMachines,
+        materialIdsByMachine: selectedMaterial?.materialIdsByMachine ?? {},
         system: device.system,
         location: device.name,
         managingPosition: managingPosition || null,
@@ -123,7 +131,7 @@ export function DeviceMaterialDeclarationDialog({
         lastReplacedAt: lastReplacedAt || null,
         note: note || null,
       });
-      toast.success("Đã khai báo vật tư cho thiết bị");
+      toast.success(selectedMachines.length === 2 ? "Đã khai báo vật tư cho cả S1 và S2" : "Đã khai báo vật tư cho thiết bị");
       onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không thể khai báo vật tư");
@@ -154,12 +162,32 @@ export function DeviceMaterialDeclarationDialog({
             </div>
 
             <Field label="Tổ máy áp dụng">
-              <div className="flex min-h-11 items-center justify-between rounded-lg border border-blue-100 bg-blue-50/60 px-4">
-                <span className="text-sm text-muted-foreground">Tự động theo nhánh thiết bị</span>
-                <span className="rounded-full bg-navy px-3 py-1 text-xs font-bold text-white">
-                  {machine === "COMMON" ? "COMMON · Dùng chung" : machine}
-                </span>
-              </div>
+              {canApplyBothUnits ? (
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => { setMachineMode("CURRENT"); setMaterialId(""); }}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${machineMode === "CURRENT" ? "bg-navy text-white shadow-sm" : "text-slate-600 hover:bg-white/80"}`}
+                  >
+                    Chỉ {machine}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMachineMode("BOTH"); setMaterialId(""); }}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${machineMode === "BOTH" ? "bg-navy text-white shadow-sm" : "text-slate-600 hover:bg-white/80"}`}
+                  >
+                    Cả S1 &amp; S2
+                  </button>
+                </div>
+              ) : (
+                <div className="flex min-h-11 items-center justify-between rounded-lg border border-blue-100 bg-blue-50/60 px-4">
+                  <span className="text-sm text-muted-foreground">Tự động theo nhánh thiết bị</span>
+                  <span className="rounded-full bg-navy px-3 py-1 text-xs font-bold text-white">COMMON · Dùng chung</span>
+                </div>
+              )}
+              {machineMode === "BOTH" && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">Chỉ hiển thị vật tư đã có trong danh mục của cả hai tổ máy.</p>
+              )}
             </Field>
 
             <Field label="Loại vật tư *">
