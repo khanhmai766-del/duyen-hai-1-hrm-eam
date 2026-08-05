@@ -2114,14 +2114,14 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         <table className="w-full min-w-[1280px] table-fixed text-[13px]">
           <colgroup>
             <col className="w-[3%]" />
-            <col className="w-[24%]" />
-            <col className="w-[22%]" />
-            <col className="w-[15%]" />
-            <col className="w-[7%]" />
-            <col className="w-[7%]" />
-            <col className="w-[7%]" />
-            <col className="w-[5%]" />
+            <col className="w-[20%]" />
+            <col className="w-[19%]" />
+            <col className="w-[13%]" />
             <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[9%]" />
           </colgroup>
           <thead>
             <tr className="border-b border-border text-muted-foreground">
@@ -2129,10 +2129,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Hệ thống / thiết bị</th>
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Thiết bị</th>
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Cương vị</th>
-              <th className="px-2 py-2 text-center font-semibold leading-4">Chu kỳ O&M</th>
-              <th className="px-2 py-2 text-center font-semibold leading-4">Chu kỳ thay</th>
-              <th className="px-2 py-2 text-center font-semibold leading-4">Số lượng</th>
-              <th className="px-2 py-2 text-center font-semibold leading-4">Số yêu cầu</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ O&M</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ thay</th>
+              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Số lượng</th>
+              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Số yêu cầu</th>
               <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Theo dõi</th>
             </tr>
           </thead>
@@ -2194,11 +2194,11 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                     <span className="block break-words leading-5" title={p.managingPosition || undefined}>{p.managingPosition || "—"}</span>
                   </td>
                   {/* Ghi chú O&M quá dài thì cắt bớt kèm tooltip, tránh 1 ô kéo vỡ cả bảng. */}
-                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">
                     <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
                   </td>
-                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
-                  <td className="px-2 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
+                  <td className="px-3 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
+                  <td className="px-3 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                   {/* Tra cứu ngược: các SYC thay thế đã ra cho chính điểm này. */}
                   <td className="px-2 py-2.5 text-center whitespace-nowrap">
                     <ReplacementRequestChips requests={p.defectRequests} />
