@@ -45,6 +45,7 @@ export function buildSeedFromPoints(points: ReplacementPointOption[]): DefectMat
     replacementIds: points.map((point) => point.id),
     materialName: primary.materialName,
     materialUnit: primary.materialUnit,
+    materialCategory: primary.category,
     primaryIsFolder: primary.deviceIsFolder,
     primarySystemName: primary.deviceIsFolder ? primary.deviceName : primary.systemName,
     primaryDeviceName: primary.deviceName,

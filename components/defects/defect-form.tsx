@@ -27,6 +27,7 @@ import {
   DEFECT_REQUEST_TYPES,
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
+  defaultRequestTypeForMaterialCategory,
   isPositionAllowedForDefectUnit,
   isSelectableManagingPosition,
 } from "@/lib/constants";
@@ -54,6 +55,8 @@ export type DefectMaterialRequestSeed = {
   replacementIds: string[];
   materialName: string;
   materialUnit: string;
+  /** Loại vật tư (Material.category) — quyết định gợi ý Cơ/Điện cho phiếu. */
+  materialCategory: string | null;
   /** Node gắn phiếu là THƯ MỤC (điểm khai báo ở cấp hệ thống) — chỉ SYC thay thế mới cho phép. */
   primaryIsFolder: boolean;
   /** Hệ thống chính và tên node chính, chỉ để hiển thị — server tự dựng lại khi lưu. */
@@ -150,8 +153,11 @@ export function DefectForm({
     condition: defect?.condition ?? "",
     fireSafetyImpact: defect?.fireSafetyImpact ?? "Không",
     environmentSafetyImpact: defect?.environmentSafetyImpact ?? "Không",
-    // Phiếu mới phải để VHV chủ động chọn Cơ/Điện để tránh ghi nhầm Sheet.
-    requestType: defect?.requestType ?? "",
+    // Phiếu mới để VHV chủ động chọn Cơ/Điện để tránh ghi nhầm Sheet — trừ SYC
+    // thay thế của dầu bôi trơn / lõi lọc dầu / bi nghiền than, luôn thuộc phần
+    // Cơ nên điền sẵn. Người lập vẫn đổi lại được.
+    requestType:
+      defect?.requestType ?? defaultRequestTypeForMaterialCategory(initialMaterialRequest?.materialCategory),
     requestNumber: defect?.requestNumber ?? "",
     content: defect?.content ?? initialMaterialRequest?.suggestedContent ?? "",
     status: defect?.status ?? "CHUA_XU_LY",
@@ -261,6 +267,8 @@ export function DefectForm({
         !current.content.trim() || current.content === materialRequest?.suggestedContent
           ? seed?.suggestedContent ?? ""
           : current.content,
+      // Chỉ điền hộ khi ô còn trống — đã chọn tay thì giữ nguyên lựa chọn đó.
+      requestType: current.requestType || defaultRequestTypeForMaterialCategory(seed?.materialCategory),
     }));
     setMaterialRequest(seed);
   }

@@ -2264,6 +2264,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                 replacementIds: selectedPoints.map((p) => p.id),
                 materialName: m.name,
                 materialUnit: m.unit,
+                materialCategory: m.category ?? null,
                 primaryIsFolder: !!selectedPoints[0].deviceIsFolder,
                 primarySystemName: selectedPoints[0].deviceIsFolder
                   ? selectedPoints[0].device?.name ?? ""

@@ -302,6 +302,15 @@ export function materialCategoryMatches(value: string | null | undefined, target
   );
 }
 
+/** Loại vật tư luôn thuộc phần Cơ — SYC thay thế của các loại này mặc định ghi
+ *  vào Sheet Cơ, người lập vẫn đổi lại được nếu cần. */
+export const MECHANICAL_MATERIAL_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Bi Nghiền Than"] as const;
+
+/** Loại yêu cầu gợi ý sẵn theo loại vật tư; rỗng = để người lập tự chọn. */
+export function defaultRequestTypeForMaterialCategory(category: string | null | undefined): string {
+  return MECHANICAL_MATERIAL_CATEGORIES.some((target) => materialCategoryMatches(category, target)) ? "Cơ" : "";
+}
+
 /** Ánh xạ loại vật tư của PHIẾU thay thế (materialCategory) → loại trong Danh mục
  *  vật tư (Material.category): dùng để lọc dropdown vật tư ở bước Đề xuất/Nhập liệu. */
 export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
