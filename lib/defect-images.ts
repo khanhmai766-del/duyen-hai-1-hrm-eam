@@ -1,8 +1,10 @@
 const MAX_DEFECT_IMAGE_BYTES = 15 * 1024 * 1024;
+/** Trần số ảnh mỗi phiếu. Đổi ở đây là đổi cả server lẫn giao diện. */
+export const MAX_DEFECT_IMAGES = 2;
 
 /** Kiểm tra payload ảnh khiếm khuyết kể cả khi client gọi API trực tiếp. */
 export function validateDefectImages(values: unknown[]) {
-  if (values.length > 3) return "Chỉ được tải lên tối đa 3 ảnh khiếm khuyết";
+  if (values.length > MAX_DEFECT_IMAGES) return `Chỉ được tải lên tối đa ${MAX_DEFECT_IMAGES} ảnh khiếm khuyết`;
 
   for (const value of values) {
     if (typeof value !== "string") return "Dữ liệu ảnh khiếm khuyết không hợp lệ";
