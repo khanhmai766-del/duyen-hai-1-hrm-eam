@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Check, Loader2, ChevronRight, ChevronLeft, Cpu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,7 @@ export function DefectForm({
   onCancel?: () => void;
 }) {
   const isEdit = !!defect;
+  const { data: session, status: sessionStatus } = useSession();
   // Phiếu tạo trên website vẫn thuộc quyền chỉnh sửa của Vận hành sau khi được
   // đồng bộ vòng về từ Sheet. Chỉ phiếu có nguồn gốc thật sự từ Sheet mới dùng
   // màn hình ánh xạ cục bộ.
@@ -171,6 +173,7 @@ export function DefectForm({
     sourceDeviceRaw: defect?.sourceDeviceRaw ?? "",
     images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
   });
+  const defaultPositionResolvedRef = React.useRef(Boolean(form.system));
   const [mappingScope, setMappingScope] = React.useState<TreeScope>(initialMappedUnit);
   React.useEffect(() => {
     const allowed = allowedMappedUnits(form.unit);
@@ -206,6 +209,51 @@ export function DefectForm({
     },
     [positions, form.unit, form.system]
   );
+  const userPositionCandidates = React.useMemo(() => {
+    const candidates = [
+      session?.user?.position,
+      session?.user?.secondaryPosition,
+      session?.user?.secondaryPosition2,
+    ].filter((position): position is string => Boolean(position?.trim()));
+
+    return candidates.filter(
+      (position, index) =>
+        candidates.findIndex((candidate) => positionsMatch(candidate, position)) === index
+    );
+  }, [
+    session?.user?.position,
+    session?.user?.secondaryPosition,
+    session?.user?.secondaryPosition2,
+  ]);
+
+  // Phiếu mới tự chọn cương vị theo hồ sơ người lập: chức vụ chính → phụ 1 → phụ 2.
+  // Chỉ áp dụng một lần để không ghi đè lựa chọn thủ công của người dùng.
+  React.useEffect(() => {
+    if (isEdit || defaultPositionResolvedRef.current) return;
+    if (sessionStatus === "loading" || usersQuery.isLoading) return;
+
+    const allowedPositions = positions.filter((position) =>
+      isPositionAllowedForDefectUnit(form.unit, position)
+    );
+    const matchedPosition = userPositionCandidates
+      .map((candidate) =>
+        allowedPositions.find((position) => positionsMatch(position, candidate))
+      )
+      .find((position): position is string => Boolean(position));
+
+    defaultPositionResolvedRef.current = true;
+    if (!matchedPosition) return;
+    setForm((current) =>
+      current.system ? current : { ...current, system: matchedPosition }
+    );
+  }, [
+    form.unit,
+    isEdit,
+    positions,
+    sessionStatus,
+    userPositionCandidates,
+    usersQuery.isLoading,
+  ]);
   // Chọn tổ máy; nếu cương vị hiện tại không thuộc nhóm mặc định của tổ máy mới thì bỏ chọn.
   // Mỗi tổ máy ánh xạ vào một CÂY thiết bị riêng (S1/S2 = nhánh 1,2,3,7; COMMON = nhánh 5,6)
   // nên đổi tổ máy phải bỏ luôn thiết bị đã chọn — thiết bị cũ thuộc cây khác.
@@ -274,6 +322,7 @@ export function DefectForm({
   }
 
   function setSystem(v: string) {
+    defaultPositionResolvedRef.current = true;
     const next = v === NONE ? "" : v;
     // Danh sách điểm được lọc theo cương vị, đổi cương vị thì lựa chọn cũ hết hiệu lực.
     if (canPickMaterialRequest && next !== form.system) setMaterialRequest(null);

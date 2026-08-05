@@ -311,7 +311,7 @@ export function DocumentCatalogPage({
   const [blockFilter, setBlockFilter] = React.useState(ALL_FILTER);
   const [procedureTypeFilter, setProcedureTypeFilter] = React.useState(ALL_FILTER);
   const [yearFilter, setYearFilter] = React.useState("");
-  const [tagFilter, setTagFilter] = React.useState(ALL_FILTER);
+  const [tagFilter, setTagFilter] = React.useState(() => tagOptions[0]?.value ?? ALL_FILTER);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [pageSize, setPageSize] = React.useState(10);
   const [pageIndex, setPageIndex] = React.useState(1);
@@ -326,6 +326,7 @@ export function DocumentCatalogPage({
   const hasDateField = Boolean(dateLabel);
   const hasAttachmentField = Boolean(attachmentLabel && maxAttachments > 0);
   const hasYearField = Boolean(yearLabel && yearOptions.length);
+  const showArchiveFilterMenu = !hideToolbar && !showEquipmentScope && (hasTagField || hasYearField);
   const hasIssueDateField = category === "PROCEDURE" || category === "PID";
   const hasProcedureValidity = category === "PROCEDURE";
   const showPositionColumn = showEquipmentScope && !hasProcedureValidity;
@@ -871,94 +872,68 @@ export function DocumentCatalogPage({
           </Button>
         )}
       </PageHeader>
-      {afterHeader}
-
-      {/* Thanh lọc chỉ còn các bộ lọc; ô tìm kiếm chuyển xuống thanh công cụ
-          ngay trên bảng, giống trang Lịch sử sửa chữa. */}
-      {!hideToolbar && !showEquipmentScope && (hasTagField || hasYearField || showEquipmentScope) && (
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {(hasTagField || hasYearField) && (
-            <div className="flex flex-wrap items-center gap-2">
+      {(afterHeader || showArchiveFilterMenu) && (
+        <div className="flex flex-wrap items-end gap-2 border-b border-border">
+          <div className="min-w-0 flex-1">{afterHeader}</div>
+          {showArchiveFilterMenu && (
+            <div className="flex shrink-0 items-center gap-2 pb-2">
               {beforeTagFilter}
-              {hasTagField && (
-                <Select value={tagFilter} onValueChange={setTagFilter}>
-                  <SelectTrigger className="h-10 w-40" aria-label={`Lọc theo ${tagLabel?.toLowerCase() ?? "tổ máy"}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_FILTER}>Tất cả tổ máy</SelectItem>
-                    {tagOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {hasYearField && (
-                <Select value={activeYearFilter} onValueChange={setYearFilter}>
-                  <SelectTrigger className="h-10 w-36" aria-label="Lọc theo năm">
-                    <SelectValue placeholder="Chọn năm" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {formYearOptions.map((year) => (
-                      <SelectItem key={year} value={year}>
-                        Năm {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
+                    <span className="flex items-center gap-2">
+                      <ListFilter className="h-4 w-4 text-sky-600" />
+                      Bộ lọc
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+                >
+                  <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
+                    <p className="mt-0.5 text-sm font-bold text-slate-900">Thư mục lưu trữ</p>
+                  </div>
+                  <div className="grid gap-3 p-4">
+                    {hasTagField && (
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">{tagLabel ?? "Tổ máy"}</Label>
+                        <Select value={tagFilter} onValueChange={setTagFilter}>
+                          <SelectTrigger className="h-10 w-full" aria-label={`Lọc theo ${tagLabel?.toLowerCase() ?? "tổ máy"}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tagOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {hasYearField && (
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">{yearLabel ?? "Năm"}</Label>
+                        <Select value={activeYearFilter} onValueChange={setYearFilter}>
+                          <SelectTrigger className="h-10 w-full" aria-label="Lọc theo năm">
+                            <SelectValue placeholder="Chọn năm" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {formYearOptions.map((year) => (
+                              <SelectItem key={year} value={year}>Năm {year}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
-          {showEquipmentScope && (
-            <>
-              <Select value={positionFilter} onValueChange={setPositionFilter}>
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder={hasProcedureValidity ? "Lọc quy trình theo cương vị" : "Lọc cương vị"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_FILTER}>{hasProcedureValidity ? "Tất cả quy trình" : "Tất cả cương vị"}</SelectItem>
-                  {positionOptions.map((position) => (
-                    <SelectItem key={position} value={position}>
-                      {position}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {hasProcedureValidity && (
-                <Select value={procedureTypeFilter} onValueChange={setProcedureTypeFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Loại QT" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_FILTER}>Tất cả loại QT</SelectItem>
-                    {PROCEDURE_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <Select value={blockFilter} onValueChange={setBlockFilter}>
-                <SelectTrigger className="w-full sm:w-[190px]">
-                  <SelectValue placeholder="Lọc khối quản lý" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_FILTER}>Tất cả khối</SelectItem>
-                  {blockOptions.map((block) => (
-                    <SelectItem key={block} value={block}>
-                      {block}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
-          )}
         </div>
-      </Card>
       )}
 
       {customContent ? (

@@ -226,7 +226,7 @@ export default function ArchiveDocumentsPage() {
         ) : undefined
       }
       afterHeader={
-        <div className="flex flex-wrap gap-1 border-b border-border">
+        <div className="flex flex-wrap gap-1">
           {visibleTabs.map((item) => (
             <ArchiveTabButton
               key={item.key}
