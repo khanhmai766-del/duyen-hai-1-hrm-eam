@@ -587,7 +587,56 @@ function MaterialsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="DANH MỤC VẬT TƯ PXVH1" description={`Tồn kho phụ tùng & vật tư bảo trì — ${machineLabel}`}>
-        {canManage && <QlvtSyncAction />}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
+              <span className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-sky-600" />
+                Bộ lọc
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={8}
+            className="w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+          >
+            <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
+              <p className="mt-0.5 text-sm font-bold text-slate-900">Danh mục vật tư</p>
+            </div>
+            <div className="grid gap-3 p-4 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                <Select value={machineTab} onValueChange={changeMachineTab}>
+                  <SelectTrigger className="h-10 w-full rounded-xl" aria-label="Lọc theo tổ máy">
+                    <SelectValue>{activeMachineTab.label}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MACHINE_TABS.map((tab) => (
+                      <SelectItem key={tab.key} value={tab.key}>{tab.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Khối quản lý</Label>
+                <Select value={blockFilter} onValueChange={setBlockFilter}>
+                  <SelectTrigger className="h-10 w-full rounded-xl" aria-label="Lọc theo khối quản lý">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả khối</SelectItem>
+                    {EQUIPMENT_BLOCKS.map((block) => (
+                      <SelectItem key={block} value={block}>{block}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         <Popover open={replacementDataOpen} onOpenChange={setReplacementDataOpen}>
           <PopoverTrigger asChild>
             <Button type="button" variant="soft" size="toolbar" className="group min-w-[180px] justify-between">
@@ -688,29 +737,9 @@ function MaterialsPageContent() {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="ml-auto flex items-center gap-2 pb-2">
-          <Select value={machineTab} onValueChange={changeMachineTab}>
-            <SelectTrigger className="h-9 w-[132px] rounded-xl" aria-label="Lọc theo tổ máy">
-              <SelectValue>{activeMachineTab.label}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {MACHINE_TABS.map((tab) => (
-                <SelectItem key={tab.key} value={tab.key}>{tab.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={blockFilter} onValueChange={setBlockFilter}>
-            <SelectTrigger className="h-9 w-[150px] rounded-xl" aria-label="Lọc theo khối quản lý">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tất cả khối</SelectItem>
-              {EQUIPMENT_BLOCKS.map((b) => (
-                <SelectItem key={b} value={b}>{b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="sm:w-72" />
+        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+          <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="w-full sm:w-72" />
+          {canManage && <QlvtSyncAction />}
         </div>
       </div>
 
@@ -2115,13 +2144,13 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
           <colgroup>
             <col className="w-[3%]" />
             <col className="w-[20%]" />
-            <col className="w-[20%]" />
+            <col className="w-[19%]" />
             <col className="w-[10%]" />
-            <col className="w-[9%]" />
-            <col className="w-[9%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
             <col className="w-[7%]" />
             <col className="w-[8%]" />
-            <col className="w-[14%]" />
+            <col className="w-[13%]" />
           </colgroup>
           <thead>
             <tr className="border-b border-border text-muted-foreground">
@@ -2197,7 +2226,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                   <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">
                     <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
                   </td>
-                  <td className="px-2 py-2.5 text-center leading-4 text-ink">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
+                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">{p.intervalMonths === 0 ? "Không theo dõi lịch" : `${p.intervalMonths} tháng`}</td>
                   <td className="px-2 py-2.5 text-center font-semibold text-ink whitespace-nowrap">{p.quantity * (p.deviceCount || 1)} {m.unit}</td>
                   {/* Tra cứu ngược: các SYC thay thế đã ra cho chính điểm này. */}
                   <td className="px-2 py-2.5 text-center whitespace-nowrap">

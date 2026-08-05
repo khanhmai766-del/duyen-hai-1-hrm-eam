@@ -482,13 +482,6 @@ function ReplacementsPageContent() {
   return (
     <div className="space-y-6">
       <PageHeader title="LỊCH THAY THẾ VẬT TƯ" description="Tổng hợp lịch thay thế & lịch sử ghi nhận thay thế vật tư">
-        <SearchBar
-          value={searchQ}
-          onChange={setSearchQ}
-          placeholder="Tìm theo vật tư, thiết bị, ghi chú..."
-          className="w-full sm:w-72 lg:w-80"
-          shortcut
-        />
         <Popover>
           <PopoverTrigger asChild>
             <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
@@ -656,7 +649,7 @@ function ReplacementsPageContent() {
         )}
       </PageHeader>
 
-      {/* Tabs + bộ lọc tìm kiếm cùng hàng (bên phải) */}
+      {/* Tabs + tìm kiếm cùng hàng; tìm kiếm nằm sát mép phải dưới cụm thao tác đầu trang. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
         <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
         <TabBtn
@@ -672,7 +665,14 @@ function ReplacementsPageContent() {
           count={statusPoints.length}
         />
         <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
-        <div className="ml-auto flex flex-wrap items-center gap-2 pb-2">
+        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 pb-2 sm:w-auto">
+          <SearchBar
+            value={searchQ}
+            onChange={setSearchQ}
+            placeholder="Tìm theo vật tư, thiết bị, ghi chú..."
+            className="w-full sm:w-72 lg:w-80"
+            shortcut
+          />
           {tab === "schedule" && canCreate && (
             <Button
               type="button"
