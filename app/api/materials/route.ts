@@ -250,9 +250,13 @@ export async function GET(req: NextRequest) {
     const materials = await prisma.material.findMany({
       where: {
         ...(machine ? { machine } : {}),
-        // Vật tư chỉ xuất hiện khi có ít nhất một thiết bị đã khai báo trong phạm
-        // vi Xem/Sửa của cương vị hiện tại.
-        replacements: { some: materialAccess.declaration },
+        // Vật tư chưa khai báo thiết bị vẫn phải xuất hiện để người dùng có thể
+        // tiếp tục bổ sung điểm dùng/thay thế. Khi đã có khai báo, chỉ hiện vật
+        // tư có ít nhất một thiết bị thuộc phạm vi Xem/Sửa của cương vị hiện tại.
+        OR: [
+          { replacements: { none: {} } },
+          { replacements: { some: materialAccess.declaration } },
+        ],
       },
       orderBy: { code: "asc" },
       include: {
