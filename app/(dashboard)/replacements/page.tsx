@@ -215,6 +215,14 @@ function ymLabel(m: string): string {
   return `${mo}/${y}`;
 }
 
+function replacementCategoryMatches(category: string | null | undefined, filter: string): boolean {
+  return (
+    filter === "ALL" ||
+    category === filter ||
+    (filter === "Hóa Chất" && (category === "Vật tư tiêu hao" || category === "Hóa chất"))
+  );
+}
+
 export default function ReplacementsPage() {
   return (
     <PeakProtectedRoute>
@@ -253,6 +261,8 @@ function ReplacementsPageContent() {
   }, [searchQ]);
 
   const { data, isLoading } = useReplacements({ q: debouncedSearchQ });
+  const history = useReplacementHistory();
+  const logs = React.useMemo(() => history.data?.data ?? [], [history.data?.data]);
   const del = useDeleteReplacement();
   const delLog = useDeleteReplacementLog();
   const all = data?.data ?? [];
@@ -268,6 +278,13 @@ function ReplacementsPageContent() {
         ...localStatusDemo
           .filter((point) => machineFilter === "ALL" || point.machine === machineFilter)
           .map((point) => positionLabelOf(point.managingPosition)),
+        ...logs
+          .filter(
+            (log) =>
+              machineFilter === "ALL" ||
+              (log.replacement?.material.machine ?? "COMMON") === machineFilter
+          )
+          .map((log) => positionLabelOf(log.replacement?.managingPosition)),
       ].filter((position): position is string => Boolean(position))
     )
   ).sort((a, b) => a.localeCompare(b, "vi"));
@@ -275,10 +292,8 @@ function ReplacementsPageContent() {
     ? byMachine
     : byMachine.filter((point) => positionsMatch(point.managingPosition, positionFilter));
   // Lọc theo loại vật tư (khớp cả tên biến thể cũ, như tab Danh mục vật tư).
-  const matchCategory = (c: string | null | undefined) =>
-    categoryFilter === "ALL" ||
-    c === categoryFilter ||
-    (categoryFilter === "Hóa Chất" && (c === "Vật tư tiêu hao" || c === "Hóa chất"));
+  const matchCategory = (category: string | null | undefined) =>
+    replacementCategoryMatches(category, categoryFilter);
   const byCategory = byPosition.filter((p) => matchCategory(p.material.category));
   const actualStatusPoints: ReplacementStatusPoint[] = byCategory.map((point) => {
     const device = linkedDeviceOf(point);
@@ -334,31 +349,31 @@ function ReplacementsPageContent() {
   /* ---- Tab 2: Lịch sử thay thế (history) ---- */
   const [historyFromMonth, setHistoryFromMonth] = React.useState(() => ym(new Date()));
   const [historyToMonth, setHistoryToMonth] = React.useState(() => ym(new Date()));
-  const [historyPosition, setHistoryPosition] = React.useState("ALL");
-  const history = useReplacementHistory();
-  const logs = history.data?.data ?? [];
-  const historyPositions = React.useMemo(
+  const historyScopedLogs = React.useMemo(
     () =>
-      Array.from(
-        new Set(
-          logs
-            .map((log) => positionLabelOf(log.replacement?.managingPosition))
-            .filter((position): position is string => Boolean(position))
-        )
-      ).sort((a, b) => a.localeCompare(b, "vi")),
-    [logs]
+      logs.filter((log) => {
+        const replacement = log.replacement;
+        const matchesMachine =
+          machineFilter === "ALL" ||
+          (replacement?.material.machine ?? "COMMON") === machineFilter;
+        const matchesPosition =
+          positionFilter === "ALL" ||
+          positionsMatch(replacement?.managingPosition, positionFilter);
+        const matchesCategory = replacementCategoryMatches(
+          replacement?.material.category,
+          categoryFilter
+        );
+        return matchesMachine && matchesPosition && matchesCategory;
+      }),
+    [logs, machineFilter, positionFilter, categoryFilter]
   );
   // Lọc theo khoảng tháng, bao gồm cả tháng bắt đầu và tháng kết thúc.
   // Chuỗi YYYY-MM có thể so sánh trực tiếp theo thứ tự thời gian.
-  const logsInMonthRange = logs.filter((l) => {
+  const logsInMonthRange = historyScopedLogs.filter((l) => {
     const replacedMonth = ym(l.replacedAt);
-    const matchesPosition =
-      historyPosition === "ALL" ||
-      positionsMatch(l.replacement?.managingPosition, historyPosition);
     return (
       replacedMonth >= historyFromMonth &&
-      replacedMonth <= historyToMonth &&
-      matchesPosition
+      replacedMonth <= historyToMonth
     );
   });
   const filteredLogs = searchQ.trim()
@@ -372,20 +387,21 @@ function ReplacementsPageContent() {
     ? `tháng ${ymLabel(historyFromMonth)}`
     : `từ tháng ${ymLabel(historyFromMonth)} đến tháng ${ymLabel(historyToMonth)}`;
   const currentMonth = ym(new Date());
-  const replacementFilterCount = tab === "history"
-    ? Number(historyFromMonth !== currentMonth || historyToMonth !== currentMonth) + Number(historyPosition !== "ALL")
-    : Number(machineFilter !== "S1") + Number(positionFilter !== "ALL") + Number(categoryFilter !== CATEGORY_FILTERS[0]);
+  const sharedFilterCount =
+    Number(machineFilter !== "S1") +
+    Number(positionFilter !== "ALL") +
+    Number(categoryFilter !== CATEGORY_FILTERS[0]);
+  const replacementFilterCount =
+    sharedFilterCount +
+    (tab === "history" ? Number(historyFromMonth !== currentMonth || historyToMonth !== currentMonth) : 0);
   const historyBackupRows = React.useMemo(() => {
     const qText = searchQ.trim().toLowerCase();
-    const logsByPosition = historyPosition === "ALL"
-      ? logs
-      : logs.filter((log) => positionsMatch(log.replacement?.managingPosition, historyPosition));
-    if (!qText) return logsByPosition;
-    return logsByPosition.filter((l) => {
+    if (!qText) return historyScopedLogs;
+    return historyScopedLogs.filter((l) => {
       const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
       return `${l.replacement?.material.code ?? ""} ${l.replacement?.material.name ?? ""} ${device?.code ?? ""} ${device?.name ?? ""} ${device?.system ?? ""} ${l.note ?? ""} ${l.doneBy.name}`.toLowerCase().includes(qText);
     });
-  }, [historyPosition, searchQ, logs]);
+  }, [historyScopedLogs, searchQ]);
   const historyBackupColumns = React.useMemo(
     () => [
       { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: ReplacementLogItem, index: number) => index + 1 },
@@ -500,94 +516,70 @@ function ReplacementsPageContent() {
           <PopoverContent
             align="end"
             sideOffset={8}
-            className={cn(
-              "overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]",
-              tab === "history" ? "w-[min(26rem,calc(100vw-2rem))]" : "w-[min(22rem,calc(100vw-2rem))]"
-            )}
+            className="w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
           >
             <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
-              <p className="mt-0.5 text-sm font-bold text-slate-900">
-                {tab === "history" ? "Lịch sử thay thế" : tab === "status" ? "Trạng thái theo dõi" : "Lịch thay thế"}
-              </p>
+              <p className="mt-0.5 text-sm font-bold text-slate-900">Áp dụng cho cả 3 tab</p>
             </div>
             <div className="space-y-3 p-4">
-              {tab !== "history" ? (
-                <>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
-                    <Select
-                      value={machineFilter}
-                      onValueChange={(value) => {
-                        setMachineFilter(value);
-                        setPositionFilter("ALL");
-                      }}
-                    >
-                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {MACHINE_FILTERS.map((machine) => (
-                          <SelectItem key={machine.key} value={machine.key}>{machine.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
-                    <Select value={positionFilter} onValueChange={setPositionFilter}>
-                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo cương vị">
-                        <SelectValue placeholder="Chọn cương vị" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Tất cả cương vị</SelectItem>
-                        {positionOptions.map((position) => (
-                          <SelectItem key={position} value={position}>{position}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Loại vật tư</Label>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
-                        {CATEGORY_FILTERS.map((category) => (
-                          <SelectItem key={category} value={category}>{category}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <MonthRangeFilter
-                    from={historyFromMonth}
-                    to={historyToMonth}
-                    onFromChange={(value) => {
-                      setHistoryFromMonth(value);
-                      if (value > historyToMonth) setHistoryToMonth(value);
-                    }}
-                    onToChange={(value) => {
-                      setHistoryToMonth(value);
-                      if (value < historyFromMonth) setHistoryFromMonth(value);
-                    }}
-                  />
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
-                    <Select value={historyPosition} onValueChange={setHistoryPosition}>
-                      <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo cương vị">
-                        <SelectValue placeholder="Chọn cương vị" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Tất cả cương vị</SelectItem>
-                        {historyPositions.map((position) => (
-                          <SelectItem key={position} value={position}>{position}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
+              {tab === "history" && (
+                <MonthRangeFilter
+                  from={historyFromMonth}
+                  to={historyToMonth}
+                  onFromChange={(value) => {
+                    setHistoryFromMonth(value);
+                    if (value > historyToMonth) setHistoryToMonth(value);
+                  }}
+                  onToChange={(value) => {
+                    setHistoryToMonth(value);
+                    if (value < historyFromMonth) setHistoryFromMonth(value);
+                  }}
+                />
               )}
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                <Select
+                  value={machineFilter}
+                  onValueChange={(value) => {
+                    setMachineFilter(value);
+                    setPositionFilter("ALL");
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MACHINE_FILTERS.map((machine) => (
+                      <SelectItem key={machine.key} value={machine.key}>{machine.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
+                <Select value={positionFilter} onValueChange={setPositionFilter}>
+                  <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo cương vị">
+                    <SelectValue placeholder="Chọn cương vị" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                    {positionOptions.map((position) => (
+                      <SelectItem key={position} value={position}>{position}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs font-semibold text-slate-600">Loại vật tư</Label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
+                    {CATEGORY_FILTERS.map((category) => (
+                      <SelectItem key={category} value={category}>{category}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                 <span className="text-[11px] text-slate-500">
                   {replacementFilterCount > 0 ? `${replacementFilterCount} điều kiện đang áp dụng` : "Đang dùng thiết lập mặc định"}
@@ -598,14 +590,12 @@ function ReplacementsPageContent() {
                   size="sm"
                   disabled={replacementFilterCount === 0}
                   onClick={() => {
+                    setMachineFilter("S1");
+                    setPositionFilter("ALL");
+                    setCategoryFilter(CATEGORY_FILTERS[0]);
                     if (tab === "history") {
                       setHistoryFromMonth(currentMonth);
                       setHistoryToMonth(currentMonth);
-                      setHistoryPosition("ALL");
-                    } else {
-                      setMachineFilter("S1");
-                      setPositionFilter("ALL");
-                      setCategoryFilter(CATEGORY_FILTERS[0]);
                     }
                   }}
                 >
@@ -654,17 +644,12 @@ function ReplacementsPageContent() {
         <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
         <TabBtn
           active={tab === "status"}
-          onClick={() => {
-            setTab("status");
-            setMachineFilter("S1");
-            setPositionFilter("ALL");
-            setCategoryFilter("Dầu bôi trơn");
-          }}
+          onClick={() => setTab("status")}
           icon={Activity}
           label="Trạng thái theo dõi"
           count={statusPoints.length}
         />
-        <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={logs.length} />
+        <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={filteredLogs.length} />
         <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 pb-2 sm:w-auto">
           <SearchBar
             value={searchQ}
@@ -826,8 +811,8 @@ function ReplacementsPageContent() {
             <Card className="overflow-hidden">
               <div className="border-b border-border px-4 py-2.5 text-sm text-muted-foreground">
                 <span className="capitalize">{historyRangeLabel}</span> · <span className="font-semibold text-ink">{filteredLogs.length}</span> lần ghi nhận thay thế
-                {historyPosition !== "ALL" && (
-                  <> · Cương vị <span className="font-medium text-ink">{historyPosition}</span></>
+                {positionFilter !== "ALL" && (
+                  <> · Cương vị <span className="font-medium text-ink">{positionFilter}</span></>
                 )}
               </div>
               <Table>

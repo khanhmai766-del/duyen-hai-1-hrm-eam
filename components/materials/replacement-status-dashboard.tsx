@@ -254,7 +254,7 @@ export function ReplacementStatusDashboard({
                 <div
                   key={point.id}
                   className={cn(
-                    "grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/70 lg:grid-cols-[minmax(260px,1.35fr)_minmax(220px,1fr)_150px_170px_150px] lg:items-center",
+                    "grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/70 xl:grid-cols-[minmax(220px,1.25fr)_minmax(180px,1fr)_minmax(160px,0.85fr)_110px_140px_130px] xl:items-center",
                     style.row
                   )}
                 >
@@ -273,10 +273,17 @@ export function ReplacementStatusDashboard({
                   <div className="min-w-0 text-sm">
                     <div className="flex items-center gap-1.5 truncate font-medium text-ink">
                       <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                      {point.deviceName || point.system || "Chưa khai báo vị trí"}
+                      {point.deviceName || "Chưa khai báo thiết bị"}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {point.deviceCode || point.system || "—"} · {point.managingPosition || "Chưa gán cương vị"}
+                      {point.deviceCode || "—"} · {point.managingPosition || "Chưa gán cương vị"}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hệ thống</div>
+                    <div className="mt-0.5 break-words text-sm font-medium leading-5 text-ink">
+                      {point.system || "Chưa khai báo hệ thống"}
                     </div>
                   </div>
 
