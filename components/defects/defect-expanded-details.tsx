@@ -30,9 +30,12 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         )}
         <DetailLine
           label="Thiết bị đã gắn"
-          value={defect.device
-            ? `${scopeCode(defect.device, parseScope(defect.mappedDeviceUnit ?? defect.unit))} · ${defect.mappedDeviceUnit ?? defect.unit}`
+          value={defect.node
+            ? `${defect.node.name} (${scopeCode(defect.node.seq, parseScope(defect.mappedDeviceUnit ?? defect.unit))} · ${defect.mappedDeviceUnit ?? defect.unit})`
+            : defect.device
+              ? `${defect.device} · ${defect.mappedDeviceUnit ?? defect.unit}`
             : "—"}
+          multiline
         />
         <DetailLine
           label="Thiết bị liên quan"
