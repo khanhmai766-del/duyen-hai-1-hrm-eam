@@ -30,10 +30,19 @@ export function materialCatalogAccessWhere(
     "deviceSeq"
   ) as Prisma.EquipmentMaterialWhereInput | null;
 
-  const replacement: Prisma.MaterialReplacementWhereInput = {
+  const linkedReplacement: Prisma.MaterialReplacementWhereInput = {
     deviceSeq: { not: null },
     device: { is: { parentSeq: { not: null } } },
     ...(replacementSeq ?? {}),
+  };
+  const replacement: Prisma.MaterialReplacementWhereInput = {
+    OR: [
+      linkedReplacement,
+      // File Excel cho phép khai báo theo Hệ thống + Tên thiết bị mà không có
+      // deviceSeq. Lấy các dòng này ra để route kiểm tra phạm vi theo tên hệ
+      // thống bằng access-context (so khớp tiếng Việt đã chuẩn hoá).
+      { deviceSeq: null, system: { not: null } },
+    ],
   };
 
   return {

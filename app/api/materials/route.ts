@@ -10,6 +10,7 @@ import { maybeUploadDataUrl } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
 import { positionCodeOf } from "@/lib/position-catalog";
+import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 
 export const dynamic = "force-dynamic";
 
@@ -247,7 +248,7 @@ export async function GET(req: NextRequest) {
     const access = await resolveEquipmentAccessForUser(user);
     const materialAccess = materialCatalogAccessWhere(access);
 
-    const materials = await prisma.material.findMany({
+    const materialRows = await prisma.material.findMany({
       where: {
         ...(machine ? { machine } : {}),
         // Vật tư chưa khai báo thiết bị vẫn phải xuất hiện để người dùng có thể
@@ -273,6 +274,19 @@ export async function GET(req: NextRequest) {
             }
           : {}),
       },
+    });
+    // Dòng nhập file không có deviceSeq phải kiểm tra quyền theo tên hệ thống
+    // trong JS vì SQL không thể dùng cùng phép normalizeText tiếng Việt của
+    // access-context. Chỉ giữ vật tư có điểm khai báo người dùng thực sự được xem;
+    // vật tư hoàn toàn chưa có điểm vẫn hiện để có thể tiếp tục khai báo.
+    const materials = materialRows.flatMap((material) => {
+      const hadNoPoints = material.replacements.length === 0;
+      const replacements = material.replacements.filter((replacement) =>
+        canViewMaterialReplacement(access, replacement)
+      );
+      return hadNoPoints || replacements.some((replacement) => !replacement.isActive)
+        ? [{ ...material, replacements }]
+        : [];
     });
     const documents = await materialDocumentMap(materials.map((material) => material.id));
     // Tra tên node cha 1 lần cho mọi thiết bị của các điểm thay thế → cột "Hệ thống".
