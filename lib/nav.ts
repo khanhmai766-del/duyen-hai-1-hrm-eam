@@ -20,10 +20,7 @@ import {
   Factory,
   Boxes,
   Database,
-  Droplet,
-  Filter,
   FlaskConical,
-  CircleDot,
   Zap,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
@@ -114,13 +111,6 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/vat-tu/loai-dau",
         icon: Database,
         keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat bi nghien than gom nhom erp de xuat nhap nguong canh bao",
-        children: [
-          { label: "Dầu bôi trơn", href: "/vat-tu/loai-dau?loai=dau-boi-tron", icon: Droplet, keywords: "ton kho nhom dau boi tron oil" },
-          { label: "Lõi lọc dầu", href: "/vat-tu/loai-dau?loai=loi-loc-dau", icon: Filter, keywords: "ton kho nhom loi loc dau filter" },
-          { label: "Thiết bị C&I", href: "/vat-tu/loai-dau?loai=thiet-bi-ci", icon: Cpu, keywords: "ton kho nhom thiet bi ci dieu khien control instrumentation" },
-          { label: "Hóa Chất", href: "/vat-tu/loai-dau?loai=hoa-chat", icon: FlaskConical, keywords: "ton kho nhom hoa chat chemical" },
-          { label: "Bi Nghiền Than", href: "/vat-tu/loai-dau?loai=bi-nghien-than", icon: CircleDot, keywords: "ton kho nhom bi nghien than" },
-        ],
       },
       {
         label: "Lịch thay thế vật tư",

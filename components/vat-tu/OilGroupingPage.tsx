@@ -7,10 +7,10 @@
 // Dữ liệu qua hooks/useOilGrouping (TanStack Query).
 // =====================================================================
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { AlertTriangle, Ban, ChevronDown, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, CloudDownload, Cpu, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -68,8 +68,11 @@ const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
   "bi-nghien-than": "Bi Nghiền Than",
 };
 
+const CATEGORY_OPTIONS = Object.entries(CATEGORY_BY_SLUG).map(([slug, value]) => ({ slug, value }));
+
 /* ==================== TRANG CHÍNH ==================== */
 export default function OilGroupingPage() {
+  const router = useRouter();
   const params = useSearchParams();
   const { data: session } = useSession();
   const canManage = canManageMaterialCatalog({ role: session?.user?.role, position: session?.user?.position });
@@ -88,15 +91,40 @@ export default function OilGroupingPage() {
         {canManage && <GroupedErpActions category={category} />}
       </PageHeader>
 
-      {/* Tabs tồn kho / chờ phân nhóm — loại vật tư chọn từ menu con sidebar */}
+      {/* Tabs tồn kho / chờ phân nhóm — loại vật tư chọn tại dropdown trong trang. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200">
         <TabButton active={tab === "stock"} onClick={() => setTab("stock")} label="Tồn kho theo nhóm" />
         <TabButton active={tab === "all"} onClick={() => setTab("all")} label="Tất cả" />
         <TabButton active={tab === "pending"} onClick={() => setTab("pending")} label="Chờ phân nhóm" badge={pendingCount} />
-        <span className="ml-auto mb-1.5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
-          <CategoryIcon category={category} className="h-4 w-4" />
-          {category}
-        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="mb-1.5 ml-auto h-10 min-w-40 justify-between gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <CategoryIcon category={category} className="h-4 w-4 shrink-0" />
+                <span className="truncate">{category}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {CATEGORY_OPTIONS.map((option) => {
+              const selected = option.value === category;
+              return (
+                <DropdownMenuItem
+                  key={option.slug}
+                  className={cn("gap-2", selected && "bg-blue-50 font-semibold text-blue-700")}
+                  onSelect={() => {
+                    if (!selected) router.push(`/vat-tu/loai-dau?loai=${option.slug}`);
+                  }}
+                >
+                  <CategoryIcon category={option.value} className="h-4 w-4 shrink-0" />
+                  <span className="flex-1">{option.value}</span>
+                  {selected && <Check className="h-4 w-4" />}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {tab === "stock" ? (
