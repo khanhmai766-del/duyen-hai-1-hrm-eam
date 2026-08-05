@@ -2114,14 +2114,13 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
         <table className="w-full min-w-[1280px] table-fixed text-[13px]">
           <colgroup>
             <col className="w-[3%]" />
-            <col className="w-[19%]" />
+            <col className="w-[24%]" />
+            <col className="w-[22%]" />
             <col className="w-[15%]" />
-            <col className="w-[11%]" />
             <col className="w-[7%]" />
-            <col className="w-[9%]" />
-            <col className="w-[10%]" />
-            <col className="w-[10%]" />
-            <col className="w-[6%]" />
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
+            <col className="w-[5%]" />
             <col className="w-[10%]" />
           </colgroup>
           <thead>
@@ -2130,11 +2129,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Hệ thống / thiết bị</th>
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Thiết bị</th>
               <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Cương vị</th>
-              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">SL thiết bị</th>
-              <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ O&M</th>
-              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Chu kỳ thay thế</th>
-              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Số lượng cần thay</th>
-              <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Số yêu cầu</th>
+              <th className="px-2 py-2 text-center font-semibold leading-4">Chu kỳ O&M</th>
+              <th className="px-2 py-2 text-center font-semibold leading-4">Chu kỳ thay</th>
+              <th className="px-2 py-2 text-center font-semibold leading-4">Số lượng</th>
+              <th className="px-2 py-2 text-center font-semibold leading-4">Số yêu cầu</th>
               <th className="px-2 py-2 text-center font-semibold whitespace-nowrap">Theo dõi</th>
             </tr>
           </thead>
@@ -2181,21 +2179,20 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                     />
                   </td>
                   {/* Hệ thống của thiết bị (tên node cha trong cây) — fallback: system đã lưu, rồi tên thiết bị. */}
-                  <td className="overflow-hidden px-3 py-2.5 font-medium uppercase text-ink">
-                    <span className="block truncate" title={p.device?.system || p.system || p.device?.name || undefined}>
+                  <td className="px-3 py-2.5 font-medium uppercase text-ink">
+                    <span className="block break-words leading-5" title={p.device?.system || p.system || p.device?.name || undefined}>
                       {p.device?.system || p.system || p.device?.name || "—"}
                     </span>
                   </td>
                   {/* Tên thiết bị SỐNG theo cây (đổi tên node là cập nhật) — location chỉ là snapshot lúc khai báo. */}
-                  <td className="overflow-hidden px-3 py-2.5 text-ink">
-                    <span className="block truncate" title={p.device?.name || p.location || undefined}>
+                  <td className="px-3 py-2.5 text-ink">
+                    <span className="block break-words leading-5" title={p.device?.name || p.location || undefined}>
                       {p.device?.name || p.location || "—"}
                     </span>
                   </td>
-                  <td className="overflow-hidden px-3 py-2.5 text-ink">
-                    <span className="block truncate" title={p.managingPosition || undefined}>{p.managingPosition || "—"}</span>
+                  <td className="px-3 py-2.5 text-ink">
+                    <span className="block break-words leading-5" title={p.managingPosition || undefined}>{p.managingPosition || "—"}</span>
                   </td>
-                  <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">{p.deviceCount ?? 1}</td>
                   {/* Ghi chú O&M quá dài thì cắt bớt kèm tooltip, tránh 1 ô kéo vỡ cả bảng. */}
                   <td className="px-2 py-2.5 text-center text-ink whitespace-nowrap">
                     <span className="mx-auto block max-w-[280px] truncate" title={p.intervalNote || undefined}>{p.intervalNote || "—"}</span>
