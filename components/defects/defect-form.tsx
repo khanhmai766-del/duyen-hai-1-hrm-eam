@@ -465,9 +465,13 @@ export function DefectForm({
       setStep(3);
       return toast.error("Vui lòng chọn Sheet Môi Trường – Cơ hoặc Môi Trường – Điện");
     }
-    if (form.requestType === "Môi Trường" && !form.sourceDeviceRaw.trim()) {
+    if (!form.sourceDeviceRaw.trim()) {
       setStep(3);
-      return toast.error("Vui lòng nhập Mã Trạm ghi lên Google Sheet");
+      return toast.error(
+        form.requestType === "Môi Trường"
+          ? "Vui lòng nhập Mã Trạm ghi lên Google Sheet"
+          : "Vui lòng nhập Tên thiết bị ghi lên Google Sheet"
+      );
     }
     if (!form.content.trim()) {
       setStep(3);
@@ -1279,7 +1283,7 @@ export function DefectForm({
               </Field>
               <Field
                 label={form.requestType === "Môi Trường" ? "Mã Trạm ghi lên Google Sheet" : "Tên thiết bị ghi lên Google Sheet"}
-                required={form.requestType === "Môi Trường"}
+                required
                 full
                 hint={form.requestType === "Môi Trường"
                   ? "Đây là giá trị đi vào cột (3) Mã Trạm; không thay thế cho thiết bị được gắn trong cây."
@@ -1292,6 +1296,7 @@ export function DefectForm({
                   placeholder={form.requestType === "Môi Trường"
                     ? "Nhập Mã Trạm"
                     : "Mặc định theo tên thiết bị đã chọn, có thể sửa lại"}
+                  required
                 />
               </Field>
             </Section>

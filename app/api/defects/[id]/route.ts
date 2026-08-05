@@ -351,6 +351,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body.shiftLeaderId === undefined && !existing.shiftLeaderId) {
       return fail("Vui lòng chọn Trưởng ca");
     }
+    if (body.requestType === "Hành Chính IT") {
+      return fail("Loại yêu cầu Hành Chính IT đã ngừng sử dụng");
+    }
+    const nextSourceDeviceRaw = body.sourceDeviceRaw !== undefined
+      ? String(body.sourceDeviceRaw ?? "").trim()
+      : String(existing.sourceDeviceRaw ?? "").trim();
+    if (!nextSourceDeviceRaw) {
+      return fail(
+        (body.requestType ?? existing.requestType) === "Môi Trường"
+          ? "Vui lòng nhập Mã Trạm ghi lên Google Sheet"
+          : "Vui lòng nhập Tên thiết bị ghi lên Google Sheet"
+      );
+    }
     const shiftLeader = body.shiftLeaderId !== undefined
       ? await resolveDefectShiftLeader(body.shiftLeaderId)
       : undefined;

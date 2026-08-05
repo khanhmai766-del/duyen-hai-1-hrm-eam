@@ -3,8 +3,7 @@
  * n8n đồng bộ về: sheet Cơ và sheet Điện (xem N8N_DEFECT_SOURCES).
  *
  * Mỗi phần chỉ hiển thị phiếu của sheet tương ứng và chỉ cho lọc những loại yêu cầu
- * mà bộ phận đó thực sự dùng — "Môi Trường" có ở cả hai bên, còn "Hóa" là của Cơ và
- * "Hành Chính IT" là của Điện.
+ * mà bộ phận đó thực sự dùng — "Môi Trường" có ở cả hai bên, còn "Hóa" là của Cơ.
  *
  * Dùng chung cho cả client (sidebar, bộ lọc) lẫn server (điều kiện truy vấn), nên
  * KHÔNG đọc biến môi trường ở đây; ánh xạ sang spreadsheet id nằm ở phía server.
@@ -30,7 +29,7 @@ export const DEFECT_SECTIONS: Record<
   dien: {
     source: "DIEN",
     label: "Phần Điện",
-    requestTypes: ["Điện", "Môi Trường", "Hành Chính IT"],
+    requestTypes: ["Điện", "Môi Trường"],
   },
 };
 

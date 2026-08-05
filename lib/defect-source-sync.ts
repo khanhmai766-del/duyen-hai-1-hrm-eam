@@ -207,6 +207,7 @@ export async function upsertPreparedDefectRecords(params: {
           sourceKey: true,
           positionCode: true,
           sourceHash: true,
+          cancelledAt: true,
           sourceStatusMismatch: true,
           syncState: true,
           websiteCreated: true,
@@ -237,13 +238,18 @@ export async function upsertPreparedDefectRecords(params: {
     .map((item) => item.requestNumber);
   const manualCandidateRows = unmatchedRequestNumbers.length > 0
     ? await prisma.defect.findMany({
-        where: { sourceKey: null, requestNumber: { in: unmatchedRequestNumbers } },
+        where: {
+          sourceKey: null,
+          cancelledAt: null,
+          requestNumber: { in: unmatchedRequestNumbers },
+        },
         select: {
           id: true,
           requestNumber: true,
           sourceKey: true,
           positionCode: true,
           sourceHash: true,
+          cancelledAt: true,
           sourceStatusMismatch: true,
           syncState: true,
           websiteCreated: true,
@@ -300,15 +306,42 @@ export async function upsertPreparedDefectRecords(params: {
   const updates: Array<{ id: string; data: Prisma.DefectUpdateInput }> = [];
   const unchangedIds: string[] = [];
   const cancelledPendingIds: string[] = [];
+  const detachedCancelledIds: string[] = [];
   const expeditedPendingIds: string[] = [];
   let unchangedCount = 0;
   let confirmedSkippedCount = 0;
 
   for (const item of prepared) {
-    const matchedByKey = existingFor(item);
+    const matchedByKeyCandidate = existingFor(item);
+    const sourceStatus = statusOf(item.record.sourceStatusRaw);
+    const sourceNote = text(item.record.noteRaw) || null;
+    // Dòng của phiếu đã hủy vẫn còn nguyên trên Sheet thì chỉ ghi nhận đã thấy,
+    // không tạo lại. Nếu cùng khóa nguồn nhưng nội dung/trạng thái đã trở thành
+    // một phiếu khác, tháo khóa khỏi vòng đời đã hủy để dòng mới được nhập như
+    // một Defect ACTIVE độc lập.
+    const cancelledRowStillSame = Boolean(
+      matchedByKeyCandidate?.cancelledAt
+      && (
+        // Chiều ghi chưa ACK: Sheet có thể vẫn đang giữ trạng thái trước khi
+        // hủy; website phải thắng và tuyệt đối không được hiểu nhầm thành phiếu mới.
+        pendingWebsiteUpdateDefectIds.has(matchedByKeyCandidate.id)
+        || (
+          matchedByKeyCandidate.status === sourceStatus
+          && matchedByKeyCandidate.note === sourceNote
+        )
+      )
+    );
+    const reusedCancelledSource = Boolean(
+      matchedByKeyCandidate?.cancelledAt
+      && matchedByKeyCandidate.sourceHash !== item.hash
+      && !cancelledRowStillSame
+    );
+    if (reusedCancelledSource && matchedByKeyCandidate) {
+      detachedCancelledIds.push(matchedByKeyCandidate.id);
+    }
+    const matchedByKey = reusedCancelledSource ? undefined : matchedByKeyCandidate;
     const matchedByRequestNumber = matchedByKey ? undefined : existingByRequestNumber.get(item.requestNumber);
     const existing = matchedByKey ?? matchedByRequestNumber;
-    const sourceStatus = statusOf(item.record.sourceStatusRaw);
     const repairStatus = defectResultStatusOf(item.record.repairResultRaw);
     const sourceData = {
       unit: unitOf(item.record.unit),
@@ -325,7 +358,7 @@ export async function upsertPreparedDefectRecords(params: {
       status: sourceStatus,
       detectedAt: item.detectedAt,
       shiftLeaderName: text(item.record.shiftLeaderRaw) || null,
-      note: text(item.record.noteRaw) || null,
+      note: sourceNote,
       reminderRaw: text(item.record.reminderRaw) || null,
       repeatedRepairRaw: text(item.record.repeatedRepairRaw) || null,
       sourceSpreadsheetId: text(item.record.sourceSpreadsheetId),
@@ -413,7 +446,8 @@ export async function upsertPreparedDefectRecords(params: {
         data: {
           sourceLastSeenAt: now,
           sourceSyncedAt: now,
-          sourceChangedAfterConfirm: existing.sourceHash !== item.hash,
+          sourceChangedAfterConfirm: existing.cancelledAt ? false : existing.sourceHash !== item.hash,
+          sourceHash: existing.cancelledAt ? item.hash : undefined,
         },
       });
       continue;
@@ -513,6 +547,12 @@ export async function upsertPreparedDefectRecords(params: {
     });
   }
 
+  for (let index = 0; index < detachedCancelledIds.length; index += 1000) {
+    await prisma.defect.updateMany({
+      where: { id: { in: detachedCancelledIds.slice(index, index + 1000) } },
+      data: { sourceKey: null },
+    });
+  }
   for (let index = 0; index < creates.length; index += CHUNK) {
     await prisma.defect.createMany({ data: creates.slice(index, index + CHUNK) });
   }

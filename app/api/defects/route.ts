@@ -544,6 +544,7 @@ export async function POST(req: NextRequest) {
     const requestYear = (detectedAt ?? new Date()).getUTCFullYear();
     const requestType = String(body.requestType ?? "").trim();
     if (!requestType) return fail("Vui lòng chọn loại phiếu");
+    if (requestType === "Hành Chính IT") return fail("Loại yêu cầu Hành Chính IT đã ngừng sử dụng");
     let environmentTarget: ReturnType<typeof resolveDefectEnvironmentSheetTarget> | null = null;
     if (requestType === "Môi Trường") {
       if (!String(body.sourceDeviceRaw ?? "").trim()) {
@@ -557,6 +558,13 @@ export async function POST(req: NextRequest) {
     }
     const content = String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
+    if (!String(body.sourceDeviceRaw ?? "").trim()) {
+      return fail(
+        requestType === "Môi Trường"
+          ? "Vui lòng nhập Mã Trạm ghi lên Google Sheet"
+          : "Vui lòng nhập Tên thiết bị ghi lên Google Sheet"
+      );
+    }
     const severity = String(body.severity ?? "").trim();
     if (!["1", "2", "3", "4"].includes(severity)) return fail("Vui lòng chọn mức độ khiếm khuyết");
     const severityCriteria = normalizeDefectSeverityCriteria(severity, body.severityCriteria);
