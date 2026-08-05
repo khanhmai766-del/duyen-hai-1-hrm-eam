@@ -53,7 +53,7 @@ function toDeviceRecord(node: NormalizedEquipmentNode, parent: NormalizedEquipme
   };
 }
 
-async function findEquipmentRecord(seq: string, requestedMachine?: string | null) {
+async function findEquipmentRecord(seq: string, requestedMachine?: string | null, requestedDescendantDepth?: string | null) {
   await Promise.all([ensureRepairMachineColumn(), ensureDeviceQrCardTable()]);
   const nodes = await getCachedEquipmentNodeFull();
   const index = getEquipmentTreeIndexFor(nodes);
@@ -64,7 +64,11 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
   const machine = normalizedMachine && allowedMachines.includes(normalizedMachine)
     ? normalizedMachine
     : allowedMachines[0];
-  const profileSeqs = [...getEquipmentSeqsWithinDepth(nodes, node.seq, 2)];
+  const descendantDepth = Math.min(
+    3,
+    Math.max(0, Number.parseInt(requestedDescendantDepth ?? "2", 10) || 0)
+  );
+  const profileSeqs = [...getEquipmentSeqsWithinDepth(nodes, node.seq, descendantDepth)];
   const includesDescendants = profileSeqs.length > 1;
   // Thiết bị COMMON dùng chung một deviceSeq cho cả phiếu S1, S2 và COMMON.
   // Khi xem lịch sử của thiết bị dùng chung, không lọc theo unit để tránh bỏ sót
@@ -202,6 +206,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
     defectHistory,
     includesDescendants,
     includedDeviceCount: profileSeqs.length,
+    includedDescendantDepth: descendantDepth,
     _count: { repairLogs: repairLogs.length },
   };
 }
@@ -212,7 +217,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     await requireDeviceView(user);
     const seq = decodeURIComponent(params.id);
     await assertSeqViewable(user, seq);
-    const device = await findEquipmentRecord(seq, req.nextUrl.searchParams.get("machine"));
+    const device = await findEquipmentRecord(
+      seq,
+      req.nextUrl.searchParams.get("machine"),
+      req.nextUrl.searchParams.get("includeDescendants")
+    );
     if (!device) return fail("Không tìm thấy thiết bị", 404);
     return ok(device);
   });

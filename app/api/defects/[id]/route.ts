@@ -89,7 +89,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       !operationUpdateAvailable
       && operationFields.some((field) => body[field] !== undefined)
     ) {
-      return fail("Cập nhật Vận hành đang tạm khóa; bạn vẫn có thể ánh xạ thiết bị", 503);
+      return fail("Cập nhật Vận hành đang tạm khóa; bạn vẫn có thể gắn thiết bị", 503);
     }
     const isInitialSheetMapping =
       existing.sourceType === "GOOGLE_SHEETS"
@@ -146,7 +146,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Trưởng kíp, Lò trưởng, Máy trưởng). Cho phép các cương vị đó thực hiện
       // ánh xạ lần đầu, nhưng chỉ vào các nhánh thiết bị họ được phép xem.
       if (!canViewUnmappedDefectPosition(existing.system, user.currentPosition ?? user.position)) {
-        return fail("Cương vị của bạn không có quyền ánh xạ phiếu khiếm khuyết này", 403);
+        return fail("Cương vị của bạn không có quyền gắn thiết bị cho phiếu khiếm khuyết này", 403);
       }
       const access = await resolveEquipmentAccessForUser(user);
       const requestedSeqs = [
@@ -171,8 +171,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const mappingRequested = mappingFieldsRequested;
       const requestedDeviceSeq = String(body.device ?? "").trim();
       const requestedSystemSeq = String(body.deviceSystemSeq ?? "").trim();
-      if (mappingRequested && !requestedSystemSeq) return fail("Vui lòng chọn Hệ thống trước khi lưu ánh xạ");
-      if (mappingRequested && !requestedDeviceSeq) return fail("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
+      if (mappingRequested && !requestedSystemSeq) return fail("Vui lòng chọn Hệ thống trước khi gắn thiết bị");
+      if (mappingRequested && !requestedDeviceSeq) return fail("Vui lòng chọn Thiết bị chính trước khi gắn");
       const severity = body.severity === undefined ? undefined : String(body.severity);
       if (severity !== undefined && !["1", "2", "3", "4"].includes(severity)) {
         return fail("Mức độ khiếm khuyết không hợp lệ");
@@ -244,7 +244,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return false;
       }
       if (mappingRequested && !belongsToSelectedSystem(requestedDeviceSeq)) {
-        return fail("Thiết bị chính không thuộc Hệ thống đang ánh xạ");
+        return fail("Thiết bị chính không thuộc Hệ thống đã chọn");
       }
 
       const existingImages = existing.images.length > 0
@@ -279,7 +279,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         || (environmentSafetyImpact !== undefined && environmentSafetyImpact !== existing.environmentSafetyImpact)
         || (note !== undefined && note !== (existing.note ?? ""));
       if (operationalChanged && !existing.deviceSeq && !requestedDeviceSeq) {
-        return fail("Vui lòng ánh xạ thiết bị trước khi cập nhật Vận hành");
+        return fail("Vui lòng gắn thiết bị trước khi cập nhật Vận hành");
       }
       const defect = await prisma.$transaction(async (tx) => {
         const updated = await tx.defect.update({

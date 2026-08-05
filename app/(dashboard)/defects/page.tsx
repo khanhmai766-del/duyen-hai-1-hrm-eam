@@ -283,7 +283,7 @@ export default function DefectsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const deviceSeqFilter = searchParams.get("deviceSeq")?.trim() ?? "";
-  const includeDescendants = Math.min(2, Math.max(0, Number.parseInt(searchParams.get("includeDescendants") ?? "0", 10) || 0));
+  const includeDescendants = Math.min(3, Math.max(0, Number.parseInt(searchParams.get("includeDescendants") ?? "0", 10) || 0));
   const mappedUnitFilter = searchParams.get("mappedUnit")?.trim() ?? "";
   const unitFromUrl = searchParams.get("unit")?.toUpperCase();
   // Phần Cơ / phần Điện — quyết định sheet nguồn và danh sách loại yêu cầu được lọc.
@@ -794,7 +794,7 @@ export default function DefectsPage() {
                                   : "bg-orange-100 text-orange-700"
                               )}
                             >
-                              {d.deviceSeq ? "Đã ánh xạ" : "Chưa ánh xạ"}
+                              {d.deviceSeq ? "Đã gắn thiết bị" : "Chưa gắn thiết bị"}
                             </span>
                           </div>
                         )}
@@ -809,7 +809,7 @@ export default function DefectsPage() {
                         {awaitingHistoryConfirmation && (
                           <div
                             className="mt-2 flex items-center gap-1.5 text-left text-[11px] font-semibold leading-4 text-amber-700"
-                            title="Phiếu đã xử lý và đã ánh xạ, đang chờ VHV xác nhận lưu lịch sử"
+                            title="Phiếu đã xử lý và đã gắn thiết bị, đang chờ VHV xác nhận lưu lịch sử"
                           >
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
                             Chưa xác nhận lưu lịch sử
@@ -958,8 +958,8 @@ export default function DefectsPage() {
                               title={
                                 d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated
                                   ? operationUpdateAvailable
-                                    ? "Ánh xạ / cập nhật Vận hành"
-                                    : "Ánh xạ thiết bị"
+                                    ? "Gắn thiết bị / cập nhật Vận hành"
+                                    : "Gắn thiết bị"
                                   : "Sửa"
                               }
                               className="h-7 w-7"
@@ -1041,7 +1041,7 @@ export default function DefectsPage() {
             <div className="flex items-center gap-2 border-b border-border p-4">
               <button onClick={() => setFormOpen(false)} className="rounded-md p-1.5 hover:bg-muted" aria-label="Đóng"><X className="h-5 w-5" /></button>
               <h2 className="text-lg font-bold text-ink">
-                {editTarget?.sourceType === "GOOGLE_SHEETS" && !editTarget.websiteCreated ? "Ánh xạ & cập nhật Vận hành" : editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}
+                {editTarget?.sourceType === "GOOGLE_SHEETS" && !editTarget.websiteCreated ? "Gắn thiết bị & cập nhật Vận hành" : editTarget ? "Sửa khiếm khuyết" : "Nhập khiếm khuyết"}
               </h2>
             </div>
             <DefectForm

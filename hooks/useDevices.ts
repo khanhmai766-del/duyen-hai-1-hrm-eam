@@ -97,6 +97,7 @@ export interface DeviceWithRelations extends DeviceRecord {
   }>;
   includesDescendants?: boolean;
   includedDeviceCount?: number;
+  includedDescendantDepth?: number;
 }
 
 export function useDevices(params: {
@@ -115,11 +116,20 @@ export function useDevices(params: {
   });
 }
 
-export function useDevice(id: string | undefined, machine?: string | null) {
+export function useDevice(id: string | undefined, machine?: string | null, includeDescendants?: number) {
   const machineParam = machine?.toUpperCase() ?? "";
+  const descendantDepth = includeDescendants === undefined
+    ? undefined
+    : Math.min(3, Math.max(0, Math.trunc(includeDescendants)));
   return useQuery({
-    queryKey: ["device", id, machineParam],
-    queryFn: () => apiGet<DeviceWithRelations>(`/api/devices/${id}${machineParam ? `?machine=${encodeURIComponent(machineParam)}` : ""}`),
+    queryKey: ["device", id, machineParam, descendantDepth],
+    queryFn: () => {
+      const query = new URLSearchParams();
+      if (machineParam) query.set("machine", machineParam);
+      if (descendantDepth !== undefined) query.set("includeDescendants", String(descendantDepth));
+      const suffix = query.size ? `?${query.toString()}` : "";
+      return apiGet<DeviceWithRelations>(`/api/devices/${id}${suffix}`);
+    },
     enabled: !!id,
   });
 }

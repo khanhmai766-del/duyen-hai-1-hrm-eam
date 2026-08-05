@@ -29,7 +29,7 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
           <DetailLine label="Thiết bị theo nguồn" value={defect.sourceDeviceRaw || "—"} multiline />
         )}
         <DetailLine
-          label="Thiết bị đã ánh xạ"
+          label="Thiết bị đã gắn"
           value={defect.device
             ? `${scopeCode(defect.device, parseScope(defect.mappedDeviceUnit ?? defect.unit))} · ${defect.mappedDeviceUnit ?? defect.unit}`
             : "—"}

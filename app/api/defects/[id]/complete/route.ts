@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return fail("Chỉ xác nhận lịch sử khi Google Sheet đã ghi nhận khiếm khuyết được xử lý");
     }
     if (sheetTracked && !defect.deviceSeq) {
-      return fail("Vui lòng lưu ánh xạ thiết bị trước khi xác nhận đưa vào lịch sử");
+      return fail("Vui lòng gắn thiết bị trước khi xác nhận đưa vào lịch sử");
     }
     if (sheetTracked && defect.postRepairAwaitingMaterial) {
       return fail("Phiếu đang được đánh dấu chờ vật tư; vui lòng bỏ đánh dấu Tồn đọng trước khi xác nhận");

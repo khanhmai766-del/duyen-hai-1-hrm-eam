@@ -29,7 +29,7 @@ export function validateMappedDevice(
   defectUnit?: string | null
 ): string | null {
   if (!allowedMappedUnits(defectUnit).includes(mappedUnit)) {
-    return `Phiếu ${defectUnit || "COMMON"} không được ánh xạ vào hồ sơ thiết bị ${mappedUnit}`;
+    return `Phiếu ${defectUnit || "COMMON"} không được gắn vào hồ sơ thiết bị ${mappedUnit}`;
   }
   const canonical = canonicalSeq(deviceSeq);
   if (!seqInScope(canonical, mappedUnit)) {

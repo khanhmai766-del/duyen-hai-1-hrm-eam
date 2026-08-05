@@ -224,7 +224,7 @@ export async function GET(req: NextRequest) {
     const repairResult = params.get("repairResult")?.trim();
     const deviceSeq = params.get("deviceSeq")?.trim();
     const descendantDepth = deviceSeq
-      ? Math.min(2, Math.max(0, Number.parseInt(params.get("includeDescendants") ?? "0", 10) || 0))
+      ? Math.min(3, Math.max(0, Number.parseInt(params.get("includeDescendants") ?? "0", 10) || 0))
       : 0;
     const deviceSeqs = deviceSeq && descendantDepth > 0
       ? [...getEquipmentSeqsWithinDepth(await getCachedEquipmentNodeFull(), deviceSeq, descendantDepth)]

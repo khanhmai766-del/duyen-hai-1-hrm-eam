@@ -480,7 +480,7 @@ export function DefectForm({
     if (isSynced) {
       if (!form.device && !defect?.deviceSeq) {
         setStep(1);
-        return toast.error("Vui lòng chọn Thiết bị chính trước khi lưu ánh xạ");
+        return toast.error("Vui lòng chọn Thiết bị chính trước khi gắn");
       }
       try {
         if (form.severity && defect?.status !== "DA_XU_LY" && form.severityCriteria.length === 0) {
@@ -522,8 +522,8 @@ export function DefectForm({
           step === 3
             ? "Đã lưu hình ảnh khiếm khuyết"
             : operationUpdateAvailable
-              ? "Đã lưu ánh xạ và KQ Vận hành"
-              : "Đã lưu ánh xạ thiết bị"
+              ? "Đã lưu thiết bị đã gắn và KQ Vận hành"
+              : "Đã lưu thiết bị đã gắn"
         );
         if (step === 1 && onMappingSaved) onMappingSaved(updated);
         else onDone?.();
@@ -591,7 +591,7 @@ export function DefectForm({
           <>
             {/* Không đánh số như phiếu mới: đây là 4 mục tra cứu/cập nhật độc lập,
                 không phải trình tự bắt buộc. Chỉ đánh dấu mục ĐÃ ánh xạ xong. */}
-            <TabBtn active={step === 1} onClick={() => setStep(1)} label="Ánh xạ thiết bị" done={!!form.device} />
+            <TabBtn active={step === 1} onClick={() => setStep(1)} label="Gắn thiết bị" done={!!form.device} />
             <TabBtn active={step === 2} onClick={() => setStep(2)} label="Nội dung sửa chữa" muted />
             {["1", "2"].includes(form.severity) && (
               <TabBtn active={step === 3} onClick={() => setStep(3)} label="Hình ảnh khiếm khuyết" />
@@ -636,7 +636,7 @@ export function DefectForm({
               </div>
             )}
             <Section
-              eyebrow={isSynced ? "Ánh xạ thiết bị" : "Định vị phiếu"}
+              eyebrow={isSynced ? "Gắn phiếu vào thiết bị" : "Định vị phiếu"}
               hint={isSynced
                 ? "Gắn phiếu từ Google Sheet vào đúng node trên cây thiết bị để tra cứu chung được lịch sử."
                 : "Tổ máy và cương vị quyết định phiếu đi vào Google Sheet nào và ai được xử lý."}
@@ -868,7 +868,7 @@ export function DefectForm({
                   <p className="font-semibold text-blue-950">Cập nhật Vận hành</p>
                   <p className="text-xs text-blue-800/75">
                     {operationFeatureLocked
-                      ? "Đồng bộ hai chiều đang tắt. Bạn vẫn có thể ánh xạ thiết bị; các trường Vận hành tạm khóa."
+                      ? "Đồng bộ hai chiều đang tắt. Bạn vẫn có thể gắn thiết bị; các trường Vận hành tạm khóa."
                       : operationFieldsLocked
                       ? "Phiếu đã xử lý xong. Chỉ Ghi chú được phép thay đổi."
                       : "Các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet."}
@@ -1282,7 +1282,7 @@ export function DefectForm({
                 required={form.requestType === "Môi Trường"}
                 full
                 hint={form.requestType === "Môi Trường"
-                  ? "Đây là giá trị đi vào cột (3) Mã Trạm; không thay thế cho thiết bị được ánh xạ trong cây."
+                  ? "Đây là giá trị đi vào cột (3) Mã Trạm; không thay thế cho thiết bị được gắn trong cây."
                   : "Đây là giá trị đi vào cột Thiết bị của Sheet."}
               >
                 <Input
@@ -1362,11 +1362,11 @@ export function DefectForm({
         {isSynced && (step === 1 || step === 3) ? (
           <Button type="button" onClick={submit} disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {step === 3 ? "Lưu hình ảnh" : "Lưu ánh xạ & Vận hành"}
+            {step === 3 ? "Lưu hình ảnh" : "Lưu thiết bị & Vận hành"}
           </Button>
         ) : isSynced ? (
           <Button type="button" onClick={() => setStep(1)}>
-            <ChevronLeft className="h-4 w-4" /> Quay lại ánh xạ
+            <ChevronLeft className="h-4 w-4" /> Quay lại gắn thiết bị
           </Button>
         ) : step < 3 ? (
           <Button type="button" onClick={step === 1 ? goToSeverity : goToDefectInfo}>

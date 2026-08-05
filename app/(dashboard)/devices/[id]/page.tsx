@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, Download, Pencil, Trash2, FileText, Package, UserCog, ExternalLink, QrCode, Loader2, Plus, X, PackagePlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeviceForm } from "@/components/devices/device-form";
 import { DeviceMaterialDeclarationDialog } from "@/components/devices/device-material-declaration-dialog";
@@ -40,8 +41,12 @@ function DeviceDetailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedMachine = searchParams.get("machine");
+  const historyDepth = Math.min(
+    3,
+    Math.max(0, Number.parseInt(searchParams.get("historyDepth") ?? "2", 10) || 0)
+  );
   const { data: session } = useSession();
-  const { data, isLoading } = useDevice(id, requestedMachine);
+  const { data, isLoading } = useDevice(id, requestedMachine, historyDepth);
   const del = useDeleteDevice();
   const access = useSeqAccess(data?.data?.id);
   const rbac = useRbacAccess();
@@ -71,11 +76,17 @@ function DeviceDetailPageContent() {
     ? `/devices?view=tree&scope=${encodeURIComponent(deviceMachine)}&focusSeq=${encodeURIComponent(device.id)}`
     : "/devices?view=tree";
   const fullHistoryUrl = device
-    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}&mappedUnit=${encodeURIComponent(deviceMachine)}${device.includesDescendants ? "&includeDescendants=2" : ""}`
+    ? `/repair-history?deviceSeq=${encodeURIComponent(device.id)}&mappedUnit=${encodeURIComponent(deviceMachine)}${historyDepth > 0 ? `&includeDescendants=${historyDepth}` : ""}`
     : "/repair-history";
   const fullDefectsUrl = device
-    ? `/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}${device.includesDescendants ? "&includeDescendants=2" : ""}`
+    ? `/defects?deviceSeq=${encodeURIComponent(device.id)}&unit=${deviceMachine}&mappedUnit=${deviceMachine}${historyDepth > 0 ? `&includeDescendants=${historyDepth}` : ""}`
     : "/defects";
+
+  function changeHistoryDepth(value: string) {
+    const query = new URLSearchParams(searchParams.toString());
+    query.set("historyDepth", value);
+    router.replace(`/devices/${encodeURIComponent(id)}?${query.toString()}`, { scroll: false });
+  }
 
   async function createQrCard() {
     try {
@@ -114,6 +125,20 @@ function DeviceDetailPageContent() {
           <p className="mt-1 font-mono text-sm text-navy">{device.code}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-2 py-1 shadow-sm">
+            <span className="hidden text-xs font-semibold text-muted-foreground sm:inline">Phạm vi lý lịch</span>
+            <Select value={String(historyDepth)} onValueChange={changeHistoryDepth}>
+              <SelectTrigger className="h-8 w-[172px] border-0 bg-slate-50 text-xs font-semibold shadow-none focus:ring-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Chỉ thiết bị này</SelectItem>
+                <SelectItem value="1">Thiết bị con · 1 cấp</SelectItem>
+                <SelectItem value="2">Thiết bị con · 2 cấp</SelectItem>
+                <SelectItem value="3">Thiết bị con · 3 cấp</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {/* Tổ máy đã được chọn từ cây thiết bị — chỉ hiển thị, không chuyển ở đây nữa. */}
           <span
             className={`inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide ring-1 ${
@@ -189,7 +214,7 @@ function DeviceDetailPageContent() {
                 <CardTitle>Lịch sử sửa chữa</CardTitle>
                 {device.includesDescendants && (
                   <p className="mt-1 text-xs font-normal text-muted-foreground">
-                    Gồm thiết bị này và {device.includedDeviceCount! - 1} thiết bị con trong 2 cấp
+                    Gồm thiết bị này và {device.includedDeviceCount! - 1} thiết bị con đến cấp {historyDepth}
                   </p>
                 )}
               </div>
