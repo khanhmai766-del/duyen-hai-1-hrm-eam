@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useDefect, type DefectItem } from "@/hooks/useDefects";
 import { DEFECT_CONDITION, DEFECT_SEVERITY } from "@/lib/constants";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
@@ -37,18 +38,7 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             : "—"}
           multiline
         />
-        <DetailLine
-          label="Thiết bị liên quan"
-          value={defect.relatedDevices.length > 0
-            ? defect.relatedDevices
-                .map((item) => {
-                  const mappedUnit = item.mappedUnit ?? defect.mappedDeviceUnit ?? defect.unit;
-                  return `${item.device.name} (${scopeCode(item.deviceSeq, parseScope(mappedUnit))} · ${mappedUnit})`;
-                })
-                .join("\n")
-            : "—"}
-          multiline
-        />
+        <RelatedDevicesLine defect={defect} />
         <div className="mt-4 border-t border-red-100 pt-3">
           <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-red-800">BGĐ chỉ đạo</h4>
           <div className="space-y-2">
@@ -148,6 +138,42 @@ function DetailLine({ label, value, multiline = false }: { label: string; value:
       <div className="whitespace-nowrap font-semibold text-ink">{label}:</div>
       <div className={cn("min-w-0 text-ink", multiline ? "whitespace-pre-wrap break-words" : "truncate")} title={!multiline ? value : undefined}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function RelatedDevicesLine({ defect }: { defect: DefectItem }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const visibleDevices = expanded ? defect.relatedDevices : defect.relatedDevices.slice(0, 3);
+  const hiddenCount = defect.relatedDevices.length - 3;
+
+  return (
+    <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
+      <div className="whitespace-nowrap font-semibold text-ink">Thiết bị liên quan:</div>
+      <div className="min-w-0 text-ink">
+        {visibleDevices.length > 0 ? (
+          <div className="space-y-1">
+            {visibleDevices.map((item) => {
+              const mappedUnit = item.mappedUnit ?? defect.mappedDeviceUnit ?? defect.unit;
+              return (
+                <div key={item.deviceSeq} className="break-words">
+                  {item.device.name} ({scopeCode(item.deviceSeq, parseScope(mappedUnit))} · {mappedUnit})
+                </div>
+              );
+            })}
+          </div>
+        ) : "—"}
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            className="mt-1.5 rounded-md px-1.5 py-0.5 text-left text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? "Thu gọn" : `Xem thêm ${hiddenCount} thiết bị`}
+          </button>
+        )}
       </div>
     </div>
   );
