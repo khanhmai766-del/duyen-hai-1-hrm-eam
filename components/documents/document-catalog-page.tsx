@@ -891,13 +891,13 @@ export function DocumentCatalogPage({
                 <PopoverContent
                   align="end"
                   sideOffset={8}
-                  className="w-[min(32rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+                  className="w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
                 >
                   <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
                     <p className="mt-0.5 text-sm font-bold text-slate-900">Thư mục lưu trữ</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 p-4">
+                  <div className="grid grid-cols-2 gap-2 p-3">
                     {hasTagField && (
                       <div className="grid min-w-0 gap-1.5">
                         <Label className="text-xs font-semibold text-slate-600">{tagLabel ?? "Tổ máy"}</Label>

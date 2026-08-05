@@ -52,14 +52,25 @@ export async function POST(req: NextRequest) {
     const rows: ImportRow[] = Array.isArray(body.rows) ? body.rows.slice(0, 10_000) : [];
     if (!rows.length) return fail("File chưa có dòng điểm thay thế hợp lệ");
 
-    const [materials, nodes, access] = await Promise.all([
+    const [materials, nodes, access, declaredPoints] = await Promise.all([
       prisma.material.findMany({ select: { id: true, code: true, erpCodes: true, name: true, machine: true, unit: true, system: true } }),
       prisma.equipmentNode.findMany({ select: { seq: true, parentSeq: true, name: true, kks: true, externalId: true } }),
       resolveEquipmentAccessForUser(user),
+      // Dòng khai báo vật tư là điều kiện bắt buộc nếu điểm import gắn trực tiếp
+      // vào một thư mục/hệ thống thay vì thiết bị lá.
+      prisma.materialReplacement.findMany({
+        where: { isActive: false, deviceSeq: { not: null } },
+        select: { materialId: true, deviceSeq: true, machine: true },
+      }),
     ]);
 
     const nodeBySeq = new Map(nodes.map((node) => [node.seq, node]));
     const parentSeqs = new Set(nodes.map((node) => node.parentSeq).filter((seq): seq is string => Boolean(seq)));
+    const declaredPointKeys = new Set(
+      declaredPoints.flatMap((point) =>
+        point.deviceSeq ? [`${point.materialId}|${point.deviceSeq}|${point.machine}`] : []
+      )
+    );
     // Tra thiết bị linh hoạt: theo mã KKS hoặc externalId (ngoài mã cây seq).
     const nodeByKks = new Map<string, (typeof nodes)[number]>();
     const nodeByExternalId = new Map<string, (typeof nodes)[number]>();
@@ -155,7 +166,15 @@ export async function POST(req: NextRequest) {
             message: `Không tìm thấy thiết bị theo mã “${deviceSeq}”. Dùng mã cây (VD DH1.${machine}.1.1.1.1) hoặc mã KKS; nếu không có, để trống cột này và chỉ điền Hệ thống / Tên thiết bị.`,
           });
         }
-        if (parentSeqs.has(node.seq)) return errors.push({ rowNumber, message: `Mã “${deviceSeq}” là thư mục/hệ thống, không phải thiết bị lá` });
+        if (
+          parentSeqs.has(node.seq) &&
+          !declaredPointKeys.has(`${material.id}|${node.seq}|${machine}`)
+        ) {
+          return errors.push({
+            rowNumber,
+            message: `Mã “${deviceSeq}” là thư mục/hệ thống. Chỉ được nhập khi vật tư “${material.name}” đã được khai báo trước cho thư mục này tại tổ máy ${machine}`,
+          });
+        }
         // Tổ máy của dòng quyết định cây thiết bị hợp lệ (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
         if (!seqInScope(node.seq, machine as TreeScope)) {
           return errors.push({
