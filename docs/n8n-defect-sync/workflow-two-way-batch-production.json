@@ -7,7 +7,10 @@
       "name": "Chạy thử thủ công",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-900, 20]
+      "position": [
+        -900,
+        20
+      ]
     },
     {
       "parameters": {
@@ -24,7 +27,10 @@
       "name": "Lịch mỗi phút",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-900, 180]
+      "position": [
+        -900,
+        180
+      ]
     },
     {
       "parameters": {
@@ -38,7 +44,10 @@
       "name": "Claim tối đa 50 sự kiện",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-660, 80],
+      "position": [
+        -660,
+        80
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -48,13 +57,16 @@
     },
     {
       "parameters": {
-        "jsCode": "const events = Array.isArray($json.data) ? $json.data : [];\nif (!events.length) return [];\nconst normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();\nconst configs = {\n  CO: { spreadsheetId: '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA', sheetName: 'DH1', requestType: 'Cơ' },\n  DIEN: { spreadsheetId: '1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ', sheetName: 'DH1', requestType: 'Điện' },\n};\nconst groups = new Map();\nfor (const event of events) {\n  const requestType = normalize(event.payload?.requestType);\n  const key = requestType.includes('dien') || requestType.includes('i&c') ? 'DIEN' : 'CO';\n  if (!groups.has(key)) groups.set(key, { ...configs[key], events: [] });\n  groups.get(key).events.push(event);\n}\nreturn [...groups.values()].map(group => ({ json: { ...group, eventIds: group.events.map(event => event.id) } }));"
+        "jsCode": "const events = Array.isArray($json.data) ? $json.data : [];\nif (!events.length) return [];\nconst normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst configs = {\n  CO: { spreadsheetId: '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA', sheetName: 'DH1', requestType: 'Cơ' },\n  CO_MT: { spreadsheetId: '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA', sheetName: 'DH1 MTruong', requestType: 'Môi Trường' },\n  CO_HOA: { spreadsheetId: '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA', sheetName: 'VH1_HOA', requestType: 'Hóa' },\n  DIEN: { spreadsheetId: '1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ', sheetName: 'DH1', requestType: 'Điện' },\n  DIEN_MT: { spreadsheetId: '1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ', sheetName: 'DH1 qt OL', requestType: 'Môi Trường' },\n};\nconst groups = new Map();\nfor (const event of events) {\n  const requestType = normalize(event.payload?.requestType);\n  const sourceSheet = normalize(event.payload?.sourceSheetName);\n  const sourceSpreadsheetId = String(event.payload?.sourceSpreadsheetId ?? '').trim();\n  let key;\n  if (sourceSpreadsheetId === '1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ' && (sourceSheet.includes('qt ol') || requestType.includes('moi truong'))) key = 'DIEN_MT';\n  else if (sourceSpreadsheetId === '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA' && sourceSheet.includes('hoa')) key = 'CO_HOA';\n  else if (sourceSpreadsheetId === '1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA' && sourceSheet.includes('mtruong')) key = 'CO_MT';\n  else if (requestType.includes('hoa')) key = 'CO_HOA';\n  else if (requestType.includes('moi truong')) key = sourceSpreadsheetId === '1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ' ? 'DIEN_MT' : 'CO_MT';\n  else if (requestType.includes('dien') || requestType.includes('i&c') || requestType.includes('hanh chinh it')) key = 'DIEN';\n  else key = 'CO';\n  if (!groups.has(key)) groups.set(key, { ...configs[key], events: [] });\n  groups.get(key).events.push(event);\n}\nreturn [...groups.values()].map(group => ({ json: { ...group, eventIds: group.events.map(event => event.id) } }));"
       },
       "id": "group-by-sheet",
       "name": "Gom sự kiện theo Sheet",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-420, 80]
+      "position": [
+        -420,
+        80
+      ]
     },
     {
       "parameters": {
@@ -67,7 +79,10 @@
       "name": "Đọc mỗi Sheet đúng 1 lần",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-180, 80],
+      "position": [
+        -180,
+        80
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "9OMe30YPXIQR7cIl",
@@ -90,7 +105,10 @@
       "name": "Lập kế hoạch cả lô",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [60, 80],
+      "position": [
+        60,
+        80
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -126,7 +144,10 @@
       "name": "Lô có thay đổi cần ghi?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [300, 80]
+      "position": [
+        300,
+        80
+      ]
     },
     {
       "parameters": {
@@ -143,7 +164,10 @@
       "name": "Ghi 1 batchUpdate mỗi Sheet",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [540, 0],
+      "position": [
+        540,
+        0
+      ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "9OMe30YPXIQR7cIl",
@@ -166,7 +190,10 @@
       "name": "ACK cả lô",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [780, 80],
+      "position": [
+        780,
+        80
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -177,31 +204,99 @@
   ],
   "connections": {
     "Chạy thử thủ công": {
-      "main": [[{ "node": "Claim tối đa 50 sự kiện", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Claim tối đa 50 sự kiện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Lịch mỗi phút": {
-      "main": [[{ "node": "Claim tối đa 50 sự kiện", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Claim tối đa 50 sự kiện",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Claim tối đa 50 sự kiện": {
-      "main": [[{ "node": "Gom sự kiện theo Sheet", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Gom sự kiện theo Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Gom sự kiện theo Sheet": {
-      "main": [[{ "node": "Đọc mỗi Sheet đúng 1 lần", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Đọc mỗi Sheet đúng 1 lần",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Đọc mỗi Sheet đúng 1 lần": {
-      "main": [[{ "node": "Lập kế hoạch cả lô", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Lập kế hoạch cả lô",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Lập kế hoạch cả lô": {
-      "main": [[{ "node": "Lô có thay đổi cần ghi?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Lô có thay đổi cần ghi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Lô có thay đổi cần ghi?": {
       "main": [
-        [{ "node": "Ghi 1 batchUpdate mỗi Sheet", "type": "main", "index": 0 }],
-        [{ "node": "ACK cả lô", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Ghi 1 batchUpdate mỗi Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ACK cả lô",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Ghi 1 batchUpdate mỗi Sheet": {
-      "main": [[{ "node": "ACK cả lô", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "ACK cả lô",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {

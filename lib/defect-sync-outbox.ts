@@ -39,6 +39,8 @@ type SheetDefect = {
   condition: string | null;
   status: string;
   note: string | null;
+  sourceSpreadsheetId?: string | null;
+  sourceSheetName?: string | null;
 };
 
 function shortShiftLeaderName(value: string | null) {
@@ -55,6 +57,10 @@ export function defectSheetPayload(
     defectId: defect.id,
     requestNumber: defect.requestNumber ?? "",
     requestType: defect.requestType ?? "",
+    // Phiếu có nguồn gốc Sheet phải quay lại đúng workbook/tab ban đầu. Hai
+    // trường này cũng giúp phân biệt hai tab Môi Trường cùng dùng requestType.
+    sourceSpreadsheetId: defect.sourceSpreadsheetId ?? "",
+    sourceSheetName: defect.sourceSheetName ?? "",
     unit: sheetUnit,
     device: defect.sourceDeviceRaw || defect.device || "",
     position: defectSheetPositionLabel(defect.system, defect.unit) ?? defect.system ?? "",

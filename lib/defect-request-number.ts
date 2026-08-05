@@ -19,15 +19,19 @@ export async function nextDefectRequestNumber(
   const sequenceType = requestType.trim();
   if (!sequenceType) throw new Error("Loại phiếu không hợp lệ để cấp số yêu cầu");
 
+  const isEnvironment = sequenceType === "Môi Trường";
+  const requestPattern = isEnvironment ? "^QT[0-9]+/[0-9]{4}$" : "^[0-9]+/[0-9]{4}$";
+  const numberExpressionPrefix = isEnvironment ? "^QT" : "^";
+
   const rows = await tx.$queryRaw<Array<{ currentValue: number }>>`
     INSERT INTO "DefectRequestSequence" ("year", "requestType", "currentValue", "updatedAt")
     VALUES (
       ${year},
       ${sequenceType},
       COALESCE((
-        SELECT MAX(split_part("requestNumber", '/', 1)::int)
+        SELECT MAX(regexp_replace(split_part("requestNumber", '/', 1), ${numberExpressionPrefix}, '')::int)
         FROM "Defect"
-        WHERE "requestNumber" ~ '^[0-9]+/[0-9]{4}$'
+        WHERE "requestNumber" ~* ${requestPattern}
           AND split_part("requestNumber", '/', 2)::int = ${year}
           AND "requestType" = ${sequenceType}
       ), 0) + 1,
@@ -37,9 +41,9 @@ export async function nextDefectRequestNumber(
     SET "currentValue" = GREATEST(
           "DefectRequestSequence"."currentValue" + 1,
           COALESCE((
-            SELECT MAX(split_part("requestNumber", '/', 1)::int)
+            SELECT MAX(regexp_replace(split_part("requestNumber", '/', 1), ${numberExpressionPrefix}, '')::int)
             FROM "Defect"
-            WHERE "requestNumber" ~ '^[0-9]+/[0-9]{4}$'
+            WHERE "requestNumber" ~* ${requestPattern}
               AND split_part("requestNumber", '/', 2)::int = ${year}
               AND "requestType" = ${sequenceType}
           ), 0) + 1
@@ -52,5 +56,5 @@ export async function nextDefectRequestNumber(
   if (!Number.isInteger(sequence) || sequence < 1) {
     throw new Error("Không thể cấp số yêu cầu");
   }
-  return `${sequence}/${year}`;
+  return `${isEnvironment ? `QT${String(sequence).padStart(2, "0")}` : sequence}/${year}`;
 }

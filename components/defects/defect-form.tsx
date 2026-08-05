@@ -39,6 +39,11 @@ import { positionsMatch } from "@/lib/position-catalog";
 import { allowedMappedUnits, normalizeMappedUnit } from "@/lib/defect-device-mapping";
 import { MaterialRequestPicker, buildSeedFromPoints } from "@/components/defects/material-request-picker";
 import type { ReplacementPointOption } from "@/hooks/useReplacements";
+import {
+  DEFECT_ENVIRONMENT_SHEET_OPTIONS,
+  defectEnvironmentSheetFromName,
+} from "@/lib/defect-environment-sheet";
+import { DEFECT_SECTIONS, defaultRequestTypeOf, type DefectSectionKey } from "@/lib/defect-section";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -71,6 +76,7 @@ export function DefectForm({
   defect,
   initialDevice,
   initialMaterialRequest,
+  section,
   lockDevice = false,
   onDone,
   onMappingSaved,
@@ -87,6 +93,7 @@ export function DefectForm({
     unit?: string | null;
   } | null;
   initialMaterialRequest?: DefectMaterialRequestSeed | null;
+  section?: DefectSectionKey;
   lockDevice?: boolean;
   onDone?: () => void;
   onMappingSaved?: (defect: DefectItem) => void;
@@ -123,6 +130,8 @@ export function DefectForm({
   // Chỉ phiếu mới, không phải phiếu Sheet, và không đến từ Danh mục mới có cửa phụ.
   const canPickMaterialRequest = !isEdit && !isSynced && !initialMaterialRequest;
   const [pickerOpen, setPickerOpen] = React.useState(false);
+  const sectionSource = section ? DEFECT_SECTIONS[section].source : "";
+  const requestTypeOptions = section ? DEFECT_SECTIONS[section].requestTypes : DEFECT_REQUEST_TYPES;
 
   // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
@@ -159,7 +168,10 @@ export function DefectForm({
     // thay thế của dầu bôi trơn / lõi lọc dầu / bi nghiền than, luôn thuộc phần
     // Cơ nên điền sẵn. Người lập vẫn đổi lại được.
     requestType:
-      defect?.requestType ?? defaultRequestTypeForMaterialCategory(initialMaterialRequest?.materialCategory),
+      (defect?.requestType
+        ?? defaultRequestTypeForMaterialCategory(initialMaterialRequest?.materialCategory))
+      || (section ? defaultRequestTypeOf(section) : ""),
+    environmentSheet: defectEnvironmentSheetFromName(defect?.sourceSheetName) || sectionSource,
     requestNumber: defect?.requestNumber ?? "",
     content: defect?.content ?? initialMaterialRequest?.suggestedContent ?? "",
     status: defect?.status ?? "CHUA_XU_LY",
@@ -280,15 +292,36 @@ export function DefectForm({
   const selectedDeviceQuery = useEquipmentNode(form.device || null, form.mappedDeviceUnit);
   const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, form.mappedDeviceUnit);
   React.useEffect(() => {
+    if (form.requestType === "Môi Trường") return;
     const deviceName = selectedDeviceQuery.data?.data.name;
     if (!deviceName) return;
     setForm((current) => (current.sourceDeviceRaw ? current : { ...current, sourceDeviceRaw: deviceName }));
-  }, [selectedDeviceQuery.data]);
+  }, [form.requestType, selectedDeviceQuery.data]);
   React.useEffect(() => {
     const systemName = selectedSystemQuery.data?.data.name;
     if (!systemName || form.deviceSystem === systemName) return;
     setForm((current) => ({ ...current, deviceSystem: systemName }));
   }, [form.deviceSystem, selectedSystemQuery.data]);
+
+  function selectRequestType(requestType: string) {
+    const selectedDeviceName = selectedDeviceQuery.data?.data.name ?? "";
+    setForm((current) => {
+      const enteringEnvironment = requestType === "Môi Trường" && current.requestType !== "Môi Trường";
+      const leavingEnvironment = requestType !== "Môi Trường" && current.requestType === "Môi Trường";
+      return {
+        ...current,
+        requestType,
+        environmentSheet: requestType === "Môi Trường"
+          ? sectionSource || current.environmentSheet
+          : "",
+        sourceDeviceRaw: enteringEnvironment
+          ? ""
+          : leavingEnvironment
+            ? selectedDeviceName
+            : current.sourceDeviceRaw,
+      };
+    });
+  }
 
   // Bỏ tick = huỷ hẳn lựa chọn; nội dung gợi ý cũng phải rút lại để không còn
   // sót mô tả vật tư trên một phiếu khiếm khuyết thường.
@@ -427,6 +460,14 @@ export function DefectForm({
     if (!form.requestType) {
       setStep(3);
       return toast.error("Vui lòng chọn Yêu cầu");
+    }
+    if (form.requestType === "Môi Trường" && !form.environmentSheet) {
+      setStep(3);
+      return toast.error("Vui lòng chọn Sheet Môi Trường – Cơ hoặc Môi Trường – Điện");
+    }
+    if (form.requestType === "Môi Trường" && !form.sourceDeviceRaw.trim()) {
+      setStep(3);
+      return toast.error("Vui lòng nhập Mã Trạm ghi lên Google Sheet");
     }
     if (!form.content.trim()) {
       setStep(3);
@@ -1177,19 +1218,45 @@ export function DefectForm({
           <div className="mx-auto w-full max-w-2xl space-y-6">
             <Section eyebrow="Phiếu yêu cầu">
               <Field label="Yêu cầu" required hint="Cơ và Điện ghi vào hai Google Sheet khác nhau.">
-                  <Select value={form.requestType} onValueChange={(v) => set("requestType", v)}>
-                    <SelectTrigger className="h-11"><SelectValue placeholder="Chọn Cơ hoặc Điện" /></SelectTrigger>
+                  <Select value={form.requestType} onValueChange={selectRequestType} disabled={isEdit}>
+                    <SelectTrigger className="h-11"><SelectValue placeholder="Chọn loại yêu cầu" /></SelectTrigger>
                     <SelectContent>
-                      {DEFECT_REQUEST_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      {requestTypeOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
               </Field>
+              {form.requestType === "Môi Trường" && (
+                <Field
+                  label="Sheet ghi nhận"
+                  required
+                  hint="Chọn đúng bộ phận quản lý để phiếu được ghi vào đúng tab Môi Trường."
+                >
+                  {section ? (
+                    <div className="flex h-11 items-center rounded-md border border-blue-200 bg-blue-50/60 px-3 text-sm font-semibold text-blue-900">
+                      Tự động: {DEFECT_ENVIRONMENT_SHEET_OPTIONS.find((option) => option.value === sectionSource)?.label}
+                    </div>
+                  ) : (
+                    <Select
+                      value={form.environmentSheet}
+                      onValueChange={(value) => set("environmentSheet", value as "CO" | "DIEN")}
+                      disabled={isEdit}
+                    >
+                      <SelectTrigger className="h-11"><SelectValue placeholder="Chọn Sheet Môi Trường" /></SelectTrigger>
+                      <SelectContent>
+                        {DEFECT_ENVIRONMENT_SHEET_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </Field>
+              )}
               <Field label="Số yêu cầu">
                 {isEdit ? (
                   <Input className="h-11" value={form.requestNumber || "—"} disabled />
                 ) : (
                   <div className="flex h-11 items-center rounded-md border border-dashed border-input bg-muted/30 px-3 text-[13px] text-muted-foreground">
-                    Sẽ tự cấp số khi lưu
+                    {form.requestType === "Môi Trường" ? "Sẽ tự cấp số QTxx/năm khi lưu" : "Sẽ tự cấp số khi lưu"}
                   </div>
                 )}
               </Field>
@@ -1210,12 +1277,21 @@ export function DefectForm({
                   placeholder="Để trống nếu không có"
                 />
               </Field>
-              <Field label="Tên thiết bị ghi lên Google Sheet" full hint="Đây là giá trị đi vào cột Thiết bị của Sheet.">
+              <Field
+                label={form.requestType === "Môi Trường" ? "Mã Trạm ghi lên Google Sheet" : "Tên thiết bị ghi lên Google Sheet"}
+                required={form.requestType === "Môi Trường"}
+                full
+                hint={form.requestType === "Môi Trường"
+                  ? "Đây là giá trị đi vào cột (3) Mã Trạm; không thay thế cho thiết bị được ánh xạ trong cây."
+                  : "Đây là giá trị đi vào cột Thiết bị của Sheet."}
+              >
                 <Input
                   className="h-11"
                   value={form.sourceDeviceRaw}
                   onChange={(e) => set("sourceDeviceRaw", e.target.value)}
-                  placeholder="Mặc định theo tên thiết bị đã chọn, có thể sửa lại"
+                  placeholder={form.requestType === "Môi Trường"
+                    ? "Nhập Mã Trạm"
+                    : "Mặc định theo tên thiết bị đã chọn, có thể sửa lại"}
                 />
               </Field>
             </Section>

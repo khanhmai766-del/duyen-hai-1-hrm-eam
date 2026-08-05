@@ -12,6 +12,7 @@ import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/
 import { validateDefectImages } from "@/lib/defect-images";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 import { nextDefectRequestNumber } from "@/lib/defect-request-number";
+import { resolveDefectEnvironmentSheetTarget } from "@/lib/defect-environment-sheet";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { normalizeText } from "@/lib/nav";
 import {
@@ -543,6 +544,17 @@ export async function POST(req: NextRequest) {
     const requestYear = (detectedAt ?? new Date()).getUTCFullYear();
     const requestType = String(body.requestType ?? "").trim();
     if (!requestType) return fail("Vui lòng chọn loại phiếu");
+    let environmentTarget: ReturnType<typeof resolveDefectEnvironmentSheetTarget> | null = null;
+    if (requestType === "Môi Trường") {
+      if (!String(body.sourceDeviceRaw ?? "").trim()) {
+        return fail("Vui lòng nhập Mã Trạm ghi lên Google Sheet");
+      }
+      try {
+        environmentTarget = resolveDefectEnvironmentSheetTarget(body.environmentSheet);
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : "Sheet Môi Trường không hợp lệ");
+      }
+    }
     const content = String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
     const severity = String(body.severity ?? "").trim();
@@ -569,6 +581,8 @@ export async function POST(req: NextRequest) {
           content,
           repeatedRepairRaw: body.repeatedRepairRaw?.trim() || null,
           websiteCreated: true,
+          sourceSpreadsheetId: environmentTarget?.spreadsheetId ?? null,
+          sourceSheetName: environmentTarget?.sheetName ?? null,
           sourceDeviceRaw: body.sourceDeviceRaw?.trim() || null,
           status: body.status || "CHUA_XU_LY",
           completedAt: body.status === "DA_XU_LY" ? new Date() : null,

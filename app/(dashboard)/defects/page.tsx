@@ -1046,6 +1046,7 @@ export default function DefectsPage() {
             </div>
             <DefectForm
               defect={editTarget}
+              section={section}
               onDone={() => setFormOpen(false)}
               onMappingSaved={(updated) => {
                 setFormOpen(false);

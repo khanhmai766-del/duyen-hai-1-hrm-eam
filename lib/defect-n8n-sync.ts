@@ -392,6 +392,8 @@ export async function finishN8nDefectRun(params: {
           WHERE active."sourceType" = 'GOOGLE_SHEETS'
             AND active."syncState" = 'ACTIVE'
             AND active."sourceSpreadsheetId" = missing."sourceSpreadsheetId"
+            AND active."sourceSheetName" IS NOT DISTINCT FROM missing."sourceSheetName"
+            AND active."requestType" IS NOT DISTINCT FROM missing."requestType"
             AND BTRIM(split_part(COALESCE(active."requestNumber", ''), '/', 1))
               = BTRIM(split_part(COALESCE(missing."requestNumber", ''), '/', 1))
             AND active."id" <> missing."id"

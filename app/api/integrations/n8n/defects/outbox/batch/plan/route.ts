@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     }
     const requestTypes = new Set(events.map((event) => requestTypeOf(event.payload)));
     if (requestTypes.size !== 1 || requestTypes.has("")) {
-      return fail("Một lô chỉ được chứa sự kiện của cùng một Sheet Cơ hoặc Điện", 409);
+      return fail("Một lô chỉ được chứa sự kiện của cùng một trang tính khiếm khuyết", 409);
     }
 
     try {

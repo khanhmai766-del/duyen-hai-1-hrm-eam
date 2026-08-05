@@ -8,7 +8,9 @@ dùng bảng mirror và không `DELETE + INSERT`. Dữ liệu tiếp tục đư�
 
 - Google Sheet vẫn là nguồn chính cho các trường nguồn.
 - Thiết bị VHV đã ánh xạ, trạng thái xác nhận và lịch sử không bị n8n ghi đè.
-- Mỗi lượt snapshot gồm một nguồn `CO`, một nguồn `DIEN`, hoặc cả hai.
+- Mỗi lượt snapshot gồm một nguồn `CO`, một nguồn `DIEN`, hoặc cả hai. Nguồn
+  `CO` luôn đọc đủ `DH1`, `DH1 MTruong`, `VH1_HOA`; nguồn `DIEN` luôn đọc đủ
+  `DH1`, `DH1 qt OL` trước khi được phép hoàn tất.
 - Dữ liệu được gửi theo batch tối đa 500 dòng.
 - Retry cùng `runId/source/batchNumber` không ghi trùng.
 - Chỉ khi tất cả nguồn khai báo trong lượt hoàn tất, backend mới đánh dấu khóa
@@ -56,12 +58,20 @@ Thêm vào `.env` của website:
 ```env
 N8N_DEFECT_SYNC_TOKEN="token-rieng-cua-n8n"
 N8N_DEFECT_TWO_WAY_SYNC_TOKEN="token-rieng-cho-chieu-ghi"
+N8N_DEFECT_CO_SPREADSHEET_ID="id-workbook-co-hoa-moi-truong"
+N8N_DEFECT_DIEN_SPREADSHEET_ID="id-workbook-dien-moi-truong"
 ```
 
 Hai token chỉ dùng cho kết nối giữa website và n8n. Credential đọc Sheet dùng
 `N8N_DEFECT_SYNC_TOKEN`; credential claim/plan/ack hàng đợi ghi ngược dùng
 `N8N_DEFECT_TWO_WAY_SYNC_TOKEN`. Có thể đặt cùng giá trị trong lần chuyển tiếp
 đầu tiên, nhưng production nên tách riêng để dễ xoay khóa.
+
+Hai Spreadsheet ID còn được backend dùng để định tuyến phiếu Môi Trường tạo từ
+website: lựa chọn `Môi Trường – Cơ` ghi vào `DH1 MTruong`, lựa chọn
+`Môi Trường – Điện` ghi vào `DH1 qt OL`. Phiếu Môi Trường dùng số dạng
+`QTxx/năm`; ô “Mã Trạm” trên website được ghi vào cột (3), độc lập với thiết bị
+được ánh xạ trong cây.
 
 Áp dụng schema:
 
@@ -138,8 +148,9 @@ Response trả `data.runId`. n8n phải giữ giá trị này cho các node ti�
 POST /api/integrations/n8n/defects/runs/{runId}/batches
 ```
 
-Body mẫu nằm ở `sample-batch.json`. Một batch nhận tối đa 500 dòng. Số batch
-được đánh từ 1 và độc lập cho từng nguồn.
+Body mẫu nằm ở `sample-batch.json`. Một batch nhận tối đa 500 dòng. Trong mỗi
+nguồn, dải số batch được tách theo tab để retry không đụng nhau: tab chính từ
+1, tab Môi Trường từ 1001 và tab Hóa từ 2001.
 
 ### 3. Kết thúc
 
@@ -181,24 +192,25 @@ toàn trong `Defect`; do chưa gọi `finish`, không có bản ghi nào bị đ
 
 Import hai workflow production:
 
-- `workflow-production-source-aware.json`: đọc hai Sheet chính thức vào website,
-  bao gồm dữ liệu Vận hành, hai trường tham khảo KTAT/BGĐ ở cột 16–17
-  và 10 trường Sửa chữa ở cột 18–27.
+- `workflow-production-source-aware.json`: đọc hai workbook chính thức vào
+  website, gồm năm tab `DH1` Cơ, `DH1 MTruong`, `VH1_HOA`, `DH1` Điện và
+  `DH1 qt OL`; bao gồm dữ liệu Vận hành, hai trường tham khảo KTAT/BGĐ ở cột
+  16–17 và 10 trường Sửa chữa ở cột 18–27.
 - `workflow-two-way-batch-production.json`: claim tối đa 50 sự kiện, gom theo
-  Sheet và ghi thay đổi vào đúng Sheet Cơ hoặc Điện bằng tối đa hai lượt đọc và
-  hai lượt `batchUpdate`.
+  đúng workbook + tab nguồn rồi ghi thay đổi bằng một lượt đọc và một lượt
+  `batchUpdate` cho mỗi tab có sự kiện.
 
 Sau khi import, chọn lại credential `Header Auth account` và
 `Google Sheets account` cho tất cả node có cảnh báo. Chạy thủ công từng workflow
 thành công trước khi Publish và bật Schedule Trigger. Cờ đồng bộ hai chiều trên
-website mặc định tắt; chỉ bật sau khi đã kiểm tra đúng Sheet, đúng tab `DH1` và
-đúng tài khoản Google.
+website mặc định tắt; chỉ bật sau khi đã kiểm tra đúng workbook, đúng một trong
+năm tab nói trên và đúng tài khoản Google.
 
 1. Schedule Trigger kiểm tra định kỳ.
 2. Đọc `modifiedTime` của hai file bằng Google Drive API.
 3. Dừng ngay nếu cả hai mốc không đổi.
 4. Bắt đầu run với `expectedSources` chỉ gồm những nguồn đã đổi.
-5. Chỉ đọc, chuẩn hóa và gửi batch cho các Sheet tương ứng.
+5. Với mỗi nguồn đã đổi, đọc đủ mọi tab thuộc nguồn rồi mới xác nhận nguồn đó.
 6. Finish với `completedSources` khớp chính xác `expectedSources`.
 7. Chỉ sau khi finish trả `SUCCESS` mới lưu các mốc `modifiedTime`.
 8. Error Workflow dùng `execution.id` để gọi endpoint `by-external-id/fail`,
@@ -216,7 +228,8 @@ gốc, chọn dòng trống và tạo danh sách ô cần ghi để tránh lệc
 dùng chèn/xóa trên Sheet. Lượt lịch mới không chạy chồng khi lô trước chưa ACK.
 
 - Phiếu mới ghi vào hàng trống có sẵn hoặc hàng cuối.
-- Sửa phiếu cập nhật đúng hàng có `STT/năm`.
+- Sửa phiếu cập nhật đúng hàng có `STT/năm`; hai tab Môi Trường chấp nhận cả
+  dạng `QTxx/năm`.
 - Nhắc lại không chèn hàng; ô Nhắc lại của hàng gốc có dạng:
 
 ```text

@@ -61,8 +61,9 @@ function dateVi(value: unknown) {
 }
 
 function parseRequestNumber(value: unknown) {
-  const match = text(value).match(/^(\d+)\/(\d{4})$/);
-  if (!match) throw new Error(`Số yêu cầu không đúng định dạng STT/năm: ${text(value)}`);
+  // Các tab Môi Trường dùng STT QT01, QT02…; Cơ/Điện/Hóa vẫn dùng STT số.
+  const match = text(value).match(/^([a-z]+\d+|\d+)\/(\d{4})$/i);
+  if (!match) throw new Error(`Số yêu cầu không đúng định dạng STT/năm hoặc QTxx/năm: ${text(value)}`);
   return { sequence: match[1], year: Number(match[2]) };
 }
 
