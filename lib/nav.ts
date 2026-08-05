@@ -78,8 +78,8 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: ShieldAlert,
         keywords: "defect su co fault khiem khuyet co dien",
         children: [
-          { label: "Phần Cơ", href: "/defects?phan=co", icon: Wrench, keywords: "khiem khuyet phan co syc sheet co moi truong hoa" },
-          { label: "Phần Điện", href: "/defects?phan=dien", icon: Zap, keywords: "khiem khuyet phan dien syc sheet dien moi truong hanh chinh it" },
+          { label: "Sheet Cơ - Hóa", href: "/defects?phan=co", icon: Wrench, keywords: "khiem khuyet co hoa syc sheet co moi truong hoa" },
+          { label: "Sheet Điện", href: "/defects?phan=dien", icon: Zap, keywords: "khiem khuyet dien syc sheet dien moi truong" },
         ],
       },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },

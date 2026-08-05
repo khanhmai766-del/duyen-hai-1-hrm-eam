@@ -23,12 +23,12 @@ export const DEFECT_SECTIONS: Record<
 > = {
   co: {
     source: "CO",
-    label: "Phần Cơ",
+    label: "Sheet Cơ - Hóa",
     requestTypes: ["Cơ", "Môi Trường", "Hóa"],
   },
   dien: {
     source: "DIEN",
-    label: "Phần Điện",
+    label: "Sheet Điện",
     requestTypes: ["Điện", "Môi Trường"],
   },
 };
