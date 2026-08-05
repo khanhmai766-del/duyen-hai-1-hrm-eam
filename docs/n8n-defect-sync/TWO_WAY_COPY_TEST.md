@@ -46,6 +46,10 @@ không active và Schedule Trigger cũng bị tắt.
   bộ vùng `A6:O` tối đa hai lần, thay vì đọc lại cho từng phiếu.
 - Backend lập kế hoạch tuần tự trên một ảnh chụp Sheet trong bộ nhớ. Nhiều phiếu
   tạo mới trong cùng lô không thể chọn trùng một hàng trống.
+- CREATE gặp cùng số và cùng dữ liệu nhận diện được xem là retry an toàn. Nếu
+  cùng số nhưng nội dung khác, backend giữ nguyên dòng Sheet, tự cấp số mới cho
+  phiếu website và cập nhật payload hàng đợi ngay trong lượt lập kế hoạch. Dòng
+  chỉ có STT, còn B:O trống vẫn là dòng giữ chỗ hợp lệ và không gây đổi số.
 - Mỗi Sheet chỉ gọi một `values:batchUpdate`, sau đó ACK toàn bộ sự kiện của
   Sheet đó.
 - Nếu Google Sheets hoặc bước lập kế hoạch lỗi, lô không được ACK. Backend thu

@@ -89,6 +89,19 @@ function normalizeRow(row: unknown): string[] {
   return values;
 }
 
+function normalizedIdentityCell(value: unknown) {
+  return text(value).replace(/\s+/g, " ").toLocaleLowerCase("vi");
+}
+
+function sameCreateIdentity(left: string[], right: string[]) {
+  // B:F là phần nhận diện ổn định của một phiếu: tổ máy, thiết bị, cương vị,
+  // nội dung và ngày phát hiện. Các cột phía sau có thể được Vận hành sửa sau
+  // khi website đã ghi nhưng trước khi ACK, nên không dùng để nhận diện retry.
+  return [1, 2, 3, 4, 5].every(
+    (index) => normalizedIdentityCell(left[index]) === normalizedIdentityCell(right[index])
+  );
+}
+
 function baseRow(payload: Payload, sheetSequence: string) {
   return [
     sheetSequence,
@@ -169,7 +182,12 @@ export function buildDefectSheetWritePlan(
 
   if (event.eventType === "CREATE") {
     if (originals.length === 1) {
-      // Retry sau khi Google đã ghi nhưng ACK bị mất: chuyển thành update idempotent.
+      // Chỉ được xem là retry nếu đúng dữ liệu nhận diện của phiếu website.
+      // Cùng số nhưng nội dung khác là phiếu nhập tay trên Sheet: dừng để API
+      // cấp lại số, tuyệt đối không ghi đè.
+      if (!sameCreateIdentity(originals[0].row, current)) {
+        throw new DefectSheetRequestNumberConflictError(requestNumber);
+      }
       writes.push({ range: `A${originals[0].sheetRow}:O${originals[0].sheetRow}`, values: [current] });
       return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
     }
@@ -238,6 +256,30 @@ export function buildDefectSheetWritePlan(
   writes.push({ range: `G${original.sheetRow}`, values: [[current[6]]] });
   writes.push({ range: `H${original.sheetRow}`, values: [[history]] });
   return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+}
+
+export class DefectSheetRequestNumberConflictError extends Error {
+  constructor(public readonly requestNumber: string) {
+    super(`Số yêu cầu ${requestNumber} đã có phiếu khác trên Sheet`);
+    this.name = "DefectSheetRequestNumberConflictError";
+  }
+}
+
+/** Các số đã có dữ liệu nghiệp vụ. Dòng chỉ điền STT và để trống B:O là dòng
+ * giữ chỗ, không phải xung đột và vẫn được phép nhận phiếu website. */
+export function usedDefectRequestNumbersFromSheet(inputRows: unknown[]) {
+  const used = new Set<string>();
+  for (const row of inputRows.map(normalizeRow)) {
+    if (!row[0] || !row.slice(1).some(Boolean)) continue;
+    const fullNumber = row[0].match(/^([a-z]+\d+|\d+)\/(\d{4})$/i);
+    if (fullNumber) {
+      used.add(`${fullNumber[1].toUpperCase()}/${fullNumber[2]}`);
+      continue;
+    }
+    const year = yearFromSheetDate(row[5]);
+    if (year) used.add(`${row[0].toUpperCase()}/${year}`);
+  }
+  return used;
 }
 
 export type DefectSheetBatchWritePlan = {

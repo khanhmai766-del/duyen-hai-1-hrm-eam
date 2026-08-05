@@ -227,6 +227,11 @@ Google Sheets batchUpdate → batch ack`. Không tự xây số dòng trong n8n:
 gốc, chọn dòng trống và tạo danh sách ô cần ghi để tránh lệch dòng khi người
 dùng chèn/xóa trên Sheet. Lượt lịch mới không chạy chồng khi lô trước chưa ACK.
 
+Khi CREATE gặp một dòng đã có cùng số, `batch plan` chỉ cập nhật nếu B:F khớp
+(retry sau lỗi ACK). Nếu nội dung nhận diện khác, backend không ghi đè dòng Sheet
+mà tự cấp số mới cho phiếu website, cập nhật các sự kiện đang chờ và ghi audit.
+Dòng chuẩn bị sẵn chỉ có STT, còn B:O trống, được xem là dòng giữ chỗ hợp lệ.
+
 - Phiếu mới ghi vào hàng trống có sẵn hoặc hàng cuối.
 - Sửa phiếu cập nhật đúng hàng có `STT/năm`; hai tab Môi Trường chấp nhận cả
   dạng `QTxx/năm`.
