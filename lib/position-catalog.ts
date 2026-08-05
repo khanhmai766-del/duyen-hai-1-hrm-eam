@@ -123,7 +123,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "COAL_MILL",
     label: "Máy nghiền",
-    aliases: ["14. Máy nghiền S1", "15. Máy nghiền S2"],
+    aliases: ["MN", "14. Máy nghiền S1", "15. Máy nghiền S2"],
     units: UNIT_1_2,
     sheetLabels: { S1: "14. Máy nghiền S1", S2: "15. Máy nghiền S2" },
   },
@@ -151,7 +151,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "CIRCULATING_WATER_PUMP",
     label: "Trạm bơm tuần hoàn",
-    aliases: ["TBTH", "VHV TBTH", "22. VHV TBTH"],
+    aliases: ["TBTH", "Tuần hoàn", "VHV TBTH", "22. VHV TBTH"],
     units: ALL_UNITS,
     sheetLabels: { S1: "22. VHV TBTH", S2: "22. VHV TBTH", COMMON: "22. VHV TBTH" },
   },
@@ -162,6 +162,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "Khí nén - nhà dầu 300m3",
       "Khí Nén-Nhà Dầu",
       "Nhà dầu - khí nén",
+      "Khí nén-Dầu 300",
       "VHV MNK-ND3.",
       "VHV MNK-ND3",
       "VHV Trạm khí nén - Nhà dầu HFO 300m3",
@@ -182,6 +183,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
     label: "XLNT",
     aliases: [
       "XLNT - Nhà dầu 5000m3",
+      "XLNT-Dầu 5000",
       "VHV XLNT-ND5.",
       "VHV XLNT-ND5",
       "VHV XLN thải - Nhà dầu 5000m3",
@@ -254,6 +256,9 @@ export function positionAliasKey(value?: string | null) {
   return normalizeText(String(value ?? ""))
     .replace(/[\u2010-\u2015]/g, "-")
     .replace(/^\s*\d+\s*[.)-]?\s*/, "")
+    // Sheet có nơi thêm tiền tố “VHV”, nơi khác lại bỏ. Đây chỉ là cách ghi
+    // chức danh, không tạo ra một cương vị mới (VHV FGD S2 vẫn chính là FGD).
+    .replace(/^vhv\s+/, "")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+s[12]$/i, "")
     .replace(/\s+/g, " ")
@@ -322,4 +327,3 @@ export function positionLabelsForUnit(unit?: string | null) {
     .filter((item) => item.units.includes(unit as PositionUnit))
     .map((item) => item.label);
 }
-
