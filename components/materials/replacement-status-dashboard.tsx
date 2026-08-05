@@ -254,7 +254,7 @@ export function ReplacementStatusDashboard({
                 <div
                   key={point.id}
                   className={cn(
-                    "grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/70 xl:grid-cols-[minmax(220px,1.25fr)_minmax(180px,1fr)_minmax(160px,0.85fr)_110px_140px_130px] xl:items-center",
+                    "grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/70 xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,1fr)_165px_165px_165px_130px] xl:items-center",
                     style.row
                   )}
                 >
@@ -276,14 +276,14 @@ export function ReplacementStatusDashboard({
                       {point.deviceName || "Chưa khai báo thiết bị"}
                     </div>
                     <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {point.deviceCode || "—"} · {point.managingPosition || "Chưa gán cương vị"}
+                      {point.system || "Chưa khai báo hệ thống"}
                     </div>
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Hệ thống</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cương vị</div>
                     <div className="mt-0.5 break-words text-sm font-medium leading-5 text-ink">
-                      {point.system || "Chưa khai báo hệ thống"}
+                      {point.managingPosition || "Chưa gán cương vị"}
                     </div>
                   </div>
 
