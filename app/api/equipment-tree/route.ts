@@ -7,6 +7,9 @@ import { maybeUploadDataUrl } from "@/lib/s3";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import { requireDeviceManage, requireDeviceView } from "@/lib/device-permissions";
 import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access";
+import { getProfileOverrides } from "@/lib/equipment-profile-cache";
+import { parseScopeParam, seqInScope } from "@/lib/equipment-units";
+import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +18,12 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requireDeviceView(user);
-    const canAccessAllNodes = await canBypassEquipmentPositionScope(
+    const adminTree = req.nextUrl.searchParams.get("adminTree") === "1";
+    if (adminTree) {
+      await requirePermissionLevel(user, "rbac-manage", ["full"], "Không đủ quyền đọc toàn bộ cây để phân quyền");
+    }
+    const scope = parseScopeParam(req.nextUrl.searchParams.get("scope"));
+    const canAccessAllNodes = adminTree || await canBypassEquipmentPositionScope(
       user,
       req.nextUrl.searchParams.get("permissionScope")
     );
@@ -23,10 +31,12 @@ export async function GET(req: NextRequest) {
     const visibleNodes = canAccessAllNodes
       ? normalizedNodes
       : await filterEquipmentNodesForUser(user, normalizedNodes);
-    return ok(visibleNodes.map((node) => ({
+    const scopedNodes = scope ? visibleNodes.filter((node) => seqInScope(node.seq, scope)) : visibleNodes;
+    const overrideOf = scope ? await getProfileOverrides(scope) : () => undefined;
+    return ok(scopedNodes.map((node) => ({
       seq: node.seq,
       parentSeq: node.parentSeq,
-      name: node.name,
+      name: overrideOf(node.seq)?.name ?? node.name,
       drawing: node.drawing,
       depth: node.depth,
       deviceId: node.deviceId ?? null,

@@ -161,13 +161,20 @@ export interface EquipmentNodeDetail extends EquipmentNode {
 export function useEquipmentTree(options?: {
   enabled?: boolean;
   permissionScope?: EquipmentPermissionScope;
+  adminTree?: boolean;
+  scope?: TreeScope;
 }) {
   const permissionScope = options?.permissionScope;
+  const params = new URLSearchParams();
+  if (permissionScope) params.set("permissionScope", permissionScope);
+  if (options?.adminTree) params.set("adminTree", "1");
+  if (options?.scope) params.set("scope", options.scope);
+  const query = params.toString();
   return useQuery({
-    queryKey: ["equipment-tree", permissionScope ?? "position-scope"],
+    queryKey: ["equipment-tree", permissionScope ?? (options?.adminTree ? "admin-tree" : "position-scope"), options?.scope ?? "ALL"],
     queryFn: () =>
       apiGet<EquipmentNode[]>(
-        `/api/equipment-tree${permissionScope ? `?permissionScope=${encodeURIComponent(permissionScope)}` : ""}`
+        `/api/equipment-tree${query ? `?${query}` : ""}`
       ),
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,

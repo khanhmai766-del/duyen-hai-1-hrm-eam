@@ -10,13 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useEquipmentTree, type EquipmentNode } from "@/hooks/useEquipment";
 import { usePositionSystemScopes, useUpdatePositionSystemScope } from "@/hooks/usePositionSystemScopes";
 import { usePositions } from "@/hooks/useUsers";
-import { buildEquipmentTreeIndex, compareEquipmentSeq } from "@/lib/equipment-tree";
+import { compareEquipmentSeq } from "@/lib/equipment-tree";
+import { branchOf, scopeCode, type TreeScope } from "@/lib/equipment-units";
 import { selectableManagingPositionOptions } from "@/lib/positions";
 import { isUnrestrictedEquipmentPosition, normalizeScopeAccess, positionScopeOptions, scopesForPosition, type NodeAccess } from "@/lib/position-system-scopes";
 import { cn } from "@/lib/utils";
 import { apiGet } from "@/lib/fetcher";
 
 const REQUIRED_SCOPE_POSITIONS = ["Quản đốc", "Phó Quản đốc", "Kỹ thuật viên"] as const;
+const PERMISSION_TREE_SCOPES: Array<{ key: Extract<TreeScope, "S1" | "COMMON">; label: string }> = [
+  { key: "S1", label: "Tổ máy S1/S2" },
+  { key: "COMMON", label: "Dùng chung" },
+];
 
 type ScopeConflictReport = {
   hasExplicitScope: boolean;
@@ -46,7 +51,9 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
     ]),
     [allPositions]
   );
-  const treeQuery = useEquipmentTree();
+  const [treeScope, setTreeScope] = React.useState<TreeScope>("S1");
+  // Màn cấu hình RBAC phải đọc toàn bộ cây, độc lập với cương vị hiện tại của admin.
+  const treeQuery = useEquipmentTree({ adminTree: true, scope: treeScope });
   const scopesQuery = usePositionSystemScopes();
   const updateScopes = useUpdatePositionSystemScope();
   const equipmentNodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
@@ -68,18 +75,42 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   const conflictReport = conflictsQuery.data?.data;
 
   const { roots, childrenOf, parentOf, allChildrenOf } = React.useMemo(() => {
-    const index = buildEquipmentTreeIndex(equipmentNodes);
+    // Dựng đúng theo parentSeq như cây thiết bị lazy. Không đoán cha bằng tiền tố mã,
+    // vì fallback đó từng làm màn phân quyền khác cấu trúc cây chính.
+    const bySeq = new Map(equipmentNodes.map((node) => [node.seq, node]));
+    const directChildren = new Map<string, EquipmentNode[]>();
+    const strictParentOf = new Map<string, string | null>();
+    const rawRoots: EquipmentNode[] = [];
+    for (const node of equipmentNodes) {
+      const parent = node.parentSeq && bySeq.has(node.parentSeq) ? node.parentSeq : null;
+      strictParentOf.set(node.seq, parent);
+      if (!parent) rawRoots.push(node);
+      else directChildren.set(parent, [...(directChildren.get(parent) ?? []), node]);
+    }
+    for (const children of directChildren.values()) children.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+
     // Chỉ phân quyền ở node thư mục (hệ thống) — node có con.
     const folderChildren = new Map<string, EquipmentNode[]>();
-    for (const [seq, children] of index.childrenOf) {
-      const folders = children.filter((child) => (index.childrenOf.get(child.seq) ?? []).length > 0);
+    for (const [seq, children] of directChildren) {
+      const folders = children.filter((child) => (directChildren.get(child.seq) ?? []).length > 0);
       if (folders.length) folderChildren.set(seq, folders.sort((a, b) => compareEquipmentSeq(a.seq, b.seq)));
     }
-    const folderRoots = index.roots
-      .filter((root) => (index.childrenOf.get(root.seq) ?? []).length > 0)
+    // Giống API roots: ẩn gốc nhà máy DH1.S1 và đưa các nhánh 1..7 lên cấp đầu.
+    // Node mồ côi nằm sâu không được tự nâng thành root.
+    const scopeRoots = rawRoots.flatMap((root) =>
+      branchOf(root.seq) === null
+        ? directChildren.get(root.seq) ?? []
+        : root.seq.split(".").length === 3
+          ? [root]
+          : []
+    );
+    const folderRoots = scopeRoots
+      .filter((root) => (directChildren.get(root.seq) ?? []).length > 0)
       .sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-    return { roots: folderRoots, childrenOf: folderChildren, parentOf: index.parentOf, allChildrenOf: index.childrenOf };
+    return { roots: folderRoots, childrenOf: folderChildren, parentOf: strictParentOf, allChildrenOf: directChildren };
   }, [equipmentNodes]);
+
+  React.useEffect(() => setExpanded(new Set()), [treeScope]);
 
   React.useEffect(() => {
     if (!positions.length) return;
@@ -216,7 +247,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
             <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-500/70" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-ink" title={node.name}>{node.name}</span>
-              <span className="font-mono text-[11px] text-muted-foreground">{node.seq}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">{scopeCode(node.seq, treeScope).replace(/^DH1\.S\d+\.?/, "")}</span>
             </span>
             <span
               className={cn(
@@ -263,7 +294,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-ink" title={node.name}>{node.name}</span>
-              <span className="font-mono text-[11px] text-muted-foreground">{node.seq}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">{scopeCode(node.seq, treeScope).replace(/^DH1\.S\d+\.?/, "")}</span>
             </span>
             <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-white p-0.5">
               {ACCESS_OPTIONS.map((opt) => {
@@ -341,12 +372,39 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
           <div className="rounded-lg border border-dashed border-cyan-200 bg-white px-4 py-6 text-center text-sm text-muted-foreground">
             Chỉ Quản trị viên được thay đổi phạm vi hệ thống thiết bị theo cương vị.
           </div>
+        ) : treeQuery.isLoading ? (
+          <div className="rounded-lg border border-dashed border-cyan-200 bg-white px-4 py-6 text-center text-sm text-muted-foreground">
+            Đang tải cây thiết bị để phân quyền…
+          </div>
         ) : roots.length === 0 ? (
           <div className="rounded-lg border border-dashed border-cyan-200 bg-white px-4 py-6 text-center text-sm text-muted-foreground">
             Chưa có dữ liệu cây thiết bị để phân quyền.
           </div>
         ) : (
           <>
+            <div className="mb-3 flex items-center gap-1 rounded-xl border border-border bg-muted/40 p-1.5" role="tablist" aria-label="Phạm vi cây thiết bị phân quyền">
+              {PERMISSION_TREE_SCOPES.map((item) => {
+                const active = treeScope === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setTreeScope(item.key)}
+                    className={cn(
+                      "flex-1 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors",
+                      active ? "bg-white text-accent shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-ink"
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mb-3 text-xs leading-5 text-muted-foreground">
+              Cây Tổ máy S1/S2 dùng chung cấu trúc và quyền theo thư mục; Dùng chung được cấu hình ở nhóm riêng.
+            </p>
             {fixedUnrestricted && (
               <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                 <b>Quyền mặc định cố định:</b> {position} được xem và thao tác toàn bộ hệ thống, thiết bị.
