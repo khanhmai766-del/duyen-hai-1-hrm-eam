@@ -9,6 +9,7 @@ export interface TicketItem {
   erpCode: string | null;
   erpName: string | null;
   deviceSeq: string | null;
+  replacementPointKeys: string[];
   deviceNameManual: string | null;
   quantity: number;
   replacementQuantity: number | null;
@@ -209,7 +210,8 @@ export function useCreateTicket() {
     mutationFn: (body: {
       type?: "DE_XUAT" | "UNG"; unit: string; bbktNumber?: string; note?: string;
       assignedPosition: string; materialCategory: string;
-      materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string; replacementDeviceSeq?: string;
+      materialId?: string; erpCode?: string; proposedQuantity?: number; replacementDeviceName?: string;
+      replacementDeviceSeq?: string; replacementDeviceSeqs?: string[];
     }) =>
       apiMutate<MaterialTicket>("/api/material-tickets", "POST", body),
     onSuccess: () => {

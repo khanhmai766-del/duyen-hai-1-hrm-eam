@@ -443,6 +443,83 @@ const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghi�
 const UNITS = ["S1", "S2", "COMMON"];
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
+type TicketDeviceOption = { seq: string; label: string; system: string | null; managingPosition: string | null };
+
+function DeviceMultiSelect({
+  options,
+  allOptions,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  options: TicketDeviceOption[];
+  allOptions: TicketDeviceOption[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  disabled?: boolean;
+}) {
+  const selectedOptions = value
+    .map((key) => allOptions.find((option) => option.seq === key))
+    .filter((option): option is TicketDeviceOption => Boolean(option));
+  const visibleKeys = options.map((option) => option.seq);
+  const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => value.includes(key));
+
+  function toggle(key: string) {
+    onChange(value.includes(key) ? value.filter((item) => item !== key) : [...value, key]);
+  }
+
+  return (
+    <div className="device-multi-wrap">
+      <details className={`device-multiselect ${disabled ? "disabled" : ""}`}>
+        <summary onClick={(event) => { if (disabled) event.preventDefault(); }}>
+          <span className="device-multi-summary">
+            <b>{value.length ? `${value.length} thiết bị đã chọn` : "— Chọn một hoặc nhiều thiết bị —"}</b>
+            {value.length > 0 && <small>Nhấn để xem hoặc thay đổi lựa chọn</small>}
+          </span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </summary>
+        <div className="device-multi-panel" role="group" aria-label="Chọn thiết bị thay thế">
+          <div className="device-multi-toolbar">
+            <span>{options.length} thiết bị phù hợp</span>
+            <button
+              type="button"
+              disabled={!visibleKeys.length}
+              onClick={() => onChange(allVisibleSelected
+                ? value.filter((key) => !visibleKeys.includes(key))
+                : Array.from(new Set([...value, ...visibleKeys])))}
+            >
+              {allVisibleSelected ? "Bỏ chọn nhóm này" : "Chọn tất cả"}
+            </button>
+          </div>
+          <div className="device-multi-options">
+            {options.map((option) => {
+              const checked = value.includes(option.seq);
+              return (
+                <label key={`${option.seq}:${option.managingPosition ?? ""}`} className={checked ? "checked" : ""}>
+                  <input type="checkbox" checked={checked} onChange={() => toggle(option.seq)} />
+                  <span className="device-check"><Check size={12} /></span>
+                  <span><b>{option.label}</b>{option.system && <small>{option.system}</small>}</span>
+                </label>
+              );
+            })}
+            {!options.length && <div className="device-multi-empty">Không có thiết bị phù hợp trong hệ thống đã chọn.</div>}
+          </div>
+        </div>
+      </details>
+      {selectedOptions.length > 0 && (
+        <div className="device-selected-list" aria-label="Các thiết bị đã chọn">
+          {selectedOptions.map((option) => (
+            <span key={option.seq} title={option.label}>
+              <Check size={11} /> {option.label}
+              <button type="button" onClick={() => toggle(option.seq)} aria-label={`Bỏ chọn ${option.label}`}><X size={11} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>("DE_XUAT");
   const [unit, setUnit] = useState("S1");
@@ -452,7 +529,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [selectedErpCode, setSelectedErpCode] = useState("");
   const [proposedQuantity, setProposedQuantity] = useState(1);
-  const [replacementDeviceSeq, setReplacementDeviceSeq] = useState("");
+  const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>([]);
   const [replacementSystem, setReplacementSystem] = useState("");
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
@@ -499,16 +576,16 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
-      if (replacementDeviceSeq) setReplacementDeviceSeq("");
+      if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
       if (replacementSystem) setReplacementSystem("");
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
-      setReplacementDeviceSeq("");
+      setReplacementDeviceSeqs([]);
       setReplacementSystem("");
     }
-  }, [materialCards, replacementDeviceSeq, replacementSystem, selectedMaterialId, selectedErpCode]);
+  }, [materialCards, replacementDeviceSeqs.length, replacementSystem, selectedMaterialId, selectedErpCode]);
 
   React.useEffect(() => {
     if (!selectedErpOptions.length) {
@@ -521,16 +598,18 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   }, [selectedErpCode, selectedErpOptions]);
 
   React.useEffect(() => {
-    if (replacementDeviceSeq && !selectedDeviceOptions.some((device) => device.seq === replacementDeviceSeq)) {
-      setReplacementDeviceSeq("");
-    }
-  }, [replacementDeviceSeq, selectedDeviceOptions]);
+    const validKeys = new Set(availableDeviceOptions.map((device) => device.seq));
+    setReplacementDeviceSeqs((current) => {
+      const next = current.filter((key) => validKeys.has(key));
+      return next.length === current.length ? current : next;
+    });
+  }, [availableDeviceOptions]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
     setSelectedMaterialId("");
     setSelectedErpCode("");
-    setReplacementDeviceSeq("");
+    setReplacementDeviceSeqs([]);
     setReplacementSystem("");
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
@@ -542,7 +621,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
         assignedPosition: assigned, materialCategory: category,
         materialId: selectedMaterialId || undefined,
         proposedQuantity,
-        replacementDeviceSeq: replacementDeviceSeq || undefined,
+        replacementDeviceSeqs,
       });
       toast.success(`Đã tạo phiếu ${materialTicketReference(res)}`);
       onClose();
@@ -579,7 +658,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}>
+            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystem(""); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -587,7 +666,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats ticket-category-options">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystem(""); }}>{c}</button>
               ))}
             </div>
 
@@ -605,7 +684,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                         key={m.id}
                         type="button"
                         className={selectedMaterialId === m.id ? "on" : ""}
-                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}
+                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystem(""); }}
                         title={`${m.code} - ${m.name}`}
                       >
                         <span>{m.name}</span>
@@ -649,8 +728,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   onChange={(e) => {
                     const system = e.target.value;
                     setReplacementSystem(system);
-                    const currentDevice = availableDeviceOptions.find((option) => option.seq === replacementDeviceSeq);
-                    if (currentDevice?.system?.trim() !== system) setReplacementDeviceSeq("");
                   }}
                 >
                   <option value="">
@@ -663,19 +740,13 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   {replacementSystemOptions.map((system) => <option key={system} value={system}>{system}</option>)}
                 </select>
                 <label>Thiết bị thay thế *</label>
-                <select
-                  value={replacementDeviceSeq}
-                  disabled={!selectedMaterialId || !selectedDeviceOptions.length}
-                  onChange={(e) => {
-                    const deviceSeq = e.target.value;
-                    setReplacementDeviceSeq(deviceSeq);
-                    const device = availableDeviceOptions.find((option) => option.seq === deviceSeq);
-                    setReplacementSystem(device?.system?.trim() ?? "");
-                  }}
-                >
-                  <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
-                  {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
-                </select>
+                <DeviceMultiSelect
+                  options={selectedDeviceOptions}
+                  allOptions={availableDeviceOptions}
+                  value={replacementDeviceSeqs}
+                  onChange={setReplacementDeviceSeqs}
+                  disabled={!selectedMaterialId || !availableDeviceOptions.length}
+                />
                 {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
               </>
             ) : (
@@ -689,7 +760,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   !assigned ||
                   !category ||
                   !selectedMaterialId ||
-                  !note.trim() || proposedQuantity <= 0 || !replacementDeviceSeq
+                  !note.trim() || proposedQuantity <= 0 || replacementDeviceSeqs.length === 0
                 }
                 onClick={submit}>
                 {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
@@ -791,7 +862,10 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const [selectedErpCode, setSelectedErpCode] = useState(t.items[0]?.erpCode ?? "");
   const [proposedQuantity, setProposedQuantity] = useState(t.items[0]?.quantity ?? 1);
   const [note, setNote] = useState(t.proposalNote ?? "");
-  const [replacementDeviceSeq, setReplacementDeviceSeq] = useState(t.items[0]?.deviceSeq ?? "");
+  const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>(() => {
+    const storedKeys = t.items[0]?.replacementPointKeys ?? [];
+    return storedKeys.length ? storedKeys : t.items[0]?.deviceSeq ? [t.items[0].deviceSeq] : [];
+  });
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
@@ -827,14 +901,14 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
-      if (replacementDeviceSeq) setReplacementDeviceSeq("");
+      if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
-      setReplacementDeviceSeq("");
+      setReplacementDeviceSeqs([]);
     }
-  }, [materialCards, selectedMaterialId, selectedErpCode, replacementDeviceSeq, t.type]);
+  }, [materialCards, selectedMaterialId, selectedErpCode, replacementDeviceSeqs.length, t.type]);
 
   React.useEffect(() => {
     if (!['DE_XUAT', 'UNG'].includes(t.type)) return;
@@ -850,19 +924,21 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   React.useEffect(() => {
     if (!["DE_XUAT", "UNG"].includes(t.type)) return;
     if (!selectedMaterial) {
-      if (replacementDeviceSeq) setReplacementDeviceSeq("");
+      if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
       return;
     }
-    if (replacementDeviceSeq && !selectedDeviceOptions.some((device) => device.seq === replacementDeviceSeq)) {
-      setReplacementDeviceSeq("");
-    }
-  }, [replacementDeviceSeq, selectedDeviceOptions, selectedMaterial, t.type]);
+    const validKeys = new Set(selectedDeviceOptions.map((device) => device.seq));
+    setReplacementDeviceSeqs((current) => {
+      const next = current.filter((key) => validKeys.has(key));
+      return next.length === current.length ? current : next;
+    });
+  }, [replacementDeviceSeqs.length, selectedDeviceOptions, selectedMaterial, t.type]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
     setSelectedMaterialId("");
     setSelectedErpCode("");
-    setReplacementDeviceSeq("");
+    setReplacementDeviceSeqs([]);
     setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
@@ -875,7 +951,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
         erpCode: selectedErpCode || undefined,
         proposedQuantity,
         note: note.trim() || undefined,
-        replacementDeviceSeq: replacementDeviceSeq || undefined,
+        replacementDeviceSeqs,
       });
       toast.success(`Đã cập nhật phiếu ${materialTicketReference(t)}`);
       onClose();
@@ -899,7 +975,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           </div>
 
           <label>Cương vị được giao thực hiện *</label>
-          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>
+          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}>
             <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
             {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -907,7 +983,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <label>Loại vật tư *</label>
           <div className="cats ticket-category-options">
             {CATEGORIES.map((c) => (
-              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>{c}</button>
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}>{c}</button>
             ))}
           </div>
 
@@ -925,7 +1001,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                       key={m.id}
                       type="button"
                       className={selectedMaterialId === m.id ? "on" : ""}
-                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}
+                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}
                       title={`${m.code} - ${m.name}`}
                     >
                       <span>{m.name}</span>
@@ -959,10 +1035,13 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 </div>
                 <div className="field">
                   <label>Thiết bị thay thế *</label>
-                  <select value={replacementDeviceSeq} disabled={!selectedMaterialId || !selectedDeviceOptions.length} onChange={(e) => setReplacementDeviceSeq(e.target.value)}>
-                    <option value="">{selectedMaterialId ? "— Chọn thiết bị thuộc cương vị đã chọn —" : "— Chọn tên vật tư trước —"}</option>
-                    {selectedDeviceOptions.map((device) => <option key={`${device.seq}:${device.managingPosition}`} value={device.seq}>{device.label}</option>)}
-                  </select>
+                  <DeviceMultiSelect
+                    options={selectedDeviceOptions}
+                    allOptions={selectedDeviceOptions}
+                    value={replacementDeviceSeqs}
+                    onChange={setReplacementDeviceSeqs}
+                    disabled={!selectedMaterialId || !selectedDeviceOptions.length}
+                  />
                 </div>
               </div>
               {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
@@ -994,7 +1073,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 act.isPending ||
                 !assigned ||
                 !category ||
-                (["DE_XUAT", "UNG"].includes(t.type) && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || !replacementDeviceSeq))
+                (["DE_XUAT", "UNG"].includes(t.type) && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || replacementDeviceSeqs.length === 0))
               }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
@@ -2331,6 +2410,38 @@ const CSS = `
 .material-cards button span{display:block;font-size:12.5px;font-weight:800;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .material-cards button small{display:block;margin-top:3px;font-size:10.5px;font-weight:700;color:${C.soft};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .material-empty{grid-column:1/-1;border:1px dashed ${C.line};background:#fbfbfa;border-radius:10px;padding:11px 12px;text-align:center;font-size:12px;font-weight:600;color:${C.soft};}
+.device-multi-wrap{display:flex;flex-direction:column;gap:7px;min-width:0;}
+.device-multiselect{border:1px solid ${C.line};border-radius:10px;background:#fff;overflow:hidden;transition:border-color .16s ease,box-shadow .16s ease;}
+.device-multiselect[open]{border-color:#93c5fd;box-shadow:0 0 0 3px #dbeafe80;}
+.device-multiselect.disabled{background:#f8fafc;opacity:.66;pointer-events:none;}
+.device-multiselect summary{list-style:none;min-height:40px;padding:7px 11px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;color:#475569;user-select:none;}
+.device-multiselect summary::-webkit-details-marker{display:none;}
+.device-multiselect summary>svg{flex:0 0 auto;transition:transform .16s ease;color:#64748b;}
+.device-multiselect[open] summary>svg{transform:rotate(90deg);}
+.device-multi-summary{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.device-multi-summary b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.device-multi-summary small{font-size:10px;color:${C.soft};font-weight:500;}
+.device-multi-panel{border-top:1px solid #e8edf3;background:#fbfdff;}
+.device-multi-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border-bottom:1px solid #edf2f7;color:${C.muted};font-size:10.5px;font-weight:700;}
+.device-multi-toolbar button{border:0;background:transparent;color:${C.accent};font-size:10.5px;font-weight:800;cursor:pointer;padding:3px 5px;border-radius:5px;}
+.device-multi-toolbar button:hover{background:#dbeafe;}
+.device-multi-toolbar button:disabled{opacity:.45;cursor:not-allowed;}
+.device-multi-options{display:flex;flex-direction:column;max-height:184px;overflow-y:auto;padding:5px;}
+.device-multi-options>label{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer;color:#334155;transition:background .14s ease,color .14s ease;}
+.device-multi-options>label:hover{background:#eff6ff;}
+.device-multi-options>label.checked{background:#eaf3ff;color:${C.navy};}
+.device-multi-options input{position:absolute;opacity:0;pointer-events:none;}
+.device-check{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;border:1.5px solid #cbd5e1;border-radius:5px;background:#fff;color:transparent;}
+.device-multi-options label.checked .device-check{border-color:${C.accent};background:${C.accent};color:#fff;}
+.device-multi-options label>span:last-child{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.device-multi-options label b{font-size:11.5px;line-height:1.25;white-space:normal;}
+.device-multi-options label small{font-size:9.5px;color:${C.soft};}
+.device-multi-empty{padding:14px;text-align:center;color:${C.soft};font-size:11px;}
+.device-selected-list{display:flex;flex-wrap:wrap;gap:5px;}
+.device-selected-list>span{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 5px 4px 7px;border:1px solid #bfdbfe;border-radius:999px;background:#eff6ff;color:#1e40af;font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.device-selected-list>span>svg{flex:0 0 auto;}
+.device-selected-list>span>button{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;border:0;border-radius:50%;background:#dbeafe;color:#1e40af;cursor:pointer;padding:0;}
+.device-selected-list>span>button:hover{background:#bfdbfe;}
 .frm input:focus,.act input:focus,.act textarea:focus{border-color:${C.accent};}
 .seg2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .seg2 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}

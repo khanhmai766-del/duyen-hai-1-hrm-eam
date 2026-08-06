@@ -190,8 +190,16 @@ export async function POST(req: NextRequest) {
     if (!materialId) return fail("Vui lòng chọn tên vật tư");
     const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
     if (!Number.isFinite(proposedQuantity) || proposedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
-    const replacementDeviceSeq = String(body.replacementDeviceSeq || "").trim();
-    if (!replacementDeviceSeq) return fail("Vui lòng chọn thiết bị thay thế");
+    const rawReplacementKeys: unknown[] = Array.isArray(body.replacementDeviceSeqs)
+      ? body.replacementDeviceSeqs
+      : [body.replacementDeviceSeq];
+    const requestedReplacementKeys = Array.from(new Set<string>(
+      rawReplacementKeys
+        .map((value: unknown) => String(value || "").trim())
+        .filter(Boolean)
+    ));
+    if (!requestedReplacementKeys.length) return fail("Vui lòng chọn ít nhất một thiết bị thay thế");
+    if (requestedReplacementKeys.length > 50) return fail("Mỗi phiếu được chọn tối đa 50 thiết bị thay thế");
 
     selectedMaterial = await prisma.material.findUnique({
       where: { id: materialId },
@@ -201,25 +209,28 @@ export async function POST(req: NextRequest) {
     const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
     if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
-    const manualDeviceId = replacementDeviceSeq.startsWith("manual:")
-      ? replacementDeviceSeq.slice("manual:".length)
-      : "";
     const replacementPoints = await prisma.materialReplacement.findMany({
-      where: manualDeviceId
-        ? { id: manualDeviceId, materialId: selectedMaterial.id }
-        : { materialId: selectedMaterial.id, deviceSeq: replacementDeviceSeq },
-      select: { deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+      where: { materialId: selectedMaterial.id },
+      select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
     });
-    const replacementPoint = replacementPoints.find(
-      (point) => positionsMatch(point.managingPosition, assignedPosition)
+    const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
+    for (const point of replacementPoints) {
+      if (!positionsMatch(point.managingPosition, assignedPosition)) continue;
+      const key = point.location || !point.device ? `manual:${point.id}` : point.deviceSeq;
+      if (key && !assignedPointByKey.has(key)) assignedPointByKey.set(key, point);
+    }
+    const selectedReplacementPoints = requestedReplacementKeys.map((key) => assignedPointByKey.get(key));
+    if (selectedReplacementPoints.some((point) => !point)) {
+      return fail("Một hoặc nhiều thiết bị đã chọn không thuộc cương vị được giao quản lý");
+    }
+    const validReplacementPoints = selectedReplacementPoints.filter(
+      (point): point is NonNullable<typeof point> => Boolean(point)
     );
-    if (!replacementPoint) {
-      return fail("Vật tư hoặc thiết bị đã chọn không thuộc cương vị được giao quản lý");
-    }
-    if (!manualDeviceId && (!replacementPoint.deviceSeq || !replacementPoint.device)) {
-      return fail("Thiết bị chưa được khai báo trong Chi tiết điểm thay thế của vật tư");
-    }
-    const replacementDeviceLabel = replacementPoint.location || replacementPoint.device?.name || replacementPoint.system || replacementPoint.deviceSeq || "Thiết bị nhập tay";
+    const replacementDeviceLabels = validReplacementPoints.map(
+      (point) => point.location || point.device?.name || point.system || point.deviceSeq || "Thiết bị nhập tay"
+    );
+    const primaryReplacementPoint = validReplacementPoints[0];
+    const primaryReplacementKey = requestedReplacementKeys[0];
 
     const sequenceMonth = materialTicketMonthKey();
     const ticket = await prisma.$transaction(async (tx) => {
@@ -248,8 +259,9 @@ export async function POST(req: NextRequest) {
               materialId: selectedMaterial!.id,
               erpCode: null,
               quantity: proposedQuantity,
-              deviceSeq: manualDeviceId ? null : replacementPoint.deviceSeq,
-              deviceNameManual: replacementDeviceLabel,
+              deviceSeq: primaryReplacementKey.startsWith("manual:") ? null : primaryReplacementPoint.deviceSeq,
+              replacementPointKeys: requestedReplacementKeys,
+              deviceNameManual: replacementDeviceLabels.join(", "),
             }],
           },
         },
@@ -260,7 +272,7 @@ export async function POST(req: NextRequest) {
 
     const workflowLabel = type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-      `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabel}`);
+      `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabels.join(", ")}`);
     return ok(ticket);
   });
 }

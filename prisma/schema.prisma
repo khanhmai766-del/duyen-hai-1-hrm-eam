@@ -1337,6 +1337,7 @@ model MaterialTicketItem {
   erpCode             String?
   erpName             String? // tên vật tư ERP đóng băng khi chọn mã, dùng cho biên bản
   deviceSeq           String? // thiết bị theo EquipmentNode.seq; phiếu đề xuất mới có thể nhập tay tên thiết bị
+  replacementPointKeys String[] @default([]) // các điểm/thiết bị được chọn; giữ deviceSeq đầu tiên để tương thích dữ liệu cũ
   deviceNameManual    String?
   quantity            Int     @default(1)
   replacementQuantity Int? // số lượng thay thế do cương vị phân giao nhập ở luồng Ứng
