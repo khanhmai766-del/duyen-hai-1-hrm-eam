@@ -836,14 +836,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const workflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
+      const isChemicalTicket = t.materialCategory === "Hóa chất";
+      const requestedWorkflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
+      // Quy tắc nghiệp vụ: Hóa chất chỉ được đi theo luồng Đề xuất.
+      const workflowType = isChemicalTicket ? "DE_XUAT" : requestedWorkflowType;
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const quantity = Math.trunc(Number(body.proposedQuantity || item.quantity));
       const bbktNumber = String(body.bbktNumber || "").trim();
       const proposalNote = String(body.proposalNote || "").trim(); // Lý do — hiện ở "Ghi chú lý do" trên phiếu
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
-      if (t.type === "CHUA_CHON" && workflowType === "DE_XUAT") {
+      if (!isChemicalTicket && t.type === "CHUA_CHON" && workflowType === "DE_XUAT") {
         const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
         const availableErpCode = await prisma.erpMaterial.findFirst({
           where: {
@@ -1009,7 +1012,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
       const erpMaterial = await prisma.erpMaterial.findUnique({ where: { code: erpCode }, select: { name: true, erpStock: true } });
       if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
-      if (erpMaterial.erpStock < item.quantity) {
+      // Số lượng đề xuất Hóa chất không bị ràng buộc bởi tồn ERP. Việc xác nhận
+      // số lượng thực lãnh ở bước sau vẫn giữ kiểm tra tồn kho để tránh âm kho.
+      if (t.materialCategory !== "Hóa chất" && erpMaterial.erpStock < item.quantity) {
         return fail(
           `Mã vật tư ERP "${erpCode}" chỉ còn ${erpMaterial.erpStock.toLocaleString("vi-VN")} ${item.material.unit}, không đủ số lượng đề xuất ${item.quantity.toLocaleString("vi-VN")} ${item.material.unit}`
         );

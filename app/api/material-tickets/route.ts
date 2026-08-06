@@ -154,7 +154,6 @@ export async function POST(req: NextRequest) {
       return fail("Bạn không có quyền tạo phiếu thay thế vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
     }
     const body = await req.json();
-    const type = "CHUA_CHON";
     const unit = String(body.unit || "").trim();
     if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
     // BBKT không còn bắt buộc lúc tạo (bổ sung ở bước Nghiệm thu nếu có);
@@ -181,6 +180,9 @@ export async function POST(req: NextRequest) {
     const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
     const materialCategory = String(body.materialCategory || "").trim();
     if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
+    // Hóa chất luôn đi theo luồng Đề xuất. Không để phiếu ở trạng thái chờ
+    // chọn luồng vì nghiệp vụ này không áp dụng Ứng hoặc Sử dụng hiện có.
+    const type = materialCategory === "Hóa chất" ? "DE_XUAT" : "CHUA_CHON";
 
     let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
     const nextStatus = "CHO_XAC_NHAN";
@@ -256,8 +258,9 @@ export async function POST(req: NextRequest) {
       return ticket;
     });
 
+    const workflowLabel = type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
-      `${materialTicketReference(ticket)} (chưa chọn luồng, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabel}`);
+      `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabel}`);
     return ok(ticket);
   });
 }

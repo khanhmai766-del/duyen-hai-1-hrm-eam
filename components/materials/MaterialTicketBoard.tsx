@@ -90,7 +90,8 @@ const ORDER: Record<string, string[]> = {
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
 };
 const flowStatusKey = (status: string, type: string) =>
-  type === "DE_XUAT" && status === "CHO_THONG_KE_XUAT_BIEN_BAN" ? "CHO_NGHIEM_THU"
+  type === "DE_XUAT" && status === "CHO_XAC_NHAN" ? "CHO_THONG_KE"
+  : type === "DE_XUAT" && status === "CHO_THONG_KE_XUAT_BIEN_BAN" ? "CHO_NGHIEM_THU"
   : status === "CHO_THONG_KE" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_XAC_NHAN_PHAT" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_PHIEU_YCSC" ? "NHAN_VAT_TU"
@@ -570,10 +571,12 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
           </div>
         ) : (
           <div className="frm frm-scroll">
-            <label>Tổ máy</label>
-            <div className="seg2">{UNITS.map((u) => (
-              <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
-            ))}</div>
+            <div className="ticket-unit-field">
+              <label>Tổ máy</label>
+              <div className="seg2 ticket-unit-options">{UNITS.map((u) => (
+                <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
+              ))}</div>
+            </div>
 
             <label>Cương vị được giao thực hiện *</label>
             <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}>
@@ -582,7 +585,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </select>
 
             <label>Loại vật tư *</label>
-            <div className="cats">
+            <div className="cats ticket-category-options">
               {CATEGORIES.map((c) => (
                 <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); setReplacementSystem(""); }}>{c}</button>
               ))}
@@ -888,10 +891,12 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
         <div className="dlg-h"><b>Sửa phiếu {materialTicketReference(t)}</b>
           <button className="x" onClick={onClose}><X size={16} /></button></div>
         <div className="frm frm-scroll">
-          <label>Tổ máy</label>
-          <div className="seg2">{UNITS.map((u) => (
-            <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
-          ))}</div>
+          <div className="ticket-unit-field">
+            <label>Tổ máy</label>
+            <div className="seg2 ticket-unit-options">{UNITS.map((u) => (
+              <button key={u} className={unit === u ? "on" : ""} onClick={() => selectUnit(u)}>{u}</button>
+            ))}</div>
+          </div>
 
           <label>Cương vị được giao thực hiện *</label>
           <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>
@@ -900,7 +905,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           </select>
 
           <label>Loại vật tư *</label>
-          <div className="cats">
+          <div className="cats ticket-category-options">
             {CATEGORIES.map((c) => (
               <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeq(""); }}>{c}</button>
             ))}
@@ -1085,7 +1090,9 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           {t.items.length > 0 && (
             <>
             {t.items.map((it, itemIndex) => {
-              const short = ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) && it.quantity > it.material.quantity;
+              const short = t.materialCategory !== "Hóa chất"
+                && ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)
+                && it.quantity > it.material.quantity;
               return (
                 <div key={it.id} className={`item ${short ? "short" : ""}`}>
                   <div className="material-overview-grid">
@@ -1379,7 +1386,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     ? confirmationMaterialOption.erpCodes
     : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
         .map((code) => ({ code, name: t.items[0]?.material.name ?? "—", erpStock: 0 }));
-  const proposalFlowAvailable = opts ? confirmationErpInfoRows.some((row) => row.erpStock > 0) : null;
+  const isChemicalTicket = t.materialCategory === "Hóa chất";
+  const proposalFlowAvailable = isChemicalTicket
+    ? true
+    : opts ? confirmationErpInfoRows.some((row) => row.erpStock > 0) : null;
   const repairRequestConflictsProposal =
     !!repairRequestNumber.trim() &&
     !!t.proposalNumber?.trim() &&
@@ -1629,13 +1639,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   );
 
   if (acts.includes("confirm")) {
-    if (t.type === "CHUA_CHON") {
+    if (t.type === "CHUA_CHON" || isChemicalTicket) {
       const existingStockShortages = t.items.filter((item, index) => (index === 0 ? qty : item.quantity) > item.material.quantity);
       const canUseExistingStock = existingStockShortages.length === 0;
       return <div className="act">
         <div className="act-title-row">
           <label className="lb">Xác nhận yêu cầu</label>
-          <div className="seg3 flow-toggle" aria-label="Chọn luồng vật tư">
+          <div className={`seg3 flow-toggle ${isChemicalTicket ? "single" : ""}`} aria-label="Chọn luồng vật tư">
             {proposalFlowAvailable !== false && (
               <button
                 type="button"
@@ -1646,19 +1656,24 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 Đề xuất
               </button>
             )}
-            <button type="button" className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button>
-            <button
-              type="button"
-              className={workflowType === "SU_DUNG_HIEN_CO" ? "on" : ""}
-              disabled={!canUseExistingStock}
-              title={canUseExistingStock ? "Sử dụng số lượng vật tư hiện có" : "Số lượng hiện có không đủ"}
-              onClick={() => setWorkflowType("SU_DUNG_HIEN_CO")}
-            >
-              Sử dụng hiện có
-            </button>
+            {!isChemicalTicket && <button type="button" className={workflowType === "UNG" ? "on" : ""} onClick={() => setWorkflowType("UNG")}>Ứng</button>}
+            {!isChemicalTicket && (
+              <button
+                type="button"
+                className={workflowType === "SU_DUNG_HIEN_CO" ? "on" : ""}
+                disabled={!canUseExistingStock}
+                title={canUseExistingStock ? "Sử dụng số lượng vật tư hiện có" : "Số lượng hiện có không đủ"}
+                onClick={() => setWorkflowType("SU_DUNG_HIEN_CO")}
+              >
+                Sử dụng hiện có
+              </button>
+            )}
           </div>
         </div>
-        {!canUseExistingStock && (
+        {isChemicalTicket && (
+          <div className="note"><Check size={14} /><span>Phiếu Hóa chất mặc định theo luồng <b>Đề xuất</b>; số lượng đề xuất không ràng buộc với tồn ERP.</span></div>
+        )}
+        {!isChemicalTicket && !canUseExistingStock && (
           <div className="warnbox">
             <AlertTriangle size={15} />
             Không thể chọn <b>Sử dụng hiện có</b>: {existingStockShortages.map((item) => `${item.material.name} cần ${item.id === t.items[0]?.id ? qty : item.quantity}, hiện có ${item.material.quantity} ${item.material.unit}`).join("; ")}. {proposalFlowAvailable === false ? <>Bạn chỉ có thể chọn <b>Ứng</b> vì tất cả mã vật tư ERP đều không còn tồn kho.</> : <>Bạn vẫn có thể chọn <b>Đề xuất</b> hoặc <b>Ứng</b>.</>}
@@ -1736,7 +1751,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const proposedQuantity = Math.max(0, t.items[0]?.quantity ?? 0);
     // Khi mã chưa bị khóa, chỉ gợi ý các mã đủ tồn ERP để đáp ứng toàn bộ
     // số lượng đề xuất. Phiếu đã xuất vẫn hiện mã đã chọn để đối chiếu.
-    const statsCodeOptions = proposalExported
+    const statsCodeOptions = proposalExported || isChemicalTicket
       ? allStatsCodeOptions
       : allStatsCodeOptions.filter((option) => option.erpStock >= proposedQuantity);
     const selectedStatsErp = statsCodeOptions.find((option) => option.code === erpCode);
@@ -2320,7 +2335,16 @@ const CSS = `
 .seg2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .seg2 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg2 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
+.ticket-unit-field{display:grid;grid-template-columns:68px minmax(0,360px);align-items:center;gap:10px;}
+.ticket-unit-field>label{margin:0;white-space:nowrap;}
+.ticket-unit-options{max-width:360px;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+.ticket-unit-options button,.ticket-category-options button{min-height:34px;padding:7px 10px;border-radius:8px;font-size:12px;line-height:1.15;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .15s ease,background-color .15s ease,color .15s ease,box-shadow .15s ease;}
+.ticket-unit-options button:hover,.ticket-category-options button:hover{border-color:#94a3b8;background:#f8fafc;box-shadow:0 2px 5px rgba(15,23,42,.06);}
+.ticket-unit-options button.on:hover{border-color:${C.navy};background:${C.navy};}
+.ticket-category-options{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+.ticket-category-options button.on:hover{border-color:${C.accent};background:${C.accent}10;}
 .seg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.flow-toggle.single{grid-template-columns:minmax(140px,220px);}
 .seg3 button{padding:10px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;font-weight:600;cursor:pointer;color:#64748b;}
 .seg3 button.on{border-color:${C.navy};background:${C.navy};color:#fff;}
 .seg3 button:disabled{cursor:not-allowed;border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;opacity:.72;}
@@ -2505,5 +2529,6 @@ const CSS = `
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
