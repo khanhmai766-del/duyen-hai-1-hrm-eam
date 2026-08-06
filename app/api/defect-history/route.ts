@@ -136,19 +136,11 @@ export async function GET(req: NextRequest) {
     // thay thế vật tư. Không cho nó xuất hiện thêm ở đây, nếu không cùng một công tác
     // bị đếm hai lần ở hai bảng lịch sử.
     //
-    // DefectHistory.defectId cố ý KHÔNG có quan hệ (phiếu gốc có thể bị ẩn/xoá mà lịch
-    // sử vẫn đứng được), nên không lọc lồng qua `defect` được — phải loại theo danh
-    // sách id. Tập SYC nhỏ hơn hẳn tập khiếm khuyết nên truy vấn này rẻ.
-    const materialRequestDefectIds = (
-      await prisma.defect.findMany({ where: { isMaterialRequest: true }, select: { id: true } })
-    ).map((row) => row.id);
-    if (materialRequestDefectIds.length) {
-      // `notIn` sinh ra NOT IN, vốn loại luôn cả dòng defectId = NULL (lịch sử ghi tay),
-      // nên phải OR thêm nhánh NULL.
-      andConditions.push({
-        OR: [{ defectId: null }, { defectId: { notIn: materialRequestDefectIds } }],
-      });
-    }
+    // Đọc cờ phẳng chép sẵn trên chính bản ghi lịch sử. DefectHistory.defectId cố ý
+    // KHÔNG có quan hệ nên không lọc lồng qua `defect` được; bản đầu phải nạp toàn bộ
+    // id SYC rồi NOT IN — tốn một seq scan trên Defect mỗi lần mở trang (9,7 ms với
+    // 5.351 phiếu) và danh sách id sẽ phình theo từng chu kỳ thay thế.
+    where.isMaterialRequest = false;
     if (andConditions.length) where.AND = andConditions;
 
     // Điều kiện của nhánh CHỜ CHỐT, dựng riêng cho dễ đọc. Tất cả phải nằm trong SQL

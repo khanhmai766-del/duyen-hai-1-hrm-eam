@@ -696,6 +696,12 @@ model DefectRelatedDevice {
 model DefectHistory {
   id              String    @id @default(cuid())
   defectId        String? // nguồn (khiếm khuyết) — không ràng buộc quan hệ
+  // Bản ghi sinh từ SYC thay thế vật tư: hiển thị ở tab "Lịch sử thay thế" của
+  // trang Lịch thay thế vật tư, KHÔNG hiện ở Lịch sử sửa chữa.
+  // Cờ phẳng chép lúc ghi, cùng lối với Defect.isMaterialRequest — vì defectId cố
+  // ý không có quan hệ nên không lọc lồng qua Defect được. Không có cột này thì
+  // mỗi lần mở Lịch sử sửa chữa phải nạp toàn bộ id SYC rồi lọc bằng NOT IN.
+  isMaterialRequest Boolean @default(false)
   unit            String // Tổ máy thực hiện (snapshot theo khiếm khuyết)
   deviceSeq       String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq) — dùng lọc quyền/nhánh bằng SQL
   mappedDeviceUnit String? // snapshot hồ sơ thiết bị đã ánh xạ: S1 | S2 | COMMON

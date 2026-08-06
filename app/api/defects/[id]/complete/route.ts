@@ -144,6 +144,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const createdHistory = await tx.defectHistory.create({
         data: {
           defectId: defect.id,
+          // Quyết định bản ghi này thuộc Lịch sử thay thế hay Lịch sử sửa chữa.
+          isMaterialRequest: defect.isMaterialRequest,
           unit: defect.unit,
           device: defect.device,
           deviceSeq: defect.deviceSeq, // khóa chuẩn kế thừa từ phiếu khiếm khuyết (Tầng 1)

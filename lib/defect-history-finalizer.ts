@@ -151,6 +151,8 @@ export async function finalizePendingDefectHistories(
       const history = await tx.defectHistory.create({
         data: {
           defectId: defect.id,
+          // Quyết định bản ghi này thuộc Lịch sử thay thế hay Lịch sử sửa chữa.
+          isMaterialRequest: defect.isMaterialRequest,
           unit: defect.unit,
           device: defect.device,
           deviceSeq: defect.deviceSeq,
