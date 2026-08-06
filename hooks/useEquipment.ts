@@ -147,6 +147,8 @@ export interface EquipmentNodeDetail extends EquipmentNode {
   attachedInfo: string | null;
   documentUrl: string | null;
   imageUrl: string | null;
+  baseName: string;
+  hasNameOverride: boolean;
 }
 
 /**
@@ -243,6 +245,23 @@ export function useMoveEquipmentNode() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["equipment-tree"] });
       qc.invalidateQueries({ queryKey: ["equipment-node"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}
+
+export function useUpdateEquipmentProfileName() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { seq: string; machine: "S1" | "S2"; name: string | null }) =>
+      apiMutate<{ seq: string; machine: "S1" | "S2"; name: string | null; effectiveName: string }>(
+        `/api/equipment-tree/${encodeURIComponent(body.seq)}`,
+        "PUT",
+        body
+      ),
+    onSuccess: (_data, body) => {
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["equipment-node", body.seq] });
       qc.invalidateQueries({ queryKey: ["devices"] });
     },
   });

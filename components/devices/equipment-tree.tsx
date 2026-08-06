@@ -32,6 +32,7 @@ import {
   treeChildrenKey,
   type TreeNode,
   useMoveEquipmentNode,
+  useUpdateEquipmentProfileName,
 } from "@/hooks/useEquipment";
 import {
   branchOf,
@@ -294,6 +295,10 @@ function TreeScopeBody({
   const deleteDevice = useDeleteDevice();
   const updateDevice = useUpdateDevice();
   const moveNode = useMoveEquipmentNode();
+  const updateProfileName = useUpdateEquipmentProfileName();
+  const editDetailQuery = useEquipmentNode(editTarget?.seq, scope);
+  const editDetail = editDetailQuery.data?.data ?? null;
+  const editPending = updateDevice.isPending || updateProfileName.isPending;
 
   const debouncedSearch = useDebouncedValue(search, 350);
   const q = debouncedSearch.trim();
@@ -628,7 +633,7 @@ function TreeScopeBody({
       <Dialog
         open={!!editTarget}
         onOpenChange={(open) => {
-          if (!open && !updateDevice.isPending) {
+          if (!open && !editPending) {
             setEditTarget(null);
             setEditName("");
           }
@@ -636,9 +641,17 @@ function TreeScopeBody({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Chỉnh sửa tên thiết bị</DialogTitle>
+            <DialogTitle>
+              {scope === "COMMON" ? "Chỉnh sửa tên thiết bị" : `Tên riêng cho Tổ máy ${scope}`}
+            </DialogTitle>
             <DialogDescription>
-              Số thứ tự <span className="font-mono font-semibold text-ink">{editTarget?.fullCode}</span> được giữ nguyên. {BOTH_UNITS_NOTE}
+              {scope === "COMMON" ? (
+                <>Số thứ tự <span className="font-mono font-semibold text-ink">{editTarget?.fullCode}</span> được giữ nguyên.</>
+              ) : (
+                <>
+                  Tên này chỉ hiển thị tại cây <span className="font-semibold text-ink">Tổ máy {scope}</span>; tên của tổ máy còn lại không thay đổi.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -656,8 +669,12 @@ function TreeScopeBody({
               }
               try {
                 const parentSeq = editTarget.parentSeq;
-                await updateDevice.mutateAsync({ id: editTarget.seq, name });
-                toast.success(`Đã cập nhật tên thiết bị ${editTarget.fullCode}`);
+                if (scope === "COMMON") {
+                  await updateDevice.mutateAsync({ id: editTarget.seq, name });
+                } else {
+                  await updateProfileName.mutateAsync({ seq: editTarget.seq, machine: scope, name });
+                }
+                toast.success(scope === "COMMON" ? `Đã cập nhật tên thiết bị ${editTarget.fullCode}` : `Đã lưu tên riêng cho Tổ máy ${scope}`);
                 setEditTarget(null);
                 setEditName("");
                 await refreshBranch(parentSeq);
@@ -667,23 +684,51 @@ function TreeScopeBody({
             }}
           >
             <div className="space-y-2">
-              <Label htmlFor="equipment-name">Tên thiết bị</Label>
+              <Label htmlFor="equipment-name">{scope === "COMMON" ? "Tên thiết bị" : `Tên hiển thị tại ${scope}`}</Label>
               <Input
                 id="equipment-name"
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
                 maxLength={200}
                 autoFocus
-                disabled={updateDevice.isPending}
+                disabled={editPending}
                 placeholder="Nhập tên thiết bị"
               />
               <div className="text-right text-xs text-muted-foreground">{editName.length}/200 ký tự</div>
+              {scope !== "COMMON" && (
+                <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-800">
+                  Tên dùng chung hiện tại: <span className="font-semibold">{editDetail?.baseName ?? "Đang tải…"}</span>
+                </div>
+              )}
             </div>
             <DialogFooter className="gap-2">
+              {scope !== "COMMON" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="sm:mr-auto"
+                  disabled={editPending || editDetailQuery.isLoading || !editDetail?.hasNameOverride}
+                  onClick={async () => {
+                    if (!editTarget) return;
+                    try {
+                      const parentSeq = editTarget.parentSeq;
+                      await updateProfileName.mutateAsync({ seq: editTarget.seq, machine: scope, name: null });
+                      toast.success(`Đã dùng lại tên chung cho Tổ máy ${scope}`);
+                      setEditTarget(null);
+                      setEditName("");
+                      await refreshBranch(parentSeq);
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Không thể xóa tên riêng");
+                    }
+                  }}
+                >
+                  Dùng lại tên chung
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
-                disabled={updateDevice.isPending}
+                disabled={editPending}
                 onClick={() => {
                   setEditTarget(null);
                   setEditName("");
@@ -691,9 +736,9 @@ function TreeScopeBody({
               >
                 Hủy
               </Button>
-              <Button type="submit" disabled={updateDevice.isPending || !editName.trim()}>
-                {updateDevice.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Lưu tên
+              <Button type="submit" disabled={editPending || !editName.trim()}>
+                {editPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                {scope === "COMMON" ? "Lưu tên" : `Lưu cho ${scope}`}
               </Button>
             </DialogFooter>
           </form>
