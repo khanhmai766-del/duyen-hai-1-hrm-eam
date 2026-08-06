@@ -1,0 +1,2 @@
+ALTER TABLE "MaterialTicketItem"
+ADD COLUMN IF NOT EXISTS "replacementPointKeys" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
