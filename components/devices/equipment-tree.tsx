@@ -18,6 +18,7 @@ import {
   Trash2,
   Pencil,
   Plus,
+  FolderInput,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import {
   fetchTreeChildren,
   treeChildrenKey,
   type TreeNode,
+  useMoveEquipmentNode,
 } from "@/hooks/useEquipment";
 import {
   branchOf,
@@ -51,6 +53,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { EquipmentTreePicker, type PickerEquipmentNode } from "@/components/devices/equipment-tree-picker";
 
 // Cấu trúc cây là DÙNG CHUNG cho 2 tổ máy (S2 là hình chiếu của cùng bộ node), nên mọi
 // thao tác thêm/sửa/xoá thiết bị đều ảnh hưởng cả hai — phải nói rõ trước khi người dùng bấm.
@@ -99,6 +102,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onDelete,
   canEdit,
   onEdit,
+  canMove,
+  onMove,
 }: {
   node: TreeNode;
   depth: number;
@@ -111,6 +116,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onDelete: (node: TreeNode) => void;
   canEdit: boolean;
   onEdit: (node: TreeNode) => void;
+  canMove: boolean;
+  onMove: (node: TreeNode) => void;
 }) {
   const hasKids = node.hasChildren;
   return (
@@ -178,6 +185,20 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
           <Pencil className="h-3.5 w-3.5" />
         </button>
       )}
+      {canMove && node.parentSeq !== null && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove(node);
+          }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-amber-50 hover:text-amber-700 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-amber-400/40 group-hover:opacity-100"
+          title={`Di chuyển ${node.name}`}
+          aria-label={`Di chuyển ${node.name}`}
+        >
+          <FolderInput className="h-3.5 w-3.5" />
+        </button>
+      )}
       {canDelete && !hasKids && node.parentSeq !== null && (
         <button
           type="button"
@@ -200,6 +221,7 @@ type TreeViewProps = {
   canDelete?: boolean;
   canEdit?: boolean;
   canCreate?: boolean;
+  canMove?: boolean;
   onCreateChild?: (node: TreeNode) => void;
 };
 
@@ -237,6 +259,7 @@ function TreeScopeBody({
   canDelete = false,
   canEdit = false,
   canCreate = false,
+  canMove = false,
   onCreateChild,
 }: TreeViewProps & { scope: TreeScope; onScopeChange: (scope: TreeScope) => void }) {
   const params = useSearchParams();
@@ -255,8 +278,11 @@ function TreeScopeBody({
   const [deleteTarget, setDeleteTarget] = React.useState<TreeNode | null>(null);
   const [editTarget, setEditTarget] = React.useState<TreeNode | null>(null);
   const [editName, setEditName] = React.useState("");
+  const [moveTarget, setMoveTarget] = React.useState<TreeNode | null>(null);
+  const [moveDestination, setMoveDestination] = React.useState<PickerEquipmentNode | null>(null);
   const deleteDevice = useDeleteDevice();
   const updateDevice = useUpdateDevice();
+  const moveNode = useMoveEquipmentNode();
 
   const debouncedSearch = useDebouncedValue(search, 350);
   const q = debouncedSearch.trim();
@@ -515,6 +541,11 @@ function TreeScopeBody({
                         setEditTarget(node);
                         setEditName(node.name);
                       }}
+                      canMove={canMove}
+                      onMove={(node) => {
+                        setMoveTarget(node);
+                        setMoveDestination(null);
+                      }}
                     />
                   </div>
                 );
@@ -655,6 +686,69 @@ function TreeScopeBody({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!moveTarget}
+        onOpenChange={(open) => {
+          if (!open && !moveNode.isPending) {
+            setMoveTarget(null);
+            setMoveDestination(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Di chuyển thiết bị hoặc thư mục</DialogTitle>
+            <DialogDescription>
+              Chọn vị trí cha mới cho “{moveTarget?.name}”. Toàn bộ thiết bị con và dữ liệu liên quan sẽ được chuyển theo. {BOTH_UNITS_NOTE}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Thư mục đích</Label>
+            <EquipmentTreePicker
+              value={moveDestination?.seq ?? ""}
+              onChange={setMoveDestination}
+              scope={scope}
+              includeLeaves
+              maxSelectableDepth={15}
+              placeholder="Chọn thư mục hoặc thiết bị cha mới"
+              disabled={moveNode.isPending}
+            />
+            {moveDestination && (
+              <p className="text-xs text-muted-foreground">
+                Vị trí mới: <span className="font-semibold text-ink">{moveDestination.name}</span> · {moveDestination.fullCode}
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={moveNode.isPending} onClick={() => setMoveTarget(null)}>
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              disabled={!moveDestination || moveNode.isPending}
+              onClick={async () => {
+                if (!moveTarget || !moveDestination) return;
+                try {
+                  const oldParent = moveTarget.parentSeq;
+                  const result = await moveNode.mutateAsync({ sourceSeq: moveTarget.seq, targetParentSeq: moveDestination.seq });
+                  toast.success(`Đã di chuyển ${result.movedCount.toLocaleString("vi-VN")} mục sang ${moveDestination.name}`);
+                  setMoveTarget(null);
+                  setMoveDestination(null);
+                  setSelected(result.seq);
+                  setChildrenBySeq(new Map());
+                  setExpanded(new Set());
+                  await Promise.all([refreshBranch(oldParent), refreshBranch(result.targetParentSeq)]);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Không thể di chuyển thiết bị");
+                }
+              }}
+            >
+              {moveNode.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderInput className="h-4 w-4" />}
+              Di chuyển
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

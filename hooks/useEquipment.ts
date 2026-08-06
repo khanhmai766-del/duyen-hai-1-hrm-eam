@@ -230,3 +230,20 @@ export function useUpdateEquipmentNode() {
     },
   });
 }
+
+export function useMoveEquipmentNode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sourceSeq: string; targetParentSeq: string }) =>
+      apiMutate<{ sourceSeq: string; seq: string; movedCount: number; targetParentSeq: string }>(
+        "/api/equipment-tree/move",
+        "POST",
+        body
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["equipment-node"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}

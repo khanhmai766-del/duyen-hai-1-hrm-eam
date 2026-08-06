@@ -223,6 +223,7 @@ function DevicesPageContent() {
           canDelete={canDeleteDevices}
           canEdit={canEditDevices}
           canCreate={canCreateDevices}
+          canMove={canEditDevices}
           onCreateChild={openCreateForSystem}
         />
       ) : view === "detail" ? (
