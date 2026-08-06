@@ -537,22 +537,36 @@ function ReplacementsPageContent() {
                   }}
                 />
               )}
-              <div className="grid gap-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
-                <Select
-                  value={machineFilter}
-                  onValueChange={(value) => {
-                    setMachineFilter(value);
-                    setPositionFilter("ALL");
-                  }}
-                >
-                  <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MACHINE_FILTERS.map((machine) => (
-                      <SelectItem key={machine.key} value={machine.key}>{machine.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3 max-[360px]:grid-cols-1">
+                <div className="grid min-w-0 gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                  <Select
+                    value={machineFilter}
+                    onValueChange={(value) => {
+                      setMachineFilter(value);
+                      setPositionFilter("ALL");
+                    }}
+                  >
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo tổ máy"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MACHINE_FILTERS.map((machine) => (
+                        <SelectItem key={machine.key} value={machine.key}>{machine.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid min-w-0 gap-1.5">
+                  <Label className="text-xs font-semibold text-slate-600">Loại vật tư</Label>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
+                      {CATEGORY_FILTERS.map((category) => (
+                        <SelectItem key={category} value={category}>{category}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs font-semibold text-slate-600">Cương vị</Label>
@@ -564,18 +578,6 @@ function ReplacementsPageContent() {
                     <SelectItem value="ALL">Tất cả cương vị</SelectItem>
                     {positionOptions.map((position) => (
                       <SelectItem key={position} value={position}>{position}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Loại vật tư</Label>
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-10 w-full rounded-xl bg-white" aria-label="Lọc theo loại vật tư"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
-                    {CATEGORY_FILTERS.map((category) => (
-                      <SelectItem key={category} value={category}>{category}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
