@@ -166,6 +166,17 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
       ) : (
         <Cpu className="h-4 w-4 shrink-0 text-sky-500" />
       )}
+      {node.machine !== "COMMON" && (
+        <span
+          className={cn(
+            "inline-flex h-5 min-w-7 shrink-0 items-center justify-center rounded-md px-1.5 text-[9px] font-extrabold leading-none tracking-wide ring-1",
+            node.machine === "S1" ? "bg-blue-50 text-blue-700 ring-blue-200" : "bg-orange-50 text-orange-700 ring-orange-200"
+          )}
+          title={`Thiết bị Tổ máy ${node.machine}`}
+        >
+          {node.machine}
+        </span>
+      )}
       <span className={cn("min-w-0 flex-1 truncate", hasKids && "uppercase")} title={node.name}>
         {node.name}
       </span>
