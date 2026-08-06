@@ -98,8 +98,16 @@ async function materialDocumentMap(ids?: string[]) {
   }
 }
 
+/**
+ * Ghi ĐÚNG giá trị được truyền vào, kể cả null.
+ *
+ * Trước đây hàm này tự bỏ qua khi cả hai trường rỗng, nên thao tác "Gỡ tài liệu"
+ * (nút ✕ ở form vật tư gửi lên documentUrl = null) không bao giờ chạm tới DB —
+ * tải lại trang là tài liệu cũ hiện lại. Việc quyết định "có cần ghi không" thuộc
+ * về nơi gọi, vì chỉ nơi đó phân biệt được "client không gửi trường tài liệu" với
+ * "client cố ý gửi rỗng để gỡ".
+ */
 async function updateMaterialDocument(materialId: string, fields: MaterialDocumentFields) {
-  if (!fields.documentUrl && !fields.documentName) return;
   await ensureMaterialDocumentColumns();
   await prisma.$executeRaw`
     UPDATE "Material"
@@ -377,7 +385,9 @@ export async function POST(req: NextRequest) {
         include: MATERIAL_INCLUDE,
       });
       await updateMaterialErpCodes(m.id, erpCodes);
-      await updateMaterialDocument(m.id, document);
+      // Vật tư vừa tạo đã có sẵn hai cột NULL nên không có tài liệu thì khỏi ghi —
+      // tránh một UPDATE thừa (kèm cả bước ensure cột) cho mỗi tổ máy khi tạo hàng loạt.
+      if (document.documentUrl) await updateMaterialDocument(m.id, document);
       await audit(user.id, "CREATE_MATERIAL", "Material", m.id, auditDetailWithPosition(user, `${m.code} (${machine})`));
       if (!firstMaterial) firstMaterial = m;
     }
