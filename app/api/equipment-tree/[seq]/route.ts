@@ -61,16 +61,18 @@ export async function GET(req: NextRequest, { params }: { params: { seq: string 
       name: override?.name ?? normalizeEquipmentNodeName(node.seq, node.name),
       baseName: normalizeEquipmentNodeName(node.seq, node.name),
       hasNameOverride: override?.name != null,
+      baseKks: scopeKks(node.kks, scope),
+      hasKksOverride: override?.kks != null,
       deviceId: null,
     });
   });
 }
 
-/** Lưu tên riêng cho đúng hình chiếu S1 hoặc S2; cấu trúc cây vẫn dùng chung. */
+/** Lưu tên/KKS riêng cho đúng hình chiếu S1 hoặc S2; cấu trúc cây vẫn dùng chung. */
 export async function PUT(req: NextRequest, { params }: { params: { seq: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requireDeviceManage(user, "Bạn không có quyền cập nhật tên thiết bị");
+    await requireDeviceManage(user, "Bạn không có quyền cập nhật thông tin thiết bị");
     const seq = decodeURIComponent(params.seq ?? "").trim();
     if (!seq) return fail("Thiếu số thứ tự thiết bị");
     await assertSeqEditable(user, seq);
@@ -78,28 +80,50 @@ export async function PUT(req: NextRequest, { params }: { params: { seq: string 
     const body = await req.json();
     const machine = String(body.machine ?? "").trim().toUpperCase();
     if (machine !== "S1" && machine !== "S2") {
-      return fail("Tên riêng chỉ áp dụng cho thiết bị thuộc Tổ máy S1 hoặc S2");
+      return fail("Thông tin riêng chỉ áp dụng cho thiết bị thuộc Tổ máy S1 hoặc S2");
     }
-    const name = body.name == null ? null : String(body.name).trim();
-    if (name !== null && !name) return fail("Tên thiết bị không được để trống");
-    if (name && name.length > 200) return fail("Tên thiết bị không được vượt quá 200 ký tự");
+    const hasName = Object.prototype.hasOwnProperty.call(body, "name");
+    const hasKks = Object.prototype.hasOwnProperty.call(body, "kks");
+    if (!hasName && !hasKks) return fail("Không có thông tin cần cập nhật");
 
-    const node = await prisma.equipmentNode.findUnique({ where: { seq }, select: { id: true, name: true } });
+    const requestedName = hasName && body.name != null ? String(body.name).trim() : null;
+    const requestedKks = hasKks && body.kks != null ? String(body.kks).trim() : null;
+    if (hasName && body.name != null && !requestedName) return fail("Tên thiết bị không được để trống");
+    if (requestedName && requestedName.length > 200) return fail("Tên thiết bị không được vượt quá 200 ký tự");
+    if (requestedKks && requestedKks.length > 100) return fail("Mã KKS không được vượt quá 100 ký tự");
+
+    const node = await prisma.equipmentNode.findUnique({ where: { seq }, select: { id: true, name: true, kks: true } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);
-    await prisma.equipmentProfile.upsert({
+    const baseName = normalizeEquipmentNodeName(seq, node.name);
+    const baseKks = scopeKks(node.kks, machine);
+    // Giá trị trùng mặc định được quy về null để bảng ghi đè luôn là bảng thưa.
+    const name = hasName ? (requestedName === baseName ? null : requestedName) : undefined;
+    const kks = hasKks ? (requestedKks === baseKks || !requestedKks ? null : requestedKks) : undefined;
+    const profile = await prisma.equipmentProfile.upsert({
       where: { nodeSeq_machine: { nodeSeq: seq, machine } },
-      create: { nodeSeq: seq, machine, name, createdById: user.id },
-      update: { name },
+      create: { nodeSeq: seq, machine, name: name ?? null, kks: kks ?? null, createdById: user.id },
+      update: { ...(hasName ? { name: name ?? null } : {}), ...(hasKks ? { kks: kks ?? null } : {}) },
+      select: { id: true, name: true, kks: true, attachedInfo: true, documentUrl: true, imageUrl: true },
     });
+    if (!profile.name && !profile.kks && !profile.attachedInfo && !profile.documentUrl && !profile.imageUrl) {
+      await prisma.equipmentProfile.delete({ where: { id: profile.id } });
+    }
 
     invalidateEquipmentProfileCache();
     await audit(
       user.id,
-      name ? "UPDATE_EQUIPMENT_PROFILE_NAME" : "RESET_EQUIPMENT_PROFILE_NAME",
+      "UPDATE_EQUIPMENT_PROFILE",
       "EquipmentNode",
       node.id,
-      name ? `${machine}: ${name}` : `${machine}: dùng tên mặc định`
+      `${machine}${hasName ? ` · Tên: ${name ?? "mặc định"}` : ""}${hasKks ? ` · KKS: ${kks ?? "mặc định"}` : ""}`
     );
-    return ok({ seq, machine, name, effectiveName: name ?? normalizeEquipmentNodeName(seq, node.name) });
+    return ok({
+      seq,
+      machine,
+      name: name ?? null,
+      kks: kks ?? null,
+      effectiveName: name ?? baseName,
+      effectiveKks: kks ?? baseKks,
+    });
   });
 }

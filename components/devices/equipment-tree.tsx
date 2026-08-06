@@ -32,7 +32,7 @@ import {
   treeChildrenKey,
   type TreeNode,
   useMoveEquipmentNode,
-  useUpdateEquipmentProfileName,
+  useUpdateEquipmentProfile,
 } from "@/hooks/useEquipment";
 import {
   branchOf,
@@ -191,8 +191,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
             onEdit(node);
           }}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-blue-50 hover:text-accent focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent/40 group-hover:opacity-100"
-          title={`Chỉnh sửa tên ${node.name}`}
-          aria-label={`Chỉnh sửa tên ${node.name}`}
+          title={`Chỉnh sửa tên và KKS ${node.name}`}
+          aria-label={`Chỉnh sửa tên và KKS ${node.name}`}
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -290,15 +290,16 @@ function TreeScopeBody({
   const [deleteTarget, setDeleteTarget] = React.useState<TreeNode | null>(null);
   const [editTarget, setEditTarget] = React.useState<TreeNode | null>(null);
   const [editName, setEditName] = React.useState("");
+  const [editKks, setEditKks] = React.useState("");
   const [moveTarget, setMoveTarget] = React.useState<TreeNode | null>(null);
   const [moveDestination, setMoveDestination] = React.useState<PickerEquipmentNode | null>(null);
   const deleteDevice = useDeleteDevice();
   const updateDevice = useUpdateDevice();
   const moveNode = useMoveEquipmentNode();
-  const updateProfileName = useUpdateEquipmentProfileName();
+  const updateProfile = useUpdateEquipmentProfile();
   const editDetailQuery = useEquipmentNode(editTarget?.seq, scope);
   const editDetail = editDetailQuery.data?.data ?? null;
-  const editPending = updateDevice.isPending || updateProfileName.isPending;
+  const editPending = updateDevice.isPending || updateProfile.isPending;
 
   const debouncedSearch = useDebouncedValue(search, 350);
   const q = debouncedSearch.trim();
@@ -556,6 +557,7 @@ function TreeScopeBody({
                       onEdit={(node) => {
                         setEditTarget(node);
                         setEditName(node.name);
+                        setEditKks(node.kks ?? "");
                       }}
                       canMove={canMove}
                       onMove={(node) => {
@@ -636,20 +638,21 @@ function TreeScopeBody({
           if (!open && !editPending) {
             setEditTarget(null);
             setEditName("");
+            setEditKks("");
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {scope === "COMMON" ? "Chỉnh sửa tên thiết bị" : `Tên riêng cho Tổ máy ${scope}`}
+              {scope === "COMMON" ? "Chỉnh sửa tên thiết bị" : `Tên và KKS riêng cho Tổ máy ${scope}`}
             </DialogTitle>
             <DialogDescription>
               {scope === "COMMON" ? (
                 <>Số thứ tự <span className="font-mono font-semibold text-ink">{editTarget?.fullCode}</span> được giữ nguyên.</>
               ) : (
                 <>
-                  Tên này chỉ hiển thị tại cây <span className="font-semibold text-ink">Tổ máy {scope}</span>; tên của tổ máy còn lại không thay đổi.
+                  Thông tin này chỉ hiển thị tại cây <span className="font-semibold text-ink">Tổ máy {scope}</span>; tổ máy còn lại không thay đổi.
                 </>
               )}
             </DialogDescription>
@@ -662,9 +665,11 @@ function TreeScopeBody({
               const name = editName.trim();
               if (!name) return toast.error("Tên thiết bị không được để trống");
               if (name.length > 200) return toast.error("Tên thiết bị không được vượt quá 200 ký tự");
-              if (name === editTarget.name) {
+              const kks = editKks.trim();
+              if (scope === "COMMON" && name === editTarget.name) {
                 setEditTarget(null);
                 setEditName("");
+                setEditKks("");
                 return;
               }
               try {
@@ -672,11 +677,12 @@ function TreeScopeBody({
                 if (scope === "COMMON") {
                   await updateDevice.mutateAsync({ id: editTarget.seq, name });
                 } else {
-                  await updateProfileName.mutateAsync({ seq: editTarget.seq, machine: scope, name });
+                  await updateProfile.mutateAsync({ seq: editTarget.seq, machine: scope, name, kks: kks || null });
                 }
-                toast.success(scope === "COMMON" ? `Đã cập nhật tên thiết bị ${editTarget.fullCode}` : `Đã lưu tên riêng cho Tổ máy ${scope}`);
+                toast.success(scope === "COMMON" ? `Đã cập nhật tên thiết bị ${editTarget.fullCode}` : `Đã lưu tên và KKS riêng cho Tổ máy ${scope}`);
                 setEditTarget(null);
                 setEditName("");
+                setEditKks("");
                 await refreshBranch(parentSeq);
               } catch (error) {
                 toast.error(error instanceof Error ? error.message : "Không thể cập nhật tên thiết bị");
@@ -701,6 +707,47 @@ function TreeScopeBody({
                 </div>
               )}
             </div>
+            {scope !== "COMMON" && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <Label htmlFor="equipment-kks">Mã KKS hiển thị tại {scope}</Label>
+                <Input
+                  id="equipment-kks"
+                  value={editKks}
+                  onChange={(event) => setEditKks(event.target.value)}
+                  maxLength={100}
+                  disabled={editPending}
+                  placeholder="Nhập mã KKS riêng, ví dụ A0…"
+                  className="font-mono"
+                />
+                <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+                  <span>
+                    KKS mặc định: <span className="font-mono font-semibold text-ink">{editDetailQuery.isLoading ? "Đang tải…" : editDetail?.baseKks ?? "Chưa có"}</span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto shrink-0 p-0 text-xs"
+                    disabled={editPending || editDetailQuery.isLoading || !editDetail?.hasKksOverride}
+                    onClick={async () => {
+                      if (!editTarget) return;
+                      try {
+                        const parentSeq = editTarget.parentSeq;
+                        await updateProfile.mutateAsync({ seq: editTarget.seq, machine: scope, kks: null });
+                        toast.success(`Đã dùng lại KKS mặc định cho Tổ máy ${scope}`);
+                        setEditTarget(null);
+                        setEditName("");
+                        setEditKks("");
+                        await refreshBranch(parentSeq);
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : "Không thể xóa KKS riêng");
+                      }
+                    }}
+                  >
+                    Dùng lại KKS mặc định
+                  </Button>
+                </div>
+              </div>
+            )}
             <DialogFooter className="gap-2">
               {scope !== "COMMON" && (
                 <Button
@@ -712,10 +759,11 @@ function TreeScopeBody({
                     if (!editTarget) return;
                     try {
                       const parentSeq = editTarget.parentSeq;
-                      await updateProfileName.mutateAsync({ seq: editTarget.seq, machine: scope, name: null });
+                      await updateProfile.mutateAsync({ seq: editTarget.seq, machine: scope, name: null });
                       toast.success(`Đã dùng lại tên chung cho Tổ máy ${scope}`);
                       setEditTarget(null);
                       setEditName("");
+                      setEditKks("");
                       await refreshBranch(parentSeq);
                     } catch (error) {
                       toast.error(error instanceof Error ? error.message : "Không thể xóa tên riêng");
@@ -732,13 +780,14 @@ function TreeScopeBody({
                 onClick={() => {
                   setEditTarget(null);
                   setEditName("");
+                  setEditKks("");
                 }}
               >
                 Hủy
               </Button>
               <Button type="submit" disabled={editPending || !editName.trim()}>
                 {editPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                {scope === "COMMON" ? "Lưu tên" : `Lưu cho ${scope}`}
+                {scope === "COMMON" ? "Lưu tên" : `Lưu tên và KKS cho ${scope}`}
               </Button>
             </DialogFooter>
           </form>

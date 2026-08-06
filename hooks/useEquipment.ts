@@ -149,6 +149,8 @@ export interface EquipmentNodeDetail extends EquipmentNode {
   imageUrl: string | null;
   baseName: string;
   hasNameOverride: boolean;
+  baseKks: string | null;
+  hasKksOverride: boolean;
 }
 
 /**
@@ -250,11 +252,11 @@ export function useMoveEquipmentNode() {
   });
 }
 
-export function useUpdateEquipmentProfileName() {
+export function useUpdateEquipmentProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { seq: string; machine: "S1" | "S2"; name: string | null }) =>
-      apiMutate<{ seq: string; machine: "S1" | "S2"; name: string | null; effectiveName: string }>(
+    mutationFn: (body: { seq: string; machine: "S1" | "S2"; name?: string | null; kks?: string | null }) =>
+      apiMutate<{ seq: string; machine: "S1" | "S2"; name: string | null; kks: string | null; effectiveName: string; effectiveKks: string | null }>(
         `/api/equipment-tree/${encodeURIComponent(body.seq)}`,
         "PUT",
         body
