@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deleteFromS3 } from "@/lib/s3";
+import { revertMaterialRequestReplacements } from "@/lib/defect-material-request";
 
 const DEFAULT_BATCH_SIZE = 50;
 const MAX_BATCH_SIZE = 200;
@@ -128,6 +129,11 @@ export async function finalizePendingDefectHistories(
             confirmedHistoryId: null,
           },
         });
+        // Bản chờ bị huỷ ⇒ lần thay thế chưa từng được chốt. Gắn lại điểm theo dõi
+        // và gỡ dòng lịch sử đã ghi lúc VHV bấm xác nhận.
+        if (defect.isMaterialRequest) {
+          await revertMaterialRequestReplacements(tx, { defectId: defect.id });
+        }
         return { outcome: "CANCELLED" as const, images: [] as string[] };
       }
 

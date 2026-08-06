@@ -191,7 +191,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await enqueueDefectSyncEvent(tx, { defect: updatedDefect, eventType: "UPDATE" });
       }
       if (shouldRecordReplacement) {
-        await recordMaterialRequestReplacements(tx, { defectId: defect.id, userId: user.id, replacedAt: performedAt });
+        // Phải truyền `defect` y như nhánh chờ chốt ở trên: thiếu nó thì dòng lịch sử
+        // thay thế mất cả defectId lẫn requestNumber — cột "Số yêu cầu" tụt về "Ghi thủ
+        // công", nội dung thực hiện không đọc ngược được, và revertMaterialRequest…()
+        // (tra theo defectId) không tìm ra dòng nào để hoàn tác.
+        await recordMaterialRequestReplacements(tx, {
+          defectId: defect.id,
+          userId: user.id,
+          replacedAt: performedAt,
+          defect: { id: defect.id, requestNumber: defect.requestNumber },
+          note: body.content?.trim() || body.result?.trim() || null,
+        });
       }
       return createdHistory;
     });

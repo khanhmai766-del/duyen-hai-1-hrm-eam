@@ -13,6 +13,7 @@ import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/de
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { canViewUnmappedDefectPosition } from "@/lib/positions";
 import { positionCodeOf } from "@/lib/position-catalog";
+import { revertMaterialRequestReplacements } from "@/lib/defect-material-request";
 import {
   normalizeMappedUnit,
   validateMappedDevice,
@@ -335,6 +336,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               confirmedHistoryId: null,
             },
           });
+          // Rút lại xác nhận thì phải rút lại cả lần "đã thay thế": gắn lại điểm
+          // theo dõi và gỡ dòng lịch sử, nếu không điểm bị tiêu cho một lần thay
+          // chưa từng được chốt.
+          if (updated.isMaterialRequest) {
+            await revertMaterialRequestReplacements(tx, { defectId: updated.id });
+          }
         }
         return updated;
       });

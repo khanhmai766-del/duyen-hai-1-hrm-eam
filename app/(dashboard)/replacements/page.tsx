@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ListFilter, RotateCcw, Upload } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ListFilter, RotateCcw, Upload, FileClock } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -24,6 +24,7 @@ import { ReplacementScheduleImportDialog } from "@/components/materials/replacem
 import { ReplacementPointForm } from "@/components/materials/replacement-point-form";
 import { ReplacementPointDetailsDialog } from "@/components/materials/replacement-point-details-dialog";
 import { ReplacementHistoryDetails } from "@/components/materials/replacement-history-details";
+import { PendingHistoryEditDialog } from "@/components/repair/pending-history-edit-dialog";
 import { LockChip } from "@/components/shared/lock-chip";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -344,6 +345,7 @@ function ReplacementsPageContent() {
   const [expandedLogId, setExpandedLogId] = React.useState<string | null>(null);
   const [editLogTarget, setEditLogTarget] = React.useState<ReplacementLogItem | null>(null);
   const [delLogTarget, setDelLogTarget] = React.useState<ReplacementLogItem | null>(null);
+  const [pendingEditDefectId, setPendingEditDefectId] = React.useState<string | null>(null);
   const [scheduleImportOpen, setScheduleImportOpen] = React.useState(false);
 
   /* ---- Tab 2: Lịch sử thay thế (history) ---- */
@@ -911,6 +913,21 @@ function ReplacementsPageContent() {
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center gap-2">
+                          {/* SYC thay thế vật tư không còn hiện ở Lịch sử sửa chữa, nên nút
+                              sửa bản nháp chờ chốt phải có ở đây — nếu không, suốt thời gian
+                              chờ chốt sẽ không còn đường nào sửa nội dung/PCT/kết quả. */}
+                          {canManage && pending && l.defectId && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                              title="Sửa thông tin lịch sử"
+                              onClick={() => setPendingEditDefectId(l.defectId!)}
+                            >
+                              <FileClock className="h-4 w-4" />
+                            </Button>
+                          )}
                           {canManage && (
                             <Button
                               type="button"
@@ -956,6 +973,10 @@ function ReplacementsPageContent() {
             </Card>
           )}
         </div>
+      )}
+
+      {pendingEditDefectId && (
+        <PendingHistoryEditDialog defectId={pendingEditDefectId} onClose={() => setPendingEditDefectId(null)} />
       )}
 
       {/* Schedule dialogs */}

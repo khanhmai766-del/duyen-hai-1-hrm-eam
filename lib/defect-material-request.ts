@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
+import { normalizeText } from "@/lib/nav";
 import { MAX_DEFECT_RELATED_DEVICES } from "@/lib/defect-related-devices";
 import { buildReplacementLogData } from "@/lib/material-replacement-log";
 
@@ -196,14 +197,115 @@ export async function recordMaterialRequestReplacements(
     logged += 1;
 
     if (tracked) {
+      // CHỈ đổi isActive. Cố tình KHÔNG ghi đè lastReplacedAt: ngày thay đã nằm trong
+      // dòng lịch sử vừa tạo (replacedAt), còn lastReplacedAt của điểm đã giải phóng
+      // không được đọc ở đâu nữa (mọi truy vấn lịch/theo dõi đều lọc isActive=true).
+      // Giữ nguyên giá trị cũ là thứ duy nhất cho phép revert…() khôi phục đúng điểm
+      // khi phiếu bị trả về, mà không cần thêm cột nhớ giá trị trước đó.
       await tx.materialReplacement.update({
         where: { id: tracked.id },
-        data: { isActive: false, lastReplacedAt: params.replacedAt },
+        data: { isActive: false },
       });
       released += 1;
     }
   }
   return { logged, released };
+}
+
+/**
+ * Nghịch đảo của recordMaterialRequestReplacements — chạy khi lần xác nhận lịch sử
+ * bị RÚT LẠI: phiếu được trả về trạng thái khác "Đã xử lý", hoặc bản chờ chốt bị huỷ
+ * vì phiếu không còn đủ điều kiện.
+ *
+ * Không có bước này thì điểm theo dõi bị "tiêu" cho một lần thay chưa từng được chốt:
+ * nó đã rời Lịch thay thế và tab Trạng thái theo dõi, còn dòng lịch sử thay thế thì
+ * vẫn nằm đó.
+ *
+ * Hoàn tác theo TỪNG ĐIỂM và là all-or-nothing cho mỗi điểm:
+ *  - Khôi phục được → xoá dòng lịch sử + gắn lại điểm (isActive=true).
+ *  - Không khôi phục được (người dùng đã bấm "Thêm điểm" lại trong lúc phiếu còn treo,
+ *    nên suất theo dõi đã đầy) → GIỮ NGUYÊN cả dòng lịch sử lẫn điểm đã giải phóng.
+ *    Chu kỳ mới đang chạy lấy chính lần thay đó làm mốc, xoá đi là hỏng mốc; và nếu
+ *    xoá lịch sử mà không gắn lại được điểm thì điểm rỗng đó sẽ hiện thành một dòng
+ *    khai báo trùng trong Danh mục vật tư (bảng đó nhận diện dòng khai báo bằng
+ *    isActive=false + chưa có lịch sử).
+ *
+ * Luật "một dòng khai báo chỉ nuôi được deviceCount điểm" được giữ nguyên, khoá tuần
+ * tự bằng đúng advisory lock mà POST /api/material-replacements dùng.
+ */
+export async function revertMaterialRequestReplacements(
+  tx: Prisma.TransactionClient,
+  params: { defectId: string }
+) {
+  // defectId là cột snapshot trên log (có index riêng) nên tra thẳng được, không phải
+  // đi vòng qua DefectMaterialRequest — vốn có thể đã bị sửa sau khi ra phiếu.
+  const logs = await tx.materialReplacementLog.findMany({
+    where: { defectId: params.defectId },
+    select: { id: true, replacementId: true },
+  });
+  if (logs.length === 0) return { removed: 0, restored: 0, skipped: 0 };
+
+  let removed = 0;
+  let restored = 0;
+  let skipped = 0;
+
+  for (const log of logs) {
+    // Log không neo vào điểm nào (điểm đã bị xoá, hoặc lúc ghi không tìm được điểm
+    // đang theo dõi): không có gì để gắn lại, xoá dòng lịch sử là đủ.
+    if (!log.replacementId) {
+      await tx.materialReplacementLog.delete({ where: { id: log.id } });
+      removed += 1;
+      continue;
+    }
+
+    const point = await tx.materialReplacement.findUnique({
+      where: { id: log.replacementId },
+      select: { id: true, materialId: true, deviceSeq: true, system: true, location: true, isActive: true },
+    });
+    if (!point || point.isActive) {
+      skipped += 1;
+      continue;
+    }
+
+    const targetWhere: Prisma.MaterialReplacementWhereInput = point.deviceSeq
+      ? { materialId: point.materialId, deviceSeq: point.deviceSeq }
+      : { materialId: point.materialId, deviceSeq: null, system: point.system, location: point.location };
+    const targetLockKey = point.deviceSeq
+      ? `${point.materialId}|device:${point.deviceSeq}`
+      : `${point.materialId}|system:${normalizeText(point.system ?? "")}|location:${normalizeText(point.location ?? "")}`;
+    await tx.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${targetLockKey}))::text AS lock_result
+    `;
+
+    // Dòng lịch sử khác vẫn neo vào điểm này ⇒ điểm đã qua nhiều lần thay, gắn lại
+    // là làm sai lịch sử. Để nguyên.
+    const otherLogs = await tx.materialReplacementLog.count({
+      where: { replacementId: point.id, id: { not: log.id } },
+    });
+    if (otherLogs > 0) {
+      skipped += 1;
+      continue;
+    }
+
+    const declaration = await tx.materialReplacement.findFirst({
+      where: { ...targetWhere, isActive: false, logs: { none: {} }, id: { not: point.id } },
+      orderBy: { createdAt: "asc" },
+      select: { deviceCount: true },
+    });
+    const limit = Math.max(1, declaration?.deviceCount ?? 1);
+    const activeCount = await tx.materialReplacement.count({ where: { ...targetWhere, isActive: true } });
+    if (activeCount >= limit) {
+      skipped += 1;
+      continue;
+    }
+
+    await tx.materialReplacementLog.delete({ where: { id: log.id } });
+    await tx.materialReplacement.update({ where: { id: point.id }, data: { isActive: true } });
+    removed += 1;
+    restored += 1;
+  }
+
+  return { removed, restored, skipped };
 }
 
 type PointReader = Pick<PrismaClient, "materialReplacement"> | Prisma.TransactionClient;

@@ -73,6 +73,13 @@ export async function GET(req: NextRequest) {
                 name: true,
                 unit: true,
                 system: true,
+                // Bắt buộc phải có machine + category: bảng Lịch sử thay thế lọc theo
+                // tổ máy (mặc định S1) và loại vật tư dựa trên chính hai trường này.
+                // Thiếu chúng thì `machine` về undefined → coi như COMMON → mọi dòng
+                // CÒN điểm theo dõi bị bộ lọc mặc định loại sạch, trong khi dòng đã
+                // mất điểm lại hiện bình thường (nhánh snapshot có sẵn hai trường).
+                machine: true,
+                category: true,
                 deviceMaterials: {
                   select: { device: { select: EQUIPMENT_DEVICE_SELECT } },
                   orderBy: { usedAt: "desc" },

@@ -34,8 +34,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DefectHistoryDialog } from "@/components/repair/defect-history-dialog";
 import { DefectExpandedDetailsById } from "@/components/defects/defect-expanded-details";
 import { LockChip } from "@/components/shared/lock-chip";
-import { CompleteDefectDialog } from "@/components/defects/complete-defect-dialog";
-import { useDefect } from "@/hooks/useDefects";
+import { PendingHistoryEditDialog } from "@/components/repair/pending-history-edit-dialog";
 import { useDefectHistory, useDeleteDefectHistory, type DefectHistoryFilters, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
@@ -605,25 +604,6 @@ function SortHeader({
       <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
     </button>
   );
-}
-
-/**
- * Hộp thoại sửa thông tin bản nháp chờ chốt. Bảng lịch sử chỉ giữ id của phiếu
- * khiếm khuyết nên phải tải chi tiết phiếu rồi mới mở được đúng hộp thoại cũ.
- */
-function PendingHistoryEditDialog({ defectId, onClose }: { defectId: string; onClose: () => void }) {
-  const detail = useDefect(defectId);
-  const defect = detail.data?.data ?? null;
-
-  React.useEffect(() => {
-    if (detail.isError) {
-      toast.error("Không tải được phiếu khiếm khuyết của bản ghi này");
-      onClose();
-    }
-  }, [detail.isError, onClose]);
-
-  if (!defect) return null;
-  return <CompleteDefectDialog defect={defect} onClose={onClose} />;
 }
 
 /** Nhãn của một ô lọc: IN HOA, cỡ nhỏ, giãn chữ nhẹ — theo .flabel của bản mẫu. */

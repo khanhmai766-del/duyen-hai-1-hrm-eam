@@ -131,11 +131,33 @@ export async function GET(req: NextRequest) {
     // thiết bị (deviceSeq null) vẫn lấy về, xét tiếp bằng rule text bên dưới.
     const scopeWhere = equipmentSeqWhere(access.branchFilter, "deviceSeq");
     if (scopeWhere) andConditions.push({ OR: [scopeWhere, { deviceSeq: null }] });
+
+    // SYC thay thế vật tư có màn lịch sử riêng: tab "Lịch sử thay thế" của trang Lịch
+    // thay thế vật tư. Không cho nó xuất hiện thêm ở đây, nếu không cùng một công tác
+    // bị đếm hai lần ở hai bảng lịch sử.
+    //
+    // DefectHistory.defectId cố ý KHÔNG có quan hệ (phiếu gốc có thể bị ẩn/xoá mà lịch
+    // sử vẫn đứng được), nên không lọc lồng qua `defect` được — phải loại theo danh
+    // sách id. Tập SYC nhỏ hơn hẳn tập khiếm khuyết nên truy vấn này rẻ.
+    const materialRequestDefectIds = (
+      await prisma.defect.findMany({ where: { isMaterialRequest: true }, select: { id: true } })
+    ).map((row) => row.id);
+    if (materialRequestDefectIds.length) {
+      // `notIn` sinh ra NOT IN, vốn loại luôn cả dòng defectId = NULL (lịch sử ghi tay),
+      // nên phải OR thêm nhánh NULL.
+      andConditions.push({
+        OR: [{ defectId: null }, { defectId: { notIn: materialRequestDefectIds } }],
+      });
+    }
     if (andConditions.length) where.AND = andConditions;
 
     // Điều kiện của nhánh CHỜ CHỐT, dựng riêng cho dễ đọc. Tất cả phải nằm trong SQL
     // và chạy TRƯỚC `take`, nếu không trần sẽ cắt mất dữ liệu trước khi lọc.
-    const pendingDefectWhere: Record<string, unknown> = {};
+    const pendingDefectWhere: Record<string, unknown> = {
+      // Cùng lý do như nhánh đã chốt: bản chờ của SYC thay thế vật tư không hiện ở
+      // Lịch sử sửa chữa. Ở đây lọc lồng được vì DefectHistoryPending có quan hệ thật.
+      isMaterialRequest: false,
+    };
     if (matchingPositionValues.length) {
       pendingDefectWhere.system = { in: matchingPositionValues, mode: "insensitive" };
     }
