@@ -357,7 +357,10 @@ export function EquipmentTreePicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    // `modal` rất quan trọng khi picker nằm trong Radix Dialog (vd. hộp thoại di chuyển):
+    // nếu không, popup được portal ra ngoài Dialog và lớp khóa cuộn của Dialog sẽ chặn
+    // wheel/drag trên chính danh sách cây.
+    <Popover modal open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -377,7 +380,12 @@ export function EquipmentTreePicker({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(540px,90vw)] p-0">
+      <PopoverContent
+        align="start"
+        className="w-[min(540px,90vw)] p-0"
+        onWheel={(event) => event.stopPropagation()}
+        onTouchMove={(event) => event.stopPropagation()}
+      >
         <div className="border-b border-border p-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -417,7 +425,7 @@ export function EquipmentTreePicker({
           </button>
         </div>}
 
-        <div className="max-h-[320px] touch-pan-y overscroll-contain overflow-y-auto px-1.5 pb-1.5">
+        <div className="max-h-[min(320px,calc(100vh-12rem))] min-h-0 touch-pan-y overscroll-contain overflow-y-auto px-1.5 pb-1.5 [scrollbar-gutter:stable]">
           {searchActive ? (
             searchQuery.isLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">
