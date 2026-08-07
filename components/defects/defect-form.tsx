@@ -438,7 +438,7 @@ export function DefectForm({
   function missingGeneral(): string | null {
     if (isSynced) return null;
     if (!form.unit) return "Tổ máy";
-    if (form.unit === "COMMON" && !form.commonSubUnit) return "BOP hoặc CHUNG";
+    if (form.unit === "COMMON" && !form.commonSubUnit) return "BOP, CHUNG hoặc ĐKTT";
     if (!form.system) return "Cương vị";
     if (!form.condition) return "Điều kiện thực hiện";
     if (!form.shiftLeaderId) return "Trưởng ca";
@@ -482,17 +482,17 @@ export function DefectForm({
 
   async function submit() {
     if (isSynced) {
-      if (!form.device && !defect?.deviceSeq) {
-        setStep(1);
-        return toast.error("Vui lòng chọn Thiết bị chính trước khi gắn");
-      }
       try {
-        if (form.severity && defect?.status !== "DA_XU_LY" && form.severityCriteria.length === 0) {
+        const severityChanged = form.severity !== (defect?.severity ?? "");
+        if (severityChanged && form.severity && defect?.status !== "DA_XU_LY" && form.severityCriteria.length === 0) {
           setStep(1);
           return toast.error("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
         }
         const syncedPayload: Record<string, unknown> = { id: defect!.id };
-        if (form.severity && (defect?.status !== "DA_XU_LY" || form.severityCriteria.length > 0)) {
+        if (
+          form.severityCriteria.length > 0
+          && (defect?.status !== "DA_XU_LY" || severityChanged)
+        ) {
           syncedPayload.severityCriteria = form.severityCriteria;
         }
         if (operationUpdateAvailable) syncedPayload.note = form.note;
@@ -522,14 +522,17 @@ export function DefectForm({
         // Lưu ánh xạ không được kích hoạt kiểm tra/tải lại ảnh.
         if (step === 3 && operationUpdateAvailable) syncedPayload.images = form.images;
         const updated = await update.mutateAsync(syncedPayload as { id: string } & Record<string, unknown>);
+        const hasMappedDevice = Boolean(updated.deviceSeq);
         toast.success(
           step === 3
             ? "Đã lưu hình ảnh khiếm khuyết"
             : operationUpdateAvailable
-              ? "Đã lưu thiết bị đã gắn và KQ Vận hành"
+              ? hasMappedDevice
+                ? "Đã lưu thiết bị đã gắn và KQ Vận hành"
+                : "Đã lưu KQ Vận hành"
               : "Đã lưu thiết bị đã gắn"
         );
-        if (step === 1 && onMappingSaved) onMappingSaved(updated);
+        if (step === 1 && hasMappedDevice && onMappingSaved) onMappingSaved(updated);
         else onDone?.();
       } catch (error) {
         toast.error((error as Error).message);
@@ -648,7 +651,7 @@ export function DefectForm({
             <Field label="Tổ máy" required>
               {lockDevice && initialDevice ? (
                 <LockedValue
-                  primary={form.unit === "COMMON" ? "COMMON · Dùng chung" : form.unit}
+                  primary={form.unit === "COMMON" ? form.commonSubUnit || "COMMON · Dùng chung" : form.unit}
                   secondary="Tự động theo nhánh thiết bị"
                 />
               ) : (
@@ -666,7 +669,11 @@ export function DefectForm({
                         isSynced && "cursor-not-allowed opacity-70"
                       )}
                     >
-                      {u === "COMMON" ? "Common" : u}
+                      {u === "COMMON"
+                        ? isSynced && form.commonSubUnit
+                          ? form.commonSubUnit
+                          : "Common"
+                        : u}
                     </button>
                   ))}
                 </div>
@@ -875,7 +882,7 @@ export function DefectForm({
                       ? "Đồng bộ hai chiều đang tắt. Bạn vẫn có thể gắn thiết bị; các trường Vận hành tạm khóa."
                       : operationFieldsLocked
                       ? "Phiếu đã xử lý xong. Chỉ Ghi chú được phép thay đổi."
-                      : "Các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet."}
+                      : "Có thể cập nhật ngay cả khi chưa gắn thiết bị; các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet."}
                   </p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -1367,7 +1374,11 @@ export function DefectForm({
         {isSynced && (step === 1 || step === 3) ? (
           <Button type="button" onClick={submit} disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {step === 3 ? "Lưu hình ảnh" : "Lưu thiết bị & Vận hành"}
+            {step === 3
+              ? "Lưu hình ảnh"
+              : form.device || defect?.deviceSeq
+                ? "Lưu thiết bị & Vận hành"
+                : "Lưu Vận hành"}
           </Button>
         ) : isSynced ? (
           <Button type="button" onClick={() => setStep(1)}>

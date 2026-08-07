@@ -81,13 +81,14 @@ function unitOf(value: unknown) {
   return "COMMON";
 }
 
-// Sheet có 4 giá trị Tổ máy: S1 | S2 | BOP | CHUNG. BOP và CHUNG đều gộp về
-// "COMMON" ở trên (dùng cho lọc/phân quyền hiện có), nhưng là 2 khái niệm khác
-// nhau nên lưu thêm ở đây để không mất thông tin khi đọc từ Sheet.
-function commonSubUnitOf(value: unknown): "BOP" | "CHUNG" | null {
+// Sheet có 5 giá trị Tổ máy: S1 | S2 | BOP | CHUNG | ĐKTT. Ba giá trị dùng
+// chung đều gộp về "COMMON" ở trên (dùng cho lọc/phân quyền hiện có), đồng thời
+// lưu nhãn gốc tại đây để hiển thị và ghi ngược không bị mất thông tin.
+function commonSubUnitOf(value: unknown): "BOP" | "CHUNG" | "ĐKTT" | null {
   const unit = text(value).toUpperCase().replace(/\s+/g, " ");
   if (unit === "BOP") return "BOP";
   if (unit === "CHUNG") return "CHUNG";
+  if (unit === "ĐKTT" || unit === "DKTT") return "ĐKTT";
   return null;
 }
 
@@ -211,6 +212,7 @@ export async function upsertPreparedDefectRecords(params: {
           sourceStatusMismatch: true,
           syncState: true,
           websiteCreated: true,
+          commonSubUnit: true,
           status: true,
           severity: true,
           condition: true,
@@ -253,6 +255,7 @@ export async function upsertPreparedDefectRecords(params: {
           sourceStatusMismatch: true,
           syncState: true,
           websiteCreated: true,
+          commonSubUnit: true,
           status: true,
           severity: true,
           condition: true,
@@ -458,6 +461,7 @@ export async function upsertPreparedDefectRecords(params: {
       && existing.syncState === "ACTIVE"
       && existing.sourceKey === item.sourceKey
       && existing.positionCode === sourceData.positionCode
+      && existing.commonSubUnit === sourceData.commonSubUnit
       && existing.sourceStatusMismatch === (
         repairStatus !== null
         && repairStatus !== effectiveStatus

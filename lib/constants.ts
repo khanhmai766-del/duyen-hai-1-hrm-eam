@@ -139,8 +139,8 @@ export function isPositionAllowedForDefectUnit(unit: string | null | undefined, 
   return positionAllowedForUnit(unit, position);
 }
 
-/** Khi Tổ máy = COMMON, Sheet còn phân biệt thêm BOP | CHUNG (2 khái niệm khác nhau). */
-export const DEFECT_COMMON_SUB_UNITS = ["BOP", "CHUNG"] as const;
+/** Khi Tổ máy = COMMON, Sheet còn phân biệt BOP | CHUNG | ĐKTT. */
+export const DEFECT_COMMON_SUB_UNITS = ["BOP", "CHUNG", "ĐKTT"] as const;
 export type DefectCommonSubUnit = (typeof DEFECT_COMMON_SUB_UNITS)[number];
 
 /** Mức độ khiếm khuyết (1–4). */

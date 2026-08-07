@@ -530,7 +530,7 @@ model EquipmentMaterial {
 model Defect {
   id                         String    @id @default(cuid())
   unit                       String // Tổ máy: S1 | S2
-  commonSubUnit              String? // Khi unit = COMMON: BOP | CHUNG — Sheet có 4 giá trị Tổ máy, tách riêng để không gộp mất thông tin
+  commonSubUnit              String? // Khi unit = COMMON: BOP | CHUNG | ĐKTT — giữ nhãn Tổ máy gốc từ Sheet
   deviceSeq                  String? // Khóa liên kết chuẩn với cây thiết bị (EquipmentNode.seq)
   mappedDeviceUnit           String? // hồ sơ thiết bị được ánh xạ: S1 | S2 | COMMON; độc lập với unit của phiếu
   device                     String? // Thiết bị (mã thiết bị) — giữ lại tạm để tương thích dữ liệu cũ

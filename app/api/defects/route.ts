@@ -491,7 +491,7 @@ export async function POST(req: NextRequest) {
     if (!body.unit) return fail("Vui lòng chọn tổ máy");
     const commonSubUnit = body.unit === "COMMON" ? String(body.commonSubUnit ?? "").trim() : null;
     if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
-      return fail("Vui lòng chọn BOP hoặc CHUNG");
+      return fail("Vui lòng chọn BOP, CHUNG hoặc ĐKTT");
     }
     const rawRelatedMappings = Array.isArray(body.relatedDeviceMappings)
       ? body.relatedDeviceMappings as Array<{ deviceSeq?: unknown; mappedUnit?: unknown }>

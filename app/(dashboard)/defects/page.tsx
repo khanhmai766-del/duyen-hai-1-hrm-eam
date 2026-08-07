@@ -758,10 +758,10 @@ export default function DefectsPage() {
                           >
                             {expanded ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                           </button>
-                          {/* "COMMON" dài gấp ba "S1" nên viết như chip lọc ("Common") và
-                              thu nhỏ riêng nhãn này để không tràn khỏi cột. */}
+                          {/* Phiếu dùng chung giữ nhãn nguồn BOP/CHUNG/ĐKTT; dữ liệu cũ
+                              chưa có phân loại vẫn hiển thị Common. */}
                           <span className={cn(d.unit === "COMMON" && "text-[11px] tracking-tight")}>
-                            {d.unit === "COMMON" ? "Common" : d.unit}
+                            {d.unit === "COMMON" ? d.commonSubUnit || "Common" : d.unit}
                           </span>
                         </div>
                       </TableCell>

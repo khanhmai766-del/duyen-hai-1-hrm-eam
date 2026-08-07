@@ -279,9 +279,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         || (fireSafetyImpact !== undefined && fireSafetyImpact !== existing.fireSafetyImpact)
         || (environmentSafetyImpact !== undefined && environmentSafetyImpact !== existing.environmentSafetyImpact)
         || (note !== undefined && note !== (existing.note ?? ""));
-      if (operationalChanged && !existing.deviceSeq && !requestedDeviceSeq) {
-        return fail("Vui lòng gắn thiết bị trước khi cập nhật Vận hành");
-      }
       const defect = await prisma.$transaction(async (tx) => {
         const updated = await tx.defect.update({
           where: { id: params.id },
@@ -404,7 +401,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ? (body.unit === "COMMON" ? String(body.commonSubUnit ?? "").trim() : null)
       : undefined;
     if (body.unit === "COMMON" && !DEFECT_COMMON_SUB_UNITS.includes(commonSubUnit as (typeof DEFECT_COMMON_SUB_UNITS)[number])) {
-      return fail("Vui lòng chọn BOP hoặc CHUNG");
+      return fail("Vui lòng chọn BOP, CHUNG hoặc ĐKTT");
     }
     const nextStatus = body.status !== undefined ? String(body.status) : existing.status;
     const completedAt =
