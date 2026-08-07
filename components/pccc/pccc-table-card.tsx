@@ -14,13 +14,17 @@ export const PCCC_PAGE_SIZES = [25, 50, 75, 100];
 export type SortDir = "asc" | "desc";
 export type SortState = { key: string; dir: SortDir };
 
-/** Tiêu đề cột có sắp xếp, dùng trên nền xanh đầu bảng. */
+/**
+ * Tiêu đề cột có sắp xếp, dùng trên nền xanh đầu bảng.
+ * Mặc định CĂN GIỮA cho cả hai bảng PCCC — đặt ở đây thay vì rải `align="center"`
+ * khắp các cột để không bỏ sót cột nào khi thêm cột mới.
+ */
 export function SortHeader({
   label,
   sortKey,
   sort,
   onSort,
-  align = "left",
+  align = "center",
 }: {
   label: string;
   sortKey: string;
@@ -35,7 +39,7 @@ export function SortHeader({
       type="button"
       onClick={() => onSort(sortKey)}
       className={cn(
-        "inline-flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
+        "inline-flex w-full items-center gap-1.5 text-[10.5px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
         align === "center" && "justify-center"
       )}
     >
@@ -45,12 +49,12 @@ export function SortHeader({
   );
 }
 
-/** Tiêu đề cột không sắp xếp (các cột chỉ để nhập/hiển thị). */
-export function PlainHeader({ label, align = "left" }: { label: string; align?: "left" | "center" }) {
+/** Tiêu đề cột không sắp xếp (các cột chỉ để nhập/hiển thị). Cũng căn giữa mặc định. */
+export function PlainHeader({ label, align = "center" }: { label: string; align?: "left" | "center" }) {
   return (
     <span
       className={cn(
-        "block whitespace-nowrap text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90",
+        "block whitespace-nowrap text-[10.5px] font-semibold uppercase leading-tight tracking-wider text-white/90",
         align === "center" && "text-center"
       )}
     >
@@ -85,14 +89,45 @@ export function RowExpander({ expanded, onToggle }: { expanded: boolean; onToggl
  * Một mục trong khối chi tiết: nhãn và giá trị NẰM CÙNG DÒNG cho gọn, không xếp dọc —
  * xếp dọc làm khối chi tiết cao gấp đôi mà vẫn thừa chỗ trống.
  */
-export function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+export function DetailField({
+  label,
+  span,
+  children,
+}: {
+  label: string;
+  /** Trường dài thì cho chiếm 2 cột hoặc cả hàng, khỏi bị bóp trong 1 cột. */
+  span?: 2 | "full";
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex min-w-0 items-baseline gap-1.5">
+    <div
+      className={cn(
+        "flex min-w-0 items-baseline gap-1.5",
+        span === 2 && "sm:col-span-2",
+        span === "full" && "col-span-full"
+      )}
+    >
       <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}:
       </span>
-      <div className="min-w-0 flex-1 text-[13px] text-ink">{children ?? "—"}</div>
+      <div className="min-w-0 flex-1 text-[12px] text-ink">{children ?? "—"}</div>
     </div>
+  );
+}
+
+/** Chip một khiếm khuyết của linh kiện: "NHÓM · trạng thái", tô theo mức nặng nhẹ. */
+export function FaultChip({ group, status, tone }: { group: string; status: string; tone: "watch" | "bad" }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] leading-tight",
+        tone === "bad" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-800"
+      )}
+    >
+      <span className="font-semibold uppercase tracking-wide">{group}</span>
+      <span className="text-current/70">·</span>
+      <span>{status}</span>
+    </span>
   );
 }
 
@@ -274,11 +309,36 @@ export const TABLE_SCROLLER = "max-h-[calc(100vh-330px)] overflow-auto";
  * phải được truyền vào từng ô đóng băng, không thừa hưởng từ <tr>.
  */
 export const STICKY_TH = "sticky z-20";
-export const STICKY_TD = "sticky z-[1]";
+/**
+ * Ô đóng băng. `group-hover` là BẮT BUỘC: hover đổi màu trên <tr> KHÔNG lan tới các ô
+ * này (nền của chúng là màu đục vẽ đè lên), thiếu nó thì vệt sáng khi trỏ chuột bị đứt
+ * đúng ở ranh giới vùng cột cố định.
+ */
+export const STICKY_TD = "sticky z-[1] group-hover:bg-sky-50";
 /** Vạch phân cách ở cột đóng băng cuối, cho thấy rõ ranh giới vùng đóng băng. */
 export const STICKY_EDGE = "shadow-[inset_-1px_0_0_rgba(15,23,42,0.12)]";
+
+/**
+ * Màu nền của một hàng dữ liệu. Kẻ vạch XEN KẼ trắng / xám nhạt cho dễ dò theo hàng,
+ * nhưng phải theo đúng thứ tự ưu tiên: dòng đang sửa (vàng) > dòng đang mở chi tiết
+ * (xanh) > vạch xen kẽ.
+ *
+ * PHẢI dùng đúng giá trị này cho CẢ các ô đóng băng: nền ô đóng băng không thừa hưởng
+ * từ <tr>, để lệch là nhìn thấy ngay một vệt màu khác ở vùng cột cố định.
+ */
+export function rowBackground({ index, expanded, dirty }: { index: number; expanded?: boolean; dirty?: boolean }) {
+  if (dirty) return "bg-amber-50";
+  if (expanded) return "bg-sky-50";
+  return index % 2 === 1 ? "bg-slate-50/70" : "bg-white";
+}
+
+/** Màu khi trỏ chuột — đủ khác cả hai màu vạch để thấy rõ đang ở hàng nào.
+ *  `group` để các ô đóng băng bắt được hover của hàng (xem STICKY_TD). */
+export const ROW_HOVER = "group transition-colors hover:bg-sky-50";
 export const TR_HEAD = "border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0";
-export const TD_ROW = "border-b border-slate-100 px-2 py-1 align-middle";
+// Ô dữ liệu: chốt cỡ chữ 12px. Không chốt thì các ô text thuần (mã thiết bị, chủng
+// loại…) thừa hưởng text-sm = 14px của <table>, to hơn các ô sửa được → so le.
+export const TD_ROW = "border-b border-slate-100 px-2 py-1 align-middle text-[12px]";
 
 /**
  * Cột nút "+" mở chi tiết. PHẢI chốt bề rộng: bảng rộng hơn khung nhìn nên trình duyệt
@@ -286,4 +346,4 @@ export const TD_ROW = "border-b border-slate-100 px-2 py-1 align-middle";
  * như nằm lọt ra ngoài bảng.
  */
 export const TH_EXPAND = "w-[42px] min-w-[42px] max-w-[42px] px-0 text-center";
-export const TD_EXPAND = "w-[42px] min-w-[42px] max-w-[42px] border-b border-slate-100 px-0 py-1 text-center align-middle";
+export const TD_EXPAND = "w-[42px] min-w-[42px] max-w-[42px] border-b border-slate-100 px-0 py-1 text-center align-middle text-[12px]";

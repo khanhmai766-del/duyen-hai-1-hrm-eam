@@ -149,6 +149,7 @@ export function EditableCell({
   options,
   disabled,
   align = "left",
+  wrap = false,
   onSave,
 }: {
   value: string | number | null;
@@ -156,6 +157,9 @@ export function EditableCell({
   options?: string[];
   disabled?: boolean;
   align?: "left" | "right" | "center";
+  /** true = cho chữ XUỐNG DÒNG thay vì cắt bằng "…". Dùng trong khối chi tiết dòng,
+   *  nơi cần đọc đủ nội dung; trong bảng thì vẫn cắt để không phá chiều cao hàng. */
+  wrap?: boolean;
   onSave: (next: string) => void;
 }) {
   const initial = value === null || value === undefined ? "" : String(value);
@@ -174,7 +178,14 @@ export function EditableCell({
 
   if (disabled) {
     return (
-      <span className={cn("block truncate px-1 py-0.5 text-[13px]", align === "right" && "text-right", align === "center" && "text-center")}>
+      <span
+        className={cn(
+          "block px-1 py-0.5 text-[12px]",
+          wrap ? "whitespace-normal break-words" : "truncate",
+          align === "right" && "text-right",
+          align === "center" && "text-center"
+        )}
+      >
         {type === "date" ? fmtDate(initial) : initial || <span className="text-slate-300">—</span>}
       </span>
     );
@@ -189,7 +200,8 @@ export function EditableCell({
           setEditing(true);
         }}
         className={cn(
-          "block w-full truncate rounded px-1 py-0.5 text-left text-[13px] hover:bg-accent/5 hover:ring-1 hover:ring-accent/20",
+          "block w-full rounded px-1 py-0.5 text-left text-[12px] hover:bg-accent/5 hover:ring-1 hover:ring-accent/20",
+          wrap ? "whitespace-normal break-words" : "truncate",
           align === "right" && "text-right",
           align === "center" && "text-center"
         )}
@@ -215,7 +227,7 @@ export function EditableCell({
           if (e.key === "Escape") setEditing(false);
           if (e.key === "Enter") commit();
         }}
-        className="w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[13px] outline-none"
+        className="w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[12px] outline-none"
       >
         <option value="">—</option>
         {items.map((o) => (
@@ -239,7 +251,7 @@ export function EditableCell({
         if (e.key === "Enter") commit();
       }}
       className={cn(
-        "w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[13px] outline-none focus:ring-2 focus:ring-accent/20",
+        "w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[12px] outline-none focus:ring-2 focus:ring-accent/20",
         align === "right" && "text-right"
       )}
     />
@@ -277,7 +289,7 @@ export function ToneSelectCell({
 
   if (disabled) {
     return (
-      <span className={cn("inline-block truncate rounded border px-1.5 py-0.5 text-[12px] font-medium", box[tone])}>
+      <span className={cn("inline-block truncate rounded border px-1.5 py-0.5 text-[11.5px] font-medium", box[tone])}>
         {value ?? "—"}
       </span>
     );
@@ -287,7 +299,7 @@ export function ToneSelectCell({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "w-full min-w-[132px] cursor-pointer rounded border px-1 py-0.5 text-[12px] font-medium outline-none focus:ring-2 focus:ring-accent/25",
+        "w-full min-w-[124px] cursor-pointer rounded border px-1 py-0.5 text-[11.5px] font-medium outline-none focus:ring-2 focus:ring-accent/25",
         box[tone]
       )}
     >
@@ -412,7 +424,7 @@ export function MachineCell({
           if (e.target.value !== current) onSave(e.target.value);
         }}
         onBlur={() => setEditing(false)}
-        className="w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[13px] outline-none"
+        className="w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[12px] outline-none"
       >
         {MACHINE_OPTIONS.map((m) => (
           <option key={m.value} value={m.value}>
@@ -449,7 +461,7 @@ export function componentTone(statusOrder: number, statusCount: number): StatusT
 export function TableShell({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("overflow-auto rounded-xl border border-slate-200 bg-white", className)}>
-      <table className="w-full border-collapse text-[13px]">{children}</table>
+      <table className="w-full border-collapse text-[12px]">{children}</table>
     </div>
   );
 }

@@ -18,10 +18,10 @@ import {
   FileSpreadsheet,
   Filter,
   FlameKindling,
+  ChevronDown,
   Lock,
   LockOpen,
   Pencil,
-  RefreshCw,
   Save,
   ShieldCheck,
   Warehouse,
@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiDownload } from "@/lib/fetcher";
 import { cn } from "@/lib/utils";
@@ -92,7 +94,7 @@ function SelectBox({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "h-9 rounded-md border border-input bg-white px-2 text-[13px] outline-none focus:ring-2 focus:ring-accent/20",
+        "h-10 w-full rounded-xl border border-input bg-white px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-accent/20",
         className
       )}
     >
@@ -324,6 +326,29 @@ export default function PcccPage() {
   const createPeriod = usePcccCreatePeriod();
   const toggleClose = usePcccTogglePeriodClose();
 
+  /** Số bộ lọc đang bật — hiện thành huy hiệu trên nút "Bộ lọc". Ô tìm kiếm nằm trong
+   *  thanh công cụ của bảng nên KHÔNG tính vào đây. */
+  const activeFilterCount = [
+    cuongVi !== "ALL",
+    machine !== "ALL",
+    tab === "BCC" && chungLoai !== "ALL",
+    (tab === "BCC" || tab === "TCC") && tinhTrang !== "ALL",
+    tab === "BCC" && giamSat !== "ALL",
+    tab === "BCC" && quaHan,
+    tab === "TCC" && loaiTu !== "ALL",
+  ].filter(Boolean).length;
+
+  function clearFilters() {
+    setCuongVi("ALL");
+    setMachine("ALL");
+    setChungLoai("ALL");
+    setTinhTrang("ALL");
+    setGiamSat("ALL");
+    setLoaiTu("ALL");
+    setQuaHan(false);
+    setPage(1);
+  }
+
   // Có bộ lọc/tìm kiếm nào đang bật → chân bảng ghi thêm "sau lọc"
   const hasActiveFilter =
     cuongVi !== "ALL" ||
@@ -393,6 +418,35 @@ export default function PcccPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Quản lý thiết bị PCCC" description="Phân xưởng Vận hành 1">
+        {/* Chọn KỲ đứng cùng hàng với các nút hành động: nó quyết định dữ liệu của cả 4
+            tab, không phải một bộ lọc trong tab như các ô ở dải bên dưới. */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kỳ</span>
+          {/* Kỳ là lựa chọn BẮT BUỘC — không có mục "tất cả", nên dùng select thuần
+              thay cho SelectBox (SelectBox luôn thêm 1 mục ALL, sẽ lặp kỳ hiện tại). */}
+          <select
+            value={period.label}
+            disabled={dirtyCount > 0}
+            title={dirtyCount > 0 ? "Lưu hoặc huỷ các thay đổi trước khi đổi kỳ" : undefined}
+            onChange={(e) => {
+              setPeriodLabel(e.target.value);
+              setPage(1);
+            }}
+            className="h-9 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
+          >
+            {periods.map((p) => (
+              <option key={p.id} value={p.label}>
+                {p.label}
+                {p.isClosed ? " (đã chốt)" : ""}
+              </option>
+            ))}
+          </select>
+          {period.isClosed && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+              <Lock className="size-3" /> Đã chốt — chỉ đọc
+            </span>
+          )}
+        </div>
         <Button variant="outline" size="sm" onClick={() => download()} disabled={downloading}>
           <Download className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />
           Xuất Excel
@@ -458,35 +512,159 @@ export default function PcccPage() {
           </button>
         ))}
 
-        {/* Chọn KỲ nằm ở hàng tab: nó quyết định dữ liệu của cả 4 tab, không phải một
-            bộ lọc trong tab như các ô còn lại. */}
-        <div className="mb-1 ml-auto flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kỳ</span>
-          {/* Kỳ là lựa chọn BẮT BUỘC — không có mục "tất cả", nên dùng select thuần
-              thay cho SelectBox (SelectBox luôn thêm 1 mục ALL, sẽ lặp kỳ hiện tại). */}
-          <select
-            value={period.label}
-            disabled={dirtyCount > 0}
-            title={dirtyCount > 0 ? "Lưu hoặc huỷ các thay đổi trước khi đổi kỳ" : undefined}
-            onChange={(e) => {
-              setPeriodLabel(e.target.value);
-              setPage(1);
-            }}
-            className="h-9 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
-          >
-            {periods.map((p) => (
-              <option key={p.id} value={p.label}>
-                {p.label}
-                {p.isClosed ? " (đã chốt)" : ""}
-              </option>
-            ))}
-          </select>
-          {period.isClosed && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-              <Lock className="size-3" /> Đã chốt — chỉ đọc
-            </span>
-          )}
-        </div>
+        {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với các trang
+            Danh mục vật tư / Mệnh lệnh sản xuất. Tab Foam·CO2·Diesel·FM200 không có gì
+            để lọc nên không hiện nút. */}
+        {tab !== "FCD" && (
+          <div className="mb-1 ml-auto">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
+                  <span className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-sky-600" />
+                    Bộ lọc
+                    {activeFilterCount > 0 && (
+                      <span className="grid size-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-white">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                sideOffset={8}
+                className="w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc nội dung bảng</p>
+                    <p className="mt-0.5 text-sm font-bold text-slate-900">
+                      {tab === "OVERVIEW" ? "Tổng quan" : tab === "BCC" ? "Bình chữa cháy" : "Tủ chữa cháy"}
+                    </p>
+                  </div>
+                  {activeFilterCount > 0 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                      <X className="mr-1.5 size-3.5" />
+                      Xoá lọc
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid gap-3 p-4 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Cương vị quản lý</Label>
+                    <SelectBox
+                      value={cuongVi}
+                      onChange={(v) => {
+                        setCuongVi(v);
+                        setPage(1);
+                      }}
+                      options={cuongViList.map((o) => ({ value: o.code, label: o.label }))}
+                      allLabel="Tất cả cương vị"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
+                    {/* Tổ máy là chiều LỌC XEM: cùng chức danh vẫn thao tác được cả 2 tổ máy */}
+                    <SelectBox
+                      value={machine}
+                      onChange={(v) => {
+                        setMachine(v);
+                        setPage(1);
+                      }}
+                      options={MACHINE_OPTIONS.map((m) => ({ value: m.value, label: m.label }))}
+                      allLabel="Tất cả tổ máy"
+                    />
+                  </div>
+
+                  {tab === "BCC" && (
+                    <>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Chủng loại</Label>
+                        <SelectBox
+                          value={chungLoai}
+                          onChange={(v) => {
+                            setChungLoai(v);
+                            setPage(1);
+                          }}
+                          options={[...CHUNG_LOAI_OPTIONS]}
+                          allLabel="Tất cả chủng loại"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Tình trạng</Label>
+                        <SelectBox
+                          value={tinhTrang}
+                          onChange={(v) => {
+                            setTinhTrang(v);
+                            setPage(1);
+                          }}
+                          options={TINH_TRANG_FILTERS}
+                          allLabel="Tất cả tình trạng"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Cấp giám sát</Label>
+                        <SelectBox
+                          value={giamSat}
+                          onChange={(v) => {
+                            setGiamSat(v);
+                            setPage(1);
+                          }}
+                          options={giamSatList.map((o) => ({ value: o.code, label: o.label }))}
+                          allLabel="Tất cả cấp giám sát"
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 self-end rounded-xl border border-input px-2.5 py-2.5 text-[13px]">
+                        <input
+                          type="checkbox"
+                          checked={quaHan}
+                          onChange={(e) => {
+                            setQuaHan(e.target.checked);
+                            setPage(1);
+                          }}
+                          className="size-4"
+                        />
+                        Chỉ quá hạn thay thế
+                      </label>
+                    </>
+                  )}
+
+                  {tab === "TCC" && (
+                    <>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Loại tủ</Label>
+                        <SelectBox
+                          value={loaiTu}
+                          onChange={(v) => {
+                            setLoaiTu(v);
+                            setPage(1);
+                          }}
+                          options={["INDOOR", "OUTDOOR"]}
+                          allLabel="Tất cả loại tủ"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Tình trạng</Label>
+                        <SelectBox
+                          value={tinhTrang}
+                          onChange={(v) => {
+                            setTinhTrang(v);
+                            setPage(1);
+                          }}
+                          options={TINH_TRANG_FILTERS}
+                          allLabel="Tất cả tình trạng"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
 
         {editableTab && can("pccc-manage", ["personal", "manage", "full"]) && !period.isClosed && (
           <div className="mb-1 flex items-center gap-2">
@@ -516,71 +694,6 @@ export default function PcccPage() {
         )}
       </div>
 
-      {/* Dải điều khiển: kỳ + cương vị + bộ lọc riêng của từng tab */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
-        <div className="flex items-center gap-1.5">
-          <Filter className="size-3.5 text-muted-foreground" />
-          <SelectBox
-            value={cuongVi}
-            onChange={(v) => {
-              setCuongVi(v);
-              setPage(1);
-            }}
-            options={cuongViList.map((o) => ({ value: o.code, label: o.label }))}
-            allLabel="Tất cả cương vị"
-          />
-          {/* Tổ máy là chiều LỌC XEM: cùng một chức danh vẫn thao tác được cả 2 tổ máy */}
-          <SelectBox
-            value={machine}
-            onChange={(v) => {
-              setMachine(v);
-              setPage(1);
-            }}
-            options={MACHINE_OPTIONS.map((m) => ({ value: m.value, label: m.label }))}
-            allLabel="Tất cả tổ máy"
-          />
-        </div>
-
-        {tab === "BCC" && (
-          <>
-            <SelectBox value={chungLoai} onChange={(v) => { setChungLoai(v); setPage(1); }} options={[...CHUNG_LOAI_OPTIONS]} allLabel="Tất cả chủng loại" />
-            <SelectBox value={tinhTrang} onChange={(v) => { setTinhTrang(v); setPage(1); }} options={TINH_TRANG_FILTERS} allLabel="Tất cả tình trạng" />
-            <SelectBox
-              value={giamSat}
-              onChange={(v) => {
-                setGiamSat(v);
-                setPage(1);
-              }}
-              options={giamSatList.map((o) => ({ value: o.code, label: o.label }))}
-              allLabel="Tất cả cấp giám sát"
-            />
-            <label className="flex items-center gap-1.5 text-[13px]">
-              <input type="checkbox" checked={quaHan} onChange={(e) => { setQuaHan(e.target.checked); setPage(1); }} className="size-3.5" />
-              Chỉ quá hạn thay thế
-            </label>
-          </>
-        )}
-        {tab === "TCC" && (
-          <>
-            <SelectBox value={loaiTu} onChange={(v) => { setLoaiTu(v); setPage(1); }} options={["INDOOR", "OUTDOOR"]} allLabel="Tất cả loại tủ" />
-            <SelectBox value={tinhTrang} onChange={(v) => { setTinhTrang(v); setPage(1); }} options={TINH_TRANG_FILTERS} allLabel="Tất cả tình trạng" />
-          </>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto"
-          onClick={() => {
-            summaryQuery.refetch();
-            bccQuery.refetch();
-            tccQuery.refetch();
-            fcdQuery.refetch();
-          }}
-        >
-          <RefreshCw className="mr-1.5 size-3.5" />
-          Làm mới
-        </Button>
-      </div>
 
       {tab === "OVERVIEW" &&
         (summaryQuery.data ? (

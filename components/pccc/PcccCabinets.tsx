@@ -28,8 +28,11 @@ import {
   TABLE_SCROLLER,
   PcccTableCard,
   PlainHeader,
+  FaultChip,
+  ROW_HOVER,
   RowExpander,
   SortHeader,
+  rowBackground,
   TD_EXPAND,
   TD_ROW,
   TH_EXPAND,
@@ -38,6 +41,14 @@ import {
   type SortState,
 } from "@/components/pccc/pccc-table-card";
 import { type CabinetRow, type PositionOption } from "@/hooks/usePccc";
+
+/**
+ * Khối ô ☑ bám bố cục bảng gốc: mỗi cột trạng thái rộng 68px (đúng độ rộng cột trong
+ * file Excel/bản demo), tên trạng thái ghi ngang và tự xuống dòng. Cao 52px là đủ cho
+ * tên dài nhất ("Hư hỏng nặng, cần thay mới") xuống 3 dòng.
+ */
+const STATUS_COL_WIDTH = 68;
+const TIER2_HEIGHT = 52;
 
 export function PcccCabinets({
   rows,
@@ -137,16 +148,17 @@ export function PcccCabinets({
       filtered={filtered}
       onPageChange={onPageChange}
       toolbarExtra={
-        <span className="ml-2 flex flex-wrap items-center gap-x-3 text-[11px]">
-          <span>
-            <b className="text-emerald-700">OK</b> = khả dụng
+        <span className="ml-2 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2.5 rounded-sm bg-emerald-500" /> khả dụng
           </span>
-          <span>
-            <b className="text-amber-700">!</b> = lỗi nhẹ
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2.5 rounded-sm bg-amber-500" /> lỗi nhẹ
           </span>
-          <span>
-            <b className="text-rose-700">✕</b> = hư hỏng nặng
+          <span className="inline-flex items-center gap-1">
+            <span className="size-2.5 rounded-sm bg-rose-500" /> hư hỏng nặng
           </span>
+          <span>· tích được nhiều lỗi trong cùng một nhóm</span>
         </span>
       }
       footerNote={
@@ -161,7 +173,7 @@ export function PcccCabinets({
         ) : null
       }
     >
-      <Table className="min-w-[1500px]" wrapperClassName={TABLE_SCROLLER}>
+      <Table className="min-w-[2720px]" wrapperClassName={TABLE_SCROLLER}>
         <TableHeader>
           <TableRow ref={headRowRef} className={TR_HEAD}>
             <TableHead rowSpan={2} className={cn(TH_NAVY, TH_EXPAND, STICKY_TH)} style={{ left: FROZEN.expand.left }} />
@@ -201,12 +213,13 @@ export function PcccCabinets({
                 <TableHead
                   key={`${g.label}-${st}`}
                   title={st}
-                  className={cn(TH_NAVY, "w-8 text-center")}
-                  style={{ top: tier1Height }}
+                  className={cn(TH_NAVY, "px-1 text-center align-middle")}
+                  style={{ top: tier1Height, height: TIER2_HEIGHT, width: STATUS_COL_WIDTH, minWidth: STATUS_COL_WIDTH }}
                 >
-                  {/* Cột đầu = khả dụng, cột cuối = nặng nhất → ký hiệu ngắn cho gọn */}
-                  <span className="text-[10px] font-semibold text-white/80">
-                    {i === 0 ? "OK" : i === g.statuses.length - 1 ? "✕" : "!"}
+                  {/* Ghi ĐÚNG tên trạng thái của file gốc (không ký hiệu tắt), chữ NGANG tự
+                      xuống dòng trong cột 68px — đúng bố cục bảng gốc. */}
+                  <span className="block whitespace-normal text-[10px] font-medium normal-case leading-[1.15] tracking-normal text-white/90">
+                    {st}
                   </span>
                 </TableHead>
               ))
@@ -221,7 +234,7 @@ export function PcccCabinets({
               </TableCell>
             </TableRow>
           )}
-          {rows.map((r) => {
+          {rows.map((r, index) => {
             const expanded = expandedId === r.id;
             const rowDraft = draft[r.id];
             const dirty = (field: string) => (rowDraft && field in rowDraft ? "bg-amber-100/60" : "");
@@ -233,15 +246,30 @@ export function PcccCabinets({
               if (rowDraft && key in rowDraft) return Boolean(rowDraft[key]);
               return r.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ?? false;
             };
-            const frozenBg = expanded ? "bg-sky-50" : rowDraft ? "bg-amber-50" : "bg-white";
+            const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
+            // Khiếm khuyết đang có của tủ (bỏ cột đầu = "Khả dụng"), kèm cờ mức nặng để
+            // tô chip. Tính theo trạng thái HIỆU LỰC nên phản ánh cả ô vừa tích trong
+            // bản nháp, chưa lưu cũng thấy ngay.
+            const statusCount = new Map<string, number>();
+            for (const c of r.components) {
+              statusCount.set(c.groupLabel, Math.max(statusCount.get(c.groupLabel) ?? 0, c.statusOrder + 1));
+            }
+            const faults = r.components
+              .filter((c) => c.statusOrder > 0 && tick(c.groupLabel, c.status))
+              .sort((a, b) => a.groupOrder - b.groupOrder || a.statusOrder - b.statusOrder)
+              .map((c) => ({
+                groupLabel: c.groupLabel,
+                status: c.status,
+                severe: c.statusOrder === (statusCount.get(c.groupLabel) ?? 1) - 1,
+              }));
             return (
               <Fragment key={r.id}>
-                <TableRow className={expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40"}>
-                  <TableCell className={cn(TD_EXPAND, STICKY_TD, frozenBg)} style={{ left: FROZEN.expand.left }}>
+                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                  <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, frozenBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     {r.ma}
@@ -266,6 +294,7 @@ export function PcccCabinets({
                       return (
                         <TableCell
                           key={`${r.id}-${g.label}-${status}`}
+                          style={{ width: STATUS_COL_WIDTH, minWidth: STATUS_COL_WIDTH }}
                           className={cn(
                             TD_ROW,
                             "text-center",
@@ -300,13 +329,13 @@ export function PcccCabinets({
                 {expanded && (
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={colCount} className="bg-slate-50/80 p-0">
+                      {/*
+                        Bố cục khối chi tiết: hàng đầu là 3 trường NGẮN (ngày kiểm tra,
+                        chữ ký, vị trí), hàng hai dành cho hai trường DÀI mỗi cái nửa
+                        hàng, hàng cuối liệt kê khiếm khuyết theo dạng chip chiếm cả
+                        hàng. Mọi trường đều XUỐNG DÒNG chứ không cắt bằng "…".
+                      */}
                       <DetailPanel>
-                        <DetailField label="Tên / Loại tủ">
-                          <EditableCell value={val("ten", r.ten)} disabled={!canEdit} onSave={(v) => save(r, "ten", v || null)} />
-                        </DetailField>
-                        <DetailField label="Vị trí lắp đặt">
-                          <EditableCell value={val("viTri", r.viTri)} disabled={!canEdit} onSave={(v) => save(r, "viTri", v || null)} />
-                        </DetailField>
                         <DetailField label="Ngày kiểm tra">
                           <EditableCell
                             value={val("ngayKiemTra", r.ngayKiemTra)}
@@ -315,23 +344,54 @@ export function PcccCabinets({
                             onSave={(v) => save(r, "ngayKiemTra", v || null)}
                           />
                         </DetailField>
-                        <DetailField label="Ghi chú">
-                          <EditableCell value={val("ghiChu", r.ghiChu)} disabled={!canEdit} onSave={(v) => save(r, "ghiChu", v || null)} />
-                        </DetailField>
-                        {/* Tổ máy và SL/ĐVT KHÔNG hiển thị — xem ghi chú cùng chỗ ở tab
-                            Bình chữa cháy. Dữ liệu vẫn còn trong DB. */}
-                        <DetailField label="Chi tiết linh kiện đang lỗi">
-                          {r.components.filter((c) => c.checked && c.statusOrder > 0).length === 0
-                            ? "Không có"
-                            : r.components
-                                .filter((c) => c.checked && c.statusOrder > 0)
-                                .map((c) => `${c.groupLabel}: ${c.status}`)
-                                .join(" · ")}
-                        </DetailField>
                         {/* Chỉ đọc — sẽ làm lại theo hướng chọn nhiều dòng rồi ký một
                             lượt, giống tab Bình chữa cháy. API ký vẫn còn nguyên. */}
                         <DetailField label="Chữ ký">
                           {r.signature ? `${r.signature.signerName} · ${fmtDate(r.signature.signedAt)}` : "Chưa ký"}
+                        </DetailField>
+                        <DetailField label="Vị trí lắp đặt">
+                          <EditableCell
+                            value={val("viTri", r.viTri)}
+                            wrap
+                            disabled={!canEdit}
+                            onSave={(v) => save(r, "viTri", v || null)}
+                          />
+                        </DetailField>
+
+                        <DetailField label="Tên / Loại tủ" span={2}>
+                          <EditableCell
+                            value={val("ten", r.ten)}
+                            wrap
+                            disabled={!canEdit}
+                            onSave={(v) => save(r, "ten", v || null)}
+                          />
+                        </DetailField>
+                        {/* Tổ máy và SL/ĐVT KHÔNG hiển thị — xem ghi chú cùng chỗ ở tab
+                            Bình chữa cháy. Dữ liệu vẫn còn trong DB. */}
+                        <DetailField label="Ghi chú">
+                          <EditableCell
+                            value={val("ghiChu", r.ghiChu)}
+                            wrap
+                            disabled={!canEdit}
+                            onSave={(v) => save(r, "ghiChu", v || null)}
+                          />
+                        </DetailField>
+
+                        <DetailField label="Linh kiện đang lỗi" span="full">
+                          {faults.length === 0 ? (
+                            <span className="text-emerald-700">Không có — toàn bộ linh kiện khả dụng</span>
+                          ) : (
+                            <span className="flex flex-wrap gap-1">
+                              {faults.map((f) => (
+                                <FaultChip
+                                  key={`${f.groupLabel}-${f.status}`}
+                                  group={f.groupLabel}
+                                  status={f.status}
+                                  tone={f.severe ? "bad" : "watch"}
+                                />
+                              ))}
+                            </span>
+                          )}
                         </DetailField>
                       </DetailPanel>
                     </TableCell>

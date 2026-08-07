@@ -22,8 +22,10 @@ import {
   TABLE_SCROLLER,
   PcccTableCard,
   PlainHeader,
+  ROW_HOVER,
   RowExpander,
   SortHeader,
+  rowBackground,
   TD_EXPAND,
   TD_ROW,
   TH_EXPAND,
@@ -194,33 +196,28 @@ export function PcccExtinguishers({
               </TableCell>
             </TableRow>
           )}
-          {rows.map((base) => {
+          {rows.map((base, index) => {
             const rowDraft = draft[base.id];
             // Hiển thị giá trị đang sửa (nếu có) thay cho giá trị đã lưu
             const r = (rowDraft ? { ...base, ...rowDraft } : base) as ExtinguisherRow;
             const dirty = (field: string) => (rowDraft && field in rowDraft ? "bg-amber-100/60" : "");
             const expanded = expandedId === r.id;
-            // Nền của các ô đóng băng: phải đục và phải khớp màu hàng, xem STICKY_TD.
-            const frozenBg = expanded ? "bg-sky-50" : rowDraft ? "bg-amber-50" : "bg-white";
+            // Một màu nền duy nhất cho cả hàng VÀ các ô đóng băng — xem rowBackground.
+            const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
             return (
               <Fragment key={r.id}>
-                <TableRow
-                  className={cn(
-                    expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40",
-                    rowDraft && "bg-amber-50/50"
-                  )}
-                >
-                  <TableCell className={cn(TD_EXPAND, STICKY_TD, frozenBg)} style={{ left: FROZEN.expand.left }}>
+                <TableRow className={cn(rowBg, ROW_HOVER)}>
+                  <TableCell className={cn(TD_EXPAND, STICKY_TD, rowBg)} style={{ left: FROZEN.expand.left }}>
                     <RowExpander expanded={expanded} onToggle={() => setExpandedId(expanded ? null : r.id)} />
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, frozenBg, "whitespace-nowrap font-medium")}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
                     {r.ma}
                   </TableCell>
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, frozenBg, "whitespace-nowrap")}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, "whitespace-nowrap")}
                     style={{ left: FROZEN.chungLoai.left }}
                   >
                     {r.chungLoai}
@@ -228,7 +225,7 @@ export function PcccExtinguishers({
                   {/* Tình trạng: danh sách bị áp suất ràng buộc — áp suất cảnh báo thì
                       không còn lựa chọn "Khả dụng" (quy tắc của file Excel gốc). */}
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, frozenBg, dirty("tinhTrang"))}
+                    className={cn(TD_ROW, STICKY_TD, rowBg, dirty("tinhTrang"))}
                     style={{ left: FROZEN.tinhTrang.left }}
                   >
                     <ToneSelectCell
@@ -240,7 +237,7 @@ export function PcccExtinguishers({
                   </TableCell>
                   {/* Áp suất: bình CO2 đo theo khối lượng, MFZ/Foam theo vạch áp */}
                   <TableCell
-                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, frozenBg, dirty("apSuat"))}
+                    className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, dirty("apSuat"))}
                     style={{ left: FROZEN.apSuat.left }}
                   >
                     <ToneSelectCell

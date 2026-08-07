@@ -4,9 +4,9 @@
 // bảng FM200 bố cục NGANG — mỗi bình là 1 cột, KÝ 1 LẦN cho cả bảng.
 import { toast } from "sonner";
 import { Gauge } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   EditableCell,
-  MachineCell,
   PercentBar,
   SignCell,
   StatusBadge,
@@ -16,6 +16,14 @@ import {
   fmtDate,
 } from "@/components/pccc/pccc-shared";
 import { usePcccSign, usePcccUpdate, type BulkRow, type Fm200Panel, type PositionOption } from "@/hooks/usePccc";
+
+/**
+ * Ba bảng ở tab này chỉ vài dòng mỗi bảng (3 bồn, 2 dòng chỉ số FM200) nên hàng để
+ * THOÁNG hơn hai tab kia: dễ đọc và dễ bấm vào ô nhập, không sợ tốn màn hình. Hai tab
+ * Bình/Tủ chữa cháy hàng trăm dòng nên vẫn giữ hàng sát.
+ */
+const TD_ROOMY = cn(TD_CLASS, "py-2.5");
+const TH_ROOMY = cn(TH_CLASS, "py-2.5");
 
 /** % theo dải đo, dùng lại đúng công thức của lib/pccc-summary. */
 function rangePercent(value: number | null, min: number | null, max: number | null) {
@@ -94,12 +102,12 @@ function Fm200Table({ panel, canManage }: { panel: Fm200Panel; canManage: boolea
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
-              <th className={TH_CLASS}>Loại đo</th>
-              <th className={`${TH_CLASS} text-right`}>Min</th>
-              <th className={`${TH_CLASS} text-right`}>Max</th>
-              <th className={TH_CLASS}>ĐVT</th>
+              <th className={TH_ROOMY}>Loại đo</th>
+              <th className={`${TH_ROOMY} text-right`}>Min</th>
+              <th className={`${TH_ROOMY} text-right`}>Max</th>
+              <th className={TH_ROOMY}>ĐVT</th>
               {panel.binhLabels.map((b) => (
-                <th key={b} className={`${TH_CLASS} min-w-[62px] text-center`}>
+                <th key={b} className={`${TH_ROOMY} min-w-[62px] text-center`}>
                   {b}
                 </th>
               ))}
@@ -108,10 +116,10 @@ function Fm200Table({ panel, canManage }: { panel: Fm200Panel; canManage: boolea
           <tbody>
             {rows.map((row) => (
               <tr key={row.kind}>
-                <td className={`${TD_CLASS} whitespace-nowrap font-medium`}>{row.label}</td>
-                <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{row.min ?? "—"}</td>
-                <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{row.max ?? "—"}</td>
-                <td className={`${TD_CLASS} whitespace-nowrap text-muted-foreground`}>{row.dvt ?? "—"}</td>
+                <td className={`${TD_ROOMY} whitespace-nowrap font-medium`}>{row.label}</td>
+                <td className={`${TD_ROOMY} text-right tabular-nums text-muted-foreground`}>{row.min ?? "—"}</td>
+                <td className={`${TD_ROOMY} text-right tabular-nums text-muted-foreground`}>{row.max ?? "—"}</td>
+                <td className={`${TD_ROOMY} whitespace-nowrap text-muted-foreground`}>{row.dvt ?? "—"}</td>
                 {panel.binhLabels.map((label) => {
                   const value = row.values?.[label] ?? null;
                   const pct = rangePercent(value, row.min, row.max);
@@ -119,7 +127,7 @@ function Fm200Table({ panel, canManage }: { panel: Fm200Panel; canManage: boolea
                   return (
                     <td
                       key={label}
-                      className={`${TD_CLASS} text-center ${
+                      className={`${TD_ROOMY} text-center ${
                         tone === "ok" ? "bg-emerald-50/60" : tone === "watch" ? "bg-amber-50/60" : tone === "bad" ? "bg-rose-50/60" : ""
                       }`}
                     >
@@ -172,9 +180,11 @@ export function PcccBulks({
       <TableShell>
         <thead>
           <tr>
-            {["STT", "Tên", "Cương vị quản lý", "Tổ máy", "Vị trí", "ĐVT", "KL thiết kế", "KL hiện tại", "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Chữ ký"].map(
+            {/* Tổ máy KHÔNG hiển thị (3 bồn đều là Common) — dữ liệu vẫn lưu trong DB, vẫn
+                lọc bằng ô "Tất cả tổ máy" và vẫn xuất ra Excel. Giống hai tab kia. */}
+            {["STT", "Tên", "Cương vị quản lý", "Vị trí", "ĐVT", "KL thiết kế", "KL hiện tại", "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Chữ ký"].map(
               (h) => (
-                <th key={h} className={TH_CLASS}>
+                <th key={h} className={TH_ROOMY}>
                   {h}
                 </th>
               )
@@ -184,9 +194,9 @@ export function PcccBulks({
         <tbody>
           {bulks.map((b) => (
             <tr key={b.id} className="hover:bg-slate-50/60">
-              <td className={`${TD_CLASS} tabular-nums text-muted-foreground`}>{b.stt ?? ""}</td>
-              <td className={`${TD_CLASS} min-w-[200px] font-medium`}>{b.ten}</td>
-              <td className={`${TD_CLASS} whitespace-nowrap`}>
+              <td className={`${TD_ROOMY} tabular-nums text-muted-foreground`}>{b.stt ?? ""}</td>
+              <td className={`${TD_ROOMY} min-w-[200px] font-medium`}>{b.ten}</td>
+              <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <EditableCell
                   value={b.cuongVi}
                   type="select"
@@ -195,14 +205,11 @@ export function PcccBulks({
                   onSave={(v) => save(b, "cuongVi", v)}
                 />
               </td>
-              <td className={`${TD_CLASS} text-center`}>
-                <MachineCell value={b.machine} disabled={!canManage} onSave={(v) => save(b, "machine", v)} />
-              </td>
-              <td className={`${TD_CLASS} min-w-[120px]`}>
+              <td className={`${TD_ROOMY} min-w-[120px]`}>
                 <EditableCell value={b.viTri} disabled={!canManage} onSave={(v) => save(b, "viTri", v)} />
               </td>
-              <td className={TD_CLASS}>{b.dvt}</td>
-              <td className={`${TD_CLASS} text-right tabular-nums`}>
+              <td className={TD_ROOMY}>{b.dvt}</td>
+              <td className={`${TD_ROOMY} text-right tabular-nums`}>
                 <EditableCell
                   value={b.khoiLuongThietKe}
                   type="number"
@@ -211,7 +218,7 @@ export function PcccBulks({
                   onSave={(v) => save(b, "khoiLuongThietKe", v)}
                 />
               </td>
-              <td className={`${TD_CLASS} text-right tabular-nums`}>
+              <td className={`${TD_ROOMY} text-right tabular-nums`}>
                 <EditableCell
                   value={b.khoiLuongHienTai}
                   type="number"
@@ -221,22 +228,22 @@ export function PcccBulks({
                 />
               </td>
               {/* Dẫn xuất → chỉ đọc */}
-              <td className={`${TD_CLASS} w-40`}>
+              <td className={`${TD_ROOMY} w-40`}>
                 <PercentBar value={b.phanTramConLai} />
               </td>
-              <td className={`${TD_CLASS} whitespace-nowrap`}>
+              <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <StatusBadge status={b.tinhTrang} />
               </td>
-              <td className={`${TD_CLASS} whitespace-nowrap`}>
+              <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <EditableCell value={b.ngayChot} type="date" disabled={!canManage} onSave={(v) => save(b, "ngayChot", v)} />
               </td>
-              <td className={`${TD_CLASS} whitespace-nowrap`}>
+              <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <EditableCell value={b.nguoiChot} disabled={!canManage} onSave={(v) => save(b, "nguoiChot", v)} />
               </td>
-              <td className={`${TD_CLASS} min-w-[140px]`}>
+              <td className={`${TD_ROOMY} min-w-[140px]`}>
                 <EditableCell value={b.ghiChu} disabled={!canManage} onSave={(v) => save(b, "ghiChu", v)} />
               </td>
-              <td className={`${TD_CLASS} whitespace-nowrap`}>
+              <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <SignCell
                   signature={b.signature}
                   disabled={!canManage || sign.isPending}
