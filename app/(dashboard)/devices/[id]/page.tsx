@@ -324,7 +324,7 @@ function DeviceDetailPageContent() {
                       <span className="absolute -left-[23px] top-[15px] h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-white dark:ring-[hsl(var(--card))]" />
                       <div className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-sky-200 hover:bg-sky-50/30 dark:border-white/10 dark:bg-white/[0.02]">
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                          <p className="font-semibold leading-snug text-ink">{item.content || "Chưa ghi nội dung thực hiện"}</p>
+                          <p className="font-semibold leading-snug text-ink">{item.defectContent || "Chưa ghi nội dung công tác"}</p>
                           <MachineBadge machine={item.unit} />
                         </div>
                         {device.includesDescendants && (
