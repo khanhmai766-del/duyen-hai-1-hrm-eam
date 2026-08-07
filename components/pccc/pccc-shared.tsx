@@ -381,11 +381,11 @@ export function TickCell({
 export const MACHINE_OPTIONS = [
   { value: "S1", short: "S1", label: "Tổ máy 1" },
   { value: "S2", short: "S2", label: "Tổ máy 2" },
-  { value: "COMMON", short: "Chung", label: "Dùng chung" },
+  { value: "COMMON", short: "Common", label: "Common" },
 ] as const;
 
 export function machineShort(value: string | null | undefined) {
-  return MACHINE_OPTIONS.find((m) => m.value === value)?.short ?? "Chung";
+  return MACHINE_OPTIONS.find((m) => m.value === value)?.short ?? "Common";
 }
 
 export function MachineCell({

@@ -78,6 +78,8 @@ export interface CabinetRow {
   ghiChu: string | null;
   tinhTrangTongThe: string | null;
   components: CabinetComponent[];
+  /** Dùng để phát hiện người khác vừa sửa dòng này (chế độ "Sửa bảng"). */
+  updatedAt: string;
   signature: PcccSignature | null;
 }
 
@@ -290,6 +292,23 @@ export function usePcccBulkSaveExtinguishers() {
   const invalidate = useInvalidatePccc();
   return useMutation({
     mutationFn: (items: BulkSaveItem[]) => apiMutate<BulkSaveResult>("/api/pccc/extinguishers/bulk", "POST", { items }),
+    onSuccess: invalidate,
+  });
+}
+
+/** Lưu một lượt bảng TỦ CHỮA CHÁY — kèm cả các ô ☑ đã đổi của từng tủ. */
+export interface CabinetBulkSaveItem {
+  id: string;
+  updatedAt?: string;
+  patch: Record<string, unknown>;
+  components?: { groupLabel: string; status: string; checked: boolean }[];
+}
+
+export function usePcccBulkSaveCabinets() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (items: CabinetBulkSaveItem[]) =>
+      apiMutate<BulkSaveResult>("/api/pccc/cabinets/bulk", "POST", { items }),
     onSuccess: invalidate,
   });
 }

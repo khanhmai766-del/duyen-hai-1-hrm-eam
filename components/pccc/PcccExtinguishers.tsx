@@ -12,7 +12,7 @@ import { Fragment, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EditableCell, MachineCell, ToneSelectCell, fmtDate } from "@/components/pccc/pccc-shared";
+import { EditableCell, ToneSelectCell, fmtDate } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
   DetailPanel,
@@ -41,7 +41,7 @@ import {
 import { type ExtinguisherRow, type PositionOption } from "@/hooks/usePccc";
 
 /** Số cột của hàng dữ liệu — dùng cho colSpan của hàng chi tiết và hàng rỗng. */
-const COL_COUNT = 14;
+const COL_COUNT = 13;
 
 /**
  * 5 cột đầu ĐÓNG BĂNG khi cuộn ngang: nút chi tiết, mã thiết bị, chủng loại, tình
@@ -169,9 +169,6 @@ export function PcccExtinguishers({
             <TableHead className={cn(TH_NAVY, "w-[160px]")}>
               <SortHeader label="Cương vị quản lý" sortKey="cuongVi" sort={sort} onSort={onSort} />
             </TableHead>
-            <TableHead className={cn(TH_NAVY, "w-[135px]")}>
-              <PlainHeader label="Cấp giám sát" />
-            </TableHead>
             <TableHead className={cn(TH_NAVY, "w-[105px]")}>
               <PlainHeader label="Ngày SX" align="center" />
             </TableHead>
@@ -280,15 +277,6 @@ export function PcccExtinguishers({
                       onSave={(v) => save(r, "cuongVi", v)}
                     />
                   </TableCell>
-                  <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiGiamSat"))}>
-                    <EditableCell
-                      value={r.nguoiGiamSat}
-                      type="select"
-                      options={giamSatOptions}
-                      disabled={!canEdit}
-                      onSave={(v) => save(r, "nguoiGiamSat", v)}
-                    />
-                  </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("ngaySx"))}>
                     <EditableCell value={r.ngaySx} type="date" disabled={!canEdit} onSave={(v) => save(r, "ngaySx", v)} />
                   </TableCell>
@@ -339,18 +327,24 @@ export function PcccExtinguishers({
                         <DetailField label="Nguồn gốc / NSX">
                           <EditableCell value={r.nguonGoc} disabled={!canEdit} onSave={(v) => save(r, "nguonGoc", v)} />
                         </DetailField>
+                        <DetailField label="Cấp giám sát">
+                          <EditableCell
+                            value={r.nguoiGiamSat}
+                            type="select"
+                            options={giamSatOptions}
+                            disabled={!canEdit}
+                            onSave={(v) => save(r, "nguoiGiamSat", v)}
+                          />
+                        </DetailField>
                         <DetailField label="Ngày kiểm tra">
                           <EditableCell value={r.ngayKiemTra} type="date" disabled={!canEdit} onSave={(v) => save(r, "ngayKiemTra", v)} />
                         </DetailField>
                         <DetailField label="Ghi chú">
                           <EditableCell value={r.ghiChu} disabled={!canEdit} onSave={(v) => save(r, "ghiChu", v)} />
                         </DetailField>
-                        <DetailField label="Tổ máy">
-                          <MachineCell value={r.machine} disabled={!canEdit} onSave={(v) => save(r, "machine", v)} />
-                        </DetailField>
-                        <DetailField label="Số lượng / ĐVT">
-                          {r.sl ?? "—"} {r.dvt ?? ""}
-                        </DetailField>
+                        {/* Tổ máy và SL/ĐVT KHÔNG hiển thị: SL luôn là "1 Bình", còn tổ
+                            máy đã có ô lọc riêng. Hai trường vẫn lưu trong DB và vẫn
+                            dùng để lọc + xuất Excel. */}
                         <DetailField label="Chữ ký">
                           {r.signature ? `${r.signature.signerName} · ${fmtDate(r.signature.signedAt)}` : "Chưa ký"}
                         </DetailField>

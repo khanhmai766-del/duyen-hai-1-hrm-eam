@@ -42,6 +42,8 @@ import {
   usePcccSummary,
   usePcccTogglePeriodClose,
   usePcccBulkSaveExtinguishers,
+  usePcccBulkSaveCabinets,
+  type CabinetRow,
   type ExtinguisherRow,
   type PositionOption,
 } from "@/hooks/usePccc";
@@ -51,7 +53,7 @@ import { PcccExtinguishers } from "@/components/pccc/PcccExtinguishers";
 import { PcccOverview } from "@/components/pccc/PcccOverview";
 import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 import { type SortState } from "@/components/pccc/pccc-table-card";
-import { CHUNG_LOAI_OPTIONS, resolveTinhTrang } from "@/lib/pccc-status";
+import { CHUNG_LOAI_OPTIONS, applyTccToggle, resolveTinhTrang } from "@/lib/pccc-status";
 
 type TabKey = "OVERVIEW" | "BCC" | "TCC" | "FCD";
 
@@ -129,9 +131,19 @@ export default function PcccPage() {
   // Chế độ "Sửa bảng": bảng khoá theo mặc định, mở khoá mới sửa được; sửa đổi giữ
   // trong bản nháp rồi LƯU MỘT LƯỢT. `baseline` giữ updatedAt lúc mở khoá để server
   // phát hiện người khác vừa sửa cùng dòng.
+  //
+  // Bản nháp TÁCH THEO TAB: hai bảng có endpoint lưu và cấu trúc dữ liệu khác nhau,
+  // gộp chung một bản nháp thì đổi tab là gửi sai bảng.
+  type Draft = Record<string, Record<string, unknown>>;
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Record<string, Record<string, unknown>>>({});
-  const [baseline, setBaseline] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<{ BCC: Draft; TCC: Draft }>({ BCC: {}, TCC: {} });
+  const [baselines, setBaselines] = useState<{ BCC: Record<string, string>; TCC: Record<string, string> }>({
+    BCC: {},
+    TCC: {},
+  });
+  /** Tab đang có thể bật chế độ sửa. Tổng quan và FCD chưa áp. */
+  const editableTab = tab === "BCC" || tab === "TCC" ? tab : null;
+  const draft = editableTab ? drafts[editableTab] : {};
   const dirtyCount = Object.keys(draft).length;
 
   const periodsQuery = usePcccPeriods();
@@ -167,6 +179,7 @@ export default function PcccPage() {
   const fcdQuery = usePcccBulks(tab === "FCD" ? baseFilters : { ...baseFilters, page: 0 });
 
   const bulkSave = usePcccBulkSaveExtinguishers();
+  const bulkSaveCabinets = usePcccBulkSaveCabinets();
 
   // Gom sửa đổi trong bộ nhớ nên PHẢI cảnh báo trước khi mất: đóng tab / tải lại trang.
   useEffect(() => {
@@ -180,38 +193,109 @@ export default function PcccPage() {
   }, [dirtyCount]);
 
   function beginEdit() {
-    const rows = bccQuery.data?.data ?? [];
-    setBaseline(Object.fromEntries(rows.map((r) => [r.id, r.updatedAt])));
-    setDraft({});
+    if (!editableTab) return;
+    const rows: { id: string; updatedAt: string }[] =
+      editableTab === "BCC" ? (bccQuery.data?.data ?? []) : (tccQuery.data?.data ?? []);
+    setBaselines((prev) => ({ ...prev, [editableTab]: Object.fromEntries(rows.map((r) => [r.id, r.updatedAt])) }));
+    setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
     setEditing(true);
   }
 
   function cancelEdit() {
     if (dirtyCount > 0 && !window.confirm(`Bỏ ${dirtyCount} dòng đang sửa chưa lưu?`)) return;
-    setDraft({});
+    if (editableTab) setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
     setEditing(false);
   }
 
-  /** Ghi 1 ô vào bản nháp. Áp luôn quy tắc áp suất → tình trạng để người dùng thấy ngay. */
+  function patchDraft(tabKey: "BCC" | "TCC", rowId: string, apply: (rowDraft: Record<string, unknown>) => void) {
+    setDrafts((prev) => {
+      const rowDraft = { ...(prev[tabKey][rowId] ?? {}) };
+      apply(rowDraft);
+      return { ...prev, [tabKey]: { ...prev[tabKey], [rowId]: rowDraft } };
+    });
+  }
+
+  /** Ghi 1 ô của BCC vào bản nháp. Áp luôn quy tắc áp suất → tình trạng cho thấy ngay. */
   function onDraftChange(rowId: string, field: string, value: unknown, row: ExtinguisherRow) {
-    setDraft((prev) => {
-      const rowDraft = { ...(prev[rowId] ?? {}), [field]: value };
+    patchDraft("BCC", rowId, (rowDraft) => {
+      rowDraft[field] = value;
       if (field === "apSuat" || field === "tinhTrang") {
         const apSuat = (("apSuat" in rowDraft ? rowDraft.apSuat : row.apSuat) as string | null) ?? null;
         const tinhTrang = (("tinhTrang" in rowDraft ? rowDraft.tinhTrang : row.tinhTrang) as string | null) ?? null;
         const resolved = resolveTinhTrang(apSuat, tinhTrang);
         if (resolved !== tinhTrang) rowDraft.tinhTrang = resolved;
       }
-      return { ...prev, [rowId]: rowDraft };
+    });
+  }
+
+  function onTccDraftChange(rowId: string, field: string, value: unknown) {
+    patchDraft("TCC", rowId, (rowDraft) => {
+      rowDraft[field] = value;
+    });
+  }
+
+  /**
+   * Bấm 1 ô ☑ của TCC. Áp quy tắc "Khả dụng ↔ Bất khả dụng loại trừ nhau" NGAY trong
+   * bản nháp để người dùng thấy ô đối lập tự bỏ tích, không phải chờ lưu xong.
+   */
+  function onToggleComponent(row: CabinetRow, groupLabel: string, status: string, nextChecked: boolean) {
+    patchDraft("TCC", row.id, (rowDraft) => {
+      // Trạng thái hiệu lực = dữ liệu đã lưu, phủ bởi các ô đã bấm trong bản nháp
+      const effective = row.components.map((c) => {
+        const key = `comp:${c.groupLabel}|${c.status}`;
+        return { ...c, checked: key in rowDraft ? Boolean(rowDraft[key]) : c.checked };
+      });
+      for (const change of applyTccToggle(effective, groupLabel, status, nextChecked)) {
+        rowDraft[`comp:${change.groupLabel}|${change.status}`] = change.checked;
+      }
     });
   }
 
   function saveEdits() {
-    const items = Object.entries(draft).map(([id, patch]) => ({ id, updatedAt: baseline[id], patch }));
-    if (items.length === 0) {
+    if (!editableTab) return;
+    if (dirtyCount === 0) {
       setEditing(false);
       return;
     }
+    const baseline = baselines[editableTab];
+
+    if (editableTab === "TCC") {
+      // Tách bản nháp thành trường thường và các ô ☑ (khoá `comp:<nhóm>|<trạng thái>`)
+      const items = Object.entries(draft).map(([id, rowDraft]) => {
+        const patch: Record<string, unknown> = {};
+        const components: { groupLabel: string; status: string; checked: boolean }[] = [];
+        for (const [key, value] of Object.entries(rowDraft)) {
+          if (key.startsWith("comp:")) {
+            const [groupLabel, status] = key.slice(5).split("|");
+            components.push({ groupLabel, status, checked: Boolean(value) });
+          } else {
+            patch[key] = value;
+          }
+        }
+        return { id, updatedAt: baseline[id], patch, components };
+      });
+      bulkSaveCabinets.mutate(items, {
+        onSuccess: (res) => {
+          if (res.errors.length > 0) {
+            toast.error(
+              `Chưa lưu: ${res.errors.length} dòng có vấn đề. ${res.errors
+                .slice(0, 3)
+                .map((e) => `${e.ma ?? e.id}: ${e.message}`)
+                .join(" · ")}${res.errors.length > 3 ? " …" : ""}`,
+              { duration: 10_000 }
+            );
+            return;
+          }
+          toast.success(`Đã lưu ${res.saved} tủ — chữ ký của các dòng đó đã bị xoá, cần ký lại`);
+          setDrafts((prev) => ({ ...prev, TCC: {} }));
+          setEditing(false);
+        },
+        onError: (e: Error) => toast.error(e.message),
+      });
+      return;
+    }
+
+    const items = Object.entries(draft).map(([id, patch]) => ({ id, updatedAt: baseline[id], patch }));
     bulkSave.mutate(items, {
       onSuccess: (res) => {
         if (res.errors.length > 0) {
@@ -228,12 +312,14 @@ export default function PcccPage() {
         toast.success(
           `Đã lưu ${res.saved} dòng${res.adjusted > 0 ? ` (${res.adjusted} dòng tự nâng mức tình trạng theo áp suất)` : ""} — chữ ký của các dòng đó đã bị xoá, cần ký lại`
         );
-        setDraft({});
+        setDrafts((prev) => ({ ...prev, BCC: {} }));
         setEditing(false);
       },
       onError: (e: Error) => toast.error(e.message),
     });
   }
+
+  const saving = bulkSave.isPending || bulkSaveCabinets.isPending;
 
   const createPeriod = usePcccCreatePeriod();
   const toggleClose = usePcccTogglePeriodClose();
@@ -354,7 +440,12 @@ export default function PcccPage() {
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => {
+              if (dirtyCount > 0 && !window.confirm(`Bỏ ${dirtyCount} dòng đang sửa chưa lưu ở tab hiện tại?`)) return;
+              if (editableTab) setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
+              setEditing(false);
+              setTab(t.key);
+            }}
             className={cn(
               "-mb-px flex items-center gap-1.5 rounded-t-lg border border-b-0 px-3.5 py-2 text-[13px] font-medium transition",
               tab === t.key
@@ -397,7 +488,7 @@ export default function PcccPage() {
           )}
         </div>
 
-        {tab === "BCC" && can("pccc-manage", ["personal", "manage", "full"]) && !period.isClosed && (
+        {editableTab && can("pccc-manage", ["personal", "manage", "full"]) && !period.isClosed && (
           <div className="mb-1 flex items-center gap-2">
             {dirtyCount > 0 && (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
@@ -406,13 +497,13 @@ export default function PcccPage() {
             )}
             {editing ? (
               <>
-                <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={bulkSave.isPending}>
+                <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
                   <X className="mr-1.5 size-4" />
                   Huỷ
                 </Button>
-                <Button size="sm" onClick={saveEdits} disabled={bulkSave.isPending}>
-                  <Save className={cn("mr-1.5 size-4", bulkSave.isPending && "animate-pulse")} />
-                  {bulkSave.isPending ? "Đang lưu…" : "Lưu"}
+                <Button size="sm" onClick={saveEdits} disabled={saving}>
+                  <Save className={cn("mr-1.5 size-4", saving && "animate-pulse")} />
+                  {saving ? "Đang lưu…" : "Lưu"}
                 </Button>
               </>
             ) : (
@@ -446,7 +537,7 @@ export default function PcccPage() {
               setPage(1);
             }}
             options={MACHINE_OPTIONS.map((m) => ({ value: m.value, label: m.label }))}
-            allLabel="Cả 2 tổ máy"
+            allLabel="Tất cả tổ máy"
           />
         </div>
 
@@ -538,6 +629,10 @@ export default function PcccPage() {
             cuongViList={cuongViList}
             canManage={!readOnly}
             loading={tccQuery.isFetching}
+            editing={editing}
+            draft={draft}
+            onDraftChange={onTccDraftChange}
+            onToggleComponent={onToggleComponent}
             sort={sort}
             onSort={toggleSort}
             page={tccQuery.data?.meta?.page ?? 1}

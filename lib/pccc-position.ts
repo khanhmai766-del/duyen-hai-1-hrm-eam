@@ -23,7 +23,9 @@ export type PcccMachine = (typeof PCCC_MACHINES)[number];
 export const MACHINE_LABEL: Record<PcccMachine, string> = {
   S1: "Tổ máy 1",
   S2: "Tổ máy 2",
-  COMMON: "Dùng chung",
+  // Gọi "Common" cho khớp cách các module khác của hệ thống hiển thị phạm vi này
+  // (vd thẻ thiết bị ghi "COMMON · Dùng chung").
+  COMMON: "Common",
 };
 
 export function isPcccMachine(value: unknown): value is PcccMachine {
