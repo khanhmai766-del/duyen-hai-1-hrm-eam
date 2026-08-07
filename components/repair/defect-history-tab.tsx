@@ -646,7 +646,9 @@ function RequestTypeColumnFilter({ value, onChange }: { value: string; onChange:
           <Check className={cn("h-4 w-4", value === "ALL" ? "opacity-100" : "opacity-0")} />
           Tất cả
         </DropdownMenuItem>
-        {DEFECT_REQUEST_TYPES.map((option) => (
+        {DEFECT_REQUEST_TYPES.filter(
+          (option) => option !== "Hành Chính IT" && option !== "Khác"
+        ).map((option) => (
           <DropdownMenuItem key={option} onSelect={() => onChange(option)} className="gap-2">
             <Check className={cn("h-4 w-4 shrink-0", value === option ? "opacity-100" : "opacity-0")} />
             <span>{option}</span>
