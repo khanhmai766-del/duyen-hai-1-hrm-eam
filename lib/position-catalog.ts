@@ -66,6 +66,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "Trưởng kíp Lò - Máy",
       "Trưởng kíp Lò máy",
       "2. Trưởng kíp lò máy",
+      "TKLM", // viết tắt trong bảng quản lý thiết bị PCCC
     ],
     units: ALL_UNITS,
     sheetLabels: {
@@ -77,7 +78,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "ELECTRICAL_SHIFT_LEAD",
     label: "Trưởng kíp điện",
-    aliases: ["TK điện", "3. Trưởng kíp điện"],
+    aliases: ["TK điện", "3. Trưởng kíp điện", "TKĐ"], // TKĐ: viết tắt trong bảng PCCC
     units: ALL_UNITS,
     sheetLabels: {
       S1: "3. Trưởng kíp điện",
@@ -165,6 +166,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "Khí nén-Dầu 300",
       "VHV MNK-ND3.",
       "VHV MNK-ND3",
+      "MNK - ND300M3", // cách viết trong bảng PCCC
       "VHV Trạm khí nén - Nhà dầu HFO 300m3",
       "23. VHV MNK-ND3.",
     ],
@@ -174,7 +176,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "MIXED_WATER_TREATMENT",
     label: "XLN hỗn hợp",
-    aliases: ["XLNHH", "VHV XLNHH", "VHV XLN hỗn hợp", "24. VHV XLNHH"],
+    aliases: ["XLNHH", "XLN HH", "VHV XLNHH", "VHV XLN hỗn hợp", "24. VHV XLNHH"], // "XLN HH": bảng PCCC
     units: ["COMMON"],
     sheetLabels: { COMMON: "24. VHV XLNHH" },
   },
@@ -186,6 +188,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "XLNT-Dầu 5000",
       "VHV XLNT-ND5.",
       "VHV XLNT-ND5",
+      "XLNT-ND5000M3", // cách viết trong bảng PCCC
       "VHV XLN thải - Nhà dầu 5000m3",
       "25. VHV XLNT-ND5.",
     ],
@@ -231,6 +234,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "KTV I&C",
       "Thiết bị đo lường và điều khiển",
       "Thiết bị đo lường & điều khiển",
+      "TBĐL&ĐK", // viết tắt trong bảng PCCC
       "VHV C&I",
       "VHV Thiết bị đo lường điều khiển",
       "29. VHV C&I",

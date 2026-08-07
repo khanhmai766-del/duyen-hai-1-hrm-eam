@@ -1,0 +1,243 @@
+/**
+ * Xuất Excel module PCCC — chạy PHÍA SERVER bằng exceljs.
+ *
+ * Khác bản web demo: demo tạo file trong trình duyệt và nạp exceljs qua CDN nên bắt
+ * buộc phải có internet (hạn chế ở mục 5 README demo). Ở đây workbook được dựng trên
+ * server, máy người dùng không cần internet ngoài chính trang web.
+ *
+ * THỨ TỰ CỘT giữ đúng bản gốc trong Excel/Google Sheet, không theo thứ tự hiển thị
+ * trên web — hai thứ tự này khác nhau và không được lẫn.
+ */
+import ExcelJS from "exceljs";
+
+const ARGB = (hex: string) => "FF" + hex;
+
+/** Màu tô theo nhãn tình trạng — khớp bảng chú giải của sheet gốc. */
+const STATUS_FILL: Record<string, string> = {
+  "Khả dụng": "C6EFCE",
+  "Đủ mức": "C6EFCE",
+  "Cần theo dõi": "FFEB9C",
+  "Bất khả dụng": "FFC7CE",
+  "Cần bổ sung gấp": "FFC7CE",
+  "Chưa cập nhật": "EDEDED",
+};
+
+const thin = { style: "thin" as const, color: { argb: ARGB("BFBFBF") } };
+const BORDER = { top: thin, left: thin, right: thin, bottom: thin };
+const HEADER_FILL = "1E3A5F";
+
+export type ExportSheet = "BCC" | "TCC" | "FCD";
+
+export type ExportInput = {
+  periodLabel: string;
+  extinguishers: Record<string, unknown>[];
+  cabinets: (Record<string, unknown> & {
+    components: { groupLabel: string; status: string; checked: boolean; groupOrder: number; statusOrder: number }[];
+  })[];
+  bulks: Record<string, unknown>[];
+  panels: {
+    title: string;
+    binhLabels: string[];
+    mucMin: number | null;
+    mucMax: number | null;
+    mucDvt: string | null;
+    mucValues: Record<string, number | null>;
+    mucGhiChu: string | null;
+    apMin: number | null;
+    apMax: number | null;
+    apDvt: string | null;
+    apValues: Record<string, number | null>;
+    apGhiChu: string | null;
+    ngayKiemTra: Date | null;
+    nguoiKiemTra: string | null;
+  }[];
+};
+
+function headerRow(ws: ExcelJS.Worksheet, rowIdx: number, labels: string[]) {
+  const row = ws.getRow(rowIdx);
+  labels.forEach((label, i) => {
+    const cell = row.getCell(i + 1);
+    cell.value = label;
+    cell.font = { bold: true, size: 10, color: { argb: ARGB("FFFFFF") } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(HEADER_FILL) } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    cell.border = BORDER;
+  });
+  row.height = 32;
+}
+
+function writeBody(ws: ExcelJS.Worksheet, startRow: number, rows: unknown[][], statusCol?: number) {
+  rows.forEach((values, r) => {
+    const row = ws.getRow(startRow + r);
+    values.forEach((v, c) => {
+      const cell = row.getCell(c + 1);
+      cell.value = v instanceof Date ? v : (v as ExcelJS.CellValue);
+      if (v instanceof Date) cell.numFmt = "dd/mm/yyyy";
+      cell.font = { size: 10 };
+      cell.alignment = { vertical: "middle", wrapText: true };
+      cell.border = BORDER;
+      if (statusCol !== undefined && c + 1 === statusCol) {
+        const fill = STATUS_FILL[String(v ?? "")];
+        if (fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(fill) } };
+      }
+    });
+  });
+}
+
+function autoWidths(ws: ExcelJS.Worksheet, labels: string[], rows: unknown[][], min = 8, max = 34) {
+  labels.forEach((label, i) => {
+    const lens = [label.length / 2, ...rows.map((r) => String(r[i] ?? "").length)];
+    ws.getColumn(i + 1).width = Math.min(max, Math.max(min, Math.max(...lens) + 2));
+  });
+}
+
+// ------------------------------------------------------------------ BCC
+const BCC_HEADERS = [
+  "STT", "Mã thiết bị", "Chủng loại", "Vị trí lắp đặt", "Cương vị quản lý", "Tổ máy", "Cấp giám sát", "SL", "ĐVT",
+  "Tình trạng tổng thể", "Áp suất bình MFZ/KL bình CO2", "Vị trí đặt hiện tại", "Tình trạng bên ngoài",
+  "Nguồn gốc / NSX", "Thời gian thay thế gần nhất", "Ngày sản xuất", "Thời gian sử dụng", "Đến hạn thay thế",
+  "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký",
+];
+const BCC_FIELDS = [
+  "stt", "ma", "chungLoai", "viTri", "cuongVi", "machine", "nguoiGiamSat", "sl", "dvt", "tinhTrang", "apSuat",
+  "viTriHienTai", "tinhTrangNgoai", "nguonGoc", "thoiGianThayGanNhat", "ngaySx", "thoiGianSd",
+  "denHanThayThe", "ngayKiemTra", "nguoiKiemTra", "ghiChu",
+];
+
+function writeBcc(wb: ExcelJS.Workbook, input: ExportInput) {
+  const ws = wb.addWorksheet(`BÌNH CHỮA CHÁY - ${input.periodLabel}`, {
+    views: [{ state: "frozen", xSplit: 2, ySplit: 1 }],
+  });
+  const rows = input.extinguishers.map((r) => [
+    ...BCC_FIELDS.map((f) => (r[f] ?? null) as unknown),
+    (r.signature as { signerName?: string } | null)?.signerName ?? "",
+    (r.signature as { signedAt?: Date } | null)?.signedAt ?? "",
+  ]);
+  headerRow(ws, 1, BCC_HEADERS);
+  writeBody(ws, 2, rows, 10); // cột 10 = Tình trạng tổng thể (đã dịch 1 vì thêm Tổ máy)
+  autoWidths(ws, BCC_HEADERS, rows);
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: BCC_HEADERS.length } };
+}
+
+// ------------------------------------------------------------------ TCC
+function writeTcc(wb: ExcelJS.Workbook, input: ExportInput) {
+  const ws = wb.addWorksheet(`TỦ CHỮA CHÁY - ${input.periodLabel}`, {
+    views: [{ state: "frozen", xSplit: 2, ySplit: 2 }],
+  });
+
+  // Khung nhóm × trạng thái lấy từ chính dữ liệu (giữ thứ tự cột gốc)
+  const groups: { label: string; statuses: string[] }[] = [];
+  for (const c of input.cabinets[0]?.components ?? []) {
+    const g = groups.find((x) => x.label === c.groupLabel);
+    if (g) g.statuses.push(c.status);
+    else groups.push({ label: c.groupLabel, statuses: [c.status] });
+  }
+
+  const identity = ["STT", "Mã thiết bị", "Tên / Loại tủ", "Vị trí lắp đặt", "Cương vị quản lý", "Tổ máy", "SL", "ĐVT"];
+  const trailing = ["Tình trạng tổng thể", "Số YCSC", "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký"];
+  const componentCount = groups.reduce((n, g) => n + g.statuses.length, 0);
+  const totalCols = identity.length + componentCount + trailing.length;
+
+  // Hàng 1 = nhóm (merge), hàng 2 = trạng thái
+  headerRow(ws, 1, Array(totalCols).fill(""));
+  headerRow(ws, 2, Array(totalCols).fill(""));
+  identity.forEach((label, i) => {
+    ws.mergeCells(1, i + 1, 2, i + 1);
+    ws.getCell(1, i + 1).value = label;
+  });
+  let col = identity.length + 1;
+  for (const g of groups) {
+    if (g.statuses.length > 1) ws.mergeCells(1, col, 1, col + g.statuses.length - 1);
+    ws.getCell(1, col).value = g.label;
+    g.statuses.forEach((s, i) => (ws.getCell(2, col + i).value = s));
+    col += g.statuses.length;
+  }
+  trailing.forEach((label, i) => {
+    ws.mergeCells(1, col + i, 2, col + i);
+    ws.getCell(1, col + i).value = label;
+  });
+
+  const rows = input.cabinets.map((cab) => {
+    const tick = (groupLabel: string, status: string) =>
+      cab.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ? "☑" : "☐";
+    return [
+      cab.stt ?? null,
+      cab.ma ?? null,
+      cab.ten ?? null,
+      cab.viTri ?? null,
+      cab.cuongVi ?? null,
+      cab.machine ?? null,
+      cab.sl ?? null,
+      cab.dvt ?? null,
+      ...groups.flatMap((g) => g.statuses.map((s) => tick(g.label, s))),
+      cab.tinhTrangTongThe ?? null,
+      cab.soYcsc ?? null,
+      cab.ngayKiemTra ?? null,
+      cab.nguoiKiemTra ?? null,
+      cab.ghiChu ?? null,
+      (cab.signature as { signerName?: string } | null)?.signerName ?? "",
+      (cab.signature as { signedAt?: Date } | null)?.signedAt ?? "",
+    ] as unknown[];
+  });
+
+  writeBody(ws, 3, rows, identity.length + componentCount + 1);
+  for (let c = 1; c <= identity.length; c++) ws.getColumn(c).width = c === 3 ? 34 : c === 6 ? 8 : 14;
+  for (let c = identity.length + 1; c <= identity.length + componentCount; c++) ws.getColumn(c).width = 5;
+  for (let c = identity.length + componentCount + 1; c <= totalCols; c++) ws.getColumn(c).width = 16;
+}
+
+// ------------------------------------------------------- FCD + FM200 (1 sheet)
+const FCD_HEADERS = [
+  "STT", "Tên", "Cương vị quản lý", "Tổ máy", "Vị trí lắp đặt", "ĐVT", "Khối lượng thiết kế", "Khối lượng hiện tại",
+  "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Người ký", "Thời điểm ký",
+];
+
+function writeFcd(wb: ExcelJS.Workbook, input: ExportInput) {
+  const ws = wb.addWorksheet(`FOAM+CO2+DIESEL - ${input.periodLabel}`, { views: [{ state: "frozen", ySplit: 1 }] });
+  const rows = input.bulks.map((b) => [
+    b.stt ?? null, b.ten ?? null, b.cuongVi ?? null, b.machine ?? null, b.viTri ?? null, b.dvt ?? null,
+    b.khoiLuongThietKe ?? null, b.khoiLuongHienTai ?? null,
+    b.phanTramConLai === null || b.phanTramConLai === undefined ? null : Number(b.phanTramConLai),
+    b.tinhTrang ?? null, b.ngayChot ?? null, b.nguoiChot ?? null, b.ghiChu ?? null,
+    (b.signature as { signerName?: string } | null)?.signerName ?? "",
+    (b.signature as { signedAt?: Date } | null)?.signedAt ?? "",
+  ] as unknown[]);
+  headerRow(ws, 1, FCD_HEADERS);
+  writeBody(ws, 2, rows, 10); // Tình trạng dịch sang cột 10 vì thêm Tổ máy
+  autoWidths(ws, FCD_HEADERS, rows);
+  for (let r = 2; r < 2 + rows.length; r++) ws.getCell(r, 9).numFmt = "0.0%";
+
+  // Bảng FM200 nằm dưới, bố cục NGANG (mỗi bình 1 cột) như bảng giấy gốc
+  let cursor = 2 + rows.length + 2;
+  for (const panel of input.panels) {
+    ws.mergeCells(cursor, 1, cursor, 5 + panel.binhLabels.length);
+    const title = ws.getCell(cursor, 1);
+    title.value = panel.title;
+    title.font = { bold: true, size: 11, color: { argb: ARGB(HEADER_FILL) } };
+    cursor += 1;
+
+    const sub = ws.getCell(cursor, 1);
+    sub.value = `Ngày kiểm tra: ${panel.ngayKiemTra ? new Date(panel.ngayKiemTra).toLocaleDateString("vi-VN") : "—"}   ·   Người kiểm tra: ${panel.nguoiKiemTra ?? "—"}`;
+    sub.font = { size: 9, italic: true };
+    cursor += 2;
+
+    const labels = ["Loại đo", "Min", "Max", "Đơn vị", ...panel.binhLabels.map((b) => `Bình ${b}`), "Ghi chú"];
+    headerRow(ws, cursor, labels);
+    const body: unknown[][] = [
+      ["Mức FM 200", panel.mucMin, panel.mucMax, panel.mucDvt, ...panel.binhLabels.map((b) => panel.mucValues?.[b] ?? null), panel.mucGhiChu],
+      ["Áp suất N2", panel.apMin, panel.apMax, panel.apDvt, ...panel.binhLabels.map((b) => panel.apValues?.[b] ?? null), panel.apGhiChu],
+    ];
+    writeBody(ws, cursor + 1, body);
+    cursor += body.length + 3;
+  }
+}
+
+export async function buildPcccWorkbook(input: ExportInput, sheets: ExportSheet[]) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "PowerPlant EAM — Quản lý thiết bị PCCC";
+  wb.created = new Date();
+  if (sheets.includes("BCC")) writeBcc(wb, input);
+  if (sheets.includes("TCC")) writeTcc(wb, input);
+  if (sheets.includes("FCD")) writeFcd(wb, input);
+  return wb.xlsx.writeBuffer();
+}

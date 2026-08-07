@@ -1455,3 +1455,249 @@ model OilAnalysisFailure {
   @@index([ngayTraKq])
   @@map("oil_analysis_failures")
 }
+
+// ============================================================================
+// QUẢN LÝ THIẾT BỊ PCCC (Phân xưởng Vận hành 1)
+//
+// Thay thế file Excel "Quản lý BCC và TCC.xlsx" + bản web demo tĩnh (localStorage):
+// Postgres là NGUỒN SỰ THẬT DUY NHẤT. Ba nhóm thiết bị + 1 bảng thông số FM200,
+// tất cả đều gắn với MỘT KỲ KIỂM TRA (PcccPeriod) = 1 tháng, đúng như Excel gốc
+// tách sheet theo tháng ("BÌNH CHỮA CHÁY - T08.2026").
+//
+// Quy ước dùng chung cho các module theo kỳ sau này (chi tiêu QDU, hoá chất
+// NH3/HCl/NaOH): 1 bảng "kỳ" + n bảng "chỉ số trong kỳ" + 1 bảng chữ ký chung.
+// ============================================================================
+
+// Một kỳ kiểm tra = 1 tháng. Sang tháng mới, bản ghi được COPY từ kỳ trước rồi
+// xoá ngày/người kiểm tra + chữ ký (logic createNextMonthFrom của bản demo).
+model PcccPeriod {
+  id       String @id @default(cuid())
+  label    String @unique // "T08.2026" — đúng hậu tố tên sheet Excel
+  year     Int
+  monthNo  Int // 1..12
+  isClosed Boolean @default(false) // đã chốt: chỉ đọc, không cho sửa/ký thêm
+
+  closedAt    DateTime?
+  closedById  String? // id User (không FK — đã có audit log)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  extinguishers PcccExtinguisher[]
+  cabinets      PcccCabinet[]
+  bulks         PcccBulk[]
+  fm200Panels   PcccFm200Panel[]
+  signatures    PcccSignature[]
+
+  @@unique([year, monthNo])
+  @@index([isClosed])
+  @@map("pccc_periods")
+}
+
+// BÌNH CHỮA CHÁY (BCC) — 20 cột hiển thị của sheet "BÌNH CHỮA CHÁY - <kỳ>".
+// Thứ tự field ở đây GIỮ ĐÚNG thứ tự cột gốc trong Excel (cột 1..20) để việc
+// xuất Excel bám theo nguồn; UI hiển thị theo thứ tự khác (BCC_DISPLAY_ORDER).
+model PcccExtinguisher {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  stt                 Float? // cột 1  — "STT" (Excel ghi 1.0, 2.0…)
+  ma                  String // cột 2  — "Mã thiết bị", vd VH1/BCC/TBTH/01/22
+  chungLoai           String? // cột 3  — Bình MFZ (bột) | Bình CO2 | Bình Foam
+  viTri               String? // cột 4  — Vị trí lắp đặt
+  // Cương vị quản lý — CHUẨN HOÁ theo POSITION_CATALOG: nhãn KHÔNG mang hậu tố tổ
+  // máy ("Lò phó"), tổ máy tách sang cột `machine`. `cuongViCode` là PositionCode —
+  // khóa dùng cho phân quyền; đổi cách viết nhãn không làm sai quyền. lib/pccc-position.ts
+  cuongVi             String? // cột 5  — nhãn hiển thị đã chuẩn hoá
+  cuongViCode         String? // PositionCode, vd BOILER_DEPUTY
+  machine             String  @default("COMMON") // S1 | S2 | COMMON (suy từ hậu tố cương vị)
+  // Cấp giám sát (KHÔNG phải tên người): TK Lò máy / Trưởng kíp điện / Trưởng ca
+  nguoiGiamSat        String? // cột 6  — nhãn hiển thị đã chuẩn hoá
+  nguoiGiamSatCode    String? // PositionCode của cấp giám sát
+  sl                  Float? // cột 7
+  dvt                 String? // cột 8
+  tinhTrang           String? // cột 9  — Khả dụng | Cần theo dõi | Bất khả dụng
+  apSuat              String? // cột 10 — Áp suất bình MFZ / KL bình CO2
+  viTriHienTai        String? // cột 11
+  tinhTrangNgoai      String? // cột 12 — Gỉ sét thân bình / tay nắm…
+  nguonGoc            String? // cột 13 — Nguồn gốc / NSX
+  thoiGianThayGanNhat DateTime? // cột 14
+  ngaySx              DateTime? // cột 15
+  thoiGianSd          Float? // cột 16 — số NĂM sử dụng
+  denHanThayThe       DateTime? // cột 17 — DẪN XUẤT = ngaySx + thoiGianSd, lưu sẵn để lọc/đếm "quá hạn"
+  ngayKiemTra         DateTime? // cột 18
+  nguoiKiemTra        String? // cột 19
+  ghiChu              String? // cột 20
+
+  // Tham chiếu MỀM tới cây thiết bị (EquipmentNode.seq) — KHÔNG đặt FK: mã PCCC
+  // (VH1/BCC/…) hiện chưa có trong danh mục cây, phần lớn dòng còn null; đặt FK
+  // sẽ chặn import. Khi nào map xong thì siết lại bằng migration riêng.
+  deviceSeq String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, ma])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@index([periodId, tinhTrang])
+  @@index([periodId, chungLoai])
+  @@index([deviceSeq])
+  @@map("pccc_extinguishers")
+}
+
+// TỦ CHỮA CHÁY (TCC) — 7 cột định danh + 10 nhóm linh kiện (mỗi nhóm 2..4 trạng
+// thái, xem PcccCabinetComponent) + 4 cột cuối.
+model PcccCabinet {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  stt     Float? // cột 1
+  ma      String // cột 2 — "Mã thiết bị"
+  ten     String? // cột 3 — Tên / Loại tủ (chứa INDOOR/OUTDOOR)
+  viTri   String? // cột 4
+  cuongVi String? // cột 5 — nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
+  cuongViCode String?
+  machine String  @default("COMMON") // S1 | S2 | COMMON
+  sl      Float? // cột 6
+  dvt     String? // cột 7
+
+  soYcsc       String? // cột kề sau khối linh kiện — "Số YCSC"
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+  ghiChu       String?
+
+  // DẪN XUẤT từ các linh kiện (nhóm cuối = nặng → "Bất khả dụng"; nhóm giữa →
+  // "Cần theo dõi"). Lưu sẵn để dashboard/lọc không phải quét bảng con.
+  tinhTrangTongThe String?
+
+  deviceSeq String? // xem ghi chú ở PcccExtinguisher.deviceSeq
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  components PcccCabinetComponent[]
+
+  @@unique([periodId, ma])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@index([periodId, tinhTrangTongThe])
+  @@index([deviceSeq])
+  @@map("pccc_cabinets")
+}
+
+// Một ô tích ☑/☐ của bảng TCC: (nhóm linh kiện × trạng thái).
+// CHO PHÉP nhiều trạng thái cùng được tích trong 1 nhóm — quy tắc có chủ đích
+// của vòng làm việc trước, đừng "sửa" thành single-select.
+// groupOrder/statusOrder giữ đúng thứ tự cột gốc Excel để dựng lại header 2 tầng
+// và file xuất Excel.
+model PcccCabinetComponent {
+  id        String      @id @default(cuid())
+  cabinetId String
+  cabinet   PcccCabinet @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+
+  groupLabel  String // "KÍNH" | "THÂN TỦ" | "LĂNG PHUN" | …
+  status      String // "Khả dụng" | "Thiếu ron" | "Gỉ sét" | "Bất khả dụng" | …
+  checked     Boolean @default(false)
+  groupOrder  Int
+  statusOrder Int
+
+  @@unique([cabinetId, groupLabel, status])
+  @@index([cabinetId])
+  @@map("pccc_cabinet_components")
+}
+
+// FOAM / CO2 / DIESEL — bồn & mức, theo % khối lượng còn lại.
+// Không có "Mã thiết bị" trong Excel → khoá nghiệp vụ là (kỳ, tên).
+model PcccBulk {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  stt              Float?
+  ten              String // "Bồn Foam" | "Bồn CO2" | "Mức dầu DO bơm chữa cháy Diesel"
+  cuongVi          String? // nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
+  cuongViCode      String?
+  machine          String  @default("COMMON") // S1 | S2 | COMMON
+  viTri            String?
+  dvt              String?
+  khoiLuongThietKe Float?
+  khoiLuongHienTai Float?
+  phanTramConLai   Float? // DẪN XUẤT = hienTai / thietKe
+  tinhTrang        String? // DẪN XUẤT theo ngưỡng — xem ghi chú ngưỡng ở docs/pccc.md
+  ngayChot         DateTime?
+  nguoiChot        String?
+  ghiChu           String?
+
+  deviceSeq String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, ten])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@map("pccc_bulks")
+}
+
+// FM200 — bố cục NGANG: mỗi bình là 1 CỘT, 2 dòng chỉ số (Mức FM200, Áp suất N2).
+// 1 bản ghi = 1 bảng/kỳ (phòng kích từ hoặc nhà ĐKTT), KÝ 1 LẦN CHO CẢ BẢNG —
+// không ký theo từng bình (đổi thiết kế ở vòng làm việc trước).
+// Trạng thái/% là DẪN XUẤT từ (giá trị − min)/(max − min) → không lưu.
+model PcccFm200Panel {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  panelKey   String // "KICH_TU" | "DKTT"
+  title      String // "THEO DÕI THÔNG SỐ HỆ THỐNG FM200 - PHÒNG KÍCH TỪ"
+  binhLabels String[] // ["1","2","3","4"] hoặc ["1A",…,"8B"] — giữ đúng thứ tự cột
+  cuongVi     String? // nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
+  cuongViCode String?
+  machine     String  @default("COMMON") // S1 | S2 | COMMON
+
+  mucMin    Float?
+  mucMax    Float?
+  mucDvt    String? // "FT(Feet)"
+  mucValues Json // { "<nhãn bình>": số|null }
+  mucGhiChu String?
+
+  apMin    Float?
+  apMax    Float?
+  apDvt    String?
+  apValues Json
+  apGhiChu String?
+
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, panelKey])
+  @@map("pccc_fm200_panels")
+}
+
+// Chữ ký xác nhận. Quy tắc gốc: SỬA BẤT KỲ TRƯỜNG NÀO của dòng/bảng thì chữ ký
+// của dòng/bảng đó bị XOÁ, buộc ký lại. Vì vậy mỗi mục tiêu chỉ có TỐI ĐA 1 chữ
+// ký đang hiệu lực; lịch sử ký/xoá ký nằm ở AuditLog, không nhân bản ở đây.
+model PcccSignature {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  // Mục tiêu ký: "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL"
+  targetType String
+  targetId   String // id bản ghi tương ứng (không FK: 1 cột trỏ nhiều bảng)
+
+  userId         String // id User đã ký
+  signerName     String // chốt cứng tên lúc ký (đổi tên user sau này không làm sai lịch sử)
+  signerPosition String? // cương vị lúc ký
+  signedAt       DateTime @default(now())
+
+  @@unique([targetType, targetId])
+  @@index([periodId, targetType])
+  @@index([userId])
+  @@map("pccc_signatures")
+}
