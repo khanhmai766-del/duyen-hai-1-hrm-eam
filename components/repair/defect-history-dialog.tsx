@@ -9,12 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { useCreateDefectHistory, useUpdateDefectHistory, type DefectHistoryItem } from "@/hooks/useDefectHistory";
 import { usePositions } from "@/hooks/useUsers";
-import { useDevices } from "@/hooks/useDevices";
 import { DEFECT_UNITS, DEFECT_REQUEST_TYPES, blockForPosition, isSelectableManagingPosition } from "@/lib/constants";
 import { formatDateInput } from "@/lib/utils";
 import { positionsMatch } from "@/lib/position-catalog";
+import type { TreeScope } from "@/lib/equipment-units";
 
 function todayInput(): string {
   return formatDateInput();
@@ -24,7 +25,7 @@ function toDateInput(v: Date | string | null | undefined): string {
 }
 
 const NONE = "__none__";
-const EMPTY = { unit: "", device: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), defectContent: "", content: "", result: "" };
+const EMPTY = { unit: "", device: "", mappedDeviceUnit: "", system: "", requestType: "", workOrderNumber: "", performedAt: todayInput(), defectContent: "", content: "", result: "" };
 
 /**
  * Hộp thoại Thêm mới / Chỉnh sửa một bản ghi lịch sử khiếm khuyết.
@@ -44,16 +45,7 @@ export function DefectHistoryDialog({
   const update = useUpdateDefectHistory();
   // Cương vị chọn được — loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
   const positions = usePositions().filter(isSelectableManagingPosition);
-  // Thiết bị — dùng chung danh mục với form khiếm khuyết. Chỉ tải KHI HỘP THOẠI MỞ:
-  // component này được render sẵn (2 lần) ngoài trang nên nếu không chặn thì mỗi lần vào
-  // Lịch sử sửa chữa đều kéo trọn danh mục thiết bị (~10 MB) dù chưa ai mở hộp thoại.
-  const { data: devicesData } = useDevices({ enabled: open });
-  const devices = devicesData?.data ?? [];
   const [form, setForm] = React.useState({ ...EMPTY });
-  const filteredDevices = React.useMemo(
-    () => devices.filter((d) => !form.system || positionsMatch(d.managingPosition, form.system)),
-    [devices, form.system]
-  );
 
   React.useEffect(() => {
     if (!open) return;
@@ -61,7 +53,8 @@ export function DefectHistoryDialog({
       record
         ? {
             unit: record.unit ?? "",
-            device: record.device ?? "",
+            device: record.deviceSeq ?? record.device ?? "",
+            mappedDeviceUnit: record.mappedDeviceUnit ?? record.unit ?? "",
             system: record.system ?? "",
             requestType: record.requestType ?? "",
             workOrderNumber: record.workOrderNumber ?? "",
@@ -81,13 +74,24 @@ export function DefectHistoryDialog({
   function setSystem(v: string) {
     setForm((f) => {
       const system = v === NONE ? "" : v;
-      const selectedDevice = devices.find((d) => d.code === f.device);
       return {
         ...f,
         system,
-        device: selectedDevice && !positionsMatch(selectedDevice.managingPosition, system) ? "" : f.device,
+        // Cây được lọc theo cương vị. Khi đổi cương vị, bỏ node cũ để không giữ
+        // một thiết bị/thư mục nằm ngoài phạm vi mới.
+        device: system === f.system ? f.device : "",
       };
     });
+  }
+
+  function setUnit(unit: string) {
+    setForm((current) => ({
+      ...current,
+      unit,
+      mappedDeviceUnit: unit,
+      // S1/S2/COMMON là ba hình chiếu cây khác nhau; không giữ node của cây cũ.
+      device: unit === current.unit ? current.device : "",
+    }));
   }
 
   const pending = create.isPending || update.isPending;
@@ -125,7 +129,7 @@ export function DefectHistoryDialog({
                   <button
                     key={u}
                     type="button"
-                    onClick={() => set("unit", u)}
+                    onClick={() => setUnit(u)}
                     className={`h-10 rounded-md border text-sm font-medium transition-colors ${
                       form.unit === u ? "border-navy bg-navy text-white" : "border-input bg-muted/40 text-ink hover:border-accent"
                     }`}
@@ -170,13 +174,20 @@ export function DefectHistoryDialog({
             </Field>
           </div>
           <Field label="Thiết bị">
-            <Select value={form.device || NONE} onValueChange={(v) => set("device", v === NONE ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Chọn thiết bị" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>— Không chọn —</SelectItem>
-                {filteredDevices.map((d) => <SelectItem key={d.id} value={d.code}>{d.code} — {d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <EquipmentTreePicker
+              value={form.device}
+              onChange={(node) => set("device", node?.seq ?? "")}
+              position={form.system || null}
+              accessFilter="edit"
+              includeLeaves
+              leafOnly={false}
+              scope={(form.mappedDeviceUnit || form.unit || "S1") as TreeScope}
+              placeholder={form.unit ? "Chọn thư mục hoặc thiết bị" : "Chọn tổ máy trước"}
+              disabled={!form.unit}
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Mở cây tới đâu tải tới đó; có thể chọn thư mục hoặc thiết bị cấp cuối.
+            </p>
           </Field>
           <Field label="Ngày kết thúc *">
             <Input type="date" value={form.performedAt} onChange={(e) => set("performedAt", e.target.value)} />

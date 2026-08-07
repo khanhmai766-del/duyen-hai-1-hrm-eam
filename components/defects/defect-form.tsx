@@ -132,6 +132,13 @@ export function DefectForm({
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const sectionSource = section ? DEFECT_SECTIONS[section].source : "";
   const requestTypeOptions = section ? DEFECT_SECTIONS[section].requestTypes : DEFECT_REQUEST_TYPES;
+  const requestTypeLabel = React.useCallback(
+    (requestType: string) => {
+      if (requestType !== "Môi Trường" || !section) return requestType;
+      return section === "co" ? "Môi Trường (Cơ)" : "Môi Trường (Điện)";
+    },
+    [section]
+  );
 
   // Cương vị lấy từ trường "Chức vụ" của Quản lý người dùng (distinct, bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
@@ -769,7 +776,12 @@ export function DefectForm({
                 </div>
               )}
             </Field>
-            <Field label="Thiết bị" required={isSynced} full>
+            <Field
+              label={isSynced ? "Thiết bị" : "Thiết bị (không bắt buộc lúc ra phiếu)"}
+              required={isSynced}
+              full
+              hint={!isSynced ? "Có thể gắn bổ sung sau khi danh mục thiết bị được hoàn thiện." : undefined}
+            >
               {materialRequest?.primaryIsFolder ? (
                 // Điểm khai báo dừng ở cấp thư mục: không có thiết bị con để gắn.
                 // Phiếu neo vào chính thư mục đó và cột "Thiết bị" trên Google Sheet
@@ -1232,7 +1244,9 @@ export function DefectForm({
                   <Select value={form.requestType} onValueChange={selectRequestType} disabled={isEdit}>
                     <SelectTrigger className="h-11"><SelectValue placeholder="Chọn loại yêu cầu" /></SelectTrigger>
                     <SelectContent>
-                      {requestTypeOptions.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      {requestTypeOptions.map((t) => (
+                        <SelectItem key={t} value={t}>{requestTypeLabel(t)}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
               </Field>
@@ -1289,7 +1303,7 @@ export function DefectForm({
                 />
               </Field>
               <Field
-                label={form.requestType === "Môi Trường" ? "Mã Trạm ghi lên Google Sheet" : "Tên thiết bị ghi lên Google Sheet"}
+                label={form.requestType === "Môi Trường" ? "Mã Trạm ghi lên Google Sheet" : "Tên thiết bị ghi lên Google Sheet (cột 3)"}
                 required
                 full
                 hint={form.requestType === "Môi Trường"
@@ -1341,7 +1355,7 @@ export function DefectForm({
             </Section>
 
             <Section eyebrow="Bổ sung">
-              <Field label="Ghi chú" full>
+              <Field label="Ghi chú (Cột 15)" full>
                 <Textarea className="min-h-[88px] resize-y" value={form.note} onChange={(e) => set("note", e.target.value)} />
               </Field>
               {["1", "2"].includes(form.severity) && (
