@@ -8,8 +8,12 @@ export async function POST(req: NextRequest) {
   const login = typeof rawLogin === "string" ? rawLogin.trim() : "";
   if (!login || !password) return NextResponse.json({ error: "Thiếu email/user hoặc mật khẩu" }, { status: 400 });
 
+  // passwordHash ở đây là CẦN THIẾT (bcrypt.compare bên dưới), nhưng chỉ lấy đúng
+  // các trường dùng tới thay vì cả bản ghi — route nằm dưới prefix công khai
+  // /api/webauthn nên càng ít dữ liệu nhạy cảm đi qua đây càng tốt.
   const user = await prisma.user.findFirst({
     where: { OR: [{ email: login.toLowerCase() }, { username: login }] },
+    select: { id: true, email: true, name: true, isActive: true, passwordHash: true },
   });
   if (!user || !user.isActive) return NextResponse.json({ error: "Tài khoản không hợp lệ" }, { status: 401 });
   const valid = await bcrypt.compare(password, user.passwordHash);

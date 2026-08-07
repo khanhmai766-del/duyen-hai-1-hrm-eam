@@ -19,9 +19,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Dữ liệu Passkey không hợp lệ" }, { status: 400 });
   }
 
+  // Lấy ĐÚNG các trường dùng tới, không `include: { user: true }`.
+  // Route này nằm dưới prefix công khai /api/webauthn, mà include cả bản ghi User
+  // là kéo luôn bcrypt hash vào bộ nhớ tiến trình dù không cần — chỉ cần một lần
+  // sửa thành trả thẳng `stored` là lộ hash ra ngoài.
   const stored = await (prisma as any).webAuthnCredential.findUnique({
     where: { credentialId: credential.id },
-    include: { user: true },
+    select: {
+      id: true,
+      userId: true,
+      publicKey: true,
+      counter: true,
+      user: { select: { id: true, email: true, isActive: true } },
+    },
   });
   if (!stored || (payload.userId && stored.userId !== payload.userId) || !stored.user?.isActive) {
     return NextResponse.json({ error: "Thiết bị chưa được đồng bộ" }, { status: 401 });
