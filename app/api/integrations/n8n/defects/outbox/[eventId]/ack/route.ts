@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
       if (cancellation) {
         await tx.defect.updateMany({
           where: { id: existing.defectId, cancelledAt: { not: null } },
-          data: { syncState: "CONFIRMED" },
+          data: { syncState: "CONFIRMED", requestNumberReleasedAt: new Date() },
         });
       }
       return updated;

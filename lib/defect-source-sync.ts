@@ -213,6 +213,7 @@ export async function upsertPreparedDefectRecords(params: {
           syncState: true,
           websiteCreated: true,
           commonSubUnit: true,
+          content: true,
           status: true,
           severity: true,
           condition: true,
@@ -256,6 +257,7 @@ export async function upsertPreparedDefectRecords(params: {
           syncState: true,
           websiteCreated: true,
           commonSubUnit: true,
+          content: true,
           status: true,
           severity: true,
           condition: true,
@@ -318,20 +320,17 @@ export async function upsertPreparedDefectRecords(params: {
     const matchedByKeyCandidate = existingFor(item);
     const sourceStatus = statusOf(item.record.sourceStatusRaw);
     const sourceNote = text(item.record.noteRaw) || null;
-    // Dòng của phiếu đã hủy vẫn còn nguyên trên Sheet thì chỉ ghi nhận đã thấy,
-    // không tạo lại. Nếu cùng khóa nguồn nhưng nội dung/trạng thái đã trở thành
-    // một phiếu khác, tháo khóa khỏi vòng đời đã hủy để dòng mới được nhập như
-    // một Defect ACTIVE độc lập.
+    // Dòng của phiếu đã hủy vẫn còn trên Sheet thì chỉ ghi nhận đã thấy, không
+    // tạo lại. Hủy phiếu có thể làm đổi trạng thái, ghi chú và các cột sửa chữa,
+    // vì vậy không được dùng hash toàn dòng để kết luận STT đã được tái sử dụng.
+    // Chỉ xem là phiếu mới khi nội dung khiếm khuyết thực sự đã đổi.
     const cancelledRowStillSame = Boolean(
       matchedByKeyCandidate?.cancelledAt
       && (
         // Chiều ghi chưa ACK: Sheet có thể vẫn đang giữ trạng thái trước khi
         // hủy; website phải thắng và tuyệt đối không được hiểu nhầm thành phiếu mới.
         pendingWebsiteUpdateDefectIds.has(matchedByKeyCandidate.id)
-        || (
-          matchedByKeyCandidate.status === sourceStatus
-          && matchedByKeyCandidate.note === sourceNote
-        )
+        || text(matchedByKeyCandidate.content) === text(item.record.content)
       )
     );
     const reusedCancelledSource = Boolean(
@@ -442,6 +441,24 @@ export async function upsertPreparedDefectRecords(params: {
       continue;
     }
 
+    // Tombstone của phiếu đã hủy là nguồn sự thật cho vòng đời phiếu. Pull từ
+    // Sheet chỉ được cập nhật dấu đã thấy/hash, tuyệt đối không đổi lại trạng
+    // thái hoặc syncState khiến phiếu xuất hiện trở lại trên website.
+    if (existing.cancelledAt) {
+      if (existing.syncState === "CONFIRMED") confirmedSkippedCount++;
+      else unchangedCount++;
+      updates.push({
+        id: existing.id,
+        data: {
+          sourceLastSeenAt: now,
+          sourceSyncedAt: now,
+          sourceHash: item.hash,
+          sourceChangedAfterConfirm: false,
+        },
+      });
+      continue;
+    }
+
     if (existing.syncState === "CONFIRMED") {
       confirmedSkippedCount++;
       updates.push({
@@ -449,8 +466,7 @@ export async function upsertPreparedDefectRecords(params: {
         data: {
           sourceLastSeenAt: now,
           sourceSyncedAt: now,
-          sourceChangedAfterConfirm: existing.cancelledAt ? false : existing.sourceHash !== item.hash,
-          sourceHash: existing.cancelledAt ? item.hash : undefined,
+          sourceChangedAfterConfirm: existing.sourceHash !== item.hash,
         },
       });
       continue;

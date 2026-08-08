@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
             id: { in: cancellationDefectIds },
             cancelledAt: { not: null },
           },
-          data: { syncState: "CONFIRMED" },
+          data: { syncState: "CONFIRMED", requestNumberReleasedAt: new Date() },
         });
       }
       return { requested: eventIds.length, updated: updated.count };

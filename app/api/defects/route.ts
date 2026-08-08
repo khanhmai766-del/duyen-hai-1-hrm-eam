@@ -11,7 +11,7 @@ import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/constants";
 import { validateDefectImages } from "@/lib/defect-images";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
-import { nextDefectRequestNumber } from "@/lib/defect-request-number";
+import { allocateDefectRequestNumber } from "@/lib/defect-request-number";
 import { resolveDefectEnvironmentSheetTarget } from "@/lib/defect-environment-sheet";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { normalizeText } from "@/lib/nav";
@@ -571,7 +571,8 @@ export async function POST(req: NextRequest) {
     if (severityCriteria.length === 0) return fail("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
 
     const defect = await prisma.$transaction(async (tx) => {
-      const requestNumber = await nextDefectRequestNumber(tx, requestYear, requestType);
+      const allocation = await allocateDefectRequestNumber(tx, requestYear, requestType);
+      const requestNumber = allocation.requestNumber;
       const created = await tx.defect.create({
         data: {
           unit: body.unit,
@@ -614,7 +615,19 @@ export async function POST(req: NextRequest) {
         },
         include: INCLUDE,
       });
-      await enqueueDefectSyncEvent(tx, { defect: created, eventType: "CREATE" });
+      if (allocation.reusedCancelledDefectId) {
+        await tx.defect.update({
+          where: { id: allocation.reusedCancelledDefectId },
+          data: { requestNumberReusedById: created.id },
+        });
+      }
+      await enqueueDefectSyncEvent(tx, {
+        defect: created,
+        eventType: "CREATE",
+        extra: allocation.reusedCancelledDefectId
+          ? { replacesCancelledDefectId: allocation.reusedCancelledDefectId }
+          : undefined,
+      });
       return created;
     });
     await audit(

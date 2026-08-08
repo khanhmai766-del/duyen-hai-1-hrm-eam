@@ -588,6 +588,9 @@ model Defect {
   cancelledAt                DateTime? // VHV hủy phiếu; không xóa vật lý để giữ liên kết đồng bộ hai chiều
   cancelledById              String? // Snapshot ID người hủy, không FK
   cancelledByName            String? // Snapshot tên người hủy
+  requestNumberReleasedAt    DateTime? // STT hủy trong cửa sổ 6 giờ được trả lại kho sau khi Sheet ACK
+  requestNumberReusedAt      DateTime? // STT đã được một phiếu mới nhận lại
+  requestNumberReusedById    String? // Snapshot ID phiếu mới nhận lại STT, không FK
   shiftLeaderId              String? // Người giữ cương vị Trưởng ca tại thời điểm lập phiếu (không FK để giữ snapshot)
   shiftLeaderName            String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt                DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
@@ -621,6 +624,7 @@ model Defect {
   @@index([createdAt])
   @@index([completedAt])
   @@index([cancelledAt])
+  @@index([requestType, requestNumberReleasedAt, requestNumberReusedAt])
   @@index([status, completedAt(sort: Desc)])
   @@index([createdById])
   @@index([sourceType, syncState])
