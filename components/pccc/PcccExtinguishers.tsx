@@ -76,6 +76,7 @@ export function PcccExtinguishers({
   pageSize,
   total,
   filtered,
+  toolbarExtra,
   search,
   onPageChange,
   onPageSizeChange,
@@ -98,6 +99,7 @@ export function PcccExtinguishers({
   pageSize: number;
   total: number;
   filtered?: boolean;
+  toolbarExtra?: React.ReactNode;
   search: string;
   onPageChange: (p: number) => void;
   onPageSizeChange: (n: number) => void;
@@ -127,6 +129,7 @@ export function PcccExtinguishers({
       total={total}
       filtered={filtered}
       onPageChange={onPageChange}
+      toolbarExtra={toolbarExtra}
       footerNote={
         !editing && canManage ? (
           <span className="text-[12px]">

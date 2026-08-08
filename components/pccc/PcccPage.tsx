@@ -23,7 +23,6 @@ import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
-  Eye,
   ExternalLink,
   Lock,
   PenLine,
@@ -759,6 +758,38 @@ export default function PcccPage() {
     );
   }
 
+  /**
+   * Gộp phạm vi xem + sửa vào MỘT thẻ trạng thái trong thanh công cụ của bảng.
+   * Hai phạm vi thường trùng nhau; nếu cấu hình phân quyền làm chúng khác nhau thì
+   * vẫn giữ đủ thông tin trong cùng một thẻ, ngăn cách bằng một vạch mảnh.
+   */
+  const showWriteScope = !period.isClosed && scopeLimited;
+  const viewScopeLabel = viewScope?.labels.length ? viewScope.labels.join(" · ") : "Chưa gán cương vị";
+  const writeScopeLabel = writeScope?.labels.length ? writeScope.labels.join(" · ") : "Không có quyền sửa";
+  const sameViewAndWriteScope = viewLimited && showWriteScope && viewScopeLabel === writeScopeLabel;
+  const scopeStatus =
+    viewLimited || showWriteScope ? (
+      <span
+        className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700"
+        title={
+          sameViewAndWriteScope
+            ? "Bảng chỉ hiển thị và cho phép sửa/ký các thiết bị thuộc cương vị của bạn."
+            : "Phạm vi xem và phạm vi sửa/ký được xác định theo cương vị và quyền của tài khoản."
+        }
+      >
+        <ShieldCheck className="size-3.5 shrink-0" />
+        {sameViewAndWriteScope ? (
+          <span>Phạm vi xem &amp; sửa: {viewScopeLabel}</span>
+        ) : (
+          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {viewLimited && <span>Phạm vi xem: {viewScopeLabel}</span>}
+            {viewLimited && showWriteScope && <span aria-hidden="true" className="h-3 w-px bg-sky-300" />}
+            {showWriteScope && <span>Phạm vi sửa: {writeScopeLabel}</span>}
+          </span>
+        )}
+      </span>
+    ) : null;
+
   return (
     <div className="space-y-4">
       <PageHeader title="Quản lý thiết bị PCCC" description="Phân xưởng Vận hành 1">
@@ -798,40 +829,6 @@ export default function PcccPage() {
               title={`Tháng này chưa bắt đầu. Kỳ đang làm việc là ${clock?.currentLabel ?? ""}.`}
             >
               <CalendarClock className="size-3" /> Chưa tới kỳ — chỉ đọc
-            </span>
-          )}
-          {/* Phạm vi XEM: bảng chỉ còn phần của cương vị mình. Nói rõ ngay đầu trang,
-              nếu không người dùng tưởng dữ liệu bị mất. */}
-          {viewLimited && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
-              title="Bảng chỉ hiện thiết bị thuộc cương vị của bạn. Cần xem toàn nhà máy thì nhờ quản trị nâng quyền 'Xem thiết bị PCCC'."
-            >
-              <Eye className="size-3" />
-              {viewScope!.labels.length > 0
-                ? `Chỉ xem: ${viewScope!.labels.join(" · ")}`
-                : "Tài khoản chưa gán cương vị — không có dữ liệu để xem"}
-            </span>
-          )}
-          {/* Phạm vi GHI hẹp hơn phạm vi xem: nói rõ để không mất công sửa rồi mới biết
-              dòng đó không phải của mình. Không lặp lại khi hai phạm vi trùng nhau. */}
-          {!period.isClosed && scopeLimited && writeScope!.labels.length > 0 && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
-              title="Chỉ sửa/ký được dòng thuộc cương vị của bạn"
-            >
-              <ShieldCheck className="size-3" />
-              Chỉ sửa: {writeScope!.labels.join(" · ")}
-            </span>
-          )}
-          {/* Có cương vị mà vẫn không sửa được = thiếu quyền 'Sửa thiết bị PCCC'. Câu cũ
-              ("chưa gán cương vị") đổ oan cho hồ sơ trong khi lỗi nằm ở phân quyền. */}
-          {!period.isClosed && scopeLimited && writeScope!.labels.length === 0 && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-              title="Tài khoản không có quyền sửa dữ liệu PCCC, hoặc chưa được gán cương vị."
-            >
-              <ShieldCheck className="size-3" /> Chỉ đọc
             </span>
           )}
         </div>
@@ -1292,6 +1289,7 @@ export default function PcccPage() {
             pageSize={pageSize}
             total={bccQuery.data?.meta?.total ?? 0}
             filtered={hasActiveFilter}
+            toolbarExtra={scopeStatus}
             search={q}
             onPageChange={setPage}
             onPageSizeChange={(n) => {
@@ -1326,6 +1324,7 @@ export default function PcccPage() {
             pageSize={pageSize}
             total={tccQuery.data?.meta?.total ?? 0}
             filtered={hasActiveFilter}
+            toolbarExtra={scopeStatus}
             search={q}
             onPageChange={setPage}
             onPageSizeChange={(n) => {
