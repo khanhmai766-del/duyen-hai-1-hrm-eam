@@ -101,7 +101,7 @@ export async function allocateDefectRequestNumber(
   await tx.$queryRaw`
     SELECT pg_advisory_xact_lock(
       hashtextextended(${`defect-request-number:${year}:${sequenceType}:${spreadsheetId}:${sheetName}`}, 0)
-    )
+    )::text AS "lock"
   `;
 
   const isEnvironment = sequenceType === "Môi Trường";
