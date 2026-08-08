@@ -1137,7 +1137,7 @@ export function DefectForm({
                       Mức {severity}
                     </span>
                     {meta?.title && (
-                      <span className={cn("line-clamp-2 text-[11.5px] leading-snug", active ? "text-white/85" : "text-muted-foreground")}>
+                      <span className={cn("break-words text-[11.5px] leading-snug", active ? "text-white/85" : "text-muted-foreground")}>
                         {meta.title}
                       </span>
                     )}

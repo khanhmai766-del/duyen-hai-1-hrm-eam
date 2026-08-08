@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { useDefect, type DefectItem } from "@/hooks/useDefects";
-import { DEFECT_CONDITION, DEFECT_SEVERITY } from "@/lib/constants";
+import {
+  DEFECT_CONDITION,
+  DEFECT_SEVERITY,
+  defectSeverityCriteriaLabels,
+} from "@/lib/constants";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -16,6 +20,10 @@ import { cn, formatDate } from "@/lib/utils";
  */
 export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
   const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-4 shadow-sm";
+  const severityCriteria = defectSeverityCriteriaLabels(defect.severity, defect.severityCriteria);
+  const severityDisplay = severityCriteria.length > 0
+    ? severityCriteria.map((criterion) => `Mức ${defect.severity} · ${criterion}`).join("\n")
+    : DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] || defect.severity || "—";
 
   return (
     <div className="grid gap-4 px-1 py-1 text-[13px] leading-5 lg:grid-cols-2 xl:grid-cols-3">
@@ -54,7 +62,8 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
         </div>
         <DetailLine
           label="Mức độ"
-          value={DEFECT_SEVERITY[defect.severity as keyof typeof DEFECT_SEVERITY] || defect.severity || "—"}
+          value={severityDisplay}
+          multiline
         />
         <DetailLine
           label="Điều kiện thực hiện"
