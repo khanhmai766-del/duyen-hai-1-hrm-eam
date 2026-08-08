@@ -51,6 +51,18 @@ export type ExportInput = {
     ngayKiemTra: Date | null;
     nguoiKiemTra: string | null;
   }[];
+  /** Ảnh chữ ký số tải sẵn từ S3, tra theo `signatureKey` của từng bản ký. */
+  signatureImages?: SignatureImages;
+  /** Chỉ có ở BẢN LƯU TRỮ hằng tháng — sinh thêm sheet "CHỐT KỲ" (xem writeClosingSheet). */
+  closing?: {
+    closedAt: Date;
+    closedBy: string;
+    soBinh: number;
+    soTu: number;
+    soBon: number;
+    soBangFm200: number;
+    soChuKy: number;
+  };
 };
 
 function headerRow(ws: ExcelJS.Worksheet, rowIdx: number, labels: string[]) {
@@ -84,6 +96,68 @@ function writeBody(ws: ExcelJS.Worksheet, startRow: number, rows: unknown[][], s
   });
 }
 
+// ---------------------------------------------------------------- CHỮ KÝ (ảnh)
+/**
+ * Ảnh chữ ký số tải sẵn từ S3, tra theo `signatureKey` đã chốt lúc ký.
+ * Buffer được nạp Ở NGOÀI (lib/pccc-archive.ts) — file này giữ nguyên tính thuần tuý,
+ * không tự đi gọi mạng.
+ */
+export type SignatureImages = Map<string, Buffer>;
+
+/** Hộp chứa ảnh trong ô, tính bằng pixel. Cao 24 vừa với hàng 22pt mà vẫn đọc được nét ký. */
+const SIGN_BOX = { width: 96, height: 24 };
+const SIGN_ROW_HEIGHT = 22; // point
+
+/**
+ * Bề rộng THỰC của PNG để giữ đúng tỉ lệ — kéo giãn chữ ký cho vừa khung là làm méo
+ * chữ ký của người ta. Đọc thẳng khối IHDR (13 byte đầu sau chữ ký PNG); định dạng khác
+ * thì trả null và dùng khung mặc định.
+ */
+function pngSize(buffer: Buffer): { width: number; height: number } | null {
+  const isPng = buffer.length > 24 && buffer.readUInt32BE(0) === 0x89504e47;
+  if (!isPng) return null;
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+/**
+ * Chèn ảnh chữ ký vào đúng ô của một dòng.
+ *
+ * Mỗi ảnh chỉ được `addImage` MỘT LẦN cho cả workbook rồi neo lại nhiều chỗ: cả kỳ
+ * thường chỉ vài người ký, mà thêm ảnh theo từng dòng thì 747 dòng là 747 bản sao cùng
+ * một tấm ảnh nằm trong file.
+ */
+function attachSignature(
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  images: SignatureImages | undefined,
+  imageIds: Map<string, number>,
+  rowNumber: number,
+  colNumber: number,
+  signatureKey: string | null | undefined
+) {
+  if (!signatureKey || !images) return;
+  const buffer = images.get(signatureKey);
+  if (!buffer) return;
+
+  let imageId = imageIds.get(signatureKey);
+  if (imageId === undefined) {
+    imageId = wb.addImage({ buffer: buffer as unknown as ExcelJS.Buffer, extension: "png" });
+    imageIds.set(signatureKey, imageId);
+  }
+
+  const size = pngSize(buffer);
+  const height = SIGN_BOX.height;
+  const width = size ? Math.min(SIGN_BOX.width, Math.round((size.width / size.height) * height)) : SIGN_BOX.width;
+
+  ws.getRow(rowNumber).height = SIGN_ROW_HEIGHT;
+  ws.addImage(imageId, {
+    // `tl` đếm từ 0 và nhận số thập phân — cộng thêm chút để ảnh không đè lên viền ô.
+    tl: { col: colNumber - 1 + 0.08, row: rowNumber - 1 + 0.08 },
+    ext: { width, height },
+    editAs: "oneCell",
+  });
+}
+
 function autoWidths(ws: ExcelJS.Worksheet, labels: string[], rows: unknown[][], min = 8, max = 34) {
   labels.forEach((label, i) => {
     const lens = [label.length / 2, ...rows.map((r) => String(r[i] ?? "").length)];
@@ -96,7 +170,7 @@ const BCC_HEADERS = [
   "STT", "Mã thiết bị", "Chủng loại", "Vị trí lắp đặt", "Cương vị quản lý", "Tổ máy", "Cấp giám sát", "SL", "ĐVT",
   "Tình trạng tổng thể", "Áp suất bình MFZ/KL bình CO2", "Vị trí đặt hiện tại", "Tình trạng bên ngoài",
   "Nguồn gốc / NSX", "Thời gian thay thế gần nhất", "Ngày sản xuất", "Thời gian sử dụng", "Đến hạn thay thế",
-  "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký",
+  "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký", "Chữ ký",
 ];
 const BCC_FIELDS = [
   "stt", "ma", "chungLoai", "viTri", "cuongVi", "machine", "nguoiGiamSat", "sl", "dvt", "tinhTrang", "apSuat",
@@ -104,7 +178,7 @@ const BCC_FIELDS = [
   "denHanThayThe", "ngayKiemTra", "nguoiKiemTra", "ghiChu",
 ];
 
-function writeBcc(wb: ExcelJS.Workbook, input: ExportInput) {
+function writeBcc(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
   const ws = wb.addWorksheet(`BÌNH CHỮA CHÁY - ${input.periodLabel}`, {
     views: [{ state: "frozen", xSplit: 2, ySplit: 1 }],
   });
@@ -112,15 +186,22 @@ function writeBcc(wb: ExcelJS.Workbook, input: ExportInput) {
     ...BCC_FIELDS.map((f) => (r[f] ?? null) as unknown),
     (r.signature as { signerName?: string } | null)?.signerName ?? "",
     (r.signature as { signedAt?: Date } | null)?.signedAt ?? "",
+    "", // cột "Chữ ký": để trống, ảnh được neo đè lên ô
   ]);
   headerRow(ws, 1, BCC_HEADERS);
   writeBody(ws, 2, rows, 10); // cột 10 = Tình trạng tổng thể (đã dịch 1 vì thêm Tổ máy)
   autoWidths(ws, BCC_HEADERS, rows);
+  const signCol = BCC_HEADERS.length;
+  ws.getColumn(signCol).width = 18;
+  input.extinguishers.forEach((r, i) => {
+    const sig = r.signature as { signatureKey?: string | null } | null;
+    attachSignature(wb, ws, input.signatureImages, imageIds, 2 + i, signCol, sig?.signatureKey);
+  });
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: BCC_HEADERS.length } };
 }
 
 // ------------------------------------------------------------------ TCC
-function writeTcc(wb: ExcelJS.Workbook, input: ExportInput) {
+function writeTcc(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
   const ws = wb.addWorksheet(`TỦ CHỮA CHÁY - ${input.periodLabel}`, {
     views: [{ state: "frozen", xSplit: 2, ySplit: 2 }],
   });
@@ -134,7 +215,7 @@ function writeTcc(wb: ExcelJS.Workbook, input: ExportInput) {
   }
 
   const identity = ["STT", "Mã thiết bị", "Tên / Loại tủ", "Vị trí lắp đặt", "Cương vị quản lý", "Tổ máy", "SL", "ĐVT"];
-  const trailing = ["Tình trạng tổng thể", "Số YCSC", "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký"];
+  const trailing = ["Tình trạng tổng thể", "Số YCSC", "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác", "Người ký", "Thời điểm ký", "Chữ ký"];
   const componentCount = groups.reduce((n, g) => n + g.statuses.length, 0);
   const totalCols = identity.length + componentCount + trailing.length;
 
@@ -177,22 +258,27 @@ function writeTcc(wb: ExcelJS.Workbook, input: ExportInput) {
       cab.ghiChu ?? null,
       (cab.signature as { signerName?: string } | null)?.signerName ?? "",
       (cab.signature as { signedAt?: Date } | null)?.signedAt ?? "",
+      "", // cột "Chữ ký": ảnh neo đè lên ô
     ] as unknown[];
   });
 
   writeBody(ws, 3, rows, identity.length + componentCount + 1);
+  input.cabinets.forEach((cab, i) => {
+    const sig = cab.signature as { signatureKey?: string | null } | null;
+    attachSignature(wb, ws, input.signatureImages, imageIds, 3 + i, totalCols, sig?.signatureKey);
+  });
   for (let c = 1; c <= identity.length; c++) ws.getColumn(c).width = c === 3 ? 34 : c === 6 ? 8 : 14;
   for (let c = identity.length + 1; c <= identity.length + componentCount; c++) ws.getColumn(c).width = 5;
-  for (let c = identity.length + componentCount + 1; c <= totalCols; c++) ws.getColumn(c).width = 16;
+  for (let c = identity.length + componentCount + 1; c <= totalCols; c++) ws.getColumn(c).width = c === totalCols ? 18 : 16;
 }
 
 // ------------------------------------------------------- FCD + FM200 (1 sheet)
 const FCD_HEADERS = [
   "STT", "Tên", "Cương vị quản lý", "Tổ máy", "Vị trí lắp đặt", "ĐVT", "Khối lượng thiết kế", "Khối lượng hiện tại",
-  "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Người ký", "Thời điểm ký",
+  "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Người ký", "Thời điểm ký", "Chữ ký",
 ];
 
-function writeFcd(wb: ExcelJS.Workbook, input: ExportInput) {
+function writeFcd(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
   const ws = wb.addWorksheet(`FOAM+CO2+DIESEL - ${input.periodLabel}`, { views: [{ state: "frozen", ySplit: 1 }] });
   const rows = input.bulks.map((b) => [
     b.stt ?? null, b.ten ?? null, b.cuongVi ?? null, b.machine ?? null, b.viTri ?? null, b.dvt ?? null,
@@ -201,10 +287,16 @@ function writeFcd(wb: ExcelJS.Workbook, input: ExportInput) {
     b.tinhTrang ?? null, b.ngayChot ?? null, b.nguoiChot ?? null, b.ghiChu ?? null,
     (b.signature as { signerName?: string } | null)?.signerName ?? "",
     (b.signature as { signedAt?: Date } | null)?.signedAt ?? "",
+    "", // cột "Chữ ký": ảnh neo đè lên ô
   ] as unknown[]);
   headerRow(ws, 1, FCD_HEADERS);
   writeBody(ws, 2, rows, 10); // Tình trạng dịch sang cột 10 vì thêm Tổ máy
   autoWidths(ws, FCD_HEADERS, rows);
+  ws.getColumn(FCD_HEADERS.length).width = 18;
+  input.bulks.forEach((b, i) => {
+    const sig = b.signature as { signatureKey?: string | null } | null;
+    attachSignature(wb, ws, input.signatureImages, imageIds, 2 + i, FCD_HEADERS.length, sig?.signatureKey);
+  });
   for (let r = 2; r < 2 + rows.length; r++) ws.getCell(r, 9).numFmt = "0.0%";
 
   // Bảng FM200 nằm dưới, bố cục NGANG (mỗi bình 1 cột) như bảng giấy gốc
@@ -232,12 +324,60 @@ function writeFcd(wb: ExcelJS.Workbook, input: ExportInput) {
   }
 }
 
+/**
+ * Sheet "CHỐT KỲ" — chỉ có trong BẢN LƯU TRỮ hằng tháng, không có trong file người dùng
+ * tự bấm xuất. File lưu trên S3 sống lâu hơn dữ liệu trong DB (DB chỉ giữ 6 kỳ), nên nó
+ * phải tự mang theo bằng chứng: chốt lúc nào, ai/cái gì chốt, chốt trên bao nhiêu dòng.
+ * Đặt LÀM SHEET ĐẦU để mở file ra là thấy ngay, và các sheet dữ liệu giữ nguyên bố cục
+ * gốc của file Excel nguồn.
+ */
+function writeClosingSheet(wb: ExcelJS.Workbook, input: ExportInput) {
+  const closing = input.closing;
+  if (!closing) return;
+  const ws = wb.addWorksheet("CHỐT KỲ");
+  ws.columns = [{ width: 30 }, { width: 46 }];
+  const rows: [string, string | number][] = [
+    ["Kỳ kiểm tra", input.periodLabel],
+    ["Thời điểm chốt", closing.closedAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })],
+    ["Người/hệ thống chốt", closing.closedBy],
+    ["Số bình chữa cháy", closing.soBinh],
+    ["Số tủ chữa cháy", closing.soTu],
+    ["Số bồn Foam/CO2/Diesel", closing.soBon],
+    ["Số bảng FM200", closing.soBangFm200],
+    ["Số chữ ký hiệu lực", closing.soChuKy],
+  ];
+  const title = ws.getRow(1);
+  title.getCell(1).value = `THÔNG TIN CHỐT KỲ ${input.periodLabel}`;
+  title.getCell(1).font = { bold: true, size: 13, color: { argb: ARGB("FFFFFF") } };
+  title.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(HEADER_FILL) } };
+  title.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB(HEADER_FILL) } };
+  title.height = 22;
+
+  rows.forEach(([label, value], i) => {
+    const row = ws.getRow(i + 2);
+    row.getCell(1).value = label;
+    row.getCell(1).font = { bold: true };
+    row.getCell(2).value = value;
+    for (const col of [1, 2]) row.getCell(col).border = BORDER;
+  });
+  ws.getRow(rows.length + 3).getCell(1).value =
+    "Bản lưu trữ tự động của hệ thống EAM. Dữ liệu trong cơ sở dữ liệu chỉ giữ 6 kỳ gần nhất; tệp này là bản gốc dài hạn.";
+  ws.getRow(rows.length + 3).getCell(1).font = { italic: true, size: 10 };
+}
+
 export async function buildPcccWorkbook(input: ExportInput, sheets: ExportSheet[]) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "PowerPlant EAM — Quản lý thiết bị PCCC";
   wb.created = new Date();
-  if (sheets.includes("BCC")) writeBcc(wb, input);
-  if (sheets.includes("TCC")) writeTcc(wb, input);
-  if (sheets.includes("FCD")) writeFcd(wb, input);
+  if (input.closing) {
+    wb.description = `Bản lưu trữ kỳ ${input.periodLabel}, chốt lúc ${input.closing.closedAt.toISOString()}`;
+    wb.lastModifiedBy = input.closing.closedBy;
+  }
+  writeClosingSheet(wb, input);
+  // Mỗi ảnh chữ ký chỉ nạp vào workbook một lần, dùng lại cho mọi dòng và mọi sheet.
+  const imageIds = new Map<string, number>();
+  if (sheets.includes("BCC")) writeBcc(wb, input, imageIds);
+  if (sheets.includes("TCC")) writeTcc(wb, input, imageIds);
+  if (sheets.includes("FCD")) writeFcd(wb, input, imageIds);
   return wb.xlsx.writeBuffer();
 }

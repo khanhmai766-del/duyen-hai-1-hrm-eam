@@ -2,9 +2,12 @@
 // TAB "FOAM · CO2 · DIESEL · FM200".
 // Hai khối: bảng bồn/mức (% còn lại, ngưỡng 90/70 theo công thức sheet nguồn) và các
 // bảng FM200 bố cục NGANG — mỗi bình là 1 cột, KÝ 1 LẦN cho cả bảng.
+import { useState } from "react";
 import { toast } from "sonner";
 import { Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMeProfile } from "@/hooks/useUsers";
+import { PcccSignConfirmDialog } from "@/components/pccc/pccc-sign-dialog";
 import {
   EditableCell,
   PercentBar,
@@ -15,13 +18,28 @@ import {
   TableShell,
   fmtDate,
 } from "@/components/pccc/pccc-shared";
-import { usePcccSign, usePcccUpdate, type BulkRow, type Fm200Panel, type PositionOption } from "@/hooks/usePccc";
+import {
+  canEditPcccRow,
+  usePcccSign,
+  type BulkRow,
+  type Fm200Panel,
+  type PcccWriteScopeMeta,
+  type PositionOption,
+} from "@/hooks/usePccc";
 
 /**
  * Ba bảng ở tab này chỉ vài dòng mỗi bảng (3 bồn, 2 dòng chỉ số FM200) nên hàng để
  * THOÁNG hơn hai tab kia: dễ đọc và dễ bấm vào ô nhập, không sợ tốn màn hình. Hai tab
  * Bình/Tủ chữa cháy hàng trăm dòng nên vẫn giữ hàng sát.
  */
+/** Mục tiêu của một lượt ký ở tab này: một bồn hoặc một bảng FM200. */
+type SignTarget = {
+  targetType: "BULK" | "FM200_PANEL";
+  targetId: string;
+  name: string;
+  remove?: boolean;
+};
+
 const TD_ROOMY = cn(TD_CLASS, "py-2.5");
 const TH_ROOMY = cn(TH_CLASS, "py-2.5");
 
@@ -38,26 +56,32 @@ function fm200Tone(pct: number | null) {
   return "bad" as const;
 }
 
-function Fm200Table({ panel, canManage }: { panel: Fm200Panel; canManage: boolean }) {
-  const update = usePcccUpdate("FM200_PANEL");
+function Fm200Table({
+  panel,
+  canManage,
+  onSign,
+  rowDraft,
+  onDraftChange,
+}: {
+  panel: Fm200Panel;
+  canManage: boolean;
+  onSign: (target: SignTarget) => void;
+  rowDraft: Record<string, unknown>;
+  onDraftChange: (field: string, value: unknown) => void;
+}) {
   const sign = usePcccSign();
 
+  /** Ghi vào BẢN NHÁP, không gọi API. Lưu một lượt khi bấm "Lưu" — giống hai tab kia. */
   function saveValue(kind: "mucValues" | "apValues", label: string, raw: string) {
-    update.mutate(
-      { id: panel.id, patch: { [kind]: { [label]: raw === "" ? null : Number(raw) } } },
-      {
-        onSuccess: () => toast.success(`Đã lưu bình ${label} — chữ ký bảng đã bị xoá, cần ký lại`),
-        onError: (e: Error) => toast.error(e.message),
-      }
-    );
+    onDraftChange(`${kind === "mucValues" ? "muc" : "ap"}:${label}`, raw === "" ? null : Number(raw));
   }
 
   function saveField(field: string, raw: string) {
-    update.mutate(
-      { id: panel.id, patch: { [field]: raw === "" ? null : raw } },
-      { onSuccess: () => toast.success("Đã lưu"), onError: (e: Error) => toast.error(e.message) }
-    );
+    onDraftChange(field, raw === "" ? null : raw);
   }
+
+  /** Giá trị đang sửa (nếu có) thay cho giá trị đã lưu. */
+  const val = <T,>(field: string, saved: T) => (field in rowDraft ? (rowDraft[field] as T) : saved);
 
   const rows = [
     { kind: "mucValues" as const, label: "Mức FM 200", min: panel.mucMin, max: panel.mucMax, dvt: panel.mucDvt, values: panel.mucValues },
@@ -79,20 +103,26 @@ function Fm200Table({ panel, canManage }: { panel: Fm200Panel; canManage: boolea
         <div className="flex flex-wrap items-center gap-2 text-[12px]">
           <span className="text-muted-foreground">Ngày KT:</span>
           <span className="w-28">
-            <EditableCell value={panel.ngayKiemTra} type="date" disabled={!canManage} onSave={(v) => saveField("ngayKiemTra", v)} />
+            <EditableCell
+              value={val("ngayKiemTra", panel.ngayKiemTra)}
+              type="date"
+              disabled={!canManage}
+              onSave={(v) => saveField("ngayKiemTra", v)}
+            />
           </span>
           <span className="text-muted-foreground">Người KT:</span>
           <span className="w-32">
-            <EditableCell value={panel.nguoiKiemTra} disabled={!canManage} onSave={(v) => saveField("nguoiKiemTra", v)} />
+            <EditableCell
+              value={val("nguoiKiemTra", panel.nguoiKiemTra)}
+              disabled={!canManage}
+              onSave={(v) => saveField("nguoiKiemTra", v)}
+            />
           </span>
           <SignCell
             signature={panel.signature}
             disabled={!canManage || sign.isPending}
             onToggle={(remove) =>
-              sign.mutate(
-                { targetType: "FM200_PANEL", targetId: panel.id, remove },
-                { onError: (e: Error) => toast.error(e.message) }
-              )
+              onSign({ targetType: "FM200_PANEL", targetId: panel.id, name: panel.title, remove })
             }
           />
         </div>
@@ -121,7 +151,8 @@ function Fm200Table({ panel, canManage }: { panel: Fm200Panel; canManage: boolea
                 <td className={`${TD_ROOMY} text-right tabular-nums text-muted-foreground`}>{row.max ?? "—"}</td>
                 <td className={`${TD_ROOMY} whitespace-nowrap text-muted-foreground`}>{row.dvt ?? "—"}</td>
                 {panel.binhLabels.map((label) => {
-                  const value = row.values?.[label] ?? null;
+                  const key = `${row.kind === "mucValues" ? "muc" : "ap"}:${label}`;
+                  const value = (key in rowDraft ? (rowDraft[key] as number | null) : row.values?.[label]) ?? null;
                   const pct = rangePercent(value, row.min, row.max);
                   const tone = fm200Tone(pct);
                   return (
@@ -155,24 +186,67 @@ export function PcccBulks({
   panels,
   cuongViList,
   canManage,
+  writeScope,
+  periodLabel,
+  editing,
+  draft,
+  onDraftChange,
 }: {
   bulks: BulkRow[];
   panels: Fm200Panel[];
   cuongViList: PositionOption[];
   canManage: boolean;
+  /** Nhãn kỳ đang xem — hộp thoại ký phải nói rõ đang ký cho kỳ nào. */
+  periodLabel?: string;
+  /** Bảng chỉ mở khoá khi bấm "Sửa bảng", giống hai tab kia. */
+  editing?: boolean;
+  /** Sửa đổi chưa lưu. Khoá: `bulk:<id>` / `panel:<id>`; ô số FM200 dùng `muc:`/`ap:`. */
+  draft?: Record<string, Record<string, unknown>>;
+  onDraftChange?: (key: string, field: string, value: unknown) => void;
+  /** Phạm vi ghi theo cương vị — dòng ngoài phạm vi vẫn XEM được nhưng khoá ô. */
+  writeScope?: PcccWriteScopeMeta;
 }) {
   const cuongViOptions = cuongViList.map((o) => o.label);
-  const update = usePcccUpdate("BULK");
   const sign = usePcccSign();
 
-  function save(row: BulkRow, field: string, value: string) {
-    update.mutate(
-      { id: row.id, patch: { [field]: value === "" ? null : value } },
+  // ---- Ký từng bồn / từng bảng FM200: luôn hỏi xác nhận trước, giống hai tab kia.
+  const me = useMeProfile();
+  const signatureUrl = me.data?.data?.signatureUrl ?? null;
+  const hasSignature = Boolean(me.data?.data?.signatureKey);
+  const [signTarget, setSignTarget] = useState<SignTarget | null>(null);
+
+  function openSign(target: SignTarget) {
+    // Huỷ ký chỉ xoá chữ ký, không ghi gì thêm — hỏi gọn bằng confirm, khỏi mở hộp thoại.
+    if (target.remove) {
+      if (!window.confirm(`Huỷ chữ ký của "${target.name}"?`)) return;
+      sign.mutate(
+        { targetType: target.targetType, targetId: target.targetId, remove: true },
+        { onSuccess: () => toast.success(`Đã huỷ ký ${target.name}`), onError: (e: Error) => toast.error(e.message) }
+      );
+      return;
+    }
+    setSignTarget(target);
+  }
+
+  function confirmSign() {
+    if (!signTarget) return;
+    sign.mutate(
+      { targetType: signTarget.targetType, targetId: signTarget.targetId },
       {
-        onSuccess: (res) => toast.success(res?.signatureCleared ? `Đã lưu ${row.ten} — chữ ký đã bị xoá` : `Đã lưu ${row.ten}`),
+        onSuccess: () => {
+          toast.success(
+            `Đã ký ${signTarget.name} — người kiểm tra ${me.data?.data?.name ?? ""}, ngày ${new Date().toLocaleDateString("vi-VN")}`
+          );
+          setSignTarget(null);
+        },
         onError: (e: Error) => toast.error(e.message),
       }
     );
+  }
+
+  /** Ghi vào BẢN NHÁP, không gọi API. Lưu một lượt khi bấm "Lưu". */
+  function save(row: BulkRow, field: string, value: string) {
+    onDraftChange?.(`bulk:${row.id}`, field, value === "" ? null : value);
   }
 
   return (
@@ -192,38 +266,43 @@ export function PcccBulks({
           </tr>
         </thead>
         <tbody>
-          {bulks.map((b) => (
+          {bulks.map((b) => {
+            // Phạm vi ghi theo cương vị — bồn của cương vị khác vẫn xem được, chỉ khoá ô.
+            const rowEditable = canManage && Boolean(editing) && canEditPcccRow(writeScope, b);
+            const bDraft = draft?.[`bulk:${b.id}`] ?? {};
+            const val = <T,>(field: string, saved: T) => (field in bDraft ? (bDraft[field] as T) : saved);
+            return (
             <tr key={b.id} className="hover:bg-slate-50/60">
               <td className={`${TD_ROOMY} tabular-nums text-muted-foreground`}>{b.stt ?? ""}</td>
               <td className={`${TD_ROOMY} min-w-[200px] font-medium`}>{b.ten}</td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <EditableCell
-                  value={b.cuongVi}
+                  value={val("cuongVi", b.cuongVi)}
                   type="select"
                   options={cuongViOptions}
-                  disabled={!canManage}
+                  disabled={!rowEditable}
                   onSave={(v) => save(b, "cuongVi", v)}
                 />
               </td>
               <td className={`${TD_ROOMY} min-w-[120px]`}>
-                <EditableCell value={b.viTri} disabled={!canManage} onSave={(v) => save(b, "viTri", v)} />
+                <EditableCell value={val("viTri", b.viTri)} disabled={!rowEditable} onSave={(v) => save(b, "viTri", v)} />
               </td>
               <td className={TD_ROOMY}>{b.dvt}</td>
               <td className={`${TD_ROOMY} text-right tabular-nums`}>
                 <EditableCell
-                  value={b.khoiLuongThietKe}
+                  value={val("khoiLuongThietKe", b.khoiLuongThietKe)}
                   type="number"
                   align="right"
-                  disabled={!canManage}
+                  disabled={!rowEditable}
                   onSave={(v) => save(b, "khoiLuongThietKe", v)}
                 />
               </td>
               <td className={`${TD_ROOMY} text-right tabular-nums`}>
                 <EditableCell
-                  value={b.khoiLuongHienTai}
+                  value={val("khoiLuongHienTai", b.khoiLuongHienTai)}
                   type="number"
                   align="right"
-                  disabled={!canManage}
+                  disabled={!rowEditable}
                   onSave={(v) => save(b, "khoiLuongHienTai", v)}
                 />
               </td>
@@ -235,31 +314,58 @@ export function PcccBulks({
                 <StatusBadge status={b.tinhTrang} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
-                <EditableCell value={b.ngayChot} type="date" disabled={!canManage} onSave={(v) => save(b, "ngayChot", v)} />
+                <EditableCell value={val("ngayChot", b.ngayChot)} type="date" disabled={!rowEditable} onSave={(v) => save(b, "ngayChot", v)} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
-                <EditableCell value={b.nguoiChot} disabled={!canManage} onSave={(v) => save(b, "nguoiChot", v)} />
+                <EditableCell value={val("nguoiChot", b.nguoiChot)} disabled={!rowEditable} onSave={(v) => save(b, "nguoiChot", v)} />
               </td>
               <td className={`${TD_ROOMY} min-w-[140px]`}>
-                <EditableCell value={b.ghiChu} disabled={!canManage} onSave={(v) => save(b, "ghiChu", v)} />
+                <EditableCell value={val("ghiChu", b.ghiChu)} disabled={!rowEditable} onSave={(v) => save(b, "ghiChu", v)} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <SignCell
                   signature={b.signature}
-                  disabled={!canManage || sign.isPending}
-                  onToggle={(remove) =>
-                    sign.mutate({ targetType: "BULK", targetId: b.id, remove }, { onError: (e: Error) => toast.error(e.message) })
-                  }
+                  disabled={!rowEditable || sign.isPending}
+                  onToggle={(remove) => openSign({ targetType: "BULK", targetId: b.id, name: b.ten, remove })}
                 />
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </TableShell>
 
       {panels.map((p) => (
-        <Fm200Table key={p.id} panel={p} canManage={canManage} />
+        <Fm200Table
+          key={p.id}
+          panel={p}
+          canManage={canManage && Boolean(editing) && canEditPcccRow(writeScope, p)}
+          onSign={openSign}
+          rowDraft={draft?.[`panel:${p.id}`] ?? {}}
+          onDraftChange={(field, value) => onDraftChange?.(`panel:${p.id}`, field, value)}
+        />
       ))}
+
+      <PcccSignConfirmDialog
+        open={Boolean(signTarget)}
+        onClose={() => setSignTarget(null)}
+        title={`Ký xác nhận ${signTarget?.targetType === "FM200_PANEL" ? "bảng FM200" : "bồn"}`}
+        rows={[
+          { label: signTarget?.targetType === "FM200_PANEL" ? "Bảng" : "Bồn", value: signTarget?.name ?? "", strong: true },
+          { label: "Kỳ kiểm tra", value: periodLabel ?? "—" },
+          { label: "Người kiểm tra", value: me.data?.data?.name ?? "—" },
+          { label: "Ngày kiểm tra", value: new Date().toLocaleDateString("vi-VN") },
+        ]}
+        hasSignature={hasSignature}
+        signatureUrl={signatureUrl}
+        pending={sign.isPending}
+        onConfirm={confirmSign}
+        note={
+          signTarget?.targetType === "FM200_PANEL"
+            ? "Ký một lần cho cả bảng. Ngày KT và Người KT của bảng sẽ được điền tự động."
+            : "Ngày chốt và Người chốt của bồn sẽ được điền tự động theo lượt ký này."
+        }
+      />
 
       {panels.length > 0 && (
         <p className="text-[11px] text-muted-foreground">

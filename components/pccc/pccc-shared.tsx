@@ -2,7 +2,7 @@
 // Thành phần dùng chung cho 4 tab PCCC: nhãn trạng thái, thẻ số liệu, thanh %,
 // ô sửa tại chỗ và ô chữ ký. Giữ ở 1 chỗ để 3 bảng nhìn như một hệ thống.
 import { useEffect, useRef, useState } from "react";
-import { Check, PenLine, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, PenLine, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toneOf, type PcccTone } from "@/lib/pccc-status";
 
@@ -61,6 +61,12 @@ export function StatusBadge({ status, className }: { status: string | null | und
   );
 }
 
+/**
+ * Thẻ số liệu của tab Tổng quan. Có `onClick` thì thẻ thành NÚT LỌC: rê chuột vào là
+ * thẻ nhấc lên + viền đậm + hiện nhãn "Lọc →", bấm thì mở đúng bảng chi tiết của con
+ * số đó. Không truyền `onClick` thì vẫn là thẻ tĩnh như cũ (không có hiệu ứng, không
+ * bắt con trỏ) — quan trọng, vì thẻ không lọc được mà nhấp nháy như nút là gây hiểu lầm.
+ */
 export function StatCard({
   label,
   value,
@@ -69,6 +75,7 @@ export function StatCard({
   icon: Icon,
   active,
   onClick,
+  actionLabel,
 }: {
   label: string;
   value: string | number;
@@ -77,6 +84,8 @@ export function StatCard({
   icon?: React.ElementType;
   active?: boolean;
   onClick?: () => void;
+  /** Bấm vào thì lọc ra gì — hiện thành tooltip, cũng là nhãn cho trình đọc màn hình. */
+  actionLabel?: string;
 }) {
   const ring: Record<StatusTone, string> = {
     ok: "ring-emerald-200 bg-emerald-50/60",
@@ -95,16 +104,25 @@ export function StatCard({
       type="button"
       disabled={!onClick}
       onClick={onClick}
+      title={actionLabel}
+      aria-label={actionLabel ? `${label}: ${value} — ${actionLabel}` : undefined}
       className={cn(
-        "flex min-w-0 flex-1 items-start gap-3 rounded-xl p-3.5 text-left ring-1 transition",
+        "group relative flex min-w-0 flex-1 items-start gap-3 rounded-xl p-3.5 text-left ring-1 transition duration-150",
         ring[tone],
-        onClick && "hover:shadow-sm",
+        onClick &&
+          "cursor-pointer hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 focus-visible:-translate-y-0.5 focus-visible:shadow-lg focus-visible:outline-none focus-visible:ring-2 active:translate-y-0 active:shadow-sm",
         active && "ring-2 ring-offset-1 ring-offset-white",
         !onClick && "cursor-default"
       )}
     >
       {Icon && (
-        <span className={cn("mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-white/80 ring-1", ring[tone])}>
+        <span
+          className={cn(
+            "mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-white/80 ring-1 transition",
+            ring[tone],
+            onClick && "group-hover:scale-110"
+          )}
+        >
           <Icon className={cn("size-4", valueColor[tone])} />
         </span>
       )}
@@ -113,6 +131,13 @@ export function StatCard({
         <span className={cn("block text-2xl font-bold leading-tight", valueColor[tone])}>{value}</span>
         {hint && <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{hint}</span>}
       </span>
+      {/* Chỉ dấu "bấm được" — chỉ hiện khi rê chuột nên lúc thường thẻ vẫn gọn như cũ. */}
+      {onClick && (
+        <span className="pointer-events-none absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-white/95 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 opacity-0 shadow-sm ring-1 ring-slate-200 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+          Lọc
+          <ArrowRight className="size-3" />
+        </span>
+      )}
     </button>
   );
 }
@@ -313,13 +338,44 @@ export function ToneSelectCell({
   );
 }
 
+/**
+ * Con dấu chữ ký: ẢNH chữ ký số của người ký + tên + ngày. Ảnh lấy qua proxy S3 theo key
+ * đã chốt lúc ký, nên user đổi chữ ký về sau không làm sai bản ký cũ.
+ * Bản ký cũ chưa gắn ảnh thì rơi về hiện tên như trước, không để trống.
+ */
+export function SignatureStamp({
+  signature,
+  className,
+}: {
+  signature: { signerName: string; signedAt: string; signatureUrl?: string | null } | null;
+  className?: string;
+}) {
+  if (!signature) return <span className="text-[12px] text-slate-400">Chưa ký</span>;
+  return (
+    <span className={cn("inline-flex items-center gap-2", className)}>
+      {signature.signatureUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- ảnh chữ ký phục vụ qua proxy S3, không qua loader ảnh
+        <img
+          src={signature.signatureUrl}
+          alt={`Chữ ký ${signature.signerName}`}
+          className="h-8 w-auto max-w-[120px] object-contain"
+        />
+      )}
+      <span className="min-w-0 leading-tight">
+        <span className="block truncate text-[12px] font-medium text-ink">{signature.signerName}</span>
+        <span className="block text-[11px] text-muted-foreground">{fmtDate(signature.signedAt)}</span>
+      </span>
+    </span>
+  );
+}
+
 /** Ô chữ ký: chưa ký → nút "Ký"; đã ký → tên + thời điểm, bấm để huỷ ký. */
 export function SignCell({
   signature,
   disabled,
   onToggle,
 }: {
-  signature: { signerName: string; signerPosition: string | null; signedAt: string } | null;
+  signature: { signerName: string; signerPosition: string | null; signedAt: string; signatureUrl?: string | null } | null;
   disabled?: boolean;
   onToggle: (remove: boolean) => void;
 }) {
@@ -330,9 +386,14 @@ export function SignCell({
         disabled={disabled}
         onClick={() => onToggle(true)}
         title={disabled ? "Kỳ đã chốt" : "Bấm để huỷ ký"}
-        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:border-emerald-300 disabled:opacity-60"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:border-emerald-300 disabled:opacity-60"
       >
-        <ShieldCheck className="size-3 shrink-0" />
+        {signature.signatureUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- ảnh chữ ký phục vụ qua proxy S3
+          <img src={signature.signatureUrl} alt="" className="h-6 w-auto max-w-[80px] shrink-0 object-contain" />
+        ) : (
+          <ShieldCheck className="size-3 shrink-0" />
+        )}
         <span className="truncate">{signature.signerName}</span>
         <span className="shrink-0 text-emerald-600/70">{fmtDate(signature.signedAt)}</span>
       </button>
@@ -458,10 +519,23 @@ export function componentTone(statusOrder: number, statusCount: number): StatusT
   return "watch";
 }
 
-export function TableShell({ children, className }: { children: React.ReactNode; className?: string }) {
+export function TableShell({
+  children,
+  className,
+  fill,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  /**
+   * Kéo bảng cao bằng đúng khung chứa nó, chia đều phần dư cho các hàng. Dùng khi bảng
+   * nằm cạnh một khối cao hơn (biểu đồ) — không có nó thì khung bảng vẫn bị kéo cao
+   * theo lưới nhưng các hàng đứng nguyên, để lại một mảng trắng ở đáy.
+   */
+  fill?: boolean;
+}) {
   return (
     <div className={cn("overflow-auto rounded-xl border border-slate-200 bg-white", className)}>
-      <table className="w-full border-collapse text-[12px]">{children}</table>
+      <table className={cn("w-full border-collapse text-[12px]", fill && "h-full")}>{children}</table>
     </div>
   );
 }

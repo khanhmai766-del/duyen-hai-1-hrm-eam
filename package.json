@@ -18,6 +18,7 @@
     "import:equipment-tree": "node scripts/import-equipment-tree.mjs",
     "import:pccc": "tsx scripts/import-pccc-excel.ts",
     "check:pccc": "tsx scripts/check-pccc-summary.ts",
+    "pccc:rollover": "tsx scripts/pccc-rollover.ts",
     "normalize:pccc": "tsx scripts/normalize-pccc-positions.ts",
     "normalize:tcc": "tsx scripts/normalize-pccc-tcc.ts",
     "admin:reset": "tsx scripts/reset-admin-password.ts",

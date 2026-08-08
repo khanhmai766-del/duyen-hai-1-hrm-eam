@@ -10,6 +10,8 @@ export interface PcccSignature {
   signerName: string;
   signerPosition: string | null;
   signedAt: string;
+  /** Ảnh chữ ký số phục vụ qua proxy S3; null với bản ký cũ chưa gắn ảnh. */
+  signatureUrl?: string | null;
 }
 
 export interface PcccPeriod {
@@ -19,7 +21,34 @@ export interface PcccPeriod {
   monthNo: number;
   isClosed: boolean;
   closedAt: string | null;
+  /** Bản Excel đã đẩy lên S3 lúc chốt kỳ — null nghĩa là chưa lưu trữ. */
+  archiveKey?: string | null;
+  archivedAt?: string | null;
   _count?: { extinguishers: number; cabinets: number; bulks: number; fm200Panels: number; signatures: number };
+}
+
+/** Mốc thời gian do SERVER tính theo giờ VN (máy người dùng có thể sai đồng hồ/múi giờ). */
+export interface PcccClockMeta {
+  today: string;
+  currentLabel: string;
+  isLastDayOfMonth: boolean;
+  keepPeriods: number;
+}
+
+/** Một bản lưu trữ Excel trên S3. */
+export interface PcccArchiveEntry {
+  label: string;
+  key: string;
+  bytes: number;
+  archivedAt: string | null;
+}
+
+export interface PcccRolloverResult {
+  closed: { label: string; archiveKey: string; bytes: number }[];
+  created: string[];
+  deleted: string[];
+  keptWithoutArchive: string[];
+  errors: string[];
 }
 
 export interface ExtinguisherRow {
@@ -107,6 +136,9 @@ export interface Fm200Panel {
   panelKey: string;
   title: string;
   binhLabels: string[];
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
   mucMin: number | null;
   mucMax: number | null;
   mucDvt: string | null;
@@ -170,6 +202,25 @@ export interface PositionOption {
   label: string;
 }
 
+/**
+ * Phạm vi GHI/KÝ của người đăng nhập (bước E — xem lib/pccc-service.ts).
+ * `all` = ghi mọi cương vị; ngược lại chỉ các mã trong `codes` (nhãn để hiển thị ở `labels`).
+ */
+export interface PcccWriteScopeMeta {
+  all: boolean;
+  codes: string[];
+  labels: string[];
+}
+
+/**
+ * Dòng này người đang đăng nhập có được sửa không. Đây chỉ là lớp KHOÁ Ô CHO ĐỠ HỤT
+ * CÔNG — server vẫn kiểm lại đúng luật này khi ghi, vì client gọi thẳng API được.
+ */
+export function canEditPcccRow(scope: PcccWriteScopeMeta | undefined, row: { cuongViCode?: string | null }) {
+  if (!scope || scope.all) return true;
+  return Boolean(row.cuongViCode && scope.codes.includes(row.cuongViCode));
+}
+
 export interface PcccListMeta {
   period: PcccPeriod;
   total: number;
@@ -178,6 +229,7 @@ export interface PcccListMeta {
   cuongViList: PositionOption[];
   giamSatList?: PositionOption[];
   groups?: { label: string; statuses: string[] }[];
+  writeScope?: PcccWriteScopeMeta;
 }
 
 export interface PcccFilters {
@@ -313,12 +365,91 @@ export function usePcccBulkSaveCabinets() {
   });
 }
 
+/** Kết quả xem trước / ký hàng loạt theo cương vị. */
+export interface PcccBulkSignPreview {
+  total: number;
+  alreadySigned: number;
+  willSign: number;
+  scopeLabel: string;
+  periodLabel: string;
+  signerName: string;
+  /** false = tài khoản chưa có chữ ký số → hộp thoại nhắc và chặn nút xác nhận. */
+  hasSignature: boolean;
+  signatureSetupUrl: string;
+}
+
+export interface PcccBulkSignResult {
+  signed: number;
+  resigned: number;
+  signerName: string;
+  signedAt: string;
+  signatureUrl: string;
+  scopeLabel: string;
+  periodLabel: string;
+}
+
+export interface PcccBulkSignInput {
+  targetType: "EXTINGUISHER" | "CABINET";
+  period?: string;
+  cuongVi?: string;
+  machine?: string;
+  preview?: boolean;
+}
+
+/**
+ * Ký một lượt toàn bộ dòng thuộc cương vị quản lý của người ký. Gọi kèm `preview: true`
+ * thì KHÔNG ghi gì, chỉ trả số liệu cho hộp thoại xác nhận — hộp thoại phải nói đúng số
+ * dòng sắp bị đụng vào, không đoán ở phía client.
+ */
+export function usePcccBulkSign() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (input: PcccBulkSignInput) =>
+      apiMutate<PcccBulkSignResult>("/api/pccc/signatures/bulk", "POST", input),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePcccBulkSignPreview() {
+  return useMutation({
+    mutationFn: (input: Omit<PcccBulkSignInput, "preview">) =>
+      apiMutate<PcccBulkSignPreview>("/api/pccc/signatures/bulk", "POST", { ...input, preview: true }),
+  });
+}
+
 export function usePcccSign() {
   const invalidate = useInvalidatePccc();
   return useMutation({
     mutationFn: ({ targetType, targetId, remove }: { targetType: PcccTargetType; targetId: string; remove?: boolean }) =>
       apiMutate("/api/pccc/signatures", remove ? "DELETE" : "POST", { targetType, targetId }),
     onSuccess: invalidate,
+  });
+}
+
+/** 12 tháng lưu trữ gần nhất trên S3 — nguồn cho ô "Tải bản lưu trữ" của nút Xuất Excel. */
+export function usePcccArchives() {
+  return useQuery({
+    queryKey: ["pccc-archives"],
+    queryFn: () => apiGet<PcccArchiveEntry[]>("/api/pccc/archive"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Chạy TAY đúng job mà bộ hẹn giờ vẫn chạy hằng tháng: chốt kỳ (kèm xuất Excel lên S3),
+ * sinh kỳ mới, dọn DB còn 6 kỳ. Thay cho hai nút "Chốt kỳ" và "Sinh kỳ mới" trước đây —
+ * hai việc đó phải đi liền nhau nên tách ra chỉ tạo cơ hội làm nửa vời.
+ */
+export function usePcccRollover() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (closeCurrentPeriod?: boolean) =>
+      apiMutate<PcccRolloverResult>("/api/pccc/rollover", "POST", { closeCurrentPeriod: closeCurrentPeriod === true }),
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["pccc-archives"] });
+    },
   });
 }
 

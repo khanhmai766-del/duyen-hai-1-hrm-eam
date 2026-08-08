@@ -4,6 +4,7 @@ import { requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { PCCC_PERMISSION, resolvePeriod, scopeWhere, signaturesOf } from "@/lib/pccc-service";
 import { buildPcccWorkbook, type ExportSheet } from "@/lib/pccc-export-xlsx";
+import { loadSignatureImages } from "@/lib/pccc-archive";
 
 // exceljs cần Node runtime (không chạy trên Edge).
 export const runtime = "nodejs";
@@ -40,9 +41,17 @@ export async function GET(req: NextRequest) {
       signaturesOf(period.id, "BULK"),
     ]);
 
+    // Ảnh chữ ký số của người ký, tải một lần theo key duy nhất (xem lib/pccc-archive.ts).
+    const signatureImages = await loadSignatureImages([
+      ...[...sigBcc.values()].map((s) => s.signatureKey),
+      ...[...sigTcc.values()].map((s) => s.signatureKey),
+      ...[...sigBulk.values()].map((s) => s.signatureKey),
+    ]);
+
     const buffer = await buildPcccWorkbook(
       {
         periodLabel: period.label,
+        signatureImages,
         extinguishers: extinguishers.map((r) => ({ ...r, signature: sigBcc.get(r.id) ?? null })),
         cabinets: cabinets.map((r) => ({ ...r, signature: sigTcc.get(r.id) ?? null })),
         bulks: bulks.map((r) => ({ ...r, signature: sigBulk.get(r.id) ?? null })),

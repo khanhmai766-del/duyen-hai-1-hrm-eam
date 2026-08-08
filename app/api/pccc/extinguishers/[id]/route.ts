@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
-  PCCC_PERMISSION,
-  assertPeriodOpen,
+  assertPcccScope,
+  assertPcccScopePatch,
+  assertPeriodWritable,
   clearSignature,
   normalizePositionPatch,
   pickFields,
+  resolvePcccWriteScope,
   type FieldSpec,
 } from "@/lib/pccc-service";
 import { apSuatOptions, normalizeChungLoai, resolveTinhTrang } from "@/lib/pccc-status";
@@ -46,15 +47,17 @@ function computeDenHan(ngaySx: Date | null, namSuDung: number | null) {
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, PCCC_PERMISSION.manage, ["personal", "manage", "full"], "Không đủ quyền sửa dữ liệu PCCC");
+    const scope = await resolvePcccWriteScope(user);
 
     const current = await prisma.pcccExtinguisher.findUnique({ where: { id: params.id }, include: { period: true } });
     if (!current) return fail("Không tìm thấy bình chữa cháy", 404);
-    assertPeriodOpen(current.period);
+    assertPeriodWritable(current.period);
+    assertPcccScope(scope, current);
 
     const body = (await req.json()) as Record<string, unknown>;
     const data = normalizePositionPatch(pickFields(body, EDITABLE), current, { withGiamSat: true });
     if (Object.keys(data).length === 0) return fail("Không có trường nào để cập nhật");
+    assertPcccScopePatch(scope, data);
 
     // Quy tắc TÌNH TRẠNG ↔ ÁP SUẤT của bảng gốc — cưỡng chế Ở SERVER, không tin
     // client: áp suất phải nằm trong danh sách của chủng loại, và áp suất từ mức

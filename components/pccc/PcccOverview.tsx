@@ -2,12 +2,35 @@
 // TAB "TỔNG QUAN" — bám đúng sheet TỔNG QUAN của file gốc nhưng mọi con số đều
 // TÍNH TỪ DỮ LIỆU CHI TIẾT (sheet gốc là bảng nhập tay). Xem docs/pccc.md mục 3.
 import { useMemo } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CalendarClock, CircleGauge, Droplets, FlameKindling, Layers, ShieldCheck } from "lucide-react";
 import { PercentBar, StatCard, StatusBadge, TD_CLASS, TH_CLASS, TableShell, fmtPercent } from "@/components/pccc/pccc-shared";
 import type { PcccSummary } from "@/hooks/usePccc";
 
 const TONE_COLOR = { ok: "#16A34A", watch: "#D97706", bad: "#DC2626" } as const;
+
+type TccGroupRow = { groupLabel: string; binhThuong: number; huHong1Phan: number; huHongHoanToan: number };
+
+/** Nhãn nhóm linh kiện dài hơn bề ngang trục thì cắt bớt — tên đầy đủ vẫn có trong tooltip. */
+function shortGroupLabel(value: string, max = 12) {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+/** Tooltip của biểu đồ TCC: hiện ĐỦ CẢ BA trạng thái, kể cả "bình thường" không vẽ trên cột. */
+function TccChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: TccGroupRow }[] }) {
+  if (!active || !payload?.length) return null;
+  const g = payload[0].payload;
+  const total = g.binhThuong + g.huHong1Phan + g.huHongHoanToan;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] shadow-lg">
+      <p className="mb-1 font-bold text-ink">{g.groupLabel}</p>
+      <p className="text-emerald-700">Bình thường: {g.binhThuong}</p>
+      <p className="text-amber-700">Hư hỏng 1 phần: {g.huHong1Phan}</p>
+      <p className="text-rose-700">Hư hỏng hoàn toàn: {g.huHongHoanToan}</p>
+      <p className="mt-1 border-t border-slate-100 pt-1 text-muted-foreground">Tổng {total} ô đã tích</p>
+    </div>
+  );
+}
 
 function SectionTitle({ index, title, note }: { index: string; title: string; note?: string }) {
   return (
@@ -19,8 +42,17 @@ function SectionTitle({ index, title, note }: { index: string; title: string; no
   );
 }
 
-export function PcccOverview({ summary }: { summary: PcccSummary }) {
+/**
+ * Bấm thẻ KPI → mở đúng bảng chi tiết đã lọc sẵn của con số đó. Tổng quan chỉ nói
+ * "có bao nhiêu", người dùng luôn hỏi tiếp "những cái nào" — đây là đường đi thẳng
+ * tới câu trả lời, khỏi phải tự dò lại bộ lọc.
+ */
+export type PcccOverviewDrill = "BCC_KHA_DUNG" | "BCC_BAT_KHA_DUNG" | "BCC_QUA_HAN" | "TCC_HONG_NANG";
+
+export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDrill?: (target: PcccOverviewDrill) => void }) {
   const bccTotal = summary.bcc.total;
+  /** Chỉ biến thẻ thành nút khi trang có xử lý — thẻ không đi đâu thì đừng giả vờ bấm được. */
+  const drill = (target: PcccOverviewDrill) => (onDrill ? () => onDrill(target) : undefined);
 
   const donut = useMemo(
     () => [
@@ -32,7 +64,7 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
   );
 
   const tccByGroup = useMemo(() => {
-    const map = new Map<string, { groupLabel: string; binhThuong: number; huHong1Phan: number; huHongHoanToan: number }>();
+    const map = new Map<string, TccGroupRow>();
     for (const r of summary.tcc.rows) {
       const cur = map.get(r.groupLabel) ?? { groupLabel: r.groupLabel, binhThuong: 0, huHong1Phan: 0, huHongHoanToan: 0 };
       cur.binhThuong += r.binhThuong;
@@ -42,6 +74,19 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
     }
     return [...map.values()];
   }, [summary.tcc.rows]);
+
+  /**
+   * Xếp hạng nhóm linh kiện theo SỐ Ô LỖI, nhiều nhất lên trên. Bảng bên trái liệt kê
+   * theo thứ tự cột gốc của sheet nên nhìn không ra "hỏng ở đâu nhiều nhất" — biểu đồ
+   * này trả lời đúng câu đó, không lặp lại cột "Mức lành" của bảng.
+   */
+  const tccRanked = useMemo(
+    () =>
+      tccByGroup
+        .map((g) => ({ ...g, loi: g.huHong1Phan + g.huHongHoanToan }))
+        .sort((a, b) => b.loi - a.loi || b.huHongHoanToan - a.huHongHoanToan),
+    [tccByGroup]
+  );
 
   const worstFcd = summary.fcd.reduce<number | null>(
     (min, b) => (b.phanTramConLai === null ? min : min === null ? b.phanTramConLai : Math.min(min, b.phanTramConLai)),
@@ -58,6 +103,8 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
           hint={`${fmtPercent(bccTotal.phanTramKhaDung, 1)} khả dụng`}
           tone={bccTotal.phanTramKhaDung >= 0.9 ? "ok" : bccTotal.phanTramKhaDung >= 0.7 ? "watch" : "bad"}
           icon={FlameKindling}
+          onClick={drill("BCC_KHA_DUNG")}
+          actionLabel={`Bấm để xem ${bccTotal.khaDung} bình khả dụng ở tab Bình chữa cháy`}
         />
         <StatCard
           label="Bình bất khả dụng"
@@ -65,6 +112,8 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
           hint={`${bccTotal.canTheoDoi} bình cần theo dõi`}
           tone={bccTotal.batKhaDung > 0 ? "bad" : "ok"}
           icon={AlertTriangle}
+          onClick={drill("BCC_BAT_KHA_DUNG")}
+          actionLabel={`Bấm để xem ${bccTotal.batKhaDung} bình bất khả dụng ở tab Bình chữa cháy`}
         />
         <StatCard
           label="Quá hạn thay thế"
@@ -72,6 +121,8 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
           hint={`${bccTotal.sapDenHan} bình sắp đến hạn (90 ngày)`}
           tone={bccTotal.quaHanThayThe > 0 ? "watch" : "ok"}
           icon={CalendarClock}
+          onClick={drill("BCC_QUA_HAN")}
+          actionLabel={`Bấm để xem ${bccTotal.quaHanThayThe} bình quá hạn thay thế ở tab Bình chữa cháy`}
         />
         <StatCard
           label="Linh kiện tủ hỏng nặng"
@@ -79,6 +130,8 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
           hint={`${summary.tcc.total.huHong1Phan} lỗi nhẹ · ${summary.tcc.total.binhThuong} bình thường`}
           tone={summary.tcc.total.huHongHoanToan > 0 ? "bad" : "ok"}
           icon={Layers}
+          onClick={drill("TCC_HONG_NANG")}
+          actionLabel="Bấm để xem các tủ bất khả dụng (có linh kiện hỏng nặng) ở tab Tủ chữa cháy"
         />
       </div>
 
@@ -86,6 +139,10 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
       <section>
         <SectionTitle index="I" title="Bình chữa cháy (BCC)" note="theo chủng loại" />
         <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+          {/* Cột trái cao hơn bảng BCC (bảng chỉ 4 dòng, biểu đồ tròn bên phải cao gấp
+              đôi) nên hai thẻ RON được kê vào đúng khoảng trắng đó — số liệu ron tính
+              từ tủ chữa cháy, nhưng đặt ở đây thì không ai phải cuộn để thấy nó. */}
+          <div className="min-w-0 space-y-3">
           <TableShell>
             <thead>
               <tr>
@@ -121,6 +178,40 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
             </tbody>
           </TableShell>
 
+          {/* Ron: công thức mới, tính từ ô ☑ thay cho 2 dòng nhập tay của sheet cũ */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {summary.tcc.ron.map((r) => (
+              <div key={r.loaiRon} className="rounded-xl border border-slate-200 bg-white p-3.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-navy">Ron chữa cháy {r.loaiRon}</p>
+                  <StatusBadge status={r.thieuRon === 0 ? "Khả dụng" : "Cần theo dõi"} />
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {r.loaiTu} · {r.soTu} tủ × 3 ron (lăng phun 2 + ngàm 1) = {r.tongRon} ron
+                </p>
+                <div className="mt-2">
+                  <PercentBar value={r.tongRon === 0 ? null : r.dayDu / r.tongRon} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                  <span className="text-emerald-700">
+                    Đầy đủ <b className="tabular-nums">{r.dayDu}</b>
+                  </span>
+                  <span className="text-rose-700">
+                    Thiếu ron <b className="tabular-nums">{r.thieuRon}</b>
+                  </span>
+                  {Object.entries(r.thieuRonTheoNhom)
+                    .filter(([, n]) => n > 0)
+                    .map(([g, n]) => (
+                      <span key={g} className="text-muted-foreground">
+                        {g}: {n}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          </div>
+
           <div className="rounded-xl border border-slate-200 bg-white p-3">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cơ cấu tình trạng</p>
             <div className="h-[168px]">
@@ -153,7 +244,13 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
       {/* II. TCC */}
       <section>
         <SectionTitle index="II" title="Tủ chữa cháy (TCC)" note="đếm theo ô đã tích, một nhóm có thể có nhiều lỗi" />
-        <TableShell>
+        {/* Cột phải rộng hơn mục I (340 thay vì 280): trục dọc ở đây là TÊN NHÓM LINH
+            KIỆN, dài tới "VAN TAY CHẶN TỔNG" — hẹp như bên kia là phải cắt chữ. */}
+        <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        {/* `min-w-0` là bắt buộc: cột `1fr` mặc định không co nhỏ hơn bề rộng tối thiểu
+            của bảng, nên màn hình hẹp là bảng TRÀN ĐÈ lên biểu đồ bên phải thay vì tự
+            cuộn ngang trong khung của nó. */}
+        <TableShell className="min-w-0" fill>
           <thead>
             <tr>
               <th className={TH_CLASS}>Linh kiện</th>
@@ -188,37 +285,51 @@ export function PcccOverview({ summary }: { summary: PcccSummary }) {
           </tbody>
         </TableShell>
 
-        {/* Ron: công thức mới, tính từ ô ☑ thay cho 2 dòng nhập tay của sheet cũ */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {summary.tcc.ron.map((r) => (
-            <div key={r.loaiRon} className="rounded-xl border border-slate-200 bg-white p-3.5">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-navy">Ron chữa cháy {r.loaiRon}</p>
-                <StatusBadge status={r.thieuRon === 0 ? "Khả dụng" : "Cần theo dõi"} />
-              </div>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {r.loaiTu} · {r.soTu} tủ × 3 ron (lăng phun 2 + ngàm 1) = {r.tongRon} ron
-              </p>
-              <div className="mt-2">
-                <PercentBar value={r.tongRon === 0 ? null : r.dayDu / r.tongRon} />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-                <span className="text-emerald-700">
-                  Đầy đủ <b className="tabular-nums">{r.dayDu}</b>
+        {/* Biểu đồ cột NGANG XẾP CHỒNG, khác kiểu với hình tròn của BCC là có chủ ý:
+            bên BCC mỗi bình chỉ mang MỘT tình trạng nên chia tròn được; bên TCC một
+            nhóm có thể vừa "hư hỏng 1 phần" vừa "hoàn toàn" nên tổng không phải 100%,
+            và câu hỏi thực tế là "hỏng ở đâu nhiều nhất" — cột ngang xếp hạng trả lời
+            được, hình tròn thì không. */}
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Nhóm linh kiện lỗi nhiều nhất</p>
+          <p className="mt-0.5 text-[10.5px] text-muted-foreground">xếp theo số ô lỗi · rê chuột để xem cả số bình thường</p>
+          <div className="mt-1.5 h-[268px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tccRanked} layout="vertical" margin={{ top: 2, right: 14, left: 0, bottom: 2 }} barCategoryGap={3}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} stroke="#94A3B8" />
+                <YAxis
+                  type="category"
+                  dataKey="groupLabel"
+                  width={124}
+                  tick={{ fontSize: 10, fontWeight: 600 }}
+                  tickFormatter={(v) => shortGroupLabel(String(v), 20)}
+                  tickLine={false}
+                  axisLine={false}
+                  stroke="#64748B"
+                />
+                <Tooltip cursor={{ fill: "#F1F5F9" }} content={<TccChartTooltip />} />
+                <Bar dataKey="huHong1Phan" name="Hư hỏng 1 phần" stackId="loi" fill={TONE_COLOR.watch} radius={[3, 0, 0, 3]} />
+                <Bar dataKey="huHongHoanToan" name="Hư hỏng hoàn toàn" stackId="loi" fill={TONE_COLOR.bad} radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <ul className="mt-1 space-y-1 border-t border-slate-100 pt-1.5">
+            {[
+              { name: "Bình thường", value: summary.tcc.total.binhThuong, tone: "ok" as const },
+              { name: "Hư hỏng 1 phần", value: summary.tcc.total.huHong1Phan, tone: "watch" as const },
+              { name: "Hư hỏng hoàn toàn", value: summary.tcc.total.huHongHoanToan, tone: "bad" as const },
+            ].map((d) => (
+              <li key={d.name} className="flex items-center justify-between text-[12px]">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="size-2 rounded-full" style={{ background: TONE_COLOR[d.tone] }} />
+                  {d.name}
                 </span>
-                <span className="text-rose-700">
-                  Thiếu ron <b className="tabular-nums">{r.thieuRon}</b>
-                </span>
-                {Object.entries(r.thieuRonTheoNhom)
-                  .filter(([, n]) => n > 0)
-                  .map(([g, n]) => (
-                    <span key={g} className="text-muted-foreground">
-                      {g}: {n}
-                    </span>
-                  ))}
-              </div>
-            </div>
-          ))}
+                <span className="font-semibold tabular-nums">{d.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
         </div>
       </section>
 

@@ -3,7 +3,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, cuongViListOf, resolvePeriod, scopeWhere, signaturesOf } from "@/lib/pccc-service";
+import {
+  PCCC_PERMISSION,
+  cuongViListOf,
+  pcccWriteScopeOf,
+  resolvePeriod,
+  scopeWhere,
+  signaturesOf,
+} from "@/lib/pccc-service";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +59,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList] = await Promise.all([
+    const [total, rows, signatures, cuongViList, writeScope] = await Promise.all([
       prisma.pcccCabinet.count({ where }),
       prisma.pcccCabinet.findMany({
         where,
@@ -63,6 +70,8 @@ export async function GET(req: NextRequest) {
       }),
       signaturesOf(period.id, "CABINET"),
       cuongViListOf(period.id),
+      // Phạm vi GHI của người đang xem — UI khoá sẵn dòng ngoài phạm vi (xem lib/pccc-service.ts)
+      pcccWriteScopeOf(user),
     ]);
 
     // Khung header 2 tầng (nhóm × trạng thái) lấy từ chính dữ liệu, giữ thứ tự cột gốc
@@ -75,7 +84,7 @@ export async function GET(req: NextRequest) {
 
     return ok(
       rows.map((r) => ({ ...r, signature: signatures.get(r.id) ?? null })),
-      { period, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)), cuongViList, groups }
+      { period, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)), cuongViList, groups, writeScope }
     );
   });
 }

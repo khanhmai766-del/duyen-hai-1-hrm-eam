@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
-  PCCC_PERMISSION,
-  assertPeriodOpen,
+  assertPcccScope,
+  assertPcccScopePatch,
+  resolvePcccWriteScope,
+  assertPeriodWritable,
   clearSignature,
   normalizePositionPatch,
   pickFields,
@@ -30,14 +31,16 @@ const EDITABLE: FieldSpec = {
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, PCCC_PERMISSION.manage, ["personal", "manage", "full"], "Không đủ quyền sửa dữ liệu PCCC");
+    const scope = await resolvePcccWriteScope(user);
 
     const current = await prisma.pcccBulk.findUnique({ where: { id: params.id }, include: { period: true } });
     if (!current) return fail("Không tìm thấy bồn/mức", 404);
-    assertPeriodOpen(current.period);
+    assertPeriodWritable(current.period);
+    assertPcccScope(scope, current);
 
     const data = normalizePositionPatch(pickFields((await req.json()) as Record<string, unknown>, EDITABLE), current);
     if (Object.keys(data).length === 0) return fail("Không có trường nào để cập nhật");
+    assertPcccScopePatch(scope, data);
 
     const thietKe = ("khoiLuongThietKe" in data ? (data.khoiLuongThietKe as number | null) : current.khoiLuongThietKe) ?? null;
     const hienTai = ("khoiLuongHienTai" in data ? (data.khoiLuongHienTai as number | null) : current.khoiLuongHienTai) ?? null;

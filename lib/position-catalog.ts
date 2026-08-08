@@ -167,6 +167,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "VHV MNK-ND3.",
       "VHV MNK-ND3",
       "MNK - ND300M3", // cách viết trong bảng PCCC
+      "MÁY NÉN KHÍ VÀ DẦU 300M3", // bảng PCCC viết đầy đủ, không viết tắt
       "VHV Trạm khí nén - Nhà dầu HFO 300m3",
       "23. VHV MNK-ND3.",
     ],
@@ -176,7 +177,8 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "MIXED_WATER_TREATMENT",
     label: "XLN hỗn hợp",
-    aliases: ["XLNHH", "XLN HH", "VHV XLNHH", "VHV XLN hỗn hợp", "24. VHV XLNHH"], // "XLN HH": bảng PCCC
+    // "XLN HH" và "XỬ LÝ NƯỚC HỖN HỢP": hai cách viết trong bảng PCCC
+    aliases: ["XLNHH", "XLN HH", "XỬ LÝ NƯỚC HỖN HỢP", "VHV XLNHH", "VHV XLN hỗn hợp", "24. VHV XLNHH"],
     units: ["COMMON"],
     sheetLabels: { COMMON: "24. VHV XLNHH" },
   },
@@ -189,6 +191,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "VHV XLNT-ND5.",
       "VHV XLNT-ND5",
       "XLNT-ND5000M3", // cách viết trong bảng PCCC
+      "XỬ LÝ NƯỚC THẢI VÀ DẦU 5000M3", // bảng FOAM+CO2+DIESEL viết đầy đủ, không viết tắt
       "VHV XLN thải - Nhà dầu 5000m3",
       "25. VHV XLNT-ND5.",
     ],
@@ -200,6 +203,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
     label: "NH3 - Lò hơi phụ",
     aliases: [
       "NH3- Lò hơi phụ",
+      "NH3 VÀ LÒ HƠI PHỤ", // bảng FOAM+CO2+DIESEL dùng "và" thay cho gạch nối
       "NH3 - Lò phụ",
       "NH3- Lò phụ",
       "VHV NH3-LHP",

@@ -9,7 +9,7 @@
 // Các cột ít dùng khi đi kiểm tra được ẩn khỏi bảng, chỉ hiện trong khối chi tiết:
 // Vị trí lắp đặt · Ghi chú · Ngày kiểm tra (kèm Tổ máy · SL/ĐVT · chữ ký).
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -18,6 +18,7 @@ import {
   TickCell,
   componentTone,
   fmtDate,
+  SignatureStamp,
 } from "@/components/pccc/pccc-shared";
 import {
   DetailField,
@@ -40,7 +41,7 @@ import {
   TR_HEAD,
   type SortState,
 } from "@/components/pccc/pccc-table-card";
-import { type CabinetRow, type PositionOption } from "@/hooks/usePccc";
+import { canEditPcccRow, type CabinetRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
 
 /**
  * Khối ô ☑ bám bố cục bảng gốc: mỗi cột trạng thái rộng 68px (đúng độ rộng cột trong
@@ -55,6 +56,7 @@ export function PcccCabinets({
   groups,
   cuongViList,
   canManage,
+  writeScope,
   loading,
   editing,
   draft,
@@ -76,6 +78,8 @@ export function PcccCabinets({
   groups: { label: string; statuses: string[] }[];
   cuongViList: PositionOption[];
   canManage: boolean;
+  /** Phạm vi ghi theo cương vị — dòng ngoài phạm vi vẫn XEM được nhưng khoá ô. */
+  writeScope?: PcccWriteScopeMeta;
   loading?: boolean;
   /** Bảng chỉ mở khoá khi bấm "Sửa bảng" — giống tab Bình chữa cháy. */
   editing: boolean;
@@ -147,20 +151,6 @@ export function PcccCabinets({
       total={total}
       filtered={filtered}
       onPageChange={onPageChange}
-      toolbarExtra={
-        <span className="ml-2 flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <span className="size-2.5 rounded-sm bg-emerald-500" /> khả dụng
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="size-2.5 rounded-sm bg-amber-500" /> lỗi nhẹ
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="size-2.5 rounded-sm bg-rose-500" /> hư hỏng nặng
-          </span>
-          <span>· tích được nhiều lỗi trong cùng một nhóm</span>
-        </span>
-      }
       footerNote={
         !editing && canManage ? (
           <span className="text-[12px]">
@@ -236,6 +226,8 @@ export function PcccCabinets({
           )}
           {rows.map((r, index) => {
             const expanded = expandedId === r.id;
+            // Phạm vi ghi theo cương vị: tủ của cương vị khác vẫn hiện đủ nhưng khoá ô.
+            const rowEditable = canEdit && canEditPcccRow(writeScope, r);
             const rowDraft = draft[r.id];
             const dirty = (field: string) => (rowDraft && field in rowDraft ? "bg-amber-100/60" : "");
             /** Giá trị đang sửa (nếu có) thay cho giá trị đã lưu. */
@@ -272,14 +264,19 @@ export function PcccCabinets({
                     className={cn(TD_ROW, STICKY_TD, STICKY_EDGE, rowBg, "whitespace-nowrap font-medium")}
                     style={{ left: FROZEN.ma.left }}
                   >
-                    {r.ma}
+                    <span className="inline-flex items-center gap-1">
+                      {r.ma}
+                      {canEdit && !rowEditable && (
+                        <Lock className="size-3 shrink-0 text-slate-400" aria-label="Ngoài phạm vi cương vị của bạn" />
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("cuongVi"))}>
                     <EditableCell
                       value={val("cuongVi", r.cuongVi)}
                       type="select"
                       options={cuongViOptions}
-                      disabled={!canEdit}
+                      disabled={!rowEditable}
                       onSave={(v) => save(r, "cuongVi", v || null)}
                     />
                   </TableCell>
@@ -306,7 +303,7 @@ export function PcccCabinets({
                           <TickCell
                             checked={checked}
                             tone={componentTone(i, g.statuses.length)}
-                            disabled={!canEdit}
+                            disabled={!rowEditable}
                             onToggle={() => onToggleComponent(r, g.label, status, !checked)}
                           />
                         </TableCell>
@@ -315,12 +312,12 @@ export function PcccCabinets({
                   )}
 
                   <TableCell className={cn(TD_ROW, "border-l border-slate-200", dirty("soYcsc"))}>
-                    <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!canEdit} onSave={(v) => save(r, "soYcsc", v || null)} />
+                    <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
-                      disabled={!canEdit}
+                      disabled={!rowEditable}
                       onSave={(v) => save(r, "nguoiKiemTra", v || null)}
                     />
                   </TableCell>
@@ -340,20 +337,20 @@ export function PcccCabinets({
                           <EditableCell
                             value={val("ngayKiemTra", r.ngayKiemTra)}
                             type="date"
-                            disabled={!canEdit}
+                            disabled={!rowEditable}
                             onSave={(v) => save(r, "ngayKiemTra", v || null)}
                           />
                         </DetailField>
                         {/* Chỉ đọc — sẽ làm lại theo hướng chọn nhiều dòng rồi ký một
                             lượt, giống tab Bình chữa cháy. API ký vẫn còn nguyên. */}
                         <DetailField label="Chữ ký">
-                          {r.signature ? `${r.signature.signerName} · ${fmtDate(r.signature.signedAt)}` : "Chưa ký"}
+                          <SignatureStamp signature={r.signature} />
                         </DetailField>
                         <DetailField label="Vị trí lắp đặt">
                           <EditableCell
                             value={val("viTri", r.viTri)}
                             wrap
-                            disabled={!canEdit}
+                            disabled={!rowEditable}
                             onSave={(v) => save(r, "viTri", v || null)}
                           />
                         </DetailField>
@@ -362,7 +359,7 @@ export function PcccCabinets({
                           <EditableCell
                             value={val("ten", r.ten)}
                             wrap
-                            disabled={!canEdit}
+                            disabled={!rowEditable}
                             onSave={(v) => save(r, "ten", v || null)}
                           />
                         </DetailField>
@@ -372,7 +369,7 @@ export function PcccCabinets({
                           <EditableCell
                             value={val("ghiChu", r.ghiChu)}
                             wrap
-                            disabled={!canEdit}
+                            disabled={!rowEditable}
                             onSave={(v) => save(r, "ghiChu", v || null)}
                           />
                         </DetailField>

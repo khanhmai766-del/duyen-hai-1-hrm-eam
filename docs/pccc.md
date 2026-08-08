@@ -4,10 +4,10 @@
 lưu bằng `localStorage`) về hệ thống này: **Postgres là nguồn sự thật duy nhất**,
 dùng lại NextAuth/RBAC, AuditLog, exceljs, cây thiết bị `EquipmentNode`.
 
-Trạng thái: **A–D đã xong** — schema, import từ Google Sheet, API `/api/pccc/*`,
+Trạng thái: **A–F đã xong** — schema, import từ Google Sheet, API `/api/pccc/*`,
 trang `/pccc` 4 tab, xuất Excel phía server, chuẩn hoá cương vị theo danh mục chức
-danh (mục 4b). **Chưa làm (bước E)**: giới hạn ghi/ký theo phạm vi cương vị của người
-đăng nhập — hiện ai có `pccc-manage` đều sửa được mọi cương vị.
+danh (mục 4b), giới hạn ghi/ký theo phạm vi cương vị (mục 4e), tự động chốt kỳ +
+lưu trữ S3 + dọn DB (mục 6).
 
 ## 1. Mô hình dữ liệu
 
@@ -147,9 +147,25 @@ Lý do bỏ qua tổ máy khi phân quyền: cùng một chức danh thực tế
 hai tổ máy, áp quyền riêng theo tổ máy sẽ chặn sai lúc cần cập nhật. Kiểm chứng:
 chức danh `Lò phó` → 158 bình (S1 79 + S2 79), lọc tổ máy thu hẹp đúng 79/79.
 
-24 giá trị thô → **17 chức danh chuẩn**. 6 viết tắt của bảng PCCC đã được thêm vào
-`aliases` của danh mục chung (không tạo nguồn chuẩn thứ hai): `TKLM`, `TKĐ`,
-`TBĐL&ĐK`, `MNK - ND300M3`, `XLN HH`, `XLNT-ND5000M3`.
+24 giá trị thô → **17 chức danh chuẩn**. Các cách viết riêng của bảng PCCC đã được thêm vào
+`aliases` của danh mục chung (không tạo nguồn chuẩn thứ hai): `TKLM`, `TKĐ`, `TBĐL&ĐK`,
+`MNK - ND300M3`, `XLN HH`, `XLNT-ND5000M3`.
+
+Bảng TỦ CHỮA CHÁY và FOAM+CO2+DIESEL còn dùng **cách viết đầy đủ** thay cho viết tắt, và
+những giá trị này ban đầu KHÔNG khớp danh mục nên `cuongViCode` bị null — kéo theo hậu quả
+thật: theo mục 4e, dòng không có mã cương vị thì mức `personal` **không sửa/ký được**. Đã
+thêm 4 bí danh nữa và chuẩn hoá lại (46 dòng TCC + 4 dòng FCD):
+
+| Giá trị trong bảng | Chuẩn về |
+| --- | --- |
+| `XỬ LÝ NƯỚC THẢI VÀ DẦU 5000M3` | `XLNT` (`WASTEWATER_TREATMENT`) |
+| `NH3 VÀ LÒ HƠI PHỤ` | `NH3 - Lò hơi phụ` (`AUX_BOILER_NH3`) |
+| `MÁY NÉN KHÍ VÀ DẦU 300M3` | `Khí nén - Nhà dầu` (`AIR_COMPRESSOR_OIL_HOUSE`) |
+| `XỬ LÝ NƯỚC HỖN HỢP` | `XLN hỗn hợp` (`MIXED_WATER_TREATMENT`) |
+
+Hiện **0 dòng BCC/TCC/FCD thiếu mã cương vị**. Riêng **2 bảng FM200 chưa gán cương vị** —
+import chỉ tạo khung (`FM200_DEFAULT_PANELS`) chứ không có nguồn nào ghi ai phụ trách, nên
+chưa ai ở mức `personal` ký được hai bảng đó. Cần nghiệp vụ chỉ định.
 
 Cột **"Người giám sát" không phải tên người** mà là **cấp giám sát** — quan hệ khớp
 đúng cây tổ chức: nhóm lò/máy → `TK Lò máy` (515 bình), nhóm điện/hoá → `Trưởng kíp
@@ -225,6 +241,144 @@ giảm 6 (245 → 239 mỗi kỳ), tổng bình thường 2364 → 2358. Sheet �
 hai** cột nên tổng của sheet vốn đã tự mâu thuẫn; bản demo cũng normalize giống vậy khi
 nạp dữ liệu. Cần nghiệp vụ xác nhận trước khi sửa dữ liệu.
 
+## 4e. Giới hạn ghi/ký theo phạm vi cương vị (bước E — đã làm)
+
+**XEM không giới hạn, GHI/KÝ mới thu hẹp.** Người trực cần thấy toàn cảnh nhà máy, nên
+`pccc-view` vẫn cho xem cả bảng; chỉ đường ghi bị chặn. Thu hẹp dựa trên MỨC QUYỀN có
+sẵn của hệ thống, không đẻ thêm bảng phân quyền riêng (`lib/pccc-service.ts`):
+
+| `pccc-manage` | Ghi/ký được |
+| --- | --- |
+| `manage` / `full` | mọi cương vị (Trưởng ca, quản lý, ADMIN) |
+| `personal` (mặc định TECHNICIAN) | chỉ dòng có `cuongViCode` trùng cương vị của mình |
+| thấp hơn | không ghi được (403 như trước) |
+
+Ba điểm đã chốt với nghiệp vụ (2026-08-07):
+
+1. **Lấy TẤT CẢ cương vị được gán** — cương vị chính + 2 kiêm nhiệm + cương vị đang làm
+   việc, không chỉ `currentPosition`: quên chuyển cương vị đang làm việc thì vẫn phải
+   ghi được. Cùng tinh thần với việc bỏ qua tổ máy khi phân quyền (mục 4b).
+2. **Cấp giám sát KHÔNG kèm quyền ghi** — chỉ so khớp `cuongViCode`, không so
+   `nguoiGiamSatCode`. Giám sát muốn sửa thì nâng lên mức `manage`.
+3. **Dòng chưa gán cương vị thì mức `personal` không đụng được** — buộc quản lý gán
+   cương vị trước, tránh dòng vô chủ ai cũng sửa. (Hiện có 1 bình `XLN hỗn hợp` thiếu
+   cấp giám sát — xem mục 4b.)
+
+Thêm một rào nữa: mức `personal` **không chuyển được dòng sang cương vị khác**
+(`pcccScopeMoveDenial`) — sửa ô "Cương vị quản lý" thành cương vị ngoài phạm vi là tự
+đẩy dòng khỏi tầm với của mình, nên bị chặn.
+
+Áp ở **cả 7 đường ghi**: PATCH của BCC/TCC/FCD/FM200, hai route lưu-theo-lượt
+(`*/bulk`, báo lỗi **theo từng dòng** như các lỗi khác của lượt lưu) và POST chữ ký —
+ký là chữ ký xác nhận của cương vị phụ trách nên phạm vi ký = phạm vi ghi. Huỷ ký vẫn
+đòi `manage` như trước.
+
+Phía web chỉ là lớp cho đỡ hụt công: các route GET trả thêm `meta.writeScope`, bảng
+khoá sẵn ô của dòng ngoài phạm vi (kèm biểu tượng khoá cạnh mã thiết bị) và đầu trang
+hiện huy hiệu "Chỉ sửa: <cương vị>". **Server vẫn kiểm lại toàn bộ khi ghi** vì client
+gọi thẳng API được.
+
+## 4f. Nút "Chỉnh sửa" — sửa bảng và ký tên (đã làm)
+
+Hai tab Bình/Tủ chữa cháy gom hai tác vụ của một lượt đi kiểm tra vào **một cửa duy nhất**
+(`Chỉnh sửa`), thay cho nút "Sửa bảng" đứng rời:
+
+| Tác vụ | Việc xảy ra |
+| --- | --- |
+| **Sửa bảng** | Mở khoá ô, sửa nhiều dòng, bấm Lưu một lượt → **hộp thoại kết quả** ghi rõ số dòng đã lưu, số dòng bị quy tắc áp suất nâng mức, và nhắc chữ ký đã bị xoá |
+| **Ký tên** | Hộp thoại xác nhận → ký **toàn bộ dòng thuộc cương vị quản lý** của người bấm |
+
+Tab **Foam · CO2 · Diesel · FM200** cũng có nút **Chỉnh sửa → Sửa bảng**: bảng khoá theo
+mặc định, mở khoá mới sửa, gom vào bản nháp rồi **Lưu một lượt** kèm hộp thoại kết quả —
+giống hệt hai tab kia. Hai khác biệt có chủ đích:
+
+- **Không có route lưu-một-lượt riêng.** Chỉ 3 bồn + 2 bảng FM200 nên `saveFcdEdits` gọi
+  lại đúng các route PATCH từng mục đã có; dựng thêm một endpoint nữa không đáng.
+- **Không có chống ghi đè theo `updatedAt`** như hai bảng nghìn dòng (bản ghi ở đây không
+  mang mốc đó). Ít người sửa cùng lúc nên chấp nhận được, nhưng cần biết.
+
+Khoá bản nháp: `bulk:<id>` / `panel:<id>`; ô số của FM200 nằm trong cùng bản nháp của bảng
+với khoá `muc:<nhãn bình>` / `ap:<nhãn bình>`.
+
+Ký ở tab này là **từng bồn / từng bảng FM200** (không ký theo cương vị), nhưng đi qua
+**cùng một hộp thoại xác nhận** (`components/pccc/pccc-sign-dialog.tsx`) — kể cả lời nhắc
+khi chưa có chữ ký số. Vì vậy menu Chỉnh sửa của tab này **không có mục "Ký tên"**: mục đó
+ký theo cương vị cho bảng bình/tủ, để lọt vào đây là bấm một cái ký nhầm sang bảng bình
+chữa cháy. Huỷ ký chỉ hỏi gọn bằng `confirm` vì nó chỉ xoá chữ ký, không ghi thêm gì.
+
+Một lần ký ghi **ba thứ trong cùng một transaction** — thiếu thứ nào thì tháng sau không ai
+biết ai đi kiểm tra và kiểm tra hôm nào:
+
+1. bản ghi chữ ký (thẻ "Chữ ký": chưa ký → đã ký),
+2. `nguoiKiemTra` = họ tên người bấm,
+3. `ngayKiemTra` = ngày bấm xác nhận.
+
+Áp cho **cả ký hàng loạt lẫn ký từng mục**. Bảng bồn Foam/CO2/Diesel gọi hai cột này là
+**`nguoiChot` / `ngayChot`** nên ký một bồn thì điền hai cột đó; bảng FM200 và hai bảng
+BCC/TCC dùng `nguoiKiemTra` / `ngayKiemTra`.
+
+### Chữ ký là ẢNH chữ ký số của user, không phải cái tên gõ ra
+
+Lấy từ hồ sơ cá nhân (`User.signatureKey` — trang **Tài khoản → Chữ ký số**, đã có sẵn
+trong hệ thống và tự đẩy lên S3 khi lưu). Bản ghi chữ ký PCCC lưu `signature_key` **chốt
+cứng tại thời điểm ký**, cùng lý do với `signerName`: user đổi hoặc xoá chữ ký về sau thì
+bản ký cũ vẫn phải hiện đúng cái đã ký.
+
+Chỉ nhận **S3 key**, không nhận `signatureUrl` dạng base64 của hồ sơ kiểu cũ: một chữ ký
+base64 nặng ~20KB, nhân 747 dòng ký một lượt là chép 15MB chuỗi vào DB. Hồ sơ cũ chỉ cần
+mở trang Tài khoản lưu lại một lần là có key.
+
+**Chưa có chữ ký thì không ký được.** Chặn ở hai lớp: `preview` trả `hasSignature: false`
+nên hộp thoại nhắc **trước** khi bấm và ẩn luôn nút "Xác nhận ký", đồng thời hiện đường
+dẫn sang `/account` để thêm; nếu gọi thẳng API thì server trả 409. Lời nhắc nói rõ lý do —
+chữ ký ở đây là bằng chứng ai đã đi kiểm tra, ghi mỗi cái tên thì không khác gì gõ tay.
+
+Ảnh phục vụ qua proxy `/api/files/s3?key=…` (đã yêu cầu đăng nhập), **không nhúng base64
+vào payload danh sách** — bảng 747 dòng mà mỗi dòng kèm ảnh base64 là payload hàng MB.
+Hiển thị bằng `SignatureStamp` (ảnh + tên + ngày) trong khối chi tiết của BCC/TCC và trong
+ô chữ ký của tab FCD; bản ký cũ chưa gắn ảnh thì rơi về hiện tên như trước.
+
+### Ảnh chữ ký trong file Excel
+
+Cả ba sheet BCC/TCC/FCD có thêm cột cuối **"Chữ ký"**, ảnh được **neo vào đúng ô** của
+từng dòng (ngoài hai cột chữ "Người ký" / "Thời điểm ký" vẫn giữ nguyên). Áp cho **cả**
+bản lưu trữ hằng tháng lẫn nút xuất tay trên web.
+
+Ba điểm khiến chỗ này không phải chèn ảnh thẳng tuột:
+
+1. **Mỗi ảnh chỉ nạp vào workbook MỘT LẦN** rồi neo lại nhiều chỗ (`imageIds`). Cả kỳ
+   thường chỉ vài người ký; thêm ảnh theo từng dòng thì 747 dòng là 747 bản sao cùng một
+   tấm ảnh nằm trong file.
+2. **Tải theo key duy nhất**, không theo dòng (`loadSignatureImages`) — nếu không thì 747
+   dòng là 747 lượt gọi S3 cho cùng một tấm ảnh.
+3. **Giữ đúng tỉ lệ ảnh**: bề rộng tính từ kích thước thật đọc trong khối IHDR của PNG,
+   cao cố định 24px, rộng tối đa 96px. Kéo giãn chữ ký cho vừa khung là làm méo chữ ký của
+   người ta. Kiểm chứng bằng hai ảnh khác tỉ lệ (240×70 và 120×90) → hai kích thước neo
+   khác nhau trong `drawing1.xml`: `82×24` và `32×24` px, đúng tỉ lệ gốc 3.43 và 1.33.
+
+Ảnh hỏng/mất trên S3 **không** làm hỏng cả lần xuất file — bỏ qua ảnh đó, cột chữ ký vẫn
+còn tên và thời điểm ký.
+
+Cần chạy khi triển khai:
+
+```bash
+npx prisma db execute --file scripts/sql/pccc_signature_image.sql --schema prisma/schema.prisma
+```
+
+`POST /api/pccc/signatures/bulk` với `preview: true` **không ghi gì**, chỉ trả số liệu để
+hộp thoại nói đúng sự thật (bao nhiêu dòng, cương vị nào, ai ký) — con số này lấy từ
+server chứ không đoán ở client. Phạm vi ký = **phạm vi ghi** (mục 4e) giao với bộ lọc
+cương vị/tổ máy đang đặt: mức `personal` bị chặn cứng theo mã cương vị của chính mình bất
+kể client gửi gì lên; mức quản lý ký được mọi cương vị nên hộp thoại phải nêu rõ số dòng —
+với tài khoản quản đốc, không lọc gì là **747 dòng** một lần bấm.
+
+Kỳ đã chốt hoặc chưa tới tháng thì ký cũng bị chặn, dùng chung `periodWriteBlockReason`.
+
+Lưu ý khi đọc code: hộp thoại được mở **hoãn một nhịp** (`setTimeout(…, 0)`) sau khi chọn
+mục trong menu. Menu của Radix lúc đóng sẽ trả lại tiêu điểm, và chính cú trả tiêu điểm đó
+bị hộp thoại hiểu là "bấm ra ngoài" nên đóng luôn hộp thoại vừa mở — bỏ dòng hoãn này là
+bấm "Ký tên" không thấy gì hiện ra.
+
 ## 5. Điểm nối cho các module sau (chưa implement)
 
 Quy ước dùng lại: **1 bảng "kỳ" + n bảng "chỉ số trong kỳ" + 1 bảng chữ ký**, chốt
@@ -238,3 +392,108 @@ kỳ để chuyển sang chỉ đọc, trường dẫn xuất lưu sẵn cho das
   khung defect-sync — `docs/n8n-defect-sync/`, `app/api/integrations/n8n/…`, các
   bảng `DefectSync*` (run/batch/seen/outbox) — với Postgres vẫn là nguồn sự thật,
   Sheet chỉ là làn nhập phụ.
+
+## 6. Tự động chuyển kỳ + lưu trữ S3 (bước F — đã làm)
+
+Vòng đời một tháng, không ai phải bấm nút:
+
+| Mốc | Việc xảy ra |
+| --- | --- |
+| Ngày **cuối tháng** | Xuất Excel kỳ hiện tại → đẩy lên S3 → **rồi mới** chốt kỳ (chuyển chỉ đọc) |
+| Ngày **1 tháng sau** | Sinh kỳ mới, bê nguyên số liệu kỳ vừa chốt, xoá ngày/người kiểm tra + chữ ký |
+| Sau khi chốt | DB **chỉ giữ 6 kỳ gần nhất**, kỳ cũ hơn bị xoá — file trên S3 vẫn còn |
+
+Ví dụ: 31/08/2026 chốt `T08.2026` và ghi `pccc/archive/2026/PCCC-T08.2026.xlsx`;
+01/09/2026 mở `T09.2026`. Chốt `T12.2026` thì DB còn `T07`–`T12`, xoá `T06` trở về trước.
+
+**Bốn điều kiện an toàn** (`lib/pccc-rollover.ts`), vi phạm cái nào cũng là mất dữ liệu thật:
+
+1. **Không chốt khi chưa upload xong.** Upload trước, ghi `archiveKey`, rồi mới đặt
+   `isClosed`. Upload lỗi → dừng cả lượt, kỳ vẫn mở, lần chạy sau làm lại. Đã kiểm chứng:
+   với S3 sai cấu hình, job trả lỗi `getaddrinfo ENOTFOUND` và kỳ **không** bị chốt.
+2. **Không xoá kỳ chưa có bản lưu trữ.** Bộ dọn chỉ đụng kỳ đã `isClosed` **và** có
+   `archiveKey`; thiếu thì giữ lại dù quá 6 kỳ, và báo ra ngoài.
+3. **Chạy chồng nhau vẫn đúng.** Không dùng advisory lock của Postgres — lock đó bám theo
+   *kết nối*, mà Prisma dùng pool nên lệnh mở khoá dễ rơi vào kết nối khác và treo khoá
+   vĩnh viễn. Thay vào đó mọi bước để một bên thắng: `updateMany` kèm `isClosed: false`,
+   ràng buộc UNIQUE của nhãn kỳ, `deleteMany`.
+4. **Chạy lại được và tự bù.** Tắt máy chủ vài tháng thì lần chạy kế tiếp chốt lần lượt
+   từng kỳ còn mở rồi sinh bù tới tháng hiện tại.
+
+Mốc thời gian tính theo **giờ Việt Nam** (`lib/pccc-clock.ts` — dùng chung cho lớp nghiệp
+vụ và job, tách riêng để hai bên khỏi import vòng), không theo giờ máy chủ: máy chủ chạy
+UTC thì 23:30 ngày 31/08 giờ VN vẫn đang là 16:30 ngày 31/08 UTC — lệch múi giờ ở đây là
+chốt nhầm tháng.
+
+### Kỳ của tháng chưa tới — không được tồn tại, và không ghi được
+
+Nút **"Sinh kỳ mới"** ngày trước lấy kỳ mới nhất + 1 tháng, **không chặn gì cả**: bấm bao
+nhiêu lần thì chạy trước bấy nhiêu tháng. Nó đã đẻ ra `T09.2026` từ 07/08/2026 trong khi
+tháng 8 còn chưa hết, khiến trang mặc định mở kỳ tháng 9 và người dùng ghi nhầm vào đó.
+Đã bịt cả 5 đường:
+
+1. `POST /api/pccc/periods` **từ chối** sinh kỳ vượt quá tháng hiện tại (409).
+2. `periodWriteBlockReason` chặn **ghi và ký** vào kỳ chưa tới, y như kỳ đã chốt — áp cho
+   PATCH từng dòng, hai route lưu-theo-lượt (báo lỗi theo dòng) và route chữ ký.
+3. `resolvePeriod` khi không truyền nhãn thì lấy **kỳ của tháng hiện tại**, không lấy kỳ
+   mới nhất.
+4. Trang web mặc định vào kỳ tháng hiện tại; kỳ chưa tới hiện nhãn *"(chưa tới kỳ)"* trong
+   ô chọn và huy hiệu **"Chưa tới kỳ — chỉ đọc"**.
+5. Bộ dọn DB **không tính kỳ tương lai** vào 6 kỳ giữ lại — để nó chiếm chỗ thì mỗi kỳ
+   sinh sớm lại đẩy một tháng thật ra khỏi DB sớm một tháng.
+
+Hệ quả còn lại phải biết: nếu kỳ của tháng hiện tại **đã tồn tại sẵn** trước lúc kỳ trước
+được chốt, job **không** sinh lại nó từ kỳ vừa chốt, nên nó không mang theo các sửa đổi
+cuối cùng của tháng trước. Job trả về `warnings` nói đúng điều đó thay vì im lặng.
+
+### Ba đường kích hoạt (cùng gọi một job)
+
+- **Tự động lúc mở trang** — `GET /api/pccc/periods` gọi `ensurePcccRollover()`. Nhờ vậy
+  hệ thống vẫn sang kỳ đúng hạn *kể cả khi chưa cài bộ hẹn giờ*; chỉ khác là việc chốt rơi
+  vào lần đầu có người vào trang của tháng mới thay vì 23:xx đêm cuối tháng. Có chặn tần
+  suất 5 phút + đường nhanh nên hầu hết lượt tải trang không chạm tới job.
+- **Bộ hẹn giờ** (Task Scheduler / cron / n8n) — để việc chốt rơi đúng đêm cuối tháng:
+
+```bash
+npm run pccc:rollover -- --close-now   # 23:xx ngày CUỐI tháng: xuất S3 + chốt kỳ
+npm run pccc:rollover                  # 00:xx ngày 01: sinh kỳ mới + dọn DB
+npm run pccc:rollover -- --dry-run     # chỉ in ra sẽ làm gì
+```
+
+`--close-now` cố tình chỉ chạy được vào ngày cuối tháng: gõ nhầm giữa tháng là khoá mất
+bảng đang dùng của cả phân xưởng.
+
+- **Nút "Chuyển kỳ"** trên web (cần `pccc-close-period` mức manage/full) — chạy tay đúng
+  job đó khi bộ hẹn giờ lỗi. **Thay cho hai nút "Sinh kỳ mới" + "Chốt kỳ" cũ**: hai việc
+  ấy phải đi liền nhau, tách ra chỉ tạo cơ hội làm nửa vời (chốt mà quên sinh, hoặc sinh
+  kỳ mới trong khi kỳ cũ chưa được lưu trữ). Nút tự biết hôm nay có phải ngày cuối tháng
+  không (mốc do server tính) và hỏi xác nhận kèm đúng danh sách việc sẽ xảy ra.
+
+### File Excel lưu trữ
+
+Key: `pccc/archive/<năm>/PCCC-<kỳ>.xlsx` (đổi được bằng `PCCC_ARCHIVE_S3_PREFIX`).
+Nội dung dựng bằng chính `buildPcccWorkbook` của nút xuất tay nên **giữ nguyên bố cục và
+tên sheet của file gốc** (`BÌNH CHỮA CHÁY - T07.2026`…), khác hai điểm:
+
+- lấy **toàn bộ** dữ liệu của kỳ, không áp bộ lọc cương vị/tổ máy;
+- thêm sheet đầu **"CHỐT KỲ"**: kỳ, thời điểm chốt, ai/cái gì chốt, số bình/tủ/bồn/bảng
+  FM200 và số chữ ký. File sống lâu hơn dữ liệu trong DB nên phải tự mang theo bằng chứng.
+
+Nút **Xuất Excel** nay là một danh sách sổ xuống: kỳ đang xem (dựng từ DB, theo bộ lọc
+hiện tại) và **12 tháng lưu trữ gần nhất đọc thẳng từ S3** — đây chính là chỗ tra lại
+tháng đã bị dọn khỏi DB. File **không bao giờ bị xoá tự động**; muốn dọn thì đặt lifecycle
+rule trên bucket.
+
+### Cần làm khi triển khai
+
+DB dev đang lệch pha với `schema.prisma` (mục 4.2) nên cột mới thêm bằng SQL riêng:
+
+```bash
+npx prisma db execute --file scripts/sql/pccc_archive.sql --schema prisma/schema.prisma
+```
+
+Và **phải điền S3 thật** trong `.env` (`S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY`).
+Hiện `.env` còn là placeholder `s3.example.com`; khi thiếu cấu hình, `uploadS3Object` ghi
+xuống `.local-storage/` ở môi trường dev nhưng **ném lỗi ở production** — nghĩa là kỳ sẽ
+không bao giờ được chốt cho tới khi có S3 thật. Đó là hành vi mong muốn, nhưng phải biết
+để không tưởng job hỏng.

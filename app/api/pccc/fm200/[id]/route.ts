@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
-  PCCC_PERMISSION,
-  assertPeriodOpen,
+  assertPcccScope,
+  assertPcccScopePatch,
+  resolvePcccWriteScope,
+  assertPeriodWritable,
   clearSignature,
   normalizePositionPatch,
   pickFields,
@@ -49,11 +50,12 @@ function sanitizeValues(input: unknown, labels: string[], current: Record<string
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, PCCC_PERMISSION.manage, ["personal", "manage", "full"], "Không đủ quyền sửa dữ liệu PCCC");
+    const scope = await resolvePcccWriteScope(user);
 
     const current = await prisma.pcccFm200Panel.findUnique({ where: { id: params.id }, include: { period: true } });
     if (!current) return fail("Không tìm thấy bảng FM200", 404);
-    assertPeriodOpen(current.period);
+    assertPeriodWritable(current.period);
+    assertPcccScope(scope, current);
 
     const body = (await req.json()) as Record<string, unknown>;
     const data = normalizePositionPatch(pickFields(body, EDITABLE), current);
@@ -62,6 +64,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (mucValues !== undefined) data.mucValues = mucValues;
     if (apValues !== undefined) data.apValues = apValues;
     if (Object.keys(data).length === 0) return fail("Không có trường nào để cập nhật");
+    assertPcccScopePatch(scope, data);
 
     const changed = Object.keys(data);
     const updated = await prisma.pcccFm200Panel.update({ where: { id: current.id }, data });

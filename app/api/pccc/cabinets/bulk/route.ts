@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
-  PCCC_PERMISSION,
   normalizePositionPatch,
+  pcccScopeDenial,
+  periodWriteBlockReason,
+  pcccScopeMoveDenial,
   pickFields,
+  resolvePcccWriteScope,
   type FieldSpec,
 } from "@/lib/pccc-service";
 import { applyTccToggle, deriveCabinetStatus } from "@/lib/pccc-status";
@@ -48,7 +50,7 @@ type BulkItem = {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, PCCC_PERMISSION.manage, ["personal", "manage", "full"], "Không đủ quyền sửa dữ liệu PCCC");
+    const scope = await resolvePcccWriteScope(user);
 
     const body = (await req.json()) as { items?: BulkItem[] };
     const items = Array.isArray(body.items) ? body.items : [];
@@ -77,8 +79,16 @@ export async function POST(req: NextRequest) {
         errors.push({ id: item.id, message: "Dòng không còn tồn tại" });
         continue;
       }
-      if (current.period.isClosed) {
-        errors.push({ id: item.id, ma: current.ma, message: `Kỳ ${current.period.label} đã chốt` });
+      // Kỳ đã chốt HOẶC chưa tới tháng đều không ghi được (xem periodWriteBlockReason).
+      const periodBlock = periodWriteBlockReason(current.period);
+      if (periodBlock) {
+        errors.push({ id: item.id, ma: current.ma, message: periodBlock });
+        continue;
+      }
+      // Phạm vi cương vị — báo theo dòng, giống các lỗi khác của lượt lưu
+      const denial = pcccScopeDenial(scope, current);
+      if (denial) {
+        errors.push({ id: item.id, ma: current.ma, message: denial });
         continue;
       }
       if (item.updatedAt && new Date(item.updatedAt).getTime() !== current.updatedAt.getTime()) {
@@ -91,6 +101,11 @@ export async function POST(req: NextRequest) {
         data = normalizePositionPatch(pickFields(item.patch ?? {}, EDITABLE), current);
       } catch {
         errors.push({ id: item.id, ma: current.ma, message: "Giá trị không hợp lệ" });
+        continue;
+      }
+      const moveDenial = pcccScopeMoveDenial(scope, data);
+      if (moveDenial) {
+        errors.push({ id: item.id, ma: current.ma, message: moveDenial });
         continue;
       }
 

@@ -3,7 +3,15 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, cuongViListOf, giamSatListOf, resolvePeriod, scopeWhere, signaturesOf } from "@/lib/pccc-service";
+import {
+  PCCC_PERMISSION,
+  cuongViListOf,
+  giamSatListOf,
+  pcccWriteScopeOf,
+  resolvePeriod,
+  scopeWhere,
+  signaturesOf,
+} from "@/lib/pccc-service";
 import { periodEndDate } from "@/lib/pccc-summary";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +64,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, giamSatList] = await Promise.all([
+    const [total, rows, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
       prisma.pcccExtinguisher.count({ where }),
       prisma.pcccExtinguisher.findMany({
         where,
@@ -67,11 +75,22 @@ export async function GET(req: NextRequest) {
       signaturesOf(period.id, "EXTINGUISHER"),
       cuongViListOf(period.id),
       giamSatListOf(period.id),
+      // Phạm vi GHI của người đang xem — UI khoá sẵn dòng ngoài phạm vi (xem lib/pccc-service.ts)
+      pcccWriteScopeOf(user),
     ]);
 
     return ok(
       rows.map((r) => ({ ...r, signature: signatures.get(r.id) ?? null })),
-      { period, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)), cuongViList, giamSatList }
+      {
+        period,
+        total,
+        page,
+        pageSize,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        cuongViList,
+        giamSatList,
+        writeScope,
+      }
     );
   });
 }

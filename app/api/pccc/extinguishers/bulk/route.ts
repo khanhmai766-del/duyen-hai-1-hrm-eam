@@ -1,12 +1,13 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
-  PCCC_PERMISSION,
-  assertPeriodOpen,
   normalizePositionPatch,
+  pcccScopeDenial,
+  periodWriteBlockReason,
+  pcccScopeMoveDenial,
   pickFields,
+  resolvePcccWriteScope,
   type FieldSpec,
 } from "@/lib/pccc-service";
 import { apSuatOptions, normalizeChungLoai, resolveTinhTrang } from "@/lib/pccc-status";
@@ -58,7 +59,7 @@ type BulkItem = { id: string; updatedAt?: string; patch: Record<string, unknown>
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, PCCC_PERMISSION.manage, ["personal", "manage", "full"], "Không đủ quyền sửa dữ liệu PCCC");
+    const scope = await resolvePcccWriteScope(user);
 
     const body = (await req.json()) as { items?: BulkItem[] };
     const items = Array.isArray(body.items) ? body.items : [];
@@ -82,8 +83,16 @@ export async function POST(req: NextRequest) {
         errors.push({ id: item.id, message: "Dòng không còn tồn tại" });
         continue;
       }
-      if (current.period.isClosed) {
-        errors.push({ id: item.id, ma: current.ma, message: `Kỳ ${current.period.label} đã chốt` });
+      // Kỳ đã chốt HOẶC chưa tới tháng đều không ghi được (xem periodWriteBlockReason).
+      const periodBlock = periodWriteBlockReason(current.period);
+      if (periodBlock) {
+        errors.push({ id: item.id, ma: current.ma, message: periodBlock });
+        continue;
+      }
+      // Phạm vi cương vị: báo theo dòng để người dùng thấy đúng dòng nào không đụng được
+      const denial = pcccScopeDenial(scope, current);
+      if (denial) {
+        errors.push({ id: item.id, ma: current.ma, message: denial });
         continue;
       }
       // (1) chống ghi đè: dòng đã bị người khác sửa sau khi mở khoá
@@ -105,6 +114,11 @@ export async function POST(req: NextRequest) {
         continue;
       }
       if (Object.keys(data).length === 0) continue;
+      const moveDenial = pcccScopeMoveDenial(scope, data);
+      if (moveDenial) {
+        errors.push({ id: item.id, ma: current.ma, message: moveDenial });
+        continue;
+      }
 
       if ("chungLoai" in data) data.chungLoai = normalizeChungLoai(data.chungLoai as string | null);
 

@@ -1478,7 +1478,13 @@ model PcccPeriod {
   isClosed Boolean @default(false) // đã chốt: chỉ đọc, không cho sửa/ký thêm
 
   closedAt    DateTime?
-  closedById  String? // id User (không FK — đã có audit log)
+  closedById  String? // id User (không FK — đã có audit log); null = hệ thống tự chốt
+  // Bản Excel đã đẩy lên S3 lúc chốt kỳ. DB chỉ giữ 6 kỳ gần nhất nên FILE TRÊN S3 mới
+  // là bản lưu trữ dài hạn — vì vậy không được chốt kỳ khi chưa upload xong (xem
+  // lib/pccc-rollover.ts).
+  archiveKey   String? // vd "pccc/archive/2026/PCCC-T08.2026.xlsx"
+  archivedAt   DateTime?
+  archiveBytes Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1694,6 +1700,9 @@ model PcccSignature {
   userId         String // id User đã ký
   signerName     String // chốt cứng tên lúc ký (đổi tên user sau này không làm sai lịch sử)
   signerPosition String? // cương vị lúc ký
+  // Ảnh chữ ký số dùng lúc ký — chốt cứng S3 key CÙNG LÝ DO với signerName: user đổi
+  // hoặc xoá chữ ký trong hồ sơ cá nhân thì bản ký cũ vẫn phải hiện đúng cái đã ký.
+  signatureKey   String?  @map("signature_key")
   signedAt       DateTime @default(now())
 
   @@unique([targetType, targetId])
