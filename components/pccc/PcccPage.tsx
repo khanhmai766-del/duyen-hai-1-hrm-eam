@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
+  Eye,
   ExternalLink,
   Lock,
   PenLine,
@@ -66,6 +67,7 @@ import {
   type PcccClockMeta,
   type PcccBulkSignPreview,
   type ExtinguisherRow,
+  type PcccViewScopeMeta,
   type PcccWriteScopeMeta,
   type PositionOption,
 } from "@/hooks/usePccc";
@@ -240,6 +242,18 @@ export default function PcccPage() {
   const bccQuery = usePcccExtinguishers(tab === "BCC" ? listFilters : { ...baseFilters, page: 0 });
   const tccQuery = usePcccCabinets(tab === "TCC" ? listFilters : { ...baseFilters, page: 0 });
   const fcdQuery = usePcccBulks(tab === "FCD" ? baseFilters : { ...baseFilters, page: 0 });
+
+  /**
+   * Phạm vi XEM (quy tắc 4 — xem lib/pccc-service.ts). SERVER đã cắt dữ liệu rồi; cái
+   * này chỉ để nói cho người dùng biết vì sao bảng chỉ có phần của mình, tránh tưởng là
+   * mất dữ liệu. Khai báo sớm vì còn quyết định có gọi danh sách bản lưu trữ hay không.
+   */
+  const viewScope: PcccViewScopeMeta | undefined =
+    summaryQuery.data?.meta?.viewScope ??
+    bccQuery.data?.meta?.viewScope ??
+    tccQuery.data?.meta?.viewScope ??
+    fcdQuery.data?.meta?.viewScope;
+  const viewLimited = Boolean(viewScope && !viewScope.all);
 
   const bulkSave = usePcccBulkSaveExtinguishers();
   const bulkSaveCabinets = usePcccBulkSaveCabinets();
@@ -532,7 +546,7 @@ export default function PcccPage() {
     );
   }
 
-  const archivesQuery = usePcccArchives();
+  const archivesQuery = usePcccArchives(!viewLimited);
   const archives = archivesQuery.data?.data ?? [];
   const rollover = usePcccRollover();
 
@@ -786,15 +800,38 @@ export default function PcccPage() {
               <CalendarClock className="size-3" /> Chưa tới kỳ — chỉ đọc
             </span>
           )}
-          {/* Phạm vi ghi hẹp hơn phạm vi xem: nói rõ ngay đầu trang để không mất công
-              sửa rồi mới biết dòng đó không phải của mình. */}
-          {!period.isClosed && scopeLimited && (
+          {/* Phạm vi XEM: bảng chỉ còn phần của cương vị mình. Nói rõ ngay đầu trang,
+              nếu không người dùng tưởng dữ liệu bị mất. */}
+          {viewLimited && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+              title="Bảng chỉ hiện thiết bị thuộc cương vị của bạn. Cần xem toàn nhà máy thì nhờ quản trị nâng quyền 'Xem thiết bị PCCC'."
+            >
+              <Eye className="size-3" />
+              {viewScope!.labels.length > 0
+                ? `Chỉ xem: ${viewScope!.labels.join(" · ")}`
+                : "Tài khoản chưa gán cương vị — không có dữ liệu để xem"}
+            </span>
+          )}
+          {/* Phạm vi GHI hẹp hơn phạm vi xem: nói rõ để không mất công sửa rồi mới biết
+              dòng đó không phải của mình. Không lặp lại khi hai phạm vi trùng nhau. */}
+          {!period.isClosed && scopeLimited && writeScope!.labels.length > 0 && (
             <span
               className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
-              title="Xem được toàn bộ; chỉ sửa/ký được dòng thuộc cương vị của bạn"
+              title="Chỉ sửa/ký được dòng thuộc cương vị của bạn"
             >
               <ShieldCheck className="size-3" />
-              {writeScope!.labels.length > 0 ? `Chỉ sửa: ${writeScope!.labels.join(" · ")}` : "Chưa gán cương vị — chỉ đọc"}
+              Chỉ sửa: {writeScope!.labels.join(" · ")}
+            </span>
+          )}
+          {/* Có cương vị mà vẫn không sửa được = thiếu quyền 'Sửa thiết bị PCCC'. Câu cũ
+              ("chưa gán cương vị") đổ oan cho hồ sơ trong khi lỗi nằm ở phân quyền. */}
+          {!period.isClosed && scopeLimited && writeScope!.labels.length === 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+              title="Tài khoản không có quyền sửa dữ liệu PCCC, hoặc chưa được gán cương vị."
+            >
+              <ShieldCheck className="size-3" /> Chỉ đọc
             </span>
           )}
         </div>
@@ -830,7 +867,14 @@ export default function PcccPage() {
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                 Bản lưu trữ trên S3 · 12 tháng gần nhất
               </p>
-              {archives.length === 0 ? (
+              {/* File lưu trữ là bản đầy đủ cả phân xưởng, không cắt lại theo cương vị
+                  được — server trả 403, nên nói thẳng thay vì để danh sách rỗng khó hiểu. */}
+              {viewLimited ? (
+                <p className="mt-1.5 text-[12px] text-muted-foreground">
+                  Bản lưu trữ là file đầy đủ của cả phân xưởng nên chỉ cấp quản lý tải được. Kỳ đang xem vẫn xuất được
+                  phần thuộc cương vị của bạn ở mục trên.
+                </p>
+              ) : archives.length === 0 ? (
                 <p className="mt-1.5 text-[12px] text-muted-foreground">
                   Chưa có bản lưu trữ nào. File được tạo tự động khi chốt kỳ cuối mỗi tháng.
                 </p>

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, resolvePeriod, scopeWhere, signaturesOf } from "@/lib/pccc-service";
+import { PCCC_PERMISSION, resolvePcccViewScope, resolvePeriod, scopeWhere, signaturesOf } from "@/lib/pccc-service";
 import { buildPcccWorkbook, type ExportSheet } from "@/lib/pccc-export-xlsx";
 import { loadSignatureImages } from "@/lib/pccc-archive";
 
@@ -22,7 +22,10 @@ export async function GET(req: NextRequest) {
     const period = await resolvePeriod(sp.get("period"));
     const requested = (sp.get("sheets") ?? "").split(",").map((s) => s.trim().toUpperCase());
     const sheets = ALL_SHEETS.filter((s) => requested.includes(s));
-    const scope = scopeWhere(sp.get("cuongVi"), sp.get("machine"));
+    // File Excel phải cắt theo ĐÚNG phạm vi xem của người bấm xuất, nếu không thì cửa
+    // trước khoá mà cửa sau vẫn tải được cả bảng của cương vị khác.
+    const viewScope = await resolvePcccViewScope(user);
+    const scope = scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope);
 
     const [extinguishers, cabinets, bulks, panels, sigBcc, sigTcc, sigBulk] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
@@ -35,7 +38,7 @@ export async function GET(req: NextRequest) {
         include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
       }),
       prisma.pcccBulk.findMany({ where: { periodId: period.id, ...scope }, orderBy: [{ stt: "asc" }, { ten: "asc" }] }),
-      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id }, orderBy: { panelKey: "asc" } }),
+      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scope }, orderBy: { panelKey: "asc" } }),
       signaturesOf(period.id, "EXTINGUISHER"),
       signaturesOf(period.id, "CABINET"),
       signaturesOf(period.id, "BULK"),

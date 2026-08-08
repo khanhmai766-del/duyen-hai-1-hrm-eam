@@ -2,7 +2,14 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, cuongViListOf, resolvePeriod, scopeWhere } from "@/lib/pccc-service";
+import {
+  PCCC_PERMISSION,
+  cuongViListOf,
+  pcccViewScopeMeta,
+  resolvePcccViewScope,
+  resolvePeriod,
+  scopeWhere,
+} from "@/lib/pccc-service";
 import {
   periodEndDate,
   summarizeBulks,
@@ -23,7 +30,10 @@ export async function GET(req: NextRequest) {
     const period = await resolvePeriod(sp.get("period"));
     const cuongVi = sp.get("cuongVi");
     const machine = sp.get("machine");
-    const scope = scopeWhere(cuongVi, machine);
+    // Số liệu tổng quan phải đếm ĐÚNG phần người dùng được xem, nếu không con số ở tab
+    // Tổng quan lại tố ra khối lượng của cương vị mà bảng chi tiết đã giấu đi.
+    const viewScope = await resolvePcccViewScope(user);
+    const scope = scopeWhere(cuongVi, machine, viewScope);
 
     const [extinguishers, cabinets, bulks, panels, cuongViList, signatureCount] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
@@ -38,8 +48,8 @@ export async function GET(req: NextRequest) {
         where: { periodId: period.id, ...scope },
         select: { ten: true, phanTramConLai: true },
       }),
-      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id } }),
-      cuongViListOf(period.id),
+      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scope } }),
+      cuongViListOf(period.id, viewScope),
       prisma.pcccSignature.count({ where: { periodId: period.id } }),
     ]);
 
@@ -61,7 +71,14 @@ export async function GET(req: NextRequest) {
           }))
         ),
       },
-      { period, cuongVi: cuongVi ?? "ALL", machine: machine ?? "ALL", cuongViList, signatureCount }
+      {
+        period,
+        cuongVi: cuongVi ?? "ALL",
+        machine: machine ?? "ALL",
+        cuongViList,
+        signatureCount,
+        viewScope: pcccViewScopeMeta(viewScope),
+      }
     );
   });
 }

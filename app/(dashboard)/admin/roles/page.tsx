@@ -492,7 +492,10 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     id: "pccc-view",
     group: "Thiết bị PCCC",
     feature: "Xem sổ thiết bị PCCC",
-    note: "Xem tổng quan, bình chữa cháy, tủ chữa cháy, Foam/CO2/Diesel/FM200 và tải file Excel của kỳ. Xem là toàn bộ phân xưởng, không thu hẹp theo cương vị.",
+    note:
+      "Xem tổng quan, bình chữa cháy, tủ chữa cháy, Foam/CO2/Diesel/FM200 và tải file Excel của kỳ. " +
+      "Mức Đọc/Cá nhân CHỈ thấy thiết bị thuộc cương vị của mình (gộp cương vị chính và kiêm nhiệm); " +
+      "mức Quản lý/Toàn quyền thấy toàn phân xưởng. Ai sửa được mọi cương vị (pccc-manage mức Quản lý trở lên) thì cũng xem được toàn bộ.",
     matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {

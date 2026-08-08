@@ -7,7 +7,9 @@ import {
   PCCC_PERMISSION,
   cuongViListOf,
   giamSatListOf,
+  pcccViewScopeMeta,
   pcccWriteScopeOf,
+  resolvePcccViewScope,
   resolvePeriod,
   scopeWhere,
   signaturesOf,
@@ -35,6 +37,8 @@ export async function GET(req: NextRequest) {
     await requirePermissionLevel(user, PCCC_PERMISSION.view, ["read", "personal", "manage", "full"]);
 
     const sp = req.nextUrl.searchParams;
+    // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts)
+    const viewScope = await resolvePcccViewScope(user);
     const period = await resolvePeriod(sp.get("period"));
     const page = Math.max(1, Number(sp.get("page") ?? 1));
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
@@ -46,7 +50,7 @@ export async function GET(req: NextRequest) {
     const where: Prisma.PcccExtinguisherWhereInput = {
       periodId: period.id,
       // Lọc theo MÃ chức danh + tổ máy (tổ máy là bộ lọc xem, không phải rào quyền)
-      ...scopeWhere(sp.get("cuongVi"), sp.get("machine")),
+      ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope),
       ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
       ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrang } : {}),
       ...(chungLoai && chungLoai !== "ALL" ? { chungLoai } : {}),
@@ -73,8 +77,8 @@ export async function GET(req: NextRequest) {
         take: pageSize,
       }),
       signaturesOf(period.id, "EXTINGUISHER"),
-      cuongViListOf(period.id),
-      giamSatListOf(period.id),
+      cuongViListOf(period.id, viewScope),
+      giamSatListOf(period.id, viewScope),
       // Phạm vi GHI của người đang xem — UI khoá sẵn dòng ngoài phạm vi (xem lib/pccc-service.ts)
       pcccWriteScopeOf(user),
     ]);
@@ -90,6 +94,7 @@ export async function GET(req: NextRequest) {
         cuongViList,
         giamSatList,
         writeScope,
+        viewScope: pcccViewScopeMeta(viewScope),
       }
     );
   });

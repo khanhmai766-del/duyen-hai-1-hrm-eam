@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION } from "@/lib/pccc-service";
+import { PCCC_PERMISSION, resolvePcccViewScope } from "@/lib/pccc-service";
 import {
   PCCC_ARCHIVE_LIST_MONTHS,
   archiveFileNameOf,
@@ -25,6 +25,17 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, PCCC_PERMISSION.view, ["read", "personal", "manage", "full"]);
+
+    /**
+     * File lưu trữ trên S3 là bản Excel ĐẦY ĐỦ của cả phân xưởng, dựng sẵn lúc chốt kỳ —
+     * không có cách nào cắt lại theo cương vị người tải. Nên người chỉ được xem cương vị
+     * của mình thì không tải được, kẻo cửa trước khoá mà cửa sau vẫn lấy được cả bảng.
+     * Danh sách cũng ẩn luôn: bày ra một danh sách bấm vào là 403 thì chỉ tổ khó hiểu.
+     */
+    const viewScope = await resolvePcccViewScope(user);
+    if (!viewScope.all) {
+      return fail("Bản lưu trữ là file đầy đủ của cả phân xưởng — chỉ cấp quản lý mới tải được.", 403);
+    }
 
     const label = req.nextUrl.searchParams.get("label");
     if (!label) {

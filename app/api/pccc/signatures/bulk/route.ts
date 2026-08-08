@@ -37,9 +37,10 @@ export const dynamic = "force-dynamic";
 type Target = "EXTINGUISHER" | "CABINET";
 
 function whereOf(periodId: string, scope: PcccWriteScope, cuongVi?: string | null, machine?: string | null) {
-  const where: Prisma.PcccExtinguisherWhereInput = { periodId, ...scopeWhere(cuongVi, machine) };
-  // Mức `personal`: chặn cứng theo mã cương vị của chính người ký, bất kể bộ lọc gửi lên.
-  if (!scope.all) where.cuongViCode = { in: scope.codes };
+  // Phạm vi GHI đóng luôn vai trò phạm vi lọc: `scopeWhere` GIAO bộ lọc đang đặt trên
+  // màn hình với phạm vi, nên người mức `personal` gửi lên cương vị của người khác thì
+  // ra tập rỗng — chứ không phải bị bỏ qua bộ lọc rồi ký cả phần của mình.
+  const where: Prisma.PcccExtinguisherWhereInput = { periodId, ...scopeWhere(cuongVi, machine, scope) };
   return where;
 }
 

@@ -232,6 +232,18 @@ export function canEditPcccRow(scope: PcccWriteScopeMeta | undefined, row: { cuo
   return Boolean(row.cuongViCode && scope.codes.includes(row.cuongViCode));
 }
 
+/**
+ * Phạm vi XEM của người đăng nhập (quy tắc 4 — xem lib/pccc-service.ts).
+ * `all` = thấy mọi cương vị; ngược lại server ĐÃ cắt dữ liệu về đúng `codes` trước khi
+ * trả về — client chỉ dùng cái này để nói cho người dùng biết mình đang xem phần nào,
+ * chứ không phải để tự lọc.
+ */
+export interface PcccViewScopeMeta {
+  all: boolean;
+  codes: string[];
+  labels: string[];
+}
+
 export interface PcccListMeta {
   period: PcccPeriod;
   total: number;
@@ -241,6 +253,7 @@ export interface PcccListMeta {
   giamSatList?: PositionOption[];
   groups?: { label: string; statuses: string[] }[];
   writeScope?: PcccWriteScopeMeta;
+  viewScope?: PcccViewScopeMeta;
 }
 
 export interface PcccFilters {
@@ -438,11 +451,16 @@ export function usePcccSign() {
 }
 
 /** 12 tháng lưu trữ gần nhất trên S3 — nguồn cho ô "Tải bản lưu trữ" của nút Xuất Excel. */
-export function usePcccArchives() {
+/**
+ * `enabled=false` cho người chỉ xem được cương vị của mình: server trả 403 vì file lưu
+ * trữ là bản đầy đủ cả phân xưởng, gọi làm gì cho tốn một lượt hỏng.
+ */
+export function usePcccArchives(enabled = true) {
   return useQuery({
     queryKey: ["pccc-archives"],
     queryFn: () => apiGet<PcccArchiveEntry[]>("/api/pccc/archive"),
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 

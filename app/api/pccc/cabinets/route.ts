@@ -6,7 +6,9 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   cuongViListOf,
+  pcccViewScopeMeta,
   pcccWriteScopeOf,
+  resolvePcccViewScope,
   resolvePeriod,
   scopeWhere,
   signaturesOf,
@@ -32,6 +34,8 @@ export async function GET(req: NextRequest) {
     await requirePermissionLevel(user, PCCC_PERMISSION.view, ["read", "personal", "manage", "full"]);
 
     const sp = req.nextUrl.searchParams;
+    // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts)
+    const viewScope = await resolvePcccViewScope(user);
     const period = await resolvePeriod(sp.get("period"));
     const page = Math.max(1, Number(sp.get("page") ?? 1));
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
@@ -41,7 +45,7 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.PcccCabinetWhereInput = {
       periodId: period.id,
-      ...scopeWhere(sp.get("cuongVi"), sp.get("machine")),
+      ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope),
       ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrangTongThe: tinhTrang } : {}),
       // INDOOR/OUTDOOR nằm trong tên tủ, đúng như file gốc
       ...(loaiTu === "INDOOR" ? { ten: { contains: "INDOOR", mode: "insensitive" } } : {}),
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest) {
         include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
       }),
       signaturesOf(period.id, "CABINET"),
-      cuongViListOf(period.id),
+      cuongViListOf(period.id, viewScope),
       // Phạm vi GHI của người đang xem — UI khoá sẵn dòng ngoài phạm vi (xem lib/pccc-service.ts)
       pcccWriteScopeOf(user),
     ]);
@@ -84,7 +88,17 @@ export async function GET(req: NextRequest) {
 
     return ok(
       rows.map((r) => ({ ...r, signature: signatures.get(r.id) ?? null })),
-      { period, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)), cuongViList, groups, writeScope }
+      {
+        period,
+        total,
+        page,
+        pageSize,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        cuongViList,
+        groups,
+        writeScope,
+        viewScope: pcccViewScopeMeta(viewScope),
+      }
     );
   });
 }

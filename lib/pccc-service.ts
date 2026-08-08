@@ -7,6 +7,8 @@
  *  2. SỬA bất kỳ trường nào của dòng/bảng → XOÁ chữ ký của dòng/bảng đó, buộc ký lại.
  *  3. PHẠM VI GHI/KÝ theo cương vị: mức quyền `personal` chỉ đụng được dòng thuộc
  *     cương vị của chính mình (xem khối "Phạm vi ghi/ký" bên dưới).
+ *  4. PHẠM VI XEM cũng theo cương vị: người không phải cấp quản lý chỉ THẤY dòng thuộc
+ *     cương vị của mình (xem khối "Phạm vi xem" bên dưới).
  */
 import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/api";
@@ -145,8 +147,12 @@ export function pickFields(body: Record<string, unknown>, spec: FieldSpec) {
  * Danh sách cương vị có trong kỳ, dạng (mã, nhãn) — dùng cho ô lọc và ô chọn khi sửa.
  * Trả về MÃ để phía client lọc theo mã chứ không theo nhãn: đổi cách viết nhãn về sau
  * không làm sai bộ lọc hay lịch sử.
+ *
+ * `view` cắt danh sách theo phạm vi XEM: người chỉ thấy cương vị của mình thì ô lọc
+ * cũng chỉ được liệt kê đúng cương vị đó — bày ra cương vị chọn vào cũng ra bảng rỗng
+ * thì chỉ khiến người dùng tưởng mất dữ liệu.
  */
-export async function cuongViListOf(periodId: string) {
+export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC_SCOPE_ALL) {
   const [bcc, tcc, fcd] = await Promise.all([
     prisma.pcccExtinguisher.findMany({
       where: { periodId },
@@ -167,6 +173,7 @@ export async function cuongViListOf(periodId: string) {
   const byCode = new Map<string, string>();
   for (const r of [...bcc, ...tcc, ...fcd]) {
     if (!r.cuongViCode || !r.cuongVi) continue;
+    if (!view.all && !view.codes.includes(r.cuongViCode as PositionCode)) continue;
     byCode.set(r.cuongViCode, r.cuongVi);
   }
   return [...byCode.entries()]
@@ -174,10 +181,10 @@ export async function cuongViListOf(periodId: string) {
     .sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
-/** Danh sách cấp giám sát có trong kỳ (chỉ BCC có cột này). */
-export async function giamSatListOf(periodId: string) {
+/** Danh sách cấp giám sát có trong kỳ (chỉ BCC có cột này), cắt theo phạm vi XEM. */
+export async function giamSatListOf(periodId: string, view: PcccViewScope = PCCC_SCOPE_ALL) {
   const rows = await prisma.pcccExtinguisher.findMany({
-    where: { periodId },
+    where: { periodId, ...(view.all ? {} : { cuongViCode: { in: view.codes } }) },
     distinct: ["nguoiGiamSatCode"],
     select: { nguoiGiamSatCode: true, nguoiGiamSat: true },
   });
@@ -188,13 +195,26 @@ export async function giamSatListOf(periodId: string) {
 }
 
 /**
- * Điều kiện lọc dùng chung cho cả 3 bảng: theo MÃ cương vị và theo TỔ MÁY.
+ * Điều kiện lọc dùng chung cho cả 4 bảng: theo MÃ cương vị và theo TỔ MÁY.
  * Tổ máy là bộ lọc XEM, không phải rào quyền — cùng một chức danh vận hành được cả
  * hai tổ máy (xem lib/pccc-position.ts).
+ *
+ * `view` là PHẠM VI XEM của người đăng nhập và LUÔN THẮNG bộ lọc người dùng chọn: đây
+ * là rào quyền, không phải tiện ích. Tham số bắt buộc (không có mặc định) để một route
+ * đọc mới quên truyền là lỗi biên dịch chứ không phải lỗ hổng âm thầm — muốn xem toàn
+ * bộ thì phải viết rõ `PCCC_SCOPE_ALL`.
  */
-export function scopeWhere(cuongViCode?: string | null, machine?: string | null) {
+export function scopeWhere(cuongViCode: string | null | undefined, machine: string | null | undefined, view: PcccViewScope) {
+  const picked = cuongViCode && cuongViCode !== "ALL" ? cuongViCode : null;
+  // Ngoài phạm vi thì giao lại thành rỗng → `in: []` → không ra dòng nào, thay vì âm
+  // thầm nới bộ lọc thành "xem tất".
+  const cuongViWhere = view.all
+    ? picked
+      ? { cuongViCode: picked }
+      : {}
+    : { cuongViCode: { in: picked ? view.codes.filter((code) => code === picked) : view.codes } };
   return {
-    ...(cuongViCode && cuongViCode !== "ALL" ? { cuongViCode } : {}),
+    ...cuongViWhere,
     ...(isPcccMachine(machine) ? { machine } : {}),
   };
 }
@@ -202,9 +222,8 @@ export function scopeWhere(cuongViCode?: string | null, machine?: string | null)
 // ===========================================================================
 // PHẠM VI GHI/KÝ THEO CƯƠNG VỊ (quy tắc 3)
 //
-// XEM thì không giới hạn (quyền `pccc-view` cho cả bảng — người trực cần thấy toàn
-// cảnh nhà máy). GHI/KÝ mới bị thu hẹp, và thu hẹp theo MỨC QUYỀN có sẵn của hệ
-// thống, không đẻ thêm bảng phân quyền riêng:
+// GHI/KÝ thu hẹp theo MỨC QUYỀN có sẵn của hệ thống, không đẻ thêm bảng phân quyền
+// riêng:
 //
 //   `pccc-manage` = manage/full  → ghi/ký mọi cương vị (Trưởng ca, quản lý, ADMIN)
 //   `pccc-manage` = personal     → chỉ ghi/ký dòng thuộc cương vị CỦA MÌNH
@@ -221,6 +240,9 @@ export function scopeWhere(cuongViCode?: string | null, machine?: string | null)
 
 /** `all` = ghi mọi cương vị; ngược lại chỉ các mã trong `codes`. */
 export type PcccWriteScope = { all: boolean; codes: PositionCode[] };
+
+/** Cùng hình dạng với phạm vi ghi, nhưng dùng cho phần XEM (xem khối "Phạm vi xem"). */
+export type PcccViewScope = PcccWriteScope;
 
 export const PCCC_SCOPE_ALL: PcccWriteScope = { all: true, codes: [] };
 
@@ -288,6 +310,38 @@ export async function pcccWriteScopeOf(user: PcccPositionCarrier & { id?: string
     // độ quản trị đang bật/tắt, thứ mà client không tự suy ra đúng được.
     admin: isPcccAdmin(user),
   };
+}
+
+// ===========================================================================
+// PHẠM VI XEM THEO CƯƠNG VỊ (quy tắc 4)
+//
+// Trước đây XEM không giới hạn (ai vào cũng thấy cả nhà máy), chỉ GHI mới thu hẹp.
+// Nghiệp vụ đã chốt lại (2026-08-08): người dùng thường CHỈ THẤY dòng thuộc cương vị
+// của mình — bảng vài nghìn dòng của cương vị khác vừa không phải việc của họ, vừa làm
+// rối phần việc thật.
+//
+// Ai được xem toàn cảnh — thoả MỘT trong hai là đủ:
+//   `pccc-view`   = manage/full → cửa dành riêng cho tài khoản chỉ-đọc cần xem tất
+//                                 (vd lãnh đạo, tài khoản báo cáo) mà không cho ghi;
+//   `pccc-manage` = manage/full → đã ghi được mọi cương vị thì đương nhiên xem được.
+// Còn lại → chỉ cương vị của mình. Chưa gán cương vị thì `codes` rỗng và KHÔNG thấy
+// dòng nào — cùng tinh thần với phạm vi ghi, buộc quản trị gán cương vị trước.
+//
+// Dòng chưa gán cương vị (`cuongViCode` null) cũng không lọt vào `in: [...]`, nên chỉ
+// cấp quản lý mới thấy — đúng như luật ghi.
+// ===========================================================================
+
+export async function resolvePcccViewScope(
+  user: PcccPositionCarrier & { id?: string; role?: string }
+): Promise<PcccViewScope> {
+  if (await hasPermissionLevel(user, PCCC_PERMISSION.view, ["manage", "full"])) return PCCC_SCOPE_ALL;
+  if (await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["manage", "full"])) return PCCC_SCOPE_ALL;
+  return { all: false, codes: pcccPositionCodesOf(user) };
+}
+
+/** Bản gọn cho client hiển thị nhãn "Chỉ xem: …". */
+export function pcccViewScopeMeta(scope: PcccViewScope) {
+  return { all: scope.all, codes: scope.codes as string[], labels: scope.codes.map((code) => positionLabelOf(code)) };
 }
 
 /** Lý do dòng nằm ngoài phạm vi, hoặc null nếu được ghi. Dạng trả-về-lỗi để lưu theo lượt báo lỗi từng dòng. */
