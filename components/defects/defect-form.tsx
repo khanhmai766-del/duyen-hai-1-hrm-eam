@@ -30,7 +30,6 @@ import {
   DEFECT_STATUS,
   DEFECT_STATUS_ORDER,
   defaultRequestTypeForMaterialCategory,
-  isPositionAllowedForDefectUnit,
   isSelectableManagingPosition,
 } from "@/lib/constants";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
@@ -232,16 +231,16 @@ export function DefectForm({
         : [...current.severityCriteria, id],
     }));
   }
-  // Cương vị mặc định theo từng Tổ máy (S1/S2/COMMON).
+  // Form ra phiếu luôn cho chọn toàn bộ cương vị vận hành. Tổ máy chỉ quyết
+  // định cây thiết bị và đích Sheet, không được cắt danh sách cương vị.
   const visiblePositions = React.useMemo(
     () => {
-      const allowed = positions.filter((p) => isPositionAllowedForDefectUnit(form.unit, p));
-      if (form.system && !allowed.some((position) => positionsMatch(position, form.system))) {
-        return [form.system, ...allowed];
+      if (form.system && !positions.some((position) => positionsMatch(position, form.system))) {
+        return [form.system, ...positions];
       }
-      return allowed;
+      return positions;
     },
-    [positions, form.unit, form.system]
+    [positions, form.system]
   );
   const userPositionCandidates = React.useMemo(() => {
     const candidates = [
@@ -266,12 +265,9 @@ export function DefectForm({
     if (isEdit || defaultPositionResolvedRef.current) return;
     if (sessionStatus === "loading" || usersQuery.isLoading) return;
 
-    const allowedPositions = positions.filter((position) =>
-      isPositionAllowedForDefectUnit(form.unit, position)
-    );
     const matchedPosition = userPositionCandidates
       .map((candidate) =>
-        allowedPositions.find((position) => positionsMatch(position, candidate))
+        positions.find((position) => positionsMatch(position, candidate))
       )
       .find((position): position is string => Boolean(position));
 
@@ -288,7 +284,8 @@ export function DefectForm({
     userPositionCandidates,
     usersQuery.isLoading,
   ]);
-  // Chọn tổ máy; nếu cương vị hiện tại không thuộc nhóm mặc định của tổ máy mới thì bỏ chọn.
+  // Chọn tổ máy vẫn giữ cương vị hiện tại vì mọi tổ máy dùng chung danh sách
+  // cương vị; chỉ thiết bị phải xóa do mỗi tổ máy ánh xạ vào một cây khác nhau.
   // Mỗi tổ máy ánh xạ vào một CÂY thiết bị riêng (S1/S2 = nhánh 1,2,3,7; COMMON = nhánh 5,6)
   // nên đổi tổ máy phải bỏ luôn thiết bị đã chọn — thiết bị cũ thuộc cây khác.
   function selectUnit(u: string) {
@@ -305,9 +302,6 @@ export function DefectForm({
         relatedDeviceSeqs: [],
         relatedDeviceUnits: {},
       };
-      if (f.system && !isPositionAllowedForDefectUnit(u, f.system)) {
-        return { ...f, unit: u, commonSubUnit, system: "", ...cleared };
-      }
       return { ...f, unit: u, commonSubUnit, ...cleared };
     });
   }

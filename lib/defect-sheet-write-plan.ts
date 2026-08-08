@@ -24,6 +24,7 @@ type Payload = {
   reminderShiftLeader?: string;
   legacyReminderRaw?: string;
   writeScope?: string;
+  replacesCancelledDefectId?: string;
   repeatedRepair: string;
   fireSafetyImpact: string;
   environmentSafetyImpact: string;
@@ -182,6 +183,13 @@ export function buildDefectSheetWritePlan(
 
   if (event.eventType === "CREATE") {
     if (originals.length === 1) {
+      if (text(payload.replacesCancelledDefectId)) {
+        if (normalizedIdentityCell(originals[0].row[13]) !== normalizedIdentityCell(statusLabel("DA_XU_LY"))) {
+          throw new Error(`Không thể tái sử dụng số ${requestNumber}: dòng cũ chưa ở trạng thái Đã xử lý xong`);
+        }
+        writes.push({ range: `A${originals[0].sheetRow}:O${originals[0].sheetRow}`, values: [current] });
+        return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+      }
       // Chỉ được xem là retry nếu đúng dữ liệu nhận diện của phiếu website.
       // Cùng số nhưng nội dung khác là phiếu nhập tay trên Sheet: dừng để API
       // cấp lại số, tuyệt đối không ghi đè.

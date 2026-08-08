@@ -591,6 +591,7 @@ model Defect {
   requestNumberReleasedAt    DateTime? // STT hủy trong cửa sổ 6 giờ được trả lại kho sau khi Sheet ACK
   requestNumberReusedAt      DateTime? // STT đã được một phiếu mới nhận lại
   requestNumberReusedById    String? // Snapshot ID phiếu mới nhận lại STT, không FK
+  requestNumberReuseEligible Boolean @default(false) // Chỉ phiếu hủy sau khi triển khai cơ chế mới được tái sử dụng STT
   shiftLeaderId              String? // Người giữ cương vị Trưởng ca tại thời điểm lập phiếu (không FK để giữ snapshot)
   shiftLeaderName            String? // Tên Trưởng ca snapshot, giữ nguyên nếu nhân sự đổi cương vị/tài khoản
   completedAt                DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần

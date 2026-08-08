@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 
+export type DefectRequestNumberAllocation = { requestNumber: string; reusedCancelledDefectId: string | null };
+export type DefectRequestNumberSheetScope = { spreadsheetId: string; sheetName: string };
+const REUSE_WINDOW_MS = 6 * 60 * 60 * 1000;
+
 /**
  * Cấp số yêu cầu nguyên tử theo năm phát hiện. Hàm phải chạy trong cùng
  * transaction tạo Defect để hai yêu cầu mới trên website không thể nhận cùng số.
@@ -57,4 +61,39 @@ export async function nextDefectRequestNumber(
     throw new Error("Không thể cấp số yêu cầu");
   }
   return `${isEnvironment ? `QT${String(sequence).padStart(2, "0")}` : sequence}/${year}`;
+}
+
+export async function allocateDefectRequestNumber(
+  tx: Prisma.TransactionClient,
+  year: number,
+  requestType: string,
+  scope: DefectRequestNumberSheetScope
+): Promise<DefectRequestNumberAllocation> {
+  const sequenceType = requestType.trim();
+  const spreadsheetId = scope.spreadsheetId.trim();
+  const sheetName = scope.sheetName.trim();
+  if (!sequenceType || !spreadsheetId || !sheetName) throw new Error("Thông tin cấp số yêu cầu không hợp lệ");
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`defect-request-number:${year}:${sequenceType}:${spreadsheetId}:${sheetName}`}, 0))::text AS "lock"`;
+  const isEnvironment = sequenceType === "Môi Trường";
+  const pattern = isEnvironment ? "^QT[0-9]+/[0-9]{4}$" : "^[0-9]+/[0-9]{4}$";
+  const prefix = isEnvironment ? "^QT" : "^";
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - REUSE_WINDOW_MS);
+  const rows = await tx.$queryRaw<Array<{ id: string; requestNumber: string }>>`
+    SELECT "id", "requestNumber" FROM "Defect"
+    WHERE "requestNumberReuseEligible" = true
+      AND "cancelledAt" IS NOT NULL AND "syncState" = 'CONFIRMED'
+      AND "requestNumberReleasedAt" IS NOT NULL AND "requestNumberReusedAt" IS NULL
+      AND "createdAt" >= ${cutoff} AND "createdAt" <= ${now}
+      AND "cancelledAt" <= "createdAt" + INTERVAL '6 hours'
+      AND "requestType" = ${sequenceType}
+      AND "sourceSpreadsheetId" = ${spreadsheetId} AND "sourceSheetName" = ${sheetName}
+      AND "requestNumber" ~* ${pattern} AND split_part("requestNumber", '/', 2)::int = ${year}
+    ORDER BY regexp_replace(split_part("requestNumber", '/', 1), ${prefix}, '')::int ASC
+    LIMIT 1 FOR UPDATE SKIP LOCKED
+  `;
+  const candidate = rows[0];
+  if (!candidate) return { requestNumber: await nextDefectRequestNumber(tx, year, sequenceType), reusedCancelledDefectId: null };
+  await tx.defect.update({ where: { id: candidate.id }, data: { requestNumberReusedAt: now, requestNumberReuseEligible: false } });
+  return { requestNumber: candidate.requestNumber, reusedCancelledDefectId: candidate.id };
 }

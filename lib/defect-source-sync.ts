@@ -570,7 +570,7 @@ export async function upsertPreparedDefectRecords(params: {
   for (let index = 0; index < detachedCancelledIds.length; index += 1000) {
     await prisma.defect.updateMany({
       where: { id: { in: detachedCancelledIds.slice(index, index + 1000) } },
-      data: { sourceKey: null },
+      data: { sourceKey: null, requestNumberReuseEligible: false, requestNumberReusedAt: now },
     });
   }
   for (let index = 0; index < creates.length; index += CHUNK) {

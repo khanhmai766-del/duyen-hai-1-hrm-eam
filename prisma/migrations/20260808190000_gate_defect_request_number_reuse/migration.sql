@@ -1,0 +1,2 @@
+ALTER TABLE "Defect"
+  ADD COLUMN IF NOT EXISTS "requestNumberReuseEligible" BOOLEAN NOT NULL DEFAULT false;
