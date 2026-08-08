@@ -66,6 +66,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "Trưởng kíp Lò - Máy",
       "Trưởng kíp Lò máy",
       "2. Trưởng kíp lò máy",
+      "TKLM", // viết tắt trong bảng quản lý thiết bị PCCC
     ],
     units: ALL_UNITS,
     sheetLabels: {
@@ -77,7 +78,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "ELECTRICAL_SHIFT_LEAD",
     label: "Trưởng kíp điện",
-    aliases: ["TK điện", "3. Trưởng kíp điện"],
+    aliases: ["TK điện", "3. Trưởng kíp điện", "TKĐ"], // TKĐ: viết tắt trong bảng PCCC
     units: ALL_UNITS,
     sheetLabels: {
       S1: "3. Trưởng kíp điện",
@@ -165,6 +166,8 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "Khí nén-Dầu 300",
       "VHV MNK-ND3.",
       "VHV MNK-ND3",
+      "MNK - ND300M3", // cách viết trong bảng PCCC
+      "MÁY NÉN KHÍ VÀ DẦU 300M3", // bảng PCCC viết đầy đủ, không viết tắt
       "VHV Trạm khí nén - Nhà dầu HFO 300m3",
       "23. VHV MNK-ND3.",
     ],
@@ -174,7 +177,8 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
   {
     code: "MIXED_WATER_TREATMENT",
     label: "XLN hỗn hợp",
-    aliases: ["XLNHH", "VHV XLNHH", "VHV XLN hỗn hợp", "24. VHV XLNHH"],
+    // "XLN HH" và "XỬ LÝ NƯỚC HỖN HỢP": hai cách viết trong bảng PCCC
+    aliases: ["XLNHH", "XLN HH", "XỬ LÝ NƯỚC HỖN HỢP", "VHV XLNHH", "VHV XLN hỗn hợp", "24. VHV XLNHH"],
     units: ["COMMON"],
     sheetLabels: { COMMON: "24. VHV XLNHH" },
   },
@@ -186,6 +190,8 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "XLNT-Dầu 5000",
       "VHV XLNT-ND5.",
       "VHV XLNT-ND5",
+      "XLNT-ND5000M3", // cách viết trong bảng PCCC
+      "XỬ LÝ NƯỚC THẢI VÀ DẦU 5000M3", // bảng FOAM+CO2+DIESEL viết đầy đủ, không viết tắt
       "VHV XLN thải - Nhà dầu 5000m3",
       "25. VHV XLNT-ND5.",
     ],
@@ -197,6 +203,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
     label: "NH3 - Lò hơi phụ",
     aliases: [
       "NH3- Lò hơi phụ",
+      "NH3 VÀ LÒ HƠI PHỤ", // bảng FOAM+CO2+DIESEL dùng "và" thay cho gạch nối
       "NH3 - Lò phụ",
       "NH3- Lò phụ",
       "VHV NH3-LHP",
@@ -231,6 +238,7 @@ export const POSITION_CATALOG: readonly PositionCatalogItem[] = [
       "KTV I&C",
       "Thiết bị đo lường và điều khiển",
       "Thiết bị đo lường & điều khiển",
+      "TBĐL&ĐK", // viết tắt trong bảng PCCC
       "VHV C&I",
       "VHV Thiết bị đo lường điều khiển",
       "29. VHV C&I",

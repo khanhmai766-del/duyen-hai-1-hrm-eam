@@ -21,6 +21,7 @@ import {
   Boxes,
   Database,
   FlaskConical,
+  FlameKindling,
   Zap,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
@@ -80,6 +81,13 @@ export const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { label: "Lịch sử sửa chữa", href: "/repair-history", icon: Wrench, keywords: "repair sua chua bao tri history khiem khuyet" },
+      {
+        label: "Thiết bị PCCC",
+        href: "/pccc",
+        icon: FlameKindling,
+        permissionIds: ["pccc-view"],
+        keywords: "pccc phong chay chua chay binh chua chay bcc tu chua chay tcc foam co2 diesel fm200 ron lang phun ngam cuon ong an toan",
+      },
       {
         label: "Thư mục lưu trữ",
         href: "/documents/archive",

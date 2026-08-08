@@ -85,6 +85,7 @@ export interface DeviceWithRelations extends DeviceRecord {
   defectHistory: Array<{
     id: string;
     unit: string;
+    defectContent?: string | null;
     content?: string | null;
     result?: string | null;
     requestType?: string | null;

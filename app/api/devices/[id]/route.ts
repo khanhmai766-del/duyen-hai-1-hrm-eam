@@ -158,6 +158,7 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
       select: {
         id: true,
         unit: true,
+        defectContent: true,
         content: true,
         result: true,
         requestType: true,

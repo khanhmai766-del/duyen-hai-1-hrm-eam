@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import path from "path";
-import { mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import { Readable } from "stream";
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -348,6 +348,41 @@ export async function listS3ObjectKeys(prefix: string) {
     continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
   } while (continuationToken);
   return keys;
+}
+
+/**
+ * Liệt kê tệp kèm dung lượng và thời điểm ghi. Khác `listS3ObjectKeys` ở chỗ CÓ ĐƯỜNG
+ * LUI khi máy chưa cấu hình S3: đọc thư mục `.local-storage` — đúng nơi `uploadS3Object`
+ * ghi xuống trong môi trường dev, nhờ vậy màn hình lưu trữ vẫn chạy được trên máy lập trình.
+ */
+export async function listS3Objects(prefix: string) {
+  if (!hasS3Config()) {
+    const root = localObjectPath(prefix.replace(/\/+$/, ""));
+    const entries = await readdir(root, { recursive: true, withFileTypes: true }).catch(() => []);
+    const files = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map(async (entry) => {
+          const full = path.join(entry.parentPath ?? root, entry.name);
+          const info = await stat(full);
+          const key = `${prefix.replace(/\/+$/, "")}/${path.relative(root, full).replace(/\\/g, "/")}`;
+          return { key, size: info.size, lastModified: info.mtime };
+        })
+    );
+    return files;
+  }
+  const out: { key: string; size: number; lastModified: Date | null }[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const response = await s3Client().send(
+      new ListObjectsV2Command({ Bucket: bucket(), Prefix: prefix, ContinuationToken: continuationToken })
+    );
+    for (const item of response.Contents ?? []) {
+      if (item.Key) out.push({ key: item.Key, size: item.Size ?? 0, lastModified: item.LastModified ?? null });
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return out;
 }
 
 export async function getS3ObjectBuffer(key: string) {
