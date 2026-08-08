@@ -20,6 +20,7 @@ import {
 import { MultiImagePicker } from "@/components/shared/multi-image-picker";
 import {
   DEFECT_UNITS,
+  DEFECT_UNIT_POSITIONS,
   DEFECT_COMMON_SUB_UNITS,
   DEFECT_SEVERITY_ORDER,
   DEFECT_SEVERITY_CRITERIA,
@@ -144,7 +145,21 @@ export function DefectForm({
   // loại Quản đốc / Phó quản đốc / Thống kê / Kỹ thuật viên.
   const allPositions = usePositions();
   const usersQuery = useUsers();
-  const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
+  const positions = React.useMemo(() => {
+    const actual = allPositions.filter(isSelectableManagingPosition);
+    const standard = Array.from(new Set(
+      DEFECT_UNITS.flatMap((unit) => [...DEFECT_UNIT_POSITIONS[unit]])
+    ));
+    // Giữ nhãn đang dùng trong hồ sơ nhân sự, đồng thời bổ sung mọi cương vị
+    // chuẩn chưa được gán cho người dùng nào. Nếu chỉ lấy usePositions(), danh
+    // sách COMMON sẽ thiếu các vị trí chưa có nhân sự được khai báo.
+    return [
+      ...actual,
+      ...standard.filter(
+        (standardPosition) => !actual.some((position) => positionsMatch(position, standardPosition))
+      ),
+    ];
+  }, [allPositions]);
   const shiftLeaders = React.useMemo(
     () => (usersQuery.data?.data ?? [])
       .filter((user) => user.isActive && [user.position, user.secondaryPosition, user.secondaryPosition2, user.currentPosition].some(isDefectShiftLeaderCandidatePosition))
