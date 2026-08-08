@@ -556,6 +556,17 @@ export async function POST(req: NextRequest) {
         return fail(error instanceof Error ? error.message : "Sheet Môi Trường không hợp lệ");
       }
     }
+    const sheetTarget = environmentTarget ?? (
+      requestType === "Điện" || requestType === "I&C"
+        ? {
+            spreadsheetId: N8N_DEFECT_SOURCE_SPREADSHEET_IDS.DIEN,
+            sheetName: "DH1",
+          }
+        : {
+            spreadsheetId: N8N_DEFECT_SOURCE_SPREADSHEET_IDS.CO,
+            sheetName: requestType === "Hóa" ? "VH1_HOA" : "DH1",
+          }
+    );
     const content = String(body.content ?? "").trim();
     if (!content) return fail("Vui lòng nhập nội dung khiếm khuyết");
     if (!String(body.sourceDeviceRaw ?? "").trim()) {
@@ -571,7 +582,12 @@ export async function POST(req: NextRequest) {
     if (severityCriteria.length === 0) return fail("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
 
     const defect = await prisma.$transaction(async (tx) => {
-      const allocation = await allocateDefectRequestNumber(tx, requestYear, requestType);
+      const allocation = await allocateDefectRequestNumber(
+        tx,
+        requestYear,
+        requestType,
+        sheetTarget
+      );
       const requestNumber = allocation.requestNumber;
       const created = await tx.defect.create({
         data: {
@@ -590,8 +606,8 @@ export async function POST(req: NextRequest) {
           content,
           repeatedRepairRaw: body.repeatedRepairRaw?.trim() || null,
           websiteCreated: true,
-          sourceSpreadsheetId: environmentTarget?.spreadsheetId ?? null,
-          sourceSheetName: environmentTarget?.sheetName ?? null,
+          sourceSpreadsheetId: sheetTarget.spreadsheetId,
+          sourceSheetName: sheetTarget.sheetName,
           sourceDeviceRaw: body.sourceDeviceRaw?.trim() || null,
           status: body.status || "CHUA_XU_LY",
           completedAt: body.status === "DA_XU_LY" ? new Date() : null,

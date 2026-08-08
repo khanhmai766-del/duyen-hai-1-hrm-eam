@@ -5,6 +5,11 @@ export type DefectRequestNumberAllocation = {
   reusedCancelledDefectId: string | null;
 };
 
+export type DefectRequestNumberSheetScope = {
+  spreadsheetId: string;
+  sheetName: string;
+};
+
 const REQUEST_NUMBER_REUSE_WINDOW_HOURS = 6;
 
 /**
@@ -76,15 +81,27 @@ export async function nextDefectRequestNumber(
 export async function allocateDefectRequestNumber(
   tx: Prisma.TransactionClient,
   year: number,
-  requestType: string
+  requestType: string,
+  sheetScope: DefectRequestNumberSheetScope
 ): Promise<DefectRequestNumberAllocation> {
   const sequenceType = requestType.trim();
-  if (!Number.isInteger(year) || year < 2000 || year > 9999 || !sequenceType) {
+  const spreadsheetId = sheetScope.spreadsheetId.trim();
+  const sheetName = sheetScope.sheetName.trim();
+  if (
+    !Number.isInteger(year)
+    || year < 2000
+    || year > 9999
+    || !sequenceType
+    || !spreadsheetId
+    || !sheetName
+  ) {
     throw new Error("Thông tin cấp số yêu cầu không hợp lệ");
   }
 
   await tx.$queryRaw`
-    SELECT pg_advisory_xact_lock(hashtextextended(${`defect-request-number:${year}:${sequenceType}`}, 0))
+    SELECT pg_advisory_xact_lock(
+      hashtextextended(${`defect-request-number:${year}:${sequenceType}:${spreadsheetId}:${sheetName}`}, 0)
+    )
   `;
 
   const isEnvironment = sequenceType === "Môi Trường";
@@ -103,6 +120,8 @@ export async function allocateDefectRequestNumber(
       AND "createdAt" <= ${now}
       AND "cancelledAt" <= "createdAt" + INTERVAL '6 hours'
       AND "requestType" = ${sequenceType}
+      AND "sourceSpreadsheetId" = ${spreadsheetId}
+      AND "sourceSheetName" = ${sheetName}
       AND "requestNumber" ~* ${requestPattern}
       AND split_part("requestNumber", '/', 2)::int = ${year}
     ORDER BY regexp_replace(split_part("requestNumber", '/', 1), ${numberExpressionPrefix}, '')::int ASC,
