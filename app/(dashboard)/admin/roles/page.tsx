@@ -488,6 +488,30 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     note: "Quyền Quản lý/Toàn quyền được ghim, sửa hoặc xoá chủ đề và phản hồi nếu nội dung không phù hợp.",
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
+  {
+    id: "pccc-view",
+    group: "Thiết bị PCCC",
+    feature: "Xem sổ thiết bị PCCC",
+    note: "Xem tổng quan, bình chữa cháy, tủ chữa cháy, Foam/CO2/Diesel/FM200 và tải file Excel của kỳ. Xem là toàn bộ phân xưởng, không thu hẹp theo cương vị.",
+    matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "pccc-manage",
+    group: "Thiết bị PCCC",
+    feature: "Cập nhật và ký xác nhận thiết bị PCCC",
+    note:
+      "Mức Cá nhân chỉ sửa/ký được thiết bị thuộc CƯƠNG VỊ của mình (gộp cương vị chính và kiêm nhiệm); " +
+      "mức Quản lý/Toàn quyền sửa được mọi cương vị. Ký cần có chữ ký số trong hồ sơ Tài khoản và sẽ tự điền người + ngày kiểm tra. " +
+      "Riêng ô phân công (cương vị, cấp giám sát, tổ máy, ĐVT) và dấu kiểm tra (ngày/người kiểm tra, ngày/người chốt) chỉ Quản trị viên sửa được.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
+  },
+  {
+    id: "pccc-close-period",
+    group: "Thiết bị PCCC",
+    feature: "Chuyển kỳ kiểm tra PCCC",
+    note: "Chạy tay việc chốt kỳ (xuất Excel lưu trữ lên S3), sinh kỳ tháng mới và dọn kỳ cũ khỏi cơ sở dữ liệu. Bình thường hệ thống tự chạy cuối tháng; quyền này chỉ dùng khi cần can thiệp.",
+    matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  },
 ];
 
 function mergeDefaultPermissions(rows: PermissionRow[]) {
