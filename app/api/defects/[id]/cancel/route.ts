@@ -90,7 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // có thể ẩn ngay; nếu có, ACK sẽ chuyển sang CONFIRMED sau khi Sheet ghi xong.
       return tx.defect.update({
         where: { id: updated.id },
-        data: { syncState: "CONFIRMED", requestNumberReleasedAt: cancelledAt },
+        data: { syncState: "CONFIRMED" },
         include: INCLUDE,
       });
     });

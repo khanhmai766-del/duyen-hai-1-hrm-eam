@@ -570,10 +570,7 @@ export async function upsertPreparedDefectRecords(params: {
   for (let index = 0; index < detachedCancelledIds.length; index += 1000) {
     await prisma.defect.updateMany({
       where: { id: { in: detachedCancelledIds.slice(index, index + 1000) } },
-      // Nội dung dòng Sheet đã đổi nên chính Sheet đã nhận lại STT này cho một
-      // vòng đời phiếu mới. Đánh dấu đã tái sử dụng trước khi tháo sourceKey để
-      // bộ cấp số website không thể phát lại cùng STT trong cửa sổ 6 giờ.
-      data: { sourceKey: null, requestNumberReusedAt: now },
+      data: { sourceKey: null },
     });
   }
   for (let index = 0; index < creates.length; index += CHUNK) {
