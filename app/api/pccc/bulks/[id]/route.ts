@@ -3,6 +3,7 @@ import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@
 import {
   assertPcccScope,
   assertPcccScopePatch,
+  assertAdminOnlyFields,
   resolvePcccWriteScope,
   assertPeriodWritable,
   clearSignature,
@@ -40,6 +41,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const data = normalizePositionPatch(pickFields((await req.json()) as Record<string, unknown>, EDITABLE), current);
     if (Object.keys(data).length === 0) return fail("Không có trường nào để cập nhật");
+    assertAdminOnlyFields(user, data);
     assertPcccScopePatch(scope, data);
 
     const thietKe = ("khoiLuongThietKe" in data ? (data.khoiLuongThietKe as number | null) : current.khoiLuongThietKe) ?? null;

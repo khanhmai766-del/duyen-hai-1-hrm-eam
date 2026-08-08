@@ -284,6 +284,9 @@ export async function pcccWriteScopeOf(user: PcccPositionCarrier & { id?: string
     all: scope.all,
     codes: scope.codes as string[],
     labels: scope.codes.map((code) => positionLabelOf(code)),
+    // Để client khoá sẵn các ô chỉ ADMIN sửa được. Cờ do SERVER tính vì nó phụ thuộc chế
+    // độ quản trị đang bật/tắt, thứ mà client không tự suy ra đúng được.
+    admin: isPcccAdmin(user),
   };
 }
 
@@ -295,6 +298,55 @@ export function pcccScopeDenial(scope: PcccWriteScope, row: { cuongViCode?: stri
     return `Ngoài phạm vi cương vị của bạn (dòng thuộc ${positionLabelOf(row.cuongViCode)})`;
   }
   return null;
+}
+
+// ===========================================================================
+// TRƯỜNG CHỈ ADMIN ĐƯỢC SỬA
+//
+// Hai nhóm, đều KHÔNG phải số liệu kiểm tra hằng tháng nên người đi kiểm tra không có
+// việc gì phải gõ tay vào:
+//
+//  1. PHÂN CÔNG — cương vị quản lý, cấp giám sát, tổ máy, đơn vị tính. Đây là dữ liệu
+//     gốc của thiết bị; sửa nó là đổi luôn ai được ghi/ký dòng đó (quy tắc 3), nên để
+//     người dùng thường sửa là tự mở cửa hậu cho phân quyền.
+//  2. DẤU KIỂM TRA — ngày/người kiểm tra, ngày/người chốt. Mấy ô này do THAO TÁC KÝ tự
+//     điền; gõ tay được thì chữ ký hết còn là bằng chứng ai đã đi kiểm tra.
+//
+// ADMIN vẫn sửa được tất cả để còn chữa dữ liệu sai. Dùng `user.role` (đã tính chế độ
+// quản trị) chứ không phải `systemRole` — đúng nếp của cả hệ thống: ADMIN tắt chế độ
+// quản trị thì thao tác như MANAGER.
+// ===========================================================================
+
+const ADMIN_ONLY_FIELD_LABELS: Record<string, string> = {
+  cuongVi: "Cương vị quản lý",
+  cuongViCode: "Cương vị quản lý",
+  machine: "Tổ máy",
+  nguoiGiamSat: "Cấp giám sát",
+  nguoiGiamSatCode: "Cấp giám sát",
+  dvt: "ĐVT",
+  ngayKiemTra: "Ngày kiểm tra",
+  nguoiKiemTra: "Người kiểm tra",
+  ngayChot: "Ngày chốt",
+  nguoiChot: "Người chốt",
+};
+
+export function isPcccAdmin(user: { role?: string }) {
+  return user.role === "ADMIN";
+}
+
+/** Lý do bản vá bị từ chối, hoặc null nếu hợp lệ. Dạng chuỗi để lưu-theo-lượt báo theo dòng. */
+export function adminOnlyDenial(user: { role?: string }, data: Record<string, unknown>): string | null {
+  if (isPcccAdmin(user)) return null;
+  const fields = [
+    ...new Set(Object.keys(data).filter((k) => k in ADMIN_ONLY_FIELD_LABELS).map((k) => ADMIN_ONLY_FIELD_LABELS[k])),
+  ];
+  return fields.length === 0 ? null : `Chỉ quản trị viên mới sửa được: ${fields.join(", ")}`;
+}
+
+/** Bản ném 403 — dùng cho các route sửa 1 dòng. */
+export function assertAdminOnlyFields(user: { role?: string }, data: Record<string, unknown>) {
+  const denial = adminOnlyDenial(user, data);
+  if (denial) throw fail(denial, 403);
 }
 
 /** Bản ném 403 — dùng cho các route sửa 1 dòng. */

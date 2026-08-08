@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import {
+  adminOnlyDenial,
   normalizePositionPatch,
   pcccScopeDenial,
   periodWriteBlockReason,
@@ -101,6 +102,11 @@ export async function POST(req: NextRequest) {
         data = normalizePositionPatch(pickFields(item.patch ?? {}, EDITABLE), current);
       } catch {
         errors.push({ id: item.id, ma: current.ma, message: "Giá trị không hợp lệ" });
+        continue;
+      }
+      const adminDenial = adminOnlyDenial(user, data);
+      if (adminDenial) {
+        errors.push({ id: item.id, ma: current.ma, message: adminDenial });
         continue;
       }
       const moveDenial = pcccScopeMoveDenial(scope, data);

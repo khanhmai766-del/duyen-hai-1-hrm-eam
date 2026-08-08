@@ -210,6 +210,17 @@ export interface PcccWriteScopeMeta {
   all: boolean;
   codes: string[];
   labels: string[];
+  /**
+   * Người đang xem có quyền quản trị không. Quyết định các ô CHỈ ADMIN SỬA ĐƯỢC (cương
+   * vị, cấp giám sát, tổ máy, ĐVT, ngày/người kiểm tra, ngày/người chốt) — server tính
+   * vì nó còn phụ thuộc chế độ quản trị đang bật hay tắt.
+   */
+  admin?: boolean;
+}
+
+/** Ô này chỉ ADMIN sửa được — người dùng thường thấy nhưng không mở ô ra được. */
+export function canEditPcccAdminField(scope: PcccWriteScopeMeta | undefined) {
+  return scope?.admin === true;
 }
 
 /**

@@ -422,6 +422,10 @@ type Fm200Panel = {
   panelKey: string;
   title: string;
   binhLabels: string[];
+  /** Cương vị phụ trách — không có trong file nguồn, nghiệp vụ chốt là Trực chính điện. */
+  cuongVi?: string | null;
+  cuongViCode?: string | null;
+  machine?: string;
   mucMin: number | null;
   mucMax: number | null;
   mucDvt: string | null;
@@ -497,10 +501,17 @@ function readFm200Panels(ws: ExcelJS.Worksheet): Fm200Panel[] {
  * trong file cũ nhất từng có thì mọi ô mức/áp đều rỗng. Vì vậy mỗi kỳ được tạo sẵn
  * 2 bảng ĐÚNG CẤU TRÚC (dải đo + danh sách bình) để người dùng nhập trực tiếp trên
  * web — không phụ thuộc data.json của bản demo nữa.
+ *
+ * Cương vị phụ trách là TRỰC CHÍNH ĐIỆN (nghiệp vụ chốt 2026-08-08). Bảng không có
+ * cương vị thì theo quy tắc phạm vi ghi (docs/pccc.md mục 4e) sẽ không ai ở mức
+ * `personal` sửa/ký được — nên đây không phải trường trang trí.
  */
 const FM200_DEFAULT_PANELS: Fm200Panel[] = [
   {
     panelKey: "KICH_TU",
+    cuongVi: "Trực chính điện",
+    cuongViCode: "ELECTRICAL_MAIN_OPERATOR",
+    machine: "COMMON",
     title: "THEO DÕI THÔNG SỐ HỆ THỐNG FM200 - PHÒNG KÍCH TỪ",
     binhLabels: ["1", "2", "3", "4"],
     mucMin: 0,
@@ -516,6 +527,9 @@ const FM200_DEFAULT_PANELS: Fm200Panel[] = [
   },
   {
     panelKey: "DKTT",
+    cuongVi: "Trực chính điện",
+    cuongViCode: "ELECTRICAL_MAIN_OPERATOR",
+    machine: "COMMON",
     title: "THEO DÕI THÔNG SỐ HỆ THỐNG FM200 - NHÀ ĐKTT",
     binhLabels: ["1A", "2A", "3A", "4A", "5A", "6A", "7A", "8A", "1B", "2B", "3B", "4B", "5B", "6B", "7B", "8B"],
     mucMin: 0,

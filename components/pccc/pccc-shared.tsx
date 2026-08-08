@@ -394,8 +394,8 @@ export function SignCell({
         ) : (
           <ShieldCheck className="size-3 shrink-0" />
         )}
+        {/* KHÔNG lặp lại ngày ký: cột "Ngày chốt" / "Ngày KT" ngay cạnh đã ghi đúng ngày đó. */}
         <span className="truncate">{signature.signerName}</span>
-        <span className="shrink-0 text-emerald-600/70">{fmtDate(signature.signedAt)}</span>
       </button>
     );
   }

@@ -40,7 +40,7 @@ import {
   hanThayTheTone,
   tinhTrangOptions,
 } from "@/lib/pccc-status";
-import { canEditPcccRow, type ExtinguisherRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
+import { canEditPcccAdminField, canEditPcccRow, type ExtinguisherRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
 
 /** Số cột của hàng dữ liệu — dùng cho colSpan của hàng chi tiết và hàng rỗng. */
 const COL_COUNT = 13;
@@ -107,6 +107,8 @@ export function PcccExtinguishers({
   const cuongViOptions = cuongViList.map((o) => o.label);
   const giamSatOptions = giamSatList.map((o) => o.label);
   const canEdit = canManage && editing;
+  /** Ô phân công và dấu kiểm tra: chỉ ADMIN sửa (xem lib/pccc-service.ts). */
+  const canEditAdminField = canEdit && canEditPcccAdminField(writeScope);
 
   // Ghi vào BẢN NHÁP, không gọi API. Lưu 1 lượt khi bấm "Lưu".
   function save(row: ExtinguisherRow, field: string, value: string) {
@@ -280,7 +282,7 @@ export function PcccExtinguishers({
                       value={r.cuongVi}
                       type="select"
                       options={cuongViOptions}
-                      disabled={!rowEditable}
+                      disabled={!rowEditable || !canEditAdminField}
                       onSave={(v) => save(r, "cuongVi", v)}
                     />
                   </TableCell>
@@ -320,7 +322,7 @@ export function PcccExtinguishers({
                     />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
-                    <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable} onSave={(v) => save(r, "nguoiKiemTra", v)} />
+                    <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} onSave={(v) => save(r, "nguoiKiemTra", v)} />
                   </TableCell>
                 </TableRow>
 
@@ -339,12 +341,12 @@ export function PcccExtinguishers({
                             value={r.nguoiGiamSat}
                             type="select"
                             options={giamSatOptions}
-                            disabled={!rowEditable}
+                            disabled={!rowEditable || !canEditAdminField}
                             onSave={(v) => save(r, "nguoiGiamSat", v)}
                           />
                         </DetailField>
                         <DetailField label="Ngày kiểm tra">
-                          <EditableCell value={r.ngayKiemTra} type="date" disabled={!rowEditable} onSave={(v) => save(r, "ngayKiemTra", v)} />
+                          <EditableCell value={r.ngayKiemTra} type="date" disabled={!rowEditable || !canEditAdminField} onSave={(v) => save(r, "ngayKiemTra", v)} />
                         </DetailField>
                         <DetailField label="Ghi chú">
                           <EditableCell value={r.ghiChu} disabled={!rowEditable} onSave={(v) => save(r, "ghiChu", v)} />

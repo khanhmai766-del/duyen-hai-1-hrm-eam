@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import {
+  adminOnlyDenial,
   normalizePositionPatch,
   pcccScopeDenial,
   periodWriteBlockReason,
@@ -114,6 +115,11 @@ export async function POST(req: NextRequest) {
         continue;
       }
       if (Object.keys(data).length === 0) continue;
+      const adminDenial = adminOnlyDenial(user, data);
+      if (adminDenial) {
+        errors.push({ id: item.id, ma: current.ma, message: adminDenial });
+        continue;
+      }
       const moveDenial = pcccScopeMoveDenial(scope, data);
       if (moveDenial) {
         errors.push({ id: item.id, ma: current.ma, message: moveDenial });

@@ -19,6 +19,7 @@ import {
   fmtDate,
 } from "@/components/pccc/pccc-shared";
 import {
+  canEditPcccAdminField,
   canEditPcccRow,
   usePcccSign,
   type BulkRow,
@@ -40,8 +41,8 @@ type SignTarget = {
   remove?: boolean;
 };
 
-const TD_ROOMY = cn(TD_CLASS, "py-2.5");
-const TH_ROOMY = cn(TH_CLASS, "py-2.5");
+const TD_ROOMY = cn(TD_CLASS, "py-4");
+const TH_ROOMY = cn(TH_CLASS, "py-3");
 
 /** % theo dải đo, dùng lại đúng công thức của lib/pccc-summary. */
 function rangePercent(value: number | null, min: number | null, max: number | null) {
@@ -62,9 +63,12 @@ function Fm200Table({
   onSign,
   rowDraft,
   onDraftChange,
+  adminField,
 }: {
   panel: Fm200Panel;
   canManage: boolean;
+  /** Ngày/Người KT chỉ ADMIN sửa — hai ô này do thao tác ký tự điền. */
+  adminField: boolean;
   onSign: (target: SignTarget) => void;
   rowDraft: Record<string, unknown>;
   onDraftChange: (field: string, value: unknown) => void;
@@ -106,7 +110,7 @@ function Fm200Table({
             <EditableCell
               value={val("ngayKiemTra", panel.ngayKiemTra)}
               type="date"
-              disabled={!canManage}
+              disabled={!canManage || !adminField}
               onSave={(v) => saveField("ngayKiemTra", v)}
             />
           </span>
@@ -114,7 +118,7 @@ function Fm200Table({
           <span className="w-32">
             <EditableCell
               value={val("nguoiKiemTra", panel.nguoiKiemTra)}
-              disabled={!canManage}
+              disabled={!canManage || !adminField}
               onSave={(v) => saveField("nguoiKiemTra", v)}
             />
           </span>
@@ -214,6 +218,8 @@ export function PcccBulks({
   const signatureUrl = me.data?.data?.signatureUrl ?? null;
   const hasSignature = Boolean(me.data?.data?.signatureKey);
   const [signTarget, setSignTarget] = useState<SignTarget | null>(null);
+  /** Ô phân công và dấu chốt: chỉ ADMIN sửa (xem lib/pccc-service.ts). */
+  const adminField = canEditPcccAdminField(writeScope);
 
   function openSign(target: SignTarget) {
     // Huỷ ký chỉ xoá chữ ký, không ghi gì thêm — hỏi gọn bằng confirm, khỏi mở hộp thoại.
@@ -256,7 +262,7 @@ export function PcccBulks({
           <tr>
             {/* Tổ máy KHÔNG hiển thị (3 bồn đều là Common) — dữ liệu vẫn lưu trong DB, vẫn
                 lọc bằng ô "Tất cả tổ máy" và vẫn xuất ra Excel. Giống hai tab kia. */}
-            {["STT", "Tên", "Cương vị quản lý", "Vị trí", "ĐVT", "KL thiết kế", "KL hiện tại", "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Chữ ký"].map(
+            {["STT", "Tên", "Cương vị quản lý", "ĐVT", "KL thiết kế", "KL hiện tại", "% còn lại", "Tình trạng", "Ngày chốt", "Người chốt", "Ghi chú", "Chữ ký"].map(
               (h) => (
                 <th key={h} className={TH_ROOMY}>
                   {h}
@@ -280,12 +286,9 @@ export function PcccBulks({
                   value={val("cuongVi", b.cuongVi)}
                   type="select"
                   options={cuongViOptions}
-                  disabled={!rowEditable}
+                  disabled={!rowEditable || !adminField}
                   onSave={(v) => save(b, "cuongVi", v)}
                 />
-              </td>
-              <td className={`${TD_ROOMY} min-w-[120px]`}>
-                <EditableCell value={val("viTri", b.viTri)} disabled={!rowEditable} onSave={(v) => save(b, "viTri", v)} />
               </td>
               <td className={TD_ROOMY}>{b.dvt}</td>
               <td className={`${TD_ROOMY} text-right tabular-nums`}>
@@ -314,10 +317,10 @@ export function PcccBulks({
                 <StatusBadge status={b.tinhTrang} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
-                <EditableCell value={val("ngayChot", b.ngayChot)} type="date" disabled={!rowEditable} onSave={(v) => save(b, "ngayChot", v)} />
+                <EditableCell value={val("ngayChot", b.ngayChot)} type="date" disabled={!rowEditable || !adminField} onSave={(v) => save(b, "ngayChot", v)} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
-                <EditableCell value={val("nguoiChot", b.nguoiChot)} disabled={!rowEditable} onSave={(v) => save(b, "nguoiChot", v)} />
+                <EditableCell value={val("nguoiChot", b.nguoiChot)} disabled={!rowEditable || !adminField} onSave={(v) => save(b, "nguoiChot", v)} />
               </td>
               <td className={`${TD_ROOMY} min-w-[140px]`}>
                 <EditableCell value={val("ghiChu", b.ghiChu)} disabled={!rowEditable} onSave={(v) => save(b, "ghiChu", v)} />
@@ -341,6 +344,7 @@ export function PcccBulks({
           panel={p}
           canManage={canManage && Boolean(editing) && canEditPcccRow(writeScope, p)}
           onSign={openSign}
+          adminField={adminField}
           rowDraft={draft?.[`panel:${p.id}`] ?? {}}
           onDraftChange={(field, value) => onDraftChange?.(`panel:${p.id}`, field, value)}
         />

@@ -3,6 +3,7 @@ import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@
 import {
   assertPcccScope,
   assertPcccScopePatch,
+  assertAdminOnlyFields,
   assertPeriodWritable,
   clearSignature,
   normalizePositionPatch,
@@ -57,6 +58,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const body = (await req.json()) as Record<string, unknown>;
     const data = normalizePositionPatch(pickFields(body, EDITABLE), current, { withGiamSat: true });
     if (Object.keys(data).length === 0) return fail("Không có trường nào để cập nhật");
+    assertAdminOnlyFields(user, data);
     assertPcccScopePatch(scope, data);
 
     // Quy tắc TÌNH TRẠNG ↔ ÁP SUẤT của bảng gốc — cưỡng chế Ở SERVER, không tin

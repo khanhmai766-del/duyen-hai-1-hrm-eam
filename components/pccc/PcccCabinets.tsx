@@ -41,7 +41,7 @@ import {
   TR_HEAD,
   type SortState,
 } from "@/components/pccc/pccc-table-card";
-import { canEditPcccRow, type CabinetRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
+import { canEditPcccAdminField, canEditPcccRow, type CabinetRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
 
 /**
  * Khối ô ☑ bám bố cục bảng gốc: mỗi cột trạng thái rộng 68px (đúng độ rộng cột trong
@@ -121,6 +121,8 @@ export function PcccCabinets({
   }, [groups.length]);
   const cuongViOptions = cuongViList.map((o) => o.label);
   const canEdit = canManage && editing;
+  /** Ô phân công và dấu kiểm tra: chỉ ADMIN sửa (xem lib/pccc-service.ts). */
+  const canEditAdminField = canEdit && canEditPcccAdminField(writeScope);
 
   // Chỉ đóng băng nút chi tiết + MÃ THIẾT BỊ khi cuộn ngang. Tên/Loại tủ dài (~260px)
   // nên nếu đóng băng luôn thì vùng cố định chiếm gần một phần ba màn hình, còn ít chỗ
@@ -276,7 +278,7 @@ export function PcccCabinets({
                       value={val("cuongVi", r.cuongVi)}
                       type="select"
                       options={cuongViOptions}
-                      disabled={!rowEditable}
+                      disabled={!rowEditable || !canEditAdminField}
                       onSave={(v) => save(r, "cuongVi", v || null)}
                     />
                   </TableCell>
@@ -317,7 +319,7 @@ export function PcccCabinets({
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
-                      disabled={!rowEditable}
+                      disabled={!rowEditable || !canEditAdminField}
                       onSave={(v) => save(r, "nguoiKiemTra", v || null)}
                     />
                   </TableCell>
@@ -337,7 +339,7 @@ export function PcccCabinets({
                           <EditableCell
                             value={val("ngayKiemTra", r.ngayKiemTra)}
                             type="date"
-                            disabled={!rowEditable}
+                            disabled={!rowEditable || !canEditAdminField}
                             onSave={(v) => save(r, "ngayKiemTra", v || null)}
                           />
                         </DetailField>

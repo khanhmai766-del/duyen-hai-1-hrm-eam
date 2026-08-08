@@ -163,9 +163,17 @@ thêm 4 bí danh nữa và chuẩn hoá lại (46 dòng TCC + 4 dòng FCD):
 | `MÁY NÉN KHÍ VÀ DẦU 300M3` | `Khí nén - Nhà dầu` (`AIR_COMPRESSOR_OIL_HOUSE`) |
 | `XỬ LÝ NƯỚC HỖN HỢP` | `XLN hỗn hợp` (`MIXED_WATER_TREATMENT`) |
 
-Hiện **0 dòng BCC/TCC/FCD thiếu mã cương vị**. Riêng **2 bảng FM200 chưa gán cương vị** —
-import chỉ tạo khung (`FM200_DEFAULT_PANELS`) chứ không có nguồn nào ghi ai phụ trách, nên
-chưa ai ở mức `personal` ký được hai bảng đó. Cần nghiệp vụ chỉ định.
+Hiện **0 dòng BCC/TCC/FCD thiếu mã cương vị**.
+
+Hai bảng **FM200** không có nguồn nào ghi ai phụ trách (import chỉ dựng khung
+`FM200_DEFAULT_PANELS`) nên trước đây `cuongViCode` bị null — kéo theo không ai ở mức
+`personal` sửa/ký được. Nghiệp vụ đã chốt (2026-08-08): **Trực chính điện**
+(`ELECTRICAL_MAIN_OPERATOR`). Đã gán vào dữ liệu đang chạy và **thêm luôn vào khung mặc
+định của bộ nạp**, để kỳ mới sinh ra và lần nạp lại sau đều có sẵn.
+
+Chỉ cập nhật **kỳ chưa chốt**: kỳ đã chốt là chỉ đọc và bản Excel lưu trữ đã xuất theo số
+liệu cũ, sửa ngược vào đó thì file trên S3 và DB lệch nhau. Vì vậy `T07.2026` vẫn để trống
+cương vị ở hai bảng FM200 — không ảnh hưởng gì vì kỳ đó không sửa được nữa.
 
 Cột **"Người giám sát" không phải tên người** mà là **cấp giám sát** — quan hệ khớp
 đúng cây tổ chức: nhóm lò/máy → `TK Lò máy` (515 bình), nhóm điện/hoá → `Trưởng kíp
@@ -316,6 +324,20 @@ biết ai đi kiểm tra và kiểm tra hôm nào:
 Áp cho **cả ký hàng loạt lẫn ký từng mục**. Bảng bồn Foam/CO2/Diesel gọi hai cột này là
 **`nguoiChot` / `ngayChot`** nên ký một bồn thì điền hai cột đó; bảng FM200 và hai bảng
 BCC/TCC dùng `nguoiKiemTra` / `ngayKiemTra`.
+
+### Trường chỉ ADMIN sửa được
+
+Kể cả khi đã mở "Sửa bảng", người dùng thường **không** sửa được hai nhóm ô sau (`lib/pccc-service.ts`):
+
+| Nhóm | Trường | Vì sao |
+| --- | --- | --- |
+| Phân công | `cuongVi`, `nguoiGiamSat`, `machine`, `dvt` | dữ liệu gốc của thiết bị; sửa nó là đổi luôn **ai được ghi/ký** dòng đó (mục 4e) — để người dùng thường sửa là tự mở cửa hậu cho phân quyền |
+| Dấu kiểm tra | `ngayKiemTra`, `nguoiKiemTra`, `ngayChot`, `nguoiChot` | do **thao tác ký** tự điền; gõ tay được thì chữ ký hết còn là bằng chứng ai đã đi kiểm tra |
+
+ADMIN sửa được tất cả (để còn chữa dữ liệu sai). Mốc là `user.role === "ADMIN"` — tức
+**đã bật chế độ quản trị**, đúng nếp của cả hệ thống: ADMIN tắt chế độ quản trị thì thao
+tác như MANAGER. Chặn ở **server** cho cả 6 đường ghi (hai route lưu-theo-lượt báo lỗi
+theo từng dòng); client chỉ khoá sẵn ô dựa trên cờ `meta.writeScope.admin` do server tính.
 
 ### Chữ ký là ẢNH chữ ký số của user, không phải cái tên gõ ra
 
