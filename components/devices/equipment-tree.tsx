@@ -35,6 +35,7 @@ import {
   useMoveEquipmentNode,
   useCopyEquipmentSubtree,
   useUpdateEquipmentProfile,
+  useUpdateCommonEquipmentProfile,
 } from "@/hooks/useEquipment";
 import {
   branchOf,
@@ -323,9 +324,10 @@ function TreeScopeBody({
   const moveNode = useMoveEquipmentNode();
   const copySubtree = useCopyEquipmentSubtree();
   const updateProfile = useUpdateEquipmentProfile();
+  const updateCommonProfile = useUpdateCommonEquipmentProfile();
   const editDetailQuery = useEquipmentNode(editTarget?.seq, scope);
   const editDetail = editDetailQuery.data?.data ?? null;
-  const editPending = updateDevice.isPending || updateProfile.isPending;
+  const editPending = updateDevice.isPending || updateProfile.isPending || updateCommonProfile.isPending;
 
   const debouncedSearch = useDebouncedValue(search, 350);
   const q = debouncedSearch.trim();
@@ -806,6 +808,44 @@ function TreeScopeBody({
                 </div>
               )}
             </div>
+            {scope !== "COMMON" && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-blue-200 bg-white text-blue-800 hover:bg-blue-100"
+                  disabled={editPending || editDetailQuery.isLoading || !editName.trim()}
+                  onClick={async () => {
+                    if (!editTarget) return;
+                    const name = editName.trim();
+                    const kks = editKks.trim();
+                    if (name.length > 200) return toast.error("Tên thiết bị không được vượt quá 200 ký tự");
+                    if (kks.length > 100) return toast.error("Mã KKS không được vượt quá 100 ký tự");
+                    try {
+                      const parentSeq = editTarget.parentSeq;
+                      await updateCommonProfile.mutateAsync({
+                        seq: editTarget.seq,
+                        sourceScope: scope,
+                        name,
+                        kks: kks || null,
+                      });
+                      toast.success("Đã lưu tên và KKS dùng chung cho S1 và S2");
+                      setEditTarget(null);
+                      setEditName("");
+                      setEditKks("");
+                      await refreshBranch(parentSeq);
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Không thể lưu tên và KKS dùng chung");
+                    }
+                  }}
+                >
+                  Lưu tên và KKS dùng chung cho S1 và S2
+                </Button>
+                <p className="mt-2 text-center text-[11px] leading-relaxed text-blue-700/80">
+                  KKS S2 tự đổi ký tự đầu từ 1 thành 2 theo nguyên tắc hiện tại.
+                </p>
+              </div>
+            )}
             <DialogFooter className="gap-2">
               {scope !== "COMMON" && (
                 <Button

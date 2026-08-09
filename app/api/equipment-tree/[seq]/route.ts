@@ -9,6 +9,9 @@ import { canBypassEquipmentPositionScope } from "@/lib/material-equipment-access
 import { requireDeviceView } from "@/lib/device-permissions";
 import { requireDeviceManage } from "@/lib/device-permissions";
 import { resolveEquipmentTreeRequestUser } from "@/lib/equipment-tree-request-access";
+import { normalizeText } from "@/lib/nav";
+import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
+import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -79,9 +82,6 @@ export async function PUT(req: NextRequest, { params }: { params: { seq: string 
 
     const body = await req.json();
     const machine = String(body.machine ?? "").trim().toUpperCase();
-    if (machine !== "S1" && machine !== "S2") {
-      return fail("Thông tin riêng chỉ áp dụng cho thiết bị thuộc Tổ máy S1 hoặc S2");
-    }
     const hasName = Object.prototype.hasOwnProperty.call(body, "name");
     const hasKks = Object.prototype.hasOwnProperty.call(body, "kks");
     if (!hasName && !hasKks) return fail("Không có thông tin cần cập nhật");
@@ -91,6 +91,61 @@ export async function PUT(req: NextRequest, { params }: { params: { seq: string 
     if (hasName && body.name != null && !requestedName) return fail("Tên thiết bị không được để trống");
     if (requestedName && requestedName.length > 200) return fail("Tên thiết bị không được vượt quá 200 ký tự");
     if (requestedKks && requestedKks.length > 100) return fail("Mã KKS không được vượt quá 100 ký tự");
+
+    if (machine === "COMMON") {
+      if (!hasName || !hasKks || !requestedName) return fail("Tên hoặc KKS dùng chung không hợp lệ");
+      const sourceScope = String(body.sourceScope ?? "S1").trim().toUpperCase();
+      const commonKks = sourceScope === "S2" && requestedKks?.startsWith("2")
+        ? `1${requestedKks.slice(1)}`
+        : requestedKks;
+      const node = await prisma.equipmentNode.findUnique({
+        where: { seq },
+        select: { id: true },
+      });
+      if (!node) return fail("Không tìm thấy thiết bị", 404);
+      await prisma.$transaction(async (tx) => {
+        await tx.equipmentNode.update({
+          where: { seq },
+          data: {
+            name: requestedName,
+            kks: commonKks,
+            searchText: normalizeText(`${requestedName} ${commonKks ?? ""} ${seq.replace(/^DH1\.S1\.?/, "")} ${seq}`),
+          },
+        });
+        // Tên/KKS mới trở thành mặc định cho cả hai tổ máy. KKS S2 tiếp tục
+        // dẫn xuất từ mã gốc S1 (ký tự đầu 1 → 2).
+        await tx.equipmentProfile.updateMany({
+          where: { nodeSeq: seq, machine: { in: ["S1", "S2"] } },
+          data: { name: null, kks: null },
+        });
+        await tx.equipmentProfile.deleteMany({
+          where: {
+            nodeSeq: seq,
+            machine: { in: ["S1", "S2"] },
+            name: null,
+            kks: null,
+            attachedInfo: null,
+            documentUrl: null,
+            imageUrl: null,
+          },
+        });
+      });
+      invalidateEquipmentNodeCache();
+      invalidateEquipmentProfileCache();
+      invalidateDeviceListCache();
+      await audit(
+        user.id,
+        "UPDATE_EQUIPMENT_COMMON_PROFILE",
+        "EquipmentNode",
+        node.id,
+        `S1 + S2 · Tên: ${requestedName} · KKS gốc: ${commonKks ?? "chưa có"}`
+      );
+      return ok({ seq, machine: "COMMON", effectiveName: requestedName, effectiveKks: commonKks });
+    }
+
+    if (machine !== "S1" && machine !== "S2") {
+      return fail("Thông tin riêng chỉ áp dụng cho thiết bị thuộc Tổ máy S1 hoặc S2");
+    }
 
     const node = await prisma.equipmentNode.findUnique({ where: { seq }, select: { id: true, name: true, kks: true } });
     if (!node) return fail("Không tìm thấy thiết bị", 404);

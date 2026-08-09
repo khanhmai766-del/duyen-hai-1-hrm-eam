@@ -296,3 +296,20 @@ export function useUpdateEquipmentProfile() {
     },
   });
 }
+
+export function useUpdateCommonEquipmentProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { seq: string; sourceScope: "S1" | "S2"; name: string; kks: string | null }) =>
+      apiMutate<{ seq: string; machine: "COMMON"; effectiveName: string; effectiveKks: string | null }>(
+        `/api/equipment-tree/${encodeURIComponent(body.seq)}`,
+        "PUT",
+        { machine: "COMMON", sourceScope: body.sourceScope, name: body.name, kks: body.kks }
+      ),
+    onSuccess: (_data, body) => {
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["equipment-node", body.seq] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+    },
+  });
+}
