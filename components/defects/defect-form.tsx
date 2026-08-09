@@ -307,6 +307,55 @@ export function DefectForm({
   }
   const selectedDeviceQuery = useEquipmentNode(form.device || null, form.mappedDeviceUnit);
   const selectedSystemQuery = useEquipmentNode(form.deviceSystemSeq || null, form.mappedDeviceUnit);
+  const automaticContentSuffixRef = React.useRef<string | null>(null);
+  const defaultNoteAppliedRef = React.useRef(false);
+
+  // Phiếu mới: KKS là hậu tố ở cuối, textarea vẫn sửa tự do. Khi đổi thiết bị,
+  // chỉ thay đúng hậu tố do hệ thống đã thêm và giữ nguyên phần mô tả người dùng gõ.
+  React.useEffect(() => {
+    if (isEdit || isSynced) return;
+    if (!form.device) {
+      const previousSuffix = automaticContentSuffixRef.current;
+      automaticContentSuffixRef.current = null;
+      if (!previousSuffix) return;
+      setForm((current) => current.content.endsWith(previousSuffix)
+        ? { ...current, content: current.content.slice(0, -previousSuffix.length) }
+        : current);
+      return;
+    }
+
+    const selectedDevice = selectedDeviceQuery.data?.data;
+    if (!selectedDevice || selectedDevice.seq !== form.device) return;
+    const nextSuffix = ` - ${selectedDevice.kks?.trim() || "Không có mã KKS"}`;
+    const previousSuffix = automaticContentSuffixRef.current;
+    if (previousSuffix === nextSuffix) return;
+    automaticContentSuffixRef.current = nextSuffix;
+    setForm((current) => {
+      const description = previousSuffix && current.content.endsWith(previousSuffix)
+        ? current.content.slice(0, -previousSuffix.length)
+        : current.content;
+      return { ...current, content: `${description}${nextSuffix}` };
+    });
+  }, [form.device, isEdit, isSynced, selectedDeviceQuery.data]);
+
+  // Chỉ điền một lần cho phiếu tạo mới; người dùng có thể sửa/xóa sau đó và dữ liệu
+  // cũ ở màn hình chỉnh sửa không bao giờ bị ghi đè.
+  React.useEffect(() => {
+    if (isEdit || isSynced || defaultNoteAppliedRef.current || sessionStatus === "loading") return;
+    const operatorName = session?.user?.name?.trim();
+    if (!operatorName) return;
+    defaultNoteAppliedRef.current = true;
+    const today = new Intl.DateTimeFormat("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "Asia/Ho_Chi_Minh",
+    }).format(new Date());
+    setForm((current) => current.note
+      ? current
+      : { ...current, note: `${operatorName} cập nhật ngày ${today}` });
+  }, [isEdit, isSynced, session?.user?.name, sessionStatus]);
+
   React.useEffect(() => {
     if (form.requestType === "Môi Trường") return;
     const deviceName = selectedDeviceQuery.data?.data.name;
@@ -346,7 +395,13 @@ export function DefectForm({
       if (open) {
         setForm((current) => ({
           ...current,
-          content: current.content === materialRequest?.suggestedContent ? "" : current.content,
+          content: (() => {
+            const suffix = automaticContentSuffixRef.current ?? "";
+            const description = suffix && current.content.endsWith(suffix)
+              ? current.content.slice(0, -suffix.length)
+              : current.content;
+            return description === materialRequest?.suggestedContent ? suffix : current.content;
+          })(),
         }));
         setMaterialRequest(null);
       }
@@ -360,10 +415,15 @@ export function DefectForm({
       ...current,
       // Chỉ ghi đè khi ô nội dung còn trống hoặc đang giữ nguyên gợi ý cũ —
       // câu người dùng tự viết không bị mất khi tick thêm/bớt điểm.
-      content:
-        !current.content.trim() || current.content === materialRequest?.suggestedContent
-          ? seed?.suggestedContent ?? ""
-          : current.content,
+      content: (() => {
+        const suffix = automaticContentSuffixRef.current ?? "";
+        const description = suffix && current.content.endsWith(suffix)
+          ? current.content.slice(0, -suffix.length)
+          : current.content;
+        return !description.trim() || description === materialRequest?.suggestedContent
+          ? `${seed?.suggestedContent ?? ""}${suffix}`
+          : current.content;
+      })(),
       // Chỉ điền hộ khi ô còn trống — đã chọn tay thì giữ nguyên lựa chọn đó.
       requestType: current.requestType || defaultRequestTypeForMaterialCategory(seed?.materialCategory),
     }));
@@ -460,6 +520,13 @@ export function DefectForm({
     if (!form.shiftLeaderId) return "Trưởng ca";
     return null;
   }
+  function hasDefectDescription() {
+    const suffix = automaticContentSuffixRef.current;
+    const description = suffix && form.content.endsWith(suffix)
+      ? form.content.slice(0, -suffix.length)
+      : form.content;
+    return Boolean(description.trim());
+  }
   function goToSeverity() {
     const missing = missingGeneral();
     if (missing) return toast.error(`Vui lòng chọn ${missing}`);
@@ -489,9 +556,9 @@ export function DefectForm({
           : "Vui lòng nhập Tên thiết bị ghi lên Google Sheet"
       );
     }
-    if (!form.content.trim()) {
+    if (!hasDefectDescription()) {
       setStep(3);
-      return toast.error("Vui lòng nhập Nội dung");
+      return toast.error("Vui lòng nhập mô tả khiếm khuyết trước mã KKS");
     }
     setStep(3);
   }
@@ -561,6 +628,10 @@ export function DefectForm({
     if (!isEdit && form.severityCriteria.length === 0) {
       setStep(2);
       return toast.error("Vui lòng chọn ít nhất 1 tiêu chí mức độ");
+    }
+    if (!hasDefectDescription()) {
+      setStep(3);
+      return toast.error("Vui lòng nhập mô tả khiếm khuyết trước mã KKS");
     }
     const {
       deviceSystem: _deviceSystem,
@@ -1299,6 +1370,10 @@ export function DefectForm({
                   className="min-h-[88px] resize-y"
                   value={form.content}
                   onChange={(e) => set("content", e.target.value)}
+                  onFocus={(event) => {
+                    const suffix = automaticContentSuffixRef.current;
+                    if (suffix && form.content === suffix) event.currentTarget.setSelectionRange(0, 0);
+                  }}
                   placeholder="Nhập nội dung khiếm khuyết"
                   required
                 />

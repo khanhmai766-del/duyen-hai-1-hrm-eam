@@ -230,6 +230,27 @@ export async function GET(req: NextRequest) {
       ? [...getEquipmentSeqsWithinDepth(await getCachedEquipmentNodeFull(), deviceSeq, descendantDepth)]
       : deviceSeq ? [deviceSeq] : [];
     const query = normalizeText(params.get("q")?.trim() ?? "");
+    // Không thêm bộ lọc riêng trên giao diện: ô tìm kiếm hiện có hiểu các cụm từ
+    // nghiệp vụ này và trả đúng phiếu đã bị đánh dấu không còn ở nguồn Sheet.
+    const sourceMissingQuery = new Set([
+      "mat nguon",
+      "phieu mat nguon",
+      "khong con tren google sheet",
+      "source missing",
+    ]).has(query);
+    const remindedTodayQuery = new Set([
+      "nhac lai hom nay",
+      "phieu nhac lai hom nay",
+      "nhac lai trong ngay",
+    ]).has(query);
+    // Việt Nam luôn UTC+7 và không có DST. Dựng biên ngày bằng UTC để kết quả
+    // không phụ thuộc timezone của máy chủ production.
+    const vietnamOffsetMs = 7 * 60 * 60 * 1000;
+    const vietnamNow = new Date(Date.now() + vietnamOffsetMs);
+    const remindedTodayStart = new Date(
+      Date.UTC(vietnamNow.getUTCFullYear(), vietnamNow.getUTCMonth(), vietnamNow.getUTCDate()) - vietnamOffsetMs
+    );
+    const remindedTodayEnd = new Date(remindedTodayStart.getTime() + 24 * 60 * 60 * 1000);
 
     // Lọc quyền theo cương vị NGAY TRONG SQL bằng prefix nhánh cây (index text_pattern_ops);
     // phiếu chưa gắn thiết bị (deviceSeq null) vẫn lấy về, xét tiếp bằng rule text bên dưới.
@@ -368,6 +389,16 @@ export async function GET(req: NextRequest) {
         if (severity && severity !== "ALL" && item.severity !== severity) return false;
         if (repairResult && repairResult !== "ALL" && (item.repairResultRaw ?? "") !== repairResult) return false;
         if (mismatch && !item.sourceStatusMismatch) return false;
+        if (sourceMissingQuery) {
+          return item.sourceType === "GOOGLE_SHEETS" && item.syncState === "MISSING";
+        }
+        if (remindedTodayQuery) {
+          return Boolean(
+            item.lastRemindedAt
+            && item.lastRemindedAt >= remindedTodayStart
+            && item.lastRemindedAt < remindedTodayEnd
+          );
+        }
         if (!query) return true;
         return normalizeText([
           item.requestNumber,

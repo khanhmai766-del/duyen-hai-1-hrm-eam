@@ -259,6 +259,27 @@ export function useMoveEquipmentNode() {
   });
 }
 
+export function useCopyEquipmentSubtree() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { sourceSeq: string; targetParentSeq: string }) =>
+      apiMutate<{
+        sourceSeq: string;
+        targetParentSeq: string;
+        firstSeq: string;
+        copiedCount: number;
+        materialDeclarationCount: number;
+      }>("/api/equipment-tree/copy", "POST", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["equipment-node"] });
+      qc.invalidateQueries({ queryKey: ["devices"] });
+      qc.invalidateQueries({ queryKey: ["materials"] });
+      qc.invalidateQueries({ queryKey: ["replacements"] });
+    },
+  });
+}
+
 export function useUpdateEquipmentProfile() {
   const qc = useQueryClient();
   return useMutation({

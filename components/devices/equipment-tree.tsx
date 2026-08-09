@@ -19,6 +19,7 @@ import {
   Pencil,
   Plus,
   FolderInput,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,6 +33,7 @@ import {
   treeChildrenKey,
   type TreeNode,
   useMoveEquipmentNode,
+  useCopyEquipmentSubtree,
   useUpdateEquipmentProfile,
 } from "@/hooks/useEquipment";
 import {
@@ -105,6 +107,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onEdit,
   canMove,
   onMove,
+  canCopy,
+  onCopy,
 }: {
   node: TreeNode;
   depth: number;
@@ -119,6 +123,8 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
   onEdit: (node: TreeNode) => void;
   canMove: boolean;
   onMove: (node: TreeNode) => void;
+  canCopy: boolean;
+  onCopy: (node: TreeNode) => void;
 }) {
   const hasKids = node.hasChildren;
   return (
@@ -178,7 +184,10 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
           {node.machine}
         </span>
       )}
-      <span className={cn("min-w-0 flex-1 truncate", hasKids && "uppercase")} title={node.name}>
+      <span
+        className={cn("min-w-0 flex-1 whitespace-normal break-words leading-5", hasKids && "uppercase")}
+        title={node.name}
+      >
         {node.name}
       </span>
       {hasKids && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">{node.childCount}</span>}
@@ -209,6 +218,20 @@ const TreeNodeRow = React.memo(function TreeNodeRow({
           aria-label={`Di chuyển ${node.name}`}
         >
           <FolderInput className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {canCopy && hasKids && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onCopy(node);
+          }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-emerald-50 hover:text-emerald-700 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 group-hover:opacity-100"
+          title={`Sao chép toàn bộ cấu trúc con của ${node.name}`}
+          aria-label={`Sao chép toàn bộ cấu trúc con của ${node.name}`}
+        >
+          <Copy className="h-3.5 w-3.5" />
         </button>
       )}
       {canDelete && !hasKids && node.parentSeq !== null && (
@@ -293,9 +316,12 @@ function TreeScopeBody({
   const [editKks, setEditKks] = React.useState("");
   const [moveTarget, setMoveTarget] = React.useState<TreeNode | null>(null);
   const [moveDestination, setMoveDestination] = React.useState<PickerEquipmentNode | null>(null);
+  const [copyTarget, setCopyTarget] = React.useState<TreeNode | null>(null);
+  const [copyDestination, setCopyDestination] = React.useState<PickerEquipmentNode | null>(null);
   const deleteDevice = useDeleteDevice();
   const updateDevice = useUpdateDevice();
   const moveNode = useMoveEquipmentNode();
+  const copySubtree = useCopyEquipmentSubtree();
   const updateProfile = useUpdateEquipmentProfile();
   const editDetailQuery = useEquipmentNode(editTarget?.seq, scope);
   const editDetail = editDetailQuery.data?.data ?? null;
@@ -413,6 +439,27 @@ function TreeScopeBody({
     [qc, scope, childrenBySeq]
   );
 
+  // Tải lại toàn bộ đường dẫn, mở các thư mục cha rồi chọn node vừa di chuyển/sao chép.
+  // Cây lazy cần làm đủ ba bước này; chỉ setSelected() sẽ không khiến node xuất hiện.
+  const revealNode = React.useCallback(
+    async (seq: string) => {
+      const path = ancestorSeqs(seq);
+      const loaded = new Map<string, TreeNode[]>();
+      setSearch("");
+      for (const parentSeq of path) {
+        for (const treeScope of TREE_SCOPES) {
+          qc.removeQueries({ queryKey: treeChildrenKey(treeScope.key, parentSeq) });
+        }
+        const response = await fetchTreeChildren(qc, scope, parentSeq);
+        loaded.set(parentSeq, response.data);
+      }
+      setChildrenBySeq(loaded);
+      setExpanded(new Set(path));
+      setSelected(seq);
+    },
+    [qc, scope]
+  );
+
   // Danh sách dòng hiển thị: chế độ tìm kiếm = kết quả phẳng; ngược lại = cây đang bung.
   const flatRows = React.useMemo<FlatRow[]>(() => {
     if (searchActive) {
@@ -443,10 +490,10 @@ function TreeScopeBody({
   });
 
   React.useEffect(() => {
-    if (!focusSeq || searchActive) return;
-    const idx = flatRows.findIndex((r) => r.node.seq === focusSeq);
+    if (!selected || searchActive) return;
+    const idx = flatRows.findIndex((r) => r.node.seq === selected);
     if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: "center" });
-  }, [focusSeq, flatRows, rowVirtualizer, searchActive]);
+  }, [selected, flatRows, rowVirtualizer, searchActive]);
 
   const isLoading = rootsQuery.isLoading;
   const showSearchLoading = searchActive && searchQuery.isLoading;
@@ -564,6 +611,11 @@ function TreeScopeBody({
                         setMoveTarget(node);
                         setMoveDestination(null);
                       }}
+                      canCopy={canMove}
+                      onCopy={(node) => {
+                        setCopyTarget(node);
+                        setCopyDestination(null);
+                      }}
                     />
                   </div>
                 );
@@ -645,7 +697,7 @@ function TreeScopeBody({
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {scope === "COMMON" ? "Chỉnh sửa tên thiết bị" : `Tên và KKS riêng cho Tổ máy ${scope}`}
+              {scope === "COMMON" ? "Chỉnh sửa tên và KKS thiết bị" : `Tên và KKS riêng cho Tổ máy ${scope}`}
             </DialogTitle>
             <DialogDescription>
               {scope === "COMMON" ? (
@@ -666,7 +718,8 @@ function TreeScopeBody({
               if (!name) return toast.error("Tên thiết bị không được để trống");
               if (name.length > 200) return toast.error("Tên thiết bị không được vượt quá 200 ký tự");
               const kks = editKks.trim();
-              if (scope === "COMMON" && name === editTarget.name) {
+              if (kks.length > 100) return toast.error("Mã KKS không được vượt quá 100 ký tự");
+              if (scope === "COMMON" && name === editTarget.name && kks === (editTarget.kks ?? "")) {
                 setEditTarget(null);
                 setEditName("");
                 setEditKks("");
@@ -675,11 +728,11 @@ function TreeScopeBody({
               try {
                 const parentSeq = editTarget.parentSeq;
                 if (scope === "COMMON") {
-                  await updateDevice.mutateAsync({ id: editTarget.seq, name });
+                  await updateDevice.mutateAsync({ id: editTarget.seq, name, kks: kks || null });
                 } else {
                   await updateProfile.mutateAsync({ seq: editTarget.seq, machine: scope, name, kks: kks || null });
                 }
-                toast.success(scope === "COMMON" ? `Đã cập nhật tên thiết bị ${editTarget.fullCode}` : `Đã lưu tên và KKS riêng cho Tổ máy ${scope}`);
+                toast.success(scope === "COMMON" ? `Đã cập nhật tên và KKS thiết bị ${editTarget.fullCode}` : `Đã lưu tên và KKS riêng cho Tổ máy ${scope}`);
                 setEditTarget(null);
                 setEditName("");
                 setEditKks("");
@@ -707,18 +760,23 @@ function TreeScopeBody({
                 </div>
               )}
             </div>
-            {scope !== "COMMON" && (
-              <div className="space-y-2 border-t border-border pt-4">
-                <Label htmlFor="equipment-kks">Mã KKS hiển thị tại {scope}</Label>
-                <Input
-                  id="equipment-kks"
-                  value={editKks}
-                  onChange={(event) => setEditKks(event.target.value)}
-                  maxLength={100}
-                  disabled={editPending}
-                  placeholder="Nhập mã KKS riêng, ví dụ A0…"
-                  className="font-mono"
-                />
+            <div className="space-y-2 border-t border-border pt-4">
+              <Label htmlFor="equipment-kks">{scope === "COMMON" ? "Mã KKS" : `Mã KKS hiển thị tại ${scope}`}</Label>
+              <Input
+                id="equipment-kks"
+                value={editKks}
+                onChange={(event) => setEditKks(event.target.value)}
+                maxLength={100}
+                disabled={editPending}
+                placeholder={scope === "COMMON" ? "Nhập mã KKS thiết bị" : "Nhập mã KKS riêng, ví dụ A0…"}
+                className="font-mono"
+              />
+              {scope === "COMMON" ? (
+                <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+                  <span>Để trống nếu thiết bị chưa có mã KKS.</span>
+                  <span>{editKks.length}/100 ký tự</span>
+                </div>
+              ) : (
                 <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
                   <span>
                     KKS mặc định: <span className="font-mono font-semibold text-ink">{editDetailQuery.isLoading ? "Đang tải…" : editDetail?.baseKks ?? "Chưa có"}</span>
@@ -746,8 +804,8 @@ function TreeScopeBody({
                     Dùng lại KKS mặc định
                   </Button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             <DialogFooter className="gap-2">
               {scope !== "COMMON" && (
                 <Button
@@ -787,7 +845,7 @@ function TreeScopeBody({
               </Button>
               <Button type="submit" disabled={editPending || !editName.trim()}>
                 {editPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                {scope === "COMMON" ? "Lưu tên" : `Lưu tên và KKS cho ${scope}`}
+                {scope === "COMMON" ? "Lưu tên và KKS" : `Lưu tên và KKS cho ${scope}`}
               </Button>
             </DialogFooter>
           </form>
@@ -841,10 +899,8 @@ function TreeScopeBody({
                   toast.success(`Đã di chuyển ${result.movedCount.toLocaleString("vi-VN")} mục sang ${moveDestination.name}`);
                   setMoveTarget(null);
                   setMoveDestination(null);
-                  setSelected(result.seq);
-                  setChildrenBySeq(new Map());
-                  setExpanded(new Set());
-                  await Promise.all([refreshBranch(oldParent), refreshBranch(result.targetParentSeq)]);
+                  await refreshBranch(oldParent);
+                  await revealNode(result.seq);
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : "Không thể di chuyển thiết bị");
                 }
@@ -852,6 +908,83 @@ function TreeScopeBody({
             >
               {moveNode.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderInput className="h-4 w-4" />}
               Di chuyển
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!copyTarget}
+        onOpenChange={(open) => {
+          if (!open && !copySubtree.isPending) {
+            setCopyTarget(null);
+            setCopyDestination(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Sao chép cấu trúc thiết bị con</DialogTitle>
+            <DialogDescription>
+              Dùng “{copyTarget?.name}” làm mẫu và sao chép toàn bộ cấu trúc bên dưới vào thư mục đích đã tồn tại.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs leading-5 text-emerald-900">
+              <p className="font-semibold">Dữ liệu được sao chép</p>
+              <p>Tên, tài liệu, ảnh, thông tin bổ sung và các dòng vật tư khai báo. Mã KKS không được sao chép và cần khai báo mới.</p>
+              <p className="mt-1 font-semibold text-amber-800">Không sao chép lịch sử sửa chữa, lịch sử thay vật tư, lịch theo dõi đang chạy hoặc khiếm khuyết.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Thư mục đích đã tạo</Label>
+              <EquipmentTreePicker
+                value={copyDestination?.seq ?? ""}
+                onChange={setCopyDestination}
+                scope={scope}
+                includeLeaves
+                maxSelectableDepth={15}
+                placeholder="Chọn thư mục nhận cấu trúc sao chép"
+                disabled={copySubtree.isPending}
+              />
+              {copyDestination && (
+                <p className="text-xs text-muted-foreground">
+                  Các mục con sẽ được tạo trực tiếp trong <span className="font-semibold text-ink">{copyDestination.name}</span> · {copyDestination.fullCode}
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={copySubtree.isPending} onClick={() => setCopyTarget(null)}>
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                !copyDestination
+                || copySubtree.isPending
+                || copyDestination.seq === copyTarget?.seq
+                || copyDestination.seq.startsWith(`${copyTarget?.seq}.`)
+              }
+              onClick={async () => {
+                if (!copyTarget || !copyDestination) return;
+                try {
+                  const destinationName = copyDestination.name;
+                  const result = await copySubtree.mutateAsync({
+                    sourceSeq: copyTarget.seq,
+                    targetParentSeq: copyDestination.seq,
+                  });
+                  toast.success(
+                    `Đã sao chép ${result.copiedCount.toLocaleString("vi-VN")} mục và ${result.materialDeclarationCount.toLocaleString("vi-VN")} khai báo vật tư vào ${destinationName}`
+                  );
+                  setCopyTarget(null);
+                  setCopyDestination(null);
+                  await revealNode(result.firstSeq);
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Không thể sao chép cấu trúc thiết bị");
+                }
+              }}
+            >
+              {copySubtree.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+              Sao chép cấu trúc
             </Button>
           </DialogFooter>
         </DialogContent>

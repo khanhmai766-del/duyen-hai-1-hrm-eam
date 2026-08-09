@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { positionCodeOf } from "@/lib/position-catalog";
+import { reminderSummaryOf } from "@/lib/defect-reminder";
 
 export type DefectSourceRecord = {
   sourceSpreadsheetId: string;
@@ -101,28 +102,6 @@ function statusOf(value: unknown) {
   return "CHUA_XU_LY";
 }
 
-function reminderOf(value: unknown) {
-  const raw = text(value);
-  if (!raw) return { count: 0, lastDate: null as Date | null };
-
-  const explicitCounts = Array.from(raw.matchAll(/l[aầ]n\s*(?:thứ\s*)?(\d+)/gi))
-    .map((match) => Number(match[1]))
-    .filter(Number.isFinite);
-  const dates = Array.from(raw.matchAll(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g))
-    .map((match) => parseSourceDate(match[0]))
-    .filter((date): date is Date => !!date);
-  const distinctDates = new Set(dates.map((date) => date.toISOString().slice(0, 10)));
-  const count = explicitCounts.length > 0
-    ? Math.max(...explicitCounts)
-    : distinctDates.size > 0
-      ? distinctDates.size
-      : 1;
-  const lastDate = dates.length > 0
-    ? new Date(Math.max(...dates.map((date) => date.getTime())))
-    : null;
-  return { count, lastDate };
-}
-
 function sourceHash(record: DefectSourceRecord) {
   // Số dòng có thể thay đổi khi người dùng chèn/xóa dòng trên Sheet, không được
   // xem là thay đổi nghiệp vụ.
@@ -157,7 +136,7 @@ export function prepareDefectSourceRecords(records: DefectSourceRecord[]) {
     const sourceKey = sourceKeyOf(record, detectedAt);
     const legacySourceKey = sourceKeyOf(record, detectedAt, false);
     if (!sourceKey || !text(record.content)) return [];
-    const reminder = reminderOf(record.reminderRaw);
+    const reminder = reminderSummaryOf(record.reminderRaw);
     const stt = text(record.stt).replace(/\.0$/, "");
     return [{
       record,

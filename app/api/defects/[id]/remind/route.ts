@@ -6,6 +6,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
+import { reminderSummaryOf } from "@/lib/defect-reminder";
 
 const INCLUDE = {
   createdBy: {
@@ -52,10 +53,36 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
 
     const remindedAt = new Date();
+    const legacyReminder = reminderSummaryOf(existing.reminderRaw);
     // Lịch sử nhắc lại là dữ liệu nghiệp vụ nên luôn được ghi, không phụ thuộc cờ
     // tích hợp. Cập nhật bộ đếm và tạo log trong cùng transaction để retry sau lỗi
     // không làm tăng số lần nhưng thiếu ngày tương ứng.
     const defect = await prisma.$transaction(async (tx) => {
+      const existingWebLogs = await tx.defectReminderLog.findMany({
+        where: { defectId: existing.id },
+        select: { occurredAt: true },
+      });
+      const legacyDates = new Map<string, number>();
+      for (const key of legacyReminder.dateKeys) legacyDates.set(key, (legacyDates.get(key) ?? 0) + 1);
+      let webLogsNotYetInSheet = 0;
+      for (const log of existingWebLogs) {
+        const vietnamDate = new Date(log.occurredAt.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const remainingLegacyOccurrences = legacyDates.get(vietnamDate) ?? 0;
+        if (remainingLegacyOccurrences > 0) legacyDates.set(vietnamDate, remainingLegacyOccurrences - 1);
+        else webLogsNotYetInSheet++;
+      }
+      const knownReminderCount = Math.max(
+        existing.reminderCount,
+        legacyReminder.count + webLogsNotYetInSheet
+      );
+      // Phiếu cũ có thể đã có lịch sử ở Sheet trước khi web quản lý bộ đếm.
+      // Nâng về tối thiểu bằng nguồn cũ rồi mới tăng nguyên tử một lần.
+      if (knownReminderCount > 0) {
+        await tx.defect.updateMany({
+          where: { id: existing.id, reminderCount: { lt: knownReminderCount } },
+          data: { reminderCount: knownReminderCount },
+        });
+      }
       const updated = await tx.defect.update({
         where: { id: existing.id },
         data: {
@@ -79,7 +106,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         orderBy: { occurredAt: "asc" },
         select: { id: true, occurredAt: true, shiftLeaderName: true },
       });
-      const legacyReminderCount = Math.max(0, updated.reminderCount - reminderHistory.length);
+      const legacyCountBeforeWebLogs = Math.max(0, updated.reminderCount - reminderHistory.length);
       await enqueueDefectSyncEvent(tx, {
         defect: updated,
         eventType: "REMIND",
@@ -95,7 +122,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
               : "FULL",
           reminderHistory: reminderHistory.map((item, index) => ({
             reminderLogId: item.id,
-            reminderNumber: legacyReminderCount + index + 1,
+            reminderNumber: legacyCountBeforeWebLogs + index + 1,
             remindedAt: item.occurredAt.toISOString(),
             shiftLeader: item.shiftLeaderName ?? updated.shiftLeaderName ?? "",
           })),

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { reminderSummaryOf } from "@/lib/defect-reminder";
 
 const START_ROW = 6;
 const COLUMN_COUNT = 15; // A:O
@@ -132,11 +133,39 @@ function fullReminderHistory(payload: Payload) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line && !/^số lần nhắc lại\s*:/i.test(line));
-  const newLines = (payload.reminderHistory ?? [])
-    .map((item) => `Nhắc lại lần ${item.reminderNumber} ngày ${dateVi(item.remindedAt)}`)
-    .filter(Boolean);
-  const count = Number(payload.reminderCount) || payload.reminderHistory?.length || 0;
-  const history = [...new Set([...legacyLines, ...newLines])].join("\n");
+  const dateKeyOf = (value: string) => {
+    const match = value.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+    if (!match) return null;
+    const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);
+    return `${year}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  };
+  const newEntries = (payload.reminderHistory ?? []).flatMap((item) => {
+    const displayDate = dateVi(item.remindedAt);
+    const key = dateKeyOf(displayDate);
+    return key ? [{ key, displayDate }] : [];
+  });
+  const newDateKeys = new Set(newEntries.map((item) => item.key));
+  const otherLegacyLines: string[] = [];
+  const legacyEntries: Array<{ key: string; displayDate: string }> = [];
+  for (const line of legacyLines) {
+    const key = dateKeyOf(line);
+    if (/^nhắc lại lần/i.test(line) && key) {
+      // Dòng này có thể chính là log web đã đồng bộ vòng về; log web là nguồn
+      // chính xác hơn nên không giữ thêm bản legacy trùng ngày.
+      if (!newDateKeys.has(key)) legacyEntries.push({ key, displayDate: line.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/)![0] });
+    } else {
+      otherLegacyLines.push(line);
+    }
+  }
+  const numberedLines = [...legacyEntries, ...newEntries]
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map((item, index) => `Nhắc lại lần ${index + 1} ngày ${item.displayDate}`);
+  const count = Math.max(
+    Number(payload.reminderCount) || 0,
+    reminderSummaryOf(payload.legacyReminderRaw).count,
+    numberedLines.length
+  );
+  const history = [...new Set([...otherLegacyLines, ...numberedLines])].join("\n");
   return history ? `Số lần nhắc lại: ${count}\n${history}` : "";
 }
 
