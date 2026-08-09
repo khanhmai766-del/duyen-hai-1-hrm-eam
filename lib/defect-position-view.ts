@@ -12,7 +12,10 @@
  *
  * Ai được xem toàn bộ — thoả MỘT trong ba là đủ:
  *   - ADMIN;
- *   - `defect-manage` mức manage/full (Quản đốc, quản lý, Trưởng ca…);
+ *   - `defect-view` mức manage/full — quyền RIÊNG cho phạm vi xem. KHÔNG dùng
+ *     `defect-manage`: quyền đó bị quy về `repair-edit` (lib/rbac-permissions.ts) và
+ *     trên thực tế đã mở mức "manage" cho mọi vai trò, kể cả VIEWER, nên gắn rào xem
+ *     vào nó thì 100% tài khoản lọt cổng và rào không bao giờ có hiệu lực;
  *   - cương vị không bị giới hạn cây thiết bị (Quản đốc / Phó QĐ / KTV / Trưởng ca),
  *     vì các cương vị này không nằm trong danh mục vận hành nên không có mã để so.
  *
@@ -29,6 +32,19 @@ import {
 } from "@/lib/position-catalog";
 import { canViewUnmappedDefectPosition } from "@/lib/positions";
 import { isUnrestrictedEquipmentPosition } from "@/lib/position-system-scopes";
+import { normalizeText } from "@/lib/nav";
+
+/**
+ * Cương vị hành chính không đi ca nên không có mã trong danh mục vận hành, nhưng công
+ * việc của họ là tổng hợp toàn phân xưởng — rào theo cương vị sẽ làm họ không thấy gì.
+ * Danh sách TƯỜNG MINH, không suy đoán kiểu "không khớp danh mục thì cho xem tất".
+ */
+const ADMIN_VIEW_ALL_POSITION_KEYS = ["thong ke"];
+
+function isAdminViewAllPosition(position: string) {
+  const key = normalizeText(position);
+  return ADMIN_VIEW_ALL_POSITION_KEYS.some((allowed) => key.includes(allowed));
+}
 
 /** `all` = xem mọi cương vị; ngược lại chỉ các mã trong `codes`. */
 export type DefectViewScope = { all: boolean; codes: PositionCode[] };
@@ -71,20 +87,29 @@ function viewableCodesFor(viewerPosition: string): PositionCode[] {
 }
 
 /**
- * Phạm vi xem của người đăng nhập. Cương vị rỗng / không khớp danh mục → `codes` rỗng
- * → KHÔNG thấy phiếu nào; buộc quản trị khai báo chức danh trước, thay vì âm thầm nới
- * thành "xem tất".
+ * Phạm vi xem của người đăng nhập.
+ *
+ * Chức danh ĐÃ khai nhưng không khớp danh mục vận hành và không nằm trong danh sách
+ * hành chính ở trên → `codes` rỗng → không thấy phiếu nào. Đây là chủ ý: nhãn lạ phải
+ * được sửa cho đúng danh mục chứ không được âm thầm nới thành "xem tất".
  */
 export async function resolveDefectViewScope(
   user: DefectPositionCarrier
 ): Promise<DefectViewScope> {
   if (user.role === "ADMIN") return DEFECT_VIEW_SCOPE_ALL;
-  if (await hasPermissionLevel(user, "defect-manage", ["manage", "full"])) {
+  if (await hasPermissionLevel(user, "defect-view", ["manage", "full"])) {
     return DEFECT_VIEW_SCOPE_ALL;
   }
 
   const positions = ownPositionsOf(user);
   if (positions.some(isUnrestrictedEquipmentPosition)) return DEFECT_VIEW_SCOPE_ALL;
+  if (positions.some(isAdminViewAllPosition)) return DEFECT_VIEW_SCOPE_ALL;
+  // CHƯA khai chức danh thì giữ nguyên hành vi cũ (xem toàn bộ) thay vì làm mù tài
+  // khoản: rào này để phân việc theo cương vị, không phải để phạt hồ sơ thiếu dữ liệu.
+  // An toàn vì chỉ ADMIN mới sửa được `position` (/api/me chặn, chỉ /api/users cho phép)
+  // nên người dùng không thể tự xoá chức danh để thoát rào. Tài khoản rơi vào nhánh này
+  // được đếm và báo lên giao diện để quản trị đi khai cho đủ.
+  if (!positions.length) return DEFECT_VIEW_SCOPE_ALL;
 
   const codes = new Set<PositionCode>();
   for (const position of positions) {

@@ -20,6 +20,12 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "repair-delete": { ADMIN: "full", MANAGER: "personal", SUPERVISOR: "personal", TECHNICIAN: "personal", VIEWER: "none" },
   "repair-approve": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   "defect-manage": { ADMIN: "manage", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "read" },
+  // Phạm vi XEM khiếm khuyết. Tách hẳn khỏi quyền SỬA: `defect-manage` bị quy về
+  // `repair-edit` và trên thực tế đã mở mức "manage" cho mọi vai trò, nên nếu để quyền
+  // xem đi ké quyền sửa thì rào cương vị không bao giờ có hiệu lực.
+  // Đọc/Cá nhân = chỉ cương vị của mình (và cấp dưới theo sơ đồ ca trực);
+  // Quản lý/Toàn quyền = toàn phân xưởng.
+  "defect-view": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   "defect-close": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   "defect-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "defect-history-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
