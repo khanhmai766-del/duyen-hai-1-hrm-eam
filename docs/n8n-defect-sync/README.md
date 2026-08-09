@@ -195,7 +195,9 @@ Import hai workflow production:
 - `workflow-production-source-aware.json`: đọc hai workbook chính thức vào
   website, gồm năm tab `DH1` Cơ, `DH1 MTruong`, `VH1_HOA`, `DH1` Điện và
   `DH1 qt OL`; bao gồm dữ liệu Vận hành, hai trường tham khảo KTAT/BGĐ ở cột
-  16–17 và 10 trường Sửa chữa ở cột 18–27.
+  16–17 và 10 trường Sửa chữa ở cột 18–27. Đây là bản import hoàn chỉnh; khi
+  tiêu đề một trong 15 cột Vận hành bị mất, workflow ưu tiên tên tiêu đề và chỉ
+  dùng hàng đánh số `(1)`–`(15)` làm phương án dự phòng.
 - `workflow-two-way-batch-production.json`: claim tối đa 50 sự kiện, gom theo
   đúng workbook + tab nguồn rồi ghi thay đổi bằng một lượt đọc và một lượt
   `batchUpdate` cho mỗi tab có sự kiện.

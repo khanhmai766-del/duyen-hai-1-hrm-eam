@@ -1,5 +1,6 @@
 {
   "name": "Đồng bộ khiếm khuyết DH1 - Tự động tối ưu",
+  "active": false,
   "nodes": [
     {
       "parameters": {},
@@ -1092,12 +1093,9 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
+    "timezone": "Asia/Ho_Chi_Minh",
     "availableInMCP": false
   },
-  "meta": {
-    "instanceId": "f05fdebd4acd7b3923c2579073dd18925fa22302dcbb82ff8fa83ebea7ad3e23"
-  },
   "nodeGroups": [],
-  "id": "R6NTcoirCNnXb0f6",
   "tags": []
 }
