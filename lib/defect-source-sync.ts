@@ -299,23 +299,15 @@ export async function upsertPreparedDefectRecords(params: {
     const matchedByKeyCandidate = existingFor(item);
     const sourceStatus = statusOf(item.record.sourceStatusRaw);
     const sourceNote = text(item.record.noteRaw) || null;
-    // Dòng của phiếu đã hủy vẫn còn trên Sheet thì chỉ ghi nhận đã thấy, không
-    // tạo lại. Hủy phiếu có thể làm đổi trạng thái, ghi chú và các cột sửa chữa,
-    // vì vậy không được dùng hash toàn dòng để kết luận STT đã được tái sử dụng.
-    // Chỉ xem là phiếu mới khi nội dung khiếm khuyết thực sự đã đổi.
-    const cancelledRowStillSame = Boolean(
-      matchedByKeyCandidate?.cancelledAt
-      && (
-        // Chiều ghi chưa ACK: Sheet có thể vẫn đang giữ trạng thái trước khi
-        // hủy; website phải thắng và tuyệt đối không được hiểu nhầm thành phiếu mới.
-        pendingWebsiteUpdateDefectIds.has(matchedByKeyCandidate.id)
-        || text(matchedByKeyCandidate.content) === text(item.record.content)
-      )
-    );
+    // Phiếu hủy chỉ trở thành một phiếu nguồn Sheet mới khi việc hủy đã ACK
+    // hoàn tất và Vận hành chủ động đổi trạng thái khỏi "Đã xử lý xong".
+    // Thay đổi nội dung, ghi chú hoặc mức độ trong khi trạng thái vẫn hoàn tất
+    // chỉ là chỉnh dòng lưu vết, không được làm phiếu xuất hiện lại trên web.
     const reusedCancelledSource = Boolean(
       matchedByKeyCandidate?.cancelledAt
-      && matchedByKeyCandidate.sourceHash !== item.hash
-      && !cancelledRowStillSame
+      && matchedByKeyCandidate.syncState === "CONFIRMED"
+      && !pendingWebsiteUpdateDefectIds.has(matchedByKeyCandidate.id)
+      && sourceStatus !== "DA_XU_LY"
     );
     if (reusedCancelledSource && matchedByKeyCandidate) {
       detachedCancelledIds.push(matchedByKeyCandidate.id);
