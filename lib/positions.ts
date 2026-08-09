@@ -52,7 +52,9 @@ export function announcementPositionsMatch(
 }
 
 /**
- * Quyền xem phiếu Sheet chưa ánh xạ theo sơ đồ ca trực:
+ * Quan hệ xem giữa hai cương vị theo sơ đồ ca trực. Là luật phân cấp gốc dùng cho
+ * TOÀN BỘ phiếu khiếm khuyết (đã gắn hay chưa gắn thiết bị) — gọi qua
+ * `lib/defect-position-view.ts`, đừng gọi thẳng ở route để hai nơi không lệch luật:
  * - cương vị trực tiếp thấy phiếu của chính mình;
  * - Trưởng ca thấy toàn bộ;
  * - Trưởng kíp thấy các cương vị nằm dưới nhánh mình;

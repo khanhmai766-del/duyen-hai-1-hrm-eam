@@ -43,6 +43,7 @@ import { DefectExpandedDetailsById } from "@/components/defects/defect-expanded-
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
+import { announcementPositionLabel } from "@/lib/positions";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 // Nhãn hiển thị của từng giá trị statusFilter. Bộ lọc kết quả vận hành không còn
@@ -359,7 +360,7 @@ export default function DefectsPage() {
 
   // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Kỹ thuật viên / Thống kê khỏi bộ lọc.
-  const positions = usePositions().filter(isSelectableManagingPosition);
+  const allPositions = usePositions().filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
   // Mặc định S1; người dùng có thể chọn ALL để xem toàn bộ tổ máy.
@@ -408,6 +409,18 @@ export default function DefectsPage() {
   const total = data?.meta?.total ?? 0;
   const totalPages = data?.meta?.totalPages ?? 1;
   const scopeTotal = data?.meta?.scopeTotal ?? 0;
+  // Ô lọc "Cương vị" chỉ bày cương vị người dùng thực sự xem được — bày cương vị ngoài
+  // phạm vi thì chọn vào chỉ ra bảng rỗng, tưởng lỗi. Phạm vi do SERVER tính vì client
+  // không tự suy ra đúng phân cấp ca trực (Trưởng kíp thấy cương vị dưới nhánh mình…).
+  const positionScope = data?.meta?.positionScope;
+  const positions = React.useMemo(() => {
+    if (!positionScope || positionScope.all) return allPositions;
+    const allowed = new Set(positionScope.labels.map(announcementPositionLabel));
+    const shown = allPositions.filter((position) => allowed.has(announcementPositionLabel(position)));
+    // Chức danh của người dùng chưa có ai khác mang thì usePositions() không sinh ra
+    // được nhãn nào — lấy thẳng nhãn chuẩn từ server để ô lọc không rỗng.
+    return shown.length ? shown : positionScope.labels;
+  }, [allPositions, positionScope]);
   const firstShown = total ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, total);
   const deviceDisplayName = pagedDefects.find((item) => item.deviceSeq === deviceSeqFilter)?.node?.name;

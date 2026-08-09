@@ -18,8 +18,13 @@ import { normalizeText } from "@/lib/nav";
 import {
   announcementPositionLabel,
   announcementPositionsMatch,
-  canViewUnmappedDefectPosition,
 } from "@/lib/positions";
+import {
+  canViewDefectPosition,
+  defectViewScopeMeta,
+  resolveDefectViewScope,
+  unmatchedDefectPosition,
+} from "@/lib/defect-position-view";
 import { positionCodeOf } from "@/lib/position-catalog";
 import {
   normalizeMappedUnit,
@@ -192,6 +197,9 @@ export async function GET(req: NextRequest) {
     const queryStartedAt = Date.now();
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
+    // Phạm vi XEM theo cương vị — rào quyền độc lập với cây thiết bị (xem
+    // lib/defect-position-view.ts), áp cho MỌI phiếu chứ không riêng phiếu chưa ánh xạ.
+    const viewScope = await resolveDefectViewScope(user);
     const params = req.nextUrl.searchParams;
     const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(params.get("limit") ?? "10", 10) || 10));
@@ -303,38 +311,45 @@ export async function GET(req: NextRequest) {
     // Lấy tập trường nhẹ để có thể xếp số yêu cầu theo giá trị số (năm giảm dần,
     // STT giảm dần). PostgreSQL không thể xếp đúng "999/2026" và "1000/2026"
     // bằng thứ tự chuỗi thông thường; quan hệ đầy đủ vẫn chỉ tải cho trang hiện tại.
-    const [candidates, scopeTotal] = await Promise.all([
+    const [candidates, scopeRows] = await Promise.all([
       prisma.defect.findMany({
         where,
         select: LIST_SELECT,
       }),
-      prisma.defect.count({
-        where: {
-          AND: [
-            activeDefectWhere(),
-            ...(scopeWhere ? [{ OR: [scopeWhere, { deviceSeq: null }] } as Prisma.DefectWhereInput] : []),
-          ],
-        },
-      }),
+      // Mẫu số "x / y bản ghi" cũng phải nằm trong phạm vi cương vị, nếu không người
+      // dùng vẫn đọc được tổng số phiếu của cương vị khác. Rào cương vị so khớp theo MÃ
+      // chức danh nên không viết được thành điều kiện SQL — lấy về đúng một cột rồi đếm
+      // bằng chính hàm dùng cho danh sách, để mẫu số không bao giờ lệch luật với tử số.
+      viewScope.all
+        ? prisma.defect.count({
+            where: {
+              AND: [
+                activeDefectWhere(),
+                ...(scopeWhere ? [{ OR: [scopeWhere, { deviceSeq: null }] } as Prisma.DefectWhereInput] : []),
+              ],
+            },
+          })
+        : prisma.defect.findMany({
+            where: {
+              AND: [
+                activeDefectWhere(),
+                ...(scopeWhere ? [{ OR: [scopeWhere, { deviceSeq: null }] } as Prisma.DefectWhereInput] : []),
+              ],
+            },
+            select: { system: true },
+          }),
     ]);
+    const scopeTotal = typeof scopeRows === "number"
+      ? scopeRows
+      : scopeRows.filter((row) => canViewDefectPosition(row.system, viewScope)).length;
 
     const base = candidates
-      .filter(
-        (defect) =>
-          !access.hasExplicitScopes ||
-          (
-            // Phiếu Google Sheets chưa ánh xạ chưa có deviceSeq chuẩn, nhưng Sheet
-            // đã có cột Cương vị (lưu ở system), nên chỉ trả về đúng cương vị đang
-            // làm việc. Sau khi ánh xạ, quyền xem bám theo cây thiết bị.
-            defect.sourceType === "GOOGLE_SHEETS" &&
-            !defect.deviceSeq
-              ? canViewUnmappedDefectPosition(defect.system, user.currentPosition ?? user.position)
-              // Có deviceSeq → đã qua lọc SQL; chỉ phiếu cũ chưa gắn thiết bị mới
-              // xét rule text tương thích.
-              : !!defect.deviceSeq ||
-                access.canViewDeviceLike({ device: defect.device, system: defect.system })
-          )
-      )
+      // Rào cương vị: áp cho MỌI phiếu, kể cả phiếu ĐÃ gắn thiết bị. Trước đây nhánh
+      // `!!defect.deviceSeq` cho qua thẳng, nên Trợ thủ vẫn thấy phiếu "Máy phó S1" /
+      // "VHV TBTH" chỉ vì thiết bị của họ nằm chung nhánh cây được cấp quyền xem.
+      // Rào cây thiết bị vẫn còn, đã chạy trong SQL ở `scopeWhere` phía trên — hai rào
+      // GIAO nhau, không rào nào thay được rào nào.
+      .filter((defect) => canViewDefectPosition(defect.system, viewScope))
       .filter(
         (defect) =>
           !position ||
@@ -464,6 +479,14 @@ export async function GET(req: NextRequest) {
       upgradeCandidateTotal,
       kpi,
       repairResults,
+      // Ô lọc "Cương vị" chỉ được bày cương vị người dùng thực sự xem được; danh sách
+      // do SERVER tính vì client không tự suy ra đúng phân cấp ca trực.
+      positionScope: defectViewScopeMeta(viewScope),
+      // Số phiếu bị ẩn vì cột Cương vị bỏ trống / ghi nhãn lạ không quy được về danh
+      // mục. Hiện cho cấp quản lý biết mà đi gán, thay vì để phiếu vô chủ mất hút.
+      unmatchedPositionHidden: viewScope.all
+        ? candidates.filter((defect) => unmatchedDefectPosition(defect.system)).length
+        : 0,
       queryMode: "compatibility",
       durationMs,
     });

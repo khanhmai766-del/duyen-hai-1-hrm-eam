@@ -88,6 +88,11 @@ export interface DefectListMeta {
   /** Các giá trị "KQ sửa chữa" thực có trong phạm vi đang xem — dựng danh sách lọc động
    *  vì cột này là chuỗi tự do đồng bộ từ Google Sheet, không phải enum cố định. */
   repairResults?: string[];
+  /** Phạm vi cương vị được xem, do server tính (xem lib/defect-position-view.ts).
+   *  `all` = xem toàn bộ; ngược lại ô lọc "Cương vị" chỉ bày `labels`. */
+  positionScope?: { all: boolean; codes: string[]; labels: string[] };
+  /** Số phiếu bị ẩn vì cột Cương vị bỏ trống / ghi nhãn lạ. Chỉ khác 0 với người xem toàn bộ. */
+  unmatchedPositionHidden?: number;
 }
 
 function defectListUrl(params: DefectListParams) {

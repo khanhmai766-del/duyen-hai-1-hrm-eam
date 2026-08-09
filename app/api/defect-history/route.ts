@@ -9,6 +9,7 @@ import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-m
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 import { positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
+import { canViewDefectPosition, resolveDefectViewScope } from "@/lib/defect-position-view";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,9 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
+    // Cùng rào cương vị với trang Khiếm khuyết — lịch sử là bản sao của chính những
+    // phiếu đó, vá một bên mà bỏ bên kia thì dữ liệu vẫn xem được qua đường vòng.
+    const viewScope = await resolveDefectViewScope(user);
     const { searchParams } = new URL(req.url);
     // `system` là tên tham số cũ; thực chất cột này lưu snapshot cương vị.
     const position = searchParams.get("position")?.trim() || searchParams.get("system")?.trim();
@@ -209,13 +213,9 @@ export async function GET(req: NextRequest) {
       }),
     ]);
     const finalizedData = history
-      .filter(
-        (item) =>
-          !access.hasExplicitScopes ||
-          // Có deviceSeq → đã qua lọc SQL; chỉ bản ghi chưa gắn thiết bị mới xét rule text cũ.
-          !!item.deviceSeq ||
-          access.canViewDeviceLike({ device: item.device, system: item.system })
-      )
+      // Rào cương vị áp cho MỌI bản ghi, kể cả bản đã gắn thiết bị (xem
+      // lib/defect-position-view.ts). Rào cây thiết bị đã chạy trong SQL ở `scopeWhere`.
+      .filter((item) => canViewDefectPosition(item.system, viewScope))
       .filter((item) => !position || positionsMatch(item.system, position))
       .map((item) => ({
         ...item,
@@ -231,11 +231,11 @@ export async function GET(req: NextRequest) {
     const normalizedDevice = device?.toLocaleLowerCase("vi") ?? "";
     const pendingData = pendingRows
       .filter(({ defect, performedAt, workOrderNumber: pendingWorkOrder }) => {
-        if (access.hasExplicitScopes) {
-          const canView = defect.deviceSeq
-            ? access.canViewSeq(defect.deviceSeq)
-            : access.canViewDeviceLike({ device: defect.device, system: defect.system });
-          if (!canView) return false;
+        if (!canViewDefectPosition(defect.system, viewScope)) return false;
+        // Nhánh CHỜ CHỐT không đi qua `scopeWhere` của SQL nên rào cây thiết bị phải
+        // xét ở đây; bản chưa gắn thiết bị chỉ chịu rào cương vị ở trên.
+        if (access.hasExplicitScopes && defect.deviceSeq && !access.canViewSeq(defect.deviceSeq)) {
+          return false;
         }
         if (position && !positionsMatch(defect.system, position)) return false;
         if (unit && defect.unit !== unit) return false;
