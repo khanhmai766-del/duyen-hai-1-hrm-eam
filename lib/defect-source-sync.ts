@@ -400,8 +400,11 @@ export async function upsertPreparedDefectRecords(params: {
     const sourceOperationData = {
       fireSafetyImpact: sourceData.fireSafetyImpact,
       environmentSafetyImpact: sourceData.environmentSafetyImpact,
-      severity: sourceData.severity,
-      condition: sourceData.condition,
+      // Mức độ và điều kiện là trường bắt buộc của phiếu. Nếu n8n không đọc
+      // được tiêu đề lẫn hàng số dự phòng, không được dùng chuỗi rỗng từ Sheet
+      // để xóa giá trị hợp lệ đang có trên website.
+      severity: sourceData.severity ?? existing?.severity ?? null,
+      condition: sourceData.condition ?? existing?.condition ?? null,
       status: sourceData.status,
       note: sourceData.note,
     };
@@ -511,7 +514,11 @@ export async function upsertPreparedDefectRecords(params: {
                     }
                   : sourceOperationData),
               }
-          : sourceData),
+          : {
+              ...sourceData,
+              severity: sourceData.severity ?? existing.severity,
+              condition: sourceData.condition ?? existing.condition,
+            }),
         sourceStatusMismatch: repairStatus !== null && repairStatus !== effectiveStatus,
         // Khi ghép phiếu website với dòng vừa ghi lên Sheet, chuyển sang chế độ
         // theo dõi Google Sheet nhưng giữ websiteCreated để không mất các thao

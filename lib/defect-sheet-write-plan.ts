@@ -214,7 +214,11 @@ export function buildDefectSheetWritePlan(
     if (originals.length === 1) {
       if (text(payload.replacesCancelledDefectId)) {
         if (normalizedIdentityCell(originals[0].row[13]) !== normalizedIdentityCell(statusLabel("DA_XU_LY"))) {
-          throw new Error(`Không thể tái sử dụng số ${requestNumber}: dòng cũ chưa ở trạng thái Đã xử lý xong`);
+          // Số đã hủy chỉ được ghi đè khi hàng cũ thật sự hoàn tất. Nếu trạng
+          // thái trên Sheet đã thay đổi hoặc chưa kịp đồng bộ, coi đây là một
+          // xung đột số để API tự cấp số mới; không để cùng sự kiện bị n8n thu
+          // hồi và thử lại vô hạn.
+          throw new DefectSheetRequestNumberConflictError(requestNumber);
         }
         writes.push({ range: `A${originals[0].sheetRow}:O${originals[0].sheetRow}`, values: [current] });
         return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
