@@ -11,7 +11,6 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
-import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ReplacementBadge, SamplingOnlyChip } from "@/components/materials/replacement-badge";
@@ -226,11 +225,9 @@ function replacementCategoryMatches(category: string | null | undefined, filter:
 
 export default function ReplacementsPage() {
   return (
-    <PeakProtectedRoute>
-      <RbacProtectedRoute permissionId="replacement-manage" featureLabel="Lịch thay thế vật tư">
-        <ReplacementsPageContent />
-      </RbacProtectedRoute>
-    </PeakProtectedRoute>
+    <RbacProtectedRoute permissionId="replacement-manage" featureLabel="Lịch thay thế vật tư">
+      <ReplacementsPageContent />
+    </RbacProtectedRoute>
   );
 }
 

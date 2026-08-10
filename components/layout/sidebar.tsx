@@ -9,8 +9,6 @@ import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
 import { navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { usePeakMode } from "@/hooks/usePeakMode";
-import { isPeakBlockedHref } from "@/lib/peak-mode";
 import { useAdminMode } from "@/hooks/useAdminMode";
 
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
@@ -36,7 +34,6 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const role = session?.user?.role;
   const rbac = useRbacAccess();
   const [adminMode] = useAdminMode();
-  const peakMode = usePeakMode();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
   const positionCarrier = React.useMemo(
     () => ({
@@ -107,11 +104,10 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
         {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
-              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
+              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode));
               return children ? { ...item, children } : item;
             })
             .filter((item) => {
-              if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(item.href)) return false;
               if (item.children) return item.children.length > 0;
               return navItemAllowed(item, role, rbac.can, adminMode);
             });

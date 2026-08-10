@@ -39,7 +39,6 @@ import { DeviceGuideButton } from "@/components/devices/device-guide-button";
 import { EquipmentTreeView } from "@/components/devices/equipment-tree";
 import { defaultScopeOf, parseScope, scopeCode, seqInScope, TREE_SCOPES, type TreeScope } from "@/lib/equipment-units";
 import { QRModal } from "@/components/devices/qr-modal";
-import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,11 +91,9 @@ type SystemTreeRow = {
 
 export default function DevicesPage() {
   return (
-    <PeakProtectedRoute>
-      <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
-        <DevicesPageContent />
-      </RbacProtectedRoute>
-    </PeakProtectedRoute>
+    <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
+      <DevicesPageContent />
+    </RbacProtectedRoute>
   );
 }
 

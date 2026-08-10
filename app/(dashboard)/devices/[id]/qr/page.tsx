@@ -7,16 +7,13 @@ import { ArrowLeft, Printer, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDevice } from "@/hooks/useDevices";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 
 export default function DeviceQrPage() {
   return (
-    <PeakProtectedRoute>
-      <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
-        <DeviceQrPageContent />
-      </RbacProtectedRoute>
-    </PeakProtectedRoute>
+    <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
+      <DeviceQrPageContent />
+    </RbacProtectedRoute>
   );
 }
 

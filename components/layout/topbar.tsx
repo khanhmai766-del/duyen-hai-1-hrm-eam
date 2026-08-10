@@ -12,7 +12,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isStatisticsPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
-import { isPeakBlockedHref } from "@/lib/peak-mode";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { acknowledgeForumNotice, useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
@@ -22,7 +21,6 @@ import { ReplacementBadge } from "@/components/materials/replacement-badge";
 import { useMyDashboard, useOperations } from "@/hooks/useDashboard";
 import { useMeProfile } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { usePeakMode } from "@/hooks/usePeakMode";
 import { useAdminMode } from "@/hooks/useAdminMode";
 import { OPERATION_TYPE, ROLES, type RoleKey } from "@/lib/constants";
 import { cn, initials, formatDate } from "@/lib/utils";
@@ -83,7 +81,6 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
   const isSystemAdmin = session?.user?.role === "ADMIN";
   const [adminMode, setAdminMode] = useAdminMode();
   const currentPosition = useCurrentPosition();
-  const peakMode = usePeakMode();
   const router = useRouter();
   const queryClient = useQueryClient();
   const role = session?.user?.role;
@@ -168,13 +165,12 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     () =>
       navSections.flatMap((s) =>
         s.items.flatMap((i) => {
-          if (peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)) return [];
-          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href)));
+          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode));
           if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon }));
           return navItemAllowed(i, role, rbac.can, adminMode) ? [{ label: i.label, href: i.href, icon: i.icon }] : [];
         })
       ),
-    [adminMode, navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
+    [adminMode, navSections, rbac.can, role]
   );
 
   function toggleFullscreen() {
@@ -200,10 +196,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     () =>
       navSections.flatMap((s) =>
         s.items
-          .filter((i) => !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(i.href)))
           .map((i) => ({
             ...i,
-            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode) && !(peakMode.restrictHeavyRoutes && isPeakBlockedHref(child.href))),
+            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode)),
           }))
           .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can, adminMode)))
           .flatMap((i) => {
@@ -224,7 +219,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             return own ? [own, ...kids] : kids;
           })
       ),
-    [adminMode, navSections, peakMode.restrictHeavyRoutes, rbac.can, role]
+    [adminMode, navSections, rbac.can, role]
   );
 
   const nq = normalizeText(q);
@@ -251,19 +246,13 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     e.preventDefault();
     if (results.length) go(results[0].href);
     else if (q.trim() && statisticsNavRestricted) toast.info("Chức vụ Thống kê chỉ tìm trong các mục được phân quyền");
-    else if (q.trim() && !peakMode.restrictHeavyRoutes) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
-    else if (q.trim()) toast.info("Tạm ẩn tìm kiếm thiết bị trong giờ cao điểm chấm công");
+    else if (q.trim()) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
   }
 
   // "Mở lịch thay thế vật tư": đánh dấu đã xem mọi cảnh báo hiện tại (lưu client)
   // để badge reset, rồi mở trang Lịch thay thế vật tư. Khi vật tư sang chu kỳ mới
   // (nextDueAt đổi) cảnh báo sẽ xuất hiện lại.
   function handleViewAllRepl() {
-    if (peakMode.restrictHeavyRoutes) {
-      setNotifOpen(false);
-      toast.info("Tạm ẩn lịch thay thế vật tư trong giờ cao điểm chấm công");
-      return;
-    }
     setNotifOpen(false);
     const next = new Set(replAlerts.map(replAlertKey));
     setAckedReplKeys(next);
@@ -338,9 +327,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                 </ul>
               ) : (
                 <div className="px-3 py-4 text-center text-sm text-muted-foreground">
-                  {peakMode.restrictHeavyRoutes
-                    ? "Tạm ẩn tìm kiếm thiết bị trong giờ cao điểm chấm công."
-                    : `Không tìm thấy. Nhấn Enter để tìm thiết bị "${q.trim()}".`}
+                  {`Không tìm thấy. Nhấn Enter để tìm thiết bị "${q.trim()}".`}
                 </div>
               )}
             </div>

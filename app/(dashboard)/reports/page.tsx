@@ -34,7 +34,6 @@ import {
   Wrench,
 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,9 +50,7 @@ const DUYEN_HAI_VIRTUAL_TOUR_URL = "https://nddh.apptgs.vn/";
 
 export default function ReportsPage() {
   return (
-    <PeakProtectedRoute>
-      <ReportsPageContent />
-    </PeakProtectedRoute>
+    <ReportsPageContent />
   );
 }
 

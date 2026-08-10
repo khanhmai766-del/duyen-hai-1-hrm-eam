@@ -15,7 +15,6 @@ import { DeviceForm } from "@/components/devices/device-form";
 import { DeviceMaterialDeclarationDialog } from "@/components/devices/device-material-declaration-dialog";
 import { DefectForm } from "@/components/defects/defect-form";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { useDevice, useDeleteDevice } from "@/hooks/useDevices";
@@ -28,11 +27,9 @@ import { defaultScopeOf, TREE_SCOPES } from "@/lib/equipment-units";
 
 export default function DeviceDetailPage() {
   return (
-    <PeakProtectedRoute>
-      <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
-        <DeviceDetailPageContent />
-      </RbacProtectedRoute>
-    </PeakProtectedRoute>
+    <RbacProtectedRoute permissionId="device-view" featureLabel="Thông tin thiết bị">
+      <DeviceDetailPageContent />
+    </RbacProtectedRoute>
   );
 }
 

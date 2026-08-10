@@ -13,7 +13,6 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
-import { PeakProtectedRoute } from "@/components/shared/peak-protected-route";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,11 +75,9 @@ type MaterialEdit = Partial<Material> & {
 
 export default function MaterialsPage() {
   return (
-    <PeakProtectedRoute>
-      <RbacProtectedRoute permissionId="material-manage" featureLabel="Danh mục Vận Hành 1">
-        <MaterialsPageContent />
-      </RbacProtectedRoute>
-    </PeakProtectedRoute>
+    <RbacProtectedRoute permissionId="material-manage" featureLabel="Danh mục Vận Hành 1">
+      <MaterialsPageContent />
+    </RbacProtectedRoute>
   );
 }
 
