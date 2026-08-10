@@ -1204,6 +1204,7 @@ export function DefectForm({
                   onChange={(images) => set("images", images)}
                   max={MAX_DEFECT_IMAGES}
                   maxFileSizeMb={15}
+                  size="lg"
                 />
                 <p className="text-xs text-muted-foreground">
                   {`Hỗ trợ tối đa ${MAX_DEFECT_IMAGES} ảnh, mỗi ảnh tối đa 15MB.`}
@@ -1361,6 +1362,7 @@ export function DefectForm({
                     onChange={(images) => set("images", images)}
                     max={MAX_DEFECT_IMAGES}
                     maxFileSizeMb={15}
+                    size="lg"
                   />
                   <p className="text-xs text-muted-foreground">
                     Ảnh được lưu tại S3 trong thư mục defects/images và tự động xoá khi khiếm khuyết hoàn thành.

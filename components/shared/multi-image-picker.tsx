@@ -15,6 +15,7 @@ export function MultiImagePicker({
   maxWidth = 1280,
   maxFileSizeMb = 8,
   allowUrl = false,
+  size = "sm",
 }: {
   value: string[];
   onChange: (v: string[]) => void;
@@ -23,10 +24,19 @@ export function MultiImagePicker({
   maxFileSizeMb?: number;
   /** Hiện thêm ô dán URL (vd link Google Photos) ngoài tải file. */
   allowUrl?: boolean;
+  /**
+   * Cỡ ô xem trước. "sm" (80px) cho các form chật; "lg" cho nơi ảnh là nội dung
+   * chính và cần nhìn rõ ngay khi vừa tải lên, vd Hình ảnh khiếm khuyết.
+   */
+  size?: "sm" | "lg";
 }) {
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [url, setUrl] = React.useState("");
   const full = value.length >= max;
+  // Ô "lg" co theo bề ngang màn hình để trên điện thoại không tràn ra ngoài.
+  const box = size === "lg"
+    ? "h-40 w-40 sm:h-48 sm:w-48"
+    : "h-20 w-20";
 
   function addUrl() {
     const u = url.trim();
@@ -89,9 +99,9 @@ export function MultiImagePicker({
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         {value.map((src, i) => (
-          <div key={i} className="relative h-20 w-20 shrink-0">
+          <div key={i} className={`relative shrink-0 ${box}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={`Ảnh ${i + 1}`} className="h-full w-full rounded-md border border-border object-cover" />
+            <img src={src} alt={`Ảnh ${i + 1}`} className="h-full w-full rounded-lg border border-border object-cover" />
             <button
               type="button"
               onClick={() => removeAt(i)}
@@ -106,10 +116,12 @@ export function MultiImagePicker({
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input bg-muted/40 text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+            className={`flex shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-input bg-muted/40 text-muted-foreground transition-colors hover:border-accent hover:text-accent ${box}`}
           >
-            <ImagePlus className="h-5 w-5" />
-            <span className="text-[11px] font-medium">{value.length}/{max}</span>
+            <ImagePlus className={size === "lg" ? "h-7 w-7" : "h-5 w-5"} />
+            <span className={size === "lg" ? "text-xs font-semibold" : "text-[11px] font-medium"}>
+              {size === "lg" ? `Thêm ảnh ${value.length}/${max}` : `${value.length}/${max}`}
+            </span>
           </button>
         )}
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onFiles} />
