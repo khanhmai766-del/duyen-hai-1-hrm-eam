@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/shared/page-header";
+import { PositionScopeChip } from "@/components/shared/position-scope-chip";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
@@ -229,6 +230,10 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           <Button size="toolbar" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Thêm mới</Button>
         )}
       </PageHeader>
+
+      <PositionScopeChip
+        scope={(data?.meta as { positionScope?: { all: boolean; labels: string[] } } | undefined)?.positionScope}
+      />
 
       {/* Thanh lọc theo bản mẫu lich-su-sua-chua: nhãn IN HOA cỡ nhỏ, các nút
           tổ máy dính liền thành một khối, nút Xoá bộ lọc đẩy sát phải. */}

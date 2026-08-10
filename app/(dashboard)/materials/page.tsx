@@ -10,6 +10,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
+import { PositionScopeChip } from "@/components/shared/position-scope-chip";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -136,6 +137,10 @@ function MaterialsPageContent() {
   // Lọc theo tổ máy NGAY TỪ SERVER (payload nhỏ hơn nhiều); riêng khi mở theo
   // ?track= (từ chuông thông báo) thì tải toàn bộ vì vật tư có thể ở tab khác.
   const { data, isLoading } = useMaterials(trackId ? {} : { machine: machineTab });
+  // Phạm vi cương vị do SERVER tính (lib/position-data-scope.ts) — hiện thành nhãn để
+  // người kiêm nhiệm biết danh sách đang cắt theo cương vị nào.
+  const materialPositionScope = (data?.meta as { positionScope?: { all: boolean; labels: string[] } } | undefined)
+    ?.positionScope;
   const erpMaterials = (erpMaterialsQuery.data?.data ?? []) as Array<{
     id: string;
     code: string;
@@ -700,6 +705,8 @@ function MaterialsPageContent() {
           </Button>
         )}
       </PageHeader>
+
+      <PositionScopeChip scope={materialPositionScope} />
 
       {/* Lọc loại vật tư dạng dropdown; ô tìm kiếm cùng hàng bên phải */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
