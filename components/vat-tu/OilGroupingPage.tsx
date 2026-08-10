@@ -69,6 +69,8 @@ const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
 };
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_BY_SLUG).map(([slug, value]) => ({ slug, value }));
+const categoryLabel = (category: GroupingCategory) =>
+  category === "Hóa Chất" ? "Hóa chất & Chai khí" : category;
 
 /* ==================== TRANG CHÍNH ==================== */
 export default function OilGroupingPage() {
@@ -101,7 +103,7 @@ export default function OilGroupingPage() {
             <Button variant="outline" className="mb-1.5 ml-auto h-10 min-w-40 justify-between gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800">
               <span className="inline-flex min-w-0 items-center gap-2">
                 <CategoryIcon category={category} className="h-4 w-4 shrink-0" />
-                <span className="truncate">{category}</span>
+                <span className="truncate">{categoryLabel(category)}</span>
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
             </Button>
@@ -118,7 +120,7 @@ export default function OilGroupingPage() {
                   }}
                 >
                   <CategoryIcon category={option.value} className="h-4 w-4 shrink-0" />
-                  <span className="flex-1">{option.value}</span>
+                  <span className="flex-1">{categoryLabel(option.value)}</span>
                   {selected && <Check className="h-4 w-4" />}
                 </DropdownMenuItem>
               );
@@ -285,7 +287,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
         <div><Label className="mb-1.5 block">Kho</Label><Input value={edit.warehouse ?? ""} onChange={(e) => setEdit({ ...edit, warehouse: e.target.value })} /></div>
         <div><Label className="mb-1.5 block">Tồn ERP</Label><Input type="number" min={0} step="any" value={edit.erpStock} onChange={(e) => setEdit({ ...edit, erpStock: Number(e.target.value) })} /></div>
         <div className="col-span-2"><Label className="mb-1.5 block">Loại vật tư</Label><select value={edit.category} disabled={!!edit.oilType} onChange={(e) => setEdit({ ...edit, category: e.target.value as GroupingCategory })} className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
-          {GROUPING_CATEGORIES.map((value) => <option key={value}>{value}</option>)}
+          {GROUPING_CATEGORIES.map((value) => <option key={value} value={value}>{categoryLabel(value)}</option>)}
         </select>{edit.oilType && <p className="mt-1 text-xs text-slate-500">Mã đã gom nhóm nên không thể đổi loại vật tư.</p>}</div>
       </div>}
       <DialogFooter><Button variant="outline" onClick={() => setEdit(null)}>Huỷ</Button><Button onClick={save} disabled={updateMaterial.isPending}>{updateMaterial.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lưu</Button></DialogFooter>
@@ -633,7 +635,7 @@ function GroupedErpActions({
                   className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm font-medium text-slate-800"
                 >
                   {GROUPING_CATEGORIES.map((item) => (
-                    <option key={item} value={item}>{item}</option>
+                    <option key={item} value={item}>{categoryLabel(item)}</option>
                   ))}
                 </select>
               </div>

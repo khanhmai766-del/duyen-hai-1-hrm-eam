@@ -444,6 +444,8 @@ const UNITS = ["S1", "S2", "COMMON"];
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
 type TicketDeviceOption = { seq: string; label: string; system: string | null; managingPosition: string | null };
+const totalMaterialErpStock = (material: { erpCodes: { erpStock: number }[] }) =>
+  material.erpCodes.reduce((total, item) => total + Number(item.erpStock || 0), 0);
 
 function DeviceMultiSelect({
   options,
@@ -689,6 +691,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                       >
                         <span>{m.name}</span>
                         <small>Hiện có: {m.quantity} {m.unit}</small>
+                        <small>Số lượng ERP: {totalMaterialErpStock(m).toLocaleString("vi-VN")} {m.unit}</small>
                       </button>
                     ))
                   ) : (
@@ -1006,6 +1009,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                     >
                       <span>{m.name}</span>
                       <small>Hiện có: {m.quantity} {m.unit}</small>
+                      <small>Số lượng ERP: {totalMaterialErpStock(m).toLocaleString("vi-VN")} {m.unit}</small>
                     </button>
                   ))
                 ) : (

@@ -48,12 +48,12 @@ const MACHINE_TABS: { key: (typeof DEFECT_UNITS)[number]; label: string }[] = [
 ];
 
 // Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
-const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; icon: LucideIcon }[] = [
-  { key: "Dầu bôi trơn", icon: Droplet },
-  { key: "Lõi lọc dầu", icon: Filter },
-  { key: "Thiết bị C&I", icon: Cpu },
-  { key: "Hóa Chất", icon: FlaskConical },
-  { key: "Bi Nghiền Than", icon: CircleDot },
+const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; label: string; icon: LucideIcon }[] = [
+  { key: "Dầu bôi trơn", label: "Dầu bôi trơn", icon: Droplet },
+  { key: "Lõi lọc dầu", label: "Lõi lọc dầu", icon: Filter },
+  { key: "Thiết bị C&I", label: "Thiết bị C&I", icon: Cpu },
+  { key: "Hóa Chất", label: "Hóa chất & Chai khí", icon: FlaskConical },
+  { key: "Bi Nghiền Than", label: "Bi Nghiền Than", icon: CircleDot },
 ];
 
 // Form khiếm khuyết chỉ nạp khi thật sự mở panel "Ra SYC thay thế" — nó kéo theo
@@ -712,7 +712,7 @@ function MaterialsPageContent() {
             >
               <span className="flex items-center gap-2 whitespace-nowrap">
                 <ActiveCategoryIcon className="h-4 w-4 shrink-0 text-navy" />
-                <span>{activeCategoryTab.key}</span>
+                <span>{activeCategoryTab.label}</span>
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
             </Button>
@@ -729,7 +729,7 @@ function MaterialsPageContent() {
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{tab.key}</span>
+                    <span className="truncate">{tab.label}</span>
                   </span>
                   {active && <Check className="h-4 w-4 shrink-0" />}
                 </DropdownMenuItem>

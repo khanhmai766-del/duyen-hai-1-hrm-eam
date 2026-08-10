@@ -37,8 +37,6 @@ import type { TreeScope } from "@/lib/equipment-units";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 import { positionsMatch } from "@/lib/position-catalog";
 import { allowedMappedUnits, normalizeMappedUnit } from "@/lib/defect-device-mapping";
-import { MaterialRequestPicker, buildSeedFromPoints } from "@/components/defects/material-request-picker";
-import type { ReplacementPointOption } from "@/hooks/useReplacements";
 import {
   DEFECT_ENVIRONMENT_SHEET_OPTIONS,
   defectEnvironmentSheetFromName,
@@ -122,14 +120,9 @@ export function DefectForm({
   const create = useCreateDefect();
   const update = useUpdateDefect();
   const [step, setStep] = React.useState<1 | 2 | 3 | 4>(1);
-  // Hai đường vào cùng một cơ chế: mồi sẵn từ Danh mục vật tư (prop), hoặc người dùng
-  // tự tick "SYC thay thế vật tư" ngay tại đây rồi chọn điểm (state).
-  const [materialRequest, setMaterialRequest] = React.useState<DefectMaterialRequestSeed | null>(
-    initialMaterialRequest ?? null
-  );
-  // Chỉ phiếu mới, không phải phiếu Sheet, và không đến từ Danh mục mới có cửa phụ.
-  const canPickMaterialRequest = !isEdit && !isSynced && !initialMaterialRequest;
-  const [pickerOpen, setPickerOpen] = React.useState(false);
+  // SYC thay thế vật tư chỉ được khởi tạo từ Điểm thay thế. Form Khiếm khuyết
+  // thông thường không cung cấp cửa chọn vật tư riêng.
+  const materialRequest = initialMaterialRequest ?? null;
   const sectionSource = section ? DEFECT_SECTIONS[section].source : "";
   const requestTypeOptions = section ? DEFECT_SECTIONS[section].requestTypes : DEFECT_REQUEST_TYPES;
   const requestTypeLabel = React.useCallback(
@@ -289,8 +282,6 @@ export function DefectForm({
   // Mỗi tổ máy ánh xạ vào một CÂY thiết bị riêng (S1/S2 = nhánh 1,2,3,7; COMMON = nhánh 5,6)
   // nên đổi tổ máy phải bỏ luôn thiết bị đã chọn — thiết bị cũ thuộc cây khác.
   function selectUnit(u: string) {
-    // Điểm thay thế đã chọn thuộc đúng một tổ máy; đổi tổ máy là bỏ lựa chọn cũ.
-    if (canPickMaterialRequest && form.unit !== u) setMaterialRequest(null);
     setForm((f) => {
       const commonSubUnit = u === "COMMON" ? f.commonSubUnit : "";
       if (f.unit === u) return { ...f, commonSubUnit };
@@ -388,53 +379,9 @@ export function DefectForm({
     });
   }
 
-  // Bỏ tick = huỷ hẳn lựa chọn; nội dung gợi ý cũng phải rút lại để không còn
-  // sót mô tả vật tư trên một phiếu khiếm khuyết thường.
-  function toggleMaterialRequestMode() {
-    setPickerOpen((open) => {
-      if (open) {
-        setForm((current) => ({
-          ...current,
-          content: (() => {
-            const suffix = automaticContentSuffixRef.current ?? "";
-            const description = suffix && current.content.endsWith(suffix)
-              ? current.content.slice(0, -suffix.length)
-              : current.content;
-            return description === materialRequest?.suggestedContent ? suffix : current.content;
-          })(),
-        }));
-        setMaterialRequest(null);
-      }
-      return !open;
-    });
-  }
-
-  function applyPickedPoints(points: ReplacementPointOption[]) {
-    const seed = buildSeedFromPoints(points);
-    setForm((current) => ({
-      ...current,
-      // Chỉ ghi đè khi ô nội dung còn trống hoặc đang giữ nguyên gợi ý cũ —
-      // câu người dùng tự viết không bị mất khi tick thêm/bớt điểm.
-      content: (() => {
-        const suffix = automaticContentSuffixRef.current ?? "";
-        const description = suffix && current.content.endsWith(suffix)
-          ? current.content.slice(0, -suffix.length)
-          : current.content;
-        return !description.trim() || description === materialRequest?.suggestedContent
-          ? `${seed?.suggestedContent ?? ""}${suffix}`
-          : current.content;
-      })(),
-      // Chỉ điền hộ khi ô còn trống — đã chọn tay thì giữ nguyên lựa chọn đó.
-      requestType: current.requestType || defaultRequestTypeForMaterialCategory(seed?.materialCategory),
-    }));
-    setMaterialRequest(seed);
-  }
-
   function setSystem(v: string) {
     defaultPositionResolvedRef.current = true;
     const next = v === NONE ? "" : v;
-    // Danh sách điểm được lọc theo cương vị, đổi cương vị thì lựa chọn cũ hết hiệu lực.
-    if (canPickMaterialRequest && next !== form.system) setMaterialRequest(null);
     set("system", next);
   }
 
@@ -1056,44 +1003,6 @@ export function DefectForm({
                     </span>
                   </span>
                 </button>
-              </Field>
-            )}
-            {canPickMaterialRequest && (
-              <Field label="SYC thay thế vật tư" full>
-                <div className="space-y-2.5">
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={pickerOpen}
-                    onClick={toggleMaterialRequestMode}
-                    className={cn(
-                      "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
-                      pickerOpen ? "border-emerald-300 bg-emerald-50/70" : "border-border bg-white hover:border-emerald-200"
-                    )}
-                  >
-                    <span className={cn(
-                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border",
-                      pickerOpen ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 bg-white"
-                    )}>
-                      {pickerOpen && <Check className="h-3.5 w-3.5" />}
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold text-ink">Phiếu này để thay thế / bổ sung vật tư</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                        Chọn từ các điểm thay thế đã khai báo — thiết bị và hệ thống lấy theo bản khai báo
-                        nên phiếu nằm đúng vị trí trên cây, tra cứu chung với lịch sử thay thế.
-                      </span>
-                    </span>
-                  </button>
-                  {pickerOpen && (
-                    <MaterialRequestPicker
-                      machine={form.unit}
-                      position={form.system}
-                      selectedIds={materialRequest?.replacementIds ?? []}
-                      onChange={applyPickedPoints}
-                    />
-                  )}
-                </div>
               </Field>
             )}
             </Section>
