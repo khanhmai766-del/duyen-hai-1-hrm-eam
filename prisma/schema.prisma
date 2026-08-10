@@ -597,7 +597,7 @@ model Defect {
   completedAt                DateTime? // Ngày đánh dấu "Đã xử lý" — dùng cho mốc ẩn khỏi danh sách sau 2 tuần
   note                       String? // Ghi chú
   imageUrl                   String? // Ảnh cũ (giữ để tương thích dữ liệu trước khi hỗ trợ nhiều ảnh)
-  images                     String[]  @default([]) // Ảnh ghi nhận ban đầu, tối đa 3; chỉ áp dụng mức 1, 2
+  images                     String[]  @default([]) // Ảnh ghi nhận ban đầu cho mọi mức độ; giới hạn theo MAX_DEFECT_IMAGES
   createdById                String
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt

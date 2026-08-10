@@ -327,6 +327,10 @@ function DeviceDetailPageContent() {
                         {device.includesDescendants && (
                           <OriginatingDevice item={item} rootSeq={device.id} />
                         )}
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                          <span className="font-semibold text-ink">Nội dung thực hiện:</span>{" "}
+                          {item.content || "Chưa ghi nhận"}
+                        </p>
                         {item.result && (
                           <p className="mt-1.5 text-[13px] text-muted-foreground">
                             <span className="font-semibold text-ink">Kết quả:</span> {item.result}

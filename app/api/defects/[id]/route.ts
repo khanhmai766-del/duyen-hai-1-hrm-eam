@@ -262,9 +262,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           : [];
       const imageError = rawImages ? validateDefectImages(rawImages) : null;
       if (imageError) return fail(imageError);
-      if (rawImages && rawImages.length > 0 && !["1", "2"].includes(existing.severity ?? "")) {
-        return fail("Chỉ khiếm khuyết Mức 1 hoặc Mức 2 mới được thêm ảnh");
-      }
       const images = rawImages
         ? await maybeUploadDataUrlList(rawImages, "defects/images", "image")
         : undefined;
@@ -385,10 +382,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       : existing.imageUrl
         ? [existing.imageUrl]
         : [];
-    const nextImageCount = rawImages !== undefined ? rawImages.length : existingImages.length;
-    if (nextImageCount > 0 && !["1", "2"].includes(nextSeverity ?? "")) {
-      return fail("Chỉ khiếm khuyết Mức 1 hoặc Mức 2 mới được thêm ảnh");
-    }
     const images = rawImages !== undefined
       ? await maybeUploadDataUrlList(rawImages, "defects/images", "image")
       : undefined;
