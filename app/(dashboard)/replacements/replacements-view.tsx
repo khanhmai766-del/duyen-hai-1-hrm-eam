@@ -259,7 +259,11 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
     return () => clearTimeout(t);
   }, [searchQ]);
 
-  const { data, isLoading } = useReplacements({ q: debouncedSearchQ });
+  // Trang "Lịch sử thay thế" KHÔNG cần danh sách điểm thay thế (1.346 điểm kèm quan hệ
+  // vật tư/thiết bị) — nó chỉ phục vụ hai tab Lịch thay thế & Trạng thái theo dõi. Tải
+  // luôn cả khối đó chỉ để hiển thị bảng lịch sử là nguyên nhân chính gây giật khi mở tab.
+  // Danh sách cương vị cho ô lọc vẫn dựng được từ chính các dòng lịch sử.
+  const { data, isLoading } = useReplacements({ q: debouncedSearchQ }, { enabled: only !== "history" });
   const history = useReplacementHistory();
   const logs = React.useMemo(() => history.data?.data ?? [], [history.data?.data]);
   const del = useDeleteReplacement();

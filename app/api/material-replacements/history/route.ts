@@ -142,6 +142,8 @@ export async function GET(req: NextRequest) {
           // Nhãn cũng đủ: `canViewPosition` quy nhãn về mã qua `positionCodeOf`, và đo
           // trên prod thì 100% giá trị cương vị đang lưu đều quy được về danh mục.
           managingPosition: log.managingPosition ?? log.replacement?.managingPosition ?? null,
+          // Dòng lưu trữ không có thiết bị/hệ thống — xem lib/material-replacement-access.ts
+          importSource: log.importSource,
         },
         viewScope
       )

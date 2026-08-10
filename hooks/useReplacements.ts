@@ -78,6 +78,10 @@ export function useReplacementHistory(filters: { q?: string } = {}) {
   return useQuery({
     queryKey: ["replacement-history", filters],
     queryFn: () => apiGet<ReplacementLogItem[]>(`/api/material-replacements/history?${qs.toString()}`),
+    // Lịch sử là dữ liệu đã chốt, đổi rất ít. Không có staleTime thì mỗi lần chuyển
+    // trang lại tải lại toàn bộ (646 dòng) và bảng chớp trắng.
+    staleTime: 60_000,
+    placeholderData: (previous) => previous,
   });
 }
 

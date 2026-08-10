@@ -7,6 +7,11 @@ type ReplacementScopeTarget = {
   /** Mã cương vị quản lý; nhãn `managingPosition` dùng làm dự phòng cho dữ liệu cũ. */
   managingPositionCode?: string | null;
   managingPosition?: string | null;
+  /**
+   * Khác null = dòng LƯU TRỮ nhập từ sổ theo dõi vật tư. Sổ không có cột thiết bị nên
+   * các dòng này không có `deviceSeq` lẫn `system` để đối chiếu với cây thiết bị.
+   */
+  importSource?: string | null;
 };
 
 /**
@@ -27,6 +32,10 @@ export function canViewMaterialReplacement(
   if (!access.hasExplicitScopes) return true;
   if (target.deviceSeq) return access.canViewSeq(target.deviceSeq);
   if (target.system) return access.canViewDeviceLike({ system: target.system });
+  // Dòng LƯU TRỮ không có thiết bị lẫn hệ thống để đối chiếu với cây thiết bị, nên rào
+  // cương vị ở trên là rào duy nhất áp dụng được. Không có nhánh này thì mọi cương vị
+  // có cấu hình phạm vi cây (hiện là 1205 bản ghi trên prod) sẽ KHÔNG thấy dòng nào.
+  if (target.importSource) return true;
   return false;
 }
 
