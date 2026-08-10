@@ -17,6 +17,7 @@ import { isPcccMachine, normalizePosition } from "@/lib/pccc-position";
 import { isFuturePeriod, periodLabelOf, vietnamClock } from "@/lib/pccc-clock";
 import { s3ProxyUrl } from "@/lib/s3";
 import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
+import { resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export type PcccTargetType = "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL";
 
@@ -334,9 +335,17 @@ export async function pcccWriteScopeOf(user: PcccPositionCarrier & { id?: string
 export async function resolvePcccViewScope(
   user: PcccPositionCarrier & { id?: string; role?: string }
 ): Promise<PcccViewScope> {
-  if (await hasPermissionLevel(user, PCCC_PERMISSION.view, ["manage", "full"])) return PCCC_SCOPE_ALL;
+  // Ai sửa được mọi cương vị thì đương nhiên xem được toàn bộ — luật riêng của PCCC,
+  // giữ nguyên. Cổng `pccc-view` và phần còn lại đã nằm trong resolvePositionViewScope.
   if (await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["manage", "full"])) return PCCC_SCOPE_ALL;
-  return { all: false, codes: pcccPositionCodesOf(user) };
+  // Từ 2026-08-10 dùng chung phạm vi với Khiếm khuyết / Vật tư / Lịch thay thế
+  // (lib/position-data-scope.ts): CHỈ cương vị đang làm việc (không gộp kiêm nhiệm),
+  // kèm cương vị cấp dưới theo sơ đồ ca trực. Trước đây PCCC gộp cả cương vị chính lẫn
+  // kiêm nhiệm nên người trực I&C vẫn thấy lẫn bình chữa cháy của Trợ thủ.
+  //
+  // Chỉ đổi phần XEM. `pcccWriteScopeOf` vẫn gộp mọi cương vị được gán, để người quên
+  // chuyển cương vị đang làm việc không bị mất quyền ký (xem khối "PHẠM VI GHI/KÝ").
+  return resolvePositionViewScope(user, "pccc");
 }
 
 /** Bản gọn cho client hiển thị nhãn "Chỉ xem: …". */

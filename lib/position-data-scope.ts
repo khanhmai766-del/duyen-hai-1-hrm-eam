@@ -46,6 +46,8 @@ export const POSITION_SCOPE_PERMISSION = {
   defect: "defect-view",
   material: "material-view",
   replacement: "replacement-view",
+  // PCCC đã có sẵn quyền xem riêng từ trước, không phải đẻ thêm.
+  pccc: "pccc-view",
 } as const;
 
 export type PositionScopeArea = keyof typeof POSITION_SCOPE_PERMISSION;
