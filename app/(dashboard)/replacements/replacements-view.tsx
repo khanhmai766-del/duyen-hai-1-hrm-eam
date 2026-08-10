@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock, Search, Plus, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -57,6 +57,8 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 
 type TabKey = "schedule" | "status" | "history";
+type HistorySortKey = "subject" | "source" | "replacedAt" | "quantity" | "doneBy" | "locked";
+type SortDir = "asc" | "desc";
 
 // Bộ lọc tổ máy: theo tab Danh mục vật tư mà vật tư thuộc về (Material.machine).
 const MACHINE_FILTERS = [
@@ -405,12 +407,20 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   // vài trăm hàng, vừa chậm vừa khó đọc.
   const [historyPageSize, setHistoryPageSize] = React.useState(10);
   const [historyPage, setHistoryPage] = React.useState(1);
+  const [historySort, setHistorySort] = React.useState<{ key: HistorySortKey; dir: SortDir }>({
+    key: "replacedAt",
+    dir: "desc",
+  });
+  const sortedFilteredLogs = React.useMemo(
+    () => [...filteredLogs].sort((a, b) => compareHistoryLogs(a, b, historySort.key, historySort.dir)),
+    [filteredLogs, historySort]
+  );
   const historyTotalPages = Math.max(1, Math.ceil(filteredLogs.length / historyPageSize));
   React.useEffect(() => {
     setHistoryPage(1);
-  }, [historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize]);
+  }, [historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize, historySort]);
   const historySafePage = Math.min(historyPage, historyTotalPages);
-  const pagedLogs = filteredLogs.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
+  const pagedLogs = sortedFilteredLogs.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
   const historyFirstShown = filteredLogs.length ? (historySafePage - 1) * historyPageSize + 1 : 0;
   const historyLastShown = Math.min(historySafePage * historyPageSize, filteredLogs.length);
 
@@ -425,6 +435,19 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const replacementFilterCount =
     sharedFilterCount +
     (tab === "history" ? Number(historyFromMonth !== currentMonth || historyToMonth !== currentMonth) : 0);
+  const historyHasActiveFilters =
+    sharedFilterCount > 0 ||
+    historyFromMonth !== currentMonth ||
+    historyToMonth !== currentMonth ||
+    searchQ.trim().length > 0;
+
+  function toggleHistorySort(key: HistorySortKey) {
+    setHistorySort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "replacedAt" ? "desc" : "asc" }
+    );
+  }
   const historyBackupRows = React.useMemo(() => {
     const qText = searchQ.trim().toLowerCase();
     if (!qText) return historyScopedLogs;
@@ -537,7 +560,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             : "Tổng hợp lịch thay thế & trạng thái theo dõi vật tư"
         }
       >
-        <Popover>
+        {tab !== "history" && <Popover>
           <PopoverTrigger asChild>
             <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
               <span className="flex items-center gap-2">
@@ -559,23 +582,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
           >
             <div className="border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
-              <p className="mt-0.5 text-sm font-bold text-slate-900">Áp dụng cho cả 3 tab</p>
+              <p className="mt-0.5 text-sm font-bold text-slate-900">Áp dụng cho lịch và trạng thái</p>
             </div>
             <div className="space-y-3 p-4">
-              {tab === "history" && (
-                <MonthRangeFilter
-                  from={historyFromMonth}
-                  to={historyToMonth}
-                  onFromChange={(value) => {
-                    setHistoryFromMonth(value);
-                    if (value > historyToMonth) setHistoryToMonth(value);
-                  }}
-                  onToChange={(value) => {
-                    setHistoryToMonth(value);
-                    if (value < historyFromMonth) setHistoryFromMonth(value);
-                  }}
-                />
-              )}
               <div className="grid grid-cols-2 gap-3 max-[360px]:grid-cols-1">
                 <div className="grid min-w-0 gap-1.5">
                   <Label className="text-xs font-semibold text-slate-600">Tổ máy</Label>
@@ -634,10 +643,6 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                     setMachineFilter("S1");
                     setPositionFilter("ALL");
                     setCategoryFilter(CATEGORY_FILTERS[0]);
-                    if (tab === "history") {
-                      setHistoryFromMonth(currentMonth);
-                      setHistoryToMonth(currentMonth);
-                    }
                   }}
                 >
                   <RotateCcw className="h-3.5 w-3.5" /> Xóa lọc
@@ -645,7 +650,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
               </div>
             </div>
           </PopoverContent>
-        </Popover>
+        </Popover>}
         {tab === "schedule" && (
           <ExportButton
             rows={exportRows}
@@ -680,8 +685,115 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         )}
       </PageHeader>
 
+      {tab === "history" && (
+        <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <HistoryFilterLabel>Cương vị</HistoryFilterLabel>
+            <Select value={positionFilter} onValueChange={setPositionFilter}>
+              <SelectTrigger className="h-8 w-40 rounded-md text-[13px] md:w-44" aria-label="Lọc theo cương vị">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {positionOptions.map((position) => (
+                  <SelectItem key={position} value={position}>{position}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <HistoryFilterLabel>Loại vật tư</HistoryFilterLabel>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-8 w-40 rounded-md text-[13px]" aria-label="Lọc theo loại vật tư">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả</SelectItem>
+                {CATEGORY_FILTERS.map((category) => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <HistoryFilterLabel>Tổ máy</HistoryFilterLabel>
+            <div className="inline-flex overflow-hidden rounded-md border border-input bg-white">
+              {MACHINE_FILTERS.map((machine) => {
+                const active = machineFilter === machine.key;
+                return (
+                  <button
+                    key={machine.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setMachineFilter(machine.key);
+                      setPositionFilter("ALL");
+                    }}
+                    className={cn(
+                      "border-r border-input px-3 py-1.5 text-[12.5px] font-semibold transition-colors last:border-r-0",
+                      active ? "bg-[#00558F] text-white" : "text-ink/70 hover:bg-muted hover:text-ink"
+                    )}
+                  >
+                    {machine.key === "ALL" ? "Tất cả" : machine.key}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <HistoryFilterLabel>Từ tháng</HistoryFilterLabel>
+            <input
+              type="month"
+              value={historyFromMonth}
+              max={historyToMonth}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value) return;
+                setHistoryFromMonth(value);
+                if (value > historyToMonth) setHistoryToMonth(value);
+              }}
+              className="h-8 w-[142px] rounded-md border border-input bg-white px-2 text-[13px]"
+              aria-label="Từ tháng"
+            />
+            <HistoryFilterLabel>Đến tháng</HistoryFilterLabel>
+            <input
+              type="month"
+              value={historyToMonth}
+              min={historyFromMonth}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value) return;
+                setHistoryToMonth(value);
+                if (value < historyFromMonth) setHistoryFromMonth(value);
+              }}
+              className="h-8 w-[142px] rounded-md border border-input bg-white px-2 text-[13px]"
+              aria-label="Đến tháng"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMachineFilter("S1");
+              setPositionFilter("ALL");
+              setCategoryFilter(CATEGORY_FILTERS[0]);
+              setHistoryFromMonth(currentMonth);
+              setHistoryToMonth(currentMonth);
+              setSearchQ("");
+            }}
+            disabled={!historyHasActiveFilters}
+            className="ml-auto h-8 rounded-md border border-input bg-white px-3 text-[13px] font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40"
+          >
+            Xoá bộ lọc
+          </button>
+        </Card>
+      )}
+
       {/* Tabs + tìm kiếm cùng hàng; tìm kiếm nằm sát mép phải dưới cụm thao tác đầu trang. */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-border">
+      {tab !== "history" && <div className="flex flex-wrap items-center gap-1 border-b border-border">
         {!only && (
           <>
             <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
@@ -714,7 +826,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             </Button>
           )}
         </div>
-      </div>
+      </div>}
 
       {tab === "schedule" ? (
         <div className="space-y-6">
@@ -845,7 +957,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         <div className="space-y-6">
           {history.isLoading ? (
             <TableSkeleton rows={8} />
-          ) : filteredLogs.length === 0 ? (
+          ) : logs.length === 0 && !historyHasActiveFilters ? (
             <EmptyState
               icon={History}
               title={`Không có ghi nhận thay thế ${historyRangeLabel}`}
@@ -853,14 +965,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             />
           ) : (
             <Card className="overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-sm text-muted-foreground">
-                <div>
-                  <span className="capitalize">{historyRangeLabel}</span> · <span className="font-semibold text-ink">{filteredLogs.length}</span> lần ghi nhận thay thế
-                  {positionFilter !== "ALL" && (
-                    <> · Cương vị <span className="font-medium text-ink">{positionFilter}</span></>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
+              {/* Thanh công cụ cùng khuôn Lịch sử sửa chữa: cỡ trang trái, tìm kiếm phải. */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>Hiển thị</span>
                   <select
                     value={historyPageSize}
@@ -874,22 +981,56 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                   </select>
                   <span>dòng</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Tìm kiếm:</span>
+                  <div className="relative w-60">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={searchQ}
+                      onChange={(event) => setSearchQ(event.target.value)}
+                      placeholder="Vật tư, thiết bị, số phiếu..."
+                      className="h-9 rounded-xl pl-9"
+                    />
+                  </div>
+                </div>
               </div>
-              <Table>
-                <TableHeader className="bg-muted/40">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-10" />
-                    <TableHead>Vật tư / Thiết bị</TableHead>
-                    <TableHead className="text-center">Nguồn</TableHead>
-                    <TableHead className="text-center">Ngày thay</TableHead>
-                    <TableHead className="text-center">Số lượng</TableHead>
-                    <TableHead className="text-center">Người ghi nhận</TableHead>
-                    <TableHead className="text-center">Chốt lịch sử</TableHead>
-                    <TableHead className="text-center">Thao tác</TableHead>
+
+              <div className="overflow-x-auto">
+              <Table className="min-w-[1160px]">
+                <TableHeader>
+                  <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
+                    <TableHead className="w-[52px] bg-[#00558F]" />
+                    <TableHead className="min-w-[320px] bg-[#00558F]">
+                      <ReplacementHistorySortHeader label="Vật tư / Thiết bị" sortKey="subject" sort={historySort} onSort={toggleHistorySort} />
+                    </TableHead>
+                    <TableHead className="w-[190px] bg-[#00558F] px-2">
+                      <ReplacementHistorySortHeader label="Nguồn" sortKey="source" sort={historySort} onSort={toggleHistorySort} align="center" />
+                    </TableHead>
+                    <TableHead className="w-[126px] bg-[#00558F] px-2">
+                      <ReplacementHistorySortHeader label="Ngày thay" sortKey="replacedAt" sort={historySort} onSort={toggleHistorySort} align="center" />
+                    </TableHead>
+                    <TableHead className="w-[125px] bg-[#00558F] px-2">
+                      <ReplacementHistorySortHeader label="Số lượng" sortKey="quantity" sort={historySort} onSort={toggleHistorySort} align="center" />
+                    </TableHead>
+                    <TableHead className="w-[165px] bg-[#00558F] px-2">
+                      <ReplacementHistorySortHeader label="Người ghi nhận" sortKey="doneBy" sort={historySort} onSort={toggleHistorySort} align="center" />
+                    </TableHead>
+                    <TableHead className="w-[145px] bg-[#00558F] px-2">
+                      <ReplacementHistorySortHeader label="Chốt lịch sử" sortKey="locked" sort={historySort} onSort={toggleHistorySort} align="center" />
+                    </TableHead>
+                    <TableHead className="w-[108px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
+                      Thao tác
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedLogs.map((l) => {
+                  {pagedLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
+                        Không tìm thấy bản ghi phù hợp.
+                      </TableCell>
+                    </TableRow>
+                  ) : pagedLogs.map((l) => {
                     const expanded = expandedLogId === l.id;
                     const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
                     const pending = l.defectHistory?.status === "PENDING";
@@ -910,7 +1051,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                             expanded ? "rotate-45 bg-[#00558F]" : "bg-emerald-600 hover:bg-emerald-700"
                           )}
                         >
-                          <Repeat className="h-3.5 w-3.5" />
+                          <Plus className="h-3.5 w-3.5" />
                         </button>
                       </TableCell>
                       {/* Gộp vật tư + thiết bị vào một ô như cột THIẾT BỊ của Lịch sử sửa chữa;
@@ -959,15 +1100,12 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                         {l.quantity != null ? `${l.quantity.toLocaleString("vi-VN")} ${l.unitLabel ?? l.replacement?.material.unit ?? ""}` : "—"}
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center">
-                        {/* Dòng lưu trữ có người dùng chưa/không còn tài khoản: hiện tên
-                            nguyên văn trên sổ thay cho avatar của tài khoản chạy nhập. */}
-                        {l.imported && l.doneByName ? (
-                          <span className="text-[12.5px] font-medium text-ink" title="Tên ghi trên sổ theo dõi">
-                            {l.doneByName}
-                          </span>
-                        ) : (
-                          <UserAvatar user={l.doneBy} />
-                        )}
+                        {/* Dòng lưu trữ đối chiếu tên trên sổ với hồ sơ user. Không dùng
+                            `doneBy` vì đó chỉ là tài khoản đã chạy lệnh nhập dữ liệu. */}
+                        <UserAvatar
+                          user={l.imported && l.doneByName ? l.recordedByUser : l.doneBy}
+                          fallbackName={l.doneByName ?? l.doneBy.name}
+                        />
                       </TableCell>
                       {/* Chỉ dòng sinh từ SYC mới có khái niệm chốt lịch sử. */}
                       <TableCell className="px-3 py-2.5 text-center">
@@ -992,9 +1130,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                           {canManage && pending && l.defectId && (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                              className="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                               title="Sửa thông tin lịch sử"
                               onClick={() => setPendingEditDefectId(l.defectId!)}
                             >
@@ -1004,9 +1142,8 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                           {canManage && (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
                               title="Chỉnh sửa"
                               onClick={() => setEditLogTarget(l)}
                             >
@@ -1016,9 +1153,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                           {canDelete && (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              className="text-muted-foreground hover:bg-red-50 hover:text-destructive"
                               title="Xóa"
                               onClick={() => setDelLogTarget(l)}
                             >
@@ -1043,11 +1180,18 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                   })}
                 </TableBody>
               </Table>
+              </div>
               <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                 <div>
-                  Hiển thị <b className="font-mono text-ink">{historyFirstShown}</b>–<b className="font-mono text-ink">{historyLastShown}</b> trong tổng số{" "}
-                  <b className="font-mono text-ink">{filteredLogs.length}</b> bản ghi
-                  {searchQ.trim() && <span> sau lọc</span>}
+                  {filteredLogs.length === 0 ? (
+                    "Không có bản ghi nào"
+                  ) : (
+                    <>
+                      Hiển thị <b className="font-mono text-ink">{historyFirstShown}</b>–<b className="font-mono text-ink">{historyLastShown}</b> trong tổng số{" "}
+                      <b className="font-mono text-ink">{filteredLogs.length}</b> bản ghi
+                      {historyHasActiveFilters && <span> sau lọc</span>}
+                    </>
+                  )}
                 </div>
                 <HistoryPager page={historySafePage} totalPages={historyTotalPages} onGo={setHistoryPage} />
               </div>
@@ -1214,6 +1358,64 @@ function HistoryPager({ page, totalPages, onGo }: { page: number; totalPages: nu
   );
 }
 
+function compareHistoryLogs(a: ReplacementLogItem, b: ReplacementLogItem, key: HistorySortKey, dir: SortDir) {
+  const av = historySortValue(a, key);
+  const bv = historySortValue(b, key);
+  const result = typeof av === "number" && typeof bv === "number"
+    ? av - bv
+    : String(av).localeCompare(String(bv), "vi", { numeric: true, sensitivity: "base" });
+  return dir === "asc" ? result : -result;
+}
+
+function historySortValue(row: ReplacementLogItem, key: HistorySortKey): string | number {
+  const replacement = row.replacement;
+  const device = replacement?.device ?? replacement?.material.deviceMaterials?.[0]?.device ?? null;
+  if (key === "replacedAt") return new Date(row.replacedAt).getTime();
+  if (key === "quantity") return row.quantity ?? 0;
+  if (key === "doneBy") return row.doneByName || row.doneBy.name;
+  if (key === "locked") return row.defectHistory?.status === "PENDING" ? 1 : 0;
+  if (key === "source") return row.requestNumber ?? row.defectHistory?.workOrderNumber ?? row.pctNumber ?? "";
+  return `${replacement?.material.name ?? row.materialNameLabel ?? ""} ${device?.name ?? row.deviceLabel ?? ""} ${device?.code ?? row.deviceSeq ?? ""}`;
+}
+
+function ReplacementHistorySortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  sortKey: HistorySortKey;
+  sort: { key: HistorySortKey; dir: SortDir };
+  onSort: (key: HistorySortKey) => void;
+  align?: "left" | "center";
+}) {
+  const active = sort.key === sortKey;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={cn(
+        "inline-flex w-full items-center gap-1.5 text-[11px] font-semibold uppercase leading-tight tracking-wider text-white/90 transition-colors hover:text-white",
+        align === "center" && "justify-center"
+      )}
+    >
+      <span className="whitespace-nowrap">{label}</span>
+      <Icon className={cn("h-3.5 w-3.5", active ? "text-white" : "text-white/50")} />
+    </button>
+  );
+}
+
+function HistoryFilterLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
 function TabBtn({ active, onClick, icon: Icon, label, count }: { active: boolean; onClick: () => void; icon: any; label: string; count?: number }) {
   return (
     <button
@@ -1232,55 +1434,25 @@ function TabBtn({ active, onClick, icon: Icon, label, count }: { active: boolean
   );
 }
 
-/** Khoảng tháng lịch sử; hai đầu mút đều được tính vào kết quả. */
-function MonthRangeFilter({
-  from,
-  to,
-  onFromChange,
-  onToChange,
+function UserAvatar({
+  user,
+  fallbackName,
 }: {
-  from: string;
-  to: string;
-  onFromChange: (value: string) => void;
-  onToChange: (value: string) => void;
+  user?: { name: string; position: string | null; avatarUrl: string | null } | null;
+  fallbackName?: string | null;
 }) {
+  const name = user?.name ?? fallbackName?.trim() ?? "Không xác định";
+  const title = user
+    ? `${name}${user.position ? ` · ${user.position}` : ""}`
+    : `${name} · chưa tìm thấy tài khoản trùng tên`;
   return (
-    <div className="grid grid-cols-2 gap-2.5">
-      <label className="grid min-w-0 gap-1.5">
-        <span className="text-xs font-semibold text-slate-600">Từ tháng</span>
-        <input
-          type="month"
-          value={from}
-          max={to}
-          onChange={(event) => event.target.value && onFromChange(event.target.value)}
-          aria-label="Từ tháng"
-          className="h-10 w-full min-w-0 rounded-xl border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
-      <label className="grid min-w-0 gap-1.5">
-        <span className="text-xs font-semibold text-slate-600">Đến tháng</span>
-        <input
-          type="month"
-          value={to}
-          min={from}
-          onChange={(event) => event.target.value && onToChange(event.target.value)}
-          aria-label="Đến tháng"
-          className="h-10 w-full min-w-0 rounded-xl border border-input bg-white px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
-    </div>
-  );
-}
-
-function UserAvatar({ user }: { user: { name: string; position: string | null; avatarUrl: string | null } }) {
-  return (
-    <div className="flex justify-center" title={`${user.name}${user.position ? ` · ${user.position}` : ""}`} aria-label={user.name}>
+    <div className="flex justify-center" title={title} aria-label={`Người ghi nhận: ${name}`}>
       <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-navy text-[11px] font-bold text-white shadow-sm ring-1 ring-border">
-        {user.avatarUrl ? (
+        {user?.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+          <img src={user.avatarUrl} alt={name} className="h-full w-full object-cover" />
         ) : (
-          initials(user.name)
+          initials(name)
         )}
       </span>
     </div>

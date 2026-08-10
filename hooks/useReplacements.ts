@@ -39,6 +39,8 @@ export interface ReplacementFilters {
 
 export interface ReplacementLogItem extends MaterialReplacementLog {
   doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
+  /** Tài khoản khớp duy nhất với tên người ghi nhận trên dòng lưu trữ. */
+  recordedByUser?: { id: string; name: string; position: string | null; avatarUrl: string | null } | null;
   /** Điểm theo dõi đã bị gỡ/xoá — dòng đang hiển thị bằng snapshot của chính log. */
   pointRemoved?: boolean;
   /** true = dòng LƯU TRỮ nhập từ sổ theo dõi vật tư (chỉ tra cứu, không gắn điểm theo dõi). */

@@ -7,6 +7,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { publicUserRef } from "@/lib/s3";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
+import { normalizeText } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -149,6 +150,36 @@ export async function GET(req: NextRequest) {
       )
     );
 
+    /**
+     * Dòng nhập từ sổ chỉ có tên người ghi nhận dạng chữ (`doneByName`); `doneBy`
+     * thực tế là tài khoản chạy lệnh nhập. Đối chiếu tên với hồ sơ user để bảng có
+     * thể hiện đúng avatar. Chỉ nhận tên khớp DUY NHẤT — nếu có hai tài khoản trùng
+     * tên thì để null, tránh gắn nhầm ảnh của người khác.
+     */
+    const recordedNameKeys = new Set(
+      visibleLogs
+        .map((log) => normalizeText(log.doneByName ?? ""))
+        .filter(Boolean)
+    );
+    type RecordedUser = {
+      id: string;
+      name: string;
+      position: string | null;
+      avatarUrl: string | null;
+      avatarKey: string | null;
+    };
+    const recordedUserByName = new Map<string, RecordedUser | null>();
+    if (recordedNameKeys.size > 0) {
+      const users = await prisma.user.findMany({
+        select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true },
+      });
+      for (const candidate of users) {
+        const key = normalizeText(candidate.name);
+        if (!recordedNameKeys.has(key)) continue;
+        recordedUserByName.set(key, recordedUserByName.has(key) ? null : candidate);
+      }
+    }
+
     return ok(
       visibleLogs.map((log: any) => {
         // Giao diện đọc qua `replacement`; khi điểm đã bị gỡ thì dựng lại từ snapshot
@@ -186,9 +217,14 @@ export async function GET(req: NextRequest) {
         const finalRow = log.defectId ? finalizedByDefect.get(log.defectId) : undefined;
         const pendingRow = log.defectId ? pendingByDefect.get(log.defectId) : undefined;
         const source = finalRow ?? pendingRow;
+        const recordedByUser = log.doneByName
+          ? recordedUserByName.get(normalizeText(log.doneByName)) ?? null
+          : null;
         return {
           ...log,
           doneBy: publicUserRef(log.doneBy),
+          /** User trùng duy nhất với tên trên sổ; null nếu không tìm thấy hoặc bị trùng tên. */
+          recordedByUser: recordedByUser ? publicUserRef(recordedByUser) : null,
           // Điểm theo dõi đã bị gỡ/xoá — dùng để hiện nhãn mờ trên giao diện.
           // Dòng LƯU TRỮ chưa từng có điểm theo dõi nên không phải "đã gỡ".
           pointRemoved: !log.replacement && !log.importSource,
