@@ -9,7 +9,7 @@ import {
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -132,6 +132,7 @@ export async function GET(req: NextRequest) {
           vhvReceive: stepAllowedWithMap(wfMap, "vhvReceive", user),
           vhvReceiveConfigured: wfMap.vhvReceive.length > 0,
           stats: stepAllowedWithMap(wfMap, "stats", user),
+          statsHandover: stepAllowedWithMap(wfMap, "statsHandover", user),
           receive: stepAllowedWithMap(wfMap, "receive", user),
           use: stepAllowedWithMap(wfMap, "use", user),
           accept: stepAllowedWithMap(wfMap, "accept", user),
@@ -164,9 +165,9 @@ export async function POST(req: NextRequest) {
     // Cương vị được giao: bắt buộc, và phải là cương vị có phân giao cây thiết bị
     const assignedPosition = String(body.assignedPosition || "").trim();
     if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao thực hiện");
-    if (!isPositionAllowedForDefectUnit(unit, assignedPosition)) {
-      return fail(`Cương vị "${assignedPosition}" không thuộc tổ máy ${unit}`);
-    }
+    // Không còn ràng buộc cương vị theo tổ máy (bỏ 2026-08-10): cùng một chức danh đi
+    // vận hành được cả S1, S2 lẫn COMMON. Phạm vi vẫn siết bằng phân giao cây thiết bị
+    // ngay bên dưới.
     const totalScopeCount = await prisma.positionSystemScope.count();
     const assignedPositionCode = positionCodeOf(assignedPosition);
     const scopeCount = await prisma.positionSystemScope.count({

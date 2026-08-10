@@ -44,7 +44,7 @@ export function canCreateTicket(user: { role?: string | null; position?: string 
 /* ---------- Phân quyền các bước quy trình (admin cấu hình, bảng MaterialWorkflowRole) ---------- */
 
 export const WORKFLOW_STEPS = [
-  "create", "confirm", "vhvReceive", "stats", "receive", "use", "accept", "settle", "manage",
+  "create", "confirm", "vhvReceive", "stats", "statsHandover", "receive", "use", "accept", "settle", "manage",
 ] as const;
 export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
 
@@ -53,6 +53,7 @@ export const WORKFLOW_STEP_LABELS: Record<WorkflowStep, string> = {
   confirm: "Xác nhận",
   vhvReceive: "Ứng - VHV lãnh vật tư",
   stats: "Thống kê xác nhận ĐXVT",
+  statsHandover: "Xác nhận VHV nhận / trả phiếu ĐXVT",
   receive: "Nhận vật tư",
   use: "Sử dụng vật tư",
   accept: "Nghiệm thu + xuất BBNT",
@@ -82,7 +83,8 @@ export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[
   if (roleMapCache && roleMapCache.expires > Date.now()) return roleMapCache.value;
   const rows = await prisma.materialWorkflowRole.findMany({ select: { step: true, position: true } });
   const map: Record<WorkflowStep, string[]> = {
-    create: [], confirm: [], vhvReceive: [], stats: [], receive: [], use: [], accept: [], settle: [], manage: [],
+    create: [], confirm: [], vhvReceive: [], stats: [], statsHandover: [],
+    receive: [], use: [], accept: [], settle: [], manage: [],
   };
   for (const r of rows) {
     if ((WORKFLOW_STEPS as readonly string[]).includes(r.step)) map[r.step as WorkflowStep].push(r.position);
@@ -100,7 +102,9 @@ function positionInList(position: string | null | undefined, list: string[]) {
 /** Mặc định khi bước CHƯA được admin cấu hình (giữ hành vi cũ, không gãy khi mới deploy). */
 function defaultStepAllowed(step: WorkflowStep, user: { role?: string | null; position?: string | null }) {
   if (step === "create") return canCreateTicket(user);
-  if (step === "stats" || step === "settle") return isStats(user.position);
+  // statsHandover tách khỏi stats từ 2026-08-10 để giao được cho cương vị khác; khi
+  // chưa cấu hình vẫn mặc định Thống kê y như trước, deploy không đổi hành vi.
+  if (step === "stats" || step === "statsHandover" || step === "settle") return isStats(user.position);
   if (step === "confirm" || step === "receive" || step === "use" || step === "accept") return isShiftLeader(user.position);
   if (step === "vhvReceive") return true; // khi chưa cấu hình, API vẫn giới hạn đúng cương vị được giao
   return false; // manage: mặc định chỉ người tạo phiếu (kiểm tra riêng tại API) + Admin

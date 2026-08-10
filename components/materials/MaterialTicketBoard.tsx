@@ -13,7 +13,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { isPositionAllowedForDefectUnit, MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -59,7 +59,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   DE_XUAT: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
-    { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
+    { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
@@ -536,10 +536,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
-  const positionOptions = useMemo(
-    () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
-    [opts?.positions, unit]
-  );
+  // Nghiệp vụ chốt 2026-08-10: KHÔNG chia cương vị theo tổ máy nữa — chọn S1, S2 hay
+  // COMMON đều hiện đủ danh sách chức danh. Server cũng đã bỏ chốt tương ứng.
+  const positionOptions = useMemo(() => opts?.positions ?? [], [opts?.positions]);
   const materialCards = useMemo(() => {
     if (!assigned || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
@@ -613,7 +612,6 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     setSelectedErpCode("");
     setReplacementDeviceSeqs([]);
     setReplacementSystem("");
-    setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
   async function submit() {
@@ -781,7 +779,8 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = 
   { key: "create", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
   { key: "confirm", label: "Xác nhận phiếu đề xuất", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "vhvReceive", label: "Ứng — VHV lãnh vật tư", hint: "Trống = chỉ cương vị được giao phiếu; nếu cấu hình = đúng các cương vị được chọn" },
-  { key: "stats", label: "Thống kê xác nhận ĐXVT (nhập số + xác nhận giao/trả phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
+  { key: "stats", label: "Thống kê xác nhận ĐXVT (chọn mã vật tư + nhập số phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
+  { key: "statsHandover", label: "Xác nhận VHV nhận / trả phiếu ĐXVT", hint: "Bước tách riêng khỏi Thống kê xác nhận ĐXVT — trống = mặc định: cương vị Thống kê" },
   { key: "receive", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
   { key: "accept", label: "Nghiệm thu và xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
@@ -872,10 +871,9 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
-  const positionOptions = useMemo(
-    () => (opts?.positions ?? []).filter((p) => isPositionAllowedForDefectUnit(unit, p)),
-    [opts?.positions, unit]
-  );
+  // Nghiệp vụ chốt 2026-08-10: KHÔNG chia cương vị theo tổ máy nữa — chọn S1, S2 hay
+  // COMMON đều hiện đủ danh sách chức danh. Server cũng đã bỏ chốt tương ứng.
+  const positionOptions = useMemo(() => opts?.positions ?? [], [opts?.positions]);
   const materialCards = useMemo(() => {
     if (!assigned || !materialCategoryLabel) return [];
     return (opts?.materials ?? []).filter((m) => {
@@ -942,7 +940,6 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     setSelectedMaterialId("");
     setSelectedErpCode("");
     setReplacementDeviceSeqs([]);
-    setAssigned((current) => current && !isPositionAllowedForDefectUnit(nextUnit, current) ? "" : current);
   }
 
   async function submit() {
@@ -1563,7 +1560,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       CHO_PHIEU__XUAT_KHO: "Người được phân quyền Thống Kê xác nhận ĐXVT",
       VAT_TU_KHONG_CO: "Người tạo phiếu / Trưởng Ca / Quản trị từ chối",
       CHO_THONG_KE: "Người được phân quyền Thống Kê xác nhận ĐXVT",
-      CHO_XAC_NHAN_PHAT: "Người được phân quyền Thống Kê xác nhận ĐXVT",
+      CHO_XAC_NHAN_PHAT: "Người được phân quyền Xác nhận VHV nhận / trả phiếu ĐXVT",
       VHV_LANH_VAT_TU: `Cương vị VHV được giao "${t.assignedPosition}"`,
       NHAN_TU_HIEN_CO: `Cương vị được giao "${t.assignedPosition}" nhận vật tư từ Hiện có`,
       NHAN_VAT_TU: "Người được phân quyền Xác nhận vật tư lãnh",

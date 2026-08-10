@@ -8,7 +8,7 @@ import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
-import { isPositionAllowedForDefectUnit, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 
 export const dynamic = "force-dynamic";
@@ -443,9 +443,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
       const assignedPosition = String(body.assignedPosition || "").trim();
       if (!assignedPosition) return fail("Vui lòng chọn cương vị được giao");
-      if (!isPositionAllowedForDefectUnit(unit, assignedPosition)) {
-        return fail(`Cương vị "${assignedPosition}" không thuộc tổ máy ${unit}`);
-      }
+      // Không còn ràng buộc cương vị theo tổ máy (bỏ 2026-08-10) — xem POST /api/material-tickets.
       const totalScopeCount = await prisma.positionSystemScope.count();
       const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
       if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
@@ -1074,8 +1072,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (action === "stats") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
-      if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user))
-        return fail("Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      // Hai pha, hai quyền: nhập mã ERP + số phiếu ĐXVT dùng "stats"; xác nhận VHV
+      // nhận / đã trả phiếu (CHO_XAC_NHAN_PHAT) dùng "statsHandover" để giao được cho
+      // cương vị khác ngoài Thống kê.
+      const statsStep = t.status === "CHO_XAC_NHAN_PHAT" ? "statsHandover" : "stats";
+      if (!stepAllowedWithMap(await getWorkflowRoleMap(), statsStep, user))
+        return fail(
+          t.status === "CHO_XAC_NHAN_PHAT"
+            ? "Bạn không có quyền Xác nhận VHV nhận / trả phiếu ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)"
+            : "Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)",
+          403
+        );
       // PHA 2 (Đề xuất): chỉ nhập được số phiếu ĐXVT sau khi đã xuất Phiếu ĐXVT.
       if (t.type === "DE_XUAT" && t.status !== "CHO_XAC_NHAN_PHAT" && !t.proposalDocUrl)
         return fail("Vui lòng xác nhận mã vật tư và xuất Phiếu ĐXVT trước khi nhập số phiếu");

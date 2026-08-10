@@ -104,6 +104,7 @@ export interface ViewerSteps {
   use: boolean;
   accept: boolean;
   stats: boolean;
+  statsHandover: boolean;
   settle: boolean;
   manage: boolean;
   manageConfigured: boolean;
@@ -122,8 +123,8 @@ export interface TicketViewer {
 }
 
 export type WorkflowRoleMap = {
-  create: string[]; confirm: string[]; vhvReceive: string[]; stats: string[]; receive: string[]; use: string[]; accept: string[];
-  settle: string[]; manage: string[];
+  create: string[]; confirm: string[]; vhvReceive: string[]; stats: string[]; statsHandover: string[];
+  receive: string[]; use: string[]; accept: string[]; settle: string[]; manage: string[];
 };
 
 const samePosition = (a?: string | null, b?: string | null) => {
@@ -257,7 +258,11 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
-    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO" || t.status === "CHO_XAC_NHAN_PHAT") && v.steps?.stats) a.push("stats");
+    // Nhập mã ERP + số phiếu ĐXVT: quyền "stats".
+    if ((t.status === "CHO_THONG_KE" || t.status === "CHO_PHIEU__XUAT_KHO") && v.steps?.stats) a.push("stats");
+    // Xác nhận VHV nhận phiếu (hoặc đã trả phiếu): quyền RIÊNG "statsHandover" để giao
+    // được cho cương vị khác ngoài Thống kê.
+    if (t.status === "CHO_XAC_NHAN_PHAT" && (v.steps?.statsHandover ?? v.steps?.stats)) a.push("stats");
     if (t.status === "VHV_LANH_VAT_TU" && (v.steps?.vhvReceiveConfigured ? v.steps.vhvReceive : canOperateAssigned)) a.push("vhvReceive");
     if (t.status === "NHAN_TU_HIEN_CO" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
     // Ứng: bước gộp "Xác nhận ĐXVT" — chỉ Thống kê; luồng khác giữ quyền Nhận vật tư.
