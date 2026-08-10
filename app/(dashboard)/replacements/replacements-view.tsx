@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ListFilter, RotateCcw, Upload, FileClock } from "lucide-react";
+import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -68,6 +68,9 @@ const MACHINE_FILTERS = [
 
 // Bộ lọc loại vật tư (theo tab phân loại trong Danh mục vật tư).
 const CATEGORY_FILTERS = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất"] as const;
+
+// Cỡ trang của bảng Lịch sử thay thế — theo đúng mẫu bảng Lịch sử sửa chữa.
+const HISTORY_PAGE_SIZES = [10, 25, 50, 100];
 
 // Mốc thời gian xuất danh sách vật tư cần thay thế (tính từ hôm nay).
 const EXPORT_HORIZONS = [
@@ -397,6 +400,20 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         return `${l.replacement?.material.code} ${l.replacement?.material.name} ${device?.code ?? ""} ${device?.name ?? ""} ${l.note ?? ""} ${l.requestNumber ?? ""} ${l.defectHistory?.workOrderNumber ?? ""} ${l.defectHistory?.content ?? ""} ${l.defectHistory?.result ?? ""}`.toLowerCase().includes(searchQ.toLowerCase());
       })
     : logsInMonthRange;
+  // Phân trang bảng lịch sử — cùng khuôn với Lịch sử sửa chữa. Cần thiết vì bộ lưu trữ
+  // nhập từ sổ theo dõi có 645 dòng: mở rộng khoảng tháng ra cả năm là dựng một lượt
+  // vài trăm hàng, vừa chậm vừa khó đọc.
+  const [historyPageSize, setHistoryPageSize] = React.useState(10);
+  const [historyPage, setHistoryPage] = React.useState(1);
+  const historyTotalPages = Math.max(1, Math.ceil(filteredLogs.length / historyPageSize));
+  React.useEffect(() => {
+    setHistoryPage(1);
+  }, [historyFromMonth, historyToMonth, machineFilter, positionFilter, categoryFilter, searchQ, historyPageSize]);
+  const historySafePage = Math.min(historyPage, historyTotalPages);
+  const pagedLogs = filteredLogs.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
+  const historyFirstShown = filteredLogs.length ? (historySafePage - 1) * historyPageSize + 1 : 0;
+  const historyLastShown = Math.min(historySafePage * historyPageSize, filteredLogs.length);
+
   const historyRangeLabel = historyFromMonth === historyToMonth
     ? `tháng ${ymLabel(historyFromMonth)}`
     : `từ tháng ${ymLabel(historyFromMonth)} đến tháng ${ymLabel(historyToMonth)}`;
@@ -836,11 +853,27 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
             />
           ) : (
             <Card className="overflow-hidden">
-              <div className="border-b border-border px-4 py-2.5 text-sm text-muted-foreground">
-                <span className="capitalize">{historyRangeLabel}</span> · <span className="font-semibold text-ink">{filteredLogs.length}</span> lần ghi nhận thay thế
-                {positionFilter !== "ALL" && (
-                  <> · Cương vị <span className="font-medium text-ink">{positionFilter}</span></>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-sm text-muted-foreground">
+                <div>
+                  <span className="capitalize">{historyRangeLabel}</span> · <span className="font-semibold text-ink">{filteredLogs.length}</span> lần ghi nhận thay thế
+                  {positionFilter !== "ALL" && (
+                    <> · Cương vị <span className="font-medium text-ink">{positionFilter}</span></>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>Hiển thị</span>
+                  <select
+                    value={historyPageSize}
+                    onChange={(e) => setHistoryPageSize(Number(e.target.value))}
+                    className="h-8 rounded-lg border border-input bg-white px-2 text-sm font-medium text-ink"
+                    aria-label="Số dòng mỗi trang"
+                  >
+                    {HISTORY_PAGE_SIZES.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <span>dòng</span>
+                </div>
               </div>
               <Table>
                 <TableHeader className="bg-muted/40">
@@ -856,7 +889,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((l) => {
+                  {pagedLogs.map((l) => {
                     const expanded = expandedLogId === l.id;
                     const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
                     const pending = l.defectHistory?.status === "PENDING";
@@ -1010,6 +1043,14 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                   })}
                 </TableBody>
               </Table>
+              <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                <div>
+                  Hiển thị <b className="font-mono text-ink">{historyFirstShown}</b>–<b className="font-mono text-ink">{historyLastShown}</b> trong tổng số{" "}
+                  <b className="font-mono text-ink">{filteredLogs.length}</b> bản ghi
+                  {searchQ.trim() && <span> sau lọc</span>}
+                </div>
+                <HistoryPager page={historySafePage} totalPages={historyTotalPages} onGo={setHistoryPage} />
+              </div>
             </Card>
           )}
         </div>
@@ -1134,6 +1175,42 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Điều hướng trang cho bảng Lịch sử thay thế — cùng khuôn với Lịch sử sửa chữa. */
+function HistoryPager({ page, totalPages, onGo }: { page: number; totalPages: number; onGo: (p: number) => void }) {
+  const items: Array<number | "gap"> = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= 1) items.push(i);
+    else if (Math.abs(i - page) === 2) items.push("gap");
+  }
+  const btn = "h-8 min-w-8 rounded-lg border border-border px-2 font-mono text-[13px] font-semibold transition-colors";
+  const nav = "text-muted-foreground hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-40";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <button type="button" className={cn(btn, nav)} disabled={page <= 1} onClick={() => onGo(page - 1)} aria-label="Trang trước">
+        <ChevronLeft className="mx-auto h-4 w-4" />
+      </button>
+      {items.map((item, index) =>
+        item === "gap" ? (
+          <span key={`gap-${index}`} className="px-1 text-muted-foreground">…</span>
+        ) : (
+          <button
+            key={item}
+            type="button"
+            aria-current={item === page}
+            onClick={() => onGo(item)}
+            className={cn(btn, item === page ? "border-[#00558F] bg-[#00558F] text-white" : nav)}
+          >
+            {item}
+          </button>
+        )
+      )}
+      <button type="button" className={cn(btn, nav)} disabled={page >= totalPages} onClick={() => onGo(page + 1)} aria-label="Trang sau">
+        <ChevronRight className="mx-auto h-4 w-4" />
+      </button>
+    </div>
   );
 }
 
