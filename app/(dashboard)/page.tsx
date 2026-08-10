@@ -605,11 +605,24 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
   const [draftEnd, setDraftEnd] = React.useState("");
   const [draftReason, setDraftReason] = React.useState("");
   
-  // Live clock for safe-operation elapsed calculation
+  // Đồng hồ cục bộ không gọi API: cập nhật số phút hiển thị đều đặn và đồng bộ
+  // ngay khi màn hình thức dậy/tab được mở lại hoặc mạng vừa kết nối lại.
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
+    const syncNow = () => setNow(new Date());
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") syncNow();
+    };
+    const timer = window.setInterval(syncNow, 30_000);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("focus", syncNow);
+    window.addEventListener("online", syncNow);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+      window.removeEventListener("focus", syncNow);
+      window.removeEventListener("online", syncNow);
+    };
   }, []);
 
   // Compute entries and totals from events

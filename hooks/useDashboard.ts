@@ -71,6 +71,12 @@ export function useSafeOperations() {
     queryKey: ["safe-operation"],
     queryFn: () => apiGet<SafeOperationEvent[]>("/api/safe-operation"),
     staleTime: 60 * 1000,
+    // Overview có thể được treo liên tục như màn hình giám sát. Polling giúp
+    // nhận thay đổi được nhập từ máy khác mà không cần tải lại trang.
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
