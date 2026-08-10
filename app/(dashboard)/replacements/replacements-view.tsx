@@ -45,6 +45,8 @@ import {
   type ReplacementLogItem,
 } from "@/hooks/useReplacements";
 import {
+  MATERIAL_CATEGORIES,
+  isSelectableManagingPosition,
   REPL_DUE,
   REPL_DUE_ORDER,
   addMonths,
@@ -55,6 +57,8 @@ import {
 import { formatDate, formatDateInput, cn, initials } from "@/lib/utils";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
+import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
+import { usePositions } from "@/hooks/useUsers";
 
 type TabKey = "schedule" | "status" | "history";
 type HistorySortKey = "subject" | "source" | "replacedAt" | "quantity" | "doneBy" | "locked";
@@ -1268,18 +1272,57 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
   const [replacedAt, setReplacedAt] = React.useState("");
   const [quantity, setQuantity] = React.useState("");
   const [note, setNote] = React.useState("");
+  // Các thẻ dưới đây chỉ mở cho dòng LƯU TRỮ nhập từ sổ theo dõi. Dòng do web tự sinh
+  // lấy chúng từ điểm thay thế / phiếu SYC nên sửa tay sẽ làm lệch khỏi nguồn gốc.
+  const archive = Boolean(log?.imported);
+  const [machine, setMachine] = React.useState("");
+  const [position, setPosition] = React.useState("");
+  const [category, setCategory] = React.useState("");
+  const [materialName, setMaterialName] = React.useState("");
+  const [unitLabel, setUnitLabel] = React.useState("");
+  const [pctNumber, setPctNumber] = React.useState("");
+  const [sourceNote, setSourceNote] = React.useState("");
+  const [deviceSeq, setDeviceSeq] = React.useState("");
+  const [deviceName, setDeviceName] = React.useState("");
+  const positions = usePositions().filter(isSelectableManagingPosition);
 
   React.useEffect(() => {
     if (!log) return;
     setReplacedAt(formatDateInput(log.replacedAt));
     setQuantity(log.quantity != null ? String(log.quantity) : "");
     setNote(log.note ?? "");
+    setMachine(log.machine ?? "");
+    setPosition(log.managingPosition ?? "");
+    setCategory(log.materialCategory ?? "");
+    setMaterialName(log.materialNameLabel ?? "");
+    setUnitLabel(log.unitLabel ?? "");
+    setPctNumber(log.pctNumber ?? "");
+    setSourceNote(log.sourceNote ?? "");
+    setDeviceSeq(log.deviceSeq ?? "");
+    setDeviceName(log.deviceLabel ?? "");
   }, [log]);
 
   async function submit() {
     if (!log) return;
     try {
-      await update.mutateAsync({ id: log.id, replacedAt, quantity: quantity || null, note });
+      await update.mutateAsync({
+        id: log.id,
+        replacedAt,
+        quantity: quantity || null,
+        note,
+        ...(archive
+          ? {
+              machine,
+              managingPosition: position,
+              materialCategory: category,
+              materialNameLabel: materialName,
+              unitLabel,
+              pctNumber,
+              sourceNote,
+              deviceSeq,
+            }
+          : {}),
+      });
       toast.success("Đã cập nhật ghi nhận thay thế");
       onClose();
     } catch (e) {
@@ -1289,13 +1332,18 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
 
   return (
     <Dialog open={!!log} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
         <DialogHeader><DialogTitle>Chỉnh sửa ghi nhận thay thế</DialogTitle></DialogHeader>
         {log && (
           <div className="space-y-4">
             <div className="rounded-lg bg-muted/50 p-3 text-sm">
-              <div className="font-medium text-ink">{log.replacement?.material.name ?? "Vật tư"}</div>
+              <div className="font-medium text-ink">{log.replacement?.material.name ?? log.materialNameLabel ?? "Vật tư"}</div>
               <div className="font-mono text-xs text-navy">{log.replacement?.material.code ?? ""}</div>
+              {archive && (
+                <div className="mt-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  Dòng lưu trữ · nhập từ sổ theo dõi
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -1307,8 +1355,85 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
                 <Input type="number" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
               </div>
             </div>
+
+            {archive && (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <Label className="mb-1.5 block">Tổ máy</Label>
+                    <Select value={machine || "NONE"} onValueChange={(v) => setMachine(v === "NONE" ? "" : v)}>
+                      <SelectTrigger><SelectValue placeholder="Chưa gán" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Chưa gán</SelectItem>
+                        <SelectItem value="S1">S1</SelectItem>
+                        <SelectItem value="S2">S2</SelectItem>
+                        <SelectItem value="COMMON">COMMON</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block">Cương vị</Label>
+                    <Select value={position || "NONE"} onValueChange={(v) => setPosition(v === "NONE" ? "" : v)}>
+                      <SelectTrigger><SelectValue placeholder="Chưa gán" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Chưa gán</SelectItem>
+                        {positions.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block">Loại vật tư</Label>
+                    <Select value={category || "NONE"} onValueChange={(v) => setCategory(v === "NONE" ? "" : v)}>
+                      <SelectTrigger><SelectValue placeholder="Chưa gán" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Chưa gán</SelectItem>
+                        {MATERIAL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                  <div>
+                    <Label className="mb-1.5 block">Tên vật tư</Label>
+                    <Input value={materialName} onChange={(e) => setMaterialName(e.target.value)} placeholder="Tên vật tư ghi trên sổ" />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block">ĐVT</Label>
+                    <Input value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="lít / kg / cái" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="mb-1.5 block">Thiết bị</Label>
+                  <EquipmentTreePicker
+                    value={deviceSeq}
+                    scope={(machine || undefined) as "S1" | "S2" | "COMMON" | undefined}
+                    position={position || null}
+                    accessFilter="edit"
+                    includeLeaves
+                    leafOnly
+                    placeholder="Chọn thiết bị trên cây (để trống nếu chưa xác định)"
+                    selectionLabel={deviceName || undefined}
+                    onChange={(node) => {
+                      setDeviceSeq(node?.seq ?? "");
+                      setDeviceName(node?.name ?? "");
+                    }}
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="mb-1.5 block">Số PCT/LCT</Label>
+                    <Input value={pctNumber} onChange={(e) => setPctNumber(e.target.value)} placeholder="PCT cơ …" />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block">Ghi chú (BBNT DO / hình thức lãnh)</Label>
+                    <Input value={sourceNote} onChange={(e) => setSourceNote(e.target.value)} placeholder="BBNT DO: … · Hình thức lãnh: …" />
+                  </div>
+                </div>
+              </>
+            )}
+
             <div>
-              <Label className="mb-1.5 block">Ghi chú</Label>
+              <Label className="mb-1.5 block">{archive ? "Nội dung sử dụng vật tư" : "Ghi chú"}</Label>
               <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Nội dung ghi chú..." />
             </div>
             <div className="flex justify-end gap-2">

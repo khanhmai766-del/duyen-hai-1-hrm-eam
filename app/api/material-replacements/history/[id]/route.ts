@@ -1,10 +1,14 @@
 import type { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { canEditMaterialReplacement } from "@/lib/material-replacement-access";
+import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
+import { MATERIAL_CATEGORIES } from "@/lib/constants";
+import { assertSeqEditable } from "@/lib/server-access";
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +52,70 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       quantity = Math.trunc(n);
     }
 
+    // Các thẻ chỉ sửa được trên DÒNG LƯU TRỮ (nhập từ sổ theo dõi). Dòng do web tự
+    // sinh lấy các giá trị này từ điểm thay thế / phiếu SYC, sửa tay ở đây sẽ làm dữ
+    // liệu lệch khỏi nguồn gốc của nó.
+    const current = await prisma.materialReplacementLog.findUnique({
+      where: { id: params.id },
+      select: { importSource: true },
+    });
+    if (!current) return fail("Không tìm thấy ghi nhận thay thế", 404);
+    const archiveFields: Prisma.MaterialReplacementLogUpdateInput = {};
+    if (current.importSource) {
+      const text = (v: unknown) => {
+        const t = String(v ?? "").trim();
+        return t ? t : null;
+      };
+      if (body.machine !== undefined) {
+        const m = text(body.machine);
+        if (m && !["S1", "S2", "COMMON"].includes(m)) return fail("Tổ máy không hợp lệ");
+        archiveFields.machine = m;
+      }
+      if (body.managingPosition !== undefined) {
+        const raw = text(body.managingPosition);
+        // Quy về nhãn chuẩn để rào cương vị (so theo MÃ chức danh) luôn nhận ra.
+        const code = raw ? positionCodeOf(raw) : null;
+        if (raw && !code) return fail(`Cương vị "${raw}" không thuộc danh mục chức danh`);
+        archiveFields.managingPosition = code ? positionLabelOf(code) : null;
+      }
+      if (body.materialCategory !== undefined) {
+        const c = text(body.materialCategory);
+        if (c && !(MATERIAL_CATEGORIES as readonly string[]).includes(c)) return fail("Loại vật tư không hợp lệ");
+        archiveFields.materialCategory = c;
+      }
+      if (body.materialNameLabel !== undefined) archiveFields.materialNameLabel = text(body.materialNameLabel);
+      if (body.pctNumber !== undefined) archiveFields.pctNumber = text(body.pctNumber);
+      if (body.sourceNote !== undefined) archiveFields.sourceNote = text(body.sourceNote);
+      if (body.unitLabel !== undefined) archiveFields.unitLabel = text(body.unitLabel);
+      if (body.materialId !== undefined) {
+        const id = text(body.materialId);
+        if (id && !(await prisma.material.findUnique({ where: { id }, select: { id: true } })))
+          return fail("Vật tư được chọn không tồn tại", 404);
+        archiveFields.material = id ? { connect: { id } } : { disconnect: true };
+      }
+      if (body.deviceSeq !== undefined) {
+        const seq = text(body.deviceSeq);
+        if (seq) {
+          const node = await prisma.equipmentNode.findUnique({ where: { seq }, select: { seq: true, name: true } });
+          if (!node) return fail("Thiết bị được chọn không tồn tại trên cây", 404);
+          // Cùng rào phạm vi với mọi thao tác thiết bị khác.
+          await assertSeqEditable(user, seq);
+          archiveFields.deviceSeq = seq;
+          archiveFields.deviceLabel = node.name;
+        } else {
+          archiveFields.deviceSeq = null;
+          archiveFields.deviceLabel = null;
+        }
+      }
+    }
+
     const log = await prisma.materialReplacementLog.update({
       where: { id: params.id },
       data: {
         replacedAt,
         quantity,
         note: body.note?.trim() || null,
+        ...archiveFields,
       },
     });
     await audit(user.id, "UPDATE_REPLACEMENT_LOG", "MaterialReplacementLog", log.id, auditDetailWithPosition(user));
