@@ -231,14 +231,20 @@ export default function ReplacementsPage() {
   );
 }
 
-function ReplacementsPageContent() {
+/**
+ * `only` = khoá cứng vào một tab và ẩn thanh tab. Trang "Lịch sử thay thế" ở sidebar
+ * dùng lại đúng thành phần này với only="history" — mọi bộ lọc (tổ máy, cương vị, loại
+ * vật tư, khoảng tháng, tìm kiếm) và nút xuất backup đều dùng chung, không nhân bản mã.
+ */
+export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
   const canCreate = rbac.can("replacement-manage", ["personal", "manage", "full"]);
   const canManage = rbac.can("replacement-manage", ["manage", "full"]);
   const canDelete = rbac.can("replacement-manage", ["manage", "full"]);
-  const [tab, setTab] = React.useState<TabKey>("schedule");
+  const [tabState, setTab] = React.useState<TabKey>(only ?? "schedule");
+  const tab: TabKey = only ?? tabState;
   // Bộ lọc tháng/năm dùng chung cho cả 2 tab (mặc định tháng hiện tại).
   const [month, setMonth] = React.useState(() => ym(new Date()));
   // Một thanh tìm kiếm dùng chung cho Lịch thay thế và Lịch sử thay thế.
@@ -415,7 +421,8 @@ function ReplacementsPageContent() {
     () => [
       { key: "stt", header: "STT", width: 7, align: "center" as const, value: (_row: ReplacementLogItem, index: number) => index + 1 },
       { key: "replacedAt", header: "Ngày thay", width: 14, align: "center" as const, value: (l: ReplacementLogItem) => formatDate(l.replacedAt) },
-      { key: "material", header: "Tên vật tư", width: 30, value: (l: ReplacementLogItem) => l.replacement?.material.name },
+      { key: "material", header: "Tên vật tư", width: 30, value: (l: ReplacementLogItem) => l.replacement?.material.name ?? l.materialNameLabel ?? "" },
+      { key: "materialCategory", header: "Loại vật tư", width: 18, value: (l: ReplacementLogItem) => l.materialCategory ?? l.replacement?.material.category ?? "" },
       { key: "materialCode", header: "Mã vật tư", width: 24, value: (l: ReplacementLogItem) => l.replacement?.material.code },
       {
         key: "device",
@@ -459,7 +466,7 @@ function ReplacementsPageContent() {
         header: "Số PCT",
         width: 16,
         align: "center" as const,
-        value: (l: ReplacementLogItem) => l.defectHistory?.workOrderNumber ?? "",
+        value: (l: ReplacementLogItem) => l.defectHistory?.workOrderNumber ?? l.pctNumber ?? "",
       },
       {
         key: "note",
@@ -473,7 +480,7 @@ function ReplacementsPageContent() {
         width: 30,
         value: (l: ReplacementLogItem) => l.defectHistory?.result ?? "",
       },
-      { key: "doneBy", header: "Người thực hiện", width: 24, value: (l: ReplacementLogItem) => l.doneBy.name },
+      { key: "doneBy", header: "Người thực hiện", width: 24, value: (l: ReplacementLogItem) => l.doneByName || l.doneBy.name },
     ],
     []
   );
@@ -506,7 +513,14 @@ function ReplacementsPageContent() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="LỊCH THAY THẾ VẬT TƯ" description="Tổng hợp lịch thay thế & lịch sử ghi nhận thay thế vật tư">
+      <PageHeader
+        title={only === "history" ? "LỊCH SỬ THAY THẾ VẬT TƯ" : "LỊCH THAY THẾ VẬT TƯ"}
+        description={
+          only === "history"
+            ? "Lịch sử ghi nhận thay thế vật tư — gồm cả dữ liệu lưu trữ nhập từ sổ theo dõi"
+            : "Tổng hợp lịch thay thế & trạng thái theo dõi vật tư"
+        }
+      >
         <Popover>
           <PopoverTrigger asChild>
             <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
@@ -652,15 +666,18 @@ function ReplacementsPageContent() {
 
       {/* Tabs + tìm kiếm cùng hàng; tìm kiếm nằm sát mép phải dưới cụm thao tác đầu trang. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
-        <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
-        <TabBtn
-          active={tab === "status"}
-          onClick={() => setTab("status")}
-          icon={Activity}
-          label="Trạng thái theo dõi"
-          count={statusPoints.length}
-        />
-        <TabBtn active={tab === "history"} onClick={() => setTab("history")} icon={History} label="Lịch sử thay thế" count={filteredLogs.length} />
+        {!only && (
+          <>
+            <TabBtn active={tab === "schedule"} onClick={() => setTab("schedule")} icon={CalendarCheck} label="Lịch thay thế" />
+            <TabBtn
+              active={tab === "status"}
+              onClick={() => setTab("status")}
+              icon={Activity}
+              label="Trạng thái theo dõi"
+              count={statusPoints.length}
+            />
+          </>
+        )}
         <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 pb-2 sm:w-auto">
           <SearchBar
             value={searchQ}
@@ -879,6 +896,11 @@ function ReplacementsPageContent() {
                             điểm theo dõi đã gỡ
                           </div>
                         )}
+                        {l.imported && (
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700">
+                            Lưu trữ · sổ theo dõi
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center">
                         {l.requestNumber ? (
@@ -890,6 +912,10 @@ function ReplacementsPageContent() {
                           >
                             {l.requestNumber}
                           </Link>
+                        ) : l.imported ? (
+                          <span className="text-[12.5px] text-muted-foreground" title="Nhập từ sổ theo dõi vật tư">
+                            {l.pctNumber || "—"}
+                          </span>
                         ) : (
                           <span className="text-[12.5px] text-muted-foreground">Ghi thủ công</span>
                         )}
@@ -901,7 +927,15 @@ function ReplacementsPageContent() {
                         {l.quantity != null ? `${l.quantity.toLocaleString("vi-VN")} ${l.unitLabel ?? l.replacement?.material.unit ?? ""}` : "—"}
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center">
-                        <UserAvatar user={l.doneBy} />
+                        {/* Dòng lưu trữ có người dùng chưa/không còn tài khoản: hiện tên
+                            nguyên văn trên sổ thay cho avatar của tài khoản chạy nhập. */}
+                        {l.imported && l.doneByName ? (
+                          <span className="text-[12.5px] font-medium text-ink" title="Tên ghi trên sổ theo dõi">
+                            {l.doneByName}
+                          </span>
+                        ) : (
+                          <UserAvatar user={l.doneBy} />
+                        )}
                       </TableCell>
                       {/* Chỉ dòng sinh từ SYC mới có khái niệm chốt lịch sử. */}
                       <TableCell className="px-3 py-2.5 text-center">

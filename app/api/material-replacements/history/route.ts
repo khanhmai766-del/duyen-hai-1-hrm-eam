@@ -11,7 +11,10 @@ import { resolvePositionViewScope } from "@/lib/position-data-scope";
 export const dynamic = "force-dynamic";
 
 // Tầng 4: bảng lịch sử phình theo năm tháng — GET luôn có trần, không findMany không giới hạn.
-const HISTORY_TAKE = 300;
+// Nâng 300 → 2000 khi nhập bộ lưu trữ từ sổ theo dõi vật tư (645 dòng, trải 14 tháng):
+// giao diện lọc khoảng tháng ở CLIENT nên trần cắt trước sẽ làm các tháng cũ biến mất
+// hẳn khỏi bảng. `meta.capped` vẫn báo lên khi chạm trần.
+const HISTORY_TAKE = 2000;
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -31,6 +34,11 @@ export async function GET(req: NextRequest) {
         { systemLabel: { contains: q, mode: "insensitive" } },
         { deviceSeq: { contains: q, mode: "insensitive" } },
         { requestNumber: { contains: q, mode: "insensitive" } },
+        // Dòng lưu trữ không có quan hệ material — phải tìm trên chính snapshot của log.
+        { materialNameLabel: { contains: q, mode: "insensitive" } },
+        { pctNumber: { contains: q, mode: "insensitive" } },
+        { sourceNote: { contains: q, mode: "insensitive" } },
+        { doneByName: { contains: q, mode: "insensitive" } },
         { material: { is: { name: { contains: q, mode: "insensitive" } } } },
         { material: { is: { code: { contains: q, mode: "insensitive" } } } },
         { replacement: { is: { device: { is: { seq: { contains: q, mode: "insensitive" } } } } } },
@@ -160,7 +168,17 @@ export async function GET(req: NextRequest) {
             : null,
           material: log.material
             ? { ...log.material, deviceMaterials: [] }
-            : { id: "", code: "", name: "—", unit: log.unitLabel ?? "", system: null, deviceMaterials: [] },
+            : {
+                id: "",
+                code: "",
+                // Dòng lưu trữ nhập từ sổ theo dõi giữ tên vật tư dạng chữ (Sheet dùng
+                // danh mục rộng hơn Danh mục Vận Hành 1 nên phần lớn không tra ra materialId).
+                name: log.materialNameLabel || "—",
+                unit: log.unitLabel ?? "",
+                system: null,
+                category: log.materialCategory ?? null,
+                deviceMaterials: [],
+              },
         };
         // Đã chốt thì lấy bản chính thức; chưa chốt thì lấy bản nháp đang chờ.
         const finalRow = log.defectId ? finalizedByDefect.get(log.defectId) : undefined;
@@ -170,7 +188,10 @@ export async function GET(req: NextRequest) {
           ...log,
           doneBy: publicUserRef(log.doneBy),
           // Điểm theo dõi đã bị gỡ/xoá — dùng để hiện nhãn mờ trên giao diện.
-          pointRemoved: !log.replacement,
+          // Dòng LƯU TRỮ chưa từng có điểm theo dõi nên không phải "đã gỡ".
+          pointRemoved: !log.replacement && !log.importSource,
+          /** true = dòng nhập từ sổ theo dõi vật tư, chỉ để tra cứu. */
+          imported: Boolean(log.importSource),
           defectHistory: source
             ? {
                 status: finalRow ? "FINALIZED" : "PENDING",

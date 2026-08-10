@@ -7,6 +7,7 @@ import {
   Wrench,
   Package,
   Repeat,
+  History,
   ShieldAlert,
   BarChart3,
   Users,
@@ -128,6 +129,13 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: "lich thay the vat tu replacement schedule canh bao dinh ky dau boi tron loc",
       },
       { label: "Theo dõi vật tư", href: "/replacement-procedures", icon: ClipboardList, keywords: "theo doi vat tu quy trinh thay the huong dan checklist procedure replacement" },
+      {
+        label: "Lịch sử thay thế",
+        href: "/replacement-history",
+        icon: History,
+        permissionIds: ["replacement-manage"],
+        keywords: "lich su thay the vat tu history ghi nhan da thay luu tru so theo doi",
+      },
     ],
   },
   {

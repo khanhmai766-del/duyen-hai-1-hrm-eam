@@ -465,6 +465,22 @@ model MaterialReplacementLog {
   defectId         String?
   requestNumber    String?
 
+  // --- Dữ liệu LƯU TRỮ nhập từ Google Sheet theo dõi vật tư (07.2025 → 08.2026) ---
+  // Chỉ để TRA CỨU: các dòng này không gắn điểm theo dõi (replacementId = null) nên
+  // không đụng vào luồng ghi nhận thay thế đang chạy trên web.
+  // `importSource` khác null = dòng lưu trữ; null = dòng do web tự sinh như trước.
+  importSource      String? // vd "SHEET_VT"
+  importKey         String? // khoá chống trùng khi chạy lại: "<tab>|<dòng>"
+  pctNumber         String? // Số PCT/LCT sử dụng vật tư
+  sourceNote        String? // Ghi chú gộp: số BBNT DO + hình thức lãnh
+  materialCategory  String? // Dầu bôi trơn | Lõi lọc dầu | Bi Nghiền Than | Hóa Chất
+  // Tên vật tư dạng CHỮ: Sheet dùng danh mục rộng hơn Danh mục Vận Hành 1 nên phần lớn
+  // dòng lưu trữ không tra được materialId; giữ nguyên văn để bảng vẫn hiển thị đủ.
+  materialNameLabel String?
+  // Tên người sử dụng nguyên văn trên Sheet. Dùng khi không tìm được tài khoản
+  // (người đã nghỉ việc, ô bỏ trống) — doneById là khoá ngoại BẮT BUỘC nên không rỗng được.
+  doneByName        String?
+
   replacement MaterialReplacement? @relation(fields: [replacementId], references: [id], onDelete: SetNull)
   material    Material?            @relation(fields: [materialId], references: [id], onDelete: SetNull)
   doneBy      User                 @relation("MrDoneBy", fields: [doneById], references: [id])
@@ -479,6 +495,9 @@ model MaterialReplacementLog {
   @@index([deviceSeq, replacedAt(sort: Desc)])
   @@index([materialId])
   @@index([defectId])
+  // Chạy lại script nhập không được tạo bản sao: khoá duy nhất theo nguồn + vị trí dòng.
+  @@unique([importSource, importKey])
+  @@index([importSource, replacedAt(sort: Desc)])
 }
 
 // Cầu nối "Chi tiết điểm thay thế" (Danh mục vật tư) → Số yêu cầu khiếm khuyết.

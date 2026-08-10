@@ -41,6 +41,8 @@ export interface ReplacementLogItem extends MaterialReplacementLog {
   doneBy: { id: string; name: string; position: string | null; avatarUrl: string | null };
   /** Điểm theo dõi đã bị gỡ/xoá — dòng đang hiển thị bằng snapshot của chính log. */
   pointRemoved?: boolean;
+  /** true = dòng LƯU TRỮ nhập từ sổ theo dõi vật tư (chỉ tra cứu, không gắn điểm theo dõi). */
+  imported?: boolean;
   /**
    * Nội dung thực hiện đọc SỐNG từ lịch sử khiếm khuyết của phiếu (chờ chốt hoặc đã
    * chốt). Null với dòng ghi thủ công. Vì đọc sống nên phiếu được sửa/chốt lúc nào là
