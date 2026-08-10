@@ -9,7 +9,7 @@ import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-m
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 import { positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
-import { canViewDefectPosition, resolveDefectViewScope } from "@/lib/defect-position-view";
+import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     const access = await resolveEquipmentAccessForUser(user);
     // Cùng rào cương vị với trang Khiếm khuyết — lịch sử là bản sao của chính những
     // phiếu đó, vá một bên mà bỏ bên kia thì dữ liệu vẫn xem được qua đường vòng.
-    const viewScope = await resolveDefectViewScope(user);
+    const viewScope = await resolvePositionViewScope(user, "defect");
     const { searchParams } = new URL(req.url);
     // `system` là tên tham số cũ; thực chất cột này lưu snapshot cương vị.
     const position = searchParams.get("position")?.trim() || searchParams.get("system")?.trim();
@@ -214,8 +214,8 @@ export async function GET(req: NextRequest) {
     ]);
     const finalizedData = history
       // Rào cương vị áp cho MỌI bản ghi, kể cả bản đã gắn thiết bị (xem
-      // lib/defect-position-view.ts). Rào cây thiết bị đã chạy trong SQL ở `scopeWhere`.
-      .filter((item) => canViewDefectPosition(item.system, viewScope))
+      // lib/position-data-scope.ts). Rào cây thiết bị đã chạy trong SQL ở `scopeWhere`.
+      .filter((item) => canViewPosition(item.system, viewScope))
       .filter((item) => !position || positionsMatch(item.system, position))
       .map((item) => ({
         ...item,
@@ -231,7 +231,7 @@ export async function GET(req: NextRequest) {
     const normalizedDevice = device?.toLocaleLowerCase("vi") ?? "";
     const pendingData = pendingRows
       .filter(({ defect, performedAt, workOrderNumber: pendingWorkOrder }) => {
-        if (!canViewDefectPosition(defect.system, viewScope)) return false;
+        if (!canViewPosition(defect.system, viewScope)) return false;
         // Nhánh CHỜ CHỐT không đi qua `scopeWhere` của SQL nên rào cây thiết bị phải
         // xét ở đây; bản chưa gắn thiết bị chỉ chịu rào cương vị ở trên.
         if (access.hasExplicitScopes && defect.deviceSeq && !access.canViewSeq(defect.deviceSeq)) {

@@ -20,11 +20,11 @@ import {
   announcementPositionsMatch,
 } from "@/lib/positions";
 import {
-  canViewDefectPosition,
-  defectViewScopeMeta,
-  resolveDefectViewScope,
-  unmatchedDefectPosition,
-} from "@/lib/defect-position-view";
+  canViewPosition,
+  positionViewScopeMeta,
+  resolvePositionViewScope,
+  unmatchedPosition,
+} from "@/lib/position-data-scope";
 import { positionCodeOf } from "@/lib/position-catalog";
 import {
   normalizeMappedUnit,
@@ -198,8 +198,8 @@ export async function GET(req: NextRequest) {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
     // Phạm vi XEM theo cương vị — rào quyền độc lập với cây thiết bị (xem
-    // lib/defect-position-view.ts), áp cho MỌI phiếu chứ không riêng phiếu chưa ánh xạ.
-    const viewScope = await resolveDefectViewScope(user);
+    // lib/position-data-scope.ts), áp cho MỌI phiếu chứ không riêng phiếu chưa ánh xạ.
+    const viewScope = await resolvePositionViewScope(user, "defect");
     const params = req.nextUrl.searchParams;
     const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(params.get("limit") ?? "10", 10) || 10));
@@ -341,7 +341,7 @@ export async function GET(req: NextRequest) {
     ]);
     const scopeTotal = typeof scopeRows === "number"
       ? scopeRows
-      : scopeRows.filter((row) => canViewDefectPosition(row.system, viewScope)).length;
+      : scopeRows.filter((row) => canViewPosition(row.system, viewScope)).length;
 
     const base = candidates
       // Rào cương vị: áp cho MỌI phiếu, kể cả phiếu ĐÃ gắn thiết bị. Trước đây nhánh
@@ -349,7 +349,7 @@ export async function GET(req: NextRequest) {
       // "VHV TBTH" chỉ vì thiết bị của họ nằm chung nhánh cây được cấp quyền xem.
       // Rào cây thiết bị vẫn còn, đã chạy trong SQL ở `scopeWhere` phía trên — hai rào
       // GIAO nhau, không rào nào thay được rào nào.
-      .filter((defect) => canViewDefectPosition(defect.system, viewScope))
+      .filter((defect) => canViewPosition(defect.system, viewScope))
       .filter(
         (defect) =>
           !position ||
@@ -481,11 +481,11 @@ export async function GET(req: NextRequest) {
       repairResults,
       // Ô lọc "Cương vị" chỉ được bày cương vị người dùng thực sự xem được; danh sách
       // do SERVER tính vì client không tự suy ra đúng phân cấp ca trực.
-      positionScope: defectViewScopeMeta(viewScope),
+      positionScope: positionViewScopeMeta(viewScope),
       // Số phiếu bị ẩn vì cột Cương vị bỏ trống / ghi nhãn lạ không quy được về danh
       // mục. Hiện cho cấp quản lý biết mà đi gán, thay vì để phiếu vô chủ mất hút.
       unmatchedPositionHidden: viewScope.all
-        ? candidates.filter((defect) => unmatchedDefectPosition(defect.system)).length
+        ? candidates.filter((defect) => unmatchedPosition(defect.system)).length
         : 0,
       queryMode: "compatibility",
       durationMs,

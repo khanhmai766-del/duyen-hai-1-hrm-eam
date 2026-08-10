@@ -11,7 +11,7 @@ import { DEFECT_COMMON_SUB_UNITS, normalizeDefectSeverityCriteria } from "@/lib/
 import { validateDefectImages } from "@/lib/defect-images";
 import { MAX_DEFECT_RELATED_DEVICES, normalizeRelatedDeviceSeqs } from "@/lib/defect-related-devices";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
-import { canViewDefectPosition, resolveDefectViewScope } from "@/lib/defect-position-view";
+import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 import { positionCodeOf } from "@/lib/position-catalog";
 import { revertMaterialRequestReplacements } from "@/lib/defect-material-request";
 import {
@@ -51,11 +51,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     });
     if (!defect) return fail("Không tìm thấy phiếu khiếm khuyết", 404);
 
-    // Rào cương vị áp cho MỌI phiếu — cùng luật với danh sách (lib/defect-position-view.ts).
+    // Rào cương vị áp cho MỌI phiếu — cùng luật với danh sách (lib/position-data-scope.ts).
     // Không có rào này thì mở thẳng URL /khiem-khuyet/<id> là xem được phiếu của cương
     // vị khác, dù danh sách đã lọc.
-    const viewScope = await resolveDefectViewScope(user);
-    if (!canViewDefectPosition(defect.system, viewScope)) {
+    const viewScope = await resolvePositionViewScope(user, "defect");
+    if (!canViewPosition(defect.system, viewScope)) {
       return fail("Cương vị của bạn không có quyền xem phiếu khiếm khuyết này", 403);
     }
 
@@ -148,7 +148,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Quyền xem phiếu chưa ánh xạ đã bao gồm quan hệ quản lý (Trưởng ca,
       // Trưởng kíp, Lò trưởng, Máy trưởng). Cho phép các cương vị đó thực hiện
       // ánh xạ lần đầu, nhưng chỉ vào các nhánh thiết bị họ được phép xem.
-      if (!canViewDefectPosition(existing.system, await resolveDefectViewScope(user))) {
+      if (!canViewPosition(existing.system, await resolvePositionViewScope(user, "defect"))) {
         return fail("Cương vị của bạn không có quyền gắn thiết bị cho phiếu khiếm khuyết này", 403);
       }
       const access = await resolveEquipmentAccessForUser(user);

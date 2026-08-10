@@ -18,6 +18,7 @@ import {
   canEditMaterialReplacement,
   canViewMaterialReplacement,
 } from "@/lib/material-replacement-access";
+import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,9 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
+    // Rào cương vị cho CẢ tab Lịch thay thế lẫn tab Tình trạng (hai tab đọc chung
+    // endpoint này) và cho chuông cảnh báo đến hạn ở thanh trên cùng (due=WARN).
+    const viewScope = await resolvePositionViewScope(user, "replacement");
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
     const materialId = sp.get("materialId");
@@ -88,7 +92,7 @@ export async function GET(req: NextRequest) {
       orderBy: { nextDueAt: "asc" },
       include: INCLUDE,
     });
-    const visiblePoints = points.filter((point) => canViewMaterialReplacement(access, point));
+    const visiblePoints = points.filter((point) => canViewMaterialReplacement(access, point, viewScope));
 
     // Điểm chỉ lấy mẫu định kỳ không tính vào bộ đếm cảnh báo thay thế: trễ kỳ
     // lấy mẫu nhẹ hơn hẳn quá hạn thay vật tư, gộp chung sẽ làm loãng cảnh báo.
@@ -109,7 +113,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return ok(filtered.map(mapPoint), { total: filtered.length, counts, warn: counts.OVERDUE + counts.DUE_SOON });
+    return ok(filtered.map(mapPoint), {
+      total: filtered.length,
+      counts,
+      warn: counts.OVERDUE + counts.DUE_SOON,
+      positionScope: positionViewScopeMeta(viewScope),
+    });
   });
 }
 

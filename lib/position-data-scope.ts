@@ -1,28 +1,34 @@
 /**
- * PHẠM VI XEM KHIẾM KHUYẾT THEO CƯƠNG VỊ — nguồn chuẩn duy nhất.
+ * PHẠM VI XEM DỮ LIỆU VẬN HÀNH THEO CƯƠNG VỊ — nguồn chuẩn duy nhất.
  *
- * Trước đây quyền xem phiếu khiếm khuyết bị chia làm hai luật khác nhau:
- *   - phiếu CHƯA gắn thiết bị → xét cột Cương vị (`Defect.system`);
- *   - phiếu ĐÃ gắn thiết bị   → chỉ xét phạm vi cây thiết bị, BỎ QUA cương vị.
- * Hệ quả: Trợ thủ vẫn thấy phiếu "Máy phó S1" / "VHV TBTH", vì thiết bị của các
- * cương vị đó nằm chung nhánh cây mà Trợ thủ được cấp quyền xem.
+ * Dùng chung cho mọi màn hình có cột "cương vị quản lý": Khiếm khuyết, Lịch sử sửa
+ * chữa, Danh mục vật tư VH1, Lịch thay thế vật tư. Mỗi nghiệp vụ chỉ khác nhau ở QUYỀN
+ * mở cổng "xem toàn bộ" (tham số `permissionId`) và ở CỘT chứa cương vị.
  *
- * Nghiệp vụ đã chốt (2026-08-09): CƯƠNG VỊ LÀ RÀO QUYỀN ĐỘC LẬP, áp cho MỌI phiếu
- * bất kể đã gắn thiết bị hay chưa, và GIAO (AND) với phạm vi cây thiết bị.
+ * ĐỪNG nhầm với `lib/position-system-scopes.ts` — file đó là phạm vi CÂY THIẾT BỊ
+ * (PositionSystemScope, admin cấu hình từng nhánh). Hai rào GIAO nhau, không rào nào
+ * thay được rào nào.
+ *
+ * Vì sao có file này: quyền xem trước đây bị chia làm hai luật — bản ghi CHƯA gắn thiết
+ * bị thì xét cột cương vị, bản ghi ĐÃ gắn thiết bị thì chỉ xét cây thiết bị và BỎ QUA
+ * cương vị. Hệ quả: Trợ thủ vẫn thấy phiếu "Máy phó S1" / "VHV TBTH" vì thiết bị của các
+ * cương vị đó nằm chung nhánh cây được cấp quyền xem. Nghiệp vụ chốt (2026-08-09):
+ * CƯƠNG VỊ LÀ RÀO QUYỀN ĐỘC LẬP, áp cho MỌI bản ghi.
  *
  * Ai được xem toàn bộ — thoả MỘT trong ba là đủ:
  *   - ADMIN;
- *   - `defect-view` mức manage/full — quyền RIÊNG cho phạm vi xem. KHÔNG dùng
- *     `defect-manage`: quyền đó bị quy về `repair-edit` (lib/rbac-permissions.ts) và
- *     trên thực tế đã mở mức "manage" cho mọi vai trò, kể cả VIEWER, nên gắn rào xem
- *     vào nó thì 100% tài khoản lọt cổng và rào không bao giờ có hiệu lực;
+ *   - `permissionId` mức manage/full — phải là quyền RIÊNG cho phạm vi xem
+ *     (`defect-view`, `material-view`, `replacement-view`). TUYỆT ĐỐI không dùng các
+ *     quyền `*-manage`: đo trên prod 2026-08-10 thì `defect-manage` (bị quy về
+ *     `repair-edit`), `material-manage` và `replacement-manage` đều đang mở mức "manage"
+ *     cho gần hết vai trò, kể cả VIEWER — gắn rào xem vào đó thì 100% tài khoản lọt cổng
+ *     và rào không bao giờ có hiệu lực;
  *   - cương vị không bị giới hạn cây thiết bị (Quản đốc / Phó QĐ / KTV / Trưởng ca),
  *     vì các cương vị này không nằm trong danh mục vận hành nên không có mã để so.
  *
  * Còn lại: chỉ thấy cương vị ĐANG LÀM VIỆC (không gộp kiêm nhiệm — xem `ownPositionsOf`)
- * VÀ cương vị cấp dưới của nó theo sơ đồ ca trực —
- * phân cấp lấy nguyên từ `canViewUnmappedDefectPosition` (lib/positions.ts) nên
- * hai nhánh cũ giờ dùng đúng một luật, không thể lệch nhau.
+ * VÀ cương vị cấp dưới của nó theo sơ đồ ca trực; phân cấp lấy nguyên từ
+ * `canViewUnmappedDefectPosition` (lib/positions.ts) nên mọi màn hình dùng đúng một luật.
  */
 import { hasPermissionLevel } from "@/lib/rbac-guard";
 import {
@@ -34,6 +40,15 @@ import {
 import { canViewUnmappedDefectPosition } from "@/lib/positions";
 import { isUnrestrictedEquipmentPosition } from "@/lib/position-system-scopes";
 import { normalizeText } from "@/lib/nav";
+
+/** Quyền mở cổng "xem toàn bộ" của từng nghiệp vụ. */
+export const POSITION_SCOPE_PERMISSION = {
+  defect: "defect-view",
+  material: "material-view",
+  replacement: "replacement-view",
+} as const;
+
+export type PositionScopeArea = keyof typeof POSITION_SCOPE_PERMISSION;
 
 /**
  * Cương vị hành chính không đi ca nên không có mã trong danh mục vận hành, nhưng công
@@ -48,11 +63,11 @@ function isAdminViewAllPosition(position: string) {
 }
 
 /** `all` = xem mọi cương vị; ngược lại chỉ các mã trong `codes`. */
-export type DefectViewScope = { all: boolean; codes: PositionCode[] };
+export type PositionViewScope = { all: boolean; codes: PositionCode[] };
 
-export const DEFECT_VIEW_SCOPE_ALL: DefectViewScope = { all: true, codes: [] };
+export const POSITION_SCOPE_ALL: PositionViewScope = { all: true, codes: [] };
 
-type DefectPositionCarrier = {
+type PositionCarrier = {
   id?: string;
   role?: string;
   position?: string | null;
@@ -78,7 +93,7 @@ type DefectPositionCarrier = {
  * được gán (`effectiveUserPosition`, lib/current-position.ts), chưa chọn thì lấy cương vị
  * chính — nên ở đây không cần dò lại danh sách.
  */
-function ownPositionsOf(user: DefectPositionCarrier) {
+function ownPositionsOf(user: PositionCarrier) {
   const active = user.currentPosition ?? user.primaryPosition ?? user.position;
   return [active].filter((value): value is string => Boolean(value && String(value).trim()));
 }
@@ -95,29 +110,29 @@ function viewableCodesFor(viewerPosition: string): PositionCode[] {
 }
 
 /**
- * Phạm vi xem của người đăng nhập.
+ * Phạm vi xem của người đăng nhập trong MỘT nghiệp vụ.
  *
  * Chức danh ĐÃ khai nhưng không khớp danh mục vận hành và không nằm trong danh sách
- * hành chính ở trên → `codes` rỗng → không thấy phiếu nào. Đây là chủ ý: nhãn lạ phải
+ * hành chính ở trên → `codes` rỗng → không thấy bản ghi nào. Đây là chủ ý: nhãn lạ phải
  * được sửa cho đúng danh mục chứ không được âm thầm nới thành "xem tất".
  */
-export async function resolveDefectViewScope(
-  user: DefectPositionCarrier
-): Promise<DefectViewScope> {
-  if (user.role === "ADMIN") return DEFECT_VIEW_SCOPE_ALL;
-  if (await hasPermissionLevel(user, "defect-view", ["manage", "full"])) {
-    return DEFECT_VIEW_SCOPE_ALL;
+export async function resolvePositionViewScope(
+  user: PositionCarrier,
+  area: PositionScopeArea
+): Promise<PositionViewScope> {
+  if (user.role === "ADMIN") return POSITION_SCOPE_ALL;
+  if (await hasPermissionLevel(user, POSITION_SCOPE_PERMISSION[area], ["manage", "full"])) {
+    return POSITION_SCOPE_ALL;
   }
 
   const positions = ownPositionsOf(user);
-  if (positions.some(isUnrestrictedEquipmentPosition)) return DEFECT_VIEW_SCOPE_ALL;
-  if (positions.some(isAdminViewAllPosition)) return DEFECT_VIEW_SCOPE_ALL;
+  if (positions.some(isUnrestrictedEquipmentPosition)) return POSITION_SCOPE_ALL;
+  if (positions.some(isAdminViewAllPosition)) return POSITION_SCOPE_ALL;
   // CHƯA khai chức danh thì giữ nguyên hành vi cũ (xem toàn bộ) thay vì làm mù tài
   // khoản: rào này để phân việc theo cương vị, không phải để phạt hồ sơ thiếu dữ liệu.
   // An toàn vì chỉ ADMIN mới sửa được `position` (/api/me chặn, chỉ /api/users cho phép)
-  // nên người dùng không thể tự xoá chức danh để thoát rào. Tài khoản rơi vào nhánh này
-  // được đếm và báo lên giao diện để quản trị đi khai cho đủ.
-  if (!positions.length) return DEFECT_VIEW_SCOPE_ALL;
+  // nên người dùng không thể tự xoá chức danh để thoát rào.
+  if (!positions.length) return POSITION_SCOPE_ALL;
 
   const codes = new Set<PositionCode>();
   for (const position of positions) {
@@ -127,28 +142,30 @@ export async function resolveDefectViewScope(
 }
 
 /**
- * Cột Cương vị (`Defect.system`) có được người này xem không.
+ * Một giá trị cương vị có được người này xem không. Nhận cả MÃ chức danh
+ * (`managingPositionCode`) lẫn NHÃN tự do (`Defect.system`, `managingPosition`) —
+ * `positionCodeOf` quy cả hai về cùng một mã.
  *
- * Giá trị rỗng hoặc không khớp danh mục → CHỈ người xem toàn bộ mới thấy. Phiếu vô chủ
+ * Giá trị rỗng hoặc không khớp danh mục → CHỈ người xem toàn bộ mới thấy. Bản ghi vô chủ
  * phải có người quản lý nhìn thấy để gán cương vị, nhưng không được rơi vào tay một
- * cương vị bất kỳ. Đếm số dòng bị ẩn vì lý do này bằng `unmatchedDefectPosition`.
+ * cương vị bất kỳ. Đếm số dòng bị ẩn vì lý do này bằng `unmatchedPosition`.
  */
-export function canViewDefectPosition(
-  system: string | null | undefined,
-  scope: DefectViewScope
+export function canViewPosition(
+  value: string | null | undefined,
+  scope: PositionViewScope
 ) {
   if (scope.all) return true;
-  const code = positionCodeOf(system);
+  const code = positionCodeOf(value);
   return code ? scope.codes.includes(code) : false;
 }
 
-/** true khi cột Cương vị không quy được về danh mục chức danh (rỗng hoặc nhãn lạ). */
-export function unmatchedDefectPosition(system: string | null | undefined) {
-  return positionCodeOf(system) === null;
+/** true khi giá trị cương vị không quy được về danh mục chức danh (rỗng hoặc nhãn lạ). */
+export function unmatchedPosition(value: string | null | undefined) {
+  return positionCodeOf(value) === null;
 }
 
 /** Gửi xuống client để ô lọc "Cương vị" chỉ bày cương vị người dùng được xem. */
-export function defectViewScopeMeta(scope: DefectViewScope) {
+export function positionViewScopeMeta(scope: PositionViewScope) {
   return {
     all: scope.all,
     codes: scope.codes as string[],

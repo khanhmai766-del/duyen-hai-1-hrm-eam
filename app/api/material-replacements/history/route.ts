@@ -6,6 +6,7 @@ import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { publicUserRef } from "@/lib/s3";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
+import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
+    // Tab "Lịch sử thay thế" — cùng rào cương vị với hai tab kia.
+    const viewScope = await resolvePositionViewScope(user, "replacement");
     const sp = req.nextUrl.searchParams;
     const q = sp.get("q")?.trim();
 
@@ -121,10 +124,19 @@ export async function GET(req: NextRequest) {
     // điểm là bị loại thẳng — nay điểm theo dõi bị gỡ sau MỖI lần ghi nhận nên làm vậy
     // sẽ giấu mất gần như toàn bộ lịch sử.
     const visibleLogs = logs.filter((log) =>
-      canViewMaterialReplacement(access, {
-        deviceSeq: log.deviceSeq ?? log.replacement?.deviceSeq ?? null,
-        system: log.systemLabel ?? log.replacement?.system ?? null,
-      })
+      canViewMaterialReplacement(
+        access,
+        {
+          deviceSeq: log.deviceSeq ?? log.replacement?.deviceSeq ?? null,
+          system: log.systemLabel ?? log.replacement?.system ?? null,
+          // Cương vị đọc từ SNAPSHOT trên chính dòng log trước — điểm theo dõi bị gỡ
+          // sau mỗi lần ghi nhận nên không thể trông vào `replacement`.
+          // Nhãn cũng đủ: `canViewPosition` quy nhãn về mã qua `positionCodeOf`, và đo
+          // trên prod thì 100% giá trị cương vị đang lưu đều quy được về danh mục.
+          managingPosition: log.managingPosition ?? log.replacement?.managingPosition ?? null,
+        },
+        viewScope
+      )
     );
 
     return ok(

@@ -129,6 +129,9 @@ export interface ReplacementMeta {
   total: number;
   counts: { OVERDUE: number; DUE_SOON: number; OK: number };
   warn: number;
+  /** Phạm vi cương vị được xem, do server tính (xem lib/position-data-scope.ts).
+   *  `all` = xem toàn bộ; ngược lại ô lọc "Cương vị" chỉ bày `labels`. */
+  positionScope?: { all: boolean; codes: string[]; labels: string[] };
 }
 
 export function useReplacements(filters: ReplacementFilters = {}, options?: { enabled?: boolean }) {

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { handle, ok, requireUser } from "@/lib/api";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
+import { resolvePositionViewScope } from "@/lib/position-data-scope";
 import { materialCategoryMatches, replacementDueStatus } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
@@ -22,6 +23,9 @@ export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     const access = await resolveEquipmentAccessForUser(user);
+    // Cùng rào cương vị với trang Lịch thay thế: danh sách điểm để ra SYC không được
+    // bày điểm ngoài phạm vi, nếu không đây thành cửa phụ đọc dữ liệu cương vị khác.
+    const viewScope = await resolvePositionViewScope(user, "replacement");
     const sp = req.nextUrl.searchParams;
     const machine = sp.get("machine")?.trim();
     const position = sp.get("position")?.trim();
@@ -72,7 +76,7 @@ export async function GET(req: NextRequest) {
     const filtered = rows.filter((row) => {
       if (!positionsMatch(row.managingPosition, position)) return false;
       if (category && !materialCategoryMatches(row.material.category, category)) return false;
-      if (!canViewMaterialReplacement(access, { deviceSeq: row.deviceSeq, system: row.system })) return false;
+      if (!canViewMaterialReplacement(access, row, viewScope)) return false;
       if (!keyword) return true;
       return normalizeText(
         [row.material.name, row.material.code, row.system, row.device?.name, row.location]

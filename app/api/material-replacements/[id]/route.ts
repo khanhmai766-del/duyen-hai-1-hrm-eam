@@ -16,6 +16,7 @@ import {
   canEditMaterialReplacement,
   canViewMaterialReplacement,
 } from "@/lib/material-replacement-access";
+import { resolvePositionViewScope } from "@/lib/position-data-scope";
 
 const DETAIL_INCLUDE = {
   material: { select: { id: true, code: true, name: true, unit: true, imageUrl: true } },
@@ -53,7 +54,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     });
     if (!point) return fail("Không tìm thấy điểm thay thế", 404);
     const access = await resolveEquipmentAccessForUser(user);
-    if (!canViewMaterialReplacement(access, point)) {
+    const viewScope = await resolvePositionViewScope(user, "replacement");
+    if (!canViewMaterialReplacement(access, point, viewScope)) {
       return fail("Cương vị của bạn không có quyền xem điểm thay thế này", 403);
     }
     return ok(mapPoint(point));

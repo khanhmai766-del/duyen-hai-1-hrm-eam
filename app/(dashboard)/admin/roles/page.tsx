@@ -389,6 +389,26 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
+    id: "material-view",
+    group: "Vật tư",
+    feature: "Phạm vi xem Danh mục Vận Hành 1",
+    note:
+      "Mức Đọc/Cá nhân CHỈ thấy vật tư có điểm thay thế thuộc cương vị ĐANG LÀM VIỆC (kèm cương vị " +
+      "cấp dưới theo sơ đồ ca trực); vật tư chưa khai điểm nào vẫn hiện để còn khai tiếp. " +
+      "Mức Quản lý/Toàn quyền thấy toàn bộ danh mục. Tách riêng khỏi quyền sửa danh mục.",
+    matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
+    id: "replacement-view",
+    group: "Vật tư",
+    feature: "Phạm vi xem Lịch thay thế vật tư",
+    note:
+      "Áp cho CẢ BA tab (Lịch thay thế, Tình trạng, Lịch sử thay thế) và cả chuông cảnh báo đến hạn. " +
+      "Mức Đọc/Cá nhân CHỈ thấy điểm thuộc cương vị ĐANG LÀM VIỆC (kèm cương vị cấp dưới); " +
+      "mức Quản lý/Toàn quyền thấy toàn phân xưởng. Tách riêng khỏi quyền ghi nhận thay thế.",
+    matrix: { ADMIN: "full", MANAGER: "full", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
+  },
+  {
     id: "announcement-manage",
     group: "Thông tin vận hành",
     feature: "Mệnh lệnh sản xuất / thông báo",

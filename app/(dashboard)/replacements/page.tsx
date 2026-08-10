@@ -272,6 +272,9 @@ function ReplacementsPageContent() {
   // Lọc theo tổ máy của vật tư (vật tư nằm ở tab S1/S2/COMMON nào trong Danh mục).
   const byMachine = machineFilter === "ALL" ? all : all.filter((p) => (p.material.machine ?? "COMMON") === machineFilter);
   const localStatusDemo = process.env.NODE_ENV === "development" ? buildLocalStatusDemo() : [];
+  // Ô lọc "Cương vị" chỉ bày cương vị người dùng thực sự xem được — bày cương vị ngoài
+  // phạm vi thì chọn vào chỉ ra bảng rỗng, tưởng lỗi. Phạm vi do SERVER tính.
+  const positionScope = (data?.meta as { positionScope?: { all: boolean; labels: string[] } } | undefined)?.positionScope;
   const positionOptions = Array.from(
     new Set(
       [
@@ -288,7 +291,14 @@ function ReplacementsPageContent() {
           .map((log) => positionLabelOf(log.replacement?.managingPosition)),
       ].filter((position): position is string => Boolean(position))
     )
-  ).sort((a, b) => a.localeCompare(b, "vi"));
+  )
+    .filter(
+      (position) =>
+        !positionScope ||
+        positionScope.all ||
+        positionScope.labels.some((label) => positionsMatch(label, position))
+    )
+    .sort((a, b) => a.localeCompare(b, "vi"));
   const byPosition = positionFilter === "ALL"
     ? byMachine
     : byMachine.filter((point) => positionsMatch(point.managingPosition, positionFilter));

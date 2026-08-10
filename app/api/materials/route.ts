@@ -11,6 +11,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
 import { positionCodeOf } from "@/lib/position-catalog";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
+import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -254,6 +255,10 @@ export async function GET(req: NextRequest) {
     const machine = parseMachine(req.nextUrl.searchParams.get("machine"));
     const includeUsage = req.nextUrl.searchParams.get("include") === "usage";
     const access = await resolveEquipmentAccessForUser(user);
+    // Danh mục không có cột cương vị riêng: cương vị nằm ở ĐIỂM THAY THẾ của vật tư.
+    // Vật tư hiện khi có ít nhất một điểm thuộc phạm vi xem (vật tư chưa khai điểm nào
+    // vẫn hiện để còn khai tiếp — giữ nguyên luật cũ).
+    const viewScope = await resolvePositionViewScope(user, "material");
     const materialAccess = materialCatalogAccessWhere(access);
 
     const materialRows = await prisma.material.findMany({
@@ -290,7 +295,7 @@ export async function GET(req: NextRequest) {
     const materials = materialRows.flatMap((material) => {
       const hadNoPoints = material.replacements.length === 0;
       const replacements = material.replacements.filter((replacement) =>
-        canViewMaterialReplacement(access, replacement)
+        canViewMaterialReplacement(access, replacement, viewScope)
       );
       return hadNoPoints || replacements.some((replacement) => !replacement.isActive)
         ? [{ ...material, replacements }]
@@ -328,6 +333,7 @@ export async function GET(req: NextRequest) {
     return ok(data, {
       total: data.length,
       equipmentScopeApplied: access.hasExplicitScopes,
+      positionScope: positionViewScopeMeta(viewScope),
     });
   });
 }
