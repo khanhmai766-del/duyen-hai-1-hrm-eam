@@ -582,9 +582,6 @@ export async function POST(req: NextRequest) {
     const rawImages = Array.isArray(body.images) ? body.images.filter(Boolean) : [];
     const imageError = validateDefectImages(rawImages);
     if (imageError) return fail(imageError);
-    if (rawImages.length > 0 && !["1", "2"].includes(String(body.severity ?? ""))) {
-      return fail("Chỉ khiếm khuyết Mức 1 hoặc Mức 2 mới được thêm ảnh");
-    }
     const images = await maybeUploadDataUrlList(rawImages, "defects/images", "image");
 
     // Khóa liên kết chuẩn với cây: chỉ gán khi "device" là seq có thật (FK không chặn giá trị lạ).

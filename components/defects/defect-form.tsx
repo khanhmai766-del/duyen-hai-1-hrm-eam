@@ -213,7 +213,6 @@ export function DefectForm({
       ...current,
       severity,
       severityCriteria: current.severity === severity ? current.severityCriteria : [],
-      images: ["1", "2"].includes(severity) ? current.images : [],
     }));
   }
   function toggleSeverityCriterion(id: string) {
@@ -638,7 +637,7 @@ export function DefectForm({
                 không phải trình tự bắt buộc. Chỉ đánh dấu mục ĐÃ ánh xạ xong. */}
             <TabBtn active={step === 1} onClick={() => setStep(1)} label="Gắn thiết bị" done={!!form.device} />
             <TabBtn active={step === 2} onClick={() => setStep(2)} label="Nội dung sửa chữa" muted />
-            {["1", "2"].includes(form.severity) && (
+            {["1", "2", "3", "4"].includes(form.severity) && (
               <TabBtn active={step === 3} onClick={() => setStep(3)} label="Hình ảnh khiếm khuyết" />
             )}
             <TabBtn active={step === 4} onClick={() => setStep(4)} label="BGĐ chỉ đạo" muted />
@@ -1190,7 +1189,7 @@ export function DefectForm({
             </Section>
           </div>
         </div>
-        {isSynced && ["1", "2"].includes(form.severity) && (
+        {isSynced && ["1", "2", "3", "4"].includes(form.severity) && (
           <div className={cn(step === 3 ? "block" : "hidden")}>
             <div className="mx-auto max-w-xl space-y-4">
               <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
@@ -1355,7 +1354,7 @@ export function DefectForm({
               <Field label="Ghi chú (Cột 15)" full>
                 <Textarea className="min-h-[88px] resize-y" value={form.note} onChange={(e) => set("note", e.target.value)} />
               </Field>
-              {["1", "2"].includes(form.severity) && (
+              {["1", "2", "3", "4"].includes(form.severity) && (
                 <Field label={`Hình ảnh khiếm khuyết (tối đa ${MAX_DEFECT_IMAGES})`} full>
                   <MultiImagePicker
                     value={form.images}
