@@ -588,6 +588,13 @@ export function DefectForm({
             condition: form.condition,
           });
         }
+        // Cờ Tồn đọng là dữ liệu Vận hành độc lập với ánh xạ thiết bị. Phiếu
+        // Sheet đã xử lý vẫn phải lưu được `false` ngay cả khi chưa/cũ không có
+        // deviceSystemSeq; nếu đặt trong nhánh ánh xạ bên dưới thì bỏ tick chỉ
+        // đổi giao diện và API không bao giờ nhận được giá trị mới.
+        if (operationUpdateAvailable && defect?.status === "DA_XU_LY") {
+          syncedPayload.postRepairAwaitingMaterial = form.postRepairAwaitingMaterial;
+        }
         if (form.deviceSystemSeq) {
           syncedPayload.deviceSystemSeq = form.deviceSystemSeq;
           syncedPayload.device = form.device || null;
@@ -597,9 +604,6 @@ export function DefectForm({
             deviceSeq,
             mappedUnit: form.relatedDeviceUnits[deviceSeq] ?? form.mappedDeviceUnit,
           }));
-          if (operationUpdateAvailable) {
-            syncedPayload.postRepairAwaitingMaterial = form.postRepairAwaitingMaterial;
-          }
         }
         // Chỉ gửi ảnh khi VHV chủ động lưu tại tab hình ảnh.
         // Lưu ánh xạ không được kích hoạt kiểm tra/tải lại ảnh.
