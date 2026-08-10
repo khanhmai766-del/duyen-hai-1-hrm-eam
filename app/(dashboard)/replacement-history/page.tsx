@@ -1,7 +1,7 @@
 "use client";
 
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
-import { ReplacementsPageContent } from "@/app/(dashboard)/replacements/page";
+import { ReplacementsPageContent } from "@/app/(dashboard)/replacements/replacements-view";
 
 /**
  * Lịch sử thay thế vật tư — tách khỏi tab của trang Lịch thay thế để tra cứu cho nhanh,
