@@ -763,7 +763,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   !note.trim() || proposedQuantity <= 0 || replacementDeviceSeqs.length === 0
                 }
                 onClick={submit}>
-                {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo phiếu
+                {create.isPending ? <Loader2 className="spin" size={14} /> : <Plus size={14} />} Tạo đề xuất
               </button>
             </div>
           </div>
