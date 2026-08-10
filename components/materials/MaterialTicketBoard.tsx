@@ -775,17 +775,19 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 }
 
 /* ================= phân quyền quy trình (ADMIN) ================= */
-const WF_STEPS: { key: keyof WorkflowRoleMap; label: string; hint: string }[] = [
-  { key: "create", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
-  { key: "confirm", label: "Xác nhận phiếu đề xuất", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "vhvReceive", label: "Ứng — VHV lãnh vật tư", hint: "Trống = chỉ cương vị được giao phiếu; nếu cấu hình = đúng các cương vị được chọn" },
-  { key: "stats", label: "Thống kê xác nhận ĐXVT (chọn mã vật tư + nhập số phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
-  { key: "statsHandover", label: "Xác nhận VHV nhận / trả phiếu ĐXVT", hint: "Bước tách riêng khỏi Thống kê xác nhận ĐXVT — trống = mặc định: cương vị Thống kê" },
-  { key: "receive", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "use", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "accept", label: "Nghiệm thu và xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
-  { key: "settle", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
-  { key: "manage", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
+// `short` là nhãn cột của ma trận — phải đọc được trong ~90px. Nhãn đầy đủ và diễn giải
+// mặc định nằm ở tooltip của ô tiêu đề, không bày hết ra màn hình.
+const WF_STEPS: { key: keyof WorkflowRoleMap; short: string; label: string; hint: string }[] = [
+  { key: "create", short: "Tạo phiếu", label: "Tạo phiếu / Đề xuất vật tư (B0)", hint: "Trống = mặc định: Quản trị, Kỹ thuật viên, Trưởng Ca/Trưởng Kíp" },
+  { key: "confirm", short: "Xác nhận ĐX", label: "Xác nhận phiếu đề xuất", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "vhvReceive", short: "Ứng · VHV lãnh", label: "Ứng — VHV lãnh vật tư", hint: "Trống = chỉ cương vị được giao phiếu; nếu cấu hình = đúng các cương vị được chọn" },
+  { key: "stats", short: "TK xác nhận ĐXVT", label: "Thống kê xác nhận ĐXVT (chọn mã vật tư + nhập số phiếu)", hint: "Trống = mặc định: cương vị Thống kê" },
+  { key: "statsHandover", short: "Giao/trả phiếu", label: "Xác nhận VHV nhận / trả phiếu ĐXVT", hint: "Bước tách riêng khỏi Thống kê xác nhận ĐXVT — trống = mặc định: cương vị Thống kê" },
+  { key: "receive", short: "Vật tư lãnh", label: "Xác nhận vật tư lãnh (khối lượng lãnh + nguồn lãnh)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "use", short: "Sử dụng", label: "Sử dụng vật tư (PCT/LCT + khối lượng dùng)", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "accept", short: "Nghiệm thu", label: "Nghiệm thu và xuất BBNT", hint: "Trống = mặc định: Trưởng Ca/Trưởng Kíp" },
+  { key: "settle", short: "Quyết toán", label: "Quyết toán vật tư", hint: "Trống = mặc định: cương vị Thống kê" },
+  { key: "manage", short: "Sửa / Xoá", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
 
 function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
@@ -798,6 +800,9 @@ function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
     if (data?.data && !roles) setRoles(data.data);
   }, [data, roles]);
 
+  const [query, setQuery] = useState("");
+  const [onlyAssigned, setOnlyAssigned] = useState(false);
+
   function toggle(step: keyof WorkflowRoleMap, position: string) {
     setRoles((r) => {
       if (!r) return r;
@@ -805,6 +810,28 @@ function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
       return { ...r, [step]: list.includes(position) ? list.filter((p) => p !== position) : [...list, position] };
     });
   }
+
+  /** Bấm tiêu đề cột: đang có ai thì bỏ hết (về mặc định), đang trống thì chọn hết. */
+  function toggleColumn(step: keyof WorkflowRoleMap, visible: string[]) {
+    setRoles((r) => {
+      if (!r) return r;
+      const covered = visible.length > 0 && visible.every((p) => r[step].includes(p));
+      return {
+        ...r,
+        [step]: covered ? r[step].filter((p) => !visible.includes(p)) : [...new Set([...r[step], ...visible])],
+      };
+    });
+  }
+
+  const assignedCountOf = (position: string) =>
+    roles ? WF_STEPS.filter((s) => roles[s.key].includes(position)).length : 0;
+
+  // Lọc theo ô tìm kiếm (không dấu) và theo "chỉ hiện cương vị đã giao".
+  const visiblePositions = positions.filter((p) => {
+    if (query.trim() && !normalizeText(p).includes(normalizeText(query))) return false;
+    if (onlyAssigned && assignedCountOf(p) === 0) return false;
+    return true;
+  });
 
   async function submit() {
     if (!roles) return;
@@ -820,27 +847,88 @@ function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="ovl" onClick={onClose} />
-      <div className="dlg" style={{ width: 560, maxHeight: "86vh", overflowY: "auto" }}>
+      <div className="dlg" style={{ width: 1060, maxWidth: "96vw", maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
         <div className="dlg-h"><b>Phân quyền quy trình thay thế vật tư</b>
           <button className="x" onClick={onClose}><X size={16} /></button></div>
-        <div className="frm">
-          <p className="note"><UserCog size={13} /> Chọn CƯƠNG VỊ được thao tác ở từng bước. Bước để trống sẽ dùng nhóm mặc định. Quản trị luôn thao tác được mọi bước.</p>
+        <div className="frm" style={{ minHeight: 0, flex: 1, overflow: "hidden" }}>
+          <p className="note"><UserCog size={13} /> Tích ô để giao CƯƠNG VỊ (dòng) vào BƯỚC (cột). Cột để trống dùng nhóm mặc định — di chuột vào tiêu đề cột để xem. Quản trị luôn thao tác được mọi bước.</p>
           {isLoading || !roles ? (
             <div className="empty"><Loader2 className="spin" size={16} /> Đang tải cấu hình…</div>
           ) : (
-            WF_STEPS.map((s) => (
-              <div key={s.key}>
-                <label>{s.label}</label>
-                <div className="wfchips">
-                  {positions.map((p) => (
-                    <button key={p} type="button" className={roles[s.key].includes(p) ? "on" : ""} onClick={() => toggle(s.key, p)}>
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                <p className="hint">{s.hint}</p>
+            <>
+              <div className="wfm-tools">
+                <input
+                  className="wfm-search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Tìm cương vị…"
+                  autoComplete="off"
+                />
+                <label className="wfm-toggle">
+                  <input type="checkbox" checked={onlyAssigned} onChange={(e) => setOnlyAssigned(e.target.checked)} />
+                  Chỉ hiện cương vị đã giao
+                </label>
+                <span className="wfm-count">{visiblePositions.length}/{positions.length} cương vị</span>
               </div>
-            ))
+              <div className="wfm-scroll">
+                <table className="wfm">
+                  <thead>
+                    <tr>
+                      <th className="wfm-rowhead">Cương vị</th>
+                      {WF_STEPS.map((s) => {
+                        const empty = roles[s.key].length === 0;
+                        return (
+                          <th
+                            key={s.key}
+                            title={`${s.label}\n${s.hint}\n\n(Bấm để chọn / bỏ cả cột)`}
+                            onClick={() => toggleColumn(s.key, visiblePositions)}
+                          >
+                            <span className="wfm-th-label">{s.short}</span>
+                            <span className={`wfm-th-sub${empty ? " df" : ""}`}>
+                              {empty ? "mặc định" : `${roles[s.key].length} cương vị`}
+                            </span>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visiblePositions.map((p) => (
+                      <tr key={p}>
+                        <th className="wfm-rowhead" title={p}>
+                          {p}
+                          {assignedCountOf(p) > 0 && <em>{assignedCountOf(p)}</em>}
+                        </th>
+                        {WF_STEPS.map((s) => {
+                          const on = roles[s.key].includes(p);
+                          return (
+                            <td key={s.key}>
+                              <button
+                                type="button"
+                                className={`wfm-cell${on ? " on" : ""}`}
+                                aria-pressed={on}
+                                aria-label={`${p} — ${s.label}`}
+                                title={`${p} — ${s.label}`}
+                                onClick={() => toggle(s.key, p)}
+                              >
+                                {on && <Check size={13} strokeWidth={3} />}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                    {visiblePositions.length === 0 && (
+                      <tr>
+                        <td className="wfm-empty" colSpan={WF_STEPS.length + 1}>
+                          Không có cương vị nào khớp bộ lọc.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -2404,6 +2492,34 @@ const CSS = `
 .wfchips{display:flex;flex-wrap:wrap;gap:6px;}
 .wfchips button{padding:6px 10px;border-radius:999px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:12px;cursor:pointer;color:#64748b;transition:.15s;}
 .wfchips button.on{border-color:${C.accent};background:${C.accent}12;color:${C.accent};}
+/* ---- Ma trận phân quyền quy trình: dòng = cương vị, cột = bước ---- */
+.wfm-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.wfm-search{max-width:240px;}
+.wfm-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:${C.muted};cursor:pointer;}
+.wfm-toggle input{width:15px;height:15px;accent-color:${C.accent};cursor:pointer;}
+.wfm-count{margin-left:auto;font-size:11.5px;font-weight:700;color:${C.soft};}
+/* Cuộn cả hai chiều; tiêu đề cột và cột cương vị dính lại để không mất ngữ cảnh. */
+.wfm-scroll{min-height:0;flex:1;overflow:auto;border:1px solid ${C.line};border-radius:12px;background:#fff;}
+.wfm{border-collapse:separate;border-spacing:0;width:100%;}
+.wfm thead th{position:sticky;top:0;z-index:3;background:${C.cream};border-bottom:1.5px solid ${C.line};padding:7px 6px;vertical-align:bottom;cursor:pointer;user-select:none;min-width:86px;transition:background .15s;}
+.wfm thead th:hover{background:#ecebe4;}
+.wfm thead th.wfm-rowhead{z-index:4;cursor:default;}
+.wfm thead th.wfm-rowhead:hover{background:${C.cream};}
+.wfm-th-label{display:block;font-size:11.5px;font-weight:800;color:${C.navy};line-height:1.25;}
+.wfm-th-sub{display:block;margin-top:2px;font-size:10px;font-weight:700;color:${C.accent};}
+.wfm-th-sub.df{color:${C.soft};font-style:italic;}
+/* Cột cương vị dính bên trái khi cuộn ngang. */
+.wfm .wfm-rowhead{position:sticky;left:0;z-index:2;background:#fff;text-align:left;font-size:12px;font-weight:700;color:${C.navy};padding:0 12px;min-width:190px;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1.5px solid ${C.line};}
+.wfm tbody tr:nth-child(even) .wfm-rowhead{background:#fafaf8;}
+.wfm tbody tr:hover .wfm-rowhead,.wfm tbody tr:hover td{background:${C.accent}08;}
+.wfm .wfm-rowhead em{margin-left:6px;font-style:normal;font-size:10px;font-weight:800;color:${C.accent};background:${C.accent}14;border-radius:999px;padding:1px 6px;}
+.wfm tbody td{text-align:center;padding:3px;border-bottom:1px solid ${C.line}80;}
+.wfm tbody tr:nth-child(even) td{background:#fafaf8;}
+.wfm tbody tr:last-child td{border-bottom:0;}
+.wfm-cell{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;border:1.5px solid ${C.line};background:#fff;color:#fff;cursor:pointer;transition:.13s;}
+.wfm-cell:hover{border-color:${C.accent};box-shadow:0 0 0 3px ${C.accent}18;}
+.wfm-cell.on{border-color:${C.accent};background:${C.accent};}
+.wfm-empty{padding:22px;text-align:center;font-size:12.5px;font-weight:600;color:${C.soft};}
 .material-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .material-cards button{min-height:50px;padding:9px 11px;border-radius:10px;border:1.5px solid ${C.line};background:#fff;text-align:left;color:${C.navy};cursor:pointer;transition:.15s;overflow:hidden;}
 .material-cards button:hover{border-color:${C.accent};box-shadow:0 8px 18px rgba(37,99,235,.08);}
@@ -2500,7 +2616,9 @@ const CSS = `
 .erp-readonly-labels span:last-child{text-align:right;}
 .note{display:flex;align-items:center;gap:6px;font-size:12px;border-radius:9px;padding:9px 11px;}
 .note.ung{background:${C.ungBg};color:${C.ung};}
-.frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;}
+/* flex-shrink:0 — hộp thoại ma trận phân quyền cho .frm làm flex column có vùng cuộn;
+   thiếu dòng này hàng nút bị co lại khi bảng cao. Các hộp thoại khác không đổi. */
+.frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;flex-shrink:0;}
 .frm-scroll .frm-f{position:sticky;bottom:-14px;z-index:2;margin:8px -18px -14px;padding:12px 18px;background:linear-gradient(180deg,rgba(255,255,255,.92),#fff 34%);border-top:1px solid ${C.line};}
 .panel{position:fixed;top:0;right:0;height:100%;width:460px;max-width:96vw;background:#fff;z-index:41;display:flex;flex-direction:column;box-shadow:-14px 0 44px rgba(15,23,42,.25);}
 .p-h{position:relative;padding:20px;color:#fff;display:flex;flex-direction:column;gap:8px;}
