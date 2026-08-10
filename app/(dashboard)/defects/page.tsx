@@ -44,7 +44,6 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 import { announcementPositionLabel } from "@/lib/positions";
-import { PositionScopeChip } from "@/components/shared/position-scope-chip";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 // Nhãn hiển thị của từng giá trị statusFilter. Bộ lọc kết quả vận hành không còn
@@ -610,8 +609,6 @@ export default function DefectsPage() {
           </Button>
         )}
       </PageHeader>
-
-      <PositionScopeChip scope={data?.meta?.positionScope} />
 
       {deviceSeqFilter && (
         <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

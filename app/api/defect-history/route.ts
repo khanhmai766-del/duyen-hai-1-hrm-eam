@@ -9,7 +9,7 @@ import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-m
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
 import { positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
-import { canViewPosition, positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
+import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -309,7 +309,6 @@ export async function GET(req: NextRequest) {
       finalizedTotal: data.filter((item) => item.historyStatus === "FINALIZED").length,
       pendingTotal: data.filter((item) => item.historyStatus === "PENDING").length,
       capped: history.length === HISTORY_TAKE || pendingRows.length === HISTORY_TAKE,
-      positionScope: positionViewScopeMeta(viewScope),
     });
   });
 }

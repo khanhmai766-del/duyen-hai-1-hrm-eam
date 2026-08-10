@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ListFilter, RotateCcw, Upload, FileClock } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
-import { PositionScopeChip } from "@/components/shared/position-scope-chip";
 import { ExportButton } from "@/components/shared/export-button";
 import { SearchBar } from "@/components/shared/search-bar";
 import { AnnualBackupExport } from "@/components/shared/annual-backup-export";
@@ -653,8 +652,6 @@ function ReplacementsPageContent() {
           />
         )}
       </PageHeader>
-
-      <PositionScopeChip scope={positionScope} />
 
       {/* Tabs + tìm kiếm cùng hàng; tìm kiếm nằm sát mép phải dưới cụm thao tác đầu trang. */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border">
