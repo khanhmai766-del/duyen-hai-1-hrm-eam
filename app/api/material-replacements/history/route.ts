@@ -6,7 +6,7 @@ import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { publicUserRef } from "@/lib/s3";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
-import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
+import { resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
 
