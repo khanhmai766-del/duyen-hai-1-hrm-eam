@@ -339,7 +339,8 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Lịch sử sửa chữa & Khiếm khuyết",
     feature: "Phạm vi xem phiếu khiếm khuyết",
     note:
-      "Mức Đọc/Cá nhân CHỈ thấy phiếu thuộc cương vị của mình (gộp cương vị chính và kiêm nhiệm), " +
+      "Mức Đọc/Cá nhân CHỈ thấy phiếu thuộc cương vị ĐANG LÀM VIỆC — người kiêm nhiệm muốn xem " +
+      "phần việc kia phải tự chuyển cương vị ở trang Tài khoản, " +
       "kèm cương vị cấp dưới theo sơ đồ ca trực: Trưởng ca thấy tất cả, Trưởng kíp thấy nhánh mình, " +
       "Lò trưởng/Máy trưởng thấy cả khối mình quản lý. Mức Quản lý/Toàn quyền thấy toàn phân xưởng. " +
       "Quyền này TÁCH RIÊNG khỏi quyền sửa — hạ phạm vi xem không làm mất quyền ghi phiếu của ai.",

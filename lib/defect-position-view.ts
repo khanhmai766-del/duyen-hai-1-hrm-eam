@@ -19,7 +19,8 @@
  *   - cương vị không bị giới hạn cây thiết bị (Quản đốc / Phó QĐ / KTV / Trưởng ca),
  *     vì các cương vị này không nằm trong danh mục vận hành nên không có mã để so.
  *
- * Còn lại: chỉ thấy cương vị của mình VÀ cương vị cấp dưới theo sơ đồ ca trực —
+ * Còn lại: chỉ thấy cương vị ĐANG LÀM VIỆC (không gộp kiêm nhiệm — xem `ownPositionsOf`)
+ * VÀ cương vị cấp dưới của nó theo sơ đồ ca trực —
  * phân cấp lấy nguyên từ `canViewUnmappedDefectPosition` (lib/positions.ts) nên
  * hai nhánh cũ giờ dùng đúng một luật, không thể lệch nhau.
  */
@@ -62,17 +63,24 @@ type DefectPositionCarrier = {
 };
 
 /**
- * Các cương vị người dùng đang mang: chính + hai kiêm nhiệm + cương vị đang làm việc.
- * Gộp cả bốn (giống phạm vi ghi của PCCC — xem lib/pccc-service.ts): người quên chuyển
- * "cương vị đang làm việc" thì vẫn phải thấy phần việc theo chức danh đã khai báo.
+ * CHỈ cương vị ĐANG LÀM VIỆC — cố ý KHÔNG gộp cương vị kiêm nhiệm.
+ *
+ * Nghiệp vụ chốt (2026-08-10): người kiêm nhiệm chỉ nhìn phần việc của cương vị mình
+ * đang trực; muốn xem phần kiêm nhiệm thì tự chuyển cương vị đang làm việc ở trang Tài
+ * khoản. Gộp cả hai làm bảng lẫn lộn hai đầu việc — test2 trực Trợ thủ nhưng vẫn thấy
+ * cả khiếm khuyết FGD.
+ *
+ * KHÁC với phạm vi GHI của PCCC (lib/pccc-service.ts) vốn gộp mọi cương vị được gán:
+ * ở đó gộp để người quên chuyển cương vị vẫn ghi được, còn ở đây thu hẹp là để nhìn
+ * cho gọn. Hai luật khác nhau vì hai mục đích khác nhau, không phải bỏ sót.
+ *
+ * `requireUser()` đã quy `currentPosition` về đúng một cương vị hợp lệ trong số cương vị
+ * được gán (`effectiveUserPosition`, lib/current-position.ts), chưa chọn thì lấy cương vị
+ * chính — nên ở đây không cần dò lại danh sách.
  */
 function ownPositionsOf(user: DefectPositionCarrier) {
-  return [
-    user.primaryPosition ?? user.position,
-    user.secondaryPosition,
-    user.secondaryPosition2,
-    user.currentPosition,
-  ].filter((value): value is string => Boolean(value && String(value).trim()));
+  const active = user.currentPosition ?? user.primaryPosition ?? user.position;
+  return [active].filter((value): value is string => Boolean(value && String(value).trim()));
 }
 
 /**
