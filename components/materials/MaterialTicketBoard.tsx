@@ -53,11 +53,11 @@ const STATUS: Record<string, { label: string; c: string }> = {
 };
 const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
   CHUA_CHON: [
-    { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
+    { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "CHO_XAC_NHAN", label: "Xác nhận yêu cầu", who: "Trưởng ca/Trưởng kíp" },
   ],
   DE_XUAT: [
-    { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
+    { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
@@ -66,7 +66,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   UNG: [
-    { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
+    { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "VHV_LANH_VAT_TU", label: "VHV lãnh vật tư", who: "VHV được giao thực hiện" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: "CHO_NGHIEM_THU", label: "Nghiệm thu và xuất BBNT", who: "Theo phân quyền quy trình" },
@@ -74,7 +74,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
   SU_DUNG_HIEN_CO: [
-    { key: "B0", label: "VHV tạo phiếu", who: "VHV" },
+    { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "NHAN_TU_HIEN_CO", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
     { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
