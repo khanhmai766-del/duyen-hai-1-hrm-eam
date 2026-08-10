@@ -424,6 +424,29 @@ export function s3ProxyUrl(key: string, fileName?: string) {
 }
 
 /**
+ * Đổi một giá trị ảnh/tệp ĐANG LƯU thành đường dẫn TRÌNH DUYỆT TẢI ĐƯỢC.
+ *
+ * Bucket MinIO không mở quyền đọc ẩn danh: mở thẳng URL S3 sẽ nhận 403 AccessDenied,
+ * thẻ <img> hiện ảnh vỡ. Mọi thứ hiển thị được trong web đều phải đi qua proxy
+ * `/api/files/s3?key=…` (đã có sẵn cho avatar, chữ ký PCCC, hướng dẫn thiết bị).
+ *
+ * CHỈ dùng ở BIÊN TRẢ VỀ của API. Không được đổi trước khi ghi xuống DB — cột phải
+ * giữ URL S3 gốc để còn suy ra key khi xoá tệp.
+ */
+export function publicFileRef(value: string | null | undefined) {
+  if (!value) return null;
+  // Ảnh base64 cũ và đường proxy sẵn có thì giữ nguyên; link ngoài (Google Photos…)
+  // không suy ra key nên cũng giữ nguyên.
+  if (value.startsWith("data:") || value.startsWith("/api/files/s3?")) return value;
+  const key = keyFromPublicUrl(value);
+  return key ? s3ProxyUrl(key) : value;
+}
+
+export function publicFileRefs(values: string[] | null | undefined) {
+  return (values ?? []).map(publicFileRef).filter((value): value is string => !!value);
+}
+
+/**
  * Tầng 4 — user nhúng trong DANH SÁCH (createdBy/doneBy...): avatar phục vụ qua
  * proxy theo key; tuyệt đối không để base64 lọt vào payload list (mỗi avatar
  * base64 ~20-40KB, list 50 dòng kèm avatar = hàng MB).

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
-import { deleteFromS3, maybeUploadDataUrlList, publicUserRef } from "@/lib/s3";
+import { deleteFromS3, keyFromPublicUrl, maybeUploadDataUrlList, publicFileRef, publicFileRefs, publicUserRef } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { parseDateInput } from "@/lib/utils";
 import { resolveDefectShiftLeader } from "@/lib/defect-shift-leader";
@@ -66,7 +66,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       return fail("Cương vị của bạn không có quyền xem phiếu khiếm khuyết này", 403);
     }
 
-    return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
+    return ok({
+      ...defect,
+      createdBy: publicUserRef(defect.createdBy),
+      // Ảnh lưu URL S3 gốc; bucket không mở đọc ẩn danh nên phải trả về đường proxy,
+      // nếu không thẻ <img> nhận 403 và hiện ảnh vỡ (xem lib/s3.ts publicFileRef).
+      images: publicFileRefs(defect.images),
+      imageUrl: publicFileRef(defect.imageUrl),
+    });
   });
 }
 
@@ -342,11 +349,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return updated;
       });
       if (images) {
-        const retained = new Set(images);
-        await Promise.all(existingImages.filter((url) => !retained.has(url)).map((url) => deleteFromS3(url)));
+        // So bằng KEY chứ không bằng chuỗi: client nhận ảnh dưới dạng đường proxy
+        // (/api/files/s3?key=…) nhưng DB lưu URL S3 gốc, so chuỗi thẳng sẽ coi mọi ảnh
+        // giữ lại là đã gỡ và XOÁ SẠCH tệp trên S3.
+        const retained = new Set(images.map((url) => keyFromPublicUrl(url) ?? url));
+        await Promise.all(
+          existingImages
+            .filter((url) => !retained.has(keyFromPublicUrl(url) ?? url))
+            .map((url) => deleteFromS3(url))
+        );
       }
       await audit(user.id, "UPDATE_SYNCED_DEFECT_LOCAL_DATA", "Defect", defect.id, auditDetailWithPosition(user));
-      return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
+      return ok({
+      ...defect,
+      createdBy: publicUserRef(defect.createdBy),
+      // Ảnh lưu URL S3 gốc; bucket không mở đọc ẩn danh nên phải trả về đường proxy,
+      // nếu không thẻ <img> nhận 403 và hiện ảnh vỡ (xem lib/s3.ts publicFileRef).
+      images: publicFileRefs(defect.images),
+      imageUrl: publicFileRef(defect.imageUrl),
+    });
     }
     if (body.shiftLeaderId !== undefined && !String(body.shiftLeaderId ?? "").trim()) {
       return fail("Vui lòng chọn Trưởng ca");
@@ -462,11 +483,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return updated;
     });
     if (images) {
-      const retained = new Set(images);
-      await Promise.all(existingImages.filter((url) => !retained.has(url)).map((url) => deleteFromS3(url)));
+      // So bằng KEY — xem chú thích ở nhánh phiếu đồng bộ phía trên.
+      const retained = new Set(images.map((url) => keyFromPublicUrl(url) ?? url));
+      await Promise.all(
+        existingImages
+          .filter((url) => !retained.has(keyFromPublicUrl(url) ?? url))
+          .map((url) => deleteFromS3(url))
+      );
     }
     await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user));
-    return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
+    return ok({
+      ...defect,
+      createdBy: publicUserRef(defect.createdBy),
+      // Ảnh lưu URL S3 gốc; bucket không mở đọc ẩn danh nên phải trả về đường proxy,
+      // nếu không thẻ <img> nhận 403 và hiện ảnh vỡ (xem lib/s3.ts publicFileRef).
+      images: publicFileRefs(defect.images),
+      imageUrl: publicFileRef(defect.imageUrl),
+    });
   });
 }
 

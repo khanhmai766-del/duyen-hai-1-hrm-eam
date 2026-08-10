@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { uploadImageBufferToS3 } from "@/lib/s3";
+import { s3ProxyUrl, uploadImageBufferToS3 } from "@/lib/s3";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 
 export const runtime = "nodejs";
@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
     });
 
     await audit(user.id, "UPLOAD_DEFECT_IMAGE", "Defect", uploaded.key, file.name);
-    return ok({ url: uploaded.url, key: uploaded.key });
+    // Trả đường proxy: URL S3 trực tiếp không tải được (bucket không mở đọc ẩn danh).
+    // `storageUrl` là URL gốc để lưu xuống DB nếu cần.
+    return ok({ url: s3ProxyUrl(uploaded.key), storageUrl: uploaded.url, key: uploaded.key });
   });
 }
