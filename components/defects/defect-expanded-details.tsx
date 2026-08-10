@@ -7,6 +7,7 @@ import {
   DEFECT_SEVERITY,
   defectSeverityCriteriaLabels,
 } from "@/lib/constants";
+import { ImageLightbox } from "@/components/shared/image-lightbox";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -19,6 +20,8 @@ import { cn, formatDate } from "@/lib/utils";
  * cứu được đúng ba bảng này ở trang Lịch sử.
  */
 export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
+  // Ảnh nào đang mở trong khung xem; null = đóng.
+  const [viewerIndex, setViewerIndex] = React.useState<number | null>(null);
   const detailCardClass = "w-full space-y-2 rounded-xl border border-border/70 bg-white/70 p-4 shadow-sm";
   const severityCriteria = defectSeverityCriteriaLabels(defect.severity, defect.severityCriteria);
   const severityDisplay = severityCriteria.length > 0
@@ -85,12 +88,25 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
             <div className="mb-2 font-semibold text-ink">Hình ảnh:</div>
             <div className="flex flex-wrap gap-2">
               {defect.images.map((src, index) => (
-                <a key={src} href={src} target="_blank" rel="noreferrer" className="block">
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => setViewerIndex(index)}
+                  aria-label={`Xem ảnh khiếm khuyết ${index + 1}`}
+                  className="block rounded-lg transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`Ảnh khiếm khuyết ${index + 1}`} className="h-20 w-20 rounded-lg border border-border object-cover" />
-                </a>
+                  <img src={src} alt={`Ảnh khiếm khuyết ${index + 1}`} className="h-20 w-20 cursor-zoom-in rounded-lg border border-border object-cover" />
+                </button>
               ))}
             </div>
+            <ImageLightbox
+              images={defect.images}
+              index={viewerIndex}
+              onIndexChange={setViewerIndex}
+              onClose={() => setViewerIndex(null)}
+              alt="Ảnh khiếm khuyết"
+            />
           </div>
         )}
       </div>
