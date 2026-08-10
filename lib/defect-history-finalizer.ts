@@ -211,7 +211,16 @@ export async function finalizePendingDefectHistories(
 
     if (finalized.outcome === "FINALIZED") {
       result.finalizedCount++;
-      await Promise.all(finalized.images.map((url) => deleteFromS3(url)));
+      // allSettled chứ KHÔNG phải Promise.all: transaction đã commit xong (lịch sử đã
+      // tạo, cột images đã xoá), nên một lỗi S3 nhất thời mà ném ra ở đây sẽ giết cả
+      // vòng lặp — các bản chờ còn lại trong lô không được chốt. Ghi log rồi đi tiếp;
+      // tệp sót lại thành mồ côi và soát được bằng cách đối chiếu S3 với DB.
+      const cleanup = await Promise.allSettled(finalized.images.map((url) => deleteFromS3(url)));
+      for (const item of cleanup) {
+        if (item.status === "rejected") {
+          console.error("[finalize defect history] Không xoá được ảnh khiếm khuyết", item.reason);
+        }
+      }
     } else if (finalized.outcome === "CANCELLED") {
       result.cancelledCount++;
     } else if (finalized.outcome === "POSTPONED") {
