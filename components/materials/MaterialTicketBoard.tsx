@@ -447,6 +447,77 @@ type TicketDeviceOption = { seq: string; label: string; system: string | null; m
 const totalMaterialErpStock = (material: { erpCodes: { erpStock: number }[] }) =>
   material.erpCodes.reduce((total, item) => total + Number(item.erpStock || 0), 0);
 
+function SystemMultiSelect({
+  options,
+  value,
+  onChange,
+  disabled = false,
+  placeholder = "— Chọn một hoặc nhiều hệ thống —",
+}: {
+  options: string[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const allSelected = options.length > 0 && options.every((system) => value.includes(system));
+
+  function toggle(system: string) {
+    onChange(value.includes(system)
+      ? value.filter((item) => item !== system)
+      : [...value, system]);
+  }
+
+  return (
+    <div className="device-multi-wrap system-multi-wrap">
+      <details className={`device-multiselect system-multiselect ${disabled ? "disabled" : ""}`}>
+        <summary onClick={(event) => { if (disabled) event.preventDefault(); }}>
+          <span className="device-multi-summary">
+            <b>{value.length ? `${value.length} hệ thống đã chọn` : placeholder}</b>
+            {value.length > 0 && <small>Có thể tiếp tục chọn thêm hệ thống</small>}
+          </span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </summary>
+        <div className="device-multi-panel" role="group" aria-label="Chọn hệ thống thiết bị">
+          <div className="device-multi-toolbar">
+            <span>{options.length} hệ thống phù hợp</span>
+            <button
+              type="button"
+              disabled={!options.length}
+              onClick={() => onChange(allSelected ? [] : [...options])}
+            >
+              {allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+            </button>
+          </div>
+          <div className="device-multi-options system-multi-options">
+            {options.map((system) => {
+              const checked = value.includes(system);
+              return (
+                <label key={system} className={checked ? "checked" : ""}>
+                  <input type="checkbox" checked={checked} onChange={() => toggle(system)} />
+                  <span className="device-check"><Check size={12} /></span>
+                  <span><b>{system}</b></span>
+                </label>
+              );
+            })}
+            {!options.length && <div className="device-multi-empty">Chưa có hệ thống phù hợp với vật tư đã chọn.</div>}
+          </div>
+        </div>
+      </details>
+      {value.length > 0 && (
+        <div className="device-selected-list system-selected-list" aria-label="Các hệ thống đã chọn">
+          {value.map((system) => (
+            <span key={system} title={system}>
+              <Check size={11} /> {system}
+              <button type="button" onClick={() => toggle(system)} aria-label={`Bỏ chọn ${system}`}><X size={11} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DeviceMultiSelect({
   options,
   allOptions,
@@ -532,7 +603,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
   const [selectedErpCode, setSelectedErpCode] = useState("");
   const [proposedQuantity, setProposedQuantity] = useState(1);
   const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>([]);
-  const [replacementSystem, setReplacementSystem] = useState("");
+  const [replacementSystems, setReplacementSystems] = useState<string[]>([]);
   const { data: opts } = useTicketOptions(true); // lấy danh sách cương vị
   const create = useCreateTicket();
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
@@ -559,10 +630,10 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     [availableDeviceOptions]
   );
   const selectedDeviceOptions = useMemo(
-    () => replacementSystem
-      ? availableDeviceOptions.filter((device) => device.system?.trim() === replacementSystem)
+    () => replacementSystems.length
+      ? availableDeviceOptions.filter((device) => replacementSystems.includes(device.system?.trim() ?? ""))
       : availableDeviceOptions,
-    [availableDeviceOptions, replacementSystem]
+    [availableDeviceOptions, replacementSystems]
   );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
@@ -578,15 +649,23 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
       if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
-      if (replacementSystem) setReplacementSystem("");
+      if (replacementSystems.length) setReplacementSystems([]);
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
       setReplacementDeviceSeqs([]);
-      setReplacementSystem("");
+      setReplacementSystems([]);
     }
-  }, [materialCards, replacementDeviceSeqs.length, replacementSystem, selectedMaterialId, selectedErpCode]);
+  }, [materialCards, replacementDeviceSeqs.length, replacementSystems.length, selectedMaterialId, selectedErpCode]);
+
+  React.useEffect(() => {
+    const validSystems = new Set(replacementSystemOptions);
+    setReplacementSystems((current) => {
+      const next = current.filter((system) => validSystems.has(system));
+      return next.length === current.length ? current : next;
+    });
+  }, [replacementSystemOptions]);
 
   React.useEffect(() => {
     if (!selectedErpOptions.length) {
@@ -611,7 +690,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
     setSelectedMaterialId("");
     setSelectedErpCode("");
     setReplacementDeviceSeqs([]);
-    setReplacementSystem("");
+    setReplacementSystems([]);
   }
 
   async function submit() {
@@ -658,7 +737,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             </div>
 
             <label>Cương vị được giao thực hiện *</label>
-            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystem(""); }}>
+            <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>
               <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
               {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -666,7 +745,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats ticket-category-options">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystem(""); }}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>{c}</button>
               ))}
             </div>
 
@@ -684,7 +763,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                         key={m.id}
                         type="button"
                         className={selectedMaterialId === m.id ? "on" : ""}
-                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystem(""); }}
+                        onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}
                         title={`${m.code} - ${m.name}`}
                       >
                         <span>{m.name}</span>
@@ -721,25 +800,19 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                 </div><div className="field qty-field">
                     <label>Số lượng đề xuất *</label>
                     <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
-                  </div></div>
+                </div></div>
                 <label>Thuộc hệ thống</label>
-                <select
-                  value={replacementSystem}
+                <SystemMultiSelect
+                  options={replacementSystemOptions}
+                  value={replacementSystems}
+                  onChange={setReplacementSystems}
                   disabled={!selectedMaterialId || !replacementSystemOptions.length}
-                  onChange={(e) => {
-                    const system = e.target.value;
-                    setReplacementSystem(system);
-                  }}
-                >
-                  <option value="">
-                    {!selectedMaterialId
-                      ? "— Chọn tên vật tư trước —"
-                      : replacementSystemOptions.length
-                        ? "— Chọn hệ thống / thiết bị —"
-                        : "— Chưa khai báo hệ thống / thiết bị —"}
-                  </option>
-                  {replacementSystemOptions.map((system) => <option key={system} value={system}>{system}</option>)}
-                </select>
+                  placeholder={!selectedMaterialId
+                    ? "— Chọn tên vật tư trước —"
+                    : replacementSystemOptions.length
+                      ? "— Chọn một hoặc nhiều hệ thống —"
+                      : "— Chưa khai báo hệ thống / thiết bị —"}
+                />
                 <label>Thiết bị thay thế *</label>
                 <DeviceMultiSelect
                   options={selectedDeviceOptions}
