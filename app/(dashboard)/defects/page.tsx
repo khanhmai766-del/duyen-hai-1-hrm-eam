@@ -1061,7 +1061,7 @@ export default function DefectsPage() {
       {formOpen && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-ink/40" onClick={() => setFormOpen(false)} />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-xl animate-in slide-in-from-right">
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-xl animate-in slide-in-from-right xl:w-[min(1500px,calc(100vw-3rem))] xl:max-w-none">
             <div className="flex items-center gap-2 border-b border-border p-4">
               <button onClick={() => setFormOpen(false)} className="rounded-md p-1.5 hover:bg-muted" aria-label="Đóng"><X className="h-5 w-5" /></button>
               <h2 className="text-lg font-bold text-ink">
@@ -1071,6 +1071,7 @@ export default function DefectsPage() {
             <DefectForm
               defect={editTarget}
               section={section}
+              showDeviceHistory
               onDone={() => setFormOpen(false)}
               onMappingSaved={(updated) => {
                 setFormOpen(false);

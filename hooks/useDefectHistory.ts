@@ -30,6 +30,8 @@ export interface DefectHistoryFilters {
   device?: string;
   deviceSeq?: string;
   includeDescendants?: string;
+  /** Giới hạn số dòng cho các khối tra cứu nhanh, ví dụ lúc ra phiếu. */
+  limit?: string;
   from?: string;
   to?: string;
 }

@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
     // TRƯỚC khi client kịp lọc: S1 có 818 bản đã chốt, lấy 300 rồi mới lọc Cơ →
     // hiện chưa tới 300/532 dòng thật. Phải lọc ngay trong SQL.
     const requestType = searchParams.get("requestType")?.trim();
+    const requestedLimit = Number.parseInt(searchParams.get("limit") ?? String(HISTORY_TAKE), 10);
+    const queryTake = Math.min(HISTORY_TAKE, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : HISTORY_TAKE));
 
     const where: Record<string, unknown> = {};
     const andConditions: Record<string, unknown>[] = [];
@@ -183,7 +185,7 @@ export async function GET(req: NextRequest) {
         where,
         orderBy: { performedAt: "desc" },
         include: INCLUDE,
-        take: HISTORY_TAKE,
+        take: queryTake,
       }),
       prisma.defectHistoryPending.findMany({
         // Mọi điều kiện thu hẹp được đều phải nằm trong SQL, TRƯỚC `take`. Trước đây
@@ -209,7 +211,7 @@ export async function GET(req: NextRequest) {
           },
         },
         orderBy: { performedAt: "desc" },
-        take: HISTORY_TAKE,
+        take: queryTake,
       }),
     ]);
     const finalizedData = history
@@ -308,7 +310,7 @@ export async function GET(req: NextRequest) {
       total: data.length,
       finalizedTotal: data.filter((item) => item.historyStatus === "FINALIZED").length,
       pendingTotal: data.filter((item) => item.historyStatus === "PENDING").length,
-      capped: history.length === HISTORY_TAKE || pendingRows.length === HISTORY_TAKE,
+      capped: history.length === queryTake || pendingRows.length === queryTake,
     });
   });
 }

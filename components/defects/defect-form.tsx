@@ -42,6 +42,7 @@ import {
   defectEnvironmentSheetFromName,
 } from "@/lib/defect-environment-sheet";
 import { DEFECT_SECTIONS, defaultRequestTypeOf, type DefectSectionKey } from "@/lib/defect-section";
+import { DeviceDefectHistory } from "@/components/defects/device-defect-history";
 
 function toDateInput(v: Date | string | null | undefined): string {
   return formatDateInput(v);
@@ -82,6 +83,7 @@ export function DefectForm({
   initialMaterialRequest,
   section,
   lockDevice = false,
+  showDeviceHistory = false,
   onDone,
   onMappingSaved,
   onCancel,
@@ -99,6 +101,7 @@ export function DefectForm({
   initialMaterialRequest?: DefectMaterialRequestSeed | null;
   section?: DefectSectionKey;
   lockDevice?: boolean;
+  showDeviceHistory?: boolean;
   onDone?: () => void;
   onMappingSaved?: (defect: DefectItem) => void;
   onCancel?: () => void;
@@ -657,7 +660,16 @@ export function DefectForm({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+      <div className="flex min-h-0 flex-1">
+        {showDeviceHistory && form.device && (
+          <DeviceDefectHistory
+            deviceSeq={form.device}
+            deviceName={selectedDeviceQuery.data?.data.name ?? (form.sourceDeviceRaw || form.device)}
+            deviceCode={selectedDeviceQuery.data?.data.kks}
+            mappedUnit={form.mappedDeviceUnit}
+          />
+        )}
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-5">
         <div className={cn(step === 1 ? "block" : "hidden")}>
           <div className="mx-auto max-w-2xl space-y-6">
             {materialRequest && (
@@ -1385,6 +1397,7 @@ export function DefectForm({
           </div>
         </div>
 
+        </div>
       </div>
 
       {/* Footer */}
