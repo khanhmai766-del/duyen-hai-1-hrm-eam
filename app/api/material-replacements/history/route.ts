@@ -8,6 +8,7 @@ import { publicUserRef } from "@/lib/s3";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 import { resolvePositionViewScope } from "@/lib/position-data-scope";
 import { normalizeText } from "@/lib/nav";
+import { normalizePctNumber, normalizeReplacementSourceNote } from "@/lib/material-replacement-source";
 
 export const dynamic = "force-dynamic";
 
@@ -222,6 +223,8 @@ export async function GET(req: NextRequest) {
           : null;
         return {
           ...log,
+          pctNumber: normalizePctNumber(log.pctNumber) || null,
+          sourceNote: normalizeReplacementSourceNote(log.sourceNote, log.pctNumber) || null,
           doneBy: publicUserRef(log.doneBy),
           /** User trùng duy nhất với tên trên sổ; null nếu không tìm thấy hoặc bị trùng tên. */
           recordedByUser: recordedByUser ? publicUserRef(recordedByUser) : null,

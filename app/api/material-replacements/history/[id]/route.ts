@@ -9,6 +9,7 @@ import { canEditMaterialReplacement } from "@/lib/material-replacement-access";
 import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
 import { MATERIAL_CATEGORIES } from "@/lib/constants";
 import { assertSeqEditable } from "@/lib/server-access";
+import { normalizePctNumber, normalizeReplacementSourceNote } from "@/lib/material-replacement-source";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // liệu lệch khỏi nguồn gốc của nó.
     const current = await prisma.materialReplacementLog.findUnique({
       where: { id: params.id },
-      select: { importSource: true },
+      select: { importSource: true, pctNumber: true },
     });
     if (!current) return fail("Không tìm thấy ghi nhận thay thế", 404);
     const archiveFields: Prisma.MaterialReplacementLogUpdateInput = {};
@@ -84,8 +85,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         archiveFields.materialCategory = c;
       }
       if (body.materialNameLabel !== undefined) archiveFields.materialNameLabel = text(body.materialNameLabel);
-      if (body.pctNumber !== undefined) archiveFields.pctNumber = text(body.pctNumber);
-      if (body.sourceNote !== undefined) archiveFields.sourceNote = text(body.sourceNote);
+      const effectivePctNumber =
+        body.pctNumber !== undefined
+          ? normalizePctNumber(String(body.pctNumber ?? ""))
+          : normalizePctNumber(current.pctNumber);
+      if (body.pctNumber !== undefined) archiveFields.pctNumber = effectivePctNumber || null;
+      if (body.sourceNote !== undefined) {
+        archiveFields.sourceNote =
+          normalizeReplacementSourceNote(String(body.sourceNote ?? ""), effectivePctNumber) || null;
+      }
       if (body.unitLabel !== undefined) archiveFields.unitLabel = text(body.unitLabel);
       if (body.materialId !== undefined) {
         const id = text(body.materialId);

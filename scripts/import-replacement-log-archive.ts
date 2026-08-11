@@ -16,6 +16,7 @@ import fs from "fs";
 import { prisma } from "@/lib/prisma";
 import { normalizeText } from "@/lib/nav";
 import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
+import { normalizePctNumber, normalizeReplacementSourceNote } from "@/lib/material-replacement-source";
 
 const IMPORT_SOURCE = "SHEET_VT";
 
@@ -49,6 +50,7 @@ async function main() {
     const first = String(r.vhvSuDung || "").split(/[\n,;]/)[0].trim();
     const hit = byName.get(normalizeText(r.vhvSuDung)) ?? byName.get(normalizeText(first)) ?? null;
     const code = positionCodeOf(r.cuongViChuan);
+    const pctNumber = normalizePctNumber(r.pct);
     return {
       importKey: `${String(r.tab).trim()}|${r.row}`,
       matched: Boolean(hit),
@@ -62,8 +64,8 @@ async function main() {
         quantity: r.qty === null ? null : Math.round(r.qty),
         note: r.noiDung || null,
         unitLabel: r.unit || null,
-        pctNumber: r.pct || null,
-        sourceNote: r.ghiChu || null,
+        pctNumber: pctNumber || null,
+        sourceNote: normalizeReplacementSourceNote(r.ghiChu, pctNumber) || null,
         materialNameLabel: r.tenVT || null,
         materialCategory: r.loai || null,
         managingPosition: code ? positionLabelOf(code) : r.cuongViChuan || null,

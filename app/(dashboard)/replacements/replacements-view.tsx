@@ -59,6 +59,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { EquipmentTreePicker } from "@/components/devices/equipment-tree-picker";
 import { usePositions } from "@/hooks/useUsers";
+import { normalizePctNumber } from "@/lib/material-replacement-source";
 
 type TabKey = "schedule" | "status" | "history";
 type HistorySortKey = "subject" | "source" | "replacedAt" | "quantity" | "doneBy" | "locked";
@@ -523,7 +524,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         header: "Số PCT",
         width: 16,
         align: "center" as const,
-        value: (l: ReplacementLogItem) => l.defectHistory?.workOrderNumber ?? l.pctNumber ?? "",
+        value: (l: ReplacementLogItem) => normalizePctNumber(l.defectHistory?.workOrderNumber ?? l.pctNumber),
       },
       {
         key: "note",
@@ -1107,7 +1108,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                           </Link>
                         ) : l.imported ? (
                           <span className="text-[12.5px] text-muted-foreground" title="Nhập từ sổ theo dõi vật tư">
-                            {l.pctNumber || "—"}
+                            {normalizePctNumber(l.pctNumber) || "—"}
                           </span>
                         ) : (
                           <span className="text-[12.5px] text-muted-foreground">Ghi thủ công</span>
@@ -1312,7 +1313,7 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
     setCategory(log.materialCategory ?? "");
     setMaterialName(log.materialNameLabel ?? "");
     setUnitLabel(log.unitLabel ?? "");
-    setPctNumber(log.pctNumber ?? "");
+    setPctNumber(normalizePctNumber(log.pctNumber));
     setSourceNote(log.sourceNote ?? "");
     setDeviceSeq(log.deviceSeq ?? "");
     setDeviceName(log.deviceLabel ?? "");
@@ -1333,7 +1334,7 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
               materialCategory: category,
               materialNameLabel: materialName,
               unitLabel,
-              pctNumber,
+              pctNumber: normalizePctNumber(pctNumber),
               sourceNote,
               deviceSeq,
             }
@@ -1515,7 +1516,7 @@ function historySortValue(row: ReplacementLogItem, key: HistorySortKey): string 
   if (key === "quantity") return row.quantity ?? 0;
   if (key === "doneBy") return row.doneByName || row.doneBy.name;
   if (key === "locked") return replacementHistoryStatus(row) === "PENDING" ? 1 : 0;
-  if (key === "source") return row.requestNumber ?? row.defectHistory?.workOrderNumber ?? row.pctNumber ?? "";
+  if (key === "source") return normalizePctNumber(row.requestNumber ?? row.defectHistory?.workOrderNumber ?? row.pctNumber);
   return `${replacement?.material.name ?? row.materialNameLabel ?? ""} ${device?.name ?? row.deviceLabel ?? ""} ${device?.code ?? row.deviceSeq ?? ""}`;
 }
 
