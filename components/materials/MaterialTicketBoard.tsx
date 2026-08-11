@@ -133,16 +133,10 @@ export default function MaterialTicketBoard({
   creating = false,
   searchQ = "",
   onCloseCreate,
-  rolesOpen: controlledRolesOpen,
-  onOpenRoles,
-  onCloseRoles,
 }: {
   creating?: boolean;
   searchQ?: string;
   onCloseCreate?: () => void;
-  rolesOpen?: boolean;
-  onOpenRoles?: () => void;
-  onCloseRoles?: () => void;
 } = {}) {
   const [monthFilter, setMonthFilter] = useState(() => materialTicketMonthKey());
   const { data, isLoading } = useMaterialTickets(monthFilter);
@@ -154,12 +148,7 @@ export default function MaterialTicketBoard({
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [editTicket, setEditTicket] = useState<MaterialTicket | null>(null);
   const [delTicket, setDelTicket] = useState<MaterialTicket | null>(null);
-  const [rolesOpen, setRolesOpen] = useState(false);
   const del = useDeleteTicket();
-  const isRolesControlled = controlledRolesOpen !== undefined;
-  const isRolesOpen = isRolesControlled ? controlledRolesOpen : rolesOpen;
-  const openRoles = onOpenRoles ?? (() => setRolesOpen(true));
-  const closeRoles = onCloseRoles ?? (() => setRolesOpen(false));
 
   const tickets = data?.tickets ?? [];
   const viewer = data?.viewer ?? null;
@@ -274,11 +263,6 @@ export default function MaterialTicketBoard({
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
         </label>
-        {viewer?.isAdmin && !isRolesControlled && (
-          <button className="btn ghost" onClick={openRoles}>
-            <UserCog size={14} /> Phân quyền quy trình
-          </button>
-        )}
       </div>
 
       <div className="list">
@@ -400,8 +384,6 @@ export default function MaterialTicketBoard({
       </div>
 
       {creating && <CreateDialog onClose={() => onCloseCreate?.()} onOpen={setOpenId} />}
-
-      {isRolesOpen && <WorkflowRolesDialog onClose={closeRoles} />}
 
       {editTicket && <EditDialog t={editTicket} onClose={() => setEditTicket(null)} />}
 
@@ -863,7 +845,7 @@ const WF_STEPS: { key: keyof WorkflowRoleMap; short: string; label: string; hint
   { key: "manage", short: "Sửa / Xoá", label: "Sửa / Xoá phiếu", hint: "Trống = người tạo phiếu; nếu cấu hình = đúng các cương vị được chọn (Quản trị luôn được)" },
 ];
 
-function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
+export function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
   const { data, isLoading } = useWorkflowRoles(true);
   const save = useSaveWorkflowRoles();
   const positions = usePositions();
@@ -919,6 +901,7 @@ function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <>
+      <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: CSS }} />
       <div className="ovl" onClick={onClose} />
       <div className="dlg wfm-dialog" style={{ maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
         <div className="dlg-h"><b>Phân quyền quy trình thay thế vật tư</b>

@@ -18,6 +18,7 @@ import {
   Settings2,
   ShieldCheck,
   Trash2,
+  UserCog,
   Users,
   XCircle,
   type LucideIcon,
@@ -39,6 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { RoleBadge } from "@/components/devices/status-badge";
 import { PositionSystemScopeCard } from "@/components/admin/position-system-scope-card";
+import { WorkflowRolesDialog } from "@/components/materials/MaterialTicketBoard";
 import { useUpdateUser, useUsers } from "@/hooks/useUsers";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { ROLES, type RoleKey } from "@/lib/constants";
@@ -714,6 +716,7 @@ export default function RolesPage() {
   const [customRoles, setCustomRoles] = React.useState<RoleColumn[]>([]);
   const [userOverrides, setUserOverrides] = React.useState<UserPermissionOverride[]>([]);
   const [editMode, setEditMode] = React.useState(false);
+  const [workflowRolesOpen, setWorkflowRolesOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [assignUserOpen, setAssignUserOpen] = React.useState(false);
@@ -895,6 +898,10 @@ export default function RolesPage() {
       >
         {isAdmin && (
           <>
+            <Button type="button" size="toolbar" variant="soft" onClick={() => setWorkflowRolesOpen(true)}>
+              <UserCog className="h-4 w-4" />
+              Phân quyền quy trình
+            </Button>
             <Button type="button" size="toolbar" variant={editMode ? "default" : "soft"} onClick={() => setEditMode((value) => !value)}>
               <Settings2 className="h-4 w-4" />
               {editMode ? "Đang chỉnh" : "Chỉnh quyền"}
@@ -1075,6 +1082,8 @@ export default function RolesPage() {
         <span className="font-semibold text-ink">Ghi chú:</span> các quyền thao tác dữ liệu nhạy cảm như người dùng, phân quyền,
         Quyền Quản lý bao gồm xem, tạo, sửa, xoá, xác nhận, phê duyệt và chốt trạng thái trong phạm vi từng chức năng. Các cấu hình hệ thống nhạy cảm vẫn yêu cầu Toàn quyền.
       </div>
+
+      {workflowRolesOpen && <WorkflowRolesDialog onClose={() => setWorkflowRolesOpen(false)} />}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-2xl">

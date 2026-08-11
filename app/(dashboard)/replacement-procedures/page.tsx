@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { ExternalLink, FileSpreadsheet, FileText, Plus, Search, UserCog } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, FileText, Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import MaterialTicketBoard from "@/components/materials/MaterialTicketBoard";
@@ -16,12 +16,7 @@ export default function ReplacementProceduresPage() {
   const { data } = useMaterialTickets();
   const position = data?.viewer?.position ?? session?.user?.currentPosition ?? session?.user?.position;
   const canCreate = data?.viewer?.canCreate ?? false;
-  // Hiển thị quyền quản trị ngay từ session, không phụ thuộc việc API danh sách
-  // phiếu đã tải xong. Metadata từ API vẫn là nguồn bổ sung khi session đang
-  // được làm mới; API /material-workflow-roles tiếp tục chặn role khác ADMIN.
-  const canManageWorkflow = session?.user?.role === "ADMIN" || data?.viewer?.isAdmin === true;
   const [creating, setCreating] = useState(false);
-  const [rolesOpen, setRolesOpen] = useState(false);
   const [ticketSearch, setTicketSearch] = useState("");
 
   return (
@@ -41,11 +36,6 @@ export default function ReplacementProceduresPage() {
             className="ml-2 min-w-0 flex-1 bg-transparent text-sm font-medium text-ink outline-none placeholder:text-muted-foreground/70"
           />
         </label>
-        {canManageWorkflow && (
-          <Button variant="soft" size="toolbar" onClick={() => setRolesOpen(true)}>
-            <UserCog className="h-4 w-4" /> Phân quyền quy trình
-          </Button>
-        )}
         <Button variant="soft" size="toolbar" asChild>
           <a href={PROCEDURE_FLOW_PDF_URL} target="_blank" rel="noreferrer">
             <FileText className="h-4 w-4" /> Lưu đồ thực hiện
@@ -67,9 +57,6 @@ export default function ReplacementProceduresPage() {
         creating={creating}
         searchQ={ticketSearch}
         onCloseCreate={() => setCreating(false)}
-        rolesOpen={rolesOpen}
-        onOpenRoles={() => setRolesOpen(true)}
-        onCloseRoles={() => setRolesOpen(false)}
       />
     </div>
   );
