@@ -47,6 +47,7 @@ export interface MaterialTicket {
   workEndedAt: string | null;
   sccnRepresentativeName: string | null;
   sccnRepresentativePosition: string | null;
+  bbntDoNumber: string | null;
   settledAt: string | null;
   settledByName: string | null;
   rejectedReason: string | null;

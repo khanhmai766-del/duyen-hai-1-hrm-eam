@@ -61,3 +61,32 @@ export function useCreateDeviceMaterialDeclaration() {
     },
   });
 }
+
+export type DeviceMaterialDeclarationUpdateInput = {
+  id: string;
+  deviceSeq: string;
+  materialId: string;
+  system?: string | null;
+  location?: string | null;
+  managingPosition?: string | null;
+  quantity: number;
+  deviceCount: number;
+  intervalMonths: number;
+  intervalNote?: string | null;
+  note?: string | null;
+};
+
+export function useUpdateDeviceMaterialDeclaration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, deviceSeq: _deviceSeq, ...body }: DeviceMaterialDeclarationUpdateInput) =>
+      apiMutate(`/api/material-replacements/${encodeURIComponent(id)}`, "PUT", body),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),
+        qc.invalidateQueries({ queryKey: ["materials"] }),
+        qc.invalidateQueries({ queryKey: ["replacements"] }),
+      ]);
+    },
+  });
+}

@@ -1195,6 +1195,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     (t.type !== "UNG" && t.pctNumber)
     || t.repairRequestNumber
     || t.completionNote
+    || t.bbntDoNumber
     || t.receivedQuantity != null
     || t.vhvReceivedQuantity != null
     || t.usedQuantity != null,
@@ -1209,6 +1210,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${receiptSourceLabel(t.receiptSource)} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất BBNT ký tay" },
+    t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
     })),
@@ -1297,10 +1299,11 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
               <div className="completion-details">
                 {hasCompletionSummary && (
                   <div className="completion-summary-card">
-                    {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber) && (
+                    {((t.type !== "UNG" && t.pctNumber) || t.repairRequestNumber || t.bbntDoNumber) && (
                       <div className="ticket-note-row">
                         {t.type !== "UNG" && t.pctNumber && <div className="meta-line">Số PCT/LCT: <b>{t.pctNumber}</b></div>}
-                        {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số phiếu yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
+                        {t.repairRequestNumber && <div className="meta-line repair-request-meta">Số yêu cầu sửa chữa: <b>{t.repairRequestNumber}</b></div>}
+                        {t.bbntDoNumber && <div className="meta-line">Số BBNT DO: <b>{t.bbntDoNumber}</b></div>}
                       </div>
                     )}
                     {t.completionNote && <div className="done-note"><Check size={13} /> {t.completionNote}</div>}
@@ -1546,6 +1549,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
   const [recoveryRequired, setRecoveryRequired] = useState(false);
   const [recoveryReturned, setRecoveryReturned] = useState(false);
+  const [bbntDoNumberInput, setBbntDoNumberInput] = useState(t.bbntDoNumber ?? "");
+  const [settlementConfirmed, setSettlementConfirmed] = useState(false);
   const [recoveryQuantityInput, setRecoveryQuantityInput] = useState("1");
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
@@ -1576,6 +1581,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     setProposalNumberInput("");
     setBbktNumberInput("");
   }, [t.id, t.status]);
+
+  React.useEffect(() => {
+    setBbntDoNumberInput(t.bbntDoNumber ?? "");
+    setSettlementConfirmed(false);
+  }, [t.id, t.bbntDoNumber]);
 
   React.useEffect(() => {
     if (
@@ -2085,8 +2095,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             />
           </label>
           {!isAdvance && (
-            <label className="field">Số phiếu yêu cầu sửa chữa *
-              <input placeholder="Nhập số phiếu yêu cầu sửa chữa" value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} />
+            <label className="field">Số yêu cầu sửa chữa *
+              <input placeholder="Nhập số yêu cầu sửa chữa" value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} />
             </label>
           )}
         </div>
@@ -2110,7 +2120,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           <div className="note"><FileText size={15} /><span>Đã xuất Phiếu Đề Xuất Vật Tư — <a className="pdf-inline" href={t.proposalDocUrl!} target="_blank" rel="noreferrer">tải xuống</a>. Mã vật tư đã được khóa; có thể nhập số phiếu để tiếp tục.</span></div>
         )}
         {!isAdvance && repairRequestConflictsProposal && (
-          <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
+          <div className="warnbox"><AlertTriangle size={15} /> Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
         )}
         {advanceDocumentLocked ? (
           <button
@@ -2136,13 +2146,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("repairRequest")) return (
     <div className="act">
       <label className="lb">Xác nhận vật tư lãnh</label>
-      <div className="note"><FileText size={15} /> Phiếu đang ở trạng thái cũ, vui lòng bổ sung số phiếu yêu cầu sửa chữa để chuyển sang bước Sử dụng vật tư.</div>
+      <div className="note"><FileText size={15} /> Phiếu đang ở trạng thái cũ, vui lòng bổ sung số yêu cầu sửa chữa để chuyển sang bước Sử dụng vật tư.</div>
       <div className="act-field-row">
-        <label>Số phiếu yêu cầu sửa chữa *</label>
-        <input value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} placeholder="Nhập số phiếu yêu cầu sửa chữa" />
+        <label>Số yêu cầu sửa chữa *</label>
+        <input value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} placeholder="Nhập số yêu cầu sửa chữa" />
       </div>
       {repairRequestConflictsProposal && (
-        <div className="warnbox"><AlertTriangle size={15} /> Số phiếu yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
+        <div className="warnbox"><AlertTriangle size={15} /> Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
       )}
       <button className="btn primary big" disabled={!repairRequestNumber.trim() || repairRequestConflictsProposal || act.isPending} onClick={() => run({ action: "repairRequest", repairRequestNumber: repairRequestNumber.trim() }, "Đã xác nhận vật tư lãnh")}>
         <Check size={15}/> Xác nhận
@@ -2324,19 +2334,34 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   if (acts.includes("settle")) return (
     <div className="act">
-      <label className={`settlement-check ${recoveryReturned ? "checked" : ""}`}>
+      <div className="settlement-number-card">
+        <label className="field">Số BBNT DO *
+          <input
+            value={bbntDoNumberInput}
+            onChange={(e) => {
+              setBbntDoNumberInput(e.target.value);
+              if (!e.target.value.trim()) setSettlementConfirmed(false);
+            }}
+            placeholder="Nhập số BBNT DO"
+            autoComplete="off"
+          />
+        </label>
+        <span>Nhập số biên bản đã phát hành trên D-Office trước khi xác nhận quyết toán.</span>
+      </div>
+      <label className={`settlement-check ${settlementConfirmed ? "checked" : ""} ${!bbntDoNumberInput.trim() ? "disabled" : ""}`}>
         <input
           type="checkbox"
-          checked={recoveryReturned}
-          onChange={(e) => setRecoveryReturned(e.target.checked)}
+          checked={settlementConfirmed}
+          disabled={!bbntDoNumberInput.trim()}
+          onChange={(e) => setSettlementConfirmed(e.target.checked)}
         />
         <span className="settlement-check-box" aria-hidden="true">
-          {recoveryReturned && <Check size={14} strokeWidth={3} />}
+          {settlementConfirmed && <Check size={14} strokeWidth={3} />}
         </span>
         <span className="settlement-check-label">Xác nhận đã quyết toán vật tư</span>
       </label>
       <div className="note"><CircleCheck size={15}/> Các biên bản đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận quyết toán vật tư.</div>
-      <button className="btn primary big" disabled={!recoveryReturned || act.isPending} onClick={() => run({ action: "settle" }, "Đã xác nhận quyết toán vật tư")}>
+      <button className="btn primary big" disabled={!bbntDoNumberInput.trim() || !settlementConfirmed || act.isPending} onClick={() => run({ action: "settle", bbntDoNumber: bbntDoNumberInput.trim() }, "Đã xác nhận quyết toán vật tư")}>
         <CircleCheck size={15}/> Xác nhận quyết toán vật tư
       </button>
     </div>
@@ -2690,9 +2715,15 @@ const CSS = `
 .receive-existing-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:end;}
 .receive-existing-field{display:flex;min-width:0;flex-direction:column;gap:11px;}
 .receive-existing-hint{display:flex;min-height:42px;align-items:center;margin:0;padding:0 2px;line-height:1.45;}
+.settlement-number-card{display:flex;flex-direction:column;gap:7px;border:1px solid #bfdbfe;border-radius:12px;background:linear-gradient(145deg,#eff6ff 0%,#f8fbff 100%);padding:13px 15px;box-shadow:0 2px 8px rgba(37,99,235,.06);}
+.settlement-number-card .field{margin:0!important;color:${C.navy}!important;font-size:12px!important;font-weight:800!important;}
+.settlement-number-card .field input{height:42px;margin-top:7px;background:#fff;}
+.settlement-number-card>span{color:#64748b;font-size:11.5px;line-height:1.4;}
 .act label.settlement-check{position:relative;display:flex;align-items:center;gap:12px;min-height:52px;margin:0;padding:12px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;color:${C.navy};font-size:13px;font-weight:600;line-height:1.4;cursor:pointer;box-shadow:0 1px 2px rgba(15,35,64,.04);transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
 .act .settlement-check:hover{border-color:${C.accent}66;background:#fafdff;box-shadow:0 3px 10px rgba(15,35,64,.06);}
 .act .settlement-check.checked{border-color:${C.accent}80;background:${C.accent}08;}
+.act .settlement-check.disabled{cursor:not-allowed;opacity:.55;}
+.act .settlement-check.disabled:hover{border-color:#dbe3ee;background:#fff;box-shadow:0 1px 2px rgba(15,35,64,.04);}
 .act .settlement-check input{position:absolute;width:1px;height:1px;margin:0;padding:0;border:0;border-radius:0;background:transparent;opacity:0;pointer-events:none;appearance:none;}
 .settlement-check-box{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;box-sizing:border-box;border:1.5px solid #94a3b8;border-radius:6px;background:#fff;color:#fff;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;}
 .settlement-check-label{display:inline-block;min-width:0;color:${C.navy};line-height:1.4;white-space:nowrap;}

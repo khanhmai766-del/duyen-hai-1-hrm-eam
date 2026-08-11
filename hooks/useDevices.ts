@@ -49,13 +49,17 @@ export interface DeviceWithRelations extends DeviceRecord {
   }>;
   materialDeclarations: Array<{
     id: string;
+    machine: string;
     location?: string | null;
     system?: string | null;
+    managingPosition?: string | null;
     quantity: number;
     deviceCount: number;
     intervalMonths: number;
     intervalNote?: string | null;
-    material: { id: string; name: string; unit: string; machine: string; category?: string | null };
+    note?: string | null;
+    _count?: { logs: number; defectRequests: number };
+    material: { id: string; code?: string; name: string; unit: string; machine: string; category?: string | null };
   }>;
   materialUsage: Array<{
     id: string;

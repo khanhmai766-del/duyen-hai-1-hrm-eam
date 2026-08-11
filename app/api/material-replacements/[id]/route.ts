@@ -67,7 +67,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const user = await requireUser();
     await requirePermissionLevel(user, "replacement-manage", ["manage", "full"], "Không đủ quyền cập nhật điểm thay thế");
     const body = await req.json();
-    const existing = await prisma.materialReplacement.findUnique({ where: { id: params.id } });
+    const existing = await prisma.materialReplacement.findUnique({
+      where: { id: params.id },
+      include: { _count: { select: { logs: true, defectRequests: true } } },
+    });
     if (!existing) return fail("Không tìm thấy điểm thay thế", 404);
     const access = await resolveEquipmentAccessForUser(user);
     if (!canEditMaterialReplacement(access, existing)) {
@@ -81,6 +84,53 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return fail("Chu kỳ phải là số tháng hợp lệ (>= 0; 0 = không theo dõi lịch)");
     }
     if (body.deviceId !== undefined && !body.deviceId) return fail("Chọn thiết bị");
+    const targetMaterialId = body.materialId !== undefined
+      ? String(body.materialId ?? "").trim()
+      : existing.materialId;
+    if (!targetMaterialId) return fail("Vui lòng chọn vật tư");
+    if (targetMaterialId !== existing.materialId) {
+      if (existing.isActive) return fail("Không thể đổi vật tư của điểm đang theo dõi");
+      if (existing._count.logs > 0 || existing._count.defectRequests > 0) {
+        return fail("Không thể đổi vật tư vì khai báo đã phát sinh số yêu cầu hoặc lịch sử thay thế");
+      }
+      const [targetMaterial, duplicate, activeTracking] = await Promise.all([
+        prisma.material.findUnique({ where: { id: targetMaterialId }, select: { machine: true } }),
+        prisma.materialReplacement.findFirst({
+          where: {
+            id: { not: existing.id },
+            materialId: targetMaterialId,
+            deviceSeq: existing.deviceSeq,
+            machine: existing.machine,
+            isActive: false,
+          },
+          select: { id: true },
+        }),
+        prisma.materialReplacement.findFirst({
+          where: {
+            materialId: existing.materialId,
+            deviceSeq: existing.deviceSeq,
+            machine: existing.machine,
+            isActive: true,
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (!targetMaterial || targetMaterial.machine !== existing.machine) {
+        return fail("Vật tư không thuộc đúng tổ máy của khai báo", 400);
+      }
+      if (duplicate) return fail("Vật tư này đã được khai báo cho thiết bị");
+      if (activeTracking) {
+        return fail("Khai báo đang có điểm theo dõi; hãy kết thúc hoặc gỡ điểm theo dõi trước khi đổi vật tư");
+      }
+    }
+    const quantity = body.quantity !== undefined ? Math.round(Number(body.quantity)) : undefined;
+    if (quantity !== undefined && (!Number.isFinite(quantity) || quantity <= 0)) {
+      return fail("Dung tích hoặc số lượng phải lớn hơn 0");
+    }
+    const deviceCount = body.deviceCount !== undefined ? Math.round(Number(body.deviceCount)) : undefined;
+    if (deviceCount !== undefined && (!Number.isFinite(deviceCount) || deviceCount <= 0)) {
+      return fail("Số lượng thiết bị phải lớn hơn 0");
+    }
     const targetDeviceSeq =
       body.deviceId !== undefined ? String(body.deviceId).trim() : existing.deviceSeq;
     const targetSystem =
@@ -108,9 +158,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const point = await prisma.materialReplacement.update({
       where: { id: params.id },
       data: {
+        materialId: body.materialId !== undefined ? targetMaterialId : undefined,
         deviceSeq: body.deviceId !== undefined ? body.deviceId : undefined,
-        location: body.deviceId !== undefined ? null : undefined,
+        location: body.location !== undefined
+          ? String(body.location ?? "").trim() || null
+          : body.deviceId !== undefined ? null : undefined,
         system: body.system !== undefined ? body.system?.trim() || null : undefined,
+        quantity,
+        deviceCount,
         managingPosition,
         managingPositionCode: positionCodeOf(managingPosition),
         intervalMonths,

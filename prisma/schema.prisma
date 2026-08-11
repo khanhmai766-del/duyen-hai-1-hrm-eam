@@ -1266,7 +1266,7 @@ model MaterialTicket {
   proposalIssuedAt           DateTime? // Thống kê xác nhận giao phiếu ĐXVT (giữ tên cột cũ để tương thích dữ liệu)
   proposalReceiverName       String? // tên VHV nhận phiếu ĐXVT khi Thống kê giao phiếu
   deliveryNoteNumber         String? // số phiếu giao hàng
-  repairRequestNumber        String? // số phiếu yêu cầu sửa chữa
+  repairRequestNumber        String? // số yêu cầu sửa chữa
   completionNote             String? // thông tin xác nhận thay thế xong
   chiHuyName                 String? // tên chỉ huy trực tiếp (SCCN) — in vào BBNT
   docUrl                     String? // file Word BBNT trên MinIO
@@ -1281,6 +1281,7 @@ model MaterialTicket {
   workEndedAt                DateTime?
   sccnRepresentativeName     String? // đại diện đơn vị sửa chữa cơ nhiệt in trên BBNT D-Office
   sccnRepresentativePosition String? // chức vụ đại diện SCCN tại thời điểm xuất biên bản
+  bbntDoNumber               String? // số BBNT D-Office nhập tại bước quyết toán
   settledAt                  DateTime? // Thống kê xác nhận đã quyết toán
   settledByName              String?
   rejectedReason             String?

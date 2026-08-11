@@ -108,7 +108,8 @@ async function findEquipmentRecord(seq: string, requestedMachine?: string | null
       where: { deviceSeq: node.seq, machine, isActive: false },
       orderBy: { createdAt: "desc" },
       include: {
-        material: { select: { id: true, name: true, unit: true, machine: true, category: true } },
+        material: { select: { id: true, code: true, name: true, unit: true, machine: true, category: true } },
+        _count: { select: { logs: true, defectRequests: true } },
       },
     }),
     prisma.materialReplacementLog.findMany({

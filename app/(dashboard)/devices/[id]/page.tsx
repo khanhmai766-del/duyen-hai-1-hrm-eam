@@ -56,6 +56,7 @@ function DeviceDetailPageContent() {
   const [showAllDeclarations, setShowAllDeclarations] = React.useState(false);
   const [showAllUsage, setShowAllUsage] = React.useState(false);
   const [materialOpen, setMaterialOpen] = React.useState(false);
+  const [materialEditId, setMaterialEditId] = React.useState<string | null>(null);
   const [defectOpen, setDefectOpen] = React.useState(false);
 
   const device = data?.data;
@@ -63,6 +64,7 @@ function DeviceDetailPageContent() {
   const canCreateQr = Boolean(device && rbac.can("device-manage", ["personal", "manage", "full"]) && access.canEdit);
   const canDeleteQr = Boolean(device && rbac.can("device-manage", ["manage", "full"]) && access.canEdit);
   const canDeclareMaterial = Boolean(device && rbac.can("replacement-manage", ["personal", "manage", "full"]) && access.canEdit);
+  const canEditMaterialDeclaration = Boolean(device && rbac.can("replacement-manage", ["manage", "full"]) && access.canEdit);
   const canCreateDefect = Boolean(device && rbac.can("defect-manage", ["personal", "manage", "full"]) && access.canEdit);
   const deviceMachine = React.useMemo(() => {
     if (!device) return "S1";
@@ -242,11 +244,29 @@ function DeviceDetailPageContent() {
                       <div className="font-semibold leading-snug text-ink">{item.material.name}</div>
                       <MachineBadge machine={item.material.machine} />
                     </div>
-                    <div className="mt-1.5 text-[11.5px] text-muted-foreground">
-                      {item.location || item.system || "Chưa ghi rõ vị trí"}
+                    <div className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
+                      <span className="font-medium text-slate-700">{device.name}</span>
+                      {device.system && <span className="block">Thư mục cha: {device.system}</span>}
                     </div>
-                    <div className="mt-1.5 text-[11.5px] text-muted-foreground">
-                      Cần thay <b className="font-semibold text-ink">{item.quantity * item.deviceCount} {item.material.unit}</b> · Chu kỳ {item.intervalNote || (item.intervalMonths === 0 ? "Không theo dõi lịch" : `${item.intervalMonths} tháng`)}
+                    <div className="mt-1.5 flex items-end justify-between gap-2 text-[11.5px] text-muted-foreground">
+                      <span>
+                        Cần thay <b className="font-semibold text-ink">{item.quantity * item.deviceCount} {item.material.unit}</b> · Chu kỳ {item.intervalNote || (item.intervalMonths === 0 ? "Không theo dõi lịch" : `${item.intervalMonths} tháng`)}
+                      </span>
+                      {canEditMaterialDeclaration && (
+                        <button
+                          type="button"
+                          onClick={() => setMaterialEditId(item.id)}
+                          disabled={(item._count?.logs ?? 0) > 0 || (item._count?.defectRequests ?? 0) > 0}
+                          title={
+                            (item._count?.logs ?? 0) > 0 || (item._count?.defectRequests ?? 0) > 0
+                              ? "Khai báo đã phát sinh số yêu cầu hoặc lịch sử nên không thể sửa"
+                              : "Sửa thông tin vật tư khai báo"
+                          }
+                          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-white px-2.5 font-semibold text-accent shadow-sm transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:opacity-50"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Sửa
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -438,6 +458,14 @@ function DeviceDetailPageContent() {
         onOpenChange={setMaterialOpen}
         device={{ ...device, code: device.id, displayCode: device.code }}
         machine={deviceMachine}
+      />
+
+      <DeviceMaterialDeclarationDialog
+        open={Boolean(materialEditId)}
+        onOpenChange={(open) => !open && setMaterialEditId(null)}
+        device={{ ...device, code: device.id, displayCode: device.code }}
+        machine={deviceMachine}
+        declaration={device.materialDeclarations.find((item) => item.id === materialEditId) ?? null}
       />
 
       {defectOpen && (
