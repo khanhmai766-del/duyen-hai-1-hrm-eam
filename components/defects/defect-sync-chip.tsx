@@ -470,8 +470,9 @@ function DefectSyncQueueDialog({
   async function confirmSkip() {
     if (!selected) return;
     try {
-      await skip.mutateAsync(selected.id);
-      toast.success(`Đã bỏ qua đồng bộ phiếu ${payloadText(selected, "requestNumber") || selected.defectId}`);
+      const force = selected.status === "PROCESSING";
+      await skip.mutateAsync({ eventId: selected.id, force });
+      toast.success(`${force ? "Đã thu hồi và bỏ qua" : "Đã bỏ qua"} đồng bộ phiếu ${payloadText(selected, "requestNumber") || selected.defectId}`);
       setSelected(null);
     } catch (error) {
       toast.error((error as Error).message);
@@ -553,12 +554,12 @@ function DefectSyncQueueDialog({
                           variant="outline"
                           size="sm"
                           className="shrink-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                          disabled={processing || skip.isPending}
-                          title={processing ? "n8n đang xử lý sự kiện này" : "Không gửi sự kiện này sang Sheet"}
+                          disabled={skip.isPending}
+                          title={processing ? "Thu hồi sự kiện sau khi đã dừng n8n và tắt loại đồng bộ" : "Không gửi sự kiện này sang Sheet"}
                           onClick={() => setSelected(item)}
                         >
                           <SkipForward className="h-4 w-4" />
-                          Bỏ qua
+                          {processing ? "Thu hồi & bỏ qua" : "Bỏ qua"}
                         </Button>
                       </div>
                     </div>
@@ -579,14 +580,19 @@ function DefectSyncQueueDialog({
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setSelected(null);
         }}
-        title="Bỏ qua lượt đồng bộ này?"
+        title={selected?.status === "PROCESSING" ? "Thu hồi và bỏ qua lượt đang xử lý?" : "Bỏ qua lượt đồng bộ này?"}
         description={selected
           ? `Phiếu ${payloadText(selected, "requestNumber") || selected.defectId} sẽ không được n8n ghi sang Google Sheet.`
           : undefined}
-        confirmLabel="Bỏ qua đồng bộ"
+        confirmLabel={selected?.status === "PROCESSING" ? "Thu hồi và bỏ qua" : "Bỏ qua đồng bộ"}
         loading={skip.isPending}
         onConfirm={() => void confirmSkip()}
       >
+        {selected?.status === "PROCESSING" && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-900">
+            Trước khi xác nhận: hãy dừng execution/workflow ghi ngược trên n8n và tắt loại đồng bộ tương ứng trên website. Nếu worker vẫn chạy, Google Sheet vẫn có thể bị ghi sau khi sự kiện được bỏ qua.
+          </div>
+        )}
         {selected?.payload?.cancellation === true && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
             Phiếu hủy sẽ được kết thúc trạng thái chờ trên website, nhưng STT không được trả lại để tránh trùng số khi Sheet chưa xác nhận.

@@ -50,15 +50,29 @@ export async function DELETE(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const eventId = String(body?.eventId ?? "").trim();
+    const force = body?.force === true;
     if (!eventId) return fail("Thiếu sự kiện cần bỏ qua");
 
     const result = await prisma.$transaction(async (tx) => {
       const event = await tx.defectSyncOutbox.findUnique({ where: { id: eventId } });
       if (!event) throw fail("Không tìm thấy sự kiện đồng bộ", 404);
       if (event.status === "PROCESSING") {
-        throw fail("Sự kiện đang được n8n xử lý, chưa thể bỏ qua", 409);
+        if (!force) throw fail("Sự kiện đang được n8n xử lý; cần dùng Thu hồi và bỏ qua", 409);
+        const setting = await tx.defectSyncSetting.findUnique({ where: { id: "singleton" } });
+        const featureEnabled = Boolean(
+          setting?.twoWaySyncEnabled
+          && (
+            (event.eventType === "UPDATE" && setting.operationUpdateEnabled)
+            || (event.eventType === "CREATE" && setting.websiteCreateEnabled)
+            || (event.eventType === "REMIND" && setting.websiteRemindEnabled)
+          )
+        );
+        if (featureEnabled) {
+          throw fail("Hãy tắt loại đồng bộ tương ứng trước khi thu hồi sự kiện đang xử lý", 409);
+        }
       }
-      if (!["PENDING", "FAILED"].includes(event.status)) {
+      const allowedStatuses = force ? ["PENDING", "FAILED", "PROCESSING"] : ["PENDING", "FAILED"];
+      if (!allowedStatuses.includes(event.status)) {
         throw fail("Sự kiện không còn ở trạng thái có thể bỏ qua", 409);
       }
 
@@ -71,13 +85,15 @@ export async function DELETE(req: Request) {
       // claim của n8n. Nếu n8n vừa nhận sự kiện sau lần đọc phía trên, thao tác
       // bỏ qua phải thất bại thay vì đổi PROCESSING thành SKIPPED giữa lúc ghi.
       const skipped = await tx.defectSyncOutbox.updateMany({
-        where: { id: event.id, status: { in: ["PENDING", "FAILED"] } },
+        where: { id: event.id, status: { in: allowedStatuses } },
         data: {
           status: "SKIPPED",
           completedAt: skippedAt,
           claimedAt: null,
           nextAttemptAt: skippedAt,
-          lastError: `Quản trị viên ${user.name} bỏ qua trên website`,
+          lastError: force
+            ? `Quản trị viên ${user.name} thu hồi và bỏ qua trên website`
+            : `Quản trị viên ${user.name} bỏ qua trên website`,
         },
       });
       if (skipped.count !== 1) {
@@ -95,7 +111,7 @@ export async function DELETE(req: Request) {
         });
       }
       const updated = await tx.defectSyncOutbox.findUniqueOrThrow({ where: { id: event.id } });
-      return { event: updated, cancellation };
+      return { event: updated, cancellation, forced: force && event.status === "PROCESSING" };
     });
 
     await audit(
@@ -105,7 +121,7 @@ export async function DELETE(req: Request) {
       result.event.id,
       auditDetailWithPosition(
         user,
-        `Bỏ qua ${result.event.eventType} của phiếu ${result.event.defectId}`
+        `${result.forced ? "Thu hồi và bỏ qua" : "Bỏ qua"} ${result.event.eventType} của phiếu ${result.event.defectId}`
         + (result.cancellation ? "; xác nhận hủy trên website nhưng không trả lại STT" : "")
       )
     );

@@ -280,8 +280,8 @@ export function useDefectSyncQueue(enabled = true) {
 export function useSkipDefectSyncEvent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (eventId: string) =>
-      apiMutate<DefectSyncQueueItem>("/api/defects/two-way-sync/queue", "DELETE", { eventId }),
+    mutationFn: ({ eventId, force = false }: { eventId: string; force?: boolean }) =>
+      apiMutate<DefectSyncQueueItem>("/api/defects/two-way-sync/queue", "DELETE", { eventId, force }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
       void qc.invalidateQueries({ queryKey: ["defect-two-way-sync"] });
