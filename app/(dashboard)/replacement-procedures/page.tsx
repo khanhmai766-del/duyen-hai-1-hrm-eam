@@ -24,9 +24,8 @@ export default function ReplacementProceduresPage() {
       <PageHeader
         title="QUY TRÌNH THAY THẾ VẬT TƯ"
         description={`Phiếu đề xuất & Ứng vật tư${position ? ` · Bạn: ${position}` : ""}`}
-        stacked
       >
-        <label className="flex h-9 w-full min-w-[260px] max-w-[320px] items-center rounded-xl border border-input bg-white px-3 text-muted-foreground shadow-sm shadow-slate-900/5 sm:w-[300px]">
+        <label className="flex h-9 w-full min-w-[240px] max-w-[320px] items-center rounded-xl border border-input bg-white px-3 text-muted-foreground shadow-sm shadow-slate-900/5 sm:w-[260px] xl:w-[300px]">
           <Search className="h-4 w-4 shrink-0" />
           <input
             value={ticketSearch}
@@ -36,9 +35,15 @@ export default function ReplacementProceduresPage() {
             className="ml-2 min-w-0 flex-1 bg-transparent text-sm font-medium text-ink outline-none placeholder:text-muted-foreground/70"
           />
         </label>
-        <Button variant="soft" size="toolbar" asChild>
-          <a href={PROCEDURE_FLOW_PDF_URL} target="_blank" rel="noreferrer">
-            <FileText className="h-4 w-4" /> Lưu đồ thực hiện
+        <Button variant="soft" size="toolbar" className="w-10 px-0" asChild>
+          <a
+            href={PROCEDURE_FLOW_PDF_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Mở lưu đồ thực hiện"
+            title="Mở lưu đồ thực hiện"
+          >
+            <FileText className="h-4 w-4" />
           </a>
         </Button>
         <Button variant="soft" size="toolbar" asChild>
