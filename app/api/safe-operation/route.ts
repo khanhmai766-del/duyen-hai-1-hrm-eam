@@ -212,9 +212,13 @@ export async function PUT(req: NextRequest) {
                 return;
               }
             } else {
+              // Mỗi tổ máy chỉ có một trạng thái ngừng hiện tại. Khi mở trạng thái
+              // mới, đóng dữ liệu mở cũ để dashboard không hiển thị chồng trạng thái.
               await tx.$executeRaw`
                 DELETE FROM "SafeOperationEvent"
-                WHERE "unit" = ${unit} AND "category" = ${parsedCategory} AND "endedAt" IS NULL
+                WHERE "unit" = ${unit}
+                  AND "category" IN ('standby', 'maintenance', 'incident')
+                  AND "endedAt" IS NULL
               `;
             }
 

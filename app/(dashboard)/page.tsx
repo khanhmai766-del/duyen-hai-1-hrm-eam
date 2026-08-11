@@ -529,7 +529,7 @@ const SAFE_OPERATION_ROWS: { key: SafeOpRowKey; label: string; icon: React.Eleme
   { key: "safe", label: "Vận hành an toàn", icon: ShieldCheck, color: "text-emerald-700", bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200", valueColor: "text-emerald-700" },
   { key: "continuous", label: "Vận hành liên tục", icon: Activity, color: "text-blue-700", bg: "bg-blue-50 hover:bg-blue-100 border-blue-200", valueColor: "text-blue-800" },
   { key: "standby", label: "Ngừng dự phòng", icon: Clock, color: "text-blue-900", bg: "bg-sky-50 hover:bg-sky-100 border-sky-200", valueColor: "text-blue-900" },
-  { key: "maintenance", label: "Ngừng sửa chữa bảo dưỡng", icon: Wrench, color: "text-orange-600", bg: "bg-orange-50 hover:bg-orange-100 border-orange-200", valueColor: "text-orange-600" },
+  { key: "maintenance", label: "Ngừng theo kế hoạch", icon: Wrench, color: "text-orange-600", bg: "bg-orange-50 hover:bg-orange-100 border-orange-200", valueColor: "text-orange-600" },
   { key: "incident", label: "Ngừng sự cố", icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 hover:bg-red-100 border-red-200", valueColor: "text-red-600" },
 ];
 
@@ -543,6 +543,14 @@ type TimeEntry = {
   reason: string | null;
   durationMs: number;
   added: boolean;   // already added to total?
+};
+
+type CurrentOperationStatus = {
+  key: "operating" | "standby" | "maintenance" | "incident" | "unknown";
+  label: string;
+  startedAt: string | null;
+  reason: string | null;
+  durationMs: number;
 };
 
 /** Composite key for entries/totals maps */
@@ -760,6 +768,36 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
     return Math.max(0, now.getTime() - new Date(startStr).getTime());
   }
 
+  function getCurrentStatus(unit: SafeOperationUnit): CurrentOperationStatus {
+    // Khi dữ liệu cũ có nhiều trạng thái đang mở, ưu tiên trạng thái nghiêm trọng hơn.
+    const priority: Array<"incident" | "maintenance" | "standby"> = ["incident", "maintenance", "standby"];
+    for (const key of priority) {
+      const openEntry = entries[entryKey(unit, key)]?.find((entry) => !entry.end);
+      if (openEntry) {
+        return {
+          key,
+          label: SAFE_OPERATION_ROWS.find((row) => row.key === key)?.label ?? "Ngừng",
+          startedAt: openEntry.start,
+          reason: openEntry.reason,
+          durationMs: openEntry.durationMs,
+        };
+      }
+    }
+
+    const continuousStart = continuousStarts[unit];
+    if (continuousStart) {
+      return {
+        key: "operating",
+        label: "Đang vận hành",
+        startedAt: continuousStart,
+        reason: null,
+        durationMs: getContinuousTotal(unit),
+      };
+    }
+
+    return { key: "unknown", label: "Chưa xác định", startedAt: null, reason: null, durationMs: 0 };
+  }
+
   return (
     <Card className="overflow-hidden border-sky-200/90 bg-[#f8fcff] shadow-[0_18px_45px_rgba(14,74,140,0.10)]">
       <CardHeader className="relative overflow-hidden border-b-[3px] border-blue-800/90 p-0">
@@ -781,7 +819,7 @@ function SafeOperationCard({ canManage }: { canManage: boolean }) {
               getTotal={getTotal}
               getSafeTotal={getSafeTotal}
               getContinuousTotal={getContinuousTotal}
-              isOperating={Boolean(continuousStarts[unit])}
+              currentStatus={getCurrentStatus(unit)}
             />
           ))
         )}
@@ -1004,7 +1042,7 @@ function SafeOperationUnitRow({
   getTotal,
   getSafeTotal,
   getContinuousTotal,
-  isOperating,
+  currentStatus,
 }: {
   unit: SafeOperationUnit;
   canManage: boolean;
@@ -1012,12 +1050,20 @@ function SafeOperationUnitRow({
   getTotal: (unit: SafeOperationUnit, rowKey: SafeOpRowKey) => number;
   getSafeTotal: (unit: SafeOperationUnit) => number;
   getContinuousTotal: (unit: SafeOperationUnit) => number;
-  isOperating: boolean;
+  currentStatus: CurrentOperationStatus;
 }) {
   // Thu gọn/mở rộng 3 dòng thời gian NGỪNG (dự phòng / sửa chữa / sự cố).
   const [showStops, setShowStops] = React.useState(false);
   const stopRows = SAFE_OPERATION_ROWS.filter((r) => STOPPABLE_KEYS.includes(r.key as EditableSafeOpRowKey));
   const stopTotalMs = getTotal(unit, "standby") + getTotal(unit, "maintenance") + getTotal(unit, "incident");
+  const statusAppearance = {
+    operating: { icon: Activity, chip: "border-emerald-300 bg-emerald-50 text-emerald-700", iconBox: "bg-emerald-600 text-white" },
+    standby: { icon: Clock, chip: "border-sky-300 bg-sky-50 text-sky-800", iconBox: "bg-sky-600 text-white" },
+    maintenance: { icon: Wrench, chip: "border-orange-300 bg-orange-50 text-orange-700", iconBox: "bg-orange-500 text-white" },
+    incident: { icon: AlertTriangle, chip: "border-red-300 bg-red-50 text-red-700", iconBox: "bg-red-600 text-white" },
+    unknown: { icon: Minus, chip: "border-slate-300 bg-slate-50 text-slate-600", iconBox: "bg-slate-500 text-white" },
+  }[currentStatus.key];
+  const StatusIcon = statusAppearance.icon;
 
   const renderRow = ({ key, label, icon: Icon, color, bg, valueColor }: (typeof SAFE_OPERATION_ROWS)[number]) => {
     const isStoppable = key !== "safe" && STOPPABLE_KEYS.includes(key as EditableSafeOpRowKey);
@@ -1080,8 +1126,9 @@ function SafeOperationUnitRow({
 
   return (
     <div className="group flex h-full flex-col overflow-hidden rounded-lg border border-sky-300/90 bg-white shadow-[0_14px_32px_rgba(14,116,144,0.10)] ring-1 ring-white">
-      <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-3 sm:px-4">
+      <div className="relative px-3 py-3 sm:px-4">
         <div className="absolute inset-x-8 bottom-0 h-px bg-blue-800/55" />
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           {/* Trái: TỔ MÁY (trên) + S1/S2 (dưới) */}
           <div className="flex shrink-0 flex-col leading-none">
@@ -1090,23 +1137,43 @@ function SafeOperationUnitRow({
               {unit}
             </span>
           </div>
-          {/* Kế bên: trạng thái vận hành an toàn */}
+          {/* Tiêu chí chính của thẻ — luôn hiển thị, không phụ thuộc trạng thái hiện tại. */}
           <div
-            className={cn(
-              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-black shadow-sm sm:gap-2 sm:px-3 sm:py-1 sm:text-sm",
-              isOperating ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-slate-50 text-slate-600",
-            )}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-black text-emerald-700 shadow-sm sm:gap-2 sm:px-3 sm:py-1 sm:text-sm"
           >
-            <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border shadow-sm sm:h-6 sm:w-6", isOperating ? "border-emerald-300 bg-emerald-600 text-white" : "border-slate-300 bg-white text-slate-500")}>
-              {isOperating ? <ShieldCheck className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-300 bg-emerald-600 text-white shadow-sm sm:h-6 sm:w-6">
+              <ShieldCheck className="h-3.5 w-3.5" />
             </span>
-            {isOperating ? "Vận hành an toàn" : "Ngừng"}
+            Vận hành an toàn
           </div>
         </div>
         {/* Phải: thời gian vận hành an toàn (tự xuống hàng riêng khi màn hình hẹp) */}
         <span className="ml-auto whitespace-nowrap text-base font-black leading-none tabular-nums text-emerald-700 sm:text-2xl">
           {formatDuration(getSafeTotal(unit))}
         </span>
+        </div>
+
+        {/* Trạng thái tức thời được tách khỏi tiêu chí vận hành an toàn. */}
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200/90 bg-slate-50/80 px-2.5 py-2 text-xs sm:px-3">
+          <span className="font-semibold text-slate-500">Trạng thái hiện tại</span>
+          <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-1 font-black shadow-sm", statusAppearance.chip)}>
+            <span className={cn("flex h-5 w-5 items-center justify-center rounded-full", statusAppearance.iconBox)}>
+              <StatusIcon className="h-3.5 w-3.5" />
+            </span>
+            {currentStatus.label}
+          </span>
+          {currentStatus.key !== "unknown" && (
+            <span className="font-black tabular-nums text-slate-700">{formatDuration(currentStatus.durationMs)}</span>
+          )}
+          {currentStatus.startedAt && (
+            <span className="text-slate-500">Từ {formatDateTime(currentStatus.startedAt)}</span>
+          )}
+          {currentStatus.reason && (
+            <span className="min-w-0 truncate text-slate-600 sm:max-w-[18rem]" title={currentStatus.reason}>
+              · {currentStatus.reason}
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex-1 px-3 py-1.5 sm:px-4">
         {/* Vận hành liên tục — luôn hiện */}
