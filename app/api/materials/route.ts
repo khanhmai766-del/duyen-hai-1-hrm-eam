@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { addMonths, DEFECT_UNITS } from "@/lib/constants";
@@ -245,6 +246,24 @@ async function updateMaterialErpCodes(materialId: string, erpCodes: string[]) {
   `;
 }
 
+function visibleDefectRequestWhere(loggedDefectIds: string[]): Prisma.DefectMaterialRequestWhereInput {
+  const activeDefect = { cancelledAt: null };
+  if (loggedDefectIds.length === 0) return { defect: activeDefect };
+
+  return {
+    defect: {
+      ...activeDefect,
+      // Chỉ reset SYC khỏi danh mục khi phiếu vừa ĐÃ XỬ LÝ, vừa thực sự được ghi
+      // vào lịch sử thay thế. Quan hệ DefectMaterialRequest vẫn được giữ nguyên để
+      // lịch sử tiếp tục tra cứu số phiếu cũ và có thể khôi phục nếu bỏ xác nhận.
+      OR: [
+        { status: { not: "DA_XU_LY" } },
+        { id: { notIn: loggedDefectIds } },
+      ],
+    },
+  };
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -261,6 +280,16 @@ export async function GET(req: NextRequest) {
     const viewScope = await resolvePositionViewScope(user, "material");
     const materialAccess = materialCatalogAccessWhere(access);
 
+    // MaterialReplacementLog giữ defectId/requestNumber dạng snapshot độc lập. Dùng
+    // defectId để nhận diện SYC đã được xác nhận lưu lịch sử, nhưng không xóa liên kết
+    // gốc — số yêu cầu cũ vẫn còn nguyên trong trang Lịch sử thay thế vật tư.
+    const loggedDefectRows = await prisma.materialReplacementLog.findMany({
+      where: { defectId: { not: null } },
+      distinct: ["defectId"],
+      select: { defectId: true },
+    });
+    const loggedDefectIds = loggedDefectRows.flatMap((row) => row.defectId ? [row.defectId] : []);
+
     const materialRows = await prisma.material.findMany({
       where: {
         ...(machine ? { machine } : {}),
@@ -276,6 +305,15 @@ export async function GET(req: NextRequest) {
       include: {
         replacements: {
           ...MATERIAL_INCLUDE.replacements,
+          include: {
+            ...MATERIAL_INCLUDE.replacements.include,
+            // Lọc trước `take: 3`, tránh các SYC đã reset/cancelled chiếm mất chỗ
+            // của yêu cầu đang cần theo dõi hoặc yêu cầu mới vừa phát hành.
+            defectRequests: {
+              ...MATERIAL_INCLUDE.replacements.include.defectRequests,
+              where: visibleDefectRequestWhere(loggedDefectIds),
+            },
+          },
           where: materialAccess.replacement,
         },
         ...(includeUsage

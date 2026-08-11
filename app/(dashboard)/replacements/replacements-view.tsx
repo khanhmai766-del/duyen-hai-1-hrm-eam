@@ -438,6 +438,51 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const pagedLogs = sortedFilteredLogs.slice((historySafePage - 1) * historyPageSize, historySafePage * historyPageSize);
   const historyFirstShown = filteredLogs.length ? (historySafePage - 1) * historyPageSize + 1 : 0;
   const historyLastShown = Math.min(historySafePage * historyPageSize, filteredLogs.length);
+  const historyFocusScrollRef = React.useRef<string | null>(null);
+
+  const focusHistoryRequest = React.useCallback((log: ReplacementLogItem) => {
+    const requestNumber = log.requestNumber?.trim();
+    if (!requestNumber) return;
+
+    const replacedMonth = ym(log.replacedAt);
+    const category = log.replacement?.material.category;
+    const matchedCategory = CATEGORY_FILTERS.find((candidate) =>
+      replacementCategoryMatches(category, candidate)
+    );
+
+    // Một SYC có thể sinh nhiều dòng lịch sử khi thay cho nhiều điểm. Lọc theo số
+    // yêu cầu để bày tất cả các dòng liên quan, đồng thời mở đúng dòng vừa bấm.
+    setMachineFilter(replacementLogMachine(log));
+    setPositionFilter("ALL");
+    setCategoryFilter(matchedCategory ?? "ALL");
+    setHistoryFromMonth(replacedMonth);
+    setHistoryToMonth(replacedMonth);
+    setSearchQ(requestNumber);
+    setDebouncedSearchQ(requestNumber);
+    setHistoryPage(1);
+    setExpandedLogId(log.id);
+    historyFocusScrollRef.current = log.id;
+  }, []);
+
+  React.useEffect(() => {
+    const focusId = historyFocusScrollRef.current;
+    if (!focusId || expandedLogId !== focusId) return;
+    const targetIndex = sortedFilteredLogs.findIndex((log) => log.id === focusId);
+    if (targetIndex < 0) return;
+    const targetPage = Math.floor(targetIndex / historyPageSize) + 1;
+    if (targetPage !== historySafePage) {
+      setHistoryPage(targetPage);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`replacement-history-${focusId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      historyFocusScrollRef.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedLogId, historyPageSize, historySafePage, sortedFilteredLogs]);
 
   const historyRangeLabel = historyFromMonth === historyToMonth
     ? `tháng ${ymLabel(historyFromMonth)}`
@@ -1058,6 +1103,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                     return (
                     <React.Fragment key={l.id}>
                     <TableRow
+                      id={`replacement-history-${l.id}`}
                       className={cn("cursor-pointer", expanded ? "bg-sky-50/70 hover:bg-sky-50/70" : "hover:bg-sky-50/40")}
                       onClick={() => setExpandedLogId(expanded ? null : l.id)}
                     >
@@ -1098,14 +1144,18 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                       </TableCell>
                       <TableCell className="px-3 py-2.5 text-center">
                         {l.requestNumber ? (
-                          <Link
-                            href={`/defects?q=${encodeURIComponent(l.requestNumber)}`}
-                            onClick={(e) => e.stopPropagation()}
-                            title="Mở số yêu cầu thay thế vật tư"
-                            className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F] hover:bg-sky-100"
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              focusHistoryRequest(l);
+                            }}
+                            title="Lọc theo số yêu cầu và mở chi tiết lịch sử thay thế"
+                            className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F] transition-colors hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00558F]/40"
+                            aria-label={`Tra lịch sử thay thế của số yêu cầu ${l.requestNumber}`}
                           >
                             {l.requestNumber}
-                          </Link>
+                          </button>
                         ) : l.imported ? (
                           <span className="text-[12.5px] text-muted-foreground" title="Nhập từ sổ theo dõi vật tư">
                             {normalizePctNumber(l.pctNumber) || "—"}

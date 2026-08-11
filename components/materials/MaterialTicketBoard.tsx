@@ -847,7 +847,7 @@ function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="ovl" onClick={onClose} />
-      <div className="dlg" style={{ width: 1060, maxWidth: "96vw", maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
+      <div className="dlg wfm-dialog" style={{ maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
         <div className="dlg-h"><b>Phân quyền quy trình thay thế vật tư</b>
           <button className="x" onClick={onClose}><X size={16} /></button></div>
         <div className="frm" style={{ minHeight: 0, flex: 1, overflow: "hidden" }}>
@@ -2498,18 +2498,19 @@ const CSS = `
 .wfm-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:${C.muted};cursor:pointer;}
 .wfm-toggle input{width:15px;height:15px;accent-color:${C.accent};cursor:pointer;}
 .wfm-count{margin-left:auto;font-size:11.5px;font-weight:700;color:${C.soft};}
-/* Cuộn cả hai chiều; tiêu đề cột và cột cương vị dính lại để không mất ngữ cảnh. */
-.wfm-scroll{min-height:0;flex:1;overflow:auto;border:1px solid ${C.line};border-radius:12px;background:#fff;}
-.wfm{border-collapse:separate;border-spacing:0;width:100%;}
-.wfm thead th{position:sticky;top:0;z-index:3;background:${C.cream};border-bottom:1.5px solid ${C.line};padding:7px 6px;vertical-align:bottom;cursor:pointer;user-select:none;min-width:86px;transition:background .15s;}
+/* Modal rộng và bảng fixed để thấy trọn 10 bước, chỉ cần cuộn dọc danh sách cương vị. */
+.wfm-dialog{width:min(1200px,calc(100vw - 24px));max-width:none;}
+.wfm-scroll{min-height:0;flex:1;overflow-x:hidden;overflow-y:auto;border:1px solid ${C.line};border-radius:12px;background:#fff;scrollbar-gutter:stable;}
+.wfm{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;}
+.wfm thead th{position:sticky;top:0;z-index:3;background:${C.cream};border-bottom:1.5px solid ${C.line};padding:7px 4px;vertical-align:bottom;cursor:pointer;user-select:none;min-width:0;transition:background .15s;}
 .wfm thead th:hover{background:#ecebe4;}
 .wfm thead th.wfm-rowhead{z-index:4;cursor:default;}
 .wfm thead th.wfm-rowhead:hover{background:${C.cream};}
 .wfm-th-label{display:block;font-size:11.5px;font-weight:800;color:${C.navy};line-height:1.25;}
 .wfm-th-sub{display:block;margin-top:2px;font-size:10px;font-weight:700;color:${C.accent};}
 .wfm-th-sub.df{color:${C.soft};font-style:italic;}
-/* Cột cương vị dính bên trái khi cuộn ngang. */
-.wfm .wfm-rowhead{position:sticky;left:0;z-index:2;background:#fff;text-align:left;font-size:12px;font-weight:700;color:${C.navy};padding:0 12px;min-width:190px;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1.5px solid ${C.line};}
+/* Cột cương vị có độ rộng ổn định; các cột bước chia đều phần còn lại. */
+.wfm .wfm-rowhead{position:sticky;left:0;z-index:2;width:180px;background:#fff;text-align:left;font-size:12px;font-weight:700;color:${C.navy};padding:0 12px;min-width:0;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-right:1.5px solid ${C.line};}
 .wfm tbody tr:nth-child(even) .wfm-rowhead{background:#fafaf8;}
 .wfm tbody tr:hover .wfm-rowhead,.wfm tbody tr:hover td{background:${C.accent}08;}
 .wfm .wfm-rowhead em{margin-left:6px;font-style:normal;font-size:10px;font-weight:800;color:${C.accent};background:${C.accent}14;border-radius:999px;padding:1px 6px;}
