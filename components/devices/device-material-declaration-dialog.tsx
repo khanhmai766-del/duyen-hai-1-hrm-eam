@@ -148,7 +148,9 @@ export function DeviceMaterialDeclarationDialog({
           deviceSeq: device.code,
           materialId,
           system: device.system,
-          location: device.name,
+          // Điểm đã gắn cây dùng deviceSeq làm nguồn chuẩn; không chụp lại tên
+          // thiết bị vào location vì sẽ bị cũ sau khi đổi tên thiết bị.
+          location: null,
           managingPosition: managingPosition || null,
           quantity: Number(quantity),
           deviceCount: Math.max(1, Number(deviceCount) || 1),
@@ -164,7 +166,7 @@ export function DeviceMaterialDeclarationDialog({
           machines: selectedMachines,
           materialIdsByMachine: selectedMaterial?.materialIdsByMachine ?? {},
           system: device.system,
-          location: device.name,
+          location: null,
           managingPosition: managingPosition || null,
           quantity: Number(quantity),
           deviceCount: Math.max(1, Number(deviceCount) || 1),

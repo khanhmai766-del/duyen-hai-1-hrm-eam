@@ -149,6 +149,7 @@ export function useCreateDevice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["devices"] });
       qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }
@@ -162,6 +163,7 @@ export function useUpdateDevice() {
       qc.invalidateQueries({ queryKey: ["devices"] });
       qc.invalidateQueries({ queryKey: ["device", vars.id] });
       qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }
@@ -173,6 +175,7 @@ export function useDeleteDevice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["devices"] });
       qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }
@@ -191,6 +194,7 @@ export function useImportDevices() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["devices"] });
       qc.invalidateQueries({ queryKey: ["equipment-tree"] });
+      qc.invalidateQueries({ queryKey: ["material-ticket-options"] });
     },
   });
 }

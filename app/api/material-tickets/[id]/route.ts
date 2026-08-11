@@ -10,6 +10,7 @@ import { materialTicketFileBase, materialTicketReference } from "@/lib/material-
 import { normalizeText } from "@/lib/nav";
 import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
+import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
 export const dynamic = "force-dynamic";
 
@@ -502,7 +503,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
         for (const point of replacementPoints) {
           if (!positionsMatch(point.managingPosition, assignedPosition)) continue;
-          const key = point.location || !point.device ? `manual:${point.id}` : point.deviceSeq;
+          const key = replacementPointSelectionKey(point);
           if (key && !assignedPointByKey.has(key)) assignedPointByKey.set(key, point);
         }
         const selectedReplacementPoints = requestedReplacementKeys.map((key) => assignedPointByKey.get(key));
@@ -513,7 +514,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           (point): point is NonNullable<typeof point> => Boolean(point)
         );
         const replacementDeviceLabels = validReplacementPoints.map(
-          (point) => point.location || point.device?.name || point.system || point.deviceSeq || "Thiết bị nhập tay"
+          (point) => replacementPointDisplayLabel(point)
         );
         const primaryReplacementPoint = validReplacementPoints[0];
         const primaryReplacementKey = requestedReplacementKeys[0];
@@ -784,10 +785,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       );
       const declSet = new Set(assignedDecls.map((d) => `${d.materialId}::${d.deviceSeq}`));
       const replacementLabelMap = new Map(
-        assignedDecls.map((d) => [`${d.materialId}::${d.deviceSeq}`, d.location || d.device?.name || d.system || d.deviceSeq || "Thiết bị thay thế"])
+        assignedDecls.map((d) => [`${d.materialId}::${d.deviceSeq}`, replacementPointDisplayLabel(d)])
       );
       const manualDeclMap = new Map(
-        assignedDecls.map((d) => [`${d.materialId}::manual:${d.id}`, d.location || d.device?.name || d.system || "Thiết bị nhập tay"])
+        assignedDecls
+          .filter((d) => !d.deviceSeq)
+          .map((d) => [`${d.materialId}::manual:${d.id}`, replacementPointDisplayLabel(d)])
       );
       for (const it of items) {
         const key = `${it.materialId}::${it.deviceSeq}`;

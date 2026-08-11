@@ -16,6 +16,7 @@ import {
   materialTicketMonthKey,
   materialTicketReference,
 } from "@/lib/material-ticket-sequence";
+import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
     const replacementLabelByKey = new Map(
       replacementLabels.map((item) => [
         `${item.materialId}::${item.deviceSeq}`,
-        item.location || item.device?.name || item.system || item.deviceSeq || "Thiết bị thay thế",
+        replacementPointDisplayLabel(item),
       ])
     );
     // Chỉ tải log SỬA BƯỚC (UI chi tiết phiếu chỉ hiển thị loại này) — trước đây tải
@@ -217,7 +218,7 @@ export async function POST(req: NextRequest) {
     const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
     for (const point of replacementPoints) {
       if (!positionsMatch(point.managingPosition, assignedPosition)) continue;
-      const key = point.location || !point.device ? `manual:${point.id}` : point.deviceSeq;
+      const key = replacementPointSelectionKey(point);
       if (key && !assignedPointByKey.has(key)) assignedPointByKey.set(key, point);
     }
     const selectedReplacementPoints = requestedReplacementKeys.map((key) => assignedPointByKey.get(key));
@@ -228,7 +229,7 @@ export async function POST(req: NextRequest) {
       (point): point is NonNullable<typeof point> => Boolean(point)
     );
     const replacementDeviceLabels = validReplacementPoints.map(
-      (point) => point.location || point.device?.name || point.system || point.deviceSeq || "Thiết bị nhập tay"
+      (point) => replacementPointDisplayLabel(point)
     );
     const primaryReplacementPoint = validReplacementPoints[0];
     const primaryReplacementKey = requestedReplacementKeys[0];

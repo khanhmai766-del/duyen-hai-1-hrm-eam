@@ -3,6 +3,7 @@ import { ok, requireUser, handle } from "@/lib/api";
 import { getPositionScopes } from "@/lib/material-workflow";
 import { announcementShiftRosterPositionOptions } from "@/lib/positions";
 import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
+import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +20,12 @@ export async function GET() {
           where: {
             OR: scopes.flatMap((s) => [{ seq: s }, { seq: { startsWith: s + "." } }]),
           },
-          select: { seq: true, name: true, depth: true },
+          select: { seq: true, name: true, depth: true, parentSeq: true },
           orderBy: { sort: "asc" },
           take: 2000,
         })
       : await prisma.equipmentNode.findMany({
-          select: { seq: true, name: true, depth: true },
+          select: { seq: true, name: true, depth: true, parentSeq: true },
           orderBy: { sort: "asc" },
           take: 2000,
         });
@@ -43,7 +44,7 @@ export async function GET() {
             system: true,
             managingPosition: true,
             managingPositionCode: true,
-            device: { select: { name: true } },
+            device: { select: { name: true, parentSeq: true } },
           },
           // Bản ghi khai báo (không theo dõi) đứng trước bản ghi lịch trùng điểm,
           // để dropdown giữ định danh ổn định khi khử trùng.
@@ -53,17 +54,29 @@ export async function GET() {
       orderBy: { name: "asc" },
     });
     const erpCodes = Array.from(new Set(materialsRaw.flatMap((m) => (m.erpCodes?.length ? m.erpCodes : [m.code]).filter(Boolean))));
-    const erpRows = erpCodes.length
-      ? await prisma.$queryRaw<Array<{ code: string; name: string; erpStock: number }>>`
-          SELECT "code", "name", "erpStock"
-          FROM "ErpMaterial"
-          WHERE "isActive" = TRUE AND "code" = ANY(${erpCodes}::text[])
-            AND "mappingStatus" = 'CONFIRMED'
-        `
-      : [];
+    const parentSeqs = Array.from(new Set(materialsRaw.flatMap((material) =>
+      material.replacements.map((replacement) => replacement.device?.parentSeq).filter(Boolean) as string[]
+    )));
+    const [erpRows, parentNodes] = await Promise.all([
+      erpCodes.length
+        ? prisma.$queryRaw<Array<{ code: string; name: string; erpStock: number }>>`
+            SELECT "code", "name", "erpStock"
+            FROM "ErpMaterial"
+            WHERE "isActive" = TRUE AND "code" = ANY(${erpCodes}::text[])
+              AND "mappingStatus" = 'CONFIRMED'
+          `
+        : Promise.resolve([]),
+      parentSeqs.length
+        ? prisma.equipmentNode.findMany({ where: { seq: { in: parentSeqs } }, select: { seq: true, name: true } })
+        : Promise.resolve([]),
+    ]);
     const erpStockByCode = new Map(erpRows.map((row) => [row.code, row.erpStock]));
     const erpNameByCode = new Map(erpRows.map((row) => [row.code, row.name]));
     const activeErpCodes = new Set(erpRows.map((row) => row.code));
+    const deviceNameBySeq = new Map([
+      ...devices.map((device) => [device.seq, device.name] as const),
+      ...parentNodes.map((device) => [device.seq, device.name] as const),
+    ]);
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
       const positions = new Set<string>();
@@ -71,24 +84,24 @@ export async function GET() {
       for (const r of m.replacements) {
         const managingPosition = positionLabelOf(r.managingPositionCode ?? r.managingPosition);
         if (managingPosition) positions.add(managingPosition);
-        // Điểm có tên nhập tay cần một giá trị riêng, kể cả khi cùng trỏ tới
-        // một nút cây. Nếu dùng deviceSeq, dropdown sẽ gộp/mất các thiết bị này.
-        const seq = r.location ? `manual:${r.id}` : (r.device ? r.deviceSeq! : `manual:${r.id}`);
+        const seq = replacementPointSelectionKey(r);
         const positionKey = positionCodeOf(r.managingPositionCode ?? r.managingPosition)
           ?? r.managingPosition?.trim().toLocaleLowerCase("vi")
           ?? "";
-        const pointKey = r.location
-          ? `location:${r.location.trim().toLocaleLowerCase("vi")}::${r.deviceSeq ?? r.system ?? ""}`
-          : r.deviceSeq
-            ? `device:${r.deviceSeq}`
+        const pointKey = r.deviceSeq
+          ? `device:${r.deviceSeq}`
+          : r.location
+            ? `location:${r.location.trim().toLocaleLowerCase("vi")}::${r.system ?? ""}`
             : `system:${r.system?.trim().toLocaleLowerCase("vi") ?? r.id}`;
         const dedupeKey = `${pointKey}::${positionKey}`;
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
         mdevices.push({
           seq,
-          label: r.location || r.device?.name || r.system || seq,
-          system: r.system,
+          label: replacementPointDisplayLabel(r),
+          system: r.device?.parentSeq
+            ? deviceNameBySeq.get(r.device.parentSeq) ?? r.system
+            : r.system,
           managingPosition: managingPosition || null,
         });
       }

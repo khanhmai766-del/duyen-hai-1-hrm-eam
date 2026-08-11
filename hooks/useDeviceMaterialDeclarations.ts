@@ -57,6 +57,7 @@ export function useCreateDeviceMaterialDeclaration() {
         qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),
         qc.invalidateQueries({ queryKey: ["materials"] }),
         qc.invalidateQueries({ queryKey: ["replacements"] }),
+        qc.invalidateQueries({ queryKey: ["material-ticket-options"] }),
       ]);
     },
   });
@@ -86,6 +87,7 @@ export function useUpdateDeviceMaterialDeclaration() {
         qc.invalidateQueries({ queryKey: ["device", variables.deviceSeq] }),
         qc.invalidateQueries({ queryKey: ["materials"] }),
         qc.invalidateQueries({ queryKey: ["replacements"] }),
+        qc.invalidateQueries({ queryKey: ["material-ticket-options"] }),
       ]);
     },
   });

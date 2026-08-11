@@ -191,7 +191,7 @@ export function useTicketOptions(enabled: boolean) {
     staleTime: 60_000,
     queryFn: async () => {
       const res = await apiGet<{
-        devices: { seq: string; name: string; depth: number }[];
+        devices: { seq: string; name: string; depth: number; parentSeq: string | null }[];
         materials: {
           id: string; code: string; name: string; unit: string; quantity: number; category: string | null;
           machine: string;
