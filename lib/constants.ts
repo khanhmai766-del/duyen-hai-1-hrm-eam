@@ -292,6 +292,12 @@ export const MATERIAL_CATEGORIES = [
   "Bi Nghiền Than",
 ] as const;
 
+/** Nhãn hiển thị loại vật tư. Giữ nguyên giá trị lưu trữ để tương thích dữ liệu,
+ *  nhưng thống nhất cách gọi ngắn gọn trên toàn bộ giao diện. */
+export function displayMaterialCategory(category: string): string {
+  return category === "Lõi lọc dầu" || category === "Lọc dầu" ? "Lõi lọc" : category;
+}
+
 /** So khớp loại vật tư với tab Danh mục — chấp nhận cả nhãn cũ còn trong dữ liệu
  *  ("Hóa chất"/"Vật tư tiêu hao" → Hóa Chất; "Bi nghiền"/"Bi nghiền than" → Bi Nghiền Than). */
 export function materialCategoryMatches(value: string | null | undefined, target: string): boolean {

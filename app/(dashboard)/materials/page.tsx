@@ -33,7 +33,7 @@ import { ReplacementPointsEditor } from "@/components/materials/replacement-poin
 import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
+import { displayMaterialCategory, MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
@@ -49,7 +49,7 @@ const MACHINE_TABS: { key: (typeof DEFECT_UNITS)[number]; label: string }[] = [
 // Tab loại vật tư (icon theo nhóm) — key trùng giá trị Material.category.
 const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; label: string; icon: LucideIcon }[] = [
   { key: "Dầu bôi trơn", label: "Dầu bôi trơn", icon: Droplet },
-  { key: "Lõi lọc dầu", label: "Lõi lọc dầu", icon: Filter },
+  { key: "Lõi lọc dầu", label: "Lõi lọc", icon: Filter },
   { key: "Thiết bị C&I", label: "Thiết bị C&I", icon: Cpu },
   { key: "Hóa Chất", label: "Hóa chất & Chai khí", icon: FlaskConical },
   { key: "Bi Nghiền Than", label: "Bi Nghiền Than", icon: CircleDot },
@@ -320,7 +320,7 @@ function MaterialsPageContent() {
     XLSX.utils.book_append_sheet(wb, ws, "Nhập điểm thay thế");
     XLSX.writeFile(
       wb,
-      `diem-thay-the_${machineTab}_${categoryFilter}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `diem-thay-the_${machineTab}_${displayMaterialCategory(categoryFilter)}_${new Date().toISOString().slice(0, 10)}.xlsx`
         .replace(/\s+/g, "-")
         .toLowerCase()
     );
@@ -760,8 +760,8 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? `Không có vật tư nào khớp bộ lọc trong loại "${categoryFilter}" (${machineLabel}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
-              : `Chưa có vật tư nào thuộc loại "${categoryFilter}" được khai báo cho thiết bị trong phạm vi Xem/Sửa của cương vị hiện tại (${machineLabel}).`
+              ? `Không có vật tư nào khớp bộ lọc trong loại "${displayMaterialCategory(categoryFilter)}" (${machineLabel}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
+              : `Chưa có vật tư nào thuộc loại "${displayMaterialCategory(categoryFilter)}" được khai báo cho thiết bị trong phạm vi Xem/Sửa của cương vị hiện tại (${machineLabel}).`
           }
           action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setBlockFilter("ALL"); } } : undefined}
         />
@@ -1122,7 +1122,7 @@ function MaterialsPageContent() {
                     <SelectContent>
                       <SelectItem value="NONE">— Chưa phân loại —</SelectItem>
                       {MATERIAL_CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                        <SelectItem key={c} value={c}>{displayMaterialCategory(c)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

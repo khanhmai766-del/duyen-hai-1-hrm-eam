@@ -53,7 +53,7 @@ const fmt = (n: number) => n.toLocaleString("vi-VN", { maximumFractionDigits: 3 
 // Icon + gợi ý mặc định khi tạo nhóm mới cho từng loại vật tư.
 const CATEGORY_META: Record<GroupingCategory, { icon: LucideIcon; defaultUnit: string; codeHint: string; nameHint: string }> = {
   "Dầu bôi trơn": { icon: Droplet, defaultUnit: "Lít", codeHint: "T32", nameHint: "Dầu tuabin T32" },
-  "Lõi lọc dầu": { icon: Filter, defaultUnit: "Cái", codeHint: "LOC-TB", nameHint: "Lõi lọc dầu tuabin" },
+  "Lõi lọc dầu": { icon: Filter, defaultUnit: "Cái", codeHint: "LOC-TB", nameHint: "Lõi lọc tuabin" },
   "Thiết bị C&I": { icon: Cpu, defaultUnit: "Cái", codeHint: "C&I", nameHint: "Thiết bị C&I" },
   "Hóa Chất": { icon: FlaskConical, defaultUnit: "Kg", codeHint: "NAOH", nameHint: "Xút NaOH 32%" },
   "Bi Nghiền Than": { icon: CircleDot, defaultUnit: "Viên", codeHint: "BI60", nameHint: "Bi nghiền than 60mm" },
@@ -70,7 +70,7 @@ const CATEGORY_BY_SLUG: Record<string, GroupingCategory> = {
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_BY_SLUG).map(([slug, value]) => ({ slug, value }));
 const categoryLabel = (category: GroupingCategory) =>
-  category === "Hóa Chất" ? "Hóa chất & Chai khí" : category;
+  category === "Hóa Chất" ? "Hóa chất & Chai khí" : category === "Lõi lọc dầu" ? "Lõi lọc" : category;
 
 /* ==================== TRANG CHÍNH ==================== */
 export default function OilGroupingPage() {

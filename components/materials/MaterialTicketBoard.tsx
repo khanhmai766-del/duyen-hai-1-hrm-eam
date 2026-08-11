@@ -13,7 +13,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -213,7 +213,7 @@ export default function MaterialTicketBoard({
       || b.createdAt.localeCompare(a.createdAt)
     );
   }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, typeFilter, searchText]);
-  const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : materialCategoryFilter;
+  const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : displayMaterialCategory(materialCategoryFilter);
   const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
 
   return (
@@ -260,7 +260,7 @@ export default function MaterialTicketBoard({
             style={{ width: compactSelectWidth(selectedCategoryLabel, 10, 19) }}
           >
             <option value="ALL">Tất cả loại</option>
-            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{displayMaterialCategory(c)}</option>)}
           </select>
         </label>
         <label className="unit-filter">
@@ -339,7 +339,7 @@ export default function MaterialTicketBoard({
                     : t.type === "SU_DUNG_HIEN_CO"
                       ? <span className="tag dx"><Package size={11} /> Sử dụng hiện có</span>
                     : <span className="tag dx"><ClipboardList size={11} /> Đề xuất</span>}
-                <small className="kind-sub">{t.unit}{t.materialCategory ? ` · ${t.materialCategory}` : ""}</small>
+                <small className="kind-sub">{t.unit}{t.materialCategory ? ` · ${displayMaterialCategory(t.materialCategory)}` : ""}</small>
               </span>
               <span>{t.assignedPosition}</span>
               <span className="material-name" title={materialText}>{materialText}</span>
@@ -745,7 +745,7 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
             <label>Loại vật tư *</label>
             <div className="cats ticket-category-options">
               {CATEGORIES.map((c) => (
-                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>{c}</button>
+                <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>{displayMaterialCategory(c)}</button>
               ))}
             </div>
 
@@ -1144,7 +1144,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <label>Loại vật tư *</label>
           <div className="cats ticket-category-options">
             {CATEGORIES.map((c) => (
-              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}>{c}</button>
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}>{displayMaterialCategory(c)}</button>
             ))}
           </div>
 
@@ -2015,7 +2015,11 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 <label className="field">Mã vật tư *
                   <select value={erpCode} disabled={proposalExported} onChange={(e) => setErpCode(e.target.value)}>
                     <option value="">— Chọn mã vật tư ERP —</option>
-                    {statsCodeOptions.map((option) => <option key={option.code} value={option.code}>{option.code} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}</option>)}
+                    {statsCodeOptions.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.code} · {option.name || t.items[0]?.material.name || "Chưa có tên vật tư"} · ERP: {option.erpStock.toLocaleString("vi-VN")} {t.items[0]?.material.unit ?? ""}
+                      </option>
+                    ))}
                   </select>
                 </label>
               )}

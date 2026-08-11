@@ -45,6 +45,7 @@ import {
   type ReplacementLogItem,
 } from "@/hooks/useReplacements";
 import {
+  displayMaterialCategory,
   MATERIAL_CATEGORIES,
   isSelectableManagingPosition,
   REPL_DUE,
@@ -674,7 +675,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                     <SelectContent>
                       <SelectItem value="ALL">Tất cả loại vật tư</SelectItem>
                       {CATEGORY_FILTERS.map((category) => (
-                        <SelectItem key={category} value={category}>{category}</SelectItem>
+                        <SelectItem key={category} value={category}>{displayMaterialCategory(category)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -775,7 +776,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
               <SelectContent>
                 <SelectItem value="ALL">Tất cả</SelectItem>
                 {CATEGORY_FILTERS.map((category) => (
-                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                  <SelectItem key={category} value={category}>{displayMaterialCategory(category)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1454,7 +1455,7 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
                       <SelectTrigger><SelectValue placeholder="Chưa gán" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NONE">Chưa gán</SelectItem>
-                        {MATERIAL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {MATERIAL_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{displayMaterialCategory(c)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

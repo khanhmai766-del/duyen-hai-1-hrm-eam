@@ -15,7 +15,7 @@ import {
   useDeviceMaterialOptions,
   useUpdateDeviceMaterialDeclaration,
 } from "@/hooks/useDeviceMaterialDeclarations";
-import { MATERIAL_CATEGORIES, isSelectableManagingPosition, materialCategoryMatches } from "@/lib/constants";
+import { displayMaterialCategory, MATERIAL_CATEGORIES, isSelectableManagingPosition, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 
@@ -243,7 +243,7 @@ export function DeviceMaterialDeclarationDialog({
               <Select value={category || NONE} onValueChange={(value) => { setCategory(value === NONE ? "" : value); setMaterialId(""); }} disabled={optionsQuery.isLoading}>
                 <SelectTrigger><SelectValue placeholder="Chọn loại vật tư" /></SelectTrigger>
                 <SelectContent>
-                  {categories.length ? categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>) : <SelectItem value={NONE}>Chưa có loại vật tư</SelectItem>}
+                  {categories.length ? categories.map((item) => <SelectItem key={item} value={item}>{displayMaterialCategory(item)}</SelectItem>) : <SelectItem value={NONE}>Chưa có loại vật tư</SelectItem>}
                 </SelectContent>
               </Select>
             </Field>
