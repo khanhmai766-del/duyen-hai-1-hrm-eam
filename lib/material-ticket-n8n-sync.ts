@@ -18,6 +18,7 @@ type MaterialTicketSyncItem = {
   material: {
     code: string;
     name: string;
+    unit: string;
   };
   device: {
     name: string;
@@ -118,19 +119,54 @@ export function decodeMaterialTicketSyncCursor(value: string) {
   }
 }
 
-function iso(value: Date | null) {
-  return value?.toISOString() ?? null;
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+function formatDate(value: Date | null) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: VIETNAM_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(value);
+}
+
+function formatDateTime(value: Date | null) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: VIETNAM_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(value).replace(",", "");
 }
 
 function joinText(parts: Array<string | null | undefined>) {
   return parts.map((part) => part?.trim()).filter(Boolean).join(" · ") || null;
 }
 
-function recoverySummary(ticket: MaterialTicketForN8nSync) {
+function joinUniqueText(parts: Array<string | null | undefined>) {
+  const unique = Array.from(new Set(parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part))));
+  return unique.join(" · ") || null;
+}
+
+function quantityWithUnit(value: number | null, unit: string) {
+  if (value == null) return null;
+  return `${value.toLocaleString("vi-VN")} ${unit.trim()}`.trim();
+}
+
+function recoverySummary(ticket: MaterialTicketForN8nSync, unit: string) {
   if (!ticket.recoveryRequired && !ticket.recoveryQuantity && !ticket.recoveryReturnedAt) return null;
   return joinText([
-    ticket.recoveryReturnedAt ? `Ngày trả: ${ticket.recoveryReturnedAt.toISOString()}` : null,
-    ticket.recoveryQuantity != null ? `Số lượng trả: ${ticket.recoveryQuantity}` : null,
+    ticket.recoveryReturnedAt ? `Ngày trả: ${formatDate(ticket.recoveryReturnedAt)}` : null,
+    ticket.materialUserName || ticket.usedByName
+      ? `Người trả: ${ticket.materialUserName ?? ticket.usedByName}`
+      : null,
+    ticket.recoveryQuantity != null ? `Số lượng trả: ${quantityWithUnit(ticket.recoveryQuantity, unit)}` : null,
   ]);
 }
 
@@ -155,7 +191,7 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
     const proposedByName = ticket.proposedByName ?? ticket.createdByName;
     const proposedByPosition = ticket.proposedByPosition ?? ticket.assignedPosition;
     const materialUserName = ticket.materialUserName ?? ticket.usedByName;
-    const purpose = item.deviceNameManual ?? item.device?.name ?? null;
+    const unit = item.material.unit;
 
     return {
       syncKey,
@@ -164,38 +200,42 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
       row: {
         A: ticket.sequenceNumber,
         B: ticket.materialCategory,
-        C: ticket.remainingQuantity,
+        C: quantityWithUnit(ticket.remainingQuantity, unit),
         D: ticket.proposalNumber,
-        E: iso(proposedAt),
+        E: formatDate(proposedAt),
         F: proposedByPosition,
         G: proposedByName,
-        H: item.erpCode ?? item.material.code,
-        I: item.erpName ?? item.material.name,
-        J: item.quantity,
-        K: purpose,
-        L: ticket.proposalNote,
-        M: iso(receivedAt),
-        N: receivedQuantity,
+        // Mã ERP chỉ có sau khi Thống kê thực sự chọn mã vật tư.
+        H: item.erpCode,
+        // Luôn giữ tên nhóm người đề xuất đã chọn trong Danh mục Vận hành 1.
+        I: item.material.name,
+        J: quantityWithUnit(item.quantity, unit),
+        K: ticket.proposalNote,
+        // Website hiện chưa có trường ghi chú người đề xuất tách riêng.
+        L: null,
+        M: formatDate(receivedAt),
+        N: quantityWithUnit(receivedQuantity, unit),
         O: receivedByName,
-        P: joinText([ticket.receivedMethod, ticket.deliveryNoteNumber]),
+        P: joinUniqueText([ticket.receivedMethod, ticket.deliveryNoteNumber]),
         Q: null,
         R: materialUserName,
-        S: iso(ticket.usedAt),
-        T: ticket.completionNote ?? purpose,
+        S: formatDate(ticket.usedAt),
+        // Chỉ điền khi bước nghiệm thu đã có nội dung xác nhận hoàn thành.
+        T: ticket.completionNote,
         U: ticket.pctNumber,
-        V: ticket.usedQuantity,
-        W: ticket.remainingQuantity,
+        V: quantityWithUnit(ticket.usedQuantity, unit),
+        W: quantityWithUnit(ticket.remainingQuantity, unit),
         X: null,
-        Y: recoverySummary(ticket),
+        Y: recoverySummary(ticket, unit),
         Z: null,
-        AA: joinText([iso(ticket.completedAt), ticket.completedByName]),
+        AA: joinText([formatDate(ticket.completedAt), ticket.completedByName]),
         AB: ticket.completionNote,
         AC: null,
         AD: ticket.bbntDoNumber ?? null,
         AE: recoveryDocumentNumber(ticket),
         AF: null,
         AG: syncKey,
-        AH: ticket.updatedAt.toISOString(),
+        AH: formatDateTime(ticket.updatedAt),
         AI: ticket.status,
       },
     };

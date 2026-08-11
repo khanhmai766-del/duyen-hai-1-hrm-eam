@@ -1,0 +1,224 @@
+{
+  "name": "PRODUCTION - Đồng bộ vật tư sang VT_DONGBO",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "material-manual-trigger",
+      "name": "Chạy thử thủ công",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-980, 20]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "40 8,23,38,53 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "material-schedule-trigger",
+      "name": "Lịch 15 phút lệch 40 giây",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-980, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $getWorkflowStaticData('global');\nreturn [{ json: {\n  updatedAfter: state.materialUpdatedAfter ?? '1970-01-01T00:00:00.000Z',\n} }];"
+      },
+      "id": "material-prepare-watermark",
+      "name": "Chuẩn bị watermark",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-740, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://duyenhai1.vn/api/integrations/n8n/material-tickets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "updatedAfter",
+              "value": "={{ $json.updatedAfter }}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "material-fetch-api",
+      "name": "Lấy phiếu vật tư từ website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-500, 100],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "material-has-rows-condition",
+              "leftValue": "={{ Array.isArray($json.data) && $json.data.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "material-has-rows",
+      "name": "Có dòng cần đồng bộ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-260, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values/VT_DONGBO!AG3:AG?majorDimension=ROWS",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "material-read-sync-keys",
+      "name": "Đọc SYNC_KEY hiện có",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-20, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $('Lấy phiếu vật tư từ website').first().json;\nif (response.meta?.hasMore) {\n  throw new Error('API còn trang dữ liệu; chưa được cập nhật watermark để tránh bỏ sót');\n}\nconst changes = Array.isArray(response.data) ? response.data : [];\nconst keyRows = Array.isArray($json.values) ? $json.values : [];\nconst rowByKey = new Map();\nfor (let index = 0; index < keyRows.length; index++) {\n  const key = String(keyRows[index]?.[0] ?? '').trim();\n  if (key && !rowByKey.has(key)) rowByKey.set(key, index + 3);\n}\nlet nextRow = keyRows.length + 3;\nconst columns = [\n  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),\n  'AA','AB','AC','AD','AE','AF','AG','AH','AI','AJ',\n];\nconst formatDateTime = (value) => new Intl.DateTimeFormat('en-GB', {\n  timeZone: 'Asia/Ho_Chi_Minh',\n  day: '2-digit', month: '2-digit', year: 'numeric',\n  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n}).format(value).replace(',', '');\nconst syncedAt = formatDateTime(new Date());\nconst writes = changes.map((change) => {\n  const key = String(change.syncKey ?? change.row?.AG ?? '').trim();\n  if (!key) throw new Error('Dòng vật tư thiếu SYNC_KEY');\n  let rowNumber = rowByKey.get(key);\n  if (!rowNumber) {\n    rowNumber = nextRow++;\n    rowByKey.set(key, rowNumber);\n  }\n  const values = columns.map((column) => {\n    if (column === 'A') return rowNumber - 2;\n    if (column === 'AJ') return syncedAt;\n    const value = change.row?.[column];\n    return value === null || value === undefined ? '' : value;\n  });\n  return {\n    range: `VT_DONGBO!A${rowNumber}:AJ${rowNumber}`,\n    majorDimension: 'ROWS',\n    values: [values],\n  };\n});\nreturn [{ json: {\n  writes,\n  watermark: response.meta?.watermark,\n  rowCount: writes.length,\n} }];"
+      },
+      "id": "material-plan-writes",
+      "name": "Lập kế hoạch upsert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ valueInputOption: 'USER_ENTERED', data: $json.writes }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "material-write-batch",
+      "name": "Ghi batch vào VT_DONGBO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [460, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $('Lập kế hoạch upsert').first().json;\nif (!plan.watermark) throw new Error('Thiếu watermark sau khi ghi Sheet');\nconst state = $getWorkflowStaticData('global');\nstate.materialUpdatedAfter = plan.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: plan.rowCount,\n  watermark: plan.watermark,\n} }];"
+      },
+      "id": "material-save-watermark-after-write",
+      "name": "Lưu watermark sau khi ghi",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $('Lấy phiếu vật tư từ website').first().json;\nif (response.meta?.hasMore) throw new Error('API còn trang dữ liệu');\nif (!response.meta?.watermark) throw new Error('Thiếu watermark từ API');\nconst state = $getWorkflowStaticData('global');\nstate.materialUpdatedAfter = response.meta.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: 0,\n  watermark: response.meta.watermark,\n} }];"
+      },
+      "id": "material-save-watermark-empty",
+      "name": "Lưu watermark khi không có dòng",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-20, 200]
+    }
+  ],
+  "connections": {
+    "Chạy thử thủ công": {
+      "main": [[{"node": "Chuẩn bị watermark", "type": "main", "index": 0}]]
+    },
+    "Lịch 15 phút lệch 40 giây": {
+      "main": [[{"node": "Chuẩn bị watermark", "type": "main", "index": 0}]]
+    },
+    "Chuẩn bị watermark": {
+      "main": [[{"node": "Lấy phiếu vật tư từ website", "type": "main", "index": 0}]]
+    },
+    "Lấy phiếu vật tư từ website": {
+      "main": [[{"node": "Có dòng cần đồng bộ?", "type": "main", "index": 0}]]
+    },
+    "Có dòng cần đồng bộ?": {
+      "main": [
+        [{"node": "Đọc SYNC_KEY hiện có", "type": "main", "index": 0}],
+        [{"node": "Lưu watermark khi không có dòng", "type": "main", "index": 0}]
+      ]
+    },
+    "Đọc SYNC_KEY hiện có": {
+      "main": [[{"node": "Lập kế hoạch upsert", "type": "main", "index": 0}]]
+    },
+    "Lập kế hoạch upsert": {
+      "main": [[{"node": "Ghi batch vào VT_DONGBO", "type": "main", "index": 0}]]
+    },
+    "Ghi batch vào VT_DONGBO": {
+      "main": [[{"node": "Lưu watermark sau khi ghi", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "active": false,
+  "versionId": "material-sync-production-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

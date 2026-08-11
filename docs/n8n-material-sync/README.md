@@ -27,6 +27,19 @@ ghi. Một phiếu có nhiều item sẽ có nhiều dòng với `SYNC_KEY` khá
 Cột `AD` lấy trực tiếp từ `MaterialTicket.bbntDoNumber` (Số BBNT D-Office được
 nhập tại bước quyết toán).
 
+Quy ước dữ liệu nghiệp vụ:
+
+- Các cột khối lượng ghi kèm đơn vị của nhóm vật tư.
+- Cột H chỉ có mã ERP sau khi Thống kê chọn mã; cột I luôn là tên nhóm từ
+  Danh mục Vận hành 1.
+- Ghi chú lúc tạo đề xuất ghi vào cột K (Mục đích sử dụng); cột L để trống cho
+  tới khi website có trường ghi chú riêng.
+- Cột T chỉ ghi nội dung nghiệm thu (`completionNote`), không tự lấy tên thiết
+  bị khi bước sử dụng chưa nhập nội dung.
+- Ngày nghiệp vụ hiển thị `dd/MM/yyyy`; cột kỹ thuật AH/AJ hiển thị
+  `dd/MM/yyyy HH:mm:ss` theo múi giờ Việt Nam.
+- STT cột A do workflow tính theo vị trí dòng thực tế trên Sheet.
+
 ## Lịch production
 
 - Trigger: `8,23,38,53 * * * *` (mỗi 15 phút).
