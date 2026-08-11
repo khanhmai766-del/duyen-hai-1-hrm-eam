@@ -21,8 +21,6 @@ function pointLabel(point: ReplacementPointOption) {
  */
 function buildContent(points: ReplacementPointOption[]) {
   if (points.length === 0) return "";
-  const { materialName, materialUnit } = points[0];
-  const total = points.reduce((sum, point) => sum + point.quantity, 0);
   if (points.length === 1) {
     const point = points[0];
     const detail = [
@@ -30,12 +28,20 @@ function buildContent(points: ReplacementPointOption[]) {
       point.intervalNote ? `O&M ${point.intervalNote}` : null,
       point.lastReplacedAt ? `lần thay gần nhất ${formatDate(point.lastReplacedAt)}` : null,
     ].filter(Boolean).join(", ");
-    return `Thay thế ${materialName} — ${point.quantity.toLocaleString("vi-VN")} ${materialUnit} tại ${pointLabel(point)}${detail ? ` (${detail})` : ""}.`;
+    return `Thay thế ${point.materialName} — ${point.quantity.toLocaleString("vi-VN")} ${point.materialUnit} tại ${pointLabel(point)}${detail ? ` (${detail})` : ""}.`;
   }
-  return [
-    `Thay thế ${materialName} cho ${points.length} vị trí — tổng ${total.toLocaleString("vi-VN")} ${materialUnit}:`,
-    ...points.map((point) => `- ${pointLabel(point)}: ${point.quantity.toLocaleString("vi-VN")} ${materialUnit}`),
-  ].join("\n");
+  const groups = new Map<string, ReplacementPointOption[]>();
+  for (const point of points) groups.set(point.materialId, [...(groups.get(point.materialId) ?? []), point]);
+  const lines = groups.size === 1
+    ? []
+    : [`Thay thế ${groups.size} loại vật tư tại ${points.length} vị trí:`];
+  for (const group of groups.values()) {
+    const first = group[0];
+    const total = group.reduce((sum, point) => sum + point.quantity, 0);
+    lines.push(`${groups.size === 1 ? "" : "- "}Thay thế ${first.materialName} cho ${group.length} vị trí — tổng ${total.toLocaleString("vi-VN")} ${first.materialUnit}:`);
+    lines.push(...group.map((point) => `${groups.size === 1 ? "-" : "  +"} ${pointLabel(point)}: ${point.quantity.toLocaleString("vi-VN")} ${point.materialUnit}`));
+  }
+  return lines.join("\n");
 }
 
 export function buildSeedFromPoints(points: ReplacementPointOption[]): DefectMaterialRequestSeed | null {
@@ -49,7 +55,13 @@ export function buildSeedFromPoints(points: ReplacementPointOption[]): DefectMat
     primaryIsFolder: primary.deviceIsFolder,
     primarySystemName: primary.deviceIsFolder ? primary.deviceName : primary.systemName,
     primaryDeviceName: primary.deviceName,
-    points: points.map((point) => ({ id: point.id, label: pointLabel(point), quantity: point.quantity })),
+    points: points.map((point) => ({
+      id: point.id,
+      label: pointLabel(point),
+      quantity: point.quantity,
+      materialName: point.materialName,
+      materialUnit: point.materialUnit,
+    })),
     suggestedContent: buildContent(points),
   };
 }
@@ -57,7 +69,7 @@ export function buildSeedFromPoints(points: ReplacementPointOption[]): DefectMat
 /**
  * Chọn điểm thay thế ngay trong form Nhập khiếm khuyết ("cửa phụ").
  * Danh sách đã được server lọc theo tổ máy + cương vị đang chọn, nên mọi điểm hiện
- * ra đều gộp được vào một phiếu. Trong form chỉ còn ràng buộc CÙNG MỘT VẬT TƯ.
+ * ra đều gộp được vào một phiếu, kể cả khi thuộc nhiều loại vật tư khác nhau.
  */
 export function MaterialRequestPicker({
   machine,
@@ -74,16 +86,16 @@ export function MaterialRequestPicker({
   const query = useReplacementPointOptions({
     machine,
     position,
-    category: category === ALL_CATEGORIES ? undefined : category,
   });
   const points = React.useMemo(() => query.data?.data ?? [], [query.data]);
+  const visiblePoints = React.useMemo(
+    () => category === ALL_CATEGORIES ? points : points.filter((point) => point.category === category),
+    [category, points]
+  );
   const selected = React.useMemo(
     () => points.filter((point) => selectedIds.includes(point.id)),
     [points, selectedIds]
   );
-  // Một phiếu chỉ mang một vật tư; điểm đầu tiên khoá phần còn lại.
-  const lockedMaterialId = selected[0]?.materialId ?? null;
-
   function toggle(point: ReplacementPointOption) {
     const next = selectedIds.includes(point.id)
       ? selected.filter((item) => item.id !== point.id)
@@ -101,7 +113,7 @@ export function MaterialRequestPicker({
 
   return (
     <div className="space-y-2">
-      <Select value={category} onValueChange={(value) => { setCategory(value); onChange([]); }}>
+      <Select value={category} onValueChange={setCategory}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Loại vật tư" /></SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL_CATEGORIES}>Tất cả loại vật tư</SelectItem>
@@ -113,31 +125,26 @@ export function MaterialRequestPicker({
         <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang tải điểm thay thế…
         </div>
-      ) : points.length === 0 ? (
+      ) : visiblePoints.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border bg-muted/25 px-3 py-3 text-xs text-muted-foreground">
           Cương vị <b>{position}</b> chưa có điểm thay thế nào được khai báo{category !== ALL_CATEGORIES ? ` cho loại “${category}”` : ""}.
           Khai báo tại Danh mục vật tư → Chi tiết điểm thay thế.
         </p>
       ) : (
         <div className="max-h-72 space-y-1.5 overflow-y-auto rounded-lg border border-border bg-muted/15 p-1.5">
-          {points.map((point) => {
+          {visiblePoints.map((point) => {
             const checked = selectedIds.includes(point.id);
-            const blocked = !!lockedMaterialId && point.materialId !== lockedMaterialId && !checked;
             const due = point.dueStatus ? REPL_DUE[point.dueStatus] : null;
             return (
               <button
                 key={point.id}
                 type="button"
-                disabled={blocked}
                 onClick={() => toggle(point)}
-                title={blocked ? "Một số yêu cầu chỉ gộp được các điểm của cùng một vật tư" : undefined}
                 className={cn(
                   "flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors",
                   checked
                     ? "border-emerald-300 bg-white shadow-sm"
-                    : blocked
-                      ? "cursor-not-allowed border-transparent bg-white/40 opacity-45"
-                      : "border-transparent bg-white/70 hover:border-emerald-200 hover:bg-white"
+                    : "border-transparent bg-white/70 hover:border-emerald-200 hover:bg-white"
                 )}
               >
                 <span

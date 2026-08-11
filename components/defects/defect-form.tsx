@@ -66,7 +66,13 @@ export type DefectMaterialRequestSeed = {
   /** Hệ thống chính và tên node chính, chỉ để hiển thị — server tự dựng lại khi lưu. */
   primarySystemName: string;
   primaryDeviceName: string;
-  points: Array<{ id: string; label: string; quantity: number }>;
+  points: Array<{
+    id: string;
+    label: string;
+    quantity: number;
+    materialName: string;
+    materialUnit: string;
+  }>;
   suggestedContent: string;
 };
 
@@ -662,13 +668,19 @@ export function DefectForm({
                     {materialRequest.points.length} điểm
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-medium text-ink">{materialRequest.materialName}</p>
+                <p className="mt-1 text-sm font-medium text-ink">
+                  {new Set(materialRequest.points.map((point) => point.materialName)).size > 1
+                    ? `${new Set(materialRequest.points.map((point) => point.materialName)).size} loại vật tư`
+                    : materialRequest.materialName}
+                </p>
                 <ul className="mt-2 space-y-1">
                   {materialRequest.points.map((point) => (
                     <li key={point.id} className="flex items-baseline justify-between gap-3 text-xs text-emerald-900/85">
-                      <span className="min-w-0 flex-1 truncate" title={point.label}>{point.label}</span>
+                      <span className="min-w-0 flex-1 truncate" title={`${point.materialName} · ${point.label}`}>
+                        <b>{point.materialName}</b> · {point.label}
+                      </span>
                       <span className="shrink-0 font-semibold tabular-nums">
-                        {point.quantity.toLocaleString("vi-VN")} {materialRequest.materialUnit}
+                        {point.quantity.toLocaleString("vi-VN")} {point.materialUnit}
                       </span>
                     </li>
                   ))}

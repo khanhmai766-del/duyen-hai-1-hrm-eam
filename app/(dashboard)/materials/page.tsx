@@ -102,7 +102,7 @@ function MaterialsPageContent() {
   const [categoryFilter, setCategoryFilter] = React.useState<string>(initialCategory);
   const [blockFilter, setBlockFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(25);
   const [deleting, setDeleting] = React.useState<Material | null>(null);
@@ -118,6 +118,7 @@ function MaterialsPageContent() {
   const [replacementDataOpen, setReplacementDataOpen] = React.useState(false);
   const [deletingDetails, setDeletingDetails] = React.useState<MaterialWithDevices | null>(null);
   const [selectedDetailIds, setSelectedDetailIds] = React.useState<Set<string>>(new Set());
+  const [materialRequestSelection, setMaterialRequestSelection] = React.useState<MaterialRequestSelection[]>([]);
   const [erpSearch, setErpSearch] = React.useState("");
 
   // Mở drawer "Theo dõi thay thế" khi điều hướng kèm ?track=<materialId>
@@ -385,11 +386,29 @@ function MaterialsPageContent() {
     setSelected(checked ? new Set(materials.map((m) => m.id)) : new Set());
   }
 
+  function toggleExpanded(id: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function changeMachineTab(nextMachine: string) {
     const next = new URLSearchParams(params.toString());
     next.set("may", nextMachine);
     next.delete("track");
     router.replace(`/materials?${next.toString()}`, { scroll: false });
+  }
+
+  function changeCategoryTab(nextCategory: string) {
+    setCategoryFilter(nextCategory);
+    // Hóa chất & chai khí là danh mục dùng chung, nên khi người dùng chọn nhóm này
+    // tự chuyển phạm vi tổ máy về COMMON. Các nhóm còn lại giữ nguyên tổ máy đang xem.
+    if (nextCategory === "Hóa Chất" && machineTab !== "COMMON") {
+      changeMachineTab("COMMON");
+    }
   }
 
   async function confirmBulkDelete() {
@@ -532,7 +551,7 @@ function MaterialsPageContent() {
   }
 
   function openTrackingDialog(material: MaterialWithDevices) {
-    setExpandedId(material.id);
+    setExpandedIds((current) => new Set(current).add(material.id));
     setTrackingMaterial(material);
     setTrackingRows([{ deviceSeq: null, system: null, intervalMonths: 6, quantity: 1, deviceCount: 1 }]);
   }
@@ -722,7 +741,7 @@ function MaterialsPageContent() {
                 <DropdownMenuItem
                   key={tab.key}
                   className={cn("justify-between gap-3", active && "bg-blue-50 text-navy")}
-                  onClick={() => setCategoryFilter(tab.key)}
+                  onClick={() => changeCategoryTab(tab.key)}
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <Icon className="h-4 w-4 shrink-0" />
@@ -790,12 +809,12 @@ function MaterialsPageContent() {
             <TableBody>
               {pagedMaterials.map((m) => {
                 const checked = selected.has(m.id);
-                const expanded = expandedId === m.id;
+                const expanded = expandedIds.has(m.id);
                 const linkedCodes = materialErpCodes(m);
                 const linkedErpStock = linkedCodes.length ? erpStockByCodes(linkedCodes) : m.minStock;
                 return (
                   <React.Fragment key={m.id}>
-                  <TableRow data-state={checked ? "selected" : undefined} className={cn("cursor-pointer hover:bg-muted/30", checked && "bg-accent/5")} onClick={() => setExpandedId(expanded ? null : m.id)}>
+                  <TableRow data-state={checked ? "selected" : undefined} className={cn("cursor-pointer hover:bg-muted/30", checked && "bg-accent/5")} onClick={() => toggleExpanded(m.id)}>
                     {canManage && (
                       <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -809,7 +828,7 @@ function MaterialsPageContent() {
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setExpandedId(expanded ? null : m.id); }}
+                          onClick={(e) => { e.stopPropagation(); toggleExpanded(m.id); }}
                           className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-colors", expanded ? "bg-rose-500" : "bg-emerald-500")}
                           title={expanded ? "Thu gọn" : "Mở chi tiết"}
                         >
@@ -922,7 +941,13 @@ function MaterialsPageContent() {
                   {expanded && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
-                        <MaterialExpandedDetails m={m} blockFilter={blockFilter} onOpenTracking={() => setReplMaterial(m)} />
+                        <MaterialExpandedDetails
+                          m={m}
+                          blockFilter={blockFilter}
+                          selectedItems={materialRequestSelection}
+                          onSelectedItemsChange={setMaterialRequestSelection}
+                          onOpenTracking={() => setReplMaterial(m)}
+                        />
                         {trackingMaterial?.id === m.id && (
                           <InlineTrackingEditor
                             material={m}
@@ -1975,7 +2000,19 @@ function compareNatural(a: string, b: string) {
 }
 
 /** Panel bung: liệt kê các thiết bị theo dõi đã khai báo cho vật tư. */
-function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m: MaterialWithDevices; blockFilter?: string; onOpenTracking?: () => void }) {
+function MaterialExpandedDetails({
+  m,
+  blockFilter = "ALL",
+  selectedItems,
+  onSelectedItemsChange,
+  onOpenTracking,
+}: {
+  m: MaterialWithDevices;
+  blockFilter?: string;
+  selectedItems: MaterialRequestSelection[];
+  onSelectedItemsChange: React.Dispatch<React.SetStateAction<MaterialRequestSelection[]>>;
+  onOpenTracking?: () => void;
+}) {
   const points = React.useMemo(
     () =>
       (m.replacements ?? [])
@@ -2024,13 +2061,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
   // ── Ra số yêu cầu thay thế ────────────────────────────────────────────────
   // Chọn nhiều điểm → MỘT phiếu. Ràng buộc: cùng tổ máy + cùng cương vị quản lý
   // (server kiểm lại), vì một phiếu chỉ mang được một cặp giá trị này lên Sheet.
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [requestOpen, setRequestOpen] = React.useState(false);
   const selectablePoints = React.useMemo(() => points.filter((p) => !!p.deviceSeq), [points]);
-  const anchor = React.useMemo(
-    () => (selectedIds.length > 0 ? points.find((p) => p.id === selectedIds[0]) ?? null : null),
-    [points, selectedIds]
-  );
+  const selectedIds = React.useMemo(() => selectedItems.map((item) => item.point.id), [selectedItems]);
+  const anchor = selectedItems[0]?.point ?? null;
   const canSelect = React.useCallback(
     (p: PanelPoint) => {
       if (!p.deviceSeq) return false;
@@ -2042,14 +2076,13 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
     },
     [anchor, selectedIds]
   );
-  const toggleSelected = (id: string) =>
-    setSelectedIds((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+  const toggleSelected = (point: PanelPoint) =>
+    onSelectedItemsChange((current) =>
+      current.some((item) => item.point.id === point.id)
+        ? current.filter((item) => item.point.id !== point.id)
+        : [...current, { material: m, point }]
     );
-  const selectedPoints = React.useMemo(
-    () => selectedIds.map((id) => points.find((p) => p.id === id)).filter(Boolean) as PanelPoint[],
-    [points, selectedIds]
-  );
+  const selectedPoints = selectedItems;
 
   const [tracking, setTracking] = React.useState<PanelPoint | null>(null);
   const [trackDate, setTrackDate] = React.useState("");
@@ -2120,8 +2153,10 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
           </span>
           {selectedIds.length > 0 ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Đã chọn {selectedIds.length} điểm</span>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelectedIds([])}>
+              <span className="text-xs font-medium text-muted-foreground">
+                Đã chọn {selectedIds.length} điểm · {new Set(selectedItems.map((item) => item.material.id)).size} vật tư
+              </span>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onSelectedItemsChange([])}>
                 Bỏ chọn
               </Button>
               <Button type="button" size="sm" className="h-7 px-3 text-xs" onClick={() => setRequestOpen(true)}>
@@ -2131,7 +2166,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
           ) : (
             selectablePoints.length > 0 && (
               <span className="text-[11px] text-muted-foreground">
-                Tick chọn điểm để ra số yêu cầu thay thế — chọn nhiều điểm cùng tổ máy &amp; cương vị sẽ gộp vào một phiếu.
+                Tick chọn nhiều thiết bị của nhiều vật tư — cùng tổ máy &amp; cương vị sẽ gộp vào một SYC.
               </span>
             )
           )}
@@ -2192,7 +2227,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
                       type="checkbox"
                       checked={checked}
                       disabled={!selectable}
-                      onChange={() => toggleSelected(p.id)}
+                      onChange={() => toggleSelected(p)}
                       className="h-4 w-4 cursor-pointer accent-[#00558F] disabled:cursor-not-allowed disabled:opacity-35"
                       aria-label={`Chọn điểm ${p.device?.name || p.location || ""} để ra số yêu cầu`}
                       title={
@@ -2258,7 +2293,7 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
               <div>
                 <h2 className="text-lg font-bold text-ink">Ra số yêu cầu thay thế vật tư</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {selectedPoints.length} điểm · {m.name}
+                  {selectedPoints.length} điểm · {new Set(selectedPoints.map((item) => item.material.id)).size} vật tư
                 </p>
               </div>
               <button
@@ -2273,39 +2308,41 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
             <DefectForm
               lockDevice
               initialDevice={{
-                code: selectedPoints[0].deviceSeq ?? "",
-                name: selectedPoints[0].device?.name || selectedPoints[0].location || "",
+                code: selectedPoints[0].point.deviceSeq ?? "",
+                name: selectedPoints[0].point.device?.name || selectedPoints[0].point.location || "",
                 // Điểm ở cấp thư mục thì chính nó là "hệ thống chính" của phiếu.
-                system: selectedPoints[0].deviceIsFolder
-                  ? selectedPoints[0].device?.name ?? null
-                  : selectedPoints[0].device?.system ?? selectedPoints[0].system ?? null,
-                systemSeq: selectedPoints[0].deviceSeq ?? null,
-                managingPosition: selectedPoints[0].managingPosition ?? null,
-                unit: selectedPoints[0].machine ?? m.machine ?? null,
+                system: selectedPoints[0].point.deviceIsFolder
+                  ? selectedPoints[0].point.device?.name ?? null
+                  : selectedPoints[0].point.device?.system ?? selectedPoints[0].point.system ?? null,
+                systemSeq: selectedPoints[0].point.deviceSeq ?? null,
+                managingPosition: selectedPoints[0].point.managingPosition ?? null,
+                unit: selectedPoints[0].point.machine ?? selectedPoints[0].material.machine ?? null,
               }}
               initialMaterialRequest={{
-                replacementIds: selectedPoints.map((p) => p.id),
-                materialName: m.name,
-                materialUnit: m.unit,
-                materialCategory: m.category ?? null,
-                primaryIsFolder: !!selectedPoints[0].deviceIsFolder,
-                primarySystemName: selectedPoints[0].deviceIsFolder
-                  ? selectedPoints[0].device?.name ?? ""
-                  : selectedPoints[0].device?.system ?? selectedPoints[0].system ?? "",
-                primaryDeviceName: selectedPoints[0].device?.name || selectedPoints[0].location || "",
-                points: selectedPoints.map((p) => ({
-                  id: p.id,
-                  label: [p.device?.system || p.system, p.device?.name || p.location]
+                replacementIds: selectedPoints.map((item) => item.point.id),
+                materialName: selectedPoints[0].material.name,
+                materialUnit: selectedPoints[0].material.unit,
+                materialCategory: selectedPoints[0].material.category ?? null,
+                primaryIsFolder: !!selectedPoints[0].point.deviceIsFolder,
+                primarySystemName: selectedPoints[0].point.deviceIsFolder
+                  ? selectedPoints[0].point.device?.name ?? ""
+                  : selectedPoints[0].point.device?.system ?? selectedPoints[0].point.system ?? "",
+                primaryDeviceName: selectedPoints[0].point.device?.name || selectedPoints[0].point.location || "",
+                points: selectedPoints.map(({ material, point }) => ({
+                  id: point.id,
+                  label: [point.device?.system || point.system, point.device?.name || point.location]
                     .filter(Boolean)
                     .filter((part, index, all) => all.indexOf(part) === index)
                     .join(" · "),
-                  quantity: p.quantity * (p.deviceCount || 1),
+                  quantity: point.quantity * (point.deviceCount || 1),
+                  materialName: material.name,
+                  materialUnit: material.unit,
                 })),
-                suggestedContent: buildReplacementRequestContent(m, selectedPoints),
+                suggestedContent: buildReplacementRequestContent(selectedPoints),
               }}
               onDone={() => {
                 setRequestOpen(false);
-                setSelectedIds([]);
+                onSelectedItemsChange([]);
               }}
               onCancel={() => setRequestOpen(false)}
             />
@@ -2378,23 +2415,26 @@ function MaterialExpandedDetails({ m, blockFilter = "ALL", onOpenTracking }: { m
 }
 
 type PanelReplacementPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
+type MaterialRequestSelection = {
+  material: MaterialWithDevices;
+  point: PanelReplacementPoint;
+};
 
 /**
  * Nội dung gợi ý cho SYC thay thế — bản client, chỉ để người dùng thấy và sửa trước
  * khi lưu. Server dựng lại chuỗi tương đương khi ô nội dung bị bỏ trống.
  */
-function buildReplacementRequestContent(material: MaterialWithDevices, points: PanelReplacementPoint[]) {
-  if (points.length === 0) return "";
+function buildReplacementRequestContent(items: MaterialRequestSelection[]) {
+  if (items.length === 0) return "";
   const labelOf = (p: PanelReplacementPoint) =>
     [p.device?.system || p.system, p.device?.name || p.location]
       .filter(Boolean)
       .filter((part, index, all) => all.indexOf(part) === index)
       .join(" · ") || "Chưa xác định vị trí";
   const totalOf = (p: PanelReplacementPoint) => p.quantity * (p.deviceCount || 1);
-  const total = points.reduce((sum, p) => sum + totalOf(p), 0);
 
-  if (points.length === 1) {
-    const p = points[0];
+  if (items.length === 1) {
+    const { material, point: p } = items[0];
     const detail = [
       p.intervalMonths > 0 ? `chu kỳ ${p.intervalMonths} tháng` : null,
       p.intervalNote ? `O&M ${p.intervalNote}` : null,
@@ -2402,10 +2442,18 @@ function buildReplacementRequestContent(material: MaterialWithDevices, points: P
     ].filter(Boolean).join(", ");
     return `Thay thế ${material.name} — ${totalOf(p).toLocaleString("vi-VN")} ${material.unit} tại ${labelOf(p)}${detail ? ` (${detail})` : ""}.`;
   }
-  return [
-    `Thay thế ${material.name} cho ${points.length} vị trí — tổng ${total.toLocaleString("vi-VN")} ${material.unit}:`,
-    ...points.map((p) => `- ${labelOf(p)}: ${totalOf(p).toLocaleString("vi-VN")} ${material.unit}`),
-  ].join("\n");
+  const groups = new Map<string, MaterialRequestSelection[]>();
+  for (const item of items) groups.set(item.material.id, [...(groups.get(item.material.id) ?? []), item]);
+  const lines = groups.size === 1
+    ? []
+    : [`Thay thế ${groups.size} loại vật tư tại ${items.length} vị trí:`];
+  for (const group of groups.values()) {
+    const material = group[0].material;
+    const total = group.reduce((sum, item) => sum + totalOf(item.point), 0);
+    lines.push(`${groups.size === 1 ? "" : "- "}Thay thế ${material.name} cho ${group.length} vị trí — tổng ${total.toLocaleString("vi-VN")} ${material.unit}:`);
+    lines.push(...group.map(({ point }) => `${groups.size === 1 ? "-" : "  +"} ${labelOf(point)}: ${totalOf(point).toLocaleString("vi-VN")} ${material.unit}`));
+  }
+  return lines.join("\n");
 }
 
 /** Các SYC thay thế đã ra cho một điểm — bấm để mở thẳng phiếu bên màn Khiếm khuyết. */

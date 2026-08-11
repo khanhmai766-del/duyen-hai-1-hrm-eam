@@ -89,12 +89,12 @@ function dateVi(value: Date | null) {
  */
 export function buildMaterialRequestContent(points: MaterialRequestPoint[]) {
   if (points.length === 0) return "";
-  const materialName = points[0].material.name;
-  const unitLabel = points[0].material.unit;
-  const total = points.reduce((sum, point) => sum + totalQuantityOf(point), 0);
 
   if (points.length === 1) {
     const point = points[0];
+    const materialName = point.material.name;
+    const unitLabel = point.material.unit;
+    const total = totalQuantityOf(point);
     const detail = [
       point.intervalMonths > 0 ? `chu kỳ ${point.intervalMonths} tháng` : null,
       point.intervalNote ? `O&M ${point.intervalNote}` : null,
@@ -103,13 +103,31 @@ export function buildMaterialRequestContent(points: MaterialRequestPoint[]) {
     return `Thay thế ${materialName} — ${numberVi.format(total)} ${unitLabel} tại ${pointLabelOf(point)}${detail ? ` (${detail})` : ""}.`;
   }
 
-  const lines = points.map(
-    (point) => `- ${pointLabelOf(point)}: ${numberVi.format(totalQuantityOf(point))} ${unitLabel}`
-  );
-  return [
-    `Thay thế ${materialName} cho ${points.length} vị trí — tổng ${numberVi.format(total)} ${unitLabel}:`,
-    ...lines,
-  ].join("\n");
+  const groups = new Map<string, MaterialRequestPoint[]>();
+  for (const point of points) {
+    const current = groups.get(point.materialId) ?? [];
+    current.push(point);
+    groups.set(point.materialId, current);
+  }
+
+  if (groups.size === 1) {
+    const group = [...groups.values()][0];
+    const { name, unit } = group[0].material;
+    const total = group.reduce((sum, point) => sum + totalQuantityOf(point), 0);
+    return [
+      `Thay thế ${name} cho ${group.length} vị trí — tổng ${numberVi.format(total)} ${unit}:`,
+      ...group.map((point) => `- ${pointLabelOf(point)}: ${numberVi.format(totalQuantityOf(point))} ${unit}`),
+    ].join("\n");
+  }
+
+  const lines = [`Thay thế ${groups.size} loại vật tư tại ${points.length} vị trí:`];
+  for (const group of groups.values()) {
+    const { name, unit } = group[0].material;
+    const total = group.reduce((sum, point) => sum + totalQuantityOf(point), 0);
+    lines.push(`- ${name} — tổng ${numberVi.format(total)} ${unit}:`);
+    lines.push(...group.map((point) => `  + ${pointLabelOf(point)}: ${numberVi.format(totalQuantityOf(point))} ${unit}`));
+  }
+  return lines.join("\n");
 }
 
 const LOG_SOURCE_SELECT = {
@@ -335,9 +353,6 @@ export async function resolveMaterialRequest(
   // Giữ đúng thứ tự người dùng chọn: điểm đầu tiên quyết định thiết bị chính.
   const points = ids.map((id) => found.find((point) => point.id === id)!);
 
-  const materialIds = new Set(points.map((point) => point.materialId));
-  if (materialIds.size > 1) return "Chỉ được gộp các điểm của cùng một vật tư vào một số yêu cầu";
-
   const missingDevice = points.find((point) => !point.deviceSeq);
   if (missingDevice) {
     return `Điểm "${pointLabelOf(missingDevice)}" chưa gắn hệ thống/thiết bị trên cây nên không ra được số yêu cầu`;
@@ -354,7 +369,6 @@ export async function resolveMaterialRequest(
   );
   if (positionMismatch) return "Chỉ được gộp các điểm cùng cương vị quản lý vào một số yêu cầu";
 
-  const unitLabel = first.material.unit;
   return {
     points,
     unit: first.machine,
@@ -372,7 +386,7 @@ export async function resolveMaterialRequest(
       replacementId: point.id,
       materialId: point.materialId,
       quantity: totalQuantityOf(point),
-      unitLabel,
+      unitLabel: point.material.unit,
       pointLabel: pointLabelOf(point),
     })),
   };
