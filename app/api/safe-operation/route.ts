@@ -209,6 +209,17 @@ export async function PUT(req: NextRequest) {
                   SET "startedAt" = CAST(${startedAt.storage} AS TIMESTAMP(3)), "endedAt" = CAST(${endedAt.storage} AS TIMESTAMP(3)), "reason" = ${reason || null}, "isAdded" = false
                   WHERE "id" = ${openEntry.id}
                 `;
+
+                // Đóng mốc ngừng hiện tại đồng nghĩa tổ máy vận hành trở lại.
+                // Bộ đếm vận hành liên tục bắt đầu chính xác từ thời điểm kết thúc.
+                await tx.$executeRaw`
+                  DELETE FROM "SafeOperationEvent"
+                  WHERE "unit" = ${unit} AND "category" = 'continuous'
+                `;
+                await tx.$executeRaw`
+                  INSERT INTO "SafeOperationEvent" ("id", "unit", "category", "startedAt", "endedAt", "reason", "isAdded", "createdAt")
+                  VALUES (${randomUUID()}, ${unit}, 'continuous', CAST(${endedAt.storage} AS TIMESTAMP(3)), NULL, NULL, false, NOW())
+                `;
                 return;
               }
             } else {
@@ -219,6 +230,12 @@ export async function PUT(req: NextRequest) {
                 WHERE "unit" = ${unit}
                   AND "category" IN ('standby', 'maintenance', 'incident')
                   AND "endedAt" IS NULL
+              `;
+
+              // Bắt đầu ngừng: dừng và reset bộ đếm vận hành liên tục về 0.
+              await tx.$executeRaw`
+                DELETE FROM "SafeOperationEvent"
+                WHERE "unit" = ${unit} AND "category" = 'continuous'
               `;
             }
 
