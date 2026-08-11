@@ -87,11 +87,11 @@ export async function DELETE(req: Request) {
       if (cancellation) {
         await tx.defect.updateMany({
           where: { id: event.defectId, cancelledAt: { not: null } },
-          data: {
-            syncState: "CONFIRMED",
-            requestNumberReuseEligible: false,
-            requestNumberReleasedAt: null,
-          },
+          // “Bỏ qua” chỉ có nhiệm vụ kết thúc trạng thái chờ. Không chạm các
+          // cột kho STT: sự kiện không được Sheet ACK nên số phiếu đương nhiên
+          // không đủ điều kiện tái sử dụng. Việc tách này còn giúp admin cứu
+          // hàng đợi cũ trên DB chưa kịp áp migration kho số.
+          data: { syncState: "CONFIRMED" },
         });
       }
       const updated = await tx.defectSyncOutbox.findUniqueOrThrow({ where: { id: event.id } });
