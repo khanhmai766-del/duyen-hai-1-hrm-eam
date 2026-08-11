@@ -857,7 +857,7 @@ model DefectSyncOutbox {
   defectId      String
   eventType     String // CREATE | UPDATE | REMIND
   payload       Json
-  status        String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED
+  status        String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED | SKIPPED
   attemptCount  Int       @default(0)
   nextAttemptAt DateTime  @default(now())
   claimedAt     DateTime?

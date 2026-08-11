@@ -25,7 +25,6 @@ export async function nextDefectRequestNumber(
   const isEnvironment = sequenceType === "Môi Trường";
   const requestPattern = isEnvironment ? "^QT[0-9]+/[0-9]{4}$" : "^[0-9]+/[0-9]{4}$";
   const numberExpressionPrefix = isEnvironment ? "^QT" : "^";
-
   const rows = await tx.$queryRaw<Array<{ currentValue: number }>>`
     INSERT INTO "DefectRequestSequence" ("year", "requestType", "currentValue", "updatedAt")
     VALUES (
@@ -73,10 +72,31 @@ export async function allocateDefectRequestNumber(
   const sheetName = scope.sheetName.trim();
   if (!sequenceType || !spreadsheetId || !sheetName) throw new Error("Thông tin cấp số yêu cầu không hợp lệ");
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`defect-request-number:${year}:${sequenceType}:${spreadsheetId}:${sheetName}`}, 0))::text AS "lock"`;
-  // Số phiếu là định danh bất biến để đối chiếu giữa website và Sheet. Phiếu
-  // đã hủy vẫn giữ nguyên dòng và số cũ; phiếu mới luôn nhận số kế tiếp.
-  return {
-    requestNumber: await nextDefectRequestNumber(tx, year, sequenceType),
-    reusedCancelledDefectId: null,
-  };
+  const isEnvironment = sequenceType === "Môi Trường";
+  const pattern = isEnvironment ? "^QT[0-9]+/[0-9]{4}$" : "^[0-9]+/[0-9]{4}$";
+  const prefix = isEnvironment ? "^QT" : "^";
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const rows = await tx.$queryRaw<Array<{ id: string; requestNumber: string }>>`
+    SELECT "id", "requestNumber" FROM "Defect"
+    WHERE "requestNumberReuseEligible" = true
+      AND "cancelledAt" IS NOT NULL AND "syncState" = 'CONFIRMED'
+      AND "requestNumberReleasedAt" IS NOT NULL AND "requestNumberReusedAt" IS NULL
+      AND "createdAt" >= ${cutoff} AND "createdAt" <= ${now}
+      AND "cancelledAt" <= "createdAt" + INTERVAL '6 hours'
+      AND "requestType" = ${sequenceType}
+      AND "sourceSpreadsheetId" = ${spreadsheetId} AND "sourceSheetName" = ${sheetName}
+      AND "requestNumber" ~* ${pattern} AND split_part("requestNumber", '/', 2)::int = ${year}
+    ORDER BY regexp_replace(split_part("requestNumber", '/', 1), ${prefix}, '')::int ASC
+    LIMIT 1 FOR UPDATE SKIP LOCKED
+  `;
+  const candidate = rows[0];
+  if (!candidate) {
+    return { requestNumber: await nextDefectRequestNumber(tx, year, sequenceType), reusedCancelledDefectId: null };
+  }
+  await tx.defect.update({
+    where: { id: candidate.id },
+    data: { requestNumberReusedAt: now, requestNumberReuseEligible: false },
+  });
+  return { requestNumber: candidate.requestNumber, reusedCancelledDefectId: candidate.id };
 }

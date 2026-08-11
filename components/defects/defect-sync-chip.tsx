@@ -2,7 +2,19 @@
 
 import * as React from "react";
 import type { DefectSyncRun } from "@prisma/client";
-import { RefreshCw, ChevronDown, CloudDownload, History, Activity, Pencil, Plus, BellRing } from "lucide-react";
+import {
+  RefreshCw,
+  ChevronDown,
+  CloudDownload,
+  History,
+  Activity,
+  Pencil,
+  Plus,
+  BellRing,
+  ListChecks,
+  Loader2,
+  SkipForward,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,7 +26,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useDefectTwoWaySync, useSetDefectTwoWaySync } from "@/hooks/useDefects";
+import {
+  type DefectSyncQueueItem,
+  useDefectSyncQueue,
+  useDefectTwoWaySync,
+  useSetDefectTwoWaySync,
+  useSkipDefectSyncEvent,
+} from "@/hooks/useDefects";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -229,6 +248,7 @@ function TwoWayWarnDot({ enabled }: { enabled: boolean }) {
 function TwoWaySyncRow() {
   const query = useDefectTwoWaySync();
   const setEnabled = useSetDefectTwoWaySync();
+  const [queueOpen, setQueueOpen] = React.useState(false);
   type SettingKey = "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled";
   const [queueDecision, setQueueDecision] = React.useState<{
     key: SettingKey;
@@ -355,8 +375,25 @@ function TwoWaySyncRow() {
                 : `${(setting.metrics.averageDurationMs / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} giây`}
             </span>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full bg-white"
+            onClick={() => setQueueOpen(true)}
+          >
+            <ListChecks className="h-4 w-4" />
+            Xem hàng đợi đồng bộ
+            {setting.metrics.waiting > 0 && (
+              <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-amber-800">
+                {setting.metrics.waiting}
+              </span>
+            )}
+          </Button>
         </div>
       )}
+
+      <DefectSyncQueueDialog open={queueOpen} onOpenChange={setQueueOpen} />
 
       <Dialog
         open={queueDecision !== null}
@@ -404,6 +441,159 @@ function TwoWaySyncRow() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function payloadText(item: DefectSyncQueueItem, key: string) {
+  return String(item.payload?.[key] ?? "").trim();
+}
+
+function queueActionLabel(item: DefectSyncQueueItem) {
+  if (item.payload?.cancellation === true) return "Hủy phiếu";
+  if (item.eventType === "CREATE") return "Thêm phiếu";
+  if (item.eventType === "REMIND") return "Nhắc lại";
+  return "Cập nhật";
+}
+
+function DefectSyncQueueDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const queue = useDefectSyncQueue(open);
+  const skip = useSkipDefectSyncEvent();
+  const [selected, setSelected] = React.useState<DefectSyncQueueItem | null>(null);
+  const items = queue.data?.data ?? [];
+
+  async function confirmSkip() {
+    if (!selected) return;
+    try {
+      await skip.mutateAsync(selected.id);
+      toast.success(`Đã bỏ qua đồng bộ phiếu ${payloadText(selected, "requestNumber") || selected.defectId}`);
+      setSelected(null);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl overflow-hidden p-0">
+          <DialogHeader className="border-b border-border bg-slate-50/80 px-6 py-5">
+            <DialogTitle className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-blue-700" />
+              Hàng đợi đồng bộ Google Sheet
+            </DialogTitle>
+            <DialogDescription>
+              Các thay đổi từ website đang chờ n8n ghi sang Sheet. Quản trị viên có thể bỏ qua từng sự kiện bị lỗi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[62vh] overflow-y-auto px-6 py-4">
+            {queue.isLoading ? (
+              <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Đang đọc hàng đợi…
+              </div>
+            ) : queue.isError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                {(queue.error as Error).message}
+              </div>
+            ) : items.length === 0 ? (
+              <div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 text-center">
+                <ListChecks className="mb-2 h-8 w-8 text-emerald-600" />
+                <p className="font-semibold text-ink">Không có đồng bộ đang chờ</p>
+                <p className="mt-1 text-xs text-muted-foreground">Hàng đợi hiện đã được xử lý hết.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {items.map((item) => {
+                  const processing = item.status === "PROCESSING";
+                  const failed = item.status === "FAILED";
+                  const requestNumber = payloadText(item, "requestNumber") || "Chưa có STT";
+                  const content = payloadText(item, "content") || "Không có nội dung phiếu";
+                  const sheetName = payloadText(item, "sourceSheetName");
+                  return (
+                    <div key={item.id} className="rounded-xl border border-border bg-white p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-ink">{requestNumber}</span>
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
+                              {queueActionLabel(item)}
+                            </span>
+                            <span className={cn(
+                              "rounded-full px-2 py-0.5 text-[11px] font-bold",
+                              processing
+                                ? "bg-sky-50 text-sky-700"
+                                : failed
+                                  ? "bg-rose-50 text-rose-700"
+                                  : "bg-amber-50 text-amber-700"
+                            )}>
+                              {processing ? "Đang xử lý" : failed ? "Đồng bộ lỗi" : "Đang chờ"}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-sm text-ink/80">{content}</p>
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                            <span>Tạo lúc {fullFmt.format(new Date(item.createdAt))}</span>
+                            {sheetName && <span>Sheet: {sheetName}</span>}
+                            {item.attemptCount > 0 && <span>Đã thử {item.attemptCount} lần</span>}
+                          </div>
+                          {item.lastError && (
+                            <p className="mt-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs leading-relaxed text-rose-700">
+                              {item.lastError}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                          disabled={processing || skip.isPending}
+                          title={processing ? "n8n đang xử lý sự kiện này" : "Không gửi sự kiện này sang Sheet"}
+                          onClick={() => setSelected(item)}
+                        >
+                          <SkipForward className="h-4 w-4" />
+                          Bỏ qua
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t border-border bg-slate-50/60 px-6 py-4">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={selected !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelected(null);
+        }}
+        title="Bỏ qua lượt đồng bộ này?"
+        description={selected
+          ? `Phiếu ${payloadText(selected, "requestNumber") || selected.defectId} sẽ không được n8n ghi sang Google Sheet.`
+          : undefined}
+        confirmLabel="Bỏ qua đồng bộ"
+        loading={skip.isPending}
+        onConfirm={() => void confirmSkip()}
+      >
+        {selected?.payload?.cancellation === true && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            Phiếu hủy sẽ được kết thúc trạng thái chờ trên website, nhưng STT không được trả lại để tránh trùng số khi Sheet chưa xác nhận.
+          </div>
+        )}
+      </ConfirmDialog>
+    </>
   );
 }
 

@@ -28,6 +28,29 @@ export interface DefectTwoWaySyncStatus extends DefectSyncSetting {
   metrics: DefectSyncTrafficMetrics;
 }
 
+export interface DefectSyncQueueItem {
+  id: string;
+  defectId: string;
+  eventType: "CREATE" | "UPDATE" | "REMIND";
+  payload: Record<string, unknown>;
+  status: "PENDING" | "PROCESSING" | "FAILED";
+  attemptCount: number;
+  nextAttemptAt: string;
+  claimedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DefectRequestNumberControl {
+  defectId: string;
+  issuedRequestNumber: string;
+  currentRequestNumber: string;
+  sheetRequestNumber: string;
+  sheetMatchAmbiguous: boolean;
+  issuedAt: string | null;
+}
+
 export interface DefectItem extends Defect {
   severity2UpgradeCandidate?: boolean;
   severityUpgradeWaitingDays?: number;
@@ -240,6 +263,53 @@ export function useSetDefectTwoWaySync() {
       pendingAction?: "resume" | "discard";
     }) => apiMutate<DefectTwoWaySyncStatus>("/api/defects/two-way-sync", "PUT", { key, enabled, pendingAction }),
     onSuccess: (setting) => qc.setQueryData(["defect-two-way-sync"], { data: setting, meta: undefined }),
+  });
+}
+
+export function useDefectSyncQueue(enabled = true) {
+  return useQuery({
+    queryKey: ["defect-sync-queue"],
+    queryFn: () => apiGet<DefectSyncQueueItem[]>("/api/defects/two-way-sync/queue"),
+    enabled,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useSkipDefectSyncEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) =>
+      apiMutate<DefectSyncQueueItem>("/api/defects/two-way-sync/queue", "DELETE", { eventId }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
+      void qc.invalidateQueries({ queryKey: ["defect-two-way-sync"] });
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+    },
+  });
+}
+
+export function useDefectRequestNumberControl(id: string, enabled = true) {
+  return useQuery({
+    queryKey: ["defect-request-number-control", id],
+    queryFn: () => apiGet<DefectRequestNumberControl>(`/api/defects/${id}/request-number`),
+    enabled: enabled && Boolean(id),
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useSetDefectRequestNumber() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, requestNumber }: { id: string; requestNumber: string }) =>
+      apiMutate<DefectRequestNumberControl>(`/api/defects/${id}/request-number`, "PUT", { requestNumber }),
+    onSuccess: (data) => {
+      qc.setQueryData(["defect-request-number-control", data.defectId], { data, meta: undefined });
+      void qc.invalidateQueries({ queryKey: ["defect", data.defectId] });
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+      void qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
+    },
   });
 }
 

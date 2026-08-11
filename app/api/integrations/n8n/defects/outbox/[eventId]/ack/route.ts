@@ -21,6 +21,13 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
       && typeof existing.payload === "object"
       && !Array.isArray(existing.payload)
       && existing.payload.cancellation === true;
+    const reuseEligible = Boolean(
+      cancellation
+      && existing.payload
+      && typeof existing.payload === "object"
+      && !Array.isArray(existing.payload)
+      && existing.payload.requestNumberReuseEligible === true
+    );
     const event = await prisma.$transaction(async (tx) => {
       const updated = await tx.defectSyncOutbox.update({
         where: { id: existing.id },
@@ -34,7 +41,11 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
       if (cancellation) {
         await tx.defect.updateMany({
           where: { id: existing.defectId, cancelledAt: { not: null } },
-          data: { syncState: "CONFIRMED", requestNumberReuseEligible: false },
+          data: {
+            syncState: "CONFIRMED",
+            requestNumberReleasedAt: reuseEligible ? new Date() : undefined,
+            requestNumberReuseEligible: reuseEligible,
+          },
         });
       }
       return updated;

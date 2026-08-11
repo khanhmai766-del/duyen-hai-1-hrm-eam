@@ -74,6 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             eventType: "UPDATE",
             extra: {
               cancellation: true,
+              requestNumberReuseEligible: true,
               ...(existing.sourceType === "GOOGLE_SHEETS" && !existing.websiteCreated
                 ? { writeScope: "SHEET_ORIGIN_LIMITED" }
                 : {}),
@@ -90,7 +91,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // có thể ẩn ngay; nếu có, ACK sẽ chuyển sang CONFIRMED sau khi Sheet ghi xong.
       return tx.defect.update({
         where: { id: updated.id },
-        data: { syncState: "CONFIRMED", requestNumberReuseEligible: false },
+        data: {
+          syncState: "CONFIRMED",
+          requestNumberReleasedAt: cancelledAt,
+          requestNumberReuseEligible: true,
+        },
         include: INCLUDE,
       });
     });

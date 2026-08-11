@@ -48,13 +48,29 @@ export async function POST(req: NextRequest) {
         )
         .map((event) => event.defectId);
       if (cancellationDefectIds.length) {
+        const reuseEligibleDefectIds = events
+          .filter(
+            (event) =>
+              cancellationDefectIds.includes(event.defectId)
+              && event.payload
+              && typeof event.payload === "object"
+              && !Array.isArray(event.payload)
+              && event.payload.requestNumberReuseEligible === true
+          )
+          .map((event) => event.defectId);
         await tx.defect.updateMany({
           where: {
             id: { in: cancellationDefectIds },
             cancelledAt: { not: null },
           },
-          data: { syncState: "CONFIRMED", requestNumberReuseEligible: false },
+          data: { syncState: "CONFIRMED" },
         });
+        if (reuseEligibleDefectIds.length) {
+          await tx.defect.updateMany({
+            where: { id: { in: reuseEligibleDefectIds }, cancelledAt: { not: null } },
+            data: { requestNumberReleasedAt: new Date(), requestNumberReuseEligible: true },
+          });
+        }
       }
       return { requested: eventIds.length, updated: updated.count };
     }).catch((error) => {

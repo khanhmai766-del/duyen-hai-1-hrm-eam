@@ -25,6 +25,7 @@ type Payload = {
   reminderShiftLeader?: string;
   legacyReminderRaw?: string;
   writeScope?: string;
+  cancellation?: boolean;
   replacesCancelledDefectId?: string;
   repeatedRepair: string;
   fireSafetyImpact: string;
@@ -243,6 +244,15 @@ export function buildDefectSheetWritePlan(
     }
     const targetRow = preparedRows[0]?.sheetRow ?? START_ROW + rows.length;
     writes.push({ range: `A${targetRow}:O${targetRow}`, values: [current] });
+    return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+  }
+
+  if (originals.length === 0 && event.eventType === "UPDATE" && payload.cancellation === true) {
+    // Người dùng có thể đã xóa dòng trực tiếp trên Sheet trước khi hủy phiếu
+    // trên website. Khi đó trạng thái đích của thao tác hủy đã đạt được, nên
+    // xem UPDATE này là idempotent và cho n8n ACK thay vì retry vô hạn. Chỉ
+    // miễn lỗi cho sự kiện hủy; UPDATE/REMIND thông thường vẫn phải dừng để
+    // tránh che giấu việc mất dữ liệu ngoài ý muốn trên Sheet.
     return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
   }
 
