@@ -163,6 +163,14 @@ export async function generateBbntDoDoc(d: BbntDoData): Promise<{ key: string; u
   const zip = new PizZip(readFileSync(tplPath));
   let documentXml = zip.file("word/document.xml")?.asText();
   if (documentXml) {
+    // Mẫu dầu từng được lưu từ Word với token thiếu một dấu `}`:
+    // `{{quanDocName}`. Docxtemplater coi toàn bộ phần chữ phía sau là một tag
+    // chưa đóng và làm tác vụ nghiệm thu trả 500. Chuẩn hóa mẫu cũ ngay trước
+    // khi biên dịch để các file đã triển khai cũng tiếp tục xuất được.
+    documentXml = documentXml.replace(
+      /\{\{quanDocName\}(?!\})/g,
+      "{{quanDocName}}"
+    );
     documentXml = patchSccnRepresentativeTokens(documentXml);
   }
   // Tương thích với mẫu đang được mở/khóa hoặc bản mẫu cũ đã deploy:
