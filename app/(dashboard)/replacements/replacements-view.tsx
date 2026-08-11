@@ -66,7 +66,6 @@ type SortDir = "asc" | "desc";
 
 // Bộ lọc tổ máy: theo tab Danh mục vật tư mà vật tư thuộc về (Material.machine).
 const MACHINE_FILTERS = [
-  { key: "ALL", label: "Tất cả tổ máy" },
   { key: "S1", label: "Tổ máy S1" },
   { key: "S2", label: "Tổ máy S2" },
   { key: "COMMON", label: "COMMON" },
@@ -235,6 +234,12 @@ function replacementCategoryMatches(category: string | null | undefined, filter:
 /** Tổ máy trên dòng lịch sử là snapshot và là nguồn chính xác sau khi người dùng chỉnh sửa. */
 function replacementLogMachine(log: ReplacementLogItem): string {
   return log.machine ?? log.replacement?.material.machine ?? "COMMON";
+}
+
+/** Dữ liệu lưu trữ từ sổ theo dõi là lịch sử cũ nên được xem là đã chốt. */
+function replacementHistoryStatus(log: ReplacementLogItem): "PENDING" | "FINALIZED" | null {
+  if (log.imported) return "FINALIZED";
+  return log.defectHistory?.status ?? null;
 }
 
 /**
@@ -507,7 +512,11 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         width: 12,
         align: "center" as const,
         value: (l: ReplacementLogItem) =>
-          l.defectHistory ? (l.defectHistory.status === "FINALIZED" ? "Đã chốt" : "Chờ chốt") : "",
+          replacementHistoryStatus(l) === "FINALIZED"
+            ? "Đã chốt"
+            : replacementHistoryStatus(l) === "PENDING"
+              ? "Chờ chốt"
+              : "",
       },
       {
         key: "workOrderNumber",
@@ -745,7 +754,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                       active ? "bg-[#00558F] text-white" : "text-ink/70 hover:bg-muted hover:text-ink"
                     )}
                   >
-                    {machine.key === "ALL" ? "Tất cả" : machine.key}
+                    {machine.key}
                   </button>
                 );
               })}
@@ -1042,7 +1051,9 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                   ) : pagedLogs.map((l) => {
                     const expanded = expandedLogId === l.id;
                     const device = l.replacement ? linkedDeviceOf(l.replacement) : null;
-                    const pending = l.defectHistory?.status === "PENDING";
+                    const historyStatus = replacementHistoryStatus(l);
+                    const pending = historyStatus === "PENDING";
+                    const finalizeAt = pending ? l.defectHistory?.finalizeAt : null;
                     return (
                     <React.Fragment key={l.id}>
                     <TableRow
@@ -1116,14 +1127,14 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
                           fallbackName={l.doneByName ?? l.doneBy.name}
                         />
                       </TableCell>
-                      {/* Chỉ dòng sinh từ SYC mới có khái niệm chốt lịch sử. */}
+                      {/* Dòng lưu trữ là lịch sử cũ nên luôn đã chốt; dòng SYC theo trạng thái thực tế. */}
                       <TableCell className="px-3 py-2.5 text-center">
-                        {l.defectHistory ? (
+                        {historyStatus ? (
                           <>
                             <LockChip pending={pending} />
-                            {pending && l.defectHistory.finalizeAt && (
+                            {finalizeAt && (
                               <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                                hạn {formatDate(l.defectHistory.finalizeAt)}
+                                hạn {formatDate(finalizeAt)}
                               </div>
                             )}
                           </>
@@ -1503,7 +1514,7 @@ function historySortValue(row: ReplacementLogItem, key: HistorySortKey): string 
   if (key === "replacedAt") return new Date(row.replacedAt).getTime();
   if (key === "quantity") return row.quantity ?? 0;
   if (key === "doneBy") return row.doneByName || row.doneBy.name;
-  if (key === "locked") return row.defectHistory?.status === "PENDING" ? 1 : 0;
+  if (key === "locked") return replacementHistoryStatus(row) === "PENDING" ? 1 : 0;
   if (key === "source") return row.requestNumber ?? row.defectHistory?.workOrderNumber ?? row.pctNumber ?? "";
   return `${replacement?.material.name ?? row.materialNameLabel ?? ""} ${device?.name ?? row.deviceLabel ?? ""} ${device?.code ?? row.deviceSeq ?? ""}`;
 }

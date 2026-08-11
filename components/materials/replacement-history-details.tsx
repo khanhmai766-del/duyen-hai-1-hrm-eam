@@ -74,8 +74,9 @@ export function ReplacementHistoryDetails({ log }: { log: ReplacementLogItem }) 
             <PenLine className="h-4 w-4 text-slate-500" />
             <span className="font-semibold text-ink">Ghi nhận thủ công</span>
           </div>
-          <div className="mt-3">
-            <Field label="Ghi chú" value={log.note} />
+          <div className="mt-3 grid gap-x-7 gap-y-3.5 sm:grid-cols-2">
+            <Field label="Nội dung sử dụng vật tư" value={log.note} />
+            <Field label="Ghi chú (BBNT DO / hình thức lãnh)" value={log.sourceNote} />
           </div>
         </div>
       ) : pending ? (
