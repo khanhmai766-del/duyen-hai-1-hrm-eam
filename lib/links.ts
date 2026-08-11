@@ -3,6 +3,13 @@
 // "ops" = hỗ trợ công tác vận hành · "personal" = hỗ trợ cá nhân người dùng.
 export type SupportLinkGroup = "ops" | "personal";
 
+export const MATERIAL_TRACKING_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/edit?gid=2099327004#gid=2099327004";
+export const MECHANICAL_CHEMICAL_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA/edit?gid=428426440#gid=428426440";
+export const ELECTRICAL_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ/edit?gid=1906730067#gid=1906730067";
+
 export const SUPPORT_LINKS: { name: string; href: string; group: SupportLinkGroup }[] = [
   { name: "Duyên Hải TPC Portal", href: "https://portal.tpcduyenhai.com.vn/login.xhtml?faces-redirect=true", group: "ops" },
   { name: "EVN Digital Office", href: "https://doffice.evngenco1.vn/sign-in", group: "ops" },
@@ -10,7 +17,7 @@ export const SUPPORT_LINKS: { name: string; href: string; group: SupportLinkGrou
   { name: "Nhật ký vận hành", href: "https://nkvh.tpcduyenhai.com.vn/nkvh/Login", group: "ops" },
   {
     name: "Theo dõi vật tư",
-    href: "https://docs.google.com/spreadsheets/d/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/edit?gid=1363993822",
+    href: MATERIAL_TRACKING_SHEET_URL,
     group: "ops",
   },
   { name: "Theo dõi PCCC", href: "https://sites.google.com/view/pcccdh1/trang-ch%E1%BB%A7", group: "ops" },
@@ -20,12 +27,12 @@ export const SUPPORT_LINKS: { name: string; href: string; group: SupportLinkGrou
   { name: "Công tác định kỳ hằng ca", href: "http://vh.tpcduyenhai.com.vn/", group: "ops" },
   {
     name: "PYC Sửa Chữa Cơ",
-    href: "https://docs.google.com/spreadsheets/d/1zKRH9zhEAkCwGRl4KiaNwUlkLg9_l4WXNSBeg3FK_MA/edit?gid=428426440",
+    href: MECHANICAL_CHEMICAL_SHEET_URL,
     group: "ops",
   },
   {
     name: "PYC Sửa Chữa Điện",
-    href: "https://docs.google.com/spreadsheets/d/1nPKFBr3wXfOFE4y_WACDs7cvb1ZZA-mg0mZbsIuB_lQ/edit?gid=1906730067",
+    href: ELECTRICAL_SHEET_URL,
     group: "ops",
   },
 ];

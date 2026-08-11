@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { FileText, Plus, Search, UserCog } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, FileText, Plus, Search, UserCog } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import MaterialTicketBoard from "@/components/materials/MaterialTicketBoard";
 import { useMaterialTickets } from "@/hooks/useMaterialTickets";
+import { MATERIAL_TRACKING_SHEET_URL } from "@/lib/links";
 
 const PROCEDURE_FLOW_PDF_URL = "/api/material-procedure-flow";
 
@@ -28,6 +29,7 @@ export default function ReplacementProceduresPage() {
       <PageHeader
         title="QUY TRÌNH THAY THẾ VẬT TƯ"
         description={`Phiếu đề xuất & Ứng vật tư${position ? ` · Bạn: ${position}` : ""}`}
+        stacked
       >
         <label className="flex h-9 w-full min-w-[260px] max-w-[320px] items-center rounded-xl border border-input bg-white px-3 text-muted-foreground shadow-sm shadow-slate-900/5 sm:w-[300px]">
           <Search className="h-4 w-4 shrink-0" />
@@ -47,6 +49,12 @@ export default function ReplacementProceduresPage() {
         <Button variant="soft" size="toolbar" asChild>
           <a href={PROCEDURE_FLOW_PDF_URL} target="_blank" rel="noreferrer">
             <FileText className="h-4 w-4" /> Lưu đồ thực hiện
+          </a>
+        </Button>
+        <Button variant="soft" size="toolbar" asChild>
+          <a href={MATERIAL_TRACKING_SHEET_URL} target="_blank" rel="noopener noreferrer">
+            <FileSpreadsheet className="h-4 w-4" /> Mở sheet vật tư
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
           </a>
         </Button>
         {canCreate && (

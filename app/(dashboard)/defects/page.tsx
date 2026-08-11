@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -44,6 +44,7 @@ import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { formatDate, initials, cn } from "@/lib/utils";
 import { isDefectShiftLeaderCandidatePosition } from "@/lib/defect-shift-leader-position";
 import { announcementPositionLabel } from "@/lib/positions";
+import { ELECTRICAL_SHEET_URL, MECHANICAL_CHEMICAL_SHEET_URL } from "@/lib/links";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 // Nhãn hiển thị của từng giá trị statusFilter. Bộ lọc kết quả vận hành không còn
@@ -584,6 +585,16 @@ export default function DefectsPage() {
         title={`KHIẾM KHUYẾT THIẾT BỊ — ${sectionConfig.label.toUpperCase()}`}
         description={`Phiếu đồng bộ từ Google Sheet ${sectionConfig.source === "CO" ? "Cơ" : "Điện"} · theo dõi sự cố & khiếm khuyết đang tồn đọng`}
       >
+        <Button variant="soft" size="toolbar" asChild>
+          <a
+            href={sectionConfig.source === "CO" ? MECHANICAL_CHEMICAL_SHEET_URL : ELECTRICAL_SHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FileSpreadsheet className="h-4 w-4" /> Mở {sectionConfig.label}
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+          </a>
+        </Button>
         {/* Trạng thái + thao tác đồng bộ gói trong 1 chip, bấm mới mở chi tiết —
             thay cho 2 banner cũ chiếm trọn chiều ngang phía trên bộ lọc. */}
         {canViewSync && (
