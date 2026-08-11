@@ -232,6 +232,11 @@ function replacementCategoryMatches(category: string | null | undefined, filter:
   );
 }
 
+/** Tổ máy trên dòng lịch sử là snapshot và là nguồn chính xác sau khi người dùng chỉnh sửa. */
+function replacementLogMachine(log: ReplacementLogItem): string {
+  return log.machine ?? log.replacement?.material.machine ?? "COMMON";
+}
+
 /**
  * Thân trang Lịch thay thế vật tư. Tách khỏi page.tsx vì Next.js App Router chỉ cho
  * page.tsx export mặc định — trang "Lịch sử thay thế" cần import lại thành phần này.
@@ -297,7 +302,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
           .filter(
             (log) =>
               machineFilter === "ALL" ||
-              (log.replacement?.material.machine ?? "COMMON") === machineFilter
+              replacementLogMachine(log) === machineFilter
           )
           .map((log) => positionLabelOf(log.replacement?.managingPosition)),
       ].filter((position): position is string => Boolean(position))
@@ -378,7 +383,7 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
         const replacement = log.replacement;
         const matchesMachine =
           machineFilter === "ALL" ||
-          (replacement?.material.machine ?? "COMMON") === machineFilter;
+          replacementLogMachine(log) === machineFilter;
         const matchesPosition =
           positionFilter === "ALL" ||
           positionsMatch(replacement?.managingPosition, positionFilter);
