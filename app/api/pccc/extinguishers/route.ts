@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     const where: Prisma.PcccExtinguisherWhereInput = {
       periodId: period.id,
       // Lọc theo MÃ chức danh + tổ máy (tổ máy là bộ lọc xem, không phải rào quyền)
-      ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope),
+      ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true }),
       ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
       ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrang } : {}),
       ...(chungLoai && chungLoai !== "ALL" ? { chungLoai } : {}),

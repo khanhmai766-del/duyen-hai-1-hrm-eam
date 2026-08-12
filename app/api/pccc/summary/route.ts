@@ -34,10 +34,12 @@ export async function GET(req: NextRequest) {
     // Tổng quan lại tố ra khối lượng của cương vị mà bảng chi tiết đã giấu đi.
     const viewScope = await resolvePcccViewScope(user);
     const scope = scopeWhere(cuongVi, machine, viewScope);
+    // Bang Binh chua chay co cot Nguoi giam sat -> cap giam sat xem duoc phan minh giam sat.
+    const scopeBcc = scopeWhere(cuongVi, machine, viewScope, { withSupervisor: true });
 
     const [extinguishers, cabinets, bulks, panels, cuongViList, signatureCount] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
-        where: { periodId: period.id, ...scope },
+        where: { periodId: period.id, ...scopeBcc },
         select: { chungLoai: true, tinhTrang: true, tinhTrangNgoai: true, denHanThayThe: true },
       }),
       prisma.pcccCabinet.findMany({

@@ -17,7 +17,7 @@ import { isPcccMachine, normalizePosition } from "@/lib/pccc-position";
 import { isFuturePeriod, periodLabelOf, vietnamClock } from "@/lib/pccc-clock";
 import { s3ProxyUrl } from "@/lib/s3";
 import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
-import { resolvePositionViewScope } from "@/lib/position-data-scope";
+import { isUnrestrictedEquipmentPosition } from "@/lib/position-system-scopes";
 
 export type PcccTargetType = "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL";
 
@@ -153,7 +153,7 @@ export function pickFields(body: Record<string, unknown>, spec: FieldSpec) {
  * cũng chỉ được liệt kê đúng cương vị đó — bày ra cương vị chọn vào cũng ra bảng rỗng
  * thì chỉ khiến người dùng tưởng mất dữ liệu.
  */
-export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC_SCOPE_ALL) {
+export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC_VIEW_ALL) {
   const [bcc, tcc, fcd] = await Promise.all([
     prisma.pcccExtinguisher.findMany({
       where: { periodId },
@@ -183,7 +183,7 @@ export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC
 }
 
 /** Danh sách cấp giám sát có trong kỳ (chỉ BCC có cột này), cắt theo phạm vi XEM. */
-export async function giamSatListOf(periodId: string, view: PcccViewScope = PCCC_SCOPE_ALL) {
+export async function giamSatListOf(periodId: string, view: PcccViewScope = PCCC_VIEW_ALL) {
   const rows = await prisma.pcccExtinguisher.findMany({
     where: { periodId, ...(view.all ? {} : { cuongViCode: { in: view.codes } }) },
     distinct: ["nguoiGiamSatCode"],
@@ -205,19 +205,34 @@ export async function giamSatListOf(periodId: string, view: PcccViewScope = PCCC
  * đọc mới quên truyền là lỗi biên dịch chứ không phải lỗ hổng âm thầm — muốn xem toàn
  * bộ thì phải viết rõ `PCCC_SCOPE_ALL`.
  */
-export function scopeWhere(cuongViCode: string | null | undefined, machine: string | null | undefined, view: PcccViewScope) {
+export function scopeWhere(
+  cuongViCode: string | null | undefined,
+  machine: string | null | undefined,
+  /**
+   * Nhận cả phạm vi GHI (không có `superviseCodes`) — route ký hàng loạt dùng phạm vi
+   * ghi làm bộ lọc, và đúng ra nó KHÔNG được nới theo cấp giám sát.
+   */
+  view: PcccWriteScope & { superviseCodes?: PositionCode[] },
+  /**
+   * Bật cho bảng CÓ cột "Người giám sát" (hiện chỉ Bình chữa cháy): cấp giám sát xem
+   * được thêm mọi dòng mình giám sát. Tủ chữa cháy / Foam-CO2-FM200 không có cột này
+   * nên giám sát chỉ thấy phần mình trực tiếp quản lý.
+   */
+  options: { withSupervisor?: boolean } = {}
+) {
   const picked = cuongViCode && cuongViCode !== "ALL" ? cuongViCode : null;
+  const machineWhere = isPcccMachine(machine) ? { machine } : {};
+  if (view.all) return { ...(picked ? { cuongViCode: picked } : {}), ...machineWhere };
+
   // Ngoài phạm vi thì giao lại thành rỗng → `in: []` → không ra dòng nào, thay vì âm
   // thầm nới bộ lọc thành "xem tất".
-  const cuongViWhere = view.all
-    ? picked
-      ? { cuongViCode: picked }
-      : {}
-    : { cuongViCode: { in: picked ? view.codes.filter((code) => code === picked) : view.codes } };
-  return {
-    ...cuongViWhere,
-    ...(isPcccMachine(machine) ? { machine } : {}),
-  };
+  const manage = { cuongViCode: { in: picked ? view.codes.filter((code) => code === picked) : view.codes } };
+  const supervise =
+    options.withSupervisor && view.superviseCodes?.length
+      ? [{ nguoiGiamSatCode: { in: view.superviseCodes }, ...(picked ? { cuongViCode: picked } : {}) }]
+      : [];
+  if (!supervise.length) return { ...manage, ...machineWhere };
+  return { OR: [manage, ...supervise], ...machineWhere };
 }
 
 // ===========================================================================
@@ -242,10 +257,17 @@ export function scopeWhere(cuongViCode: string | null | undefined, machine: stri
 /** `all` = ghi mọi cương vị; ngược lại chỉ các mã trong `codes`. */
 export type PcccWriteScope = { all: boolean; codes: PositionCode[] };
 
-/** Cùng hình dạng với phạm vi ghi, nhưng dùng cho phần XEM (xem khối "Phạm vi xem"). */
-export type PcccViewScope = PcccWriteScope;
+/**
+ * Phạm vi XEM có thêm một chiều mà phạm vi GHI không có: CẤP GIÁM SÁT.
+ * - `codes`          — cương vị QUẢN LÝ trực tiếp (cột "Cương vị quản lý").
+ * - `superviseCodes` — cấp giám sát (cột "Người giám sát", CHỈ bảng Bình chữa cháy).
+ *   Giám sát được XEM mọi bình mình giám sát nhưng KHÔNG sửa; muốn sửa thì dòng đó
+ *   phải thuộc chính cương vị quản lý của mình.
+ */
+export type PcccViewScope = PcccWriteScope & { superviseCodes: PositionCode[] };
 
 export const PCCC_SCOPE_ALL: PcccWriteScope = { all: true, codes: [] };
+export const PCCC_VIEW_ALL: PcccViewScope = { all: true, codes: [], superviseCodes: [] };
 
 type PcccPositionCarrier = {
   position?: string | null;
@@ -255,28 +277,49 @@ type PcccPositionCarrier = {
   currentPosition?: string | null;
 };
 
-/** Mã chức danh của người đăng nhập — gộp cương vị chính, kiêm nhiệm và đang làm việc. */
+/**
+ * Mã chức danh ĐANG LÀM VIỆC của người đăng nhập.
+ *
+ * Nghiệp vụ chốt 2026-08-12: người kiêm nhiệm chỉ xem và sửa phần việc của **một** chức
+ * danh — chức danh đang chọn. Trước đây gộp cả chức danh chính + 2 kiêm nhiệm nên một
+ * người trực I&C vẫn đụng được bình chữa cháy của Trợ thủ. Muốn làm phần kiêm nhiệm thì
+ * tự chuyển cương vị đang làm việc ở trang Tài khoản.
+ *
+ * `requireUser()` đã quy `currentPosition` về đúng một cương vị hợp lệ trong số cương vị
+ * được gán (`effectiveUserPosition`), chưa chọn thì lấy cương vị chính.
+ */
 export function pcccPositionCodesOf(user: PcccPositionCarrier): PositionCode[] {
-  const codes = new Set<PositionCode>();
-  for (const raw of [
-    user.primaryPosition ?? user.position,
-    user.secondaryPosition,
-    user.secondaryPosition2,
-    user.currentPosition,
-  ]) {
-    // normalizePosition tự bỏ hậu tố tổ máy khi tra danh mục ("LÒ PHÓ S1" → Lò phó).
-    const code = normalizePosition(raw).code;
-    if (code) codes.add(code);
-  }
-  return [...codes];
+  // normalizePosition tự bỏ hậu tố tổ máy khi tra danh mục ("LÒ PHÓ S1" → Lò phó).
+  const code = normalizePosition(user.currentPosition ?? user.primaryPosition ?? user.position).code;
+  return code ? [code] : [];
+}
+
+/**
+ * Chức danh cấp quản lý được xem VÀ sửa toàn bộ dữ liệu PCCC, không cần cấu hình gì
+ * thêm: Quản đốc, Phó quản đốc, Kỹ thuật viên, Trưởng ca (danh sách dùng chung với
+ * phạm vi cây thiết bị — lib/position-system-scopes.ts). Cộng thêm vai trò Quản trị.
+ */
+function isPcccManagementUser(user: PcccPositionCarrier & { role?: string }): boolean {
+  if (user.role === "ADMIN") return true;
+  return [user.currentPosition, user.primaryPosition ?? user.position]
+    .some((p) => isUnrestrictedEquipmentPosition(p));
 }
 
 /** null = không có quyền ghi. Tách riêng để bản ném và bản không ném dùng chung một luật. */
 async function computePcccWriteScope(
   user: PcccPositionCarrier & { id?: string; role?: string }
 ): Promise<PcccWriteScope | null> {
-  if (await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["manage", "full"])) return PCCC_SCOPE_ALL;
+  // Quản trị + cấp quản lý (Quản đốc / Phó QĐ / KTV / Trưởng ca): sửa mọi thiết bị.
+  // Đây là DANH SÁCH DUY NHẤT được sửa toàn bộ.
+  if (isPcccManagementUser(user)) return PCCC_SCOPE_ALL;
+  // CỐ Ý không còn nhánh `pccc-manage` mức manage/full → sửa tất cả. Đo trên prod
+  // 2026-08-12: MANAGER/SUPERVISOR/TECHNICIAN đều mặc định `manage`, lại còn có cấp
+  // riêng cho từng tài khoản, nên cổng đó cho cả TK Lò máy lẫn Trưởng kíp điện sửa
+  // sạch 747 bình — phá đúng luật "giám sát chỉ xem, không sửa".
+  // Mức manage/full giờ chỉ còn nghĩa "được ghi", phạm vi vẫn bó theo cương vị.
   if (!(await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["personal"]))) return null;
+  // Cấp giám sát KHÔNG được thêm quyền sửa ở đây: chỉ sửa được dòng thuộc đúng cương vị
+  // quản lý của mình, còn phần mình giám sát thì chỉ xem.
   return { all: false, codes: pcccPositionCodesOf(user) };
 }
 
@@ -335,22 +378,31 @@ export async function pcccWriteScopeOf(user: PcccPositionCarrier & { id?: string
 export async function resolvePcccViewScope(
   user: PcccPositionCarrier & { id?: string; role?: string }
 ): Promise<PcccViewScope> {
-  // Ai sửa được mọi cương vị thì đương nhiên xem được toàn bộ — luật riêng của PCCC,
-  // giữ nguyên. Cổng `pccc-view` và phần còn lại đã nằm trong resolvePositionViewScope.
-  if (await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["manage", "full"])) return PCCC_SCOPE_ALL;
-  // Từ 2026-08-10 dùng chung phạm vi với Khiếm khuyết / Vật tư / Lịch thay thế
-  // (lib/position-data-scope.ts): CHỈ cương vị đang làm việc (không gộp kiêm nhiệm),
-  // kèm cương vị cấp dưới theo sơ đồ ca trực. Trước đây PCCC gộp cả cương vị chính lẫn
-  // kiêm nhiệm nên người trực I&C vẫn thấy lẫn bình chữa cháy của Trợ thủ.
-  //
-  // Chỉ đổi phần XEM. `pcccWriteScopeOf` vẫn gộp mọi cương vị được gán, để người quên
-  // chuyển cương vị đang làm việc không bị mất quyền ký (xem khối "PHẠM VI GHI/KÝ").
-  return resolvePositionViewScope(user, "pccc");
+  // Quản trị + cấp quản lý: xem toàn bộ. Đây là DANH SÁCH DUY NHẤT được xem toàn bộ
+  // theo chức danh — cùng lý do như phạm vi ghi, không dùng `pccc-manage` làm cổng nữa.
+  if (isPcccManagementUser(user)) return PCCC_VIEW_ALL;
+  // Cửa riêng do quản trị cấu hình cho tài khoản chỉ-đọc cần xem toàn cảnh (lãnh đạo,
+  // tài khoản báo cáo). Mặc định chỉ ADMIN đạt mức này.
+  if (await hasPermissionLevel(user, PCCC_PERMISSION.view, ["manage", "full"])) return PCCC_VIEW_ALL;
+
+  const codes = pcccPositionCodesOf(user);
+  // Chưa khai chức danh thì không rào — giữ nguyên hành vi cũ thay vì làm mù tài khoản.
+  // An toàn vì chỉ ADMIN sửa được `position` (/api/me chặn).
+  if (!codes.length) return PCCC_VIEW_ALL;
+  // Cùng một mã vừa là cương vị quản lý vừa có thể là cấp giám sát: TK Lò máy quản 7
+  // bình của mình nhưng giám sát 515 bình của các cương vị dưới.
+  return { all: false, codes, superviseCodes: codes };
 }
 
 /** Bản gọn cho client hiển thị nhãn "Chỉ xem: …". */
 export function pcccViewScopeMeta(scope: PcccViewScope) {
-  return { all: scope.all, codes: scope.codes as string[], labels: scope.codes.map((code) => positionLabelOf(code)) };
+  return {
+    all: scope.all,
+    codes: scope.codes as string[],
+    labels: scope.codes.map((code) => positionLabelOf(code)),
+    superviseCodes: scope.superviseCodes as string[],
+    superviseLabels: scope.superviseCodes.map((code) => positionLabelOf(code)),
+  };
 }
 
 /** Lý do dòng nằm ngoài phạm vi, hoặc null nếu được ghi. Dạng trả-về-lỗi để lưu theo lượt báo lỗi từng dòng. */
