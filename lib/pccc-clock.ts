@@ -48,6 +48,27 @@ export function isLastDayOfMonth(clock: PcccClock) {
   return clock.day === clock.lastDayOfMonth;
 }
 
+/**
+ * CỬA SỔ CHUYỂN KỲ — khoảng ngày nút "Chuyển kỳ" được hiện (chốt với nghiệp vụ
+ * 2026-08-12): 3 ngày cuối tháng cũ + 2 ngày đầu tháng mới. Tháng 8 (31 ngày) thì hiện
+ * từ 29/8, sang 3/9 là ẩn.
+ *
+ * Có cửa sổ vì việc chuyển kỳ là việc CỦA CUỐI THÁNG và không hoàn tác được (kỳ cũ
+ * thành chỉ đọc, kỳ quá hạn bị xoá khỏi DB). Để nút phơi quanh năm thì sớm muộn cũng có
+ * người bấm nhầm giữa tháng. Vài ngày đầu tháng vẫn giữ nút để còn chạy tay khi job tự
+ * động lỗi đúng đêm giao tháng.
+ *
+ * Tính theo GIỜ VN như mọi mốc khác trong file này.
+ */
+export const ROLLOVER_DAYS_BEFORE_END = 3;
+export const ROLLOVER_DAYS_AFTER_START = 2;
+
+export function isRolloverWindow(clock: PcccClock) {
+  const nearEnd = clock.day > clock.lastDayOfMonth - ROLLOVER_DAYS_BEFORE_END;
+  const earlyMonth = clock.day <= ROLLOVER_DAYS_AFTER_START;
+  return nearEnd || earlyMonth;
+}
+
 /** Nhãn kỳ của tháng đang chạy, vd "T08.2026". */
 export function currentPeriodLabel(now?: Date) {
   const clock = vietnamClock(now);

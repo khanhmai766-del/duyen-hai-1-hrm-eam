@@ -41,7 +41,7 @@ import {
   TR_HEAD,
   type SortState,
 } from "@/components/pccc/pccc-table-card";
-import { canEditPcccAdminField, canEditPcccRow, type CabinetRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
+import { canEditPcccAdminField, canEditPcccRow, pcccLockReason, type CabinetRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
 
 /**
  * Khối ô ☑ bám bố cục bảng gốc: mỗi cột trạng thái rộng 68px (đúng độ rộng cột trong
@@ -233,6 +233,9 @@ export function PcccCabinets({
             const expanded = expandedId === r.id;
             // Phạm vi ghi theo cương vị: tủ của cương vị khác vẫn hiện đủ nhưng khoá ô.
             const rowEditable = canEdit && canEditPcccRow(writeScope, r);
+            /* Chỉ nói lý do khi bảng ĐANG mở khoá — lúc bảng còn khoá thì ô nào cũng
+               đóng, bật popup phân quyền ở đó là đổ lỗi sai chỗ. */
+            const lockReason = (adminField = false) => (canEdit ? pcccLockReason(writeScope, r, adminField) : undefined);
             const rowDraft = draft[r.id];
             const dirty = (field: string) => (rowDraft && field in rowDraft ? "bg-amber-100/60" : "");
             /** Giá trị đang sửa (nếu có) thay cho giá trị đã lưu. */
@@ -282,6 +285,7 @@ export function PcccCabinets({
                       type="select"
                       options={cuongViOptions}
                       disabled={!rowEditable || !canEditAdminField}
+                      lockedReason={lockReason(true)}
                       onSave={(v) => save(r, "cuongVi", v || null)}
                     />
                   </TableCell>
@@ -309,6 +313,7 @@ export function PcccCabinets({
                             checked={checked}
                             tone={componentTone(i, g.statuses.length)}
                             disabled={!rowEditable}
+                            lockedReason={lockReason()}
                             onToggle={() => onToggleComponent(r, g.label, status, !checked)}
                           />
                         </TableCell>
@@ -317,12 +322,13 @@ export function PcccCabinets({
                   )}
 
                   <TableCell className={cn(TD_ROW, "border-l border-slate-200", dirty("soYcsc"))}>
-                    <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} onSave={(v) => save(r, "soYcsc", v || null)} />
+                    <EditableCell value={val("soYcsc", r.soYcsc)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "soYcsc", v || null)} />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
                     <EditableCell
                       value={val("nguoiKiemTra", r.nguoiKiemTra)}
                       disabled={!rowEditable || !canEditAdminField}
+                      lockedReason={lockReason(true)}
                       onSave={(v) => save(r, "nguoiKiemTra", v || null)}
                     />
                   </TableCell>
@@ -343,6 +349,7 @@ export function PcccCabinets({
                             value={val("ngayKiemTra", r.ngayKiemTra)}
                             type="date"
                             disabled={!rowEditable || !canEditAdminField}
+                            lockedReason={lockReason(true)}
                             onSave={(v) => save(r, "ngayKiemTra", v || null)}
                           />
                         </DetailField>
@@ -356,6 +363,7 @@ export function PcccCabinets({
                             value={val("viTri", r.viTri)}
                             wrap
                             disabled={!rowEditable}
+                            lockedReason={lockReason()}
                             onSave={(v) => save(r, "viTri", v || null)}
                           />
                         </DetailField>
@@ -365,6 +373,7 @@ export function PcccCabinets({
                             value={val("ten", r.ten)}
                             wrap
                             disabled={!rowEditable}
+                            lockedReason={lockReason()}
                             onSave={(v) => save(r, "ten", v || null)}
                           />
                         </DetailField>
@@ -375,6 +384,7 @@ export function PcccCabinets({
                             value={val("ghiChu", r.ghiChu)}
                             wrap
                             disabled={!rowEditable}
+                            lockedReason={lockReason()}
                             onSave={(v) => save(r, "ghiChu", v || null)}
                           />
                         </DetailField>

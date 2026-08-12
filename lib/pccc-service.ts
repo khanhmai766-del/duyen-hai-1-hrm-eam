@@ -322,9 +322,41 @@ function isPcccManagementUser(user: PcccPositionCarrier & { role?: string }): bo
     .some((p) => isUnrestrictedEquipmentPosition(p));
 }
 
+// ===========================================================================
+// CƯƠNG VỊ ĐƯỢC GIAO NGUYÊN MỘT BẢNG
+//
+// Nghiệp vụ chốt 2026-08-12: TỦ CHỮA CHÁY do Trưởng kíp điện phụ trách cho cả phân
+// xưởng, không chỉ mấy tủ mang đúng cương vị mình — nên riêng bảng này họ xem và
+// sửa/ký được hết, như cấp quản lý. BA BẢNG CÒN LẠI (bình chữa cháy, Foam·CO2·Diesel,
+// FM200) vẫn bó theo cương vị như cũ; đó là lý do việc nới nằm ở hàm riêng theo bảng
+// chứ không nhét vào `isPcccManagementUser`.
+//
+// Vẫn phải CÓ QUYỀN GHI mới sửa được: hàm dưới chỉ NỚI phạm vi của người đã qua cửa
+// `pccc-manage`, không tự cấp quyền ghi cho ai.
+// ===========================================================================
+
+/** Cương vị phụ trách trọn bảng Tủ chữa cháy. */
+const CABINET_FULL_SCOPE_CODES: readonly PositionCode[] = ["ELECTRICAL_SHIFT_LEAD"];
+
+export function hasPcccCabinetFullScope(user: PcccPositionCarrier): boolean {
+  return pcccPositionCodesOf(user).some((code) => CABINET_FULL_SCOPE_CODES.includes(code));
+}
+
+/**
+ * Phạm vi XEM riêng cho bảng Tủ chữa cháy — dùng y như `pcccBulkViewScope`: route đọc
+ * lấy phạm vi chung rồi bọc qua hàm này TRƯỚC KHI dựng câu truy vấn bảng tủ.
+ */
+export function pcccCabinetViewScope(view: PcccViewScope, user: PcccPositionCarrier): PcccViewScope {
+  return hasPcccCabinetFullScope(user) ? PCCC_VIEW_ALL : view;
+}
+
+/** Bảng đang thao tác — quyết định có nới phạm vi theo khối trên hay không. */
+export type PcccScopeTable = "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL";
+
 /** null = không có quyền ghi. Tách riêng để bản ném và bản không ném dùng chung một luật. */
 async function computePcccWriteScope(
-  user: PcccPositionCarrier & { id?: string; role?: string }
+  user: PcccPositionCarrier & { id?: string; role?: string },
+  table?: PcccScopeTable
 ): Promise<PcccWriteScope | null> {
   // Quản trị + cấp quản lý (Quản đốc / Phó QĐ / KTV / Trưởng ca): sửa mọi thiết bị.
   // Đây là DANH SÁCH DUY NHẤT được sửa toàn bộ.
@@ -335,6 +367,8 @@ async function computePcccWriteScope(
   // sạch 747 bình — phá đúng luật "giám sát chỉ xem, không sửa".
   // Mức manage/full giờ chỉ còn nghĩa "được ghi", phạm vi vẫn bó theo cương vị.
   if (!(await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["personal"]))) return null;
+  // Cương vị được giao trọn bảng Tủ chữa cháy (xem khối trên) — chỉ nới đúng bảng đó.
+  if (table === "CABINET" && hasPcccCabinetFullScope(user)) return PCCC_SCOPE_ALL;
   // Cấp giám sát KHÔNG được thêm quyền sửa ở đây: chỉ sửa được dòng thuộc đúng cương vị
   // quản lý của mình, còn phần mình giám sát thì chỉ xem.
   return { all: false, codes: pcccPositionCodesOf(user) };
@@ -346,9 +380,11 @@ async function computePcccWriteScope(
  */
 export async function resolvePcccWriteScope(
   user: PcccPositionCarrier & { id?: string; role?: string },
-  message = "Không đủ quyền sửa dữ liệu PCCC"
+  message = "Không đủ quyền sửa dữ liệu PCCC",
+  /** Bảng đang ghi — bỏ trống thì KHÔNG nới phạm vi theo bảng (mặc định an toàn). */
+  table?: PcccScopeTable
 ): Promise<PcccWriteScope> {
-  const scope = await computePcccWriteScope(user);
+  const scope = await computePcccWriteScope(user, table);
   if (!scope) throw fail(message, 403);
   if (!scope.all && scope.codes.length === 0) {
     throw fail("Tài khoản chưa gán cương vị nên chưa ghi được dữ liệu PCCC — nhờ quản trị gán cương vị.", 403);
@@ -361,8 +397,12 @@ export async function resolvePcccWriteScope(
  * ngoài phạm vi, thay vì để người dùng sửa xong mới ăn 403.
  * Không có quyền ghi → `{ all: false, codes: [] }` = không dòng nào sửa được.
  */
-export async function pcccWriteScopeOf(user: PcccPositionCarrier & { id?: string; role?: string }) {
-  const scope = (await computePcccWriteScope(user)) ?? { all: false, codes: [] };
+export async function pcccWriteScopeOf(
+  user: PcccPositionCarrier & { id?: string; role?: string },
+  /** Bảng đang mở — phải truyền đúng bảng, nếu không UI khoá nhầm ô của bảng được nới. */
+  table?: PcccScopeTable
+) {
+  const scope = (await computePcccWriteScope(user, table)) ?? { all: false, codes: [] };
   return {
     all: scope.all,
     codes: scope.codes as string[],

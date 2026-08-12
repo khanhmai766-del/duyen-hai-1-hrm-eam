@@ -6,6 +6,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   cuongViListOf,
+  pcccCabinetViewScope,
   pcccViewScopeMeta,
   pcccWriteScopeOf,
   resolvePcccViewScope,
@@ -34,8 +35,9 @@ export async function GET(req: NextRequest) {
     await requirePermissionLevel(user, PCCC_PERMISSION.view, ["read", "personal", "manage", "full"]);
 
     const sp = req.nextUrl.searchParams;
-    // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts)
-    const viewScope = await resolvePcccViewScope(user);
+    // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts).
+    // Bọc qua `pcccCabinetViewScope`: cương vị được giao trọn bảng tủ thì xem hết.
+    const viewScope = pcccCabinetViewScope(await resolvePcccViewScope(user), user);
     const period = await resolvePeriod(sp.get("period"));
     const page = Math.max(1, Number(sp.get("page") ?? 1));
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
@@ -75,7 +77,7 @@ export async function GET(req: NextRequest) {
       signaturesOf(period.id, "CABINET"),
       cuongViListOf(period.id, viewScope),
       // Phạm vi GHI của người đang xem — UI khoá sẵn dòng ngoài phạm vi (xem lib/pccc-service.ts)
-      pcccWriteScopeOf(user),
+      pcccWriteScopeOf(user, "CABINET"),
     ]);
 
     // Khung header 2 tầng (nhóm × trạng thái) lấy từ chính dữ liệu, giữ thứ tự cột gốc

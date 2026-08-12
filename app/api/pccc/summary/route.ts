@@ -6,6 +6,7 @@ import {
   PCCC_PERMISSION,
   cuongViListOf,
   pcccBulkViewScope,
+  pcccCabinetViewScope,
   pcccViewScopeMeta,
   resolvePcccViewScope,
   resolvePeriod,
@@ -34,7 +35,8 @@ export async function GET(req: NextRequest) {
     // Số liệu tổng quan phải đếm ĐÚNG phần người dùng được xem, nếu không con số ở tab
     // Tổng quan lại tố ra khối lượng của cương vị mà bảng chi tiết đã giấu đi.
     const viewScope = await resolvePcccViewScope(user);
-    const scope = scopeWhere(cuongVi, machine, viewScope);
+    // Tu chua chay: cuong vi duoc giao tron bang thi dem het (xem lib/pccc-service.ts).
+    const scopeTcc = scopeWhere(cuongVi, machine, pcccCabinetViewScope(viewScope, user));
     // Bang Binh chua chay co cot Nguoi giam sat -> cap giam sat xem duoc phan minh giam sat.
     const scopeBcc = scopeWhere(cuongVi, machine, viewScope, { withSupervisor: true });
     // Foam/CO2/Diesel/FM200 la tai san dung chung -> moi cuong vi deu xem het.
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
         select: { chungLoai: true, tinhTrang: true, tinhTrangNgoai: true, denHanThayThe: true },
       }),
       prisma.pcccCabinet.findMany({
-        where: { periodId: period.id, ...scope },
+        where: { periodId: period.id, ...scopeTcc },
         select: { ten: true, components: true },
       }),
       prisma.pcccBulk.findMany({

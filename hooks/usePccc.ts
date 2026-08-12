@@ -32,6 +32,8 @@ export interface PcccClockMeta {
   today: string;
   currentLabel: string;
   isLastDayOfMonth: boolean;
+  /** Hôm nay có nằm trong cửa sổ chuyển kỳ không (3 ngày cuối tháng + 2 ngày đầu tháng sau). */
+  rolloverWindow?: boolean;
   keepPeriods: number;
 }
 
@@ -232,6 +234,31 @@ export function canEditPcccRow(scope: PcccWriteScopeMeta | undefined, row: { cuo
   return Boolean(row.cuongViCode && scope.codes.includes(row.cuongViCode));
 }
 
+/** Lời giải thích cho nhóm ô chỉ ADMIN mới sửa được. */
+export const PCCC_ADMIN_FIELD_REASON =
+  "Ô này chỉ quản trị viên sửa được (cương vị, cấp giám sát, tổ máy, ĐVT, ngày/người kiểm tra, ngày/người chốt).";
+
+/**
+ * Câu giải thích VÌ SAO ô đang khoá, để bảng nói ra thay vì im lặng: cương vị hạn chế
+ * bấm vào ô của dòng ngoài phạm vi thì nhận đúng lý do chứ không tưởng là bảng lỗi.
+ * Trả `undefined` = ô mở bình thường. Chỉ dùng khi bảng ĐANG ở chế độ sửa; lúc bảng
+ * còn khoá thì mọi ô đều đóng và đã có ghi chú "bấm Sửa bảng" ở chân bảng.
+ */
+export function pcccLockReason(
+  scope: PcccWriteScopeMeta | undefined,
+  row: { cuongViCode?: string | null; cuongVi?: string | null },
+  /** Ô thuộc nhóm chỉ ADMIN sửa được (cương vị, cấp giám sát, ngày/người kiểm tra…). */
+  adminField = false
+): string | undefined {
+  if (!canEditPcccRow(scope, row)) {
+    const mine = scope?.labels.length ? scope.labels.join(" · ") : "chưa được gán cương vị nào";
+    const owner = row.cuongVi ? `cương vị “${row.cuongVi}”` : "cương vị khác";
+    return `Dòng này thuộc ${owner}, ngoài phạm vi sửa của bạn (${mine}). Liên hệ quản trị nếu cần chỉnh sửa.`;
+  }
+  if (adminField && !canEditPcccAdminField(scope)) return PCCC_ADMIN_FIELD_REASON;
+  return undefined;
+}
+
 /**
  * Phạm vi XEM của người đăng nhập (quy tắc 4 — xem lib/pccc-service.ts).
  * `all` = thấy mọi cương vị; ngược lại server ĐÃ cắt dữ liệu về đúng `codes` trước khi
@@ -321,7 +348,9 @@ export function usePcccBulks(filters: PcccFilters) {
 function useInvalidatePccc() {
   const qc = useQueryClient();
   return () => {
-    for (const key of ["pccc-summary", "pccc-extinguishers", "pccc-cabinets", "pccc-bulks", "pccc-periods"]) {
+    // "pccc-book-status" phải nằm trong danh sách: ký/bỏ ký xong là điều kiện xuất sổ
+    // đổi ngay, không đợi người dùng tải lại trang mới thấy nút.
+    for (const key of ["pccc-summary", "pccc-extinguishers", "pccc-cabinets", "pccc-bulks", "pccc-periods", "pccc-book-status"]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };
@@ -455,6 +484,29 @@ export function usePcccSign() {
  * `enabled=false` cho người chỉ xem được cương vị của mình: server trả 403 vì file lưu
  * trữ là bản đầy đủ cả phân xưởng, gọi làm gì cho tốn một lượt hỏng.
  */
+/**
+ * Trạng thái "Sổ theo dõi phương tiện PCCC (Mẫu số 01)" của cương vị đang đăng nhập:
+ * đã ký đủ cả bảng Bình chữa cháy lẫn Tủ chữa cháy chưa. SERVER đếm trên toàn kỳ —
+ * client chỉ có một trang 25 dòng nên tự đếm là sai ngay từ trang đầu.
+ */
+export interface PcccBookStatus {
+  positionCode: string | null;
+  positionLabel: string | null;
+  bcc: { total: number; signed: number };
+  tcc: { total: number; signed: number };
+  ready: boolean;
+  /** Câu giải thích vì sao chưa xuất được — hiện thẳng cho người dùng. */
+  reason: string | null;
+}
+
+export function usePcccBookStatus(filters: { period?: string; cuongVi?: string }, enabled = true) {
+  return useQuery({
+    queryKey: ["pccc-book-status", filters],
+    queryFn: () => apiGet<PcccBookStatus>(`/api/pccc/so-theo-doi${qs(filters)}`),
+    enabled: enabled && Boolean(filters.period),
+  });
+}
+
 export function usePcccArchives(enabled = true) {
   return useQuery({
     queryKey: ["pccc-archives"],

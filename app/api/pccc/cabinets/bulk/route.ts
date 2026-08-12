@@ -51,7 +51,7 @@ type BulkItem = {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const scope = await resolvePcccWriteScope(user);
+    const scope = await resolvePcccWriteScope(user, undefined, "CABINET");
 
     const body = (await req.json()) as { items?: BulkItem[] };
     const items = Array.isArray(body.items) ? body.items : [];

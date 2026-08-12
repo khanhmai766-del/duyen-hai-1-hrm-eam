@@ -21,6 +21,8 @@ import {
 import {
   canEditPcccAdminField,
   canEditPcccRow,
+  pcccLockReason,
+  PCCC_ADMIN_FIELD_REASON,
   usePcccSign,
   type BulkRow,
   type Fm200Panel,
@@ -60,6 +62,7 @@ function fm200Tone(pct: number | null) {
 function Fm200Table({
   panel,
   canManage,
+  lockedReason,
   onSign,
   rowDraft,
   onDraftChange,
@@ -67,6 +70,8 @@ function Fm200Table({
 }: {
   panel: Fm200Panel;
   canManage: boolean;
+  /** Lý do bảng này bị khoá theo cương vị — bấm vào ô sẽ hiện popup nói đúng lý do. */
+  lockedReason?: string;
   /** Ngày/Người KT chỉ ADMIN sửa — hai ô này do thao tác ký tự điền. */
   adminField: boolean;
   onSign: (target: SignTarget) => void;
@@ -111,6 +116,7 @@ function Fm200Table({
               value={val("ngayKiemTra", panel.ngayKiemTra)}
               type="date"
               disabled={!canManage || !adminField}
+              lockedReason={lockedReason ?? (canManage && !adminField ? PCCC_ADMIN_FIELD_REASON : undefined)}
               onSave={(v) => saveField("ngayKiemTra", v)}
             />
           </span>
@@ -119,12 +125,14 @@ function Fm200Table({
             <EditableCell
               value={val("nguoiKiemTra", panel.nguoiKiemTra)}
               disabled={!canManage || !adminField}
+              lockedReason={lockedReason ?? (canManage && !adminField ? PCCC_ADMIN_FIELD_REASON : undefined)}
               onSave={(v) => saveField("nguoiKiemTra", v)}
             />
           </span>
           <SignCell
             signature={panel.signature}
             disabled={!canManage || sign.isPending}
+            lockedReason={lockedReason}
             onToggle={(remove) =>
               onSign({ targetType: "FM200_PANEL", targetId: panel.id, name: panel.title, remove })
             }
@@ -171,6 +179,7 @@ function Fm200Table({
                         type="number"
                         align="center"
                         disabled={!canManage}
+                        lockedReason={lockedReason}
                         onSave={(v) => saveValue(row.kind, label, v)}
                       />
                     </td>
@@ -275,6 +284,10 @@ export function PcccBulks({
           {bulks.map((b) => {
             // Phạm vi ghi theo cương vị — bồn của cương vị khác vẫn xem được, chỉ khoá ô.
             const rowEditable = canManage && Boolean(editing) && canEditPcccRow(writeScope, b);
+            /* Chỉ nói lý do khi bảng ĐANG mở khoá — lúc bảng còn khoá thì ô nào cũng
+               đóng, bật popup phân quyền ở đó là đổ lỗi sai chỗ. */
+            const lockReason = (adminOnly = false) =>
+              canManage && editing ? pcccLockReason(writeScope, b, adminOnly) : undefined;
             const bDraft = draft?.[`bulk:${b.id}`] ?? {};
             const val = <T,>(field: string, saved: T) => (field in bDraft ? (bDraft[field] as T) : saved);
             return (
@@ -287,6 +300,7 @@ export function PcccBulks({
                   type="select"
                   options={cuongViOptions}
                   disabled={!rowEditable || !adminField}
+                  lockedReason={lockReason(true)}
                   onSave={(v) => save(b, "cuongVi", v)}
                 />
               </td>
@@ -297,6 +311,7 @@ export function PcccBulks({
                   type="number"
                   align="right"
                   disabled={!rowEditable}
+                  lockedReason={lockReason()}
                   onSave={(v) => save(b, "khoiLuongThietKe", v)}
                 />
               </td>
@@ -306,6 +321,7 @@ export function PcccBulks({
                   type="number"
                   align="right"
                   disabled={!rowEditable}
+                  lockedReason={lockReason()}
                   onSave={(v) => save(b, "khoiLuongHienTai", v)}
                 />
               </td>
@@ -317,18 +333,19 @@ export function PcccBulks({
                 <StatusBadge status={b.tinhTrang} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
-                <EditableCell value={val("ngayChot", b.ngayChot)} type="date" disabled={!rowEditable || !adminField} onSave={(v) => save(b, "ngayChot", v)} />
+                <EditableCell value={val("ngayChot", b.ngayChot)} type="date" disabled={!rowEditable || !adminField} lockedReason={lockReason(true)} onSave={(v) => save(b, "ngayChot", v)} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
-                <EditableCell value={val("nguoiChot", b.nguoiChot)} disabled={!rowEditable || !adminField} onSave={(v) => save(b, "nguoiChot", v)} />
+                <EditableCell value={val("nguoiChot", b.nguoiChot)} disabled={!rowEditable || !adminField} lockedReason={lockReason(true)} onSave={(v) => save(b, "nguoiChot", v)} />
               </td>
               <td className={`${TD_ROOMY} min-w-[140px]`}>
-                <EditableCell value={val("ghiChu", b.ghiChu)} disabled={!rowEditable} onSave={(v) => save(b, "ghiChu", v)} />
+                <EditableCell value={val("ghiChu", b.ghiChu)} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(b, "ghiChu", v)} />
               </td>
               <td className={`${TD_ROOMY} whitespace-nowrap`}>
                 <SignCell
                   signature={b.signature}
                   disabled={!rowEditable || sign.isPending}
+                  lockedReason={lockReason()}
                   onToggle={(remove) => openSign({ targetType: "BULK", targetId: b.id, name: b.ten, remove })}
                 />
               </td>
@@ -343,6 +360,7 @@ export function PcccBulks({
           key={p.id}
           panel={p}
           canManage={canManage && Boolean(editing) && canEditPcccRow(writeScope, p)}
+          lockedReason={canManage && editing ? pcccLockReason(writeScope, p) : undefined}
           onSign={openSign}
           adminField={adminField}
           rowDraft={draft?.[`panel:${p.id}`] ?? {}}

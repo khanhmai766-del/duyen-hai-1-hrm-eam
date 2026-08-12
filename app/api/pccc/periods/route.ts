@@ -4,7 +4,7 @@ import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { PCCC_PERMISSION, createNextPeriodFrom } from "@/lib/pccc-service";
 import { PCCC_DB_KEEP_PERIODS, ensurePcccRollover } from "@/lib/pccc-rollover";
-import { isLastDayOfMonth, monthIndex, periodLabelOf, vietnamClock } from "@/lib/pccc-clock";
+import { isLastDayOfMonth, isRolloverWindow, monthIndex, periodLabelOf, vietnamClock } from "@/lib/pccc-clock";
 
 // Đường tự động chuyển kỳ có gọi exceljs + S3 → bắt buộc Node runtime.
 export const runtime = "nodejs";
@@ -46,6 +46,8 @@ export async function GET() {
         today: `${String(clock.day).padStart(2, "0")}/${String(clock.month).padStart(2, "0")}/${clock.year}`,
         currentLabel: periodLabelOf(clock.year, clock.month),
         isLastDayOfMonth: isLastDayOfMonth(clock),
+        // Nút "Chuyển kỳ" chỉ hiện trong cửa sổ cuối tháng — xem lib/pccc-clock.ts.
+        rolloverWindow: isRolloverWindow(clock),
         keepPeriods: PCCC_DB_KEEP_PERIODS,
       },
     });

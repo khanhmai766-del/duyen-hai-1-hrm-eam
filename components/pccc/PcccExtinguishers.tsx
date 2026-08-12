@@ -40,7 +40,7 @@ import {
   hanThayTheTone,
   tinhTrangOptions,
 } from "@/lib/pccc-status";
-import { canEditPcccAdminField, canEditPcccRow, type ExtinguisherRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
+import { canEditPcccAdminField, canEditPcccRow, pcccLockReason, type ExtinguisherRow, type PcccWriteScopeMeta, type PositionOption } from "@/hooks/usePccc";
 
 /** Số cột của hàng dữ liệu — dùng cho colSpan của hàng chi tiết và hàng rỗng. */
 const COL_COUNT = 13;
@@ -212,6 +212,9 @@ export function PcccExtinguishers({
             const expanded = expandedId === r.id;
             // Phạm vi ghi theo cương vị: dòng của cương vị khác vẫn hiện đủ nhưng khoá ô.
             const rowEditable = canEdit && canEditPcccRow(writeScope, base);
+            /* Chỉ nói lý do khi bảng ĐANG mở khoá — lúc bảng còn khoá thì ô nào cũng
+               đóng, bật popup phân quyền ở đó là đổ lỗi sai chỗ. */
+            const lockReason = (adminField = false) => (canEdit ? pcccLockReason(writeScope, base, adminField) : undefined);
             // Một màu nền duy nhất cho cả hàng VÀ các ô đóng băng — xem rowBackground.
             const rowBg = rowBackground({ index, expanded, dirty: Boolean(rowDraft) });
             return (
@@ -247,6 +250,7 @@ export function PcccExtinguishers({
                       value={r.tinhTrang}
                       options={tinhTrangOptions(r.apSuat)}
                       disabled={!rowEditable}
+                      lockedReason={lockReason()}
                       onChange={(v) => save(r, "tinhTrang", v)}
                     />
                   </TableCell>
@@ -259,6 +263,7 @@ export function PcccExtinguishers({
                       value={r.apSuat}
                       options={apSuatOptions(r.chungLoai)}
                       disabled={!rowEditable}
+                      lockedReason={lockReason()}
                       onChange={(v) => save(r, "apSuat", v)}
                     />
                   </TableCell>
@@ -268,6 +273,7 @@ export function PcccExtinguishers({
                       type="select"
                       options={BCC_TINH_TRANG_NGOAI_OPTIONS as unknown as string[]}
                       disabled={!rowEditable}
+                      lockedReason={lockReason()}
                       onSave={(v) => save(r, "tinhTrangNgoai", v)}
                     />
                   </TableCell>
@@ -277,6 +283,7 @@ export function PcccExtinguishers({
                       type="select"
                       options={BCC_VI_TRI_HIEN_TAI_OPTIONS as unknown as string[]}
                       disabled={!rowEditable}
+                      lockedReason={lockReason()}
                       onSave={(v) => save(r, "viTriHienTai", v)}
                     />
                   </TableCell>
@@ -286,11 +293,12 @@ export function PcccExtinguishers({
                       type="select"
                       options={cuongViOptions}
                       disabled={!rowEditable || !canEditAdminField}
+                      lockedReason={lockReason(true)}
                       onSave={(v) => save(r, "cuongVi", v)}
                     />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("ngaySx"))}>
-                    <EditableCell value={r.ngaySx} type="date" disabled={!rowEditable} onSave={(v) => save(r, "ngaySx", v)} />
+                    <EditableCell value={r.ngaySx} type="date" disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "ngaySx", v)} />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "text-right", dirty("thoiGianSd"))}>
                     <EditableCell
@@ -298,6 +306,7 @@ export function PcccExtinguishers({
                       type="number"
                       align="right"
                       disabled={!rowEditable}
+                      lockedReason={lockReason()}
                       onSave={(v) => save(r, "thoiGianSd", v)}
                     />
                   </TableCell>
@@ -321,11 +330,12 @@ export function PcccExtinguishers({
                       value={r.thoiGianThayGanNhat}
                       type="date"
                       disabled={!rowEditable}
+                      lockedReason={lockReason()}
                       onSave={(v) => save(r, "thoiGianThayGanNhat", v)}
                     />
                   </TableCell>
                   <TableCell className={cn(TD_ROW, "whitespace-nowrap", dirty("nguoiKiemTra"))}>
-                    <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} onSave={(v) => save(r, "nguoiKiemTra", v)} />
+                    <EditableCell value={r.nguoiKiemTra} disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "nguoiKiemTra", v)} />
                   </TableCell>
                 </TableRow>
 
@@ -334,10 +344,10 @@ export function PcccExtinguishers({
                     <TableCell colSpan={COL_COUNT} className="bg-slate-50/80 p-0">
                       <DetailPanel>
                         <DetailField label="Vị trí lắp đặt">
-                          <EditableCell value={r.viTri} disabled={!rowEditable} onSave={(v) => save(r, "viTri", v)} />
+                          <EditableCell value={r.viTri} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "viTri", v)} />
                         </DetailField>
                         <DetailField label="Nguồn gốc / NSX">
-                          <EditableCell value={r.nguonGoc} disabled={!rowEditable} onSave={(v) => save(r, "nguonGoc", v)} />
+                          <EditableCell value={r.nguonGoc} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "nguonGoc", v)} />
                         </DetailField>
                         <DetailField label="Cấp giám sát">
                           <EditableCell
@@ -345,14 +355,15 @@ export function PcccExtinguishers({
                             type="select"
                             options={giamSatOptions}
                             disabled={!rowEditable || !canEditAdminField}
+                            lockedReason={lockReason(true)}
                             onSave={(v) => save(r, "nguoiGiamSat", v)}
                           />
                         </DetailField>
                         <DetailField label="Ngày kiểm tra">
-                          <EditableCell value={r.ngayKiemTra} type="date" disabled={!rowEditable || !canEditAdminField} onSave={(v) => save(r, "ngayKiemTra", v)} />
+                          <EditableCell value={r.ngayKiemTra} type="date" disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "ngayKiemTra", v)} />
                         </DetailField>
                         <DetailField label="Ghi chú">
-                          <EditableCell value={r.ghiChu} disabled={!rowEditable} onSave={(v) => save(r, "ghiChu", v)} />
+                          <EditableCell value={r.ghiChu} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "ghiChu", v)} />
                         </DetailField>
                         {/* Tổ máy và SL/ĐVT KHÔNG hiển thị: SL luôn là "1 Bình", còn tổ
                             máy đã có ô lọc riêng. Hai trường vẫn lưu trong DB và vẫn

@@ -5,6 +5,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   pcccBulkViewScope,
+  pcccCabinetViewScope,
   resolvePcccViewScope,
   resolvePeriod,
   scopeWhere,
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest) {
     // File Excel phải cắt theo ĐÚNG phạm vi xem của người bấm xuất, nếu không thì cửa
     // trước khoá mà cửa sau vẫn tải được cả bảng của cương vị khác.
     const viewScope = await resolvePcccViewScope(user);
-    const scope = scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope);
+    // Tu chua chay: cuong vi duoc giao tron bang thi xuat het (xem lib/pccc-service.ts).
+    const scopeTcc = scopeWhere(sp.get("cuongVi"), sp.get("machine"), pcccCabinetViewScope(viewScope, user));
     // Bang Binh chua chay co cot Nguoi giam sat: cap giam sat xuat duoc phan minh giam sat.
     const scopeBcc = scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true });
     // Foam/CO2/Diesel/FM200 la tai san dung chung -> moi cuong vi deu xuat duoc.
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
         orderBy: [{ stt: "asc" }, { ma: "asc" }],
       }),
       prisma.pcccCabinet.findMany({
-        where: { periodId: period.id, ...scope },
+        where: { periodId: period.id, ...scopeTcc },
         orderBy: [{ stt: "asc" }, { ma: "asc" }],
         include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
       }),

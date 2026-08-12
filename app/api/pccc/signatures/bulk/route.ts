@@ -55,7 +55,6 @@ function describeScope(scope: PcccWriteScope, cuongVi?: string | null) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    const scope = await resolvePcccWriteScope(user, "Không đủ quyền ký");
 
     const body = (await req.json().catch(() => ({}))) as {
       targetType?: Target;
@@ -68,6 +67,9 @@ export async function POST(req: NextRequest) {
       return fail("targetType phải là EXTINGUISHER hoặc CABINET");
     }
     const targetType = body.targetType;
+    // Đọc body TRƯỚC khi tính phạm vi: bảng Tủ chữa cháy có cương vị được giao trọn
+    // bảng (xem lib/pccc-service.ts), nên phạm vi ký khác nhau theo `targetType`.
+    const scope = await resolvePcccWriteScope(user, "Không đủ quyền ký", targetType);
 
     const period = await resolvePeriod(body.period);
     assertPeriodWritable(period);

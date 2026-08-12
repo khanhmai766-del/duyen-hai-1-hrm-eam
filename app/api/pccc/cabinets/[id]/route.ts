@@ -34,7 +34,7 @@ const EDITABLE: FieldSpec = {
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    const scope = await resolvePcccWriteScope(user);
+    const scope = await resolvePcccWriteScope(user, undefined, "CABINET");
 
     const current = await prisma.pcccCabinet.findUnique({
       where: { id: params.id },

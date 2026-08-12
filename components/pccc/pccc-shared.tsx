@@ -3,8 +3,19 @@
 // ô sửa tại chỗ và ô chữ ký. Giữ ở 1 chỗ để 3 bảng nhìn như một hệ thống.
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, PenLine, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toneOf, type PcccTone } from "@/lib/pccc-status";
+
+/**
+ * Ô bị khoá theo phân quyền cương vị: bấm vào thì HIỆN POPUP nói rõ lý do. Trước đây ô
+ * chỉ trơ ra, người dùng cương vị hạn chế bấm mãi không được và tưởng trang bị lỗi.
+ * Dùng chung một `id` nên bấm nhiều ô liên tiếp chỉ thay nội dung một popup, không xếp
+ * chồng cả chục thông báo.
+ */
+export function notifyPcccLocked(reason: string) {
+  toast.warning(reason, { id: "pccc-locked", duration: 5000 });
+}
 
 export const dateFmt = new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -173,6 +184,7 @@ export function EditableCell({
   type = "text",
   options,
   disabled,
+  lockedReason,
   align = "left",
   wrap = false,
   onSave,
@@ -181,6 +193,8 @@ export function EditableCell({
   type?: "text" | "number" | "date" | "select";
   options?: string[];
   disabled?: boolean;
+  /** Có lý do = ô khoá do phân quyền: vẫn bấm được, nhưng chỉ để hiện popup giải thích. */
+  lockedReason?: string;
   align?: "left" | "right" | "center";
   /** true = cho chữ XUỐNG DÒNG thay vì cắt bằng "…". Dùng trong khối chi tiết dòng,
    *  nơi cần đọc đủ nội dung; trong bảng thì vẫn cắt để không phá chiều cao hàng. */
@@ -202,18 +216,23 @@ export function EditableCell({
   }
 
   if (disabled) {
-    return (
-      <span
-        className={cn(
-          "block px-1 py-0.5 text-[12px]",
-          wrap ? "whitespace-normal break-words" : "truncate",
-          align === "right" && "text-right",
-          align === "center" && "text-center"
-        )}
-      >
-        {type === "date" ? fmtDate(initial) : initial || <span className="text-slate-300">—</span>}
-      </span>
+    const content = type === "date" ? fmtDate(initial) : initial || <span className="text-slate-300">—</span>;
+    const base = cn(
+      "block w-full px-1 py-0.5 text-left text-[12px]",
+      wrap ? "whitespace-normal break-words" : "truncate",
+      align === "right" && "text-right",
+      align === "center" && "text-center"
     );
+    // Khoá do phân quyền → vẫn là nút để bấm ra popup; khoá vì lý do khác (bảng đang
+    // đóng, ô dẫn xuất…) thì giữ nguyên chữ trơ như cũ.
+    if (lockedReason) {
+      return (
+        <button type="button" title={lockedReason} onClick={() => notifyPcccLocked(lockedReason)} className={cn(base, "cursor-not-allowed rounded hover:bg-slate-100")}>
+          {content}
+        </button>
+      );
+    }
+    return <span className={base}>{content}</span>;
   }
 
   if (!editing) {
@@ -294,11 +313,14 @@ export function ToneSelectCell({
   value,
   options,
   disabled,
+  lockedReason,
   onChange,
 }: {
   value: string | null;
   options: readonly string[];
   disabled?: boolean;
+  /** Có lý do = ô khoá do phân quyền: bấm vào hiện popup giải thích. */
+  lockedReason?: string;
   onChange: (next: string) => void;
 }) {
   const tone = toneOf(value);
@@ -313,11 +335,15 @@ export function ToneSelectCell({
   const items = options.includes(value ?? "") || !value ? options : [value, ...options];
 
   if (disabled) {
-    return (
-      <span className={cn("inline-block truncate rounded border px-1.5 py-0.5 text-[11.5px] font-medium", box[tone])}>
-        {value ?? "—"}
-      </span>
-    );
+    const cls = cn("inline-block truncate rounded border px-1.5 py-0.5 text-[11.5px] font-medium", box[tone]);
+    if (lockedReason) {
+      return (
+        <button type="button" title={lockedReason} onClick={() => notifyPcccLocked(lockedReason)} className={cn(cls, "cursor-not-allowed")}>
+          {value ?? "—"}
+        </button>
+      );
+    }
+    return <span className={cls}>{value ?? "—"}</span>;
   }
   return (
     <select
@@ -373,20 +399,26 @@ export function SignatureStamp({
 export function SignCell({
   signature,
   disabled,
+  lockedReason,
   onToggle,
 }: {
   signature: { signerName: string; signerPosition: string | null; signedAt: string; signatureUrl?: string | null } | null;
   disabled?: boolean;
+  /** Có lý do = khoá do phân quyền: bấm vào hiện popup giải thích thay vì ký. */
+  lockedReason?: string;
   onToggle: (remove: boolean) => void;
 }) {
   if (signature) {
     return (
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => onToggle(true)}
-        title={disabled ? "Kỳ đã chốt" : "Bấm để huỷ ký"}
-        className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:border-emerald-300 disabled:opacity-60"
+        disabled={disabled && !lockedReason}
+        onClick={() => (lockedReason ? notifyPcccLocked(lockedReason) : onToggle(true))}
+        title={lockedReason ?? (disabled ? "Kỳ đã chốt" : "Bấm để huỷ ký")}
+        className={cn(
+          "inline-flex max-w-full items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:border-emerald-300 disabled:opacity-60",
+          lockedReason && "cursor-not-allowed opacity-60"
+        )}
       >
         {signature.signatureUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- ảnh chữ ký phục vụ qua proxy S3
@@ -402,9 +434,13 @@ export function SignCell({
   return (
     <button
       type="button"
-      disabled={disabled}
-      onClick={() => onToggle(false)}
-      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:border-accent/40 hover:text-accent disabled:opacity-50"
+      disabled={disabled && !lockedReason}
+      title={lockedReason}
+      onClick={() => (lockedReason ? notifyPcccLocked(lockedReason) : onToggle(false))}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:border-accent/40 hover:text-accent disabled:opacity-50",
+        lockedReason && "cursor-not-allowed opacity-50"
+      )}
     >
       <PenLine className="size-3" />
       Ký
@@ -417,11 +453,14 @@ export function TickCell({
   checked,
   tone,
   disabled,
+  lockedReason,
   onToggle,
 }: {
   checked: boolean;
   tone: StatusTone;
   disabled?: boolean;
+  /** Có lý do = ô khoá do phân quyền: bấm vào hiện popup giải thích thay vì tích. */
+  lockedReason?: string;
   onToggle: () => void;
 }) {
   const on: Record<StatusTone, string> = {
@@ -433,12 +472,14 @@ export function TickCell({
   return (
     <button
       type="button"
-      disabled={disabled}
-      onClick={onToggle}
+      disabled={disabled && !lockedReason}
+      title={lockedReason}
+      onClick={() => (lockedReason ? notifyPcccLocked(lockedReason) : onToggle())}
       className={cn(
         "grid size-5 place-items-center rounded border transition",
         checked ? on[tone] : "border-slate-300 bg-white hover:border-accent/50",
-        disabled && "opacity-50"
+        disabled && "opacity-50",
+        lockedReason && "cursor-not-allowed"
       )}
     >
       {checked && <Check className="size-3.5" strokeWidth={3} />}

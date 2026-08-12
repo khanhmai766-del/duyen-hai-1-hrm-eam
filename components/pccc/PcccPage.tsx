@@ -17,6 +17,7 @@ import {
   CalendarCheck,
   Download,
   FileSpreadsheet,
+  FileText,
   Filter,
   FlameKindling,
   ChevronDown,
@@ -56,6 +57,7 @@ import {
   usePcccPeriods,
   usePcccSummary,
   usePcccArchives,
+  usePcccBookStatus,
   usePcccRollover,
   usePcccBulkSign,
   usePcccBulkSignPreview,
@@ -246,8 +248,20 @@ export default function PcccPage() {
    * Phạm vi XEM (quy tắc 4 — xem lib/pccc-service.ts). SERVER đã cắt dữ liệu rồi; cái
    * này chỉ để nói cho người dùng biết vì sao bảng chỉ có phần của mình, tránh tưởng là
    * mất dữ liệu. Khai báo sớm vì còn quyết định có gọi danh sách bản lưu trữ hay không.
+   *
+   * LẤY THEO TAB ĐANG MỞ, không gộp chung: phạm vi khác nhau theo bảng (Foam·CO2 ai
+   * cũng xem hết, Tủ chữa cháy có cương vị được giao trọn bảng — xem lib/pccc-service.ts).
+   * Gộp chung thì tab này lại hiện phạm vi của tab kia. Chuỗi `??` phía sau chỉ là bản
+   * dự phòng lúc truy vấn của tab chưa về (chưa có dòng nào để khoá).
    */
   const viewScope: PcccViewScopeMeta | undefined =
+    (tab === "BCC"
+      ? bccQuery.data?.meta?.viewScope
+      : tab === "TCC"
+        ? tccQuery.data?.meta?.viewScope
+        : tab === "FCD"
+          ? fcdQuery.data?.meta?.viewScope
+          : undefined) ??
     summaryQuery.data?.meta?.viewScope ??
     bccQuery.data?.meta?.viewScope ??
     tccQuery.data?.meta?.viewScope ??
@@ -545,6 +559,17 @@ export default function PcccPage() {
     );
   }
 
+  /**
+   * Điều kiện hiện nút "Xuất PDF" (Sổ theo dõi Mẫu số 01). Kỳ đã chốt / chưa tới thì
+   * không hỏi server làm gì. Truy vấn theo KỲ + CƯƠNG VỊ đang lọc nên sang tháng mới,
+   * kỳ mới chưa ai ký, nút TỰ biến mất — không cần cơ chế reset riêng.
+   */
+  const bookStatusQuery = usePcccBookStatus(
+    { period: effectiveLabel, cuongVi },
+    Boolean(effectiveLabel) && !periodNotStarted
+  );
+  const bookStatus = bookStatusQuery.data?.data;
+
   const archivesQuery = usePcccArchives(!viewLimited);
   const archives = archivesQuery.data?.data ?? [];
   const rollover = usePcccRollover();
@@ -675,17 +700,42 @@ export default function PcccPage() {
     quaHan ||
     q.trim().length > 0;
 
+  /**
+   * Danh sách cương vị của ô lọc. Cũng phải ƯU TIÊN TAB ĐANG MỞ: danh sách được cắt theo
+   * phạm vi xem, mà phạm vi xem khác nhau theo bảng — lấy của tab Tổng quan thì tab Tủ
+   * chữa cháy thiếu mất những cương vị nó đang thực sự hiển thị.
+   */
   const cuongViList: PositionOption[] =
-    summaryQuery.data?.meta?.cuongViList ?? bccQuery.data?.meta?.cuongViList ?? tccQuery.data?.meta?.cuongViList ?? [];
+    (tab === "BCC"
+      ? bccQuery.data?.meta?.cuongViList
+      : tab === "TCC"
+        ? tccQuery.data?.meta?.cuongViList
+        : undefined) ??
+    summaryQuery.data?.meta?.cuongViList ??
+    bccQuery.data?.meta?.cuongViList ??
+    tccQuery.data?.meta?.cuongViList ??
+    [];
   const giamSatList: PositionOption[] = bccQuery.data?.meta?.giamSatList ?? [];
 
   /**
-   * Phạm vi GHI theo cương vị (bước E). Server trả cùng mọi danh sách nên lấy cái nào
-   * có trước cũng như nhau. Đây chỉ để KHOÁ Ô cho khỏi sửa hụt công — server vẫn chặn
-   * lại khi ghi, vì client gọi thẳng API được.
+   * Phạm vi GHI theo cương vị (bước E). Đây chỉ để KHOÁ Ô cho khỏi sửa hụt công — server
+   * vẫn chặn lại khi ghi, vì client gọi thẳng API được.
+   *
+   * LẤY THEO TAB ĐANG MỞ: phạm vi ghi KHÔNG còn giống nhau giữa các bảng (Trưởng kíp
+   * điện được giao trọn bảng Tủ chữa cháy — xem lib/pccc-service.ts). Lấy bừa meta của
+   * truy vấn nào về trước là tab tủ khoá nhầm theo phạm vi của tab bình.
    */
   const writeScope: PcccWriteScopeMeta | undefined =
-    bccQuery.data?.meta?.writeScope ?? tccQuery.data?.meta?.writeScope ?? fcdQuery.data?.meta?.writeScope;
+    (tab === "BCC"
+      ? bccQuery.data?.meta?.writeScope
+      : tab === "TCC"
+        ? tccQuery.data?.meta?.writeScope
+        : tab === "FCD"
+          ? fcdQuery.data?.meta?.writeScope
+          : undefined) ??
+    bccQuery.data?.meta?.writeScope ??
+    tccQuery.data?.meta?.writeScope ??
+    fcdQuery.data?.meta?.writeScope;
   const scopeLimited = Boolean(writeScope && !writeScope.all);
 
   async function download() {
@@ -704,6 +754,31 @@ export default function PcccPage() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`Đã xuất ${filename}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  /**
+   * SỔ THEO DÕI PHƯƠNG TIỆN PCCC (Mẫu số 01) của cương vị đang đăng nhập. Server dựng
+   * PDF, LƯU LÊN S3 rồi trả về đúng buffer đó — bản cầm tay và bản lưu trữ luôn khớp.
+   */
+  async function downloadBook() {
+    if (!effectiveLabel) return;
+    setDownloading(true);
+    try {
+      const { blob, filename } = await apiDownload(
+        `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(effectiveLabel)}&cuongVi=${encodeURIComponent(cuongVi)}`
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Đã xuất ${filename} và lưu lên kho S3`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -832,6 +907,26 @@ export default function PcccPage() {
             </span>
           )}
         </div>
+        {/*
+          SỔ THEO DÕI (Mẫu số 01) — chỉ hiện khi cương vị đã ký ĐỦ cả bảng Bình chữa cháy
+          lẫn Tủ chữa cháy của kỳ. Không hiện dạng "nút xám bấm không được": người dùng
+          chưa ký xong thì chưa có việc gì với nút này, cứ để thanh công cụ gọn.
+          Điều kiện do SERVER tính trên toàn kỳ (xem app/api/pccc/so-theo-doi).
+        */}
+        {bookStatus?.ready && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={downloadBook}
+            disabled={downloading}
+            title={`Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`}
+            className="border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
+          >
+            <FileText className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />
+            Xuất PDF
+          </Button>
+        )}
+
         {/* Xuất Excel: kỳ đang xem lấy thẳng từ DB, các tháng cũ lấy BẢN LƯU TRỮ trên S3 —
             DB chỉ giữ 6 kỳ nên tháng cũ hơn chỉ còn tồn tại dưới dạng file. */}
         <Popover>
@@ -907,7 +1002,10 @@ export default function PcccPage() {
             nhau (chốt thì bắt buộc xuất được file lên S3, xong mới sinh kỳ mới), tách ra
             chỉ tạo cơ hội làm nửa vời. Bình thường chẳng ai phải bấm — bộ hẹn giờ và
             đường tự động lúc mở trang đã lo; nút này là lối chạy tay khi job lỗi. */}
-        {can("pccc-close-period", ["manage", "full"]) && (
+        {/* Chỉ hiện trong CỬA SỔ CUỐI THÁNG (3 ngày cuối tháng + 2 ngày đầu tháng sau,
+            xem lib/pccc-clock.ts). Ngày do SERVER tính theo giờ VN — máy người dùng lệch
+            đồng hồ thì nút hiện sai ngày, mà đây là thao tác không hoàn tác được. */}
+        {can("pccc-close-period", ["manage", "full"]) && clock?.rolloverWindow === true && (
           <Button variant="outline" size="sm" onClick={runRollover} disabled={rollover.isPending}>
             <CalendarCheck className={cn("mr-1.5 size-4", rollover.isPending && "animate-spin")} />
             {rollover.isPending ? "Đang chuyển kỳ…" : "Chuyển kỳ"}

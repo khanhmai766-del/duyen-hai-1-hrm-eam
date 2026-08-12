@@ -46,10 +46,10 @@ function parseBody(body: unknown) {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    // Ký là chữ ký xác nhận của CƯƠNG VỊ phụ trách, nên phạm vi ký = phạm vi ghi.
-    const scope = await resolvePcccWriteScope(user, "Không đủ quyền ký");
-
     const { targetType, targetId } = parseBody(await req.json());
+    // Ký là chữ ký xác nhận của CƯƠNG VỊ phụ trách, nên phạm vi ký = phạm vi ghi. Tính
+    // theo BẢNG vì bảng Tủ chữa cháy có cương vị được giao trọn bảng (pccc-service.ts).
+    const scope = await resolvePcccWriteScope(user, "Không đủ quyền ký", targetType);
     const found = await locateTarget(targetType, targetId);
     if (!found) return fail("Không tìm thấy mục cần ký", 404);
     assertPeriodWritable(found.period);
