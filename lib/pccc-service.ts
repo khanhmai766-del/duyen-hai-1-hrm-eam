@@ -386,9 +386,9 @@ export async function resolvePcccViewScope(
   if (await hasPermissionLevel(user, PCCC_PERMISSION.view, ["manage", "full"])) return PCCC_VIEW_ALL;
 
   const codes = pcccPositionCodesOf(user);
-  // Chưa khai chức danh thì không rào — giữ nguyên hành vi cũ thay vì làm mù tài khoản.
-  // An toàn vì chỉ ADMIN sửa được `position` (/api/me chặn).
-  if (!codes.length) return PCCC_VIEW_ALL;
+  // Chưa khai chức danh thì KHÔNG thấy gì — cùng luật với các module khác
+  // (lib/position-data-scope.ts). Hồ sơ thiếu dữ liệu không được thành cửa xem tất.
+  if (!codes.length) return { all: false, codes: [], superviseCodes: [] };
   // Cùng một mã vừa là cương vị quản lý vừa có thể là cấp giám sát: TK Lò máy quản 7
   // bình của mình nhưng giám sát 515 bình của các cương vị dưới.
   return { all: false, codes, superviseCodes: codes };

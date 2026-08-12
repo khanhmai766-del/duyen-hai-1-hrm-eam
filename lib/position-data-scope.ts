@@ -132,11 +132,11 @@ export async function resolvePositionViewScope(
   const positions = ownPositionsOf(user);
   if (positions.some(isUnrestrictedEquipmentPosition)) return POSITION_SCOPE_ALL;
   if (positions.some(isAdminViewAllPosition)) return POSITION_SCOPE_ALL;
-  // CHƯA khai chức danh thì giữ nguyên hành vi cũ (xem toàn bộ) thay vì làm mù tài
-  // khoản: rào này để phân việc theo cương vị, không phải để phạt hồ sơ thiếu dữ liệu.
-  // An toàn vì chỉ ADMIN mới sửa được `position` (/api/me chặn, chỉ /api/users cho phép)
-  // nên người dùng không thể tự xoá chức danh để thoát rào.
-  if (!positions.length) return POSITION_SCOPE_ALL;
+  // CHƯA khai chức danh thì KHÔNG thấy gì (nghiệp vụ chốt 2026-08-12). Trước đây nhánh
+  // này trả về "xem toàn bộ" để khỏi làm mù tài khoản, nhưng như vậy một hồ sơ thiếu dữ
+  // liệu lại thành cửa xem cả nhà máy. Hiện chỉ có 2 tài khoản dùng chung rơi vào đây
+  // (PXSCCN, PXVH1) — khai chức danh cho chúng là mở lại đúng phần việc.
+  if (!positions.length) return { all: false, codes: [] };
 
   const codes = new Set<PositionCode>();
   for (const position of positions) {
