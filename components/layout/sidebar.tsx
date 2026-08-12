@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
-import { navSectionsForPosition, type NavItem } from "@/lib/nav";
+import { navItemAllowedForPosition, navSectionsForPosition, type NavItem } from "@/lib/nav";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { useAdminMode } from "@/hooks/useAdminMode";
 
@@ -35,16 +35,30 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   const rbac = useRbacAccess();
   const [adminMode] = useAdminMode();
   const [closedSections, setClosedSections] = React.useState<Record<string, boolean>>({});
+  const readOnlyDefects = session?.user?.accessMode === "DEFECT_READ_ONLY";
+  const { data: usersData } = useUsers({ enabled: !readOnlyDefects });
+  const currentProfile = React.useMemo(
+    () => usersData?.data?.find((user) => user.id === session?.user?.id) ?? null,
+    [session?.user?.id, usersData?.data]
+  );
   const positionCarrier = React.useMemo(
     () => ({
-      position: session?.user?.position,
-      secondaryPosition: session?.user?.secondaryPosition,
-      secondaryPosition2: session?.user?.secondaryPosition2,
-      currentPosition: session?.user?.currentPosition,
+      position: currentProfile?.position ?? session?.user?.position,
+      secondaryPosition: currentProfile?.secondaryPosition ?? session?.user?.secondaryPosition,
+      secondaryPosition2: currentProfile?.secondaryPosition2 ?? session?.user?.secondaryPosition2,
+      currentPosition: currentProfile?.currentPosition ?? session?.user?.currentPosition,
     }),
-    [session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition, session?.user?.secondaryPosition2]
+    [
+      currentProfile?.currentPosition,
+      currentProfile?.position,
+      currentProfile?.secondaryPosition,
+      currentProfile?.secondaryPosition2,
+      session?.user?.currentPosition,
+      session?.user?.position,
+      session?.user?.secondaryPosition,
+      session?.user?.secondaryPosition2,
+    ]
   );
-  const readOnlyDefects = session?.user?.accessMode === "DEFECT_READ_ONLY";
   const sections = React.useMemo(() => {
     const all = navSectionsForPosition(positionCarrier);
     if (!readOnlyDefects) return all;
@@ -65,7 +79,6 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     return () => clearInterval(t);
   }, []);
 
-  const { data: usersData } = useUsers({ enabled: !readOnlyDefects });
   const admins = (usersData?.data ?? []).filter((u) => u.role === "ADMIN");
 
   const timeStr = now
@@ -116,12 +129,12 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
         {sections.map((section, sectionIndex) => {
           const items = section.items
             .map((item) => {
-              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode));
+              const children = item.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier));
               return children ? { ...item, children } : item;
             })
             .filter((item) => {
               if (item.children) return item.children.length > 0;
-              return navItemAllowed(item, role, rbac.can, adminMode);
+              return navItemAllowed(item, role, rbac.can, adminMode, positionCarrier);
             });
           if (!items.length) return null;
           const sectionClosed = closedSections[section.title] ?? sectionIndex !== 0;
@@ -235,7 +248,14 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
   );
 }
 
-function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"], adminMode: boolean) {
+function navItemAllowed(
+  item: NavItem,
+  role: string | undefined,
+  can: ReturnType<typeof useRbacAccess>["can"],
+  adminMode: boolean,
+  position: Parameters<typeof navItemAllowedForPosition>[1]
+) {
+  if (!navItemAllowedForPosition(item, position, role)) return false;
   if (role === "ADMIN" && adminMode) return true;
   if (item.adminOnly) return false;
   if (item.permissionIds?.length) {

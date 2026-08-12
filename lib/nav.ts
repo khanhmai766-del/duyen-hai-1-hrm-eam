@@ -24,6 +24,7 @@ import {
   FlaskConical,
   FlameKindling,
   MonitorCog,
+  Calculator,
   Zap,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
@@ -34,6 +35,8 @@ export interface NavItem {
   icon: React.ElementType;
   adminOnly?: boolean;
   permissionIds?: string[];
+  /** Chỉ hiện mục cho các cương vị đang làm việc khớp từ khóa; ADMIN luôn được phép. */
+  allowedPositionKeywords?: readonly string[];
   /** Opens an external destination in a new browser tab. */
   external?: boolean;
   /** Extra search terms (accent-free) to improve topbar search matching. */
@@ -45,6 +48,29 @@ export interface NavSection {
   title: string;
   items: NavItem[];
 }
+
+export const MODEL_CONTROL_URL = "http://demoduyenhai1.site/";
+export const MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS = [
+  "quản đốc",
+  "phó quản đốc",
+  "kỹ thuật viên",
+  "trưởng ca",
+  "TK Lò máy",
+  "TKLM",
+  "trưởng kíp lò máy",
+  "trưởng kíp điện",
+  "TK điện",
+  "TKĐ",
+] as const;
+
+export const QDU_TOOL_URL =
+  "https://docs.google.com/spreadsheets/d/1ntWvK0kx6Z9zlITa7kIegYXNzAZd00xDZ9oimdZMqX8/edit?usp=sharing";
+export const QDU_TOOL_ALLOWED_POSITION_KEYWORDS = [
+  "trưởng ca",
+  "kỹ thuật viên",
+  "phó quản đốc",
+  "quản đốc",
+] as const;
 
 export const NAV_SECTIONS: NavSection[] = [
   {
@@ -160,10 +186,19 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         label: "Điều khiển mô hình DH1",
-        href: "http://demoduyenhai1.site/",
+        href: "/api/model-control/open",
         icon: MonitorCog,
         external: true,
+        allowedPositionKeywords: MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS,
         keywords: "dieu khien mo hinh duyen hai 1 demo control simulation",
+      },
+      {
+        label: "Công cụ tính QDU",
+        href: "/api/qdu-tool/open",
+        icon: Calculator,
+        external: true,
+        allowedPositionKeywords: QDU_TOOL_ALLOWED_POSITION_KEYWORDS,
+        keywords: "cong cu tinh qdu google sheets bang tinh",
       },
     ],
   },
@@ -180,6 +215,30 @@ function navPathMatches(pathname: string, href: string) {
 function positionValue(input?: PositionCarrier | string | null) {
   if (typeof input === "string") return input;
   return effectiveUserPosition(input);
+}
+
+/** Kiểm tra ràng buộc cương vị riêng của một mục điều hướng. */
+export function positionAllowedByKeywords(
+  allowedKeywords: readonly string[],
+  input?: PositionCarrier | string | null,
+  role?: string
+) {
+  if (!allowedKeywords.length || role === "ADMIN") return true;
+  const accessKey = (value: string) =>
+    normalizeText(value).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  const position = accessKey(positionValue(input) ?? "");
+  return Boolean(
+    position &&
+    allowedKeywords.some((keyword) => position.includes(accessKey(keyword)))
+  );
+}
+
+export function navItemAllowedForPosition(
+  item: NavItem,
+  input?: PositionCarrier | string | null,
+  role?: string
+) {
+  return positionAllowedByKeywords(item.allowedPositionKeywords ?? [], input, role);
 }
 
 export function isStatisticsPosition(input?: PositionCarrier | string | null) {

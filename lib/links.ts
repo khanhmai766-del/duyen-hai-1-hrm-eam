@@ -15,26 +15,11 @@ export const SUPPORT_LINKS: { name: string; href: string; group: SupportLinkGrou
   { name: "EVN Digital Office", href: "https://doffice.evngenco1.vn/sign-in", group: "ops" },
   { name: "EVN E-Learning", href: "https://elearninglms.evn.com.vn/user/login/?logout=1", group: "personal" },
   { name: "Nhật ký vận hành", href: "https://nkvh.tpcduyenhai.com.vn/nkvh/Login", group: "ops" },
-  {
-    name: "Theo dõi vật tư",
-    href: MATERIAL_TRACKING_SHEET_URL,
-    group: "ops",
-  },
   { name: "Theo dõi PCCC", href: "https://sites.google.com/view/pcccdh1/trang-ch%E1%BB%A7", group: "ops" },
   { name: "Giám sát thông số môi trường", href: "https://gsmt.tpcduyenhai.com.vn/auth/login?returnUrl=%2Fdashboard%2Ftable", group: "ops" },
   { name: "Đăng ký đổi ca, nghỉ phép", href: "https://portal.tpcduyenhai.com.vn/hrm.xhtml", group: "personal" },
   { name: "Mail nội bộ công ty", href: "https://mail.tpcduyenhai.com.vn/#5", group: "personal" },
   { name: "Công tác định kỳ hằng ca", href: "http://vh.tpcduyenhai.com.vn/", group: "ops" },
-  {
-    name: "PYC Sửa Chữa Cơ",
-    href: MECHANICAL_CHEMICAL_SHEET_URL,
-    group: "ops",
-  },
-  {
-    name: "PYC Sửa Chữa Điện",
-    href: ELECTRICAL_SHEET_URL,
-    group: "ops",
-  },
 ];
 
 export const CONTROL_ROOM_CONTACTS: { label: string; phone: string }[] = [

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isStatisticsPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
+import { isStatisticsPosition, navItemAllowedForPosition, navSectionsForPosition, normalizeText } from "@/lib/nav";
 import { apiMutate } from "@/lib/fetcher";
 import { passwordPolicyMessage } from "@/lib/password-policy";
 import { acknowledgeForumNotice, useNotifications, NOTICE_TONE } from "@/hooks/useNotifications";
@@ -46,7 +46,14 @@ const GRID_TINTS = [
 ];
 const NAV_ACCESS_LEVELS = ["read", "personal", "manage", "full"] as const;
 
-function navItemAllowed(item: NavItem, role: string | undefined, can: ReturnType<typeof useRbacAccess>["can"], adminMode = true) {
+function navItemAllowed(
+  item: NavItem,
+  role: string | undefined,
+  can: ReturnType<typeof useRbacAccess>["can"],
+  adminMode = true,
+  position?: Parameters<typeof navItemAllowedForPosition>[1]
+) {
+  if (!navItemAllowedForPosition(item, position, role)) return false;
   if (role === "ADMIN" && adminMode) return true;
   if (item.adminOnly) return false;
   if (item.permissionIds?.length) {
@@ -165,12 +172,12 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     () =>
       navSections.flatMap((s) =>
         s.items.flatMap((i) => {
-          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode));
+          const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier));
           if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon, external: child.external }));
-          return navItemAllowed(i, role, rbac.can, adminMode) ? [{ label: i.label, href: i.href, icon: i.icon, external: i.external }] : [];
+          return navItemAllowed(i, role, rbac.can, adminMode, positionCarrier) ? [{ label: i.label, href: i.href, icon: i.icon, external: i.external }] : [];
         })
       ),
-    [adminMode, navSections, rbac.can, role]
+    [adminMode, navSections, positionCarrier, rbac.can, role]
   );
 
   function toggleFullscreen() {
@@ -198,9 +205,9 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
         s.items
           .map((i) => ({
             ...i,
-            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode)),
+            children: i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode, positionCarrier)),
           }))
-          .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can, adminMode)))
+          .filter((i) => (i.children ? i.children.length > 0 : navItemAllowed(i, role, rbac.can, adminMode, positionCarrier)))
           .flatMap((i) => {
             const own = i.children ? null : {
               label: i.label,
@@ -221,7 +228,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
             return own ? [own, ...kids] : kids;
           })
       ),
-    [adminMode, navSections, rbac.can, role]
+    [adminMode, navSections, positionCarrier, rbac.can, role]
   );
 
   const nq = normalizeText(q);
