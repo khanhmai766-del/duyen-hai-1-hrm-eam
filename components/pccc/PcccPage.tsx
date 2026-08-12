@@ -16,6 +16,7 @@ import {
   Archive,
   CalendarCheck,
   Download,
+  Factory,
   FileSpreadsheet,
   FileText,
   Filter,
@@ -109,6 +110,39 @@ type ResultDialog = {
   /** Ảnh chữ ký số vừa đóng vào các dòng — cho người ký thấy đúng cái đã ký. */
   signatureUrl?: string | null;
 };
+
+/**
+ * NHẮC TỔ MÁY. Cùng một cương vị vận hành cả hai tổ máy, mà thiết bị hai tổ đặt ở hai
+ * khu riêng — đi kiểm tra tổ 1 rồi ký/lưu khi bộ lọc đang để tổ 2 là ghi nhầm cả loạt,
+ * lại còn xoá chữ ký của tổ kia. Vì vậy mọi cửa XÁC NHẬN đều phải nói rõ đang thao tác
+ * trên tổ máy nào, kể cả (nhất là) khi bộ lọc đang mở cho tất cả.
+ */
+function machineLabelOf(machine: string) {
+  const found = MACHINE_OPTIONS.find((m) => m.value === machine);
+  return found ? `${found.label} (${found.value})` : "TẤT CẢ tổ máy — S1 · S2 · Common";
+}
+
+function MachineNotice({ machine }: { machine: string }) {
+  const all = machine === "ALL";
+  return (
+    <div
+      className={cn(
+        "flex gap-2.5 rounded-xl border p-2.5 text-[12px]",
+        all ? "border-amber-300 bg-amber-50 text-amber-900" : "border-sky-200 bg-sky-50 text-sky-900"
+      )}
+    >
+      <Factory className={cn("mt-0.5 size-4 shrink-0", all ? "text-amber-600" : "text-sky-600")} />
+      <span className="min-w-0">
+        <b className="block">Tổ máy đang thao tác: {machineLabelOf(machine)}</b>
+        <span className="block">
+          {all
+            ? "Bộ lọc đang mở cho MỌI tổ máy nên thao tác này áp cho cả S1, S2 và thiết bị dùng chung. Nếu chỉ vừa đi kiểm tra một tổ, hãy huỷ và chọn đúng tổ máy ở Bộ lọc."
+            : "Chỉ các thiết bị thuộc tổ máy này bị ảnh hưởng. Kiểm tra lại nếu bạn vừa đi kiểm tra tổ khác."}
+        </span>
+      </span>
+    </div>
+  );
+}
 
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -412,6 +446,7 @@ export default function PcccPage() {
   }
 
   function saveEdits() {
+    setSaveConfirmOpen(false);
     if (!editableTab) return;
     if (dirtyCount === 0) {
       setEditing(false);
@@ -509,6 +544,8 @@ export default function PcccPage() {
   const [signOpen, setSignOpen] = useState(false);
   const [signInfo, setSignInfo] = useState<PcccBulkSignPreview | null>(null);
   const [resultDialog, setResultDialog] = useState<ResultDialog | null>(null);
+  /** Bước XÁC NHẬN trước khi lưu — chỗ duy nhất nhắc được tổ máy trước khi ghi xuống DB. */
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const signPreview = usePcccBulkSignPreview();
   const bulkSign = usePcccBulkSign();
   /** Bảng đang mở quyết định ký cái gì — tác vụ ký nằm trong tab nào thì ký tab đó. */
@@ -1221,7 +1258,8 @@ export default function PcccPage() {
                   <X className="mr-1.5 size-4" />
                   Huỷ
                 </Button>
-                <Button size="sm" onClick={saveEdits} disabled={saving}>
+                {/* Không sửa gì thì đóng luôn chế độ sửa — hỏi "lưu 0 dòng?" là hỏi thừa. */}
+                <Button size="sm" onClick={() => (dirtyCount === 0 ? saveEdits() : setSaveConfirmOpen(true))} disabled={saving}>
                   <Save className={cn("mr-1.5 size-4", saving && "animate-pulse")} />
                   {saving ? "Đang lưu…" : "Lưu"}
                 </Button>
@@ -1315,12 +1353,14 @@ export default function PcccPage() {
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <Row label="Kỳ kiểm tra" value={signInfo.periodLabel} />
                 <Row label="Cương vị" value={signInfo.scopeLabel || "—"} />
+                <Row label="Tổ máy" value={machineLabelOf(machine)} />
                 <Row label="Số dòng sẽ ký" value={`${signInfo.willSign} dòng`} strong />
                 {signInfo.alreadySigned > 0 && (
                   <Row label="Trong đó đã ký trước đó" value={`${signInfo.alreadySigned} dòng — sẽ ký đè`} />
                 )}
                 <Row label="Người ký" value={signInfo.signerName || "—"} />
               </div>
+              <MachineNotice machine={machine} />
               <p className="text-[12px] text-muted-foreground">
                 Xác nhận sẽ ghi <b>chữ ký</b>, <b>người kiểm tra</b> ({signInfo.signerName}) và <b>ngày kiểm tra</b> (
                 {new Date().toLocaleDateString("vi-VN")}) cho toàn bộ số dòng trên.
@@ -1348,6 +1388,43 @@ export default function PcccPage() {
 
       {/* Hộp thoại KẾT QUẢ — dùng chung cho lưu sửa đổi và ký tên. Toast trôi mất sau vài
           giây, mà đây là hai việc để lại dấu vết trong hồ sơ nên phải đọc xong mới đóng. */}
+      {/* XÁC NHẬN LƯU — cửa cuối trước khi ghi xuống DB, nên cũng là chỗ nhắc tổ máy.
+          Lưu còn XOÁ CHỮ KÝ của những dòng vừa sửa nên càng phải hỏi lại một câu. */}
+      <Dialog open={saveConfirmOpen} onOpenChange={(open) => !open && setSaveConfirmOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Save className="size-5 text-sky-600" />
+              Xác nhận lưu chỉnh sửa
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1 text-[13px]">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <Row
+                label="Bảng"
+                value={editableTab === "BCC" ? "Bình chữa cháy" : editableTab === "TCC" ? "Tủ chữa cháy" : "Foam · CO2 · Diesel · FM200"}
+              />
+              <Row label="Kỳ kiểm tra" value={period.label} />
+              <Row label="Tổ máy" value={machineLabelOf(machine)} />
+              <Row label="Số dòng sẽ lưu" value={`${dirtyCount} dòng`} strong />
+            </div>
+            <MachineNotice machine={machine} />
+            <p className="text-[12px] text-muted-foreground">
+              Lưu xong, <b>chữ ký của các dòng vừa sửa sẽ bị xoá</b> — cần ký lại để xác nhận số liệu mới.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setSaveConfirmOpen(false)} disabled={saving}>
+              Huỷ
+            </Button>
+            <Button size="sm" onClick={saveEdits} disabled={saving}>
+              <Save className={cn("mr-1.5 size-4", saving && "animate-pulse")} />
+              {saving ? "Đang lưu…" : "Xác nhận lưu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(resultDialog)} onOpenChange={(open) => !open && setResultDialog(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
