@@ -63,7 +63,10 @@ function DrawCanvas({ value, onChange }: { value: string; onChange: (v: string) 
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#0f172a"; // ink
+    // MỰC XANH, không phải đen: chữ ký đi vào văn bản hành chính (sổ theo dõi PCCC in
+    // ra giấy), mực đen làm bản gốc trông hệt bản photocopy. Bản in cũng tô lại chữ ký
+    // cũ sang đúng tông này — xem INK trong lib/pccc-so-theo-doi-pdf.ts.
+    ctx.strokeStyle = "#0b3d91"; // ink
   }, []);
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {

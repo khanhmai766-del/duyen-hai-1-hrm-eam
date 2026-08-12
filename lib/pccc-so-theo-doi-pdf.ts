@@ -11,7 +11,8 @@
  *    yêu cầu nghiệp vụ — không đánh số lại theo từng bảng.
  *  - Đầu bảng (2 tầng: tên cột + số cột 1..7) VẼ LẠI Ở MỖI TRANG, vì bản in đóng thành
  *    quyển, người đọc lật giữa chừng không có gì để tra cột.
- *  - Ảnh chữ ký phải ÉP NỀN TRẮNG trước khi nhúng (xem `flattenSignature`).
+ *  - Ảnh chữ ký phải ÉP NỀN TRẮNG và TÔ LẠI THÀNH MỰC XANH trước khi nhúng
+ *    (xem `flattenSignature`).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -40,8 +41,19 @@ const HEADERS = [
 const BLACK = rgb(0, 0, 0);
 const LINE = 0.8;
 const FS = { title: 13, sub: 11, body: 9, small: 8 };
-/** Đủ cao cho ảnh chữ ký NẰM TRÊN họ tên hai dòng — họ tên Việt dài, ép một dòng là cụt. */
-const ROW_H = 38;
+/**
+ * Đủ cao cho ảnh chữ ký NẰM TRÊN họ tên hai dòng — họ tên Việt dài, ép một dòng là cụt.
+ * 46pt là mức đã cân: chữ ký đọc được rõ mà mỗi trang vẫn giữ được ~9 dòng.
+ */
+const ROW_H = 46;
+
+/**
+ * MỰC CHỮ KÝ trên bản in. Chữ ký lưu trong hồ sơ vẽ bằng #0f172a (xanh gần như đen) nên
+ * in ra trông hệt bản photocopy. Văn bản hành chính cần thấy rõ đây là chữ ký TƯƠI, nên
+ * bản in tô lại nét sang mực xanh — chỉ đổi TÔNG MÀU, giữ nguyên hình nét và độ đậm nhạt
+ * của từng điểm ảnh, không vẽ lại chữ ký.
+ */
+const INK = { r: 11, g: 61, b: 145 };
 
 export type BookPdfInput = {
   periodLabel: string;
@@ -237,9 +249,31 @@ function drawTableHeader(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont
  */
 async function flattenSignature(buffer: Buffer): Promise<Buffer> {
   try {
-    return await sharp(buffer).flatten({ background: "#ffffff" }).png({ compressionLevel: 9 }).toBuffer();
+    // Làm việc trên RGBA thô: cần chính kênh alpha để biết đâu là nét, đâu là nền.
+    const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const out = Buffer.alloc(info.width * info.height * 3);
+    for (let i = 0, o = 0; i < data.length; i += 4, o += 3) {
+      const alpha = data[i + 3] / 255;
+      // Độ sáng của điểm ảnh gốc giữ lại phần đậm/nhạt (nét mảnh ở rìa nhạt hơn),
+      // nếu ép cứng một màu thì chữ ký trông như hình vẽ vector, mất nét bút.
+      const lum = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+      const k = 1 - lum * 0.35;
+      // Trộn mực với nền TRẮNG theo alpha — vừa đổi màu vừa xoá nền trong suốt, thứ
+      // khiến máy in dựng thành mảng đen.
+      out[o] = Math.round(255 + (INK.r * k - 255) * alpha);
+      out[o + 1] = Math.round(255 + (INK.g * k - 255) * alpha);
+      out[o + 2] = Math.round(255 + (INK.b * k - 255) * alpha);
+    }
+    return await sharp(out, { raw: { width: info.width, height: info.height, channels: 3 } })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
   } catch {
-    return buffer;
+    // Ảnh lỗi: ít nhất vẫn ép nền trắng để không ra mảng đen khi in.
+    try {
+      return await sharp(buffer).flatten({ background: "#ffffff" }).png({ compressionLevel: 9 }).toBuffer();
+    } catch {
+      return buffer;
+    }
   }
 }
 
