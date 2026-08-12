@@ -529,9 +529,11 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     note:
       "Xem tổng quan, bình chữa cháy, tủ chữa cháy, Foam/CO2/Diesel/FM200 và tải file Excel của kỳ. " +
       "PHẠM VI XEM đi theo CHỨC DANH ĐANG LÀM VIỆC, không theo mức quyền ở cột bên: " +
-      "cương vị thường chỉ thấy thiết bị mình quản lý; cấp giám sát (TK Lò máy, Trưởng kíp điện) " +
-      "thấy thêm mọi bình chữa cháy mình giám sát ở cột Người giám sát — Tủ chữa cháy và " +
-      "Foam/CO2/FM200 không có cột này nên chỉ thấy phần mình quản lý. " +
+      "cương vị thường chỉ thấy thiết bị mình quản lý ở bảng Bình chữa cháy và Tủ chữa cháy; " +
+      "cấp giám sát (TK Lò máy, Trưởng kíp điện) thấy thêm mọi bình chữa cháy mình giám sát ở " +
+      "cột Người giám sát — Tủ chữa cháy không có cột này nên giám sát chỉ thấy phần mình quản lý. " +
+      "RIÊNG bảng Foam/CO2/Diesel/FM200 là tài sản dùng chung: MỌI cương vị đều xem được toàn bộ, " +
+      "chỉ sửa/ký mới xét cương vị được phân giao. " +
       "Người kiêm nhiệm chỉ áp MỘT chức danh đang chọn; đổi ở trang Tài khoản. " +
       "Chưa khai chức danh thì KHÔNG thấy gì. " +
       "Xem toàn phân xưởng chỉ dành cho: Quản trị viên và các chức danh Quản đốc / Phó quản đốc / " +

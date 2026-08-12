@@ -269,6 +269,23 @@ export type PcccViewScope = PcccWriteScope & { superviseCodes: PositionCode[] };
 export const PCCC_SCOPE_ALL: PcccWriteScope = { all: true, codes: [] };
 export const PCCC_VIEW_ALL: PcccViewScope = { all: true, codes: [], superviseCodes: [] };
 
+/**
+ * Bảng Foam/CO2/Diesel/FM200 là TÀI SẢN DÙNG CHUNG của cả phân xưởng (bồn foam, chai
+ * CO2, bồn diesel, tủ FM200) chứ không phải thiết bị đặt tại vị trí của một cương vị như
+ * bình/tủ chữa cháy. Nghiệp vụ chốt 2026-08-12: MỌI cương vị đều được XEM hết bảng này;
+ * chỉ THAO TÁC (sửa/ký) mới xét cương vị được phân giao ở cột "Cương vị quản lý" —
+ * phần đó do `pcccWriteScopeOf` giữ, hàm này KHÔNG đụng tới.
+ *
+ * Vẫn giữ nguyên rào với người CHƯA khai chức danh (`codes` và `superviseCodes` đều
+ * rỗng): tài khoản chưa khai chức danh không xem được bất cứ mục nào — nới ở đây thì
+ * chính những hồ sơ thiếu dữ liệu lại thành cửa xem.
+ */
+export function pcccBulkViewScope(view: PcccViewScope): PcccViewScope {
+  if (view.all) return view;
+  if (!view.codes.length && !view.superviseCodes.length) return view;
+  return PCCC_VIEW_ALL;
+}
+
 type PcccPositionCarrier = {
   position?: string | null;
   primaryPosition?: string | null;

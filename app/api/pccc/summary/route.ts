@@ -5,6 +5,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   cuongViListOf,
+  pcccBulkViewScope,
   pcccViewScopeMeta,
   resolvePcccViewScope,
   resolvePeriod,
@@ -36,6 +37,8 @@ export async function GET(req: NextRequest) {
     const scope = scopeWhere(cuongVi, machine, viewScope);
     // Bang Binh chua chay co cot Nguoi giam sat -> cap giam sat xem duoc phan minh giam sat.
     const scopeBcc = scopeWhere(cuongVi, machine, viewScope, { withSupervisor: true });
+    // Foam/CO2/Diesel/FM200 la tai san dung chung -> moi cuong vi deu xem het.
+    const scopeFcd = scopeWhere(cuongVi, machine, pcccBulkViewScope(viewScope));
 
     const [extinguishers, cabinets, bulks, panels, cuongViList, signatureCount] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
@@ -47,10 +50,10 @@ export async function GET(req: NextRequest) {
         select: { ten: true, components: true },
       }),
       prisma.pcccBulk.findMany({
-        where: { periodId: period.id, ...scope },
+        where: { periodId: period.id, ...scopeFcd },
         select: { ten: true, phanTramConLai: true },
       }),
-      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scope } }),
+      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scopeFcd } }),
       cuongViListOf(period.id, viewScope),
       prisma.pcccSignature.count({ where: { periodId: period.id } }),
     ]);

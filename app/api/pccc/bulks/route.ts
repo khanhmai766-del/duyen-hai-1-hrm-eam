@@ -4,6 +4,7 @@ import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
+  pcccBulkViewScope,
   pcccViewScopeMeta,
   pcccWriteScopeOf,
   resolvePcccViewScope,
@@ -23,9 +24,11 @@ export async function GET(req: NextRequest) {
 
     const sp = req.nextUrl.searchParams;
     const period = await resolvePeriod(sp.get("period"));
-    // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts)
+    // Phạm vi XEM chặn ngay ở câu truy vấn — không phải lọc ở client (xem lib/pccc-service.ts).
+    // Riêng bảng này là tài sản dùng chung nên mọi cương vị xem hết (`pcccBulkViewScope`);
+    // rào cương vị chỉ còn hiệu lực ở phạm vi GHI bên dưới.
     const viewScope = await resolvePcccViewScope(user);
-    const scope = scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope);
+    const scope = scopeWhere(sp.get("cuongVi"), sp.get("machine"), pcccBulkViewScope(viewScope));
     const [bulks, panels, bulkSignatures, panelSignatures, writeScope] = await Promise.all([
       prisma.pcccBulk.findMany({ where: { periodId: period.id, ...scope }, orderBy: [{ stt: "asc" }, { ten: "asc" }] }),
       prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scope }, orderBy: { panelKey: "asc" } }),

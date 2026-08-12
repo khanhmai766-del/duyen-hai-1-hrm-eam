@@ -2,7 +2,14 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, resolvePcccViewScope, resolvePeriod, scopeWhere, signaturesOf } from "@/lib/pccc-service";
+import {
+  PCCC_PERMISSION,
+  pcccBulkViewScope,
+  resolvePcccViewScope,
+  resolvePeriod,
+  scopeWhere,
+  signaturesOf,
+} from "@/lib/pccc-service";
 import { buildPcccWorkbook, type ExportSheet } from "@/lib/pccc-export-xlsx";
 import { loadSignatureImages } from "@/lib/pccc-archive";
 
@@ -28,6 +35,8 @@ export async function GET(req: NextRequest) {
     const scope = scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope);
     // Bang Binh chua chay co cot Nguoi giam sat: cap giam sat xuat duoc phan minh giam sat.
     const scopeBcc = scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true });
+    // Foam/CO2/Diesel/FM200 la tai san dung chung -> moi cuong vi deu xuat duoc.
+    const scopeFcd = scopeWhere(sp.get("cuongVi"), sp.get("machine"), pcccBulkViewScope(viewScope));
 
     const [extinguishers, cabinets, bulks, panels, sigBcc, sigTcc, sigBulk] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
@@ -39,8 +48,8 @@ export async function GET(req: NextRequest) {
         orderBy: [{ stt: "asc" }, { ma: "asc" }],
         include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
       }),
-      prisma.pcccBulk.findMany({ where: { periodId: period.id, ...scope }, orderBy: [{ stt: "asc" }, { ten: "asc" }] }),
-      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scope }, orderBy: { panelKey: "asc" } }),
+      prisma.pcccBulk.findMany({ where: { periodId: period.id, ...scopeFcd }, orderBy: [{ stt: "asc" }, { ten: "asc" }] }),
+      prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scopeFcd }, orderBy: { panelKey: "asc" } }),
       signaturesOf(period.id, "EXTINGUISHER"),
       signaturesOf(period.id, "CABINET"),
       signaturesOf(period.id, "BULK"),
