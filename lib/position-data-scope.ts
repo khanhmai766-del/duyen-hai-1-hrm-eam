@@ -72,6 +72,7 @@ export const POSITION_SCOPE_ALL: PositionViewScope = { all: true, codes: [] };
 type PositionCarrier = {
   id?: string;
   role?: string;
+  accessMode?: string;
   position?: string | null;
   primaryPosition?: string | null;
   secondaryPosition?: string | null;
@@ -122,6 +123,7 @@ export async function resolvePositionViewScope(
   user: PositionCarrier,
   area: PositionScopeArea
 ): Promise<PositionViewScope> {
+  if (user.accessMode === "DEFECT_READ_ONLY" && area === "defect") return POSITION_SCOPE_ALL;
   if (user.role === "ADMIN") return POSITION_SCOPE_ALL;
   if (await hasPermissionLevel(user, POSITION_SCOPE_PERMISSION[area], ["manage", "full"])) {
     return POSITION_SCOPE_ALL;

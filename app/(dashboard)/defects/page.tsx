@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, type LucideIcon } from "lucide-react";
@@ -304,12 +305,14 @@ export default function DefectsPage() {
   const pageSizeFromUrl = Number.parseInt(searchParams.get("limit") ?? "", 10);
   const pageFromUrl = Number.parseInt(searchParams.get("page") ?? "", 10);
   const rbac = useRbacAccess();
-  const canCreate = rbac.can("defect-manage", ["personal", "manage", "full"]);
-  const canManage = rbac.can("defect-manage", ["manage", "full"]);
-  const canClose = rbac.can("defect-close", ["manage", "full"]);
+  const { data: session } = useSession();
+  const readOnlyDefects = session?.user?.accessMode === "DEFECT_READ_ONLY";
+  const canCreate = !readOnlyDefects && rbac.can("defect-manage", ["personal", "manage", "full"]);
+  const canManage = !readOnlyDefects && rbac.can("defect-manage", ["manage", "full"]);
+  const canClose = !readOnlyDefects && rbac.can("defect-close", ["manage", "full"]);
   const cancelDefect = useCancelDefect();
   const remind = useRemindDefect();
-  const usersQuery = useUsers();
+  const usersQuery = useUsers({ enabled: !readOnlyDefects });
   const shiftLeaders = React.useMemo(
     () => (usersQuery.data?.data ?? [])
       .filter((user) =>
@@ -361,7 +364,7 @@ export default function DefectsPage() {
 
   // Cương vị lấy từ "Chức vụ" của Quản lý người dùng (bỏ trùng);
   // loại Quản đốc / Phó quản đốc / Kỹ thuật viên / Thống kê khỏi bộ lọc.
-  const allPositions = usePositions().filter(isSelectableManagingPosition);
+  const allPositions = usePositions({ enabled: !readOnlyDefects }).filter(isSelectableManagingPosition);
 
   // Bộ lọc (Tổ máy / Yêu cầu / Cương vị) — áp dụng cho cả KPI lẫn bảng.
   // Mặc định S1; người dùng có thể chọn ALL để xem toàn bộ tổ máy.
@@ -416,13 +419,14 @@ export default function DefectsPage() {
   // không tự suy ra đúng phân cấp ca trực (Trưởng kíp thấy cương vị dưới nhánh mình…).
   const positionScope = data?.meta?.positionScope;
   const positions = React.useMemo(() => {
+    if (readOnlyDefects) return (data?.meta?.availablePositions ?? []).filter(isSelectableManagingPosition);
     if (!positionScope || positionScope.all) return allPositions;
     const allowed = new Set(positionScope.labels.map(announcementPositionLabel));
     const shown = allPositions.filter((position) => allowed.has(announcementPositionLabel(position)));
     // Chức danh của người dùng chưa có ai khác mang thì usePositions() không sinh ra
     // được nhãn nào — lấy thẳng nhãn chuẩn từ server để ô lọc không rỗng.
     return shown.length ? shown : positionScope.labels;
-  }, [allPositions, positionScope]);
+  }, [allPositions, data?.meta?.availablePositions, positionScope, readOnlyDefects]);
   const firstShown = total ? (page - 1) * pageSize + 1 : 0;
   const lastShown = Math.min(page * pageSize, total);
   const deviceDisplayName = pagedDefects.find((item) => item.deviceSeq === deviceSeqFilter)?.node?.name;
@@ -586,7 +590,7 @@ export default function DefectsPage() {
         title={`KHIẾM KHUYẾT THIẾT BỊ — ${sectionConfig.label.toUpperCase()}`}
         description={`Phiếu đồng bộ từ Google Sheet ${sectionConfig.source === "CO" ? "Cơ" : "Điện"} · theo dõi sự cố & khiếm khuyết đang tồn đọng`}
       >
-        <Button variant="soft" size="toolbar" asChild>
+        {!readOnlyDefects && <Button variant="soft" size="toolbar" asChild>
           <a
             href={sectionConfig.source === "CO" ? MECHANICAL_CHEMICAL_SHEET_URL : ELECTRICAL_SHEET_URL}
             target="_blank"
@@ -595,7 +599,12 @@ export default function DefectsPage() {
             <FileSpreadsheet className="h-4 w-4" /> Mở {sectionConfig.label}
             <ExternalLink className="h-3.5 w-3.5 opacity-70" aria-hidden="true" />
           </a>
-        </Button>
+        </Button>}
+        {readOnlyDefects && (
+          <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700">
+            Chế độ chỉ tra cứu
+          </span>
+        )}
         {/* Trạng thái + thao tác đồng bộ gói trong 1 chip, bấm mới mở chi tiết —
             thay cho 2 banner cũ chiếm trọn chiều ngang phía trên bộ lọc. */}
         {canViewSync && (

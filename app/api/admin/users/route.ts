@@ -16,6 +16,7 @@ const ADMIN_USER_LIST_SELECT = {
   employeeId: true,
   phone: true,
   role: true,
+  accessMode: true,
   position: true,
   secondaryPosition: true,
   secondaryPosition2: true,

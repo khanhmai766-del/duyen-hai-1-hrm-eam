@@ -28,6 +28,7 @@ const SUMMARY_SELECT = {
   avatarUrl: true,
   avatarKey: true,
   role: true,
+  accessMode: true,
   position: true,
   secondaryPosition: true,
   secondaryPosition2: true,
@@ -53,6 +54,7 @@ async function ensureUserSecondaryPositionColumn() {
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
     ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
+    , ADD COLUMN IF NOT EXISTS "accessMode" TEXT NOT NULL DEFAULT 'NORMAL'
   `);
   userColumnsReady = true;
 }
@@ -93,6 +95,7 @@ export async function POST(req: NextRequest) {
     await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền tạo người dùng");
     await ensureUserSecondaryPositionColumn();
     const body = await req.json();
+    const accessMode = body.accessMode === "DEFECT_READ_ONLY" ? "DEFECT_READ_ONLY" : "NORMAL";
     const username = String(body.username ?? "").trim() || null;
     const email = String(body.email ?? "").trim().toLowerCase();
     const workEmail = String(body.workEmail ?? "").trim().toLowerCase() || null;
@@ -128,6 +131,7 @@ export async function POST(req: NextRequest) {
         employeeId: body.employeeId,
         phone: body.phone || null,
         role: body.role || "VIEWER",
+        accessMode,
         position: body.position || null,
         secondaryPosition: body.secondaryPosition || null,
         secondaryPosition2: body.secondaryPosition2 || null,
@@ -195,6 +199,10 @@ export async function PUT(req: NextRequest) {
     await requirePermissionLevel(user, "user-manage", ["manage", "full"], "Không đủ quyền cập nhật người dùng");
     const before = await prisma.user.findUnique({ where: { id: body.id } });
     const data: any = {};
+    if (body.accessMode !== undefined) {
+      if (!["NORMAL", "DEFECT_READ_ONLY"].includes(body.accessMode)) return fail("Chế độ truy cập không hợp lệ");
+      data.accessMode = body.accessMode;
+    }
     if (body.role) data.role = body.role;
     if (body.isActive != null) data.isActive = body.isActive;
     if (body.name) data.name = body.name;

@@ -5,6 +5,7 @@ declare module "next-auth" {
     user: {
       id: string;
       role: string;
+      accessMode: string;
       position?: string;
       secondaryPosition?: string;
       secondaryPosition2?: string;
@@ -17,6 +18,7 @@ declare module "next-auth" {
 
   interface User {
     role: string;
+    accessMode: string;
     position?: string;
     secondaryPosition?: string;
     secondaryPosition2?: string;
@@ -31,6 +33,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: string;
+    accessMode: string;
     position?: string;
     secondaryPosition?: string;
     secondaryPosition2?: string;

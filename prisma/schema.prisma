@@ -26,6 +26,7 @@ model User {
   failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
   lockedAt            DateTime? @map("locked_at")
   role                Role      @default(VIEWER)
+  accessMode          String    @default("NORMAL") // NORMAL | DEFECT_READ_ONLY
   position            String? // e.g. "Lò trưởng S1", "I&C", "Trưởng ca"
   secondaryPosition   String? // chức vụ phụ 1
   secondaryPosition2  String? // chức vụ phụ 2

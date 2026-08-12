@@ -18,7 +18,7 @@ import {
   type PositionSystemScope,
 } from "@/lib/position-system-scopes";
 
-type SessionUser = { role?: string | null; position?: string | null; currentPosition?: string | null };
+type SessionUser = { role?: string | null; accessMode?: string | null; position?: string | null; currentPosition?: string | null };
 
 /**
  * Bộ lọc phạm vi thiết bị của một cương vị, dạng biểu diễn được trong SQL:
@@ -211,7 +211,7 @@ async function buildEquipmentAccessContext(
     },
   } satisfies EquipmentAccessContext;
 
-  if (user.role === "ADMIN") return unrestricted;
+  if (user.role === "ADMIN" || user.accessMode === "DEFECT_READ_ONLY") return unrestricted;
   const position = user.currentPosition ?? user.position ?? "";
   if (!position) return unrestricted;
   if (isUnrestrictedEquipmentPosition(position)) return unrestricted;

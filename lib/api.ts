@@ -17,6 +17,7 @@ async function ensureUserPositionColumns() {
     ADD COLUMN IF NOT EXISTS "currentPosition" TEXT,
     ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
+    , ADD COLUMN IF NOT EXISTS "accessMode" TEXT NOT NULL DEFAULT 'NORMAL'
   `);
   userPositionColumnsReady = true;
 }
@@ -40,6 +41,7 @@ export async function requireUser() {
     where: { id: session.user.id },
     select: {
       role: true,
+      accessMode: true,
       position: true,
       secondaryPosition: true,
       secondaryPosition2: true,

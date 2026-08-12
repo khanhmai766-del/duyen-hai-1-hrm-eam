@@ -151,7 +151,7 @@ export default function AdminUsersPage() {
   const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+  const [form, setForm] = React.useState({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", accessMode: "NORMAL", password: "password123", avatarUrl: "", signatureUrl: "" });
   const [newUserRoleProfile, setNewUserRoleProfile] = React.useState("");
   const [editTarget, setEditTarget] = React.useState<SafeUser | null>(null);
   const [delTarget, setDelTarget] = React.useState<SafeUser | null>(null);
@@ -250,7 +250,7 @@ export default function AdminUsersPage() {
       }
       toast.success("Đã tạo người dùng");
       setOpen(false);
-      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", password: "password123", avatarUrl: "", signatureUrl: "" });
+      setForm({ name: "", email: "", workEmail: "", username: "", employeeId: "", position: "", secondaryPosition: "", secondaryPosition2: "", department: "", role: "VIEWER", accessMode: "NORMAL", password: "password123", avatarUrl: "", signatureUrl: "" });
       setNewUserRoleProfile("");
     } catch (e) {
       toast.error((e as Error).message);
@@ -649,6 +649,15 @@ export default function AdminUsersPage() {
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field label="Chế độ tài khoản">
+              <Select value={form.accessMode} onValueChange={(v) => setForm({ ...form, accessMode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
+                  <SelectItem value="DEFECT_READ_ONLY">Chỉ tra cứu khiếm khuyết</SelectItem>
+                </SelectContent>
               </Select>
             </Field>
             <Field label="Phân quyền mở rộng">
@@ -1181,6 +1190,7 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
         avatarUrl: activeTarget.avatarUrl ?? "",
         signatureUrl: activeTarget.signatureUrl ?? "",
         role: activeTarget.role,
+        accessMode: activeTarget.accessMode ?? "NORMAL",
       });
     else setForm(null);
   }, [activeTarget]);
@@ -1227,6 +1237,15 @@ function EditUserDialog({ target, onClose }: { target: SafeUser | null; onClose:
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{ROLE_KEYS.map((r) => <SelectItem key={r} value={r}>{ROLES[r].label}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field label="Chế độ tài khoản">
+              <Select value={form.accessMode} onValueChange={(v) => setForm({ ...form, accessMode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NORMAL">Sử dụng bình thường</SelectItem>
+                  <SelectItem value="DEFECT_READ_ONLY">Chỉ tra cứu khiếm khuyết</SelectItem>
+                </SelectContent>
               </Select>
             </Field>
           </div>

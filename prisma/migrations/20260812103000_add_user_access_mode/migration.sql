@@ -1,0 +1,9 @@
+ALTER TABLE "User"
+ADD COLUMN IF NOT EXISTS "accessMode" TEXT NOT NULL DEFAULT 'NORMAL';
+
+ALTER TABLE "User"
+DROP CONSTRAINT IF EXISTS "User_accessMode_check";
+
+ALTER TABLE "User"
+ADD CONSTRAINT "User_accessMode_check"
+CHECK ("accessMode" IN ('NORMAL', 'DEFECT_READ_ONLY'));

@@ -482,6 +482,7 @@ export async function GET(req: NextRequest) {
       // Ô lọc "Cương vị" chỉ được bày cương vị người dùng thực sự xem được; danh sách
       // do SERVER tính vì client không tự suy ra đúng phân cấp ca trực.
       positionScope: positionViewScopeMeta(viewScope),
+      availablePositions: [...new Set(candidates.map((defect) => defect.system?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, "vi")),
       // Số phiếu bị ẩn vì cột Cương vị bỏ trống / ghi nhãn lạ không quy được về danh
       // mục. Hiện cho cấp quản lý biết mà đi gán, thay vì để phiếu vô chủ mất hút.
       unmatchedPositionHidden: viewScope.all

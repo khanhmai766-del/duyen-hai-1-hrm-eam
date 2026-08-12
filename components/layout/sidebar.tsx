@@ -44,7 +44,19 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     }),
     [session?.user?.currentPosition, session?.user?.position, session?.user?.secondaryPosition, session?.user?.secondaryPosition2]
   );
-  const sections = React.useMemo(() => navSectionsForPosition(positionCarrier), [positionCarrier]);
+  const readOnlyDefects = session?.user?.accessMode === "DEFECT_READ_ONLY";
+  const sections = React.useMemo(() => {
+    const all = navSectionsForPosition(positionCarrier);
+    if (!readOnlyDefects) return all;
+    return all
+      .map((section) => ({
+        ...section,
+        items: section.items
+          .filter((item) => item.href.startsWith("/defects"))
+          .map((item) => ({ ...item, children: item.children?.filter((child) => child.href.startsWith("/defects")) })),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [positionCarrier, readOnlyDefects]);
 
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
@@ -53,7 +65,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     return () => clearInterval(t);
   }, []);
 
-  const { data: usersData } = useUsers();
+  const { data: usersData } = useUsers({ enabled: !readOnlyDefects });
   const admins = (usersData?.data ?? []).filter((u) => u.role === "ADMIN");
 
   const timeStr = now
@@ -70,7 +82,7 @@ export function Sidebar({ onNavigate, collapsed = false }: { onNavigate?: () => 
     <div className="flex h-full w-full flex-col overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_58%,#fff8ed_100%)] dark:bg-[linear-gradient(180deg,#0b1220_0%,#0f172a_58%,#17120b_100%)]">
       <div className={cn("border-b border-blue-100/80 dark:border-slate-800/80", collapsed ? "p-2" : "p-3")}>
         <Link
-          href="/"
+          href={readOnlyDefects ? "/defects?phan=co" : "/"}
           prefetch={false}
           onClick={onNavigate}
           aria-label="Về trang chủ"

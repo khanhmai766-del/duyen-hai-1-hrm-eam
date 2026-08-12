@@ -15,7 +15,8 @@ async function ensureLoginLockColumns() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "User"
     ADD COLUMN IF NOT EXISTS "failed_login_attempts" INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3)
+    ADD COLUMN IF NOT EXISTS "locked_at" TIMESTAMP(3),
+    ADD COLUMN IF NOT EXISTS "accessMode" TEXT NOT NULL DEFAULT 'NORMAL'
   `);
   loginLockColumnsReady = true;
 }
@@ -71,6 +72,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: user.name,
             email: user.email,
             role: user.role,
+            accessMode: user.accessMode,
             position: user.position ?? undefined,
             secondaryPosition: user.secondaryPosition ?? undefined,
             secondaryPosition2: user.secondaryPosition2 ?? undefined,
@@ -119,6 +121,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           email: user.email,
           role: user.role,
+          accessMode: user.accessMode,
           position: user.position ?? undefined,
           secondaryPosition: user.secondaryPosition ?? undefined,
           secondaryPosition2: user.secondaryPosition2 ?? undefined,
@@ -134,6 +137,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = (user as any).id;
         token.role = (user as any).role;
+        token.accessMode = (user as any).accessMode;
         token.position = (user as any).position;
         token.secondaryPosition = (user as any).secondaryPosition;
         token.secondaryPosition2 = (user as any).secondaryPosition2;
@@ -155,6 +159,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   name: true,
                   email: true,
                   role: true,
+                  accessMode: true,
                   position: true,
                   secondaryPosition: true,
                   secondaryPosition2: true,
@@ -173,6 +178,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.name = dbUser.name;
           session.user.email = dbUser.email;
           session.user.role = dbUser.role;
+          session.user.accessMode = dbUser.accessMode;
           session.user.position = dbUser.position ?? undefined;
           session.user.secondaryPosition = dbUser.secondaryPosition ?? undefined;
           session.user.secondaryPosition2 = dbUser.secondaryPosition2 ?? undefined;
@@ -182,6 +188,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } else {
           session.user.id = token.id as string;
           session.user.role = token.role as string;
+          session.user.accessMode = (token.accessMode as string | undefined) ?? "NORMAL";
           session.user.position = token.position as string | undefined;
           session.user.secondaryPosition = token.secondaryPosition as string | undefined;
           session.user.secondaryPosition2 = token.secondaryPosition2 as string | undefined;

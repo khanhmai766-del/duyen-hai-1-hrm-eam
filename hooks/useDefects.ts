@@ -114,6 +114,8 @@ export interface DefectListMeta {
   /** Phạm vi cương vị được xem, do server tính (xem lib/position-data-scope.ts).
    *  `all` = xem toàn bộ; ngược lại ô lọc "Cương vị" chỉ bày `labels`. */
   positionScope?: { all: boolean; codes: string[]; labels: string[] };
+  /** Các cương vị thực có trong danh sách phiếu, dùng cho tài khoản chỉ tra cứu. */
+  availablePositions?: string[];
   /** Số phiếu bị ẩn vì cột Cương vị bỏ trống / ghi nhãn lạ. Chỉ khác 0 với người xem toàn bộ. */
   unmatchedPositionHidden?: number;
 }
