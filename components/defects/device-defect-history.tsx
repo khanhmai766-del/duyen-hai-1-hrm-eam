@@ -12,6 +12,8 @@ type DeviceDefectHistoryProps = {
   deviceName: string;
   deviceCode?: string | null;
   mappedUnit?: string | null;
+  /** Loại yêu cầu đang lập (Cơ, Điện, ...), dùng tách đúng lịch sử theo phần. */
+  requestType?: string | null;
 };
 
 export function DeviceDefectHistory(props: DeviceDefectHistoryProps) {
@@ -28,8 +30,18 @@ export function DeviceDefectHistory(props: DeviceDefectHistoryProps) {
 }
 
 function MobileHistory(props: DeviceDefectHistoryProps) {
-  const active = useDefects({ deviceSeq: props.deviceSeq, mappedUnit: props.mappedUnit ?? undefined, limit: 20 });
-  const history = useDefectHistory({ deviceSeq: props.deviceSeq, mappedUnit: props.mappedUnit ?? undefined, limit: "20" });
+  const active = useDefects({
+    deviceSeq: props.deviceSeq,
+    mappedUnit: props.mappedUnit ?? undefined,
+    requestType: props.requestType ?? undefined,
+    limit: 20,
+  });
+  const history = useDefectHistory({
+    deviceSeq: props.deviceSeq,
+    mappedUnit: props.mappedUnit ?? undefined,
+    requestType: props.requestType ?? undefined,
+    limit: "20",
+  });
   const activeCount = active.data?.meta.total ?? 0;
   const historyCount = history.data?.meta.total ?? 0;
 
@@ -60,9 +72,19 @@ function MobileHistory(props: DeviceDefectHistoryProps) {
   );
 }
 
-function HistoryContent({ deviceSeq, deviceName, deviceCode, mappedUnit }: DeviceDefectHistoryProps) {
-  const active = useDefects({ deviceSeq, mappedUnit: mappedUnit ?? undefined, limit: 20 });
-  const history = useDefectHistory({ deviceSeq, mappedUnit: mappedUnit ?? undefined, limit: "20" });
+function HistoryContent({ deviceSeq, deviceName, deviceCode, mappedUnit, requestType }: DeviceDefectHistoryProps) {
+  const active = useDefects({
+    deviceSeq,
+    mappedUnit: mappedUnit ?? undefined,
+    requestType: requestType ?? undefined,
+    limit: 20,
+  });
+  const history = useDefectHistory({
+    deviceSeq,
+    mappedUnit: mappedUnit ?? undefined,
+    requestType: requestType ?? undefined,
+    limit: "20",
+  });
   const activeRows = active.data?.data ?? [];
   const historyRows = history.data?.data ?? [];
   const loading = active.isLoading || history.isLoading;
@@ -78,6 +100,11 @@ function HistoryContent({ deviceSeq, deviceName, deviceCode, mappedUnit }: Devic
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Lịch sử khiếm khuyết</p>
             <h3 className="mt-0.5 truncate text-base font-bold text-slate-950" title={deviceName}>{deviceName}</h3>
             <p className="mt-0.5 truncate font-mono text-xs text-sky-700">{deviceCode || deviceSeq}</p>
+            {requestType && (
+              <span className="mt-2 inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-sky-200">
+                Phần {requestType}
+              </span>
+            )}
           </div>
         </div>
         {!loading && (

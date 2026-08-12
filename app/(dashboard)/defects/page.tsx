@@ -1138,7 +1138,7 @@ export default function DefectsPage() {
         }}
         title="Hủy phiếu khiếm khuyết?"
         description={cancelTarget
-          ? `Phiếu${cancelTarget.requestNumber ? ` “${cancelTarget.requestNumber}”` : ""} sẽ chuyển sang Đã xử lý và không bị xóa khỏi hệ thống.`
+          ? `Phiếu${cancelTarget.requestNumber ? ` “${cancelTarget.requestNumber}”` : ""} sẽ được hủy trên website và xóa dữ liệu phiếu vừa ra trên Google Sheet.`
           : undefined}
         confirmLabel="Hủy phiếu"
         loading={cancelDefect.isPending}
@@ -1165,7 +1165,13 @@ export default function DefectsPage() {
           }
         }}
       >
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-5 text-amber-950">
+            <p className="font-semibold">Google Sheet sẽ được làm sạch khi đồng bộ</p>
+            <p className="mt-1 text-xs text-amber-800">
+              Hệ thống xóa nội dung phiếu từ cột B đến O nhưng vẫn giữ STT ở cột A để cấp cho phiếu khác.
+            </p>
+          </div>
           <label htmlFor="cancel-defect-note" className="text-sm font-medium">
             Ghi chú hủy <span className="text-destructive">*</span>
           </label>
@@ -1177,7 +1183,7 @@ export default function DefectsPage() {
             placeholder="Nhập lý do hủy phiếu…"
           />
           <p className="text-xs leading-5 text-muted-foreground">
-            Trạng thái và ghi chú sẽ được ghi ngược lên Google Sheet khi đồng bộ hai chiều đang bật.
+            Phiếu vẫn được lưu dấu vết hủy trên website để phục vụ tra cứu và kiểm tra.
           </p>
         </div>
       </ConfirmDialog>

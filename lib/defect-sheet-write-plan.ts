@@ -211,6 +211,39 @@ export function buildDefectSheetWritePlan(
   const writes: DefectSheetWritePlan["writes"] = [];
   const current = baseRow(payload, sequence);
 
+  if (payload.cancellation === true) {
+    // Hủy trên website = trả hàng Sheet về trạng thái chờ để STT có thể cấp lại:
+    // giữ nguyên cột A của hàng gốc, chỉ làm trống dữ liệu nghiệp vụ B:O. Không
+    // xóa nguyên hàng vì sẽ làm dịch chuyển công thức/định dạng và các hàng dưới.
+    //
+    // UPDATE có thể đã gộp vào một CREATE chưa chạy (eventType vẫn là CREATE),
+    // nên phải xử lý cờ cancellation TRƯỚC nhánh CREATE/UPDATE thông thường.
+    if (originals.length === 0) {
+      // Dòng chưa từng được ghi hoặc đã bị xóa thủ công: trạng thái đích đã đạt,
+      // trả kế hoạch rỗng để n8n ACK, không retry vô hạn.
+      return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+    }
+
+    const original = originals[0];
+    writes.push({
+      range: `B${original.sheetRow}:O${original.sheetRow}`,
+      values: [Array.from({ length: COLUMN_COUNT - 1 }, () => "")],
+    });
+
+    // Dữ liệu cũ có thể có các hàng nhắc lại riêng. Những hàng này không phải
+    // hàng giữ STT nên làm trống A:O; nếu chỉ xóa B:O sẽ để lại STT trùng và lần
+    // cấp số kế tiếp bị báo xung đột.
+    const prefix = reminderPrefix(requestNumber);
+    for (const row of rows.map((value, index) => ({ value, sheetRow: START_ROW + index }))) {
+      if (!row.value[4].startsWith(prefix)) continue;
+      writes.push({
+        range: `A${row.sheetRow}:O${row.sheetRow}`,
+        values: [Array.from({ length: COLUMN_COUNT }, () => "")],
+      });
+    }
+    return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+  }
+
   if (event.eventType === "CREATE") {
     if (originals.length === 1) {
       if (text(payload.replacesCancelledDefectId)) {
@@ -244,15 +277,6 @@ export function buildDefectSheetWritePlan(
     }
     const targetRow = preparedRows[0]?.sheetRow ?? START_ROW + rows.length;
     writes.push({ range: `A${targetRow}:O${targetRow}`, values: [current] });
-    return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
-  }
-
-  if (originals.length === 0 && event.eventType === "UPDATE" && payload.cancellation === true) {
-    // Người dùng có thể đã xóa dòng trực tiếp trên Sheet trước khi hủy phiếu
-    // trên website. Khi đó trạng thái đích của thao tác hủy đã đạt được, nên
-    // xem UPDATE này là idempotent và cho n8n ACK thay vì retry vô hạn. Chỉ
-    // miễn lỗi cho sự kiện hủy; UPDATE/REMIND thông thường vẫn phải dừng để
-    // tránh che giấu việc mất dữ liệu ngoài ý muốn trên Sheet.
     return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
   }
 
