@@ -159,8 +159,8 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: "lims ket qua phan tich dau khong dat mau dau thi nghiem hoa y kien pkt qlvh oil analysis tien ich",
       },
       {
-        label: "Điều khiển mô hình Duyên Hải 1",
-        href: "https://demoduyenhai1.site/",
+        label: "Điều khiển mô hình DH1",
+        href: "http://demoduyenhai1.site/",
         icon: MonitorCog,
         external: true,
         keywords: "dieu khien mo hinh duyen hai 1 demo control simulation",
