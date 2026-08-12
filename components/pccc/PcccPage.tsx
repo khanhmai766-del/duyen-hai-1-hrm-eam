@@ -927,6 +927,25 @@ export default function PcccPage() {
           </Button>
         )}
 
+        {/*
+          Cấp quản lý / quản trị KHÔNG thuộc cương vị nào theo phạm vi ghi, mà cương vị
+          đang làm việc của họ cũng không có thiết bị (vd Trưởng ca): không có sổ nào để
+          mặc định. Hiện nút MỜ kèm lời chỉ dẫn thay vì giấu hẳn — giấu thì họ tưởng
+          tính năng hỏng, đúng cái bẫy đã gặp lúc chạy thử.
+        */}
+        {!bookStatus?.ready && bookStatus?.positionCode === null && writeScope?.all && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info(bookStatus.reason ?? "Chọn một cương vị ở bộ lọc để xuất sổ theo dõi")}
+            className="border-dashed text-slate-500"
+            title={bookStatus.reason ?? undefined}
+          >
+            <FileText className="mr-1.5 size-4" />
+            Xuất PDF
+          </Button>
+        )}
+
         {/* Xuất Excel: kỳ đang xem lấy thẳng từ DB, các tháng cũ lấy BẢN LƯU TRỮ trên S3 —
             DB chỉ giữ 6 kỳ nên tháng cũ hơn chỉ còn tồn tại dưới dạng file. */}
         <Popover>

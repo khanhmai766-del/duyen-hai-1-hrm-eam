@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { audit, auditDetailWithPosition, fail, handle, requireUser } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
+import { PCCC_PERMISSION, pcccPositionCodesOf, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
 import { loadSignatureImages } from "@/lib/pccc-archive";
 import { bookFileNameOf, bookKeyOf, bookPositionOf, bookStatusOf, loadBookData } from "@/lib/pccc-so-theo-doi";
 import { buildPcccBookPdf } from "@/lib/pccc-so-theo-doi-pdf";
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const period = await resolvePeriod(sp.get("period"));
     const scope = await pcccWriteScopeOf(user);
-    const positionCode = bookPositionOf(scope, sp.get("cuongVi"));
+    const positionCode = bookPositionOf(scope, sp.get("cuongVi"), pcccPositionCodesOf(user)[0]);
     const status = await bookStatusOf(period.id, positionCode);
     if (!positionCode || !status.ready) {
       return fail(status.reason ?? "Chưa đủ điều kiện xuất sổ theo dõi", 409);

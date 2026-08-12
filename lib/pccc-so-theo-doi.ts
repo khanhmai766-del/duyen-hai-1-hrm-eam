@@ -36,16 +36,24 @@ export function bookFileNameOf(periodLabel: string, positionCode: string) {
  * Cương vị mà người đang đăng nhập được xuất sổ.
  *
  * - Cương vị thường: đúng cương vị của mình (phạm vi ghi chỉ có một mã).
- * - Cấp quản lý / quản trị (phạm vi ghi = tất cả): phải CHỌN cương vị ở ô lọc, vì họ
- *   không "thuộc" cương vị nào — nút xuất khi đó là để in hộ/kiểm tra.
+ * - Cấp quản lý / quản trị (phạm vi ghi = tất cả): họ không "thuộc" cương vị nào theo
+ *   phạm vi ghi, nên lấy theo thứ tự — CƯƠNG VỊ CHỌN Ở BỘ LỌC trước, không chọn thì
+ *   dùng CƯƠNG VỊ ĐANG LÀM VIỆC của chính họ (`ownCode`).
+ *
+ *   Không có bước `ownCode` thì người vừa là quản lý vừa đang trực một cương vị (rất
+ *   phổ biến: Trưởng ca đang trực Máy nghiền, hay tài khoản quản trị của chính người đi
+ *   kiểm tra) ký xong lại KHÔNG thấy nút, vì bộ lọc mặc định là "tất cả cương vị" —
+ *   nhìn y như tính năng hỏng.
  */
 export function bookPositionOf(
   /** Nhận cả bản meta của route đọc (`codes` là string[]) lẫn phạm vi ghi thật. */
   scope: { all: boolean; codes: readonly string[] },
-  filterCuongVi?: string | null
+  filterCuongVi?: string | null,
+  /** Mã cương vị ĐANG LÀM VIỆC của người đăng nhập — chỉ dùng khi phạm vi là tất cả. */
+  ownCode?: string | null
 ): PositionCode | null {
   const picked = filterCuongVi && filterCuongVi !== "ALL" ? (filterCuongVi as PositionCode) : null;
-  if (scope.all) return picked;
+  if (scope.all) return picked ?? ((ownCode as PositionCode) || null);
   if (!scope.codes.length) return null;
   // Đã chọn lọc thì phải nằm trong phạm vi của mình, nếu không là xuất sổ của người khác.
   if (picked) return scope.codes.includes(picked) ? picked : null;

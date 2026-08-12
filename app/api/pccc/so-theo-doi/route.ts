@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ok, requireUser, handle } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
-import { PCCC_PERMISSION, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
+import { PCCC_PERMISSION, pcccPositionCodesOf, pcccWriteScopeOf, resolvePeriod } from "@/lib/pccc-service";
 import { bookPositionOf, bookStatusOf } from "@/lib/pccc-so-theo-doi";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     // Phạm vi GHI quyết định cương vị được xuất: xuất sổ là việc của người ký, không
     // phải của người chỉ được xem.
     const scope = await pcccWriteScopeOf(user);
-    const positionCode = bookPositionOf(scope, sp.get("cuongVi"));
+    const positionCode = bookPositionOf(scope, sp.get("cuongVi"), pcccPositionCodesOf(user)[0]);
     const status = await bookStatusOf(period.id, positionCode);
     return ok(status, { period });
   });
