@@ -33,8 +33,9 @@ import { ReplacementPointsEditor } from "@/components/materials/replacement-poin
 import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { displayMaterialCategory, MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, EQUIPMENT_BLOCKS, addMonths, blockForPosition, materialCategoryMatches } from "@/lib/constants";
+import { displayMaterialCategory, MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, addMonths, materialCategoryMatches } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
+import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
 import { cn, formatDate, formatDateInput } from "@/lib/utils";
 import type { Material } from "@/types";
@@ -100,7 +101,7 @@ function MaterialsPageContent() {
     : MATERIAL_CATEGORIES[0];
   const [q, setQ] = React.useState(searchParam);
   const [categoryFilter, setCategoryFilter] = React.useState<string>(initialCategory);
-  const [blockFilter, setBlockFilter] = React.useState("ALL");
+  const [positionFilter, setPositionFilter] = React.useState("ALL");
   const [edit, setEdit] = React.useState<MaterialEdit | null>(null);
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set());
   const [page, setPage] = React.useState(1);
@@ -236,30 +237,52 @@ function MaterialsPageContent() {
     (m: MaterialWithDevices) => materialPointLabels(m).join(", "),
     [materialPointLabels]
   );
-  // Khối quản lý của vật tư = các khối suy ra từ cương vị quản lý của các DÒNG KHAI BÁO
-  // (isActive=false) — khớp đúng với danh sách điểm hiện trong panel chi tiết.
-  const materialBlocks = React.useCallback(
+  // Danh sách cương vị lấy trực tiếp từ các dòng khai báo của tổ máy + loại vật tư
+  // đang xem. Chuẩn hóa nhãn và gộp các bí danh để tránh lựa chọn trùng nhau.
+  const managingPositionOptions = React.useMemo(() => {
+    const positions: string[] = [];
+    for (const material of data?.data ?? []) {
+      if ((material.machine ?? "COMMON") !== machineTab) continue;
+      if (!materialCategoryMatches(material.category, categoryFilter)) continue;
+      for (const replacement of material.replacements ?? []) {
+        if (replacement.isActive || !replacement.managingPosition?.trim()) continue;
+        const label = positionLabelOf(replacement.managingPosition);
+        if (label && !positions.some((position) => positionsMatch(position, label))) positions.push(label);
+      }
+    }
+    return positions.sort(compareNatural);
+  }, [categoryFilter, data?.data, machineTab]);
+
+  React.useEffect(() => {
+    if (
+      positionFilter !== "ALL" &&
+      !managingPositionOptions.some((position) => positionsMatch(position, positionFilter))
+    ) {
+      setPositionFilter("ALL");
+    }
+  }, [managingPositionOptions, positionFilter]);
+
+  const materialMatchesPosition = React.useCallback(
     (m: MaterialWithDevices) =>
-      new Set(
-        (m.replacements ?? [])
-          .filter((r) => !r.isActive)
-          .map((r) => blockForPosition(r.managingPosition))
-          .filter(Boolean)
+      positionFilter === "ALL" ||
+      (m.replacements ?? []).some(
+        (replacement) =>
+          !replacement.isActive && positionsMatch(replacement.managingPosition, positionFilter)
       ),
-    []
+    [positionFilter]
   );
   const materials = (data?.data ?? []).filter(
     (m) =>
       (m.machine ?? "COMMON") === machineTab &&
       (!q || `${materialErpCodes(m).join(" ")} ${m.name} ${deviceLabel(m)}`.toLowerCase().includes(q.toLowerCase())) &&
       materialCategoryMatches(m.category, categoryFilter) &&
-      (blockFilter === "ALL" || materialBlocks(m).has(blockFilter))
+      materialMatchesPosition(m)
   );
-  const isFiltered = q.trim() !== "" || blockFilter !== "ALL";
+  const isFiltered = q.trim() !== "" || positionFilter !== "ALL";
 
   /**
    * Xuất CSV "Chi tiết điểm thay thế" của TẤT CẢ vật tư đang hiển thị (theo đúng bộ lọc
-   * tổ máy / loại vật tư / khối / từ khoá) — mỗi điểm thay thế là 1 dòng, kèm thông tin vật tư.
+   * tổ máy / loại vật tư / cương vị quản lý / từ khoá) — mỗi điểm thay thế là 1 dòng, kèm thông tin vật tư.
    * Dùng đúng thứ tự sắp xếp như bảng: gom theo hệ thống, rồi thiết bị theo thứ tự tự nhiên.
    */
   function exportReplacementPointsCsv() {
@@ -272,7 +295,11 @@ function MaterialsPageContent() {
     for (const m of sortedMaterials) {
       const all = m.replacements ?? [];
       const points = all
-        .filter((r) => !r.isActive && (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter))
+        .filter(
+          (r) =>
+            !r.isActive &&
+            (positionFilter === "ALL" || positionsMatch(r.managingPosition, positionFilter))
+        )
         .slice()
         .sort((a, b) => {
           const systemOf = (p: typeof a) => p.device?.system || p.system || p.device?.name || "";
@@ -637,15 +664,15 @@ function MaterialsPageContent() {
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs font-semibold text-slate-600">Khối quản lý</Label>
-                <Select value={blockFilter} onValueChange={setBlockFilter}>
-                  <SelectTrigger className="h-10 w-full rounded-xl" aria-label="Lọc theo khối quản lý">
+                <Label className="text-xs font-semibold text-slate-600">Cương vị quản lý</Label>
+                <Select value={positionFilter} onValueChange={setPositionFilter}>
+                  <SelectTrigger className="h-10 w-full rounded-xl" aria-label="Lọc theo cương vị quản lý">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ALL">Tất cả khối</SelectItem>
-                    {EQUIPMENT_BLOCKS.map((block) => (
-                      <SelectItem key={block} value={block}>{block}</SelectItem>
+                    <SelectItem value="ALL">Tất cả cương vị</SelectItem>
+                    {managingPositionOptions.map((position) => (
+                      <SelectItem key={position} value={position}>{position}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -779,10 +806,10 @@ function MaterialsPageContent() {
           title={isFiltered ? "Không tìm thấy vật tư" : "Không có vật tư"}
           description={
             isFiltered
-              ? `Không có vật tư nào khớp bộ lọc trong loại "${displayMaterialCategory(categoryFilter)}" (${machineLabel}). Thử bỏ từ khoá / khối hoặc chuyển tab khác.`
+              ? `Không có vật tư nào khớp bộ lọc trong loại "${displayMaterialCategory(categoryFilter)}" (${machineLabel}). Thử bỏ từ khoá / cương vị quản lý hoặc chuyển tab khác.`
               : `Chưa có vật tư nào thuộc loại "${displayMaterialCategory(categoryFilter)}" được khai báo cho thiết bị trong phạm vi Xem/Sửa của cương vị hiện tại (${machineLabel}).`
           }
-          action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setBlockFilter("ALL"); } } : undefined}
+          action={isFiltered ? { label: "Xoá bộ lọc", onClick: () => { setQ(""); setPositionFilter("ALL"); } } : undefined}
         />
       ) : (
         <Card className="overflow-hidden">
@@ -943,7 +970,7 @@ function MaterialsPageContent() {
                       <TableCell colSpan={canManage ? 6 : 5} className="px-6 py-4">
                         <MaterialExpandedDetails
                           m={m}
-                          blockFilter={blockFilter}
+                          positionFilter={positionFilter}
                           selectedItems={materialRequestSelection}
                           onSelectedItemsChange={setMaterialRequestSelection}
                           onOpenTracking={() => setReplMaterial(m)}
@@ -2002,13 +2029,13 @@ function compareNatural(a: string, b: string) {
 /** Panel bung: liệt kê các thiết bị theo dõi đã khai báo cho vật tư. */
 function MaterialExpandedDetails({
   m,
-  blockFilter = "ALL",
+  positionFilter = "ALL",
   selectedItems,
   onSelectedItemsChange,
   onOpenTracking,
 }: {
   m: MaterialWithDevices;
-  blockFilter?: string;
+  positionFilter?: string;
   selectedItems: MaterialRequestSelection[];
   onSelectedItemsChange: React.Dispatch<React.SetStateAction<MaterialRequestSelection[]>>;
   onOpenTracking?: () => void;
@@ -2020,7 +2047,7 @@ function MaterialExpandedDetails({
           (r) =>
             !r.isActive &&
             (r._count?.logs ?? 0) === 0 &&
-            (blockFilter === "ALL" || blockForPosition(r.managingPosition) === blockFilter)
+            (positionFilter === "ALL" || positionsMatch(r.managingPosition, positionFilter))
         )
         // Gom các điểm CÙNG HỆ THỐNG nằm liền kề; trong mỗi hệ thống sắp thiết bị theo thứ tự
         // tự nhiên (Bơm A → B → C, Quạt 1 → 2 → 3, "#2" trước "#10").
@@ -2033,7 +2060,7 @@ function MaterialExpandedDetails({
             compareNatural(deviceOf(a), deviceOf(b))
           );
         }),
-    [m.replacements, blockFilter]
+    [m.replacements, positionFilter]
   );
   const activeCountByDeclaration = React.useMemo(() => {
     const allPoints = m.replacements ?? [];

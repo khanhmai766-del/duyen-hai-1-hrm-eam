@@ -1142,7 +1142,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return ok(up);
     }
 
-    // B2' — Đề xuất: NHẬN VẬT TƯ (quyền receive) → chuyển Sử dụng vật tư.
+    // B2' — Đề xuất: xác nhận số phiếu giao hàng trước, sau đó mới nhập số YCSC
+    // ở trạng thái CHO_PHIEU_YCSC. Ứng vẫn dùng bước gộp như hiện tại.
     // Ứng: bước gộp "XÁC NHẬN ĐXVT" (chỉ Thống kê): nguồn lãnh + mã ERP + khối lượng
     // + số phiếu giao hàng + số phiếu ĐXVT → chuyển Quyết toán; chưa xuất biên bản tại đây.
     if (action === "receive") {
@@ -1159,11 +1160,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!receivedMethod) return fail("Vui lòng nhập số phiếu giao hàng");
       const proposalNumber = t.type === "UNG" ? String(body.proposalNumber || t.proposalNumber || "").trim() : "";
       if (t.type === "UNG" && !proposalNumber) return fail("Vui lòng nhập số phiếu đề xuất vật tư");
-      const repairRequestNumber = t.type === "UNG" ? "" : String(body.repairRequestNumber || "").trim();
-      if (t.type !== "UNG" && !repairRequestNumber) return fail("Vui lòng nhập số yêu cầu sửa chữa");
-      if (t.type !== "UNG" && sameTicketNumber(repairRequestNumber, t.proposalNumber)) {
-        return fail("Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
-      }
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const requestedErpCode = String(body.erpCode || "").trim();
@@ -1208,9 +1204,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "SU_DUNG_VAT_TU",
+            status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "CHO_PHIEU_YCSC",
             receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
-            ...(t.type !== "UNG" ? { repairRequestNumber } : {}),
             // Ứng: bước gộp kiêm luôn Thống kê xác nhận ĐXVT — lưu số phiếu + dấu vết Thống kê.
             ...(t.type === "UNG" ? {
               proposalNumber,
@@ -1229,7 +1224,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       await audit(
         user.id, "MT_RECEIVE", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? `; phiếu yêu cầu sửa chữa ${repairRequestNumber}` : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
+        `${materialTicketReference(t)}: ${receiptSourceLabel(receiptSource)} ${receivedQuantity} (${receivedMethod}) — Hiện có ${item.material.code}: ${before} → ${before + materialIncrement}; ERP ${erpCode}: ${erpBefore} → ${erpAfter}${t.type !== "UNG" ? "; chờ nhập số yêu cầu sửa chữa" : `; số phiếu ĐXVT ${proposalNumber}; chuyển Quyết toán`}`
       );
       return ok(up);
     }
@@ -1241,7 +1236,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!value) return fail("Vui lòng nhập số yêu cầu sửa chữa");
       if (sameTicketNumber(value, t.proposalNumber)) return fail("Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
       const up = await prisma.materialTicket.update({ where: { id: t.id }, data: { status: "SU_DUNG_VAT_TU", repairRequestNumber: value }, include: ITEM_INCLUDE });
-      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận vật tư lãnh, yêu cầu sửa chữa ${value}`);
+      await audit(user.id, "MT_REPAIR_REQUEST", "MaterialTicket", t.id, `${materialTicketReference(t)}: xác nhận số yêu cầu sửa chữa ${value}; chuyển Sử dụng vật tư`);
       return ok(up);
     }
 

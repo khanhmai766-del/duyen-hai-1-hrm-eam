@@ -1718,6 +1718,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       VHV_LANH_VAT_TU: `Cương vị VHV được giao "${t.assignedPosition}"`,
       NHAN_TU_HIEN_CO: `Cương vị được giao "${t.assignedPosition}" nhận vật tư từ Hiện có`,
       NHAN_VAT_TU: "Người được phân quyền Xác nhận vật tư lãnh",
+      CHO_PHIEU_YCSC: "Người được phân quyền Xác nhận vật tư lãnh nhập số yêu cầu sửa chữa",
       SU_DUNG_VAT_TU: "Người được phân quyền Xác nhận vật tư sử dụng",
       CHO_NGHIEM_THU: "Người được phân quyền Nghiệm thu",
       CHO_NHAP_LIEU: `Người được phân quyền trong cương vị "${t.assignedPosition}"`,
@@ -2154,11 +2155,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
               onChange={(e) => setMethod(e.target.value)}
             />
           </label>
-          {!isAdvance && (
-            <label className="field">Số yêu cầu sửa chữa *
-              <input placeholder="Nhập số yêu cầu sửa chữa" value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} />
-            </label>
-          )}
         </div>
         {advanceDocumentLocked && (
           <div className="accept-two-grid">
@@ -2179,9 +2175,6 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         {isAdvance && advanceProposalExported && (
           <div className="note"><FileText size={15} /><span>Đã xuất Phiếu Đề Xuất Vật Tư — <a className="pdf-inline" href={t.proposalDocUrl!} target="_blank" rel="noreferrer">tải xuống</a>. Mã vật tư đã được khóa; có thể nhập số phiếu để tiếp tục.</span></div>
         )}
-        {!isAdvance && repairRequestConflictsProposal && (
-          <div className="warnbox"><AlertTriangle size={15} /> Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
-        )}
         {advanceDocumentLocked ? (
           <button
             className="btn primary big"
@@ -2194,9 +2187,9 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} Xác nhận &amp; xuất Phiếu Đề Xuất Vật Tư
           </button>
         ) : (
-          <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || (!isAdvance && (!repairRequestNumber.trim() || repairRequestConflictsProposal)) || act.isPending}
-            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : { repairRequestNumber: repairRequestNumber.trim() }) }, isAdvance ? "Đã xác nhận ĐXVT, chuyển Quyết toán" : "Đã xác nhận vật tư lãnh")}>
-            {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận"}
+          <button className="btn primary big" disabled={qty <= 0 || (isAdvance && (!erpCode || !proposalNumberInput.trim())) || !method.trim() || act.isPending}
+            onClick={() => run({ action: "receive", receivedQuantity: qty, deliveryNoteNumber: method.trim(), receiptSource: isAdvance ? receiptSource : "ERP", ...(isAdvance ? { erpCode, proposalNumber: proposalNumberInput.trim() } : {}) }, isAdvance ? "Đã xác nhận ĐXVT, chuyển Quyết toán" : "Đã xác nhận số phiếu giao hàng")}>
+            {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} {isAdvance ? "Xác nhận ĐXVT" : "Xác nhận số phiếu giao hàng"}
           </button>
         )}
       </div>
@@ -2206,7 +2199,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("repairRequest")) return (
     <div className="act">
       <label className="lb">Xác nhận vật tư lãnh</label>
-      <div className="note"><FileText size={15} /> Phiếu đang ở trạng thái cũ, vui lòng bổ sung số yêu cầu sửa chữa để chuyển sang bước Sử dụng vật tư.</div>
+      <div className="note"><Check size={15} /> Đã xác nhận số phiếu giao hàng <b>{t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}</b>. Nhập số yêu cầu sửa chữa để hoàn tất bước này.</div>
       <div className="act-field-row">
         <label>Số yêu cầu sửa chữa *</label>
         <input value={repairRequestNumber} onChange={(e) => setRepairRequestNumber(e.target.value)} placeholder="Nhập số yêu cầu sửa chữa" />
@@ -2214,8 +2207,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       {repairRequestConflictsProposal && (
         <div className="warnbox"><AlertTriangle size={15} /> Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT.</div>
       )}
-      <button className="btn primary big" disabled={!repairRequestNumber.trim() || repairRequestConflictsProposal || act.isPending} onClick={() => run({ action: "repairRequest", repairRequestNumber: repairRequestNumber.trim() }, "Đã xác nhận vật tư lãnh")}>
-        <Check size={15}/> Xác nhận
+      <button className="btn primary big" disabled={!repairRequestNumber.trim() || repairRequestConflictsProposal || act.isPending} onClick={() => run({ action: "repairRequest", repairRequestNumber: repairRequestNumber.trim() }, "Đã xác nhận số yêu cầu sửa chữa")}>
+        <Check size={15}/> Xác nhận số yêu cầu sửa chữa
       </button>
     </div>
   );
@@ -2677,7 +2670,7 @@ const CSS = `
 .receive-source-toggle button{min-width:148px;height:34px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:#dbeafe;font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;transition:background .16s ease,color .16s ease;}
 .receive-source-toggle button:hover{background:rgba(255,255,255,.1);color:#fff;}
 .receive-source-toggle button.on{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px rgba(255,255,255,.08);}
-.receive-field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end;}
+.receive-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
 .receive-field-grid.advance-receive-fields{grid-template-columns:repeat(2,minmax(0,1fr));}
 .receive-field-grid .field{min-width:0;margin:0!important;}
 .receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
