@@ -8,6 +8,7 @@ function invalidateHcAttendance(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ["hc-groups"] });
   void qc.invalidateQueries({ queryKey: ["hc-registrations"] });
   void qc.invalidateQueries({ queryKey: ["me-dashboard"] });
+  void qc.invalidateQueries({ queryKey: ["timesheet"] });
 }
 
 export interface HcMember {
@@ -109,6 +110,15 @@ export function useHcRecall() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (groupId: string) => apiMutate(`/api/hc-groups/checkin?groupId=${groupId}`, "DELETE"),
+    onSuccess: () => invalidateHcAttendance(qc),
+  });
+}
+
+export function useDeleteHcCheckIn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { checkInId: string; reason: string }) =>
+      apiMutate("/api/hc-groups/checkin", "DELETE", body),
     onSuccess: () => invalidateHcAttendance(qc),
   });
 }

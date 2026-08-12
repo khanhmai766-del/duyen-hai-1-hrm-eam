@@ -13,6 +13,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   destructive?: boolean;
   loading?: boolean;
+  confirmDisabled?: boolean;
   children?: React.ReactNode;
   onConfirm: () => void;
 }
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   confirmLabel = "Xác nhận",
   destructive = true,
   loading,
+  confirmDisabled,
   children,
   onConfirm,
 }: ConfirmDialogProps) {
@@ -47,7 +49,7 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Huỷ
           </Button>
-          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={loading}>
+          <Button variant={destructive ? "destructive" : "default"} onClick={onConfirm} disabled={loading || confirmDisabled}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {confirmLabel}
           </Button>

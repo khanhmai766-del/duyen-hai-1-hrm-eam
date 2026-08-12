@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useHcGroups, useCreateHcGroup, useUpdateHcGroup, useDeleteHcGroup,
   useHcCheckIn, useHcRecall, useHcApprove, type HcGroup,
-  useHcUpdateWorkNote, useHcCancelRegistration,
+  useHcUpdateWorkNote, useHcCancelRegistration, useDeleteHcCheckIn, type HcMember,
 } from "@/hooks/useHcAttendance";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
 import { normalizeText } from "@/lib/nav";
@@ -439,14 +439,18 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
   const checkIn = useHcCheckIn();
   const recall = useHcRecall();
   const del = useDeleteHcGroup();
+  const deleteCheckIn = useDeleteHcCheckIn();
   const [editOpen, setEditOpen] = React.useState(false);
   const [checkInOpen, setCheckInOpen] = React.useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
   const [recallConfirmOpen, setRecallConfirmOpen] = React.useState(false);
+  const [deleteMemberTarget, setDeleteMemberTarget] = React.useState<HcMember | null>(null);
+  const [deleteMemberReason, setDeleteMemberReason] = React.useState("");
 
   const approved = group.members.filter((m) => m.isApproved).length;
   const mine = group.members.find((m) => m.userId === myId);
   const canRecallMine = canRecallHcCheckIn(mine);
+  const canDeleteMember = canManage || group.createdById === myId;
 
   async function doApprove() {
     if (!group.members.length) return toast.error("Nhóm chưa có ai điểm danh");
@@ -469,6 +473,18 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
     try {
       await del.mutateAsync(group.id);
       toast.success("Đã xoá nhóm đi hành chính");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function doDeleteMember() {
+    if (!deleteMemberTarget || !deleteMemberReason.trim()) return;
+    try {
+      await deleteCheckIn.mutateAsync({ checkInId: deleteMemberTarget.id, reason: deleteMemberReason.trim() });
+      toast.success(`Đã xóa điểm danh của ${deleteMemberTarget.user.name}`);
+      setDeleteMemberTarget(null);
+      setDeleteMemberReason("");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -556,6 +572,20 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
                 {m.isApproved ? <Check className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}
                 {m.isApproved ? "Đã duyệt" : "Chờ duyệt"}
               </Badge>
+              {canDeleteMember && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="mt-1 h-7 gap-1 px-2 text-[11px] text-destructive hover:bg-red-50 hover:text-destructive"
+                  onClick={() => {
+                    setDeleteMemberTarget(m);
+                    setDeleteMemberReason("");
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" /> Xóa điểm danh
+                </Button>
+              )}
             </div>
           ))}
         </div>
@@ -563,6 +593,35 @@ function GroupCard({ group, canManage, canApprove, myId }: { group: HcGroup; can
 
       <GroupDialog open={editOpen} onOpenChange={setEditOpen} date={vietnamDateInputFromValue(group.date)} group={group} />
       <CheckInDialog open={checkInOpen} onOpenChange={setCheckInOpen} group={group} />
+      <ConfirmDialog
+        open={Boolean(deleteMemberTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteMemberTarget(null);
+            setDeleteMemberReason("");
+          }
+        }}
+        title="Xóa điểm danh thành viên"
+        description={deleteMemberTarget ? `Bạn đang xóa điểm danh của ${deleteMemberTarget.user.name} khỏi nhóm này.` : undefined}
+        confirmLabel="Xóa điểm danh"
+        loading={deleteCheckIn.isPending}
+        confirmDisabled={!deleteMemberReason.trim()}
+        onConfirm={doDeleteMember}
+      >
+        <div className="space-y-2">
+          <Label htmlFor={`delete-reason-${group.id}`}>Lý do xóa <span className="text-destructive">*</span></Label>
+          <Textarea
+            id={`delete-reason-${group.id}`}
+            value={deleteMemberReason}
+            onChange={(event) => setDeleteMemberReason(event.target.value)}
+            maxLength={500}
+            rows={3}
+            autoFocus
+            placeholder="Ví dụ: Có việc đột xuất nên không thể tham gia..."
+          />
+          <p className="text-xs text-muted-foreground">Lý do sẽ được lưu trong nhật ký hệ thống.</p>
+        </div>
+      </ConfirmDialog>
       <ConfirmDialog
         open={recallConfirmOpen}
         onOpenChange={setRecallConfirmOpen}

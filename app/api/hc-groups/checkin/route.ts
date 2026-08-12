@@ -308,27 +308,35 @@ export async function PATCH(req: NextRequest) {
   });
 }
 
-/** DELETE ?groupId= — current user recalls their own check-in. */
+/** DELETE — chủ trì/quản lý xóa một điểm danh có lý do; hoặc người dùng tự thu hồi điểm danh của mình. */
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
     await ensureHcCheckInUpdatedAtColumn();
     const groupId = req.nextUrl.searchParams.get("groupId");
-    const checkInId = req.nextUrl.searchParams.get("checkInId");
+    const body = await req.json().catch(() => ({})) as { checkInId?: unknown; reason?: unknown };
+    const checkInId = String(body.checkInId ?? req.nextUrl.searchParams.get("checkInId") ?? "").trim();
     if (checkInId) {
-      if (!(await canManageHc(user))) return fail("Không đủ quyền truy cập", 403);
+      const reason = String(body.reason ?? "").trim();
+      if (!reason) return fail("Vui lòng nhập lý do xóa điểm danh");
+      if (reason.length > 500) return fail("Lý do xóa không được vượt quá 500 ký tự");
       const checkIn = await prisma.hcCheckIn.findUnique({
         where: { id: checkInId },
-        include: { user: { select: { name: true } } },
+        include: {
+          user: { select: { name: true } },
+          group: { select: { id: true, content: true, createdById: true } },
+        },
       });
       if (!checkIn) return fail("Không tìm thấy chấm công hành chính", 404);
+      const isGroupCreator = checkIn.group.createdById === user.id;
+      if (!isGroupCreator && !(await canManageHc(user))) return fail("Chỉ chủ trì nhóm hoặc người có quyền quản lý mới được xóa điểm danh", 403);
       await prisma.hcCheckIn.delete({ where: { id: checkInId } });
       await audit(
         user.id,
-        checkIn.isRegistered ? "HC_REGISTER_CANCEL" : "HC_REJECT",
+        "HC_CHECKIN_DELETE",
         "HcCheckIn",
         checkInId,
-        checkIn.isRegistered ? `Hủy đăng ký đi hành chính của ${checkIn.user.name}` : `Không duyệt chấm công HC của ${checkIn.user.name}`
+        `Xóa điểm danh hành chính của ${checkIn.user.name} khỏi nhóm "${checkIn.group.content}". Lý do: ${reason}`
       );
       return ok({ removed: 1 });
     }
