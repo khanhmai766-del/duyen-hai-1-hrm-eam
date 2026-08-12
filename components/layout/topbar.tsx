@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList, ShieldCheck } from "lucide-react";
+import { Bell, Menu, Search, CornerDownLeft, ChevronRight, LogOut, LayoutGrid, Maximize, Minimize, UserCircle, ChevronDown, Repeat, Cpu, MapPin, KeyRound, Loader2, ClipboardList, ExternalLink, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -166,8 +166,8 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
       navSections.flatMap((s) =>
         s.items.flatMap((i) => {
           const children = i.children?.filter((child) => navItemAllowed(child, role, rbac.can, adminMode));
-          if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon }));
-          return navItemAllowed(i, role, rbac.can, adminMode) ? [{ label: i.label, href: i.href, icon: i.icon }] : [];
+          if (children) return children.map((child) => ({ label: child.label, href: child.href, icon: child.icon, external: child.external }));
+          return navItemAllowed(i, role, rbac.can, adminMode) ? [{ label: i.label, href: i.href, icon: i.icon, external: i.external }] : [];
         })
       ),
     [adminMode, navSections, rbac.can, role]
@@ -206,6 +206,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
               label: i.label,
               href: i.href,
               icon: i.icon,
+              external: i.external,
               section: s.title,
               hay: normalizeText(`${i.label} ${s.title} ${i.keywords ?? ""}`),
             };
@@ -213,6 +214,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
               label: c.label,
               href: c.href,
               icon: c.icon,
+              external: c.external,
               section: `${s.title} › ${i.label}`,
               hay: normalizeText(`${c.label} ${i.label} ${s.title} ${c.keywords ?? ""}`),
             }));
@@ -236,15 +238,16 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  function go(href: string) {
+  function go(href: string, external?: boolean) {
     setQ("");
     setOpen(false);
-    router.push(href);
+    if (external) window.open(href, "_blank", "noopener,noreferrer");
+    else router.push(href);
   }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (results.length) go(results[0].href);
+    if (results.length) go(results[0].href, results[0].external);
     else if (q.trim() && statisticsNavRestricted) toast.info("Chức vụ Thống kê chỉ tìm trong các mục được phân quyền");
     else if (q.trim()) go(`/devices?view=table&q=${encodeURIComponent(q.trim())}`);
   }
@@ -305,7 +308,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                     return (
                       <li key={r.href + r.label}>
                         <button
-                          onClick={() => go(r.href)}
+                          onClick={() => go(r.href, r.external)}
                           className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
                         >
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
@@ -315,6 +318,7 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                             <span className="block truncate font-medium text-ink">{r.label}</span>
                             <span className="block truncate text-xs text-muted-foreground">{r.section}</span>
                           </span>
+                          {r.external && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
                         </button>
                       </li>
                     );
@@ -525,6 +529,8 @@ export function Topbar({ onMenuClick, onToggleSidebar }: { onMenuClick: () => vo
                       key={l.href + l.label}
                       href={l.href}
                       prefetch={false}
+                      target={l.external ? "_blank" : undefined}
+                      rel={l.external ? "noopener noreferrer" : undefined}
                       onClick={() => setGridOpen(false)}
                       className="flex flex-col items-center gap-1.5 rounded-lg p-2.5 text-center transition-colors hover:bg-muted"
                     >

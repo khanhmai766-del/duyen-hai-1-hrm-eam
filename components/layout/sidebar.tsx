@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronDown, Clock, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
+import { ChevronDown, Clock, ExternalLink, LifeBuoy, Phone, ShieldCheck } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { useUsers } from "@/hooks/useUsers";
 import { navSectionsForPosition, type NavItem } from "@/lib/nav";
@@ -278,6 +278,8 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
         href={href}
         prefetch={false}
         onClick={onNavigate}
+        target={item.external ? "_blank" : undefined}
+        rel={item.external ? "noopener noreferrer" : undefined}
         title={item.label}
         className={cn(
           "group flex h-11 items-center justify-center rounded-xl transition-all duration-200",
@@ -306,6 +308,8 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
         href={item.href}
         prefetch={false}
         onClick={onNavigate}
+        target={item.external ? "_blank" : undefined}
+        rel={item.external ? "noopener noreferrer" : undefined}
         className={cn(
           "group relative flex min-h-[42px] items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-semibold leading-tight transition-all duration-200",
           active
@@ -325,6 +329,12 @@ function NavEntry({ item, onNavigate, collapsed = false }: { item: NavItem; onNa
           <Icon className="h-[17px] w-[17px] drop-shadow-sm" />
         </span>
         <span className="min-w-0 flex-1">{item.label}</span>
+        {item.external && (
+          <ExternalLink
+            className="h-3.5 w-3.5 shrink-0 text-slate-400 transition-colors group-hover:text-accent dark:group-hover:text-sky-300"
+            aria-hidden="true"
+          />
+        )}
       </Link>
     );
   }

@@ -23,6 +23,7 @@ import {
   Database,
   FlaskConical,
   FlameKindling,
+  MonitorCog,
   Zap,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
@@ -33,6 +34,8 @@ export interface NavItem {
   icon: React.ElementType;
   adminOnly?: boolean;
   permissionIds?: string[];
+  /** Opens an external destination in a new browser tab. */
+  external?: boolean;
   /** Extra search terms (accent-free) to improve topbar search matching. */
   keywords?: string;
   children?: NavItem[];
@@ -154,6 +157,13 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/tien-ich/phan-tich-dau",
         icon: FlaskConical,
         keywords: "lims ket qua phan tich dau khong dat mau dau thi nghiem hoa y kien pkt qlvh oil analysis tien ich",
+      },
+      {
+        label: "Điều khiển mô hình Duyên Hải 1",
+        href: "https://demoduyenhai1.site/",
+        icon: MonitorCog,
+        external: true,
+        keywords: "dieu khien mo hinh duyen hai 1 demo control simulation",
       },
     ],
   },
