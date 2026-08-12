@@ -11,9 +11,11 @@
  *    yêu cầu nghiệp vụ — không đánh số lại theo từng bảng.
  *  - Đầu bảng (2 tầng: tên cột + số cột 1..7) VẼ LẠI Ở MỖI TRANG, vì bản in đóng thành
  *    quyển, người đọc lật giữa chừng không có gì để tra cột.
+ *  - Ảnh chữ ký phải ÉP NỀN TRẮNG trước khi nhúng (xem `flattenSignature`).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import type { BookRow } from "@/lib/pccc-so-theo-doi";
@@ -222,6 +224,25 @@ function drawTableHeader(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont
   return y - headH - numH;
 }
 
+/**
+ * ÉP NỀN TRẮNG cho ảnh chữ ký.
+ *
+ * Chữ ký trong hồ sơ là PNG có KÊNH TRONG SUỐT (nét chữ trên nền rỗng). Rất nhiều trình
+ * xem PDF và gần như mọi máy in dựng vùng trong suốt thành ĐEN — in ra là một ô đen sì
+ * đè lên cột chữ ký, tưởng hỏng cả quyển sổ. Ghép ảnh lên nền trắng trước khi nhúng thì
+ * hết hẳn, mà vẫn giữ chữ là chữ thật (tìm kiếm/copy được) và tệp vẫn nhẹ — khác hẳn
+ * cách "xuất cả trang thành ảnh".
+ *
+ * Ảnh lỗi thì trả lại nguyên bản: thà chữ ký hiển thị chưa chuẩn còn hơn mất chữ ký.
+ */
+async function flattenSignature(buffer: Buffer): Promise<Buffer> {
+  try {
+    return await sharp(buffer).flatten({ background: "#ffffff" }).png({ compressionLevel: 9 }).toBuffer();
+  } catch {
+    return buffer;
+  }
+}
+
 export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
   const year = input.year ?? input.periodLabel.split(".")[1] ?? String(new Date().getFullYear());
   const pdf = await PDFDocument.create();
@@ -237,11 +258,12 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
   // chỉ một người ký, nhúng theo dòng là phình tệp lên hàng chục MB.
   const embedded = new Map<string, PDFImage>();
   for (const [key, buffer] of input.signatureImages) {
+    const flat = await flattenSignature(buffer);
     try {
-      embedded.set(key, await pdf.embedPng(buffer));
+      embedded.set(key, await pdf.embedPng(flat));
     } catch {
       try {
-        embedded.set(key, await pdf.embedJpg(buffer));
+        embedded.set(key, await pdf.embedJpg(flat));
       } catch {
         // Ảnh hỏng thì bỏ qua — cột 7 vẫn còn họ tên, không được làm hỏng cả quyển sổ.
       }
