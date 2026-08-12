@@ -118,6 +118,28 @@ export interface DefectListMeta {
   unmatchedPositionHidden?: number;
 }
 
+export interface DefectShiftSummary {
+  section: "co" | "dien";
+  shiftType: "MORNING" | "AFTERNOON" | "NIGHT";
+  shiftLabel: string;
+  timeLabel: string;
+  start: string;
+  end: string;
+  issued: number;
+  cancelled: number;
+  active: number;
+}
+
+export function useDefectShiftSummary(section: "co" | "dien") {
+  return useQuery({
+    queryKey: ["defect-shift-summary", section],
+    queryFn: () => apiGet<DefectShiftSummary>(`/api/defects/shift-summary?section=${section}`),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
 function defectListUrl(params: DefectListParams) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -162,6 +184,7 @@ export function useCreateDefect() {
     mutationFn: (body: DefectInput) => apiMutate<DefectItem>("/api/defects", "POST", body),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["defects"] });
+      qc.invalidateQueries({ queryKey: ["defect-shift-summary"] });
       if (typeof variables.device === "string" && variables.device) {
         qc.invalidateQueries({ queryKey: ["device", variables.device] });
       }
@@ -180,6 +203,7 @@ export function useUpdateDefect() {
     onSuccess: (updated) => {
       qc.setQueryData(["defect", updated.id], { data: updated, meta: null });
       void qc.invalidateQueries({ queryKey: ["defects"] });
+      void qc.invalidateQueries({ queryKey: ["defect-shift-summary"] });
     },
   });
 }
@@ -200,6 +224,7 @@ export function useCancelDefect() {
     onSuccess: (updated) => {
       qc.setQueryData(["defect", updated.id], { data: updated, meta: null });
       void qc.invalidateQueries({ queryKey: ["defects"] });
+      void qc.invalidateQueries({ queryKey: ["defect-shift-summary"] });
     },
   });
 }

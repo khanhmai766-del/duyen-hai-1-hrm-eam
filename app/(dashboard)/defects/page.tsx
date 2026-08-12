@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectSyncStatus, useDefectTwoWaySync, useRemindDefect, useSyncDefects, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
+import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectShiftSummary, useDefectSyncStatus, useDefectTwoWaySync, useRemindDefect, useSyncDefects, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
@@ -406,6 +406,7 @@ export default function DefectsPage() {
     includeDescendants,
   }), [page, pageSize, section, unitFilter, mappedUnitFilter, requestFilter, positionFilter, statusFilter, severityFilter, repairResultFilter, mismatchOnly, upgradeCandidatesOnly, deferredSearch, deviceSeqFilter, includeDescendants]);
   const { data, isLoading, isFetching } = useDefects(listParams);
+  const shiftSummary = useDefectShiftSummary(section);
   const pagedDefects = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
   const totalPages = data?.meta?.totalPages ?? 1;
@@ -620,6 +621,49 @@ export default function DefectsPage() {
           </Button>
         )}
       </PageHeader>
+
+      <div className="flex flex-col gap-3 rounded-xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-amber-50 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-navy text-white shadow-sm">
+            <ClipboardList className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-sm font-bold text-ink">
+              {shiftSummary.data?.data.shiftLabel ?? "Ca hiện tại"}
+              <span className="ml-2 font-normal text-muted-foreground">
+                {shiftSummary.data?.data.timeLabel ?? "Đang xác định…"}
+              </span>
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Phiếu yêu cầu lập từ website trong {sectionConfig.label}
+            </p>
+          </div>
+        </div>
+        {shiftSummary.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Đang tổng hợp…
+          </div>
+        ) : shiftSummary.isError ? (
+          <p className="text-sm font-medium text-red-600">Không tải được thống kê ca</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="min-w-[82px] rounded-lg border border-sky-200 bg-white px-3 py-2">
+              <p className="text-xl font-extrabold tabular-nums text-sky-700">{shiftSummary.data?.data.issued ?? 0}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Đã ra</p>
+            </div>
+            <div className="min-w-[82px] rounded-lg border border-emerald-200 bg-white px-3 py-2">
+              <p className="text-xl font-extrabold tabular-nums text-emerald-700">{shiftSummary.data?.data.active ?? 0}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Còn hiệu lực</p>
+            </div>
+            <div className="min-w-[82px] rounded-lg border border-red-200 bg-white px-3 py-2">
+              <p className="flex items-center justify-center gap-1 text-xl font-extrabold tabular-nums text-red-600">
+                <Ban className="h-3.5 w-3.5" /> {shiftSummary.data?.data.cancelled ?? 0}
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Đã hủy</p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {deviceSeqFilter && (
         <div className="flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
