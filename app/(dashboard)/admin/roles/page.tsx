@@ -528,8 +528,15 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     feature: "Xem sổ thiết bị PCCC",
     note:
       "Xem tổng quan, bình chữa cháy, tủ chữa cháy, Foam/CO2/Diesel/FM200 và tải file Excel của kỳ. " +
-      "Mức Đọc/Cá nhân CHỈ thấy thiết bị thuộc cương vị của mình (gộp cương vị chính và kiêm nhiệm); " +
-      "mức Quản lý/Toàn quyền thấy toàn phân xưởng. Ai sửa được mọi cương vị (pccc-manage mức Quản lý trở lên) thì cũng xem được toàn bộ.",
+      "PHẠM VI XEM đi theo CHỨC DANH ĐANG LÀM VIỆC, không theo mức quyền ở cột bên: " +
+      "cương vị thường chỉ thấy thiết bị mình quản lý; cấp giám sát (TK Lò máy, Trưởng kíp điện) " +
+      "thấy thêm mọi bình chữa cháy mình giám sát ở cột Người giám sát — Tủ chữa cháy và " +
+      "Foam/CO2/FM200 không có cột này nên chỉ thấy phần mình quản lý. " +
+      "Người kiêm nhiệm chỉ áp MỘT chức danh đang chọn; đổi ở trang Tài khoản. " +
+      "Chưa khai chức danh thì KHÔNG thấy gì. " +
+      "Xem toàn phân xưởng chỉ dành cho: Quản trị viên và các chức danh Quản đốc / Phó quản đốc / " +
+      "Kỹ thuật viên / Trưởng ca. Mức Quản lý/Toàn quyền ở đây là cửa phụ cho tài khoản chỉ-đọc " +
+      "cần xem toàn cảnh (lãnh đạo, tài khoản báo cáo).",
     matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   },
   {
@@ -537,8 +544,12 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     group: "Thiết bị PCCC",
     feature: "Cập nhật và ký xác nhận thiết bị PCCC",
     note:
-      "Mức Cá nhân chỉ sửa/ký được thiết bị thuộc CƯƠNG VỊ của mình (gộp cương vị chính và kiêm nhiệm); " +
-      "mức Quản lý/Toàn quyền sửa được mọi cương vị. Ký cần có chữ ký số trong hồ sơ Tài khoản và sẽ tự điền người + ngày kiểm tra. " +
+      "Quyền này quyết định CÓ ĐƯỢC GHI hay không, KHÔNG quyết định phạm vi: từ mức Cá nhân trở lên " +
+      "đều chỉ sửa/ký được thiết bị thuộc đúng CHỨC DANH ĐANG LÀM VIỆC của mình. " +
+      "Cấp giám sát chỉ XEM phần mình giám sát, muốn sửa thì thiết bị phải nằm ở cột Cương vị quản lý của mình. " +
+      "Sửa được toàn phân xưởng chỉ dành cho: Quản trị viên và các chức danh Quản đốc / Phó quản đốc / " +
+      "Kỹ thuật viên / Trưởng ca. Chưa khai chức danh thì không sửa được gì. " +
+      "Ký cần có chữ ký số trong hồ sơ Tài khoản và sẽ tự điền người + ngày kiểm tra. " +
       "Riêng ô phân công (cương vị, cấp giám sát, tổ máy, ĐVT) và dấu kiểm tra (ngày/người kiểm tra, ngày/người chốt) chỉ Quản trị viên sửa được.",
     matrix: { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "personal", VIEWER: "none" },
   },
