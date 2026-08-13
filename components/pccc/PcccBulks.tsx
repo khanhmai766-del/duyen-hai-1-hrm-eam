@@ -178,6 +178,7 @@ function Fm200Table({
                         value={value}
                         type="number"
                         align="center"
+                        compact
                         disabled={!canManage}
                         lockedReason={lockedReason}
                         onSave={(v) => saveValue(row.kind, label, v)}

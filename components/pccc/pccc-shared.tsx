@@ -187,6 +187,7 @@ export function EditableCell({
   lockedReason,
   align = "left",
   wrap = false,
+  compact = false,
   onSave,
 }: {
   value: string | number | null;
@@ -196,6 +197,12 @@ export function EditableCell({
   /** Có lý do = ô khoá do phân quyền: vẫn bấm được, nhưng chỉ để hiện popup giải thích. */
   lockedReason?: string;
   align?: "left" | "right" | "center";
+  /**
+   * Ô nhập GỌN: chỉ vừa đủ vài chữ số thay vì giãn hết bề rộng cột. Dùng cho lưới số đo
+   * FM200 — cột ở đó rộng vì phải chia đều cho 16 bình, mở ô ra mà giãn hết cột thì cái
+   * khung nhập to gấp mấy lần con số cần gõ, nhìn như lỗi giao diện.
+   */
+  compact?: boolean;
   /** true = cho chữ XUỐNG DÒNG thay vì cắt bằng "…". Dùng trong khối chi tiết dòng,
    *  nơi cần đọc đủ nội dung; trong bảng thì vẫn cắt để không phá chiều cao hàng. */
   wrap?: boolean;
@@ -295,7 +302,12 @@ export function EditableCell({
         if (e.key === "Enter") commit();
       }}
       className={cn(
-        "w-full rounded border border-accent/40 bg-white px-1 py-0.5 text-[12px] outline-none focus:ring-2 focus:ring-accent/20",
+        "rounded border border-accent/40 bg-white px-1 py-0.5 text-[12px] outline-none focus:ring-2 focus:ring-accent/20",
+        // Ô gọn: bỏ luôn nút tăng/giảm của input number — hai mũi tên đó chiếm gần nửa
+        // bề ngang ô nhỏ mà thao tác thật thì luôn gõ số.
+        compact
+          ? "mx-auto block w-14 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          : "w-full",
         align === "right" && "text-right"
       )}
     />
