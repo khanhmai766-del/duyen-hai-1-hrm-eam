@@ -541,10 +541,12 @@ export function DefectForm({
           syncedPayload.severityCriteria = form.severityCriteria;
         }
         if (operationUpdateAvailable) syncedPayload.note = form.note;
+        // Phiếu đã xử lý vẫn được phép đổi KQ Vận hành để rút lại trường hợp
+        // chuyển nhầm. Các trường Vận hành khác tiếp tục bị khóa như trước.
+        if (operationUpdateAvailable) syncedPayload.status = form.status;
         if (!operationFieldsLocked) {
           Object.assign(syncedPayload, {
             severity: form.severity,
-            status: form.status,
             fireSafetyImpact: form.fireSafetyImpact,
             environmentSafetyImpact: form.environmentSafetyImpact,
             condition: form.condition,
@@ -955,7 +957,7 @@ export function DefectForm({
                     {operationFeatureLocked
                       ? "Đồng bộ hai chiều đang tắt. Bạn vẫn có thể gắn thiết bị; các trường Vận hành tạm khóa."
                       : operationFieldsLocked
-                      ? "Phiếu đã xử lý xong. Chỉ Ghi chú được phép thay đổi."
+                      ? "Phiếu đã xử lý xong. Có thể cập nhật KQ Vận hành và Ghi chú; các trường khác vẫn được khóa."
                       : "Có thể cập nhật ngay cả khi chưa gắn thiết bị; các trường Vận hành cột 10–15 được ghi ngược lên Google Sheet."}
                   </p>
                 </div>
@@ -971,7 +973,7 @@ export function DefectForm({
                     </Select>
                   </StackField>
                   <StackField label="KQ Vận hành">
-                    <Select value={form.status} onValueChange={(value) => set("status", value)} disabled={operationFieldsLocked}>
+                    <Select value={form.status} onValueChange={(value) => set("status", value)} disabled={operationFeatureLocked}>
                       <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {DEFECT_STATUS_ORDER.map((status) => (
@@ -1006,7 +1008,7 @@ export function DefectForm({
               </div>
             )}
             {isSynced && defect?.status === "DA_XU_LY" && (
-              <Field label="Tồn đọng" full>
+              <Field label="Chưa lưu lịch sử" full>
                 <button
                   type="button"
                   role="checkbox"

@@ -52,7 +52,7 @@ const PAGE_SIZES = [10, 25, 50, 100];
 // dropdown riêng — chỉ đặt bằng 5 thẻ KPI; bảng này dùng để hiện tên trên chip "Đang lọc".
 const DEFECT_STATUS_FILTER_OPTIONS = [
   { value: "SOURCE_MISSING", label: "Không còn trên Google Sheet" },
-  { value: "TON_DONG", label: "Tồn đọng" },
+  { value: "TON_DONG", label: "Chưa lưu lịch sử" },
   ...DEFECT_STATUS_ORDER.filter((s) => s !== "DA_XU_LY").map((s) => ({ value: s, label: DEFECT_STATUS[s].label })),
 ];
 const DefectForm = dynamic(
@@ -711,7 +711,7 @@ export default function DefectsPage() {
         <DefectKpi label="Đang thực hiện" value={coPct} icon={Wrench} tone="sky" active={statusFilter === "CO_PCT"} onClick={() => toggleStatus("CO_PCT")} />
         <DefectKpi label="Chờ vật tư" value={choVatTu} icon={Package} tone="amber" active={statusFilter === "CHO_VAT_TU"} onClick={() => toggleStatus("CHO_VAT_TU")} />
         <DefectKpi label="Chờ ngừng máy" value={choNgungMay} icon={CirclePause} tone="orange" active={statusFilter === "CHO_NGUNG_MAY"} onClick={() => toggleStatus("CHO_NGUNG_MAY")} />
-        <DefectKpi label="Tồn đọng" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
+        <DefectKpi label="Chưa lưu lịch sử" value={tonDong} icon={CircleSlash} tone="violet" active={statusFilter === "TON_DONG"} onClick={() => toggleStatus("TON_DONG")} />
       </div>
 
       {!isLoading && scopeTotal > 0 && (
@@ -945,7 +945,7 @@ export default function DefectsPage() {
                           </span>
                         ) : d.postRepairAwaitingMaterial ? (
                           <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
-                            Tồn đọng · Chờ vật tư
+                            Đã xử lý · Chờ vật tư
                           </span>
                         ) : (
                           <DefectStatusBadge status={d.status} />

@@ -220,13 +220,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         existing.status === "DA_XU_LY"
         && (
           (severity !== undefined && severity !== existing.severity)
-          || (status !== undefined && status !== existing.status)
           || (condition !== undefined && condition !== existing.condition)
           || (fireSafetyImpact !== undefined && fireSafetyImpact !== existing.fireSafetyImpact)
           || (environmentSafetyImpact !== undefined && environmentSafetyImpact !== existing.environmentSafetyImpact)
         )
       ) {
-        return fail("Phiếu đã xử lý xong, chỉ được phép thay đổi Ghi chú");
+        return fail("Phiếu đã xử lý xong, chỉ được phép thay đổi KQ Vận hành và Ghi chú");
       }
 
       const equipmentNodes = mappingRequested ? await prisma.equipmentNode.findMany({
@@ -307,9 +306,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
                 ? null
                 : undefined,
           postRepairAwaitingMaterial:
-            existing.status === "DA_XU_LY" && typeof body.postRepairAwaitingMaterial === "boolean"
-              ? body.postRepairAwaitingMaterial
-              : undefined,
+            status !== undefined && status !== "DA_XU_LY" && existing.status === "DA_XU_LY"
+              ? false
+              : existing.status === "DA_XU_LY" && typeof body.postRepairAwaitingMaterial === "boolean"
+                ? body.postRepairAwaitingMaterial
+                : undefined,
           images,
           imageUrl: images ? null : undefined,
           relatedDevices: relatedDeviceSeqs
