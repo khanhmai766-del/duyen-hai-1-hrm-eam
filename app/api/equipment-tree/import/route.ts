@@ -7,6 +7,7 @@ import { assertSeqsEditable } from "@/lib/server-access";
 import { invalidateEquipmentNodeCache } from "@/lib/equipment-node-cache";
 import { invalidateDeviceListCache } from "@/lib/device-list-cache";
 import {
+  displayCode,
   validateAndBuild,
   type RawImportRow,
   type ImportMode,
@@ -14,6 +15,7 @@ import {
   type BuiltNode,
   S1_PREFIX,
 } from "@/lib/equipment-import";
+import { normalizeText } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
       // SYNC: upsert theo externalId (thêm mới + cập nhật tên/mã/KKS/quan hệ), không tự xóa.
       for (const n of nodes) (existing.byAsset.has(n.externalId) ? updated++ : created++);
       await upsertManyByExternalId(nodes);
+      await refreshRelocatedSearchText(nodes.map((n) => n.externalId));
     }
 
     // Tính lại childCount toàn cây (chính xác) + xóa cache.
@@ -93,6 +96,30 @@ export async function POST(req: NextRequest) {
 
     return ok({ result: { created, updated, skipped, deleted }, mode });
   });
+}
+
+/**
+ * Dựng lại chuỗi tìm kiếm cho các nút đã sắp xếp lại tay.
+ *
+ * Chuỗi này gồm tên + KKS + MÃ, mà upsert ở trên lấy chuỗi dựng theo mã trong FILE. Với nút
+ * `relocated`, mã trong file là mã cũ — để nguyên thì gõ mã mới vào ô tìm kiếm sẽ không ra
+ * thiết bị. Ở đây dựng lại theo mã thật trong DB; chỉ vài nút nên không đáng kể.
+ */
+async function refreshRelocatedSearchText(externalIds: string[]): Promise<void> {
+  const ids = externalIds.filter(Boolean);
+  if (!ids.length) return;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const moved = await prisma.equipmentNode.findMany({
+      where: { relocated: true, externalId: { in: ids.slice(i, i + CHUNK) } },
+      select: { seq: true, name: true, kks: true },
+    });
+    for (const node of moved) {
+      await prisma.equipmentNode.update({
+        where: { seq: node.seq },
+        data: { searchText: normalizeText(`${node.name} ${node.kks ?? ""} ${displayCode(node.seq)} ${node.seq}`) },
+      });
+    }
+  }
 }
 
 async function branchHasBusinessData(sysPrefix: string): Promise<boolean> {
@@ -131,7 +158,15 @@ async function insertMany(nodes: BuiltNode[]): Promise<number> {
   return n;
 }
 
-/** Upsert theo externalId (Assetid) bằng raw INSERT ... ON CONFLICT — không ghi 32k query lẻ. */
+/**
+ * Upsert theo externalId (Assetid) bằng raw INSERT ... ON CONFLICT — không ghi 32k query lẻ.
+ *
+ * NÚT ĐÃ SẮP XẾP LẠI TAY (`relocated`) GIỮ NGUYÊN VỊ TRÍ: seq/parentSeq/code/depth/sort lấy
+ * lại giá trị trong DB thay vì giá trị trong file. File Excel danh mục vẫn ghi vị trí cũ, nên
+ * không chặn ở đây thì mỗi lần nhập lại là một lần công sắp xếp bị xoá lặng lẽ — dữ liệu
+ * không mất (khoá ngoại cascade kéo phiếu đi theo) nhưng bố cục cây thì về như cũ.
+ * Tên/KKS/bản vẽ vẫn cập nhật bình thường: đó mới là thứ file danh mục nắm chuẩn.
+ */
 async function upsertManyByExternalId(nodes: BuiltNode[]): Promise<void> {
   const cols = 14;
   for (let i = 0; i < nodes.length; i += CHUNK) {
@@ -151,9 +186,13 @@ async function upsertManyByExternalId(nodes: BuiltNode[]): Promise<void> {
         (id, seq, "externalId", "parentSeq", code, name, kks, drawing, depth, sort, "searchText", "childCount", "deviceSynced", "createdAt")
       VALUES ${values.join(",")}
       ON CONFLICT ("externalId") DO UPDATE SET
-        seq = EXCLUDED.seq, "parentSeq" = EXCLUDED."parentSeq", code = EXCLUDED.code,
+        seq         = CASE WHEN "EquipmentNode".relocated THEN "EquipmentNode".seq ELSE EXCLUDED.seq END,
+        "parentSeq" = CASE WHEN "EquipmentNode".relocated THEN "EquipmentNode"."parentSeq" ELSE EXCLUDED."parentSeq" END,
+        code        = CASE WHEN "EquipmentNode".relocated THEN "EquipmentNode".code ELSE EXCLUDED.code END,
+        depth       = CASE WHEN "EquipmentNode".relocated THEN "EquipmentNode".depth ELSE EXCLUDED.depth END,
+        sort        = CASE WHEN "EquipmentNode".relocated THEN "EquipmentNode".sort ELSE EXCLUDED.sort END,
         name = EXCLUDED.name, kks = EXCLUDED.kks, drawing = EXCLUDED.drawing,
-        depth = EXCLUDED.depth, sort = EXCLUDED.sort, "searchText" = EXCLUDED."searchText"
+        "searchText" = EXCLUDED."searchText"
     `;
     await prisma.$executeRawUnsafe(sql, ...params);
   }

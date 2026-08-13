@@ -1057,6 +1057,11 @@ model EquipmentNode {
   // true nếu node do đồng bộ khi TẠO MỚI thiết bị sinh ra (seq không có trong danh mục gốc).
   // Dùng để xóa node theo khi xóa Device, mà không đụng node danh mục nhập từ Excel.
   deviceSynced Boolean  @default(false)
+  // true nếu nút đã được SẮP XẾP LẠI TAY trên web (đổi thư mục cha / đổi mã). Lệnh nhập danh
+  // mục khớp theo Assetid và ghi đè seq/parentSeq theo file Excel, nên không có cờ này thì lần
+  // nhập kế tiếp lặng lẽ kéo nút về đúng chỗ cũ trong file — công sắp xếp mất trắng mà không
+  // ai thấy. Có cờ thì lệnh nhập giữ nguyên vị trí, chỉ cập nhật tên/KKS/bản vẽ.
+  relocated    Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   repairLogs             RepairLog[]
