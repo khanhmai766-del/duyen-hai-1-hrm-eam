@@ -67,25 +67,38 @@ function fmtNum(value: number | null) {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
 }
 
-/** Vẽ ảnh chữ ký + họ tên trong một ô. Không có ảnh thì chỉ còn tên. */
+/**
+ * Vẽ ảnh chữ ký + họ tên trong một ô. Không có ảnh thì chỉ còn tên — mất cả hai là ô
+ * trống, không ai biết ai đã ký.
+ *
+ * `withName: false` dùng cho ô ký của hai bảng FM200: họ tên người kiểm tra đã nằm ngay
+ * ô bên trái cùng dòng, in thêm dưới chữ ký là lặp lại lần thứ hai và ăn mất chỗ của nét
+ * ký. Bảng bồn thì vẫn cần tên vì mỗi dòng một người ký khác nhau.
+ */
 function drawSignature(
   page: PDFPage,
-  opts: { x: number; y: number; w: number; h: number; fonts: PdfFonts; name: string; image?: PDFImage }
+  opts: { x: number; y: number; w: number; h: number; fonts: PdfFonts; name: string; image?: PDFImage; withName?: boolean }
 ) {
   const { x, y, w, h, fonts, name, image } = opts;
+  const withName = opts.withName ?? true;
   if (!image) {
     drawCell(page, name, { x, y, w, h, font: fonts.regular, size: FS.small, align: "center", maxLines: 2 });
     return;
   }
-  const nameH = 16;
-  const scale = Math.min((w - 8) / image.width, (h - nameH - 4) / image.height);
+  const nameH = withName ? 16 : 0;
+  const pad = 4;
+  const scale = Math.min((w - pad * 2) / image.width, (h - nameH - pad) / image.height);
+  const imgH = image.height * scale;
   page.drawImage(image, {
     x: x + (w - image.width * scale) / 2,
-    y: y + h - 2 - image.height * scale,
+    // Không có tên thì chữ ký nằm giữa ô; có tên thì đẩy sát mép trên, chừa chỗ cho tên.
+    y: withName ? y + h - 2 - imgH : y + (h - imgH) / 2,
     width: image.width * scale,
-    height: image.height * scale,
+    height: imgH,
   });
-  drawCell(page, name, { x, y: y + 1, w, h: nameH, font: fonts.regular, size: 7, align: "center", maxLines: 2 });
+  if (withName) {
+    drawCell(page, name, { x, y: y + 1, w, h: nameH, font: fonts.regular, size: 7, align: "center", maxLines: 2 });
+  }
 }
 
 export async function buildPcccFcdPdf(input: FcdPdfInput): Promise<Buffer> {
@@ -184,14 +197,20 @@ export async function buildPcccFcdPdf(input: FcdPdfInput): Promise<Buffer> {
 
   // ---- Từng bảng FM200
   for (const panel of input.report.panels) {
+    // Ô này cao hơn một dòng chữ thường vì nửa phải của nó là CHỮ KÝ: 26pt thì nét ký
+    // co lại chỉ còn bằng cỡ chữ, nhìn không ra chữ ký.
+    const infoH = 40;
+    const signW = 130;
+
     y -= 22;
-    ensure(120);
+    // Xin chỗ cho CẢ CỤM tiêu đề + dòng ký + đầu bảng + hai dòng số liệu, không phải cho
+    // riêng dòng sắp vẽ. Xin từng dòng một thì tiêu đề và chữ ký ở lại cuối trang này còn
+    // số liệu rơi sang trang sau, nhìn tờ giấy đó không biết bảng của hệ thống nào.
+    ensure(24 + infoH + FM_ROW_H * 3);
     drawCentered(page, panel.title.toUpperCase(), fonts.bold, FS.sub, y - 10);
     y -= 24;
 
     // Dòng thông tin ký của cả bảng — đặt NGAY DƯỚI tiêu đề như trên web.
-    const infoH = 26;
-    const signW = 120;
     const infoW = CONTENT_W - signW;
     rect(page, MARGIN, y - infoH, infoW, infoH);
     drawCell(
@@ -210,6 +229,7 @@ export async function buildPcccFcdPdf(input: FcdPdfInput): Promise<Buffer> {
       fonts,
       name: panel.signerName,
       image: imageOf(panel.signatureKey),
+      withName: false,
     });
     y -= infoH;
 
