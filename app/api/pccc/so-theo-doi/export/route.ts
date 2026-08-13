@@ -5,6 +5,8 @@ import { PCCC_PERMISSION, pcccPositionCodesOf, pcccWriteScopeOf, resolvePeriod }
 import { loadSignatureImages } from "@/lib/pccc-archive";
 import { bookFileNameOf, bookKeyOf, bookPositionOf, bookStatusOf, loadBookData } from "@/lib/pccc-so-theo-doi";
 import { buildPcccBookPdf } from "@/lib/pccc-so-theo-doi-pdf";
+import { fcdFileNameOf, fcdKeyOf, fcdStatusOf, loadFcdReport } from "@/lib/pccc-fcd-report";
+import { buildPcccFcdPdf } from "@/lib/pccc-fcd-pdf";
 import { positionLabelOf } from "@/lib/position-catalog";
 import { uploadS3Object } from "@/lib/s3";
 
@@ -28,6 +30,31 @@ export async function GET(req: NextRequest) {
 
     const sp = req.nextUrl.searchParams;
     const period = await resolvePeriod(sp.get("period"));
+
+    // Bảng Foam·CO2·Diesel·FM200: một bản cho cả kỳ, không theo cương vị.
+    if (sp.get("tab") === "FCD") {
+      const status = await fcdStatusOf(period.id);
+      if (!status.ready) return fail(status.reason ?? "Chưa đủ điều kiện xuất bảng", 409);
+      const report = await loadFcdReport(period.id);
+      const images = await loadSignatureImages([
+        ...report.bulks.map((b) => b.signatureKey),
+        ...report.panels.map((p) => p.signatureKey),
+      ]);
+      const pdf = await buildPcccFcdPdf({ periodLabel: period.label, report, signatureImages: images });
+      const fcdName = fcdFileNameOf(period.label);
+      await uploadS3Object({ key: fcdKeyOf(period.label), body: pdf, contentType: "application/pdf", originalName: fcdName });
+      await audit(
+        user.id,
+        "EXPORT_PCCC_BOOK",
+        "PcccPeriod",
+        period.id,
+        auditDetailWithPosition(user, `Xuất bảng Foam·CO2·Diesel·FM200 ${period.label}`)
+      );
+      return new Response(pdf as unknown as BodyInit, {
+        headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${fcdName}"` },
+      });
+    }
+
     const scope = await pcccWriteScopeOf(user);
     const positionCode = bookPositionOf(scope, sp.get("cuongVi"), pcccPositionCodesOf(user)[0]);
     const status = await bookStatusOf(period.id, positionCode);

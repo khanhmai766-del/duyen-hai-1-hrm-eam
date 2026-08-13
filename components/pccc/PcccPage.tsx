@@ -602,7 +602,9 @@ export default function PcccPage() {
    * kỳ mới chưa ai ký, nút TỰ biến mất — không cần cơ chế reset riêng.
    */
   const bookStatusQuery = usePcccBookStatus(
-    { period: effectiveLabel, cuongVi },
+    // Tab Foam·CO2·Diesel·FM200 dùng LUẬT KHÁC (ký đủ 3 bồn + 2 bảng FM200 và điền đủ số
+    // đo), và in ra một bản khác — nên phải hỏi server đúng loại bản in của tab đang mở.
+    { period: effectiveLabel, cuongVi, tab: tab === "FCD" ? "FCD" : undefined },
     Boolean(effectiveLabel) && !periodNotStarted
   );
   const bookStatus = bookStatusQuery.data?.data;
@@ -799,15 +801,17 @@ export default function PcccPage() {
   }
 
   /**
-   * SỔ THEO DÕI PHƯƠNG TIỆN PCCC (Mẫu số 01) của cương vị đang đăng nhập. Server dựng
-   * PDF, LƯU LÊN S3 rồi trả về đúng buffer đó — bản cầm tay và bản lưu trữ luôn khớp.
+   * Bản in PDF của TAB ĐANG MỞ: tab Bình/Tủ chữa cháy ra Sổ theo dõi (Mẫu số 01) của
+   * cương vị, tab Foam·CO2·Diesel·FM200 ra bảng theo dõi của cả kỳ. Server dựng PDF,
+   * LƯU LÊN S3 rồi trả về đúng buffer đó — bản cầm tay và bản lưu trữ luôn khớp.
    */
   async function downloadBook() {
     if (!effectiveLabel) return;
     setDownloading(true);
     try {
       const { blob, filename } = await apiDownload(
-        `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(effectiveLabel)}&cuongVi=${encodeURIComponent(cuongVi)}`
+        `/api/pccc/so-theo-doi/export?period=${encodeURIComponent(effectiveLabel)}&cuongVi=${encodeURIComponent(cuongVi)}` +
+          (tab === "FCD" ? "&tab=FCD" : "")
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -956,7 +960,11 @@ export default function PcccPage() {
             size="sm"
             onClick={downloadBook}
             disabled={downloading}
-            title={`Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`}
+            title={
+              tab === "FCD"
+                ? `Bảng theo dõi Foam · CO2 · Diesel · FM200 — ${period.label}`
+                : `Sổ theo dõi phương tiện PCCC (Mẫu số 01) — ${bookStatus.positionLabel} · ${period.label}`
+            }
             className="border-rose-200 bg-rose-50/60 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
           >
             <FileText className={cn("mr-1.5 size-4", downloading && "animate-pulse")} />

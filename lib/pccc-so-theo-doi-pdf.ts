@@ -14,17 +14,23 @@
  *  - Ảnh chữ ký phải ÉP NỀN TRẮNG và TÔ LẠI THÀNH MỰC XANH trước khi nhúng
  *    (xem `flattenSignature`).
  */
-import fs from "node:fs/promises";
-import path from "node:path";
-import sharp from "sharp";
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from "pdf-lib";
+import { PDFDocument, StandardFonts, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import type { BookRow } from "@/lib/pccc-so-theo-doi";
-
-/** A4 NGANG. Bảng có 7 cột, cột "Tên phương tiện" cần rất rộng — khổ dọc là vỡ bảng. */
-const PAGE = { w: 842, h: 595 };
-const MARGIN = 40;
-const CONTENT_W = PAGE.w - MARGIN * 2;
+import {
+  BLACK,
+  CONTENT_W,
+  FS,
+  MARGIN,
+  PAGE,
+  drawCell,
+  drawCentered,
+  fmtDate,
+  loadPdfFonts,
+  rect,
+  signatureInk,
+  type PdfFonts,
+} from "@/lib/pccc-pdf-kit";
 
 /** Bề rộng cột, cộng lại đúng bằng bề rộng vùng nội dung. 8 cột theo Mẫu số 01. */
 const COLS = [32, 222, 44, 44, 92, 106, 106, 116] as const;
@@ -42,22 +48,11 @@ const HEADERS = [
 /** Cột "Người được phân công quản lý" — nơi đặt ảnh chữ ký. */
 const SIGN_COL = 6;
 
-const BLACK = rgb(0, 0, 0);
-const LINE = 0.8;
-const FS = { title: 13, sub: 11, body: 9, small: 8 };
 /**
  * Đủ cao cho ảnh chữ ký NẰM TRÊN họ tên hai dòng — họ tên Việt dài, ép một dòng là cụt.
  * 46pt là mức đã cân: chữ ký đọc được rõ mà mỗi trang vẫn giữ được ~9 dòng.
  */
 const ROW_H = 46;
-
-/**
- * MỰC CHỮ KÝ trên bản in. Chữ ký lưu trong hồ sơ vẽ bằng #0f172a (xanh gần như đen) nên
- * in ra trông hệt bản photocopy. Văn bản hành chính cần thấy rõ đây là chữ ký TƯƠI, nên
- * bản in tô lại nét sang mực xanh — chỉ đổi TÔNG MÀU, giữ nguyên hình nét và độ đậm nhạt
- * của từng điểm ảnh, không vẽ lại chữ ký.
- */
-const INK = { r: 11, g: 61, b: 145 };
 
 export type BookPdfInput = {
   periodLabel: string;
@@ -69,91 +64,8 @@ export type BookPdfInput = {
   year?: string;
 };
 
-async function loadFonts(pdf: PDFDocument) {
-  const dir = path.join(process.cwd(), "assets", "fonts");
-  try {
-    const [regular, bold] = await Promise.all([
-      fs.readFile(path.join(dir, "DejaVuSerif.ttf")),
-      fs.readFile(path.join(dir, "DejaVuSerif-Bold.ttf")),
-    ]);
-    return { regular: await pdf.embedFont(regular, { subset: true }), bold: await pdf.embedFont(bold, { subset: true }) };
-  } catch {
-    // Thiếu tệp phông là lỗi cài đặt, KHÔNG được im lặng rơi về phông chuẩn: nó không
-    // vẽ được chữ Việt nên sổ in ra sẽ mất dấu hoặc hỏng giữa chừng.
-    throw new Error(
-      "Thiếu phông chữ để dựng PDF (assets/fonts/DejaVuSerif.ttf). Kiểm tra lại bản triển khai."
-    );
-  }
-}
-
-/** Cắt chuỗi thành nhiều dòng vừa bề rộng ô. Cắt theo TỪ, từ nào dài quá thì cắt cứng. */
-function wrap(text: string, font: PDFFont, size: number, maxWidth: number, maxLines = 3): string[] {
-  const clean = (text ?? "").replace(/\s+/g, " ").trim();
-  if (!clean) return [""];
-  const lines: string[] = [];
-  let current = "";
-  for (const word of clean.split(" ")) {
-    const next = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(next, size) <= maxWidth) {
-      current = next;
-      continue;
-    }
-    if (current) lines.push(current);
-    current = word;
-    while (font.widthOfTextAtSize(current, size) > maxWidth && current.length > 1) {
-      let cut = current.length - 1;
-      while (cut > 1 && font.widthOfTextAtSize(current.slice(0, cut), size) > maxWidth) cut -= 1;
-      lines.push(current.slice(0, cut));
-      current = current.slice(cut);
-    }
-    if (lines.length >= maxLines) break;
-  }
-  if (current) lines.push(current);
-  if (lines.length > maxLines) {
-    lines.length = maxLines;
-    lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, Math.max(0, lines[maxLines - 1].length - 1))}…`;
-  }
-  return lines;
-}
-
-function drawCentered(page: PDFPage, text: string, font: PDFFont, size: number, y: number) {
-  const w = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: (PAGE.w - w) / 2, y, size, font, color: BLACK });
-}
-
-/** Vẽ chữ trong ô, canh trái/giữa và canh giữa theo chiều dọc của ô. */
-function drawCell(
-  page: PDFPage,
-  text: string,
-  opts: { x: number; y: number; w: number; h: number; font: PDFFont; size: number; align?: "left" | "center"; maxLines?: number }
-) {
-  const pad = 3;
-  const lines = wrap(text, opts.font, opts.size, opts.w - pad * 2, opts.maxLines ?? 3);
-  const lineH = opts.size + 2;
-  const blockH = lines.length * lineH;
-  let cursor = opts.y + opts.h / 2 + blockH / 2 - opts.size;
-  for (const line of lines) {
-    const lineW = opts.font.widthOfTextAtSize(line, opts.size);
-    const x = opts.align === "center" ? opts.x + (opts.w - lineW) / 2 : opts.x + pad;
-    page.drawText(line, { x, y: cursor, size: opts.size, font: opts.font, color: BLACK });
-    cursor -= lineH;
-  }
-}
-
-function rect(page: PDFPage, x: number, y: number, w: number, h: number) {
-  page.drawRectangle({ x, y, width: w, height: h, borderColor: BLACK, borderWidth: LINE });
-}
-
-function fmtDate(value: Date | null) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-
 /** Trang bìa — bám nguyên văn bản mẫu, chỉ thay hai chỗ có dữ liệu. */
-function drawCover(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont }, input: BookPdfInput, year: string) {
+function drawCover(page: PDFPage, fonts: PdfFonts, input: BookPdfInput, year: string) {
   const boxX = MARGIN;
   const boxY = 150;
   const boxW = CONTENT_W;
@@ -196,7 +108,7 @@ function drawCover(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont }, in
 }
 
 /** Tiêu đề BẢNG II + đầu bảng 2 tầng. Trả về mép dưới của đầu bảng để vẽ tiếp dữ liệu. */
-function drawTableHeader(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont }, withTitle: boolean) {
+function drawTableHeader(page: PDFPage, fonts: PdfFonts, withTitle: boolean) {
   let y = PAGE.h - MARGIN;
   if (withTitle) {
     drawCentered(page, "BẢNG II", fonts.bold, FS.title, y - 10);
@@ -240,52 +152,11 @@ function drawTableHeader(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont
   return y - headH - numH;
 }
 
-/**
- * ÉP NỀN TRẮNG cho ảnh chữ ký.
- *
- * Chữ ký trong hồ sơ là PNG có KÊNH TRONG SUỐT (nét chữ trên nền rỗng). Rất nhiều trình
- * xem PDF và gần như mọi máy in dựng vùng trong suốt thành ĐEN — in ra là một ô đen sì
- * đè lên cột chữ ký, tưởng hỏng cả quyển sổ. Ghép ảnh lên nền trắng trước khi nhúng thì
- * hết hẳn, mà vẫn giữ chữ là chữ thật (tìm kiếm/copy được) và tệp vẫn nhẹ — khác hẳn
- * cách "xuất cả trang thành ảnh".
- *
- * Ảnh lỗi thì trả lại nguyên bản: thà chữ ký hiển thị chưa chuẩn còn hơn mất chữ ký.
- */
-async function flattenSignature(buffer: Buffer): Promise<Buffer> {
-  try {
-    // Làm việc trên RGBA thô: cần chính kênh alpha để biết đâu là nét, đâu là nền.
-    const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const out = Buffer.alloc(info.width * info.height * 3);
-    for (let i = 0, o = 0; i < data.length; i += 4, o += 3) {
-      const alpha = data[i + 3] / 255;
-      // Độ sáng của điểm ảnh gốc giữ lại phần đậm/nhạt (nét mảnh ở rìa nhạt hơn),
-      // nếu ép cứng một màu thì chữ ký trông như hình vẽ vector, mất nét bút.
-      const lum = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
-      const k = 1 - lum * 0.35;
-      // Trộn mực với nền TRẮNG theo alpha — vừa đổi màu vừa xoá nền trong suốt, thứ
-      // khiến máy in dựng thành mảng đen.
-      out[o] = Math.round(255 + (INK.r * k - 255) * alpha);
-      out[o + 1] = Math.round(255 + (INK.g * k - 255) * alpha);
-      out[o + 2] = Math.round(255 + (INK.b * k - 255) * alpha);
-    }
-    return await sharp(out, { raw: { width: info.width, height: info.height, channels: 3 } })
-      .png({ compressionLevel: 9 })
-      .toBuffer();
-  } catch {
-    // Ảnh lỗi: ít nhất vẫn ép nền trắng để không ra mảng đen khi in.
-    try {
-      return await sharp(buffer).flatten({ background: "#ffffff" }).png({ compressionLevel: 9 }).toBuffer();
-    } catch {
-      return buffer;
-    }
-  }
-}
-
 export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
   const year = input.year ?? input.periodLabel.split(".")[1] ?? String(new Date().getFullYear());
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const fonts = await loadFonts(pdf);
+  const fonts = await loadPdfFonts(pdf);
   pdf.setTitle(`So theo doi phuong tien PCCC - ${input.positionLabel} - ${input.periodLabel}`);
   // Phông chuẩn chỉ để pdf-lib khỏi tự nhúng Helvetica khi tài liệu rỗng; không vẽ chữ Việt bằng nó.
   await pdf.embedFont(StandardFonts.Helvetica);
@@ -296,7 +167,7 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
   // chỉ một người ký, nhúng theo dòng là phình tệp lên hàng chục MB.
   const embedded = new Map<string, PDFImage>();
   for (const [key, buffer] of input.signatureImages) {
-    const flat = await flattenSignature(buffer);
+    const flat = await signatureInk(buffer);
     try {
       embedded.set(key, await pdf.embedPng(flat));
     } catch {

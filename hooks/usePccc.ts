@@ -499,7 +499,7 @@ export interface PcccBookStatus {
   reason: string | null;
 }
 
-export function usePcccBookStatus(filters: { period?: string; cuongVi?: string }, enabled = true) {
+export function usePcccBookStatus(filters: { period?: string; cuongVi?: string; tab?: string }, enabled = true) {
   return useQuery({
     queryKey: ["pccc-book-status", filters],
     queryFn: () => apiGet<PcccBookStatus>(`/api/pccc/so-theo-doi${qs(filters)}`),
