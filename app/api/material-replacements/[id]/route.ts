@@ -115,9 +115,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           select: { id: true },
         }),
       ]);
-      // Vật tư dùng chung (COMMON) chỉ có MỘT dòng danh mục, dùng được cho khai báo của mọi
-      // tổ máy — cùng quy ước với lúc tạo khai báo (app/api/device-material-declarations).
-      if (!targetMaterial || (targetMaterial.machine !== existing.machine && targetMaterial.machine !== "COMMON")) {
+      if (!targetMaterial || targetMaterial.machine !== existing.machine) {
         return fail("Vật tư không thuộc đúng tổ máy của khai báo", 400);
       }
       if (duplicate) return fail("Vật tư này đã được khai báo cho thiết bị");
