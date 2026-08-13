@@ -86,6 +86,7 @@ export function DefectForm({
   showDeviceHistory = false,
   onDone,
   onMappingSaved,
+  onDeviceHistoryVisibilityChange,
   onCancel,
 }: {
   defect?: DefectItem | null;
@@ -104,6 +105,8 @@ export function DefectForm({
   showDeviceHistory?: boolean;
   onDone?: () => void;
   onMappingSaved?: (defect: DefectItem) => void;
+  /** Báo cho panel cha biết lúc nào cần nới rộng để đặt lịch sử cạnh form. */
+  onDeviceHistoryVisibilityChange?: (visible: boolean) => void;
   onCancel?: () => void;
 }) {
   const isEdit = !!defect;
@@ -208,6 +211,10 @@ export function DefectForm({
     sourceDeviceRaw: defect?.sourceDeviceRaw ?? "",
     images: defect?.images ?? (defect?.imageUrl ? [defect.imageUrl] : []),
   });
+
+  React.useEffect(() => {
+    onDeviceHistoryVisibilityChange?.(showDeviceHistory && Boolean(form.device));
+  }, [form.device, onDeviceHistoryVisibilityChange, showDeviceHistory]);
   const defaultPositionResolvedRef = React.useRef(Boolean(form.system));
   const [mappingScope, setMappingScope] = React.useState<TreeScope>(initialMappedUnit);
   React.useEffect(() => {

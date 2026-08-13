@@ -47,6 +47,7 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
           <p className="text-xs text-muted-foreground">Thông tin bổ sung của phiếu Vận hành</p>
         </div>
         <RequestNumberControl defect={defect} />
+        <DetailLine label="Nội dung khiếm khuyết" value={defect.content || "—"} multiline />
         <DetailLine label="Yêu cầu" value={defect.requestType || "—"} />
         <DetailLine label="Trưởng ca" value={defect.shiftLeaderName || "—"} />
         {defect.sourceType === "GOOGLE_SHEETS" && (

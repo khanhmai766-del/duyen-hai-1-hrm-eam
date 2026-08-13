@@ -547,6 +547,7 @@ export default function DefectsPage() {
 
   const [formOpen, setFormOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<DefectItem | null>(null);
+  const [formHasDeviceHistory, setFormHasDeviceHistory] = React.useState(false);
   const [cancelTarget, setCancelTarget] = React.useState<DefectItem | null>(null);
   const [cancelNote, setCancelNote] = React.useState("Vận hành hủy phiếu");
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
@@ -556,7 +557,11 @@ export default function DefectsPage() {
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = React.useState<string | null>(null);
 
-  function openCreate() { setEditTarget(null); setFormOpen(true); }
+  function openCreate() {
+    setEditTarget(null);
+    setFormHasDeviceHistory(false);
+    setFormOpen(true);
+  }
   async function loadDefectDetail(id: string) {
     setDetailLoadingId(id);
     try {
@@ -573,6 +578,7 @@ export default function DefectsPage() {
     const detail = await loadDefectDetail(d.id);
     if (!detail) return;
     setEditTarget(detail);
+    setFormHasDeviceHistory(Boolean(detail.device));
     setFormOpen(true);
   }
   async function openComplete(d: DefectItem) {
@@ -1114,7 +1120,10 @@ export default function DefectsPage() {
       {formOpen && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-ink/40" onClick={() => setFormOpen(false)} />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-xl animate-in slide-in-from-right xl:w-[min(1500px,calc(100vw-3rem))] xl:max-w-none">
+          <div className={cn(
+            "absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-xl transition-[width,max-width] duration-300 animate-in slide-in-from-right",
+            formHasDeviceHistory && "xl:w-[min(1500px,calc(100vw-3rem))] xl:max-w-none"
+          )}>
             <div className="flex items-center gap-2 border-b border-border p-4">
               <button onClick={() => setFormOpen(false)} className="rounded-md p-1.5 hover:bg-muted" aria-label="Đóng"><X className="h-5 w-5" /></button>
               <h2 className="text-lg font-bold text-ink">
@@ -1125,6 +1134,7 @@ export default function DefectsPage() {
               defect={editTarget}
               section={section}
               showDeviceHistory
+              onDeviceHistoryVisibilityChange={setFormHasDeviceHistory}
               onDone={() => setFormOpen(false)}
               onMappingSaved={(updated) => {
                 setFormOpen(false);
