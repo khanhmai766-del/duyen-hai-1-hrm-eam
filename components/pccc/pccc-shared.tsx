@@ -387,9 +387,11 @@ export function SignatureStamp({
           className="h-8 w-auto max-w-[120px] object-contain"
         />
       )}
+      {/* KHÔNG in ngày ký ở đây: ô "Ngày kiểm tra" ngay trong cùng khối chi tiết đã ghi
+          đúng ngày đó (thao tác ký tự điền vào ô ấy), lặp lại chỉ làm rối và có nguy cơ
+          hai chỗ nhìn khác nhau khi ai đó sửa tay ô ngày. */}
       <span className="min-w-0 leading-tight">
         <span className="block truncate text-[12px] font-medium text-ink">{signature.signerName}</span>
-        <span className="block text-[11px] text-muted-foreground">{fmtDate(signature.signedAt)}</span>
       </span>
     </span>
   );
