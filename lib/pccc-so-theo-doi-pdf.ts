@@ -346,7 +346,9 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
           h: ROW_H,
           font: fonts.regular,
           size: isNote ? FS.small : FS.body,
-          align: isName || isNote ? "left" : "center",
+          // Ghi chú CĂN GIỮA như các cột số liệu khác (drawCell đã căn giữa theo chiều
+          // dọc sẵn); chỉ cột "Tên phương tiện" căn trái vì là chuỗi dài nhiều dòng.
+          align: isName ? "left" : "center",
           maxLines: isName || isNote ? 3 : 2,
         });
       }
