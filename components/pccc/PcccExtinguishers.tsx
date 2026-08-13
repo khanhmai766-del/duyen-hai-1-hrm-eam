@@ -359,11 +359,15 @@ export function PcccExtinguishers({
                             onSave={(v) => save(r, "nguoiGiamSat", v)}
                           />
                         </DetailField>
-                        <DetailField label="Ngày kiểm tra">
-                          <EditableCell value={r.ngayKiemTra} type="date" disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "ngayKiemTra", v)} />
-                        </DetailField>
+                        {/* Hàng 2 xếp theo mạch việc: ghi chú (mô tả) rồi tới DẤU VẾT KIỂM
+                            TRA — ngày kiểm tra đứng ngay cạnh chữ ký, vì chính thao tác ký
+                            điền ra ngày đó; tách hai ô này ra hai đầu là bắt mắt nhảy qua
+                            lại để đối chiếu. Tab Tủ chữa cháy xếp cùng thứ tự này. */}
                         <DetailField label="Ghi chú">
                           <EditableCell value={r.ghiChu} disabled={!rowEditable} lockedReason={lockReason()} onSave={(v) => save(r, "ghiChu", v)} />
+                        </DetailField>
+                        <DetailField label="Ngày kiểm tra">
+                          <EditableCell value={r.ngayKiemTra} type="date" disabled={!rowEditable || !canEditAdminField} lockedReason={lockReason(true)} onSave={(v) => save(r, "ngayKiemTra", v)} />
                         </DetailField>
                         {/* Tổ máy và SL/ĐVT KHÔNG hiển thị: SL luôn là "1 Bình", còn tổ
                             máy đã có ô lọc riêng. Hai trường vẫn lưu trong DB và vẫn

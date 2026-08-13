@@ -338,12 +338,25 @@ export function PcccCabinets({
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={colCount} className="bg-slate-50/80 p-0">
                       {/*
-                        Bố cục khối chi tiết: hàng đầu là 3 trường NGẮN (ngày kiểm tra,
-                        chữ ký, vị trí), hàng hai dành cho hai trường DÀI mỗi cái nửa
-                        hàng, hàng cuối liệt kê khiếm khuyết theo dạng chip chiếm cả
-                        hàng. Mọi trường đều XUỐNG DÒNG chứ không cắt bằng "…".
+                        Bố cục khối chi tiết: hàng đầu là 3 trường NGẮN, hàng hai dành cho
+                        hai trường DÀI mỗi cái nửa hàng, hàng cuối liệt kê khiếm khuyết
+                        theo dạng chip chiếm cả hàng. Mọi trường đều XUỐNG DÒNG chứ không
+                        cắt bằng "…".
+
+                        Thứ tự trường KHỚP với tab Bình chữa cháy: vị trí trước, rồi tới
+                        dấu vết kiểm tra (ngày kiểm tra ngay cạnh chữ ký). Hai tab mở ra
+                        cùng một hình thì mắt không phải học lại bố cục khi đổi tab.
                       */}
                       <DetailPanel>
+                        <DetailField label="Vị trí lắp đặt">
+                          <EditableCell
+                            value={val("viTri", r.viTri)}
+                            wrap
+                            disabled={!rowEditable}
+                            lockedReason={lockReason()}
+                            onSave={(v) => save(r, "viTri", v || null)}
+                          />
+                        </DetailField>
                         <DetailField label="Ngày kiểm tra">
                           <EditableCell
                             value={val("ngayKiemTra", r.ngayKiemTra)}
@@ -357,15 +370,6 @@ export function PcccCabinets({
                             lượt, giống tab Bình chữa cháy. API ký vẫn còn nguyên. */}
                         <DetailField label="Chữ ký">
                           <SignatureStamp signature={r.signature} />
-                        </DetailField>
-                        <DetailField label="Vị trí lắp đặt">
-                          <EditableCell
-                            value={val("viTri", r.viTri)}
-                            wrap
-                            disabled={!rowEditable}
-                            lockedReason={lockReason()}
-                            onSave={(v) => save(r, "viTri", v || null)}
-                          />
                         </DetailField>
 
                         <DetailField label="Tên / Loại tủ" span={2}>

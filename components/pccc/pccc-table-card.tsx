@@ -86,8 +86,16 @@ export function RowExpander({ expanded, onToggle }: { expanded: boolean; onToggl
 }
 
 /**
- * Một mục trong khối chi tiết: nhãn và giá trị NẰM CÙNG DÒNG cho gọn, không xếp dọc —
- * xếp dọc làm khối chi tiết cao gấp đôi mà vẫn thừa chỗ trống.
+ * Một mục trong khối chi tiết: nhãn bên trái, giá trị bên phải, CÙNG DÒNG cho gọn.
+ *
+ * Nhãn nằm trong CỘT RỘNG CỐ ĐỊNH chứ không co theo độ dài chữ. Để nhãn tự co thì mỗi
+ * mục có một điểm bắt đầu giá trị khác nhau ("Ngày kiểm tra" ngắn, "Vị trí lắp đặt"
+ * dài) — cả khối nhìn răng cưa, mắt phải dò lại từ đầu ở từng dòng. Cột cố định làm mọi
+ * giá trị thẳng hàng nên đọc lướt được theo chiều dọc; đã có cột riêng thì bỏ luôn dấu
+ * hai chấm cho sạch.
+ *
+ * Căn theo MÉP TRÊN, không theo đường chữ: ô chữ ký có ảnh và ô ghi chú xuống dòng cao
+ * hơn hẳn một dòng chữ, căn theo đường chữ là nhãn bị đẩy lệch xuống giữa ô.
  */
 export function DetailField({
   label,
@@ -102,15 +110,18 @@ export function DetailField({
   return (
     <div
       className={cn(
-        "flex min-w-0 items-baseline gap-1.5",
+        // Cột nhãn phải đủ rộng cho nhãn DÀI NHẤT ("Linh kiện đang lỗi", "Nguồn gốc /
+        // NSX") nằm gọn MỘT dòng: nhãn gãy đôi dòng làm khối chi tiết trông rối hơn hẳn
+        // so với việc hy sinh vài chục pixel bề ngang của phần giá trị.
+        "grid min-w-0 grid-cols-[116px_1fr] items-start gap-x-3",
         span === 2 && "sm:col-span-2",
         span === "full" && "col-span-full"
       )}
     >
-      <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}:
+      <span className="pt-[3px] text-[10.5px] font-semibold uppercase leading-tight tracking-[0.03em] text-slate-500">
+        {label}
       </span>
-      <div className="min-w-0 flex-1 text-[12px] text-ink">{children ?? "—"}</div>
+      <div className="min-w-0 text-[12px] leading-[1.5] text-ink">{children ?? "—"}</div>
     </div>
   );
 }
@@ -139,8 +150,10 @@ export function FaultChip({ group, status, tone }: { group: string; status: stri
  */
 export function DetailPanel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky left-0 w-[min(100%,1120px)] border-l-[3px] border-[#00558F] bg-slate-50/80 py-2 pl-3 pr-4">
-      <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    <div className="sticky left-0 w-[min(100%,1120px)] border-l-[3px] border-[#00558F] bg-slate-50/80 py-3 pl-4 pr-5">
+      {/* Khoảng hở NGANG rộng hơn hở DỌC: cột nọ phải tách hẳn khỏi cột kia, còn các
+          dòng trong cùng một cột thì nên đứng gần nhau để đọc thành cụm. */}
+      <div className="grid gap-x-10 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </div>
   );
 }
