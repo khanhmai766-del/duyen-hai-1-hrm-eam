@@ -245,6 +245,11 @@ export async function applyEquipmentMove(tx: Prisma.TransactionClient, plan: Equ
     const results = await Promise.all([
       tx.defect.updateMany({ where: { deviceSeq: { in: seqs } }, data: { mappedDeviceUnit: "COMMON" } }),
       tx.defectHistory.updateMany({ where: { deviceSeq: { in: seqs } }, data: { mappedDeviceUnit: "COMMON" } }),
+      // Thiết bị LIÊN QUAN trong phiếu mang hồ sơ tổ máy riêng (`mappedUnit`), không dùng
+      // chung cột với thiết bị chính — bỏ sót là phiếu vẫn còn dòng ghi S1/S2 trên thiết bị
+      // dùng chung, đúng thứ mà việc chuyển cây phải dọn.
+      tx.defectRelatedDevice.updateMany({ where: { deviceSeq: { in: seqs } }, data: { mappedUnit: "COMMON" } }),
+      tx.defectHistoryRelatedDevice.updateMany({ where: { deviceSeq: { in: seqs } }, data: { mappedUnit: "COMMON" } }),
       tx.materialReplacement.updateMany({ where: { deviceSeq: { in: seqs } }, data: { machine: "COMMON" } }),
       tx.materialReplacementLog.updateMany({ where: { deviceSeq: { in: seqs } }, data: { machine: "COMMON" } }),
       tx.deviceQrCard.updateMany({ where: { deviceSeq: { in: seqs } }, data: { machine: "COMMON" } }),
