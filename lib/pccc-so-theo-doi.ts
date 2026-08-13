@@ -12,6 +12,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
+import { toneOf } from "@/lib/pccc-status";
 import { signaturesOf } from "@/lib/pccc-service";
 
 /** Thư mục gốc trên S3. Tách khỏi `pccc/archive` vì vòng đời khác nhau hoàn toàn. */
@@ -70,9 +71,29 @@ export type BookRow = {
   sl: number | null;
   ngayKiemTra: Date | null;
   tinhTrang: string;
+  /** Cột 8 "Ghi chú" của biểu mẫu — xem `noteOf`. Thiết bị còn tốt thì để trống. */
+  ghiChu: string;
   nguoiKiemTra: string;
   signatureKey: string | null;
 };
+
+/**
+ * Cột 8 "Ghi chú" của Mẫu số 01 — CHỈ ghi cho thiết bị KHÔNG còn khả dụng (bất khả dụng
+ * / cần theo dõi). Sổ nộp cho công tác PCCC cần nói rõ thiết bị hỏng thì hỏng ở đâu;
+ * còn thiết bị tốt mà cũng điền thì cột này đầy chữ vô ích, che mất mấy dòng đáng chú ý.
+ *
+ * Nguồn chữ khác nhau theo bảng, đúng như nghiệp vụ chốt 2026-08-13:
+ *  - Bình chữa cháy → cột "Áp suất / KL" (hết áp, 2/4 mức đỏ, KL hao hụt…), vì đó chính
+ *    là lý do bình bị đánh giá không khả dụng.
+ *  - Tủ chữa cháy  → cột "Ghi chú" của bảng (mô tả linh kiện hỏng).
+ *
+ * Xét theo MÀU của tình trạng (`toneOf`) chứ không so chuỗi: danh mục tình trạng còn
+ * đổi chữ, nhưng "ok / cần theo dõi / hỏng" thì đã có bảng tra dùng chung.
+ */
+function noteOf(tinhTrang: string | null, source: string | null): string {
+  if (toneOf(tinhTrang) === "ok") return "";
+  return source ?? "";
+}
 
 export type BookStatus = {
   positionCode: string | null;
@@ -91,12 +112,32 @@ export async function loadBookData(periodId: string, positionCode: string) {
     prisma.pcccExtinguisher.findMany({
       where: { periodId, cuongViCode: positionCode },
       orderBy: [{ stt: "asc" }, { ma: "asc" }],
-      select: { id: true, ma: true, chungLoai: true, dvt: true, sl: true, ngayKiemTra: true, tinhTrang: true, nguoiKiemTra: true },
+      select: {
+        id: true,
+        ma: true,
+        chungLoai: true,
+        dvt: true,
+        sl: true,
+        ngayKiemTra: true,
+        tinhTrang: true,
+        apSuat: true,
+        nguoiKiemTra: true,
+      },
     }),
     prisma.pcccCabinet.findMany({
       where: { periodId, cuongViCode: positionCode },
       orderBy: [{ stt: "asc" }, { ma: "asc" }],
-      select: { id: true, ma: true, ten: true, dvt: true, sl: true, ngayKiemTra: true, tinhTrangTongThe: true, nguoiKiemTra: true },
+      select: {
+        id: true,
+        ma: true,
+        ten: true,
+        dvt: true,
+        sl: true,
+        ngayKiemTra: true,
+        tinhTrangTongThe: true,
+        ghiChu: true,
+        nguoiKiemTra: true,
+      },
     }),
     signaturesOf(periodId, "EXTINGUISHER"),
     signaturesOf(periodId, "CABINET"),
@@ -111,6 +152,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: r.sl,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrang ?? "",
+      ghiChu: noteOf(r.tinhTrang, r.apSuat),
       // Cột 7 ghi người ĐÃ KÝ, không phải ô `nguoiKiemTra` gõ tay — ký mới là bằng chứng.
       nguoiKiemTra: sigBcc.get(r.id)?.signerName ?? r.nguoiKiemTra ?? "",
       signatureKey: sigBcc.get(r.id)?.signatureKey ?? null,
@@ -123,6 +165,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       sl: r.sl,
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrangTongThe ?? "",
+      ghiChu: noteOf(r.tinhTrangTongThe, r.ghiChu),
       nguoiKiemTra: sigTcc.get(r.id)?.signerName ?? r.nguoiKiemTra ?? "",
       signatureKey: sigTcc.get(r.id)?.signatureKey ?? null,
     })),

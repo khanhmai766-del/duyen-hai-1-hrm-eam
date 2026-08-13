@@ -26,17 +26,21 @@ const PAGE = { w: 842, h: 595 };
 const MARGIN = 40;
 const CONTENT_W = PAGE.w - MARGIN * 2;
 
-/** Bề rộng cột, cộng lại đúng bằng bề rộng vùng nội dung. */
-const COLS = [40, 285, 60, 55, 105, 110, 107] as const;
+/** Bề rộng cột, cộng lại đúng bằng bề rộng vùng nội dung. 8 cột theo Mẫu số 01. */
+const COLS = [32, 222, 44, 44, 92, 106, 106, 116] as const;
 const HEADERS = [
   "STT",
   "Tên phương tiện",
-  "Đơn vị tính",
+  "ĐVT",
   "Số lượng",
-  "Thời gian kiểm tra, bảo quản, bảo dưỡng",
+  "Thời gian kiểm tra, bảo dưỡng",
   "Đánh giá tình trạng hoạt động",
   "Người được phân công quản lý",
+  "Ghi chú",
 ] as const;
+
+/** Cột "Người được phân công quản lý" — nơi đặt ảnh chữ ký. */
+const SIGN_COL = 6;
 
 const BLACK = rgb(0, 0, 0);
 const LINE = 0.8;
@@ -216,7 +220,7 @@ function drawTableHeader(page: PDFPage, fonts: { regular: PDFFont; bold: PDFFont
   let x = MARGIN;
   COLS.forEach((w, i) => {
     rect(page, x, y - headH, w, headH);
-    if (i === COLS.length - 1) {
+    if (i === SIGN_COL) {
       // Cột 7 của bản mẫu có thêm dòng phụ "(Ký, ghi rõ họ tên)" — dòng này chính là chỗ
       // giải thích vì sao ô bên dưới có ảnh chữ ký, bỏ đi là lệch mẫu.
       drawCell(page, HEADERS[i], { x, y: y - headH + 12, w, h: headH - 12, font: fonts.bold, size: FS.small, align: "center" });
@@ -315,35 +319,43 @@ export async function buildPcccBookPdf(input: BookPdfInput): Promise<Buffer> {
     }
     stt += 1;
     const top = y - ROW_H;
-    const cells = [
-      String(stt),
-      `${row.ten} ${row.ma}`.trim(),
-      row.dvt,
-      row.sl === null || row.sl === undefined ? "" : String(row.sl),
-      fmtDate(row.ngayKiemTra),
-      row.tinhTrang,
-    ];
+    // Cột 7 (chữ ký) vẽ riêng bên dưới vì có ảnh; các cột còn lại chỉ là chữ.
+    const cells: Record<number, string> = {
+      0: String(stt),
+      1: `${row.ten} ${row.ma}`.trim(),
+      2: row.dvt,
+      3: row.sl === null || row.sl === undefined ? "" : String(row.sl),
+      4: fmtDate(row.ngayKiemTra),
+      5: row.tinhTrang,
+      7: row.ghiChu,
+    };
     let x = MARGIN;
     COLS.forEach((w, i) => {
       rect(page, x, top, w, ROW_H);
-      if (i < cells.length) {
+      if (i in cells) {
+        // Ghi chú là câu mô tả hỏng hóc, dài hơn hẳn các ô khác — cho chữ nhỏ hơn và
+        // thêm một dòng để không bị cắt cụt mất phần "cần thay mới".
+        const isNote = i === 7;
+        // Cột "Tên phương tiện" gồm tên + MÃ THIẾT BỊ, mà mã nằm ở cuối chuỗi: bó 2 dòng
+        // là tên tủ dài nuốt mất mã, sổ in ra không tra được thiết bị nào.
+        const isName = i === 1;
         drawCell(page, cells[i], {
           x,
           y: top,
           w,
           h: ROW_H,
           font: fonts.regular,
-          size: FS.body,
-          align: i === 1 ? "left" : "center",
-          maxLines: 2,
+          size: isNote ? FS.small : FS.body,
+          align: isName || isNote ? "left" : "center",
+          maxLines: isName || isNote ? 3 : 2,
         });
       }
       x += w;
     });
 
     // Cột 7: ảnh chữ ký nằm trên, họ tên nằm dưới — đúng "Ký, ghi rõ họ tên".
-    const signX = MARGIN + COLS.slice(0, 6).reduce((a, b) => a + b, 0);
-    const signW = COLS[6];
+    const signX = MARGIN + COLS.slice(0, SIGN_COL).reduce((a, b) => a + b, 0);
+    const signW = COLS[SIGN_COL];
     const image = row.signatureKey ? embedded.get(row.signatureKey) : undefined;
     if (image) {
       const nameH = 18;
