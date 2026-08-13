@@ -6,6 +6,7 @@ import {
   assertAdminOnlyFields,
   resolvePcccWriteScope,
   assertPeriodWritable,
+  clearInspectionStamp,
   clearSignature,
   normalizePositionPatch,
   pickFields,
@@ -53,6 +54,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const changed = Object.keys(data).filter(
       (k) => String((current as Record<string, unknown>)[k] ?? "") !== String(data[k] ?? "")
     );
+    // Có sửa gì thì chữ ký VÀ dấu chốt (ngày/người chốt) cùng bị xoá.
+    if (changed.length > 0) clearInspectionStamp("BULK", data);
     const updated = await prisma.pcccBulk.update({ where: { id: current.id }, data });
     if (changed.length > 0) await clearSignature("BULK", current.id);
 

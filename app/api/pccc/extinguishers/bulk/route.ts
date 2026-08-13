@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import {
   adminOnlyDenial,
+  clearInspectionStamp,
   normalizePositionPatch,
   pcccScopeDenial,
   periodWriteBlockReason,
@@ -151,6 +152,8 @@ export async function POST(req: NextRequest) {
         (k) => String((current as Record<string, unknown>)[k] ?? "") !== String(data[k] ?? "")
       );
       if (changed.length === 0) continue;
+      // Dòng có sửa thì dấu kiểm tra bị xoá cùng chữ ký, ghi chung một lượt update.
+      clearInspectionStamp("EXTINGUISHER", data);
       writes.push({ id: current.id, ma: current.ma, data, changed, before: current });
     }
 

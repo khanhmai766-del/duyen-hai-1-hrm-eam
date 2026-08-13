@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import {
   adminOnlyDenial,
+  clearInspectionStamp,
   normalizePositionPatch,
   pcccScopeDenial,
   periodWriteBlockReason,
@@ -148,6 +149,8 @@ export async function POST(req: NextRequest) {
       if (derived !== current.tinhTrangTongThe) data.tinhTrangTongThe = derived;
 
       if (changed.length === 0 && cellUpdates.length === 0 && !("tinhTrangTongThe" in data)) continue;
+      // Dòng có sửa thì dấu kiểm tra bị xoá cùng chữ ký, ghi chung một lượt update.
+      clearInspectionStamp("CABINET", data);
       writes.push({ id: current.id, ma: current.ma, data, cellUpdates, changed, before: current });
     }
 

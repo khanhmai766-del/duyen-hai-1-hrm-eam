@@ -6,6 +6,7 @@ import {
   assertAdminOnlyFields,
   resolvePcccWriteScope,
   assertPeriodWritable,
+  clearInspectionStamp,
   clearSignature,
   normalizePositionPatch,
   pickFields,
@@ -71,6 +72,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       }
     }
 
+    // Có sửa gì thì chữ ký VÀ dấu kiểm tra cùng bị xoá (xem clearInspectionStamp).
+    if (changed.length > 0) clearInspectionStamp("CABINET", data);
     const updated = await prisma.pcccCabinet.update({
       where: { id: current.id },
       data: { ...data, tinhTrangTongThe: deriveCabinetStatus(current.components) },

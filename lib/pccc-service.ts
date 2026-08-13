@@ -75,6 +75,36 @@ export function assertPeriodWritable(period: { isClosed: boolean; label: string;
   if (reason) throw fail(reason, 409);
 }
 
+/**
+ * DẤU KIỂM TRA của từng bảng: cặp (ngày, người). Bảng bồn gọi là "chốt", ba bảng kia
+ * gọi là "kiểm tra" — cùng một vai trò nên xử lý chung một luật.
+ */
+const INSPECTION_STAMP: Record<PcccTargetType, readonly [string, string]> = {
+  EXTINGUISHER: ["ngayKiemTra", "nguoiKiemTra"],
+  CABINET: ["ngayKiemTra", "nguoiKiemTra"],
+  BULK: ["ngayChot", "nguoiChot"],
+  FM200_PANEL: ["ngayKiemTra", "nguoiKiemTra"],
+};
+
+/**
+ * DẤU KIỂM TRA ĐI LIỀN VỚI CHỮ KÝ — thêm lệnh xoá ngày/người kiểm tra vào bản vá đang
+ * sắp ghi, để dùng CHUNG một lượt update với dữ liệu mới (khỏi thêm một vòng ghi DB).
+ *
+ * Sửa số liệu thì chữ ký bị xoá (quy tắc 2). Nếu để ngày/người kiểm tra ở lại thì dòng
+ * đó mang một cái dấu KHÔNG CÒN CHỮ KÝ NÀO ĐỨNG SAU — trên bảng nhìn y như đã kiểm tra
+ * xong, người dùng ngồi đợi mãi không hiểu vì sao nút xuất sổ không hiện (gặp thật
+ * 2026-08-13). Ký lại sẽ tự điền lại đúng ngày ký.
+ *
+ * KHÔNG đụng tới ô mà chính bản vá đang đặt tay: quản trị sửa thẳng ngày kiểm tra thì
+ * phải giữ nguyên giá trị họ vừa nhập.
+ */
+export function clearInspectionStamp(targetType: PcccTargetType, data: Record<string, unknown>) {
+  const [dateField, nameField] = INSPECTION_STAMP[targetType];
+  if (!(dateField in data)) data[dateField] = null;
+  if (!(nameField in data)) data[nameField] = null;
+  return data;
+}
+
 /** Xoá chữ ký của đúng một mục tiêu (dòng hoặc bảng). */
 export async function clearSignature(targetType: PcccTargetType, targetId: string) {
   await prisma.pcccSignature.deleteMany({ where: { targetType, targetId } });

@@ -109,6 +109,12 @@ type ResultDialog = {
   note?: string;
   /** Ảnh chữ ký số vừa đóng vào các dòng — cho người ký thấy đúng cái đã ký. */
   signatureUrl?: string | null;
+  /**
+   * Vừa lưu sửa đổi xong thì chữ ký của những dòng đó đã bị xoá — mở luôn cửa ký lại,
+   * đừng bắt người dùng tự mò lại vào menu Chỉnh sửa. Không có chỗ ký theo lượt (tab
+   * Foam·CO2·Diesel·FM200 ký từng bồn/từng bảng) thì để trống.
+   */
+  resign?: boolean;
 };
 
 /**
@@ -439,7 +445,8 @@ export default function PcccPage() {
         { label: "Kỳ kiểm tra", value: period.label },
         { label: "Số mục đã lưu", value: `${saved} mục`, strong: true },
       ],
-      note: "Chữ ký của các mục vừa sửa đã bị xoá — cần ký lại để xác nhận số liệu mới.",
+      // Tab này ký TỪNG bồn / TỪNG bảng ngay trên dòng, không có cửa ký theo lượt để mở.
+      note: "Chữ ký và dấu chốt của các mục vừa sửa đã bị xoá — bấm nút Ký trên từng dòng để ký lại; ngày chốt sẽ điền theo ngày ký.",
     });
     setDrafts((prev) => ({ ...prev, FCD: {} }));
     setEditing(false);
@@ -492,7 +499,8 @@ export default function PcccPage() {
               { label: "Kỳ kiểm tra", value: period.label },
               { label: "Số tủ đã lưu", value: `${res.saved} tủ`, strong: true },
             ],
-            note: "Chữ ký của các tủ vừa sửa đã bị xoá — cần ký lại để xác nhận số liệu mới.",
+            note: "Chữ ký và dấu kiểm tra của các tủ vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
+            resign: true,
           });
           setDrafts((prev) => ({ ...prev, TCC: {} }));
           setEditing(false);
@@ -529,7 +537,9 @@ export default function PcccPage() {
           note:
             (res.adjusted > 0
               ? "Các dòng nâng mức là do quy tắc áp suất: áp suất từ mức cảnh báo trở lên thì không được để \"Khả dụng\". "
-              : "") + "Chữ ký của các dòng vừa sửa đã bị xoá — cần ký lại để xác nhận số liệu mới.",
+              : "") +
+            "Chữ ký và dấu kiểm tra của các dòng vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
+          resign: true,
         });
         setDrafts((prev) => ({ ...prev, BCC: {} }));
         setEditing(false);
@@ -1457,9 +1467,21 @@ export default function PcccPage() {
             {resultDialog?.note && <p className="text-[12px] text-muted-foreground">{resultDialog.note}</p>}
           </div>
           <DialogFooter>
-            <Button size="sm" onClick={() => setResultDialog(null)}>
+            <Button variant={resultDialog?.resign ? "ghost" : "default"} size="sm" onClick={() => setResultDialog(null)}>
               Đóng
             </Button>
+            {resultDialog?.resign && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setResultDialog(null);
+                  openSignDialog();
+                }}
+              >
+                <PenLine className="mr-1.5 size-4" />
+                Ký lại ngay
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

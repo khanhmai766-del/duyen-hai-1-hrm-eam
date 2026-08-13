@@ -6,6 +6,7 @@ import {
   assertAdminOnlyFields,
   resolvePcccWriteScope,
   assertPeriodWritable,
+  clearInspectionStamp,
   clearSignature,
   normalizePositionPatch,
   pickFields,
@@ -68,9 +69,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     assertAdminOnlyFields(user, data);
     assertPcccScopePatch(scope, data);
 
-    const changed = Object.keys(data);
+    // So với giá trị đang có để biết CÓ THẬT SỰ đổi gì không — mở bảng ra rồi lưu mà
+    // không sửa gì thì không được xoá chữ ký, giống ba bảng kia.
+    const changed = Object.keys(data).filter(
+      (k) => JSON.stringify((current as Record<string, unknown>)[k] ?? null) !== JSON.stringify(data[k] ?? null)
+    );
+    if (changed.length > 0) clearInspectionStamp("FM200_PANEL", data);
     const updated = await prisma.pcccFm200Panel.update({ where: { id: current.id }, data });
-    await clearSignature("FM200_PANEL", current.id);
+    if (changed.length > 0) await clearSignature("FM200_PANEL", current.id);
 
     await audit(
       user.id,
@@ -80,6 +86,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       auditDetailWithPosition(user, `${current.period.label} · ${current.title}`),
       { beforeData: current, afterData: updated, changedFields: changed }
     );
-    return ok({ ...updated, signature: null, signatureCleared: true });
+    return ok({ ...updated, signature: null, signatureCleared: changed.length > 0 });
   });
 }
