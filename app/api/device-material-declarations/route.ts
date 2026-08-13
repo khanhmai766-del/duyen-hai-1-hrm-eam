@@ -35,8 +35,12 @@ export async function GET(req: NextRequest) {
     if (machines.includes("COMMON") && machines.length > 1) return fail("Thiết bị dùng chung không thể khai báo cùng tổ máy khác");
     await assertSeqEditable(user, deviceSeq);
 
+    // Lấy cả vật tư DÙNG CHUNG: hóa chất và chai khí chỉ có MỘT dòng danh mục (machine
+    // COMMON) chứ không nhân đôi theo tổ máy như dầu/lọc. Không lấy vào đây thì thiết bị
+    // thuộc cây tổ máy — vd cụm nạp khí CO2 của máy phát — không chọn được chai khí CO2,
+    // danh sách vật tư hiện trống trơn dù danh mục có đủ.
     const materials = await prisma.material.findMany({
-      where: { machine: { in: machines } },
+      where: { machine: { in: [...machines, "COMMON"] } },
       orderBy: [{ category: "asc" }, { name: "asc" }],
       select: { id: true, code: true, name: true, unit: true, category: true, machine: true, quantity: true },
     });
@@ -44,11 +48,21 @@ export async function GET(req: NextRequest) {
     const byCode = new Map<string, typeof materials>();
     for (const material of materials) byCode.set(material.code, [...(byCode.get(material.code) ?? []), material]);
     const options = Array.from(byCode.values()).flatMap((siblings) => {
-      if (!machines.every((machine) => siblings.some((material) => material.machine === machine))) return [];
-      const primary = siblings.find((material) => material.machine === machines[0]) ?? siblings[0];
+      // Có đủ dòng riêng cho từng tổ máy đang chọn thì dùng dòng riêng — giữ nguyên cách cũ.
+      if (machines.every((machine) => siblings.some((material) => material.machine === machine))) {
+        const primary = siblings.find((material) => material.machine === machines[0]) ?? siblings[0];
+        return [{
+          ...primary,
+          materialIdsByMachine: Object.fromEntries(siblings.map((material) => [material.machine, material.id])),
+          machines,
+        }];
+      }
+      // Không có dòng riêng: chỉ nhận vật tư dùng chung, một dòng dùng cho mọi tổ máy.
+      const common = siblings.find((material) => material.machine === "COMMON");
+      if (!common) return [];
       return [{
-        ...primary,
-        materialIdsByMachine: Object.fromEntries(siblings.map((material) => [material.machine, material.id])),
+        ...common,
+        materialIdsByMachine: Object.fromEntries(machines.map((machine) => [machine, common.id])),
         machines,
       }];
     });
@@ -84,19 +98,28 @@ export async function POST(req: NextRequest) {
     );
     if (requestedIds.some((id) => !id)) return fail("Vật tư chưa có đủ danh mục cho các tổ máy đã chọn");
 
+    const uniqueIds = Array.from(new Set(requestedIds));
     const [device, materials] = await Promise.all([
       prisma.equipmentNode.findUnique({ where: { seq: deviceSeq }, select: { seq: true, name: true, parentSeq: true } }),
       prisma.material.findMany({
-        where: { id: { in: requestedIds }, machine: { in: machines } },
+        where: { id: { in: uniqueIds } },
         select: { id: true, code: true, name: true, unit: true, category: true, machine: true },
       }),
     ]);
     if (!device) return fail("Không tìm thấy thiết bị", 404);
-    if (materials.length !== machines.length) return fail("Vật tư không tồn tại đầy đủ trong danh mục của các tổ máy đã chọn", 404);
+    if (materials.length !== uniqueIds.length) return fail("Vật tư không tồn tại đầy đủ trong danh mục của các tổ máy đã chọn", 404);
     if (new Set(materials.map((material) => material.code)).size !== 1) return fail("Vật tư được chọn không đồng nhất giữa các tổ máy");
-    const materialByMachine = new Map(materials.map((material) => [material.machine, material]));
-    if (machines.some((machine) => materialByMachine.get(machine)?.id !== String(materialIdsByMachine[machine] ?? (machines.length === 1 ? materialId : "")))) {
-      return fail("Vật tư không khớp tổ máy đã chọn");
+
+    // Mỗi tổ máy phải dùng dòng danh mục CỦA CHÍNH tổ máy đó; vật tư dùng chung (COMMON)
+    // thì một dòng dùng cho mọi tổ máy — xem phần lấy danh sách ở GET.
+    const materialById = new Map(materials.map((material) => [material.id, material]));
+    const materialByMachine = new Map<string, (typeof materials)[number]>();
+    for (const [index, machine] of machines.entries()) {
+      const material = materialById.get(requestedIds[index]);
+      if (!material || (material.machine !== machine && material.machine !== "COMMON")) {
+        return fail("Vật tư không khớp tổ máy đã chọn");
+      }
+      materialByMachine.set(machine, material);
     }
     // Tổ máy quyết định CÂY thiết bị được phép khai báo (S1/S2 → nhánh 1,2,3,7; COMMON → 5,6).
     for (const machine of machines) assertSeqsInScope([deviceSeq], machine);
