@@ -360,26 +360,26 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           </div>
 
           <div className="overflow-x-auto">
-          <Table className="min-w-[1490px]">
+          <Table className="min-w-[1160px]">
             {/* Đầu bảng nền xanh EVN, dính khi cuộn dọc trong vùng bảng */}
             <TableHeader>
               <TableRow className="border-0 hover:bg-transparent [&>th]:border-r [&>th]:border-white/20 [&>th:last-child]:border-r-0">
-                <TableHead className="w-[52px] bg-[#00558F]" />
-                <TableHead className="min-w-[380px] bg-[#00558F]"><SortHeader label="Nội dung khiếm khuyết" sortKey="defectContent" sort={sort} onSort={toggleSort} /></TableHead>
-                <TableHead className="w-[136px] min-w-[136px] bg-[#00558F] px-2">
+                <TableHead className="w-[44px] bg-[#00558F]" />
+                <TableHead className="min-w-[272px] bg-[#00558F]"><SortHeader label="Nội dung khiếm khuyết" sortKey="defectContent" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[104px] min-w-[104px] bg-[#00558F] px-2">
                   <div className="flex items-center justify-center gap-1.5">
                     <SortHeader label="Yêu cầu" sortKey="requestType" sort={sort} onSort={toggleSort} align="center" inline />
                     <RequestTypeColumnFilter value={requestTypeFilter} onChange={setRequestTypeFilter} />
                   </div>
                 </TableHead>
-                <TableHead className="w-[96px] bg-[#00558F] px-2"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[180px] min-w-[180px] bg-[#00558F] px-2"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
-                <TableHead className="w-[150px] bg-[#00558F] px-2"><SortHeader label="Nguồn" sortKey="requestNumber" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[130px] bg-[#00558F] px-2"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[160px] bg-[#00558F] px-2"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[145px] bg-[#00558F] px-2"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[88px] bg-[#00558F] px-2"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[136px] min-w-[136px] bg-[#00558F] px-2"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
+                <TableHead className="w-[92px] bg-[#00558F] px-2"><SortHeader label="Nguồn" sortKey="requestNumber" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[100px] bg-[#00558F] px-2"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[136px] bg-[#00558F] px-2"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[112px] bg-[#00558F] px-2"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 {actionCol && (
-                  <TableHead className="w-[92px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
+                  <TableHead className="w-[76px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
                     Thao tác
                   </TableHead>
                 )}
@@ -430,7 +430,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                             {r.workOrderNumber ? ` · ${r.workOrderNumber}` : ""}
                           </div>
                         </TableCell>
-                        <TableCell className="px-3 py-2.5 text-center">
+                        <TableCell className="px-2 py-2.5 text-center">
                           {r.requestType ? (
                             <span className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]">
                               {r.requestType}
@@ -439,7 +439,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                             <span className="text-[13px] text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-3 py-2.5 text-center">
+                        <TableCell className="px-2 py-2.5 text-center">
                           <UnitBadge unit={r.unit} />
                         </TableCell>
                         <TableCell className="px-3 py-2.5">
@@ -447,7 +447,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                             {r.system || "Chưa xác định"}
                           </div>
                         </TableCell>
-                        <TableCell className="px-3 py-2.5 text-center">
+                        <TableCell className="px-2 py-2.5 text-center">
                           {r.requestNumber ? (
                             <span
                               className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]"
@@ -459,7 +459,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                             <span className="text-[13px] text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap px-3 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
+                        <TableCell className="whitespace-nowrap px-2 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
                           {formatDate(r.performedAt)}
                         </TableCell>
                         <TableCell className="px-3 py-2.5">
