@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
 // Các loại vật tư được gom nhóm — khớp GROUPABLE_CATEGORIES phía server.
-export const GROUPING_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Bi Nghiền Than"] as const;
+export const GROUPING_CATEGORIES = ["Dầu bôi trơn", "Lõi lọc dầu", "Thiết bị C&I", "Hóa Chất", "Chai Khí", "Bi Nghiền Than"] as const;
 export type GroupingCategory = (typeof GROUPING_CATEGORIES)[number];
 
 export interface OilMaterialRow {

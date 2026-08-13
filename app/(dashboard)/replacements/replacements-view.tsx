@@ -74,7 +74,7 @@ const MACHINE_FILTERS = [
 ] as const;
 
 // Bộ lọc loại vật tư (theo tab phân loại trong Danh mục vật tư).
-const CATEGORY_FILTERS = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất"] as const;
+const CATEGORY_FILTERS = ["Dầu bôi trơn", "Lõi lọc dầu", "Hóa Chất", "Chai Khí"] as const;
 
 // Cỡ trang của bảng Lịch sử thay thế — theo đúng mẫu bảng Lịch sử sửa chữa.
 const HISTORY_PAGE_SIZES = [10, 25, 50, 100];
@@ -229,7 +229,8 @@ function replacementCategoryMatches(category: string | null | undefined, filter:
   return (
     filter === "ALL" ||
     category === filter ||
-    (filter === "Hóa Chất" && (category === "Vật tư tiêu hao" || category === "Hóa chất"))
+    (filter === "Hóa Chất" && (category === "Vật tư tiêu hao" || category === "Hóa chất")) ||
+    (filter === "Chai Khí" && category === "Chai khí")
   );
 }
 

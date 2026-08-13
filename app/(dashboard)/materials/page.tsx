@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, CircleDot, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -52,7 +52,8 @@ const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; label
   { key: "Dầu bôi trơn", label: "Dầu bôi trơn", icon: Droplet },
   { key: "Lõi lọc dầu", label: "Lõi lọc", icon: Filter },
   { key: "Thiết bị C&I", label: "Thiết bị C&I", icon: Cpu },
-  { key: "Hóa Chất", label: "Hóa chất & Chai khí", icon: FlaskConical },
+  { key: "Hóa Chất", label: "Hóa chất", icon: FlaskConical },
+  { key: "Chai Khí", label: "Chai khí", icon: Cylinder },
   { key: "Bi Nghiền Than", label: "Bi Nghiền Than", icon: CircleDot },
 ];
 
@@ -431,9 +432,9 @@ function MaterialsPageContent() {
 
   function changeCategoryTab(nextCategory: string) {
     setCategoryFilter(nextCategory);
-    // Hóa chất & chai khí là danh mục dùng chung, nên khi người dùng chọn nhóm này
+    // Hóa chất và chai khí là danh mục dùng chung, nên khi người dùng chọn nhóm này
     // tự chuyển phạm vi tổ máy về COMMON. Các nhóm còn lại giữ nguyên tổ máy đang xem.
-    if (nextCategory === "Hóa Chất" && machineTab !== "COMMON") {
+    if ((nextCategory === "Hóa Chất" || nextCategory === "Chai Khí") && machineTab !== "COMMON") {
       changeMachineTab("COMMON");
     }
   }

@@ -9,7 +9,7 @@ import {
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { isChemicalFlowTicket, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -179,12 +179,11 @@ export async function POST(req: NextRequest) {
     if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
 
     // Loại vật tư
-    const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
     const materialCategory = String(body.materialCategory || "").trim();
-    if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
-    // Hóa chất luôn đi theo luồng Đề xuất. Không để phiếu ở trạng thái chờ
+    if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
+    // Hóa chất và chai khí luôn đi theo luồng Đề xuất. Không để phiếu ở trạng thái chờ
     // chọn luồng vì nghiệp vụ này không áp dụng Ứng hoặc Sử dụng hiện có.
-    const type = materialCategory === "Hóa chất" ? "DE_XUAT" : "CHUA_CHON";
+    const type = isChemicalFlowTicket(materialCategory) ? "DE_XUAT" : "CHUA_CHON";
 
     let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
     const nextStatus = "CHO_XAC_NHAN";

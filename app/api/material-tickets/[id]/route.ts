@@ -8,7 +8,7 @@ import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
-import { TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { isChemicalFlowTicket, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
@@ -439,7 +439,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "editInfo") {
       if (!(await canManageTicket(user, t)))
         return fail("Bạn không có quyền sửa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
       const unit = String(body.unit || "").trim();
       if (!["S1", "S2", "COMMON"].includes(unit)) return fail("Tổ máy không hợp lệ");
       const assignedPosition = String(body.assignedPosition || "").trim();
@@ -449,7 +448,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
       if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
       const materialCategory = String(body.materialCategory || "").trim();
-      if (!CATEGORIES.includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
+      if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
       const bbkt = String(body.bbktNumber || "").trim(); // BBKT giờ là tuỳ chọn (bổ sung ở bước Nghiệm thu)
       const data: {
         unit: string;
@@ -854,7 +853,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const isChemicalTicket = t.materialCategory === "Hóa chất";
+      const isChemicalTicket = isChemicalFlowTicket(t.materialCategory);
       const requestedWorkflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
       // Quy tắc nghiệp vụ: Hóa chất chỉ được đi theo luồng Đề xuất.
       const workflowType = isChemicalTicket ? "DE_XUAT" : requestedWorkflowType;
@@ -1032,7 +1031,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!erpMaterial) return fail("Không tìm thấy tên vật tư theo mã ERP đã chọn", 404);
       // Số lượng đề xuất Hóa chất không bị ràng buộc bởi tồn ERP. Việc xác nhận
       // số lượng thực lãnh ở bước sau vẫn giữ kiểm tra tồn kho để tránh âm kho.
-      if (t.materialCategory !== "Hóa chất" && erpMaterial.erpStock < item.quantity) {
+      if (!isChemicalFlowTicket(t.materialCategory) && erpMaterial.erpStock < item.quantity) {
         return fail(
           `Mã vật tư ERP "${erpCode}" chỉ còn ${erpMaterial.erpStock.toLocaleString("vi-VN")} ${item.material.unit}, không đủ số lượng đề xuất ${item.quantity.toLocaleString("vi-VN")} ${item.material.unit}`
         );

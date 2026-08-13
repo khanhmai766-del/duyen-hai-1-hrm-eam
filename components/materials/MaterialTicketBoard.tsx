@@ -13,7 +13,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, isChemicalFlowTicket, MATERIAL_CATEGORIES, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -421,7 +421,7 @@ export default function MaterialTicketBoard({
 }
 
 /* ================= tạo phiếu ================= */
-const CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Bi nghiền"];
+const CATEGORIES = TICKET_MATERIAL_CATEGORIES;
 const UNITS = ["S1", "S2", "COMMON"];
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
@@ -1316,7 +1316,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
           {t.items.length > 0 && (
             <>
             {t.items.map((it, itemIndex) => {
-              const short = t.materialCategory !== "Hóa chất"
+              const short = !isChemicalFlowTicket(t.materialCategory)
                 && ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)
                 && it.quantity > it.material.quantity;
               return (
@@ -1615,7 +1615,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     ? confirmationMaterialOption.erpCodes
     : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
         .map((code) => ({ code, name: t.items[0]?.material.name ?? "—", erpStock: 0 }));
-  const isChemicalTicket = t.materialCategory === "Hóa chất";
+  const isChemicalTicket = isChemicalFlowTicket(t.materialCategory);
   const proposalFlowAvailable = isChemicalTicket
     ? true
     : opts ? confirmationErpInfoRows.some((row) => row.erpStock > 0) : null;

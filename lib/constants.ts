@@ -289,6 +289,10 @@ export const MATERIAL_CATEGORIES = [
   "Lõi lọc dầu",
   "Thiết bị C&I",
   "Hóa Chất",
+  // Chai khí (CO2, N2) tách khỏi Hóa Chất từ 2026-08: cùng là vật tư tiêu hao nhưng
+  // theo dõi theo CHAI (đếm vỏ, đổi vỏ) chứ không theo khối lượng tiêu thụ, nên gộp
+  // chung một danh mục thì hai lối theo dõi lẫn vào nhau.
+  "Chai Khí",
   "Bi Nghiền Than",
 ] as const;
 
@@ -304,6 +308,7 @@ export function materialCategoryMatches(value: string | null | undefined, target
   return (
     value === target ||
     (target === "Hóa Chất" && (value === "Vật tư tiêu hao" || value === "Hóa chất")) ||
+    (target === "Chai Khí" && value === "Chai khí") ||
     (target === "Bi Nghiền Than" && (value === "Bi nghiền than" || value === "Bi nghiền"))
   );
 }
@@ -323,8 +328,23 @@ export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
   "Dầu bôi trơn": "Dầu bôi trơn",
   "Lọc dầu": "Lõi lọc dầu",
   "Hóa chất": "Hóa Chất",
+  "Chai khí": "Chai Khí",
   "Bi nghiền": "Bi Nghiền Than",
 };
+
+/** Loại vật tư chọn được khi lập PHIẾU vật tư. Khác cách viết với `MATERIAL_CATEGORIES`
+ *  (nhãn trên phiếu ngắn hơn) nên phải đi qua `TICKET_TO_MATERIAL_CATEGORY` để tra Danh mục. */
+export const TICKET_MATERIAL_CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Chai khí", "Bi nghiền"] as const;
+
+/**
+ * Phiếu đi theo LUỒNG HÓA CHẤT: luôn bắt đầu ở Đề xuất (không có Ứng / Sử dụng hiện có)
+ * và số lượng đề xuất không bị chặn bởi tồn ERP — vì đây là vật tư tiêu hao mua theo lô,
+ * kho thường về 0 giữa hai lần nhập. Chai khí theo dõi khác hóa chất nhưng cùng đặc điểm
+ * mua sắm này nên dùng chung luồng.
+ */
+export function isChemicalFlowTicket(materialCategory: string | null | undefined): boolean {
+  return materialCategory === "Hóa chất" || materialCategory === "Chai khí";
+}
 
 /** Ai được THAO TÁC Danh mục vật tư (thêm/sửa/xoá/xuất): Quản trị (ADMIN),
  *  Kỹ thuật viên (role TECHNICIAN hoặc chức vụ), Quản đốc / Phó Quản đốc.
