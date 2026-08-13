@@ -20,7 +20,8 @@ export function LockChip({ pending }: { pending: boolean }) {
       {pending && <span className="h-full w-3 self-stretch bg-amber-500" aria-hidden="true" />}
       <span
         className={cn(
-          "px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wider",
+          // whitespace-nowrap: cột hẹp thì "Chờ chốt" bị bẻ làm đôi, nhìn như hai thẻ chồng nhau.
+          "whitespace-nowrap px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wider",
           pending ? "bg-white text-muted-foreground" : "bg-emerald-600 text-white"
         )}
       >

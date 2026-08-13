@@ -189,7 +189,11 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const actionCol = canManage || canDelete;
   // Mở rộng + Nội dung khiếm khuyết + Loại yêu cầu + Tổ máy + Cương vị
   // + Kết thúc + Người cập nhật + Chốt lịch sử (+ Thao tác)
-  const detailColSpan = actionCol ? 10 : 9;
+  // Cột "Nguồn" chỉ có nghĩa khi bản ghi CÒN CHỜ CHỐT: lúc đó nó vẫn dính với phiếu
+  // khiếm khuyết đang mở, tra ngược được. Chốt xong thì bản ghi tự đứng một mình và số
+  // yêu cầu có thể được thu hồi để dùng lại, in ra chỉ gây hiểu nhầm.
+  const showSourceColumn = statusFilter === "PENDING";
+  const detailColSpan = 8 + (showSourceColumn ? 1 : 0) + (actionCol ? 1 : 0);
   // Tổ máy LUÔN có giá trị (mặc định S1) nên không tính là đang lọc, nếu không
   // nút Xoá bộ lọc sẽ sáng vĩnh viễn và ô "Chưa có lịch sử" không bao giờ hiện.
   const hasActiveFilters =
@@ -205,7 +209,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       { key: "performedAt", header: "Ngày kết thúc", width: 15, align: "center" as const, value: (r: DefectHistoryItem) => formatDate(r.performedAt) },
       { key: "unit", header: "Tổ máy", width: 10, align: "center" as const, value: (r: DefectHistoryItem) => r.unit },
       { key: "system", header: "Cương vị", width: 22, value: (r: DefectHistoryItem) => r.system },
-      { key: "requestNumber", header: "Nguồn (SYC khếm khuyết)", width: 20, align: "center" as const, value: (r: DefectHistoryItem) => r.requestNumber },
       { key: "deviceName", header: "Tên thiết bị", width: 28, value: (r: DefectHistoryItem) => deviceNameByCode.get(r.device ?? "") ?? r.device },
       { key: "defectContent", header: "Nội dung công tác", width: 36, value: (r: DefectHistoryItem) => r.defectContent },
       { key: "content", header: "Nội dung thực hiện", width: 36, value: (r: DefectHistoryItem) => r.content },
@@ -374,10 +377,12 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                 </TableHead>
                 <TableHead className="w-[88px] bg-[#00558F] px-2"><SortHeader label="Tổ máy" sortKey="unit" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 <TableHead className="w-[136px] min-w-[136px] bg-[#00558F] px-2"><SortHeader label="Cương vị" sortKey="system" sort={sort} onSort={toggleSort} /></TableHead>
-                <TableHead className="w-[92px] bg-[#00558F] px-2"><SortHeader label="Nguồn" sortKey="requestNumber" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                {showSourceColumn && (
+                  <TableHead className="w-[92px] bg-[#00558F] px-2"><SortHeader label="Nguồn" sortKey="requestNumber" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                )}
                 <TableHead className="w-[100px] bg-[#00558F] px-2"><SortHeader label="Kết thúc" sortKey="performedAt" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[136px] bg-[#00558F] px-2"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
-                <TableHead className="w-[112px] bg-[#00558F] px-2"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[124px] bg-[#00558F] px-2"><SortHeader label="Người cập nhật" sortKey="createdBy" sort={sort} onSort={toggleSort} align="center" /></TableHead>
+                <TableHead className="w-[124px] min-w-[124px] bg-[#00558F] px-2"><SortHeader label="Chốt lịch sử" sortKey="locked" sort={sort} onSort={toggleSort} align="center" /></TableHead>
                 {actionCol && (
                   <TableHead className="w-[76px] bg-[#00558F] px-2 text-center text-[11px] font-semibold uppercase tracking-wider text-white">
                     Thao tác
@@ -447,18 +452,20 @@ export function DefectHistoryTab({ role }: { role?: string }) {
                             {r.system || "Chưa xác định"}
                           </div>
                         </TableCell>
-                        <TableCell className="px-2 py-2.5 text-center">
-                          {r.requestNumber ? (
-                            <span
-                              className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]"
-                              title={`Số yêu cầu khếm khuyết ${r.requestNumber}`}
-                            >
-                              {r.requestNumber}
-                            </span>
-                          ) : (
-                            <span className="text-[13px] text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                        {showSourceColumn && (
+                          <TableCell className="px-2 py-2.5 text-center">
+                            {r.requestNumber ? (
+                              <span
+                                className="inline-block rounded-md bg-sky-50 px-2.5 py-0.5 text-[12.5px] font-semibold text-[#00558F]"
+                                title={`Số yêu cầu khếm khuyết ${r.requestNumber}`}
+                              >
+                                {r.requestNumber}
+                              </span>
+                            ) : (
+                              <span className="text-[13px] text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell className="whitespace-nowrap px-2 py-2.5 text-center font-mono text-[13px] font-semibold text-ink">
                           {formatDate(r.performedAt)}
                         </TableCell>
