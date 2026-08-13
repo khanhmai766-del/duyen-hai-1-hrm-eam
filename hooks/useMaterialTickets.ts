@@ -21,7 +21,8 @@ export interface MaterialTicket {
   id: string;
   sequenceMonth: string;
   sequenceNumber: number;
-  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO";
+  // GHI_NHAN = phiếu khai một bước (NH3 lỏng): tạo xong là HOAN_TAT, không có bước tiếp.
+  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN";
   unit: string;
   status: string;
   assignedPosition: string;

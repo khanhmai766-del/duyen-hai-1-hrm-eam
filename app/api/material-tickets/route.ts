@@ -9,7 +9,7 @@ import {
   getWorkflowRoleMap,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { isChemicalFlowTicket, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { isChemicalFlowTicket, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -183,10 +183,10 @@ export async function POST(req: NextRequest) {
     if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
     // Hóa chất và chai khí luôn đi theo luồng Đề xuất. Không để phiếu ở trạng thái chờ
     // chọn luồng vì nghiệp vụ này không áp dụng Ứng hoặc Sử dụng hiện có.
-    const type = isChemicalFlowTicket(materialCategory) ? "DE_XUAT" : "CHUA_CHON";
+    let type = isChemicalFlowTicket(materialCategory) ? "DE_XUAT" : "CHUA_CHON";
 
     let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
-    const nextStatus = "CHO_XAC_NHAN";
+    let nextStatus = "CHO_XAC_NHAN";
     const materialId = String(body.materialId || "").trim();
     if (!materialId) return fail("Vui lòng chọn tên vật tư");
     const proposedQuantity = Math.trunc(Number(body.proposedQuantity || body.quantity || 0));
@@ -210,6 +210,14 @@ export async function POST(req: NextRequest) {
     const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
     if (selectedMaterial.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
     if (selectedMaterial.machine !== unit) return fail("Vật tư không thuộc tổ máy đã chọn");
+    // Vật tư khai MỘT BƯỚC (NH3 lỏng): lập phiếu xong là hoàn tất luôn — xem
+    // SINGLE_STEP_TICKET_MATERIAL_CODES. Phiếu vẫn nằm đủ trên bảng theo dõi, chỉ là không
+    // còn bước nào để ai thao tác tiếp.
+    const singleStep = isSingleStepTicketMaterial(selectedMaterial.code);
+    if (singleStep) {
+      type = SINGLE_STEP_TICKET_TYPE;
+      nextStatus = "HOAN_TAT";
+    }
     const replacementPoints = await prisma.materialReplacement.findMany({
       where: { materialId: selectedMaterial.id },
       select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
@@ -271,7 +279,7 @@ export async function POST(req: NextRequest) {
       return ticket;
     });
 
-    const workflowLabel = type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
+    const workflowLabel = type === SINGLE_STEP_TICKET_TYPE ? "khai một bước" : type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
       `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabels.join(", ")}`);
     return ok(ticket);

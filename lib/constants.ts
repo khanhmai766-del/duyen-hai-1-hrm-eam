@@ -346,6 +346,23 @@ export function isChemicalFlowTicket(materialCategory: string | null | undefined
   return materialCategory === "Hóa chất" || materialCategory === "Chai khí";
 }
 
+/**
+ * VẬT TƯ KHAI MỘT BƯỚC: lập phiếu xong là hết, không đi tiếp lãnh — sử dụng — nghiệm thu —
+ * quyết toán. NH3 lỏng bơm thẳng từ xe bồn vào bồn chứa hệ thống SCR: không có việc "lãnh
+ * vật tư" hay "nghiệm thu" cho từng phiếu, phiếu chỉ để GHI NHẬN lượng đã dùng vào sổ theo dõi.
+ *
+ * Khoá theo MÃ vật tư chứ không theo tên: tên gọi trong danh mục còn sửa được (đang là
+ * "Hóa chât NH3 lỏng" — sai chính tả), mã ERP thì không.
+ */
+export const SINGLE_STEP_TICKET_MATERIAL_CODES = ["1.61.16.003.VIE.00.000"] as const;
+
+/** Giá trị `MaterialTicket.type` của phiếu khai một bước. */
+export const SINGLE_STEP_TICKET_TYPE = "GHI_NHAN";
+
+export function isSingleStepTicketMaterial(materialCode: string | null | undefined): boolean {
+  return !!materialCode && (SINGLE_STEP_TICKET_MATERIAL_CODES as readonly string[]).includes(materialCode);
+}
+
 /** Ai được THAO TÁC Danh mục vật tư (thêm/sửa/xoá/xuất): Quản trị (ADMIN),
  *  Kỹ thuật viên (role TECHNICIAN hoặc chức vụ), Quản đốc / Phó Quản đốc.
  *  Xem nội dung bảng thì mọi cương vị đều được. */

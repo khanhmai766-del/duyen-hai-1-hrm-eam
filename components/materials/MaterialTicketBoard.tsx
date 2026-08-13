@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Plus, Minus, X, Check, FileText, Zap, ClipboardList, Package, Clock, ChevronRight,
+  Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, isChemicalFlowTicket, MATERIAL_CATEGORIES, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, MATERIAL_CATEGORIES, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -73,6 +73,10 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
+  // Khai một bước (NH3 lỏng): lập phiếu là xong, không có bước nào để thao tác tiếp.
+  [SINGLE_STEP_TICKET_TYPE]: [
+    { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
+  ],
   SU_DUNG_HIEN_CO: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
     { key: "XAC_NHAN_HIEN_CO", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
@@ -85,6 +89,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
 };
 const ORDER: Record<string, string[]> = {
   CHUA_CHON: ["B0", "CHO_XAC_NHAN"],
+  [SINGLE_STEP_TICKET_TYPE]: ["B0", "HOAN_TAT"],
   DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
   UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", "HOAN_TAT"],
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
@@ -308,7 +313,10 @@ export default function MaterialTicketBoard({
           const isOpen = openId === t.id;
           return (
             <React.Fragment key={t.id}>
-            <button className={`row ${mine ? "mine" : ""}`} onClick={() => setOpenId(isOpen ? null : t.id)}>
+            <button
+              className={`row ${mine ? "mine" : ""} ${t.type === SINGLE_STEP_TICKET_TYPE ? "ghinhan" : ""}`}
+              onClick={() => setOpenId(isOpen ? null : t.id)}
+            >
               <span className="code-cell">
                 <span className={`exp ${isOpen ? "open" : ""}`} title={isOpen ? "Thu gọn" : "Mở chi tiết"}>
                   {isOpen ? <Minus size={12} /> : <Plus size={12} />}
@@ -316,7 +324,9 @@ export default function MaterialTicketBoard({
                 <span className="code">{t.sequenceNumber}</span>
               </span>
               <span className="kind-cell">
-                {t.type === "UNG"
+                {t.type === SINGLE_STEP_TICKET_TYPE
+                  ? <span className="tag ghinhan"><FlaskConical size={11} /> Ghi nhận</span>
+                  : t.type === "UNG"
                   ? <span className="tag ung"><Zap size={11} /> Ứng</span>
                   : t.type === "CHUA_CHON"
                     ? <span className="tag"><Clock size={11} /> Chờ chọn luồng</span>
@@ -807,6 +817,13 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
               </>
             ) : (
               <p className="note ung"><Zap size={13} /> Luồng Ứng: số biên bản kiểm tra sẽ bổ sung sau bước xác nhận xuất file.</p>
+            )}
+            {isSingleStepTicketMaterial(selectedMaterial?.code) && (
+              <p className="note ghinhan">
+                <FlaskConical size={13} /> {selectedMaterial?.name} khai <b>một bước</b>: tạo phiếu xong là hoàn
+                tất, phiếu chỉ để ghi nhận lượng đã dùng trên bảng theo dõi, không qua các bước lãnh —
+                sử dụng — nghiệm thu — quyết toán.
+              </p>
             )}
             <div className="frm-f">
               <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -2489,6 +2506,11 @@ const CSS = `
 .row>span:nth-child(1),.row>span:nth-child(2),.row>span:nth-child(3),.row>span:nth-child(4),.row>span:nth-child(5),.row>span:nth-child(6),.row>span:nth-child(7),.row>span:nth-child(8){text-align:center;justify-self:stretch;}
 .row:hover{background:#fafaf8;}
 .row.mine{background:#fffbeb;box-shadow:inset 3px 0 0 #f59e0b;}
+/* Phiếu khai một bước — nền xanh ngọc để tách hẳn khỏi các phiếu còn đi tiếp quy trình. */
+.row.ghinhan{background:#ecfeff;box-shadow:inset 3px 0 0 #0e7490;}
+.row.ghinhan:hover{background:#cffafe;}
+.tag.ghinhan{background:#cffafe;color:#155e75;}
+.note.ghinhan{background:#ecfeff;border-color:#a5f3fc;color:#155e75;}
 .row.mine:hover{background:#fef3c7;}
 .row.mine .d.cur{background:#f59e0b;box-shadow:0 0 0 3px #f59e0b30;animation:mtwpulse 1.3s ease-in-out infinite;}
 .pd{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;margin-right:5px;vertical-align:middle;animation:mtwpulse 1.3s ease-in-out infinite;}
