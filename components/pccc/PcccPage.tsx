@@ -973,12 +973,12 @@ export default function PcccPage() {
         )}
 
         {/*
-          Cấp quản lý / quản trị KHÔNG thuộc cương vị nào theo phạm vi ghi, mà cương vị
-          đang làm việc của họ cũng không có thiết bị (vd Trưởng ca): không có sổ nào để
-          mặc định. Hiện nút MỜ kèm lời chỉ dẫn thay vì giấu hẳn — giấu thì họ tưởng
-          tính năng hỏng, đúng cái bẫy đã gặp lúc chạy thử.
+          CHƯA đủ điều kiện xuất: hiện nút MỜ kèm LÝ DO thay vì giấu hẳn. Giấu thì người
+          dùng ký xong, nhập xong mà không thấy nút, không biết còn thiếu gì — đúng cái
+          bẫy đã gặp thật (ký trước rồi lưu chỉnh sửa làm chữ ký bị xoá). Nút này bấm vào
+          chỉ hiện lời nhắc, không xuất được gì.
         */}
-        {!bookStatus?.ready && bookStatus?.positionCode === null && writeScope?.all && (
+        {!bookStatus?.ready && bookStatus?.reason && editableTab && (
           <Button
             variant="outline"
             size="sm"

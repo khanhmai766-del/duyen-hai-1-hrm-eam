@@ -7,9 +7,16 @@
  *
  * LUẬT MỞ NÚT (chốt với nghiệp vụ 2026-08-13) — phải thoả CẢ HAI:
  *   1. KÝ ĐỦ: 3 bồn mỗi bồn một chữ ký, mỗi bảng FM200 một chữ ký.
- *   2. ĐIỀN ĐỦ: bồn phải có ngày chốt, người chốt, ghi chú; bảng FM200 phải có đủ số
- *      đo Mức FM200 và Áp suất N2 cho TỪNG bình.
+ *   2. ĐIỀN ĐỦ: bồn phải có ngày chốt và người chốt; bảng FM200 phải có đủ số đo Mức
+ *      FM200 và Áp suất N2 cho TỪNG bình.
  * Thiếu một ô là bản in ra có ô trống — thứ không nộp được cho công tác PCCC.
+ *
+ * CỘT "GHI CHÚ" CỦA BỒN KHÔNG BẮT BUỘC (chốt lại 2026-08-13): bồn bình thường thì chẳng
+ * có gì để ghi, bắt điền chỉ đẻ ra mấy dòng chữ đối phó.
+ *
+ * BẪY THƯỜNG GẶP: sửa số liệu rồi lưu sẽ XOÁ chữ ký của mục đó (quy tắc 2 của module) —
+ * nên trình tự đúng là nhập xong, lưu, RỒI MỚI KÝ. Ký trước rồi mới nhập là mất chữ ký
+ * mà ngày/người chốt vẫn còn, nhìn trên bảng dễ tưởng là đã ký xong.
  *
  * Điều kiện tính theo TỪNG KỲ nên sang tháng mới, kỳ mới chưa ai ký, nút tự biến mất.
  */
@@ -133,9 +140,9 @@ export async function fcdStatusOf(periodId: string): Promise<FcdStatus> {
   const { bulks, panels } = await loadFcdReport(periodId);
 
   const bulkSigned = bulks.filter((b) => b.signatureKey || b.signerName).length;
-  // Ba ô bắt buộc của mỗi bồn. Ngày/người chốt do thao tác ký tự điền, còn ghi chú phải
-  // gõ tay — nghiệp vụ yêu cầu bồn nào cũng phải có nhận xét khi chốt tháng.
-  const bulkMissing = bulks.filter((b) => !b.ngayChot || !b.nguoiChot.trim() || !b.ghiChu.trim()).length;
+  // Hai ô bắt buộc của mỗi bồn — cả hai đều do thao tác ký tự điền. Cột "Ghi chú" KHÔNG
+  // nằm trong danh sách này (xem phần đầu file).
+  const bulkMissing = bulks.filter((b) => !b.ngayChot || !b.nguoiChot.trim()).length;
 
   const panelSigned = panels.filter((p) => p.signatureKey || p.signerName).length;
   const panelMissing = panels.reduce(
@@ -156,9 +163,15 @@ export async function fcdStatusOf(periodId: string): Promise<FcdStatus> {
   const missing: string[] = [];
   if (bulkSigned < bulks.length) missing.push(`${bulks.length - bulkSigned} bồn chưa ký`);
   if (panelSigned < panels.length) missing.push(`${panels.length - panelSigned} bảng FM200 chưa ký`);
-  if (bulkMissing > 0) missing.push(`${bulkMissing} bồn thiếu ngày chốt / người chốt / ghi chú`);
+  if (bulkMissing > 0) missing.push(`${bulkMissing} bồn thiếu ngày chốt / người chốt`);
   if (panelMissing > 0) missing.push(`${panelMissing} ô số đo FM200 còn trống`);
-  if (missing.length > 0) return { ...status, reason: `Còn ${missing.join(" · ")}` };
+  if (missing.length > 0) {
+    // Số liệu đã đủ mà chỉ thiếu chữ ký thì gần như chắc chắn là vừa dính cái bẫy ở
+    // phần đầu file — nói luôn cách làm đúng thay vì để người dùng ngồi đoán.
+    const dataDone = bulkMissing === 0 && panelMissing === 0;
+    const hint = dataDone ? " — lưu ý: mỗi lần lưu chỉnh sửa sẽ xoá chữ ký, hãy nhập xong rồi mới ký" : "";
+    return { ...status, reason: `Còn ${missing.join(" · ")}${hint}` };
+  }
 
   return { ...status, ready: true };
 }
