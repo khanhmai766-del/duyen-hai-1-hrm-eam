@@ -2670,7 +2670,10 @@ const CSS = `
 .ticket-unit-options button,.ticket-category-options button{min-height:34px;padding:7px 10px;border-radius:8px;font-size:12px;line-height:1.15;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .15s ease,background-color .15s ease,color .15s ease,box-shadow .15s ease;}
 .ticket-unit-options button:hover,.ticket-category-options button:hover{border-color:#94a3b8;background:#f8fafc;box-shadow:0 2px 5px rgba(15,23,42,.06);}
 .ticket-unit-options button.on:hover{border-color:${C.navy};background:${C.navy};}
-.ticket-category-options{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
+/* 5 loại vật tư trên MỘT dòng. Hộp thoại rộng 520px nên mỗi ô chỉ còn ~92px: bớt đệm ngang
+   và cấm xuống dòng để nhãn dài nhất ("Dầu bôi trơn") vẫn nằm gọn một hàng chữ. */
+.ticket-category-options{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
+.ticket-category-options button{padding-left:6px;padding-right:6px;white-space:nowrap;}
 .ticket-category-options button.on:hover{border-color:${C.accent};background:${C.accent}10;}
 .seg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
 .flow-toggle.single{grid-template-columns:minmax(140px,220px);}
@@ -2866,6 +2869,6 @@ const CSS = `
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
-@media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
