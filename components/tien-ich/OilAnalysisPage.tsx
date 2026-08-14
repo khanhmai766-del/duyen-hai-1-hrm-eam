@@ -105,10 +105,7 @@ function isPending(item: OilAnalysisFailureItem) {
 
 export default function OilAnalysisPage() {
   const { data: session } = useSession();
-  const canSync = canManageMaterialCatalog({
-    role: session?.user?.role,
-    position: session?.user?.position,
-  });
+  const canSync = canManageMaterialCatalog(session?.user ?? {});
 
   const [days, setDays] = useState<number>(14);
   const [filter, setFilter] = useState<StatusFilter>("ALL");

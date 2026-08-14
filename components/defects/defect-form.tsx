@@ -252,6 +252,9 @@ export function DefectForm({
   );
   const userPositionCandidates = React.useMemo(() => {
     const candidates = [
+      // Cương vị ĐANG TRỰC đứng đầu: phiếu mới phải mặc định theo vị trí người lập đang làm,
+      // không phải chức danh gốc trong hồ sơ.
+      session?.user?.currentPosition,
       session?.user?.position,
       session?.user?.secondaryPosition,
       session?.user?.secondaryPosition2,
@@ -262,6 +265,7 @@ export function DefectForm({
         candidates.findIndex((candidate) => positionsMatch(candidate, position)) === index
     );
   }, [
+    session?.user?.currentPosition,
     session?.user?.position,
     session?.user?.secondaryPosition,
     session?.user?.secondaryPosition2,

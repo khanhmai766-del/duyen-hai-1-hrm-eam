@@ -1,5 +1,6 @@
 // Centralized domain constants: statuses, roles, shift types, and their UI metadata.
 import { normalizeText } from "@/lib/nav";
+import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 import {
   positionAllowedForUnit,
   positionLabelsForUnit,
@@ -366,10 +367,13 @@ export function isSingleStepTicketMaterial(materialCode: string | null | undefin
 /** Ai được THAO TÁC Danh mục vật tư (thêm/sửa/xoá/xuất): Quản trị (ADMIN),
  *  Kỹ thuật viên (role TECHNICIAN hoặc chức vụ), Quản đốc / Phó Quản đốc.
  *  Xem nội dung bảng thì mọi cương vị đều được. */
-export function canManageMaterialCatalog(user: { role?: string | null; position?: string | null }): boolean {
+export function canManageMaterialCatalog(user: PositionCarrier & { role?: string | null }): boolean {
   if (user.role === "ADMIN") return true;
   if (user.role === "TECHNICIAN") return true;
-  const p = normalizeText(user.position ?? "");
+  // TỰ quy về cương vị ĐANG TRỰC thay vì tin vào trường `position` nơi gọi truyền xuống:
+  // phiên đăng nhập phía trình duyệt mang `position` là CHỨC DANH GỐC, lấy thẳng là giao diện
+  // ra kết quả khác máy chủ (máy chủ luôn xét cương vị đang trực).
+  const p = normalizeText(effectiveUserPosition(user) ?? user.position ?? "");
   return p.includes("quan doc") || p.includes("ky thuat vien");
 }
 

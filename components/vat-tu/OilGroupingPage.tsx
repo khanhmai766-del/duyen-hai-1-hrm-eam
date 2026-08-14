@@ -79,7 +79,7 @@ export default function OilGroupingPage() {
   const router = useRouter();
   const params = useSearchParams();
   const { data: session } = useSession();
-  const canManage = canManageMaterialCatalog({ role: session?.user?.role, position: session?.user?.position });
+  const canManage = canManageMaterialCatalog(session?.user ?? {});
   const category: GroupingCategory = CATEGORY_BY_SLUG[params.get("loai") ?? ""] ?? "Dầu bôi trơn";
   const [tab, setTab] = useState<"stock" | "all" | "pending">("stock");
   const { data, isLoading, refetch } = useOilStock(category);
@@ -741,7 +741,7 @@ function StockBoard({
   onReload: () => void;
 }) {
   const { data: session } = useSession();
-  const canManage = canManageMaterialCatalog({ role: session?.user?.role, position: session?.user?.position });
+  const canManage = canManageMaterialCatalog(session?.user ?? {});
   const updateGroup = useUpdateOilGroup();
   const deleteGroup = useDeleteOilGroup();
 

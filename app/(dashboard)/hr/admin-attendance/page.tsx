@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { effectiveUserPosition } from "@/lib/current-position";
 import { toast } from "sonner";
 import {
   Plus, Trash2, ArrowLeft, Check, Loader2, UserCheck, UserMinus, ClipboardCheck, ChevronDown, Pencil, Clock3, X,
@@ -772,7 +773,7 @@ function SelfAdministrativeCheckInDialog({
         toast.success("Đã cập nhật nội dung công việc");
       } else {
         await checkIn.mutateAsync({ date, period, workNote });
-        const autoApproved = isAutoApprovedHcPosition(session?.user?.position);
+        const autoApproved = isAutoApprovedHcPosition(effectiveUserPosition(session?.user));
         toast.success(
           myCheckIn
             ? autoApproved
