@@ -14,7 +14,7 @@ async function purgeExpired() {
 
 export async function GET(request: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
     await purgeExpired();
     const id = request.nextUrl.searchParams.get("id");
     if (id) {
@@ -23,18 +23,40 @@ export async function GET(request: NextRequest) {
         include: { createdBy: { select: { name: true, position: true } } },
       });
       if (!record) return fail("Không tìm thấy kết quả hoặc kết quả đã hết hạn", 404);
-      return ok(record);
+      return ok({ ...record, canDelete: record.createdById === user.id || user.systemRole === "ADMIN" });
     }
     const records = await prisma.shnPpaRecord.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
       select: {
-        id: true, fileNames: true, month: true, year: true, dayFrom: true, dayTo: true,
+        id: true, createdById: true, fileNames: true, month: true, year: true, dayFrom: true, dayTo: true,
         syncStatus: true, syncMessage: true, resultCount: true, createdAt: true, expiresAt: true,
         createdBy: { select: { name: true, position: true } },
       },
     });
-    return ok(records, { retentionDays: RETENTION_DAYS });
+    return ok(records.map((record) => {
+      const { createdById, ...visible } = record;
+      return { ...visible, canDelete: createdById === user.id || user.systemRole === "ADMIN" };
+    }), { retentionDays: RETENTION_DAYS });
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  return handle(async () => {
+    const user = await requireUser();
+    const id = request.nextUrl.searchParams.get("id");
+    if (!id) return fail("Thiếu mã kết quả cần xóa");
+    const record = await prisma.shnPpaRecord.findUnique({
+      where: { id },
+      select: { id: true, createdById: true },
+    });
+    if (!record) return fail("Không tìm thấy kết quả hoặc kết quả đã hết hạn", 404);
+    if (record.createdById !== user.id && user.systemRole !== "ADMIN") {
+      return fail("Bạn không có quyền xóa kết quả này", 403);
+    }
+    await prisma.shnPpaRecord.delete({ where: { id } });
+    await audit(user.id, "DELETE_SHN_PPA_RESULT", "ShnPpaRecord", id, "Xóa kết quả SHN/PPA đã lưu", { actorName: user.name });
+    return ok({ id });
   });
 }
 

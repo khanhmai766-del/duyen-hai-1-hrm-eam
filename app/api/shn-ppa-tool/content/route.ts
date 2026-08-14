@@ -13,6 +13,15 @@ const BRIDGE = `<script>
     getItem: function(k){ return Object.prototype.hasOwnProperty.call(memory,k) ? memory[k] : null; },
     setItem: function(k,v){ memory[k]=String(v); }, removeItem: function(k){ delete memory[k]; }
   };
+  function comparisonSnapshot(){
+    return {
+      comparisonRows: typeof cmpFullMergeRows!=='undefined' && Array.isArray(cmpFullMergeRows) ? cmpFullMergeRows : [],
+      warnings: typeof cmpAllWarningsGlobal!=='undefined' && Array.isArray(cmpAllWarningsGlobal) ? cmpAllWarningsGlobal : [],
+      inferredYear: typeof cmpInferredYear!=='undefined' && Number.isFinite(cmpInferredYear) ? cmpInferredYear : null,
+      filterFrom: (document.getElementById('cmpFilterFrom')||{}).value || '',
+      filterTo: (document.getElementById('cmpFilterTo')||{}).value || ''
+    };
+  }
   var nativeFetch = window.fetch.bind(window);
   window.fetch = async function(input, init){
     var method = String((init&&init.method)||'GET').toUpperCase();
@@ -21,7 +30,8 @@ const BRIDGE = `<script>
     try{ response = await nativeFetch(input, init); }
     catch(networkError){
       if(method==='POST' && body && Array.isArray(body.days)){
-        window.parent.postMessage({type:'SHN_PPA_SYNC_RESULT',days:body.days,result:null,error:String(networkError&&networkError.message||networkError)},'*');
+        var failedSnapshot=comparisonSnapshot();
+        window.parent.postMessage({type:'SHN_PPA_SYNC_RESULT',days:body.days,result:null,error:String(networkError&&networkError.message||networkError),comparisonRows:failedSnapshot.comparisonRows,warnings:failedSnapshot.warnings,inferredYear:failedSnapshot.inferredYear,filterFrom:failedSnapshot.filterFrom,filterTo:failedSnapshot.filterTo},'*');
       }
       throw networkError;
     }
@@ -31,7 +41,8 @@ const BRIDGE = `<script>
           var result=null; try{result=JSON.parse(text);}catch(e){}
           var files=Array.from(document.querySelectorAll('.filelist .f span:first-child')).map(function(el){return el.textContent||'';}).filter(Boolean);
           var value=function(id){var el=document.getElementById(id);return el?Number(el.value)||null:null;};
-          window.parent.postMessage({type:'SHN_PPA_SYNC_RESULT',days:body.days,result:result,error:result?null:text.slice(0,300),fileNames:files,month:value('month'),year:value('year'),dayFrom:value('dayFrom'),dayTo:value('dayTo')},'*');
+          var snapshot=comparisonSnapshot();
+          window.parent.postMessage({type:'SHN_PPA_SYNC_RESULT',days:body.days,result:result,error:result?null:text.slice(0,300),fileNames:files,month:value('month'),year:value('year'),dayFrom:value('dayFrom'),dayTo:value('dayTo'),comparisonRows:snapshot.comparisonRows,warnings:snapshot.warnings,inferredYear:snapshot.inferredYear,filterFrom:snapshot.filterFrom,filterTo:snapshot.filterTo},'*');
         });
       }
     } catch(e) {}
@@ -41,13 +52,45 @@ const BRIDGE = `<script>
     window.parent.postMessage({type:'SHN_PPA_HEIGHT',height:Math.min(12000,Math.max(700,document.documentElement.scrollHeight))},'*');
   }
   addEventListener('message',function(event){
-    if(!event.data || event.data.type!=='SHN_PPA_REQUEST_SNAPSHOT') return;
+    if(event.source!==window.parent || !event.data) return;
+    if(event.data.type==='SHN_PPA_RESTORE_RESULT'){
+      try{
+        if(typeof cmpApplyFilters!=='function' || typeof cmpRenderWarnings!=='function') throw new Error('Phiên bản HTML hiện tại không hỗ trợ khôi phục biểu đồ');
+        var rows=Array.isArray(event.data.comparisonRows) ? event.data.comparisonRows : [];
+        if(!rows.length) throw new Error('Bản lưu không có dữ liệu biểu đồ');
+        cmpFullMergeRows=rows;
+        cmpCurrentMergeRows=rows;
+        cmpAllWarningsGlobal=Array.isArray(event.data.warnings) ? event.data.warnings : [];
+        cmpInferredYear=Number.isFinite(event.data.inferredYear) ? event.data.inferredYear : null;
+        cmpFiltersInitialized=true;
+        document.getElementById('cmpCard').style.display='block';
+        document.getElementById('cmpControls').style.display='flex';
+        document.getElementById('cmpFilterBar').style.display='flex';
+        document.getElementById('cmpLoadedSummary').textContent='Đã khôi phục '+rows.length+' ngày từ kết quả lưu trên website.';
+        document.getElementById('cmpFilterFrom').value=event.data.filterFrom||'';
+        document.getElementById('cmpFilterTo').value=event.data.filterTo||'';
+        if(cmpAllWarningsGlobal.length) cmpSetStatus(cmpAllWarningsGlobal.length+' lưu ý trong kết quả đã lưu — bấm mở bên dưới bảng để xem chi tiết.','info');
+        else cmpClearStatus();
+        cmpRenderWarnings(cmpAllWarningsGlobal);
+        cmpApplyFilters();
+        setTimeout(function(){
+          sendHeight();
+          var card=document.getElementById('cmpCard');
+          window.parent.postMessage({type:'SHN_PPA_RESTORE_SUCCESS',offsetTop:card?card.offsetTop:0},'*');
+        },80);
+      }catch(error){
+        window.parent.postMessage({type:'SHN_PPA_RESTORE_ERROR',error:String(error&&error.message||error)},'*');
+      }
+      return;
+    }
+    if(event.data.type!=='SHN_PPA_REQUEST_SNAPSHOT') return;
     try{
       var value=function(id){var el=document.getElementById(id);return el?Number(el.value)||null:null;};
       var month=value('month'), year=value('year');
       var days=typeof window.buildPayload==='function' ? window.buildPayload(month,year) : [];
       var files=Array.from(document.querySelectorAll('.filelist .f span:first-child')).map(function(el){return el.textContent||'';}).filter(Boolean);
-      window.parent.postMessage({type:'SHN_PPA_SNAPSHOT',days:days,fileNames:files,month:month,year:year,dayFrom:value('dayFrom'),dayTo:value('dayTo')},'*');
+      var snapshot=comparisonSnapshot();
+      window.parent.postMessage({type:'SHN_PPA_SNAPSHOT',days:days,fileNames:files,month:month,year:year,dayFrom:value('dayFrom'),dayTo:value('dayTo'),comparisonRows:snapshot.comparisonRows,warnings:snapshot.warnings,inferredYear:snapshot.inferredYear,filterFrom:snapshot.filterFrom,filterTo:snapshot.filterTo},'*');
     }catch(error){
       window.parent.postMessage({type:'SHN_PPA_SNAPSHOT',days:[],error:String(error&&error.message||error)},'*');
     }
