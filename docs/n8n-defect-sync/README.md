@@ -234,6 +234,13 @@ Khi CREATE gặp một dòng đã có cùng số, `batch plan` chỉ cập nhậ
 mà tự cấp số mới cho phiếu website, cập nhật các sự kiện đang chờ và ghi audit.
 Dòng chuẩn bị sẵn chỉ có STT, còn B:O trống, được xem là dòng giữ chỗ hợp lệ.
 
+`batch plan` cô lập lỗi theo từng sự kiện: event không lập được kế hoạch được
+chuyển sang `FAILED` và xuất trong `data.failedEvents`; các event hợp lệ vẫn nằm
+trong `data.eventIds` và tiếp tục được ghi. Node ACK bắt buộc lấy đúng
+`$('Lập kế hoạch cả lô').item.json.data.eventIds`, không lấy lại danh sách từ
+node Claim. Khi `eventIds` rỗng, ACK là no-op thành công để workflow kết thúc
+mà không giữ khóa `PROCESSING`.
+
 - Phiếu mới ghi vào hàng trống có sẵn hoặc hàng cuối.
 - Sửa phiếu cập nhật đúng hàng có `STT/năm`; hai tab Môi Trường chấp nhận cả
   dạng `QTxx/năm`.

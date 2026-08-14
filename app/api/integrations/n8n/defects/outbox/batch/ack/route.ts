@@ -17,7 +17,10 @@ export async function POST(req: NextRequest) {
     }
     const body = await req.json().catch(() => ({}));
     const eventIds = eventIdsOf(body?.eventIds);
-    if (!eventIds.length) return fail("Lô xác nhận không có sự kiện");
+    // Khi toàn bộ event trong lô đã được endpoint plan cô lập sang FAILED,
+    // workflow vẫn đi qua nhánh không có writes và gọi ACK với mảng rỗng. Xem
+    // đây là no-op thành công để execution không báo lỗi giả và giữ khóa worker.
+    if (!eventIds.length) return ok({ requested: 0, updated: 0 });
     if (eventIds.length > 50) return fail("Mỗi lô chỉ được xác nhận tối đa 50 sự kiện");
 
     const result = await prisma.$transaction(async (tx) => {

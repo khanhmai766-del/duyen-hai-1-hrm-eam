@@ -364,6 +364,16 @@ export type DefectSheetBatchWritePlan = {
   writes: DefectSheetWritePlan["writes"];
 };
 
+export class DefectSheetBatchEventError extends Error {
+  constructor(
+    public readonly eventId: string,
+    public readonly eventError: unknown
+  ) {
+    super(eventError instanceof Error ? eventError.message : "Không thể lập kế hoạch cho sự kiện");
+    this.name = "DefectSheetBatchEventError";
+  }
+}
+
 function columnIndex(value: string) {
   const code = value.toUpperCase().charCodeAt(0) - 65;
   if (code < 0 || code >= COLUMN_COUNT) throw new Error(`Cột ngoài phạm vi A:O: ${value}`);
@@ -413,9 +423,13 @@ export function buildDefectSheetBatchWritePlan(
   const plans: DefectSheetWritePlan[] = [];
 
   for (const event of events) {
-    const plan = buildDefectSheetWritePlan(event, after);
-    applyWrites(after, plan.writes);
-    plans.push(plan);
+    try {
+      const plan = buildDefectSheetWritePlan(event, after);
+      applyWrites(after, plan.writes);
+      plans.push(plan);
+    } catch (error) {
+      throw new DefectSheetBatchEventError(event.id, error);
+    }
   }
 
   const writes: DefectSheetWritePlan["writes"] = [];

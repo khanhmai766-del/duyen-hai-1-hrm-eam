@@ -3,6 +3,7 @@ import { fail, handle, ok } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import {
   buildDefectSheetBatchWritePlan,
+  DefectSheetBatchEventError,
   DefectSheetRequestNumberConflictError,
   usedDefectRequestNumbersFromSheet,
 } from "@/lib/defect-sheet-write-plan";
@@ -39,6 +40,31 @@ function requestYear(requestNumber: string) {
   const year = Number(match?.[1]);
   if (!Number.isInteger(year)) throw new Error(`Không xác định được năm của số ${requestNumber}`);
   return year;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Không thể lập kế hoạch ghi Sheet cho sự kiện";
+}
+
+async function isolateFailedEvent(eventId: string, error: unknown) {
+  const event = await prisma.defectSyncOutbox.findUnique({
+    where: { id: eventId },
+    select: { attemptCount: true },
+  });
+  const message = errorMessage(error).slice(0, 2_000);
+  if (!event) return message;
+  await prisma.defectSyncOutbox.updateMany({
+    where: { id: eventId, status: "PROCESSING" },
+    data: {
+      status: "FAILED",
+      claimedAt: null,
+      lastError: message,
+      nextAttemptAt: new Date(
+        Date.now() + Math.min(60, 2 ** Math.min(event.attemptCount, 6)) * 60_000
+      ),
+    },
+  });
+  return message;
 }
 
 async function reassignConflictingCreate(
@@ -165,27 +191,72 @@ export async function POST(req: NextRequest) {
 
     try {
       const renumbered: Array<{ oldNumber: string; newNumber: string }> = [];
+      const failedEvents: Array<{ eventId: string; requestNumber: string; error: string }> = [];
       const occupiedNumbers = usedDefectRequestNumbersFromSheet(rows);
       // Một lô thường không có xung đột. Chỉ khi CREATE đụng đúng một phiếu
       // khác trên Sheet mới cấp lại số và dựng lại toàn bộ kế hoạch.
-      for (let attempt = 0; attempt <= events.length; attempt += 1) {
+      for (let attempt = 0; attempt <= eventIds.length * 2; attempt += 1) {
+        if (!events.length) {
+          return ok({
+            eventIds: [],
+            eventCount: 0,
+            requestNumbers: [],
+            writes: [],
+            requestType: [...requestTypes][0],
+            renumbered,
+            failedEvents,
+          });
+        }
         try {
           return ok({
             ...buildDefectSheetBatchWritePlan(events, rows),
             requestType: [...requestTypes][0],
             renumbered,
+            failedEvents,
           });
         } catch (error) {
-          if (!(error instanceof DefectSheetRequestNumberConflictError)) throw error;
-          const conflict = events.find(
-            (event) => event.eventType === "CREATE" && requestNumberOf(event.payload) === error.requestNumber
-          );
-          if (!conflict) throw error;
-          const changed = await reassignConflictingCreate(conflict.id, occupiedNumbers);
+          if (!(error instanceof DefectSheetBatchEventError)) throw error;
+          const failedEvent = events.find((event) => event.id === error.eventId);
+          if (!failedEvent) throw error;
+          const eventError = error.eventError;
+          if (!(eventError instanceof DefectSheetRequestNumberConflictError)) {
+            const message = await isolateFailedEvent(failedEvent.id, eventError);
+            failedEvents.push({
+              eventId: failedEvent.id,
+              requestNumber: requestNumberOf(failedEvent.payload),
+              error: message,
+            });
+            events = events.filter((event) => event.id !== failedEvent.id);
+            continue;
+          }
+          const conflict = failedEvent.eventType === "CREATE" ? failedEvent : null;
+          if (!conflict) {
+            const message = await isolateFailedEvent(failedEvent.id, eventError);
+            failedEvents.push({
+              eventId: failedEvent.id,
+              requestNumber: requestNumberOf(failedEvent.payload),
+              error: message,
+            });
+            events = events.filter((event) => event.id !== failedEvent.id);
+            continue;
+          }
+          let changed: { oldNumber: string; newNumber: string };
+          try {
+            changed = await reassignConflictingCreate(conflict.id, occupiedNumbers);
+          } catch (reassignError) {
+            const message = await isolateFailedEvent(conflict.id, reassignError);
+            failedEvents.push({
+              eventId: conflict.id,
+              requestNumber: requestNumberOf(conflict.payload),
+              error: message,
+            });
+            events = events.filter((event) => event.id !== conflict.id);
+            continue;
+          }
           renumbered.push(changed);
           occupiedNumbers.add(changed.newNumber.toUpperCase());
           found = await prisma.defectSyncOutbox.findMany({ where: { id: { in: eventIds } } });
-          events = [...found].sort(
+          events = found.filter((event) => event.status === "PROCESSING").sort(
             (left, right) => left.createdAt.getTime() - right.createdAt.getTime()
               || left.id.localeCompare(right.id)
           );
