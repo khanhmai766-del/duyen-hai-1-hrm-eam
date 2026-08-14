@@ -351,6 +351,7 @@ export function useSetDefectRequestNumber() {
       void qc.invalidateQueries({ queryKey: ["defect", data.defectId] });
       void qc.invalidateQueries({ queryKey: ["defects"] });
       void qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
+      void qc.invalidateQueries({ queryKey: ["defect-two-way-sync"] });
     },
   });
 }

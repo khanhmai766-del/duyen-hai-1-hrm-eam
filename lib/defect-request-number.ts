@@ -3,15 +3,56 @@ import { Prisma } from "@prisma/client";
 export type DefectRequestNumberAllocation = { requestNumber: string; reusedCancelledDefectId: string | null };
 export type DefectRequestNumberSheetScope = { spreadsheetId: string; sheetName: string };
 
-function equivalentSourceSheetNames(requestType: string, sheetName: string) {
+export function equivalentSourceSheetNames(requestType: string, sheetName: string) {
   const names = new Set([sheetName.trim()]);
   // Workflow kéo Sheet dùng nhãn nguồn logic cho hai tab DH1 chính, trong khi
   // phiếu website dùng tên tab thật. Cả hai cùng chỉ một tab trong đúng workbook.
-  if (sheetName.trim() === "DH1") {
-    if (requestType === "Cơ") names.add("CƠ_DH1");
-    if (requestType === "Điện" || requestType === "I&C") names.add("ĐIỆN_DH1");
+  if (requestType === "Cơ" && ["DH1", "CƠ_DH1"].includes(sheetName.trim())) {
+    names.add("DH1");
+    names.add("CƠ_DH1");
+  }
+  if ((requestType === "Điện" || requestType === "I&C") && ["DH1", "ĐIỆN_DH1"].includes(sheetName.trim())) {
+    names.add("DH1");
+    names.add("ĐIỆN_DH1");
   }
   return [...names];
+}
+
+export async function consumeReusableCancelledRequestNumber(
+  tx: Prisma.TransactionClient,
+  params: {
+    requestNumber: string;
+    requestType: string;
+    spreadsheetId: string;
+    sheetName: string;
+    reusedById: string;
+  }
+) {
+  const equivalentSheetNames = equivalentSourceSheetNames(params.requestType, params.sheetName);
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "Defect"
+    WHERE "id" <> ${params.reusedById}
+      AND "requestNumber" = ${params.requestNumber}
+      AND "requestType" = ${params.requestType}
+      AND "sourceSpreadsheetId" = ${params.spreadsheetId}
+      AND "sourceSheetName" IN (${Prisma.join(equivalentSheetNames)})
+      AND "requestNumberReuseEligible" = true
+      AND "cancelledAt" IS NOT NULL
+      AND "requestNumberReusedAt" IS NULL
+    ORDER BY "requestNumberReleasedAt" DESC NULLS LAST
+    LIMIT 1 FOR UPDATE
+  `;
+  const candidate = rows[0];
+  if (!candidate) return null;
+  await tx.defect.update({
+    where: { id: candidate.id },
+    data: {
+      requestNumberReuseEligible: false,
+      requestNumberReusedAt: new Date(),
+      requestNumberReusedById: params.reusedById,
+    },
+  });
+  return candidate.id;
 }
 
 /**
@@ -100,6 +141,14 @@ export async function allocateDefectRequestNumber(
       AND "sourceSpreadsheetId" = ${spreadsheetId}
       AND "sourceSheetName" IN (${Prisma.join(equivalentSheetNames)})
       AND "requestNumber" ~* ${pattern} AND split_part("requestNumber", '/', 2)::int = ${year}
+      AND NOT EXISTS (
+        SELECT 1 FROM "Defect" AS active
+        WHERE active."cancelledAt" IS NULL
+          AND active."requestNumber" = "Defect"."requestNumber"
+          AND active."requestType" = ${sequenceType}
+          AND active."sourceSpreadsheetId" = ${spreadsheetId}
+          AND active."sourceSheetName" IN (${Prisma.join(equivalentSheetNames)})
+      )
     ORDER BY regexp_replace(split_part("requestNumber", '/', 1), ${prefix}, '')::int ASC
     LIMIT 1 FOR UPDATE SKIP LOCKED
   `;

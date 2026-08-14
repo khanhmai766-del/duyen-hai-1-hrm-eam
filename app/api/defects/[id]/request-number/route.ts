@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
+import { consumeReusableCancelledRequestNumber } from "@/lib/defect-request-number";
 
 export const dynamic = "force-dynamic";
 
@@ -206,6 +207,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         eventType: "UPDATE",
         extra: { previousRequestNumber: defect.requestNumber ?? "" },
       });
+      const consumedCancelledDefectId = updated.sourceSpreadsheetId && updated.sourceSheetName && updated.requestType
+        ? await consumeReusableCancelledRequestNumber(tx, {
+            requestNumber,
+            requestType: updated.requestType,
+            spreadsheetId: updated.sourceSpreadsheetId,
+            sheetName: updated.sourceSheetName,
+            reusedById: updated.id,
+          })
+        : null;
 
       // Nếu đây đúng là STT mới nhất vừa cấp và chưa có phiếu nào khác dùng số
       // cũ, hạ bộ đếm một nấc để lượt tạo kế tiếp nhận lại số vừa giải phóng.
@@ -234,6 +244,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         updated,
         oldRequestNumber: defect.requestNumber,
         mergedDefectId: sheetCopy?.id ?? null,
+        consumedCancelledDefectId,
         releasedPreviousNumber,
       };
     });
@@ -247,6 +258,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         user,
         `Đổi STT từ ${result.oldRequestNumber ?? "—"} thành ${result.updated.requestNumber}`
         + (result.mergedDefectId ? `; hợp nhất phiếu Sheet ${result.mergedDefectId}` : "")
+        + (result.consumedCancelledDefectId ? `; sử dụng STT đã hủy ${result.consumedCancelledDefectId}` : "")
         + (result.releasedPreviousNumber ? `; trả lại STT ${result.oldRequestNumber} cho lượt cấp kế tiếp` : "")
       )
     );

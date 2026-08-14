@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { equivalentSourceSheetNames } from "@/lib/defect-request-number";
 
 const SETTING_ID = "singleton";
 
@@ -114,13 +115,35 @@ export async function getReusableCancelledDefectNumbers() {
       id: true,
       requestNumber: true,
       requestType: true,
+      sourceSpreadsheetId: true,
       sourceSheetName: true,
       createdAt: true,
       cancelledAt: true,
       requestNumberReleasedAt: true,
     },
   });
-  return rows.filter(
-    (row) => row.cancelledAt && row.cancelledAt.getTime() <= row.createdAt.getTime() + 6 * 60 * 60 * 1000
-  );
+  const activeRows = rows.length
+    ? await prisma.defect.findMany({
+        where: {
+          cancelledAt: null,
+          requestNumber: { in: rows.flatMap((row) => row.requestNumber ? [row.requestNumber] : []) },
+        },
+        select: {
+          requestNumber: true,
+          requestType: true,
+          sourceSpreadsheetId: true,
+          sourceSheetName: true,
+        },
+      })
+    : [];
+  return rows.filter((row) => {
+    if (!row.cancelledAt || row.cancelledAt.getTime() > row.createdAt.getTime() + 6 * 60 * 60 * 1000) return false;
+    const equivalentNames = equivalentSourceSheetNames(row.requestType ?? "", row.sourceSheetName ?? "");
+    return !activeRows.some(
+      (active) => active.requestNumber === row.requestNumber
+        && active.requestType === row.requestType
+        && active.sourceSpreadsheetId === row.sourceSpreadsheetId
+        && equivalentNames.includes(active.sourceSheetName ?? "")
+    );
+  });
 }
