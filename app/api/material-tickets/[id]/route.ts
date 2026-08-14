@@ -1,14 +1,15 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
+import { isShiftLeader, isTechnician, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
-import { isChemicalFlowTicket, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { parseDateInput } from "@/lib/utils";
+import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
@@ -1073,6 +1074,34 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     if (action === "stats") {
+      // LUỒNG HÓA CHẤT — bước 2: không có mã ERP, không xuất Phiếu ĐXVT, chỉ chốt
+      // LỊCH GIAO HÀNG và KHỐI LƯỢNG GIAO. Thống kê hoặc Kỹ thuật viên đều làm được.
+      if (t.type === CHEMICAL_TICKET_TYPE) {
+        if (t.status !== "CHO_THONG_KE") return fail("Phiếu không ở bước xác nhận đề xuất vật tư");
+        if (!stepAllowedWithMap(await getWorkflowRoleMap(), "stats", user) && !isTechnician(user)) {
+          return fail("Bạn không có quyền xác nhận đề xuất vật tư (Thống kê hoặc Kỹ thuật viên)", 403);
+        }
+        const deliveryQuantity = Math.trunc(Number(body.deliveryQuantity));
+        if (!Number.isFinite(deliveryQuantity) || deliveryQuantity <= 0) return fail("Khối lượng giao phải lớn hơn 0");
+        const deliveryScheduledAt = body.deliveryScheduledAt ? parseDateInput(body.deliveryScheduledAt) : null;
+        if (!deliveryScheduledAt || Number.isNaN(deliveryScheduledAt.getTime())) return fail("Vui lòng chọn lịch giao hàng");
+        const updated = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            deliveryScheduledAt,
+            deliveryQuantity,
+            status: "NHAN_VAT_TU",
+            statsById: user.id,
+            statsByName: user.name ?? "",
+            statsByPosition: user.position ?? null,
+            statsAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
+        await audit(user.id, "MT_STATS", "MaterialTicket", t.id,
+          `${materialTicketReference(t)}: Xác nhận đề xuất hóa chất — giao ${deliveryQuantity} ngày ${deliveryScheduledAt.toLocaleDateString("vi-VN")}`);
+        return ok(updated);
+      }
       if (!["DE_XUAT", "UNG"].includes(t.type) || !["CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "CHO_XAC_NHAN_PHAT"].includes(t.status)) return fail("Phiếu không ở bước Thống Kê xác nhận ĐXVT");
       // Hai pha, hai quyền: nhập mã ERP + số phiếu ĐXVT dùng "stats"; xác nhận VHV
       // nhận / đã trả phiếu (CHO_XAC_NHAN_PHAT) dùng "statsHandover" để giao được cho
@@ -1146,6 +1175,40 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Ứng: bước gộp "XÁC NHẬN ĐXVT" (chỉ Thống kê): nguồn lãnh + mã ERP + khối lượng
     // + số phiếu giao hàng + số phiếu ĐXVT → chuyển Quyết toán; chưa xuất biên bản tại đây.
     if (action === "receive") {
+      // LUỒNG HÓA CHẤT — bước 3 (cuối): VHV điền khối lượng lãnh, ngày lãnh, người lãnh.
+      // Xong là HOÀN TẤT, không qua sử dụng — nghiệm thu — quyết toán.
+      if (t.type === CHEMICAL_TICKET_TYPE) {
+        if (t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước xác nhận khối lượng lãnh");
+        const assigned = samePosition(user.position, t.assignedPosition);
+        if (!assigned && user.role !== "ADMIN" && !stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) {
+          return fail("Chỉ VHV được giao phiếu mới xác nhận khối lượng lãnh", 403);
+        }
+        const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
+        if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng lãnh phải lớn hơn 0");
+        const receivedAt = body.receivedAt ? parseDateInput(body.receivedAt) : null;
+        if (!receivedAt || Number.isNaN(receivedAt.getTime())) return fail("Vui lòng chọn ngày lãnh");
+        const receivedByName = String(body.receivedByName || "").trim();
+        if (!receivedByName) return fail("Vui lòng nhập tên VHV lãnh");
+        const updated = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            receivedQuantity,
+            receivedAt,
+            receivedById: user.id,
+            receivedByName,
+            receivedByPosition: user.position ?? null,
+            status: "HOAN_TAT",
+            completedAt: new Date(),
+            completedById: user.id,
+            completedByName: receivedByName,
+            completedByPosition: user.position ?? null,
+          },
+          include: ITEM_INCLUDE,
+        });
+        await audit(user.id, "MT_RECEIVE", "MaterialTicket", t.id,
+          `${materialTicketReference(t)}: Xác nhận lãnh hóa chất ${receivedQuantity} ngày ${receivedAt.toLocaleDateString("vi-VN")} — ${receivedByName}; hoàn tất phiếu`);
+        return ok(updated);
+      }
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
       const requiredStep = t.type === "UNG" ? "stats" : "receive";
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), requiredStep, user))

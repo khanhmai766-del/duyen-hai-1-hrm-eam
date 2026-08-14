@@ -7,9 +7,10 @@ import {
   getPositionScopes,
   getPositionScopeCount,
   getWorkflowRoleMap,
+  isTechnician,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { isChemicalFlowTicket, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, isChemicalWorkflowCategory, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -124,6 +125,8 @@ export async function GET(req: NextRequest) {
         position: user.position ?? null,
         isShiftLeader: isShiftLeader(user.position),
         isStats: isStats(user.position),
+        // Kỹ thuật viên cũng xác nhận được đề xuất ở luồng hóa chất — cùng định nghĩa với quyền tạo phiếu.
+        isTechnician: isTechnician(user),
         canCreate: stepAllowedWithMap(wfMap, "create", user),
         isAdmin: user.role === "ADMIN",
         hasScope: totalScopeCount === 0 || scopes.length > 0,
@@ -217,6 +220,10 @@ export async function POST(req: NextRequest) {
     if (singleStep) {
       type = SINGLE_STEP_TICKET_TYPE;
       nextStatus = "HOAN_TAT";
+    } else if (isChemicalWorkflowCategory(materialCategory)) {
+      // Luồng hóa chất 3 bước: bỏ bước Trưởng ca/Trưởng kíp, vào thẳng bước xác nhận đề xuất.
+      type = CHEMICAL_TICKET_TYPE;
+      nextStatus = "CHO_THONG_KE";
     }
     const replacementPoints = await prisma.materialReplacement.findMany({
       where: { materialId: selectedMaterial.id },
@@ -279,7 +286,7 @@ export async function POST(req: NextRequest) {
       return ticket;
     });
 
-    const workflowLabel = type === SINGLE_STEP_TICKET_TYPE ? "khai một bước" : type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
+    const workflowLabel = type === SINGLE_STEP_TICKET_TYPE ? "khai một bước" : type === CHEMICAL_TICKET_TYPE ? "luồng hóa chất" : type === "DE_XUAT" ? "luồng Đề xuất" : "chưa chọn luồng";
     await audit(user.id, "CREATE_MATERIAL_TICKET", "MaterialTicket", ticket.id,
       `${materialTicketReference(ticket)} (${workflowLabel}, ${unit}) — giao: ${assignedPosition}, loại: ${materialCategory}, vật tư: ${selectedMaterial!.name}, số lượng đề xuất: ${proposedQuantity}, thiết bị: ${replacementDeviceLabels.join(", ")}`);
     return ok(ticket);

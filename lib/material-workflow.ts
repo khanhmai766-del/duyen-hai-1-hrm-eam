@@ -30,14 +30,20 @@ export function isStats(position?: string | null) {
   return norm(position).includes("thống kê");
 }
 
+/** Kỹ thuật viên: vai trò TECHNICIAN hoặc chức vụ có chữ "Kỹ thuật viên". Một định nghĩa dùng
+ *  chung cho quyền tạo phiếu và quyền xác nhận đề xuất ở luồng hóa chất. */
+export function isTechnician(user: { role?: string | null; position?: string | null }) {
+  if (user.role === "TECHNICIAN") return true;
+  return norm(user.position).includes("kỹ thuật viên");
+}
+
 /** Ai được TẠO phiếu thay thế vật tư:
  *  - Quản trị (role ADMIN)
  *  - Kỹ thuật viên (role TECHNICIAN hoặc chức vụ "Kỹ thuật viên")
  *  - Trưởng Ca / Trưởng Kíp (gồm TK Lò máy, Trưởng kíp điện) */
 export function canCreateTicket(user: { role?: string | null; position?: string | null }) {
   if (user.role === "ADMIN") return true;
-  if (user.role === "TECHNICIAN") return true;
-  if (norm(user.position).includes("kỹ thuật viên")) return true;
+  if (isTechnician(user)) return true;
   return isShiftLeader(user.position);
 }
 

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
+import { CHEMICAL_TICKET_TYPE } from "@/lib/constants";
 
 export interface TicketItem {
   id: string;
@@ -22,7 +23,8 @@ export interface MaterialTicket {
   sequenceMonth: string;
   sequenceNumber: number;
   // GHI_NHAN = phiếu khai một bước (NH3 lỏng): tạo xong là HOAN_TAT, không có bước tiếp.
-  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN";
+  // HOA_CHAT = luồng hóa chất 3 bước (xem CHEMICAL_TICKET_TYPE trong lib/constants).
+  type: "CHUA_CHON" | "DE_XUAT" | "UNG" | "SU_DUNG_HIEN_CO" | "GHI_NHAN" | "HOA_CHAT";
   unit: string;
   status: string;
   assignedPosition: string;
@@ -42,6 +44,9 @@ export interface MaterialTicket {
   bbktDocUrl: string | null;
   recoveryRequired: boolean | null;
   recoveryQuantity: number | null;
+  // Luồng hóa chất: lịch giao hàng và khối lượng giao chốt ở bước xác nhận đề xuất.
+  deliveryScheduledAt: string | null;
+  deliveryQuantity: number | null;
   recoveryReturnedAt: string | null;
   recoveryDocUrl: string | null;
   workStartedAt: string | null;
@@ -118,6 +123,8 @@ export interface TicketViewer {
   position: string | null;
   isShiftLeader: boolean;
   isStats: boolean;
+  /** Kỹ thuật viên — luồng hóa chất cho xác nhận đề xuất ngang với Thống kê. */
+  isTechnician?: boolean;
   canCreate: boolean;
   isAdmin: boolean;
   hasScope: boolean;
@@ -256,6 +263,13 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   const canOperateAssigned = isAssigned || v.isAdmin;
   if (t.type === "CHUA_CHON") {
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
+  } else if (t.type === CHEMICAL_TICKET_TYPE) {
+    // Luồng hóa chất chỉ có hai lượt thao tác sau khi tạo phiếu.
+    // Xác nhận đề xuất: Thống kê (theo phân quyền bước) HOẶC Kỹ thuật viên.
+    if (t.status === "CHO_THONG_KE" && (v.steps?.stats || v.isTechnician)) a.push("stats");
+    // Xác nhận khối lượng lãnh: chính VHV được giao phiếu (hoặc cương vị được phân bước Nhận vật tư).
+    if (t.status === "NHAN_VAT_TU" && (canOperateAssigned || v.steps?.receive)) a.push("receive");
+    if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
   } else if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");

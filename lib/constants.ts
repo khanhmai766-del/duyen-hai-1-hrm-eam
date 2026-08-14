@@ -364,6 +364,23 @@ export const SINGLE_STEP_TICKET_MATERIAL_CODES = ["1.61.16.003.VIE.00.000"] as c
 /** Giá trị `MaterialTicket.type` của phiếu khai một bước. */
 export const SINGLE_STEP_TICKET_TYPE = "GHI_NHAN";
 
+/**
+ * LUỒNG HÓA CHẤT (3 bước) — áp cho mọi hóa chất trừ NH3 lỏng (NH3 khai một bước):
+ *
+ *   1. VHV tạo đề xuất
+ *   2. Thống kê HOẶC Kỹ thuật viên xác nhận đề xuất — chốt lịch giao hàng + khối lượng giao
+ *   3. VHV xác nhận khối lượng lãnh — khối lượng, ngày lãnh, người lãnh → hoàn tất
+ *
+ * Bỏ bước Trưởng ca/Trưởng kíp xác nhận và cả cụm sử dụng — nghiệm thu — quyết toán: hóa chất
+ * bơm thẳng vào bồn của hệ thống, không có biên bản nghiệm thu cho từng lần giao.
+ */
+export const CHEMICAL_TICKET_TYPE = "HOA_CHAT";
+
+/** Loại vật tư của PHIẾU đi theo luồng hóa chất 3 bước. */
+export function isChemicalWorkflowCategory(materialCategory: string | null | undefined): boolean {
+  return materialCategory === "Hóa chất";
+}
+
 export function isSingleStepTicketMaterial(materialCode: string | null | undefined): boolean {
   return !!materialCode && (SINGLE_STEP_TICKET_MATERIAL_CODES as readonly string[]).includes(materialCode);
 }

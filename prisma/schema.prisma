@@ -1307,6 +1307,11 @@ model MaterialTicket {
   statsByName           String?
   statsByPosition       String? // cương vị người nhập số phiếu ĐXVT
   statsAt               DateTime?
+  // LUỒNG HÓA CHẤT: bước Thống kê / Kỹ thuật viên xác nhận đề xuất chốt lịch và khối lượng giao.
+  // Hóa chất mua theo lô, giao bằng xe bồn theo hợp đồng nên phải hẹn ngày giao, khác hẳn
+  // vật tư kỹ thuật lãnh thẳng tại kho.
+  deliveryScheduledAt   DateTime? // lịch giao hàng
+  deliveryQuantity      Int? // khối lượng giao theo lịch
   // Bước VHV LÃNH VẬT TƯ của luồng Ứng (không tác động ERP)
   vhvReceivedQuantity   Int?
   vhvMaterialCode       String?

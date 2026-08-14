@@ -13,7 +13,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, MATERIAL_CATEGORIES, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, MATERIAL_CATEGORIES, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -73,6 +73,12 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
     { key: "NHAN_VAT_TU", label: "Xác nhận ĐXVT", who: "Thống kê" },
     { key: "CHO_QUYET_TOAN", label: "Quyết toán vật tư", who: "Thống kê" },
   ],
+  // Luồng hóa chất: bỏ bước Trưởng ca/Trưởng kíp và cả cụm sử dụng — nghiệm thu — quyết toán.
+  [CHEMICAL_TICKET_TYPE]: [
+    { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
+    { key: "CHO_PHIEU__XUAT_KHO", label: "Xác nhận đề xuất vật tư", who: "Thống kê hoặc Kỹ thuật viên" },
+    { key: "NHAN_VAT_TU", label: "VHV xác nhận khối lượng lãnh", who: "VHV được giao" },
+  ],
   // Khai một bước (NH3 lỏng): lập phiếu là xong, không có bước nào để thao tác tiếp.
   [SINGLE_STEP_TICKET_TYPE]: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
@@ -90,6 +96,7 @@ const FLOW: Record<string, { key: string; label: string; who: string }[]> = {
 const ORDER: Record<string, string[]> = {
   CHUA_CHON: ["B0", "CHO_XAC_NHAN"],
   [SINGLE_STEP_TICKET_TYPE]: ["B0", "HOAN_TAT"],
+  [CHEMICAL_TICKET_TYPE]: ["B0", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "HOAN_TAT"],
   DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_QUYET_TOAN", "HOAN_TAT"],
   UNG: ["B0", "VHV_LANH_VAT_TU", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "NHAN_VAT_TU", "CHO_PHIEU__XUAT_KHO", "CHO_QUYET_TOAN", "HOAN_TAT"],
   SU_DUNG_HIEN_CO: ["B0", "XAC_NHAN_HIEN_CO", "NHAN_TU_HIEN_CO", "SU_DUNG_VAT_TU", "CHO_NGHIEM_THU", "CHO_THONG_KE_XUAT_BIEN_BAN", "CHO_QUYET_TOAN", "HOAN_TAT"],
@@ -101,6 +108,9 @@ const flowStatusKey = (status: string, type: string) =>
   : status === "CHO_XAC_NHAN_PHAT" ? "CHO_PHIEU__XUAT_KHO"
   : status === "CHO_PHIEU_YCSC" ? "NHAN_VAT_TU"
   : status;
+/** Chỉ ngày, không giờ — lịch giao hàng và ngày lãnh là mốc ngày. */
+const fmtDay = (s?: string | null) =>
+  s ? new Date(s).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 const fmt = (s?: string | null) =>
   s ? new Date(s).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
 const datetimeLocalValue = (value?: string | null) => {
@@ -285,13 +295,19 @@ export default function MaterialTicketBoard({
               <option value="DE_XUAT">Đề xuất</option>
               <option value="UNG">Ứng</option>
               <option value="SU_DUNG_HIEN_CO">Sử dụng hiện có</option>
+              <option value={CHEMICAL_TICKET_TYPE}>Hóa chất</option>
+              <option value={SINGLE_STEP_TICKET_TYPE}>Ghi nhận</option>
             </select>
           </span>
           <span>Cương vị</span><span>Tên vật tư</span><span>Phiếu đề xuất</span><span>Số lượng</span><span>Trạng thái</span><span>Chờ</span><span>Thao tác</span>
         </div>
         {isLoading && <div className="empty"><Loader2 className="spin" size={18} /> Đang tải…</div>}
 	        {!isLoading && shown.map((t) => {
-		          const baseMeta = t.type === "UNG" && t.status === "CHO_XAC_NHAN_PHAT"
+		          const baseMeta = t.type === CHEMICAL_TICKET_TYPE && t.status === "CHO_THONG_KE"
+		            ? { label: "Chờ xác nhận đề xuất", c: "#7c3aed" }
+		            : t.type === CHEMICAL_TICKET_TYPE && t.status === "NHAN_VAT_TU"
+		            ? { label: "Chờ VHV xác nhận lãnh", c: "#7c3aed" }
+		            : t.type === "UNG" && t.status === "CHO_XAC_NHAN_PHAT"
 		            ? { label: "Chưa xác nhận trả phiếu", c: C.warn }
 		            : t.type === "UNG" && t.status === "NHAN_VAT_TU"
 		            ? { label: "Chờ xác nhận ĐXVT", c: "#0891b2" }
@@ -326,6 +342,8 @@ export default function MaterialTicketBoard({
               <span className="kind-cell">
                 {t.type === SINGLE_STEP_TICKET_TYPE
                   ? <span className="tag ghinhan"><FlaskConical size={11} /> Ghi nhận</span>
+                  : t.type === CHEMICAL_TICKET_TYPE
+                  ? <span className="tag hoachat"><FlaskConical size={11} /> Hóa chất</span>
                   : t.type === "UNG"
                   ? <span className="tag ung"><Zap size={11} /> Ứng</span>
                   : t.type === "CHUA_CHON"
@@ -1613,6 +1631,12 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [chiHuy, setChiHuy] = useState("");
   const [proposalReceiverName, setProposalReceiverName] = useState(t.proposalReceiverName ?? "");
   const [reason, setReason] = useState("");
+  // Luồng hóa chất: lịch giao + khối lượng giao (bước 2), khối lượng/ngày/người lãnh (bước 3).
+  const [deliveryDate, setDeliveryDate] = useState(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : "");
+  const [deliveryQty, setDeliveryQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
+  const [receivedQty, setReceivedQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
+  const [receivedDate, setReceivedDate] = useState("");
+  const [receiverName, setReceiverName] = useState(viewer?.name ?? "");
   const [qty, setQty] = useState(() => Math.max(1, t.items[0]?.quantity ?? 1)); // số lượng xác nhận / lãnh / sử dụng
   const [method, setMethod] = useState(""); // hình thức lãnh
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">("ERP");
@@ -1984,6 +2008,62 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <Check size={15} /> Xác nhận (kho đủ) → chuyển Thống kê
           </button>
         )}
+      </div>
+    );
+  }
+
+  // ---- Luồng hóa chất: hai bước riêng, không dính mã ERP / Phiếu ĐXVT / biên bản nào.
+  if (t.type === CHEMICAL_TICKET_TYPE && acts.includes("stats")) {
+    const unit = t.items[0]?.material.unit ?? "";
+    return (
+      <div className="act">
+        <label className="lb">Xác nhận đề xuất vật tư</label>
+        <div className="note"><Check size={14} /><span>Chốt lịch giao hàng và khối lượng giao. Thống kê hoặc Kỹ thuật viên đều xác nhận được.</span></div>
+        <div className="chem-grid">
+          <div>
+            <label className="lb">Lịch giao hàng *</label>
+            <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="lb">Khối lượng giao *{unit ? ` (${unit})` : ""}</label>
+            <input type="number" min={1} value={deliveryQty} onChange={(e) => setDeliveryQty(e.target.value)} />
+          </div>
+        </div>
+        <button className="btn primary big" disabled={act.isPending || !deliveryDate || Number(deliveryQty) <= 0}
+          onClick={() => run({ action: "stats", deliveryScheduledAt: deliveryDate, deliveryQuantity: Number(deliveryQty) }, "Đã xác nhận đề xuất, chuyển VHV xác nhận lãnh")}>
+          <Check size={15} /> Xác nhận đề xuất
+        </button>
+      </div>
+    );
+  }
+
+  if (t.type === CHEMICAL_TICKET_TYPE && acts.includes("receive")) {
+    const unit = t.items[0]?.material.unit ?? "";
+    return (
+      <div className="act">
+        <label className="lb">VHV xác nhận khối lượng lãnh</label>
+        {t.deliveryScheduledAt && (
+          <div className="note"><Check size={14} /><span>Theo lịch: giao <b>{t.deliveryQuantity?.toLocaleString("vi-VN")} {unit}</b> ngày <b>{fmtDay(t.deliveryScheduledAt)}</b>.</span></div>
+        )}
+        <div className="chem-grid">
+          <div>
+            <label className="lb">Khối lượng lãnh *{unit ? ` (${unit})` : ""}</label>
+            <input type="number" min={1} value={receivedQty} onChange={(e) => setReceivedQty(e.target.value)} />
+          </div>
+          <div>
+            <label className="lb">Ngày lãnh *</label>
+            <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="lb">VHV lãnh *</label>
+            <input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} placeholder="Họ tên người lãnh" />
+          </div>
+        </div>
+        <button className="btn primary big"
+          disabled={act.isPending || Number(receivedQty) <= 0 || !receivedDate || !receiverName.trim()}
+          onClick={() => run({ action: "receive", receivedQuantity: Number(receivedQty), receivedAt: receivedDate, receivedByName: receiverName.trim() }, "Đã xác nhận lãnh, phiếu hoàn tất")}>
+          <Check size={15} /> Xác nhận lãnh và hoàn tất
+        </button>
       </div>
     );
   }
@@ -2510,7 +2590,9 @@ const CSS = `
 .row.ghinhan{background:#ecfeff;box-shadow:inset 3px 0 0 #0e7490;}
 .row.ghinhan:hover{background:#cffafe;}
 .tag.ghinhan{background:#cffafe;color:#155e75;}
+.tag.hoachat{background:#ede9fe;color:#5b21b6;}
 .note.ghinhan{background:#ecfeff;border-color:#a5f3fc;color:#155e75;}
+.chem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
 .row.mine:hover{background:#fef3c7;}
 .row.mine .d.cur{background:#f59e0b;box-shadow:0 0 0 3px #f59e0b30;animation:mtwpulse 1.3s ease-in-out infinite;}
 .pd{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;margin-right:5px;vertical-align:middle;animation:mtwpulse 1.3s ease-in-out infinite;}
