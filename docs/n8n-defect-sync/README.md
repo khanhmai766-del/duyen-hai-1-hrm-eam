@@ -241,11 +241,12 @@ trong `data.eventIds` và tiếp tục được ghi. Node ACK bắt buộc lấy
 node Claim. Khi `eventIds` rỗng, ACK là no-op thành công để workflow kết thúc
 mà không giữ khóa `PROCESSING`.
 
-Các node gọi backend website (Claim, Plan, ACK) retry 5 lần, cách nhau 60 giây,
-để chịu được khoảng 4 phút website tạm dừng khi build/deploy và phù hợp giới hạn
-`Max Tries = 5` của giao diện n8n. Hai node gọi
-Google Sheets retry 3 lần, cách nhau 5 giây. Thời hạn tự thu hồi worker vẫn là
-15 phút, dài hơn cửa sổ retry nên không giành lại event khi execution còn chạy.
+Các node gọi backend website (Claim, Plan, ACK) retry 5 lần, cách nhau 5 giây,
+phù hợp giới hạn `Max Tries = 5` và `Wait Between Tries = 5000 ms` của giao diện
+n8n đang triển khai. Hai node gọi Google Sheets retry 3 lần, cách nhau 5 giây.
+Nếu dịch vụ gián đoạn lâu hơn cửa sổ retry ngắn này, event vẫn được bảo toàn và
+tự thu hồi worker sau 15 phút, hoặc quản trị viên tắt/bật đồng bộ rồi chọn
+`Tiếp tục gửi` để đưa PROCESSING/FAILED về PENDING ngay.
 
 - Phiếu mới ghi vào hàng trống có sẵn hoặc hàng cuối.
 - Sửa phiếu cập nhật đúng hàng có `STT/năm`; hai tab Môi Trường chấp nhận cả
