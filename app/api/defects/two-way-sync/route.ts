@@ -3,6 +3,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   getDefectSyncTrafficMetrics,
   getDefectTwoWaySyncSetting,
+  getReusableCancelledDefectNumbers,
   setDefectTwoWaySyncSetting,
   type DefectSyncSettingKey,
 } from "@/lib/defect-two-way-sync";
@@ -13,11 +14,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(async () => {
     await requireUser();
-    const [setting, metrics] = await Promise.all([
+    const [setting, metrics, reusableRequestNumbers] = await Promise.all([
       getDefectTwoWaySyncSetting(),
       getDefectSyncTrafficMetrics(),
+      getReusableCancelledDefectNumbers(),
     ]);
-    return ok({ ...setting, metrics });
+    return ok({ ...setting, metrics, reusableRequestNumbers });
   });
 }
 
@@ -118,6 +120,10 @@ export async function PUT(req: Request) {
       )
     );
 
-    return ok({ ...setting, discardedCount, metrics: await getDefectSyncTrafficMetrics() });
+    const [metrics, reusableRequestNumbers] = await Promise.all([
+      getDefectSyncTrafficMetrics(),
+      getReusableCancelledDefectNumbers(),
+    ]);
+    return ok({ ...setting, discardedCount, metrics, reusableRequestNumbers });
   });
 }

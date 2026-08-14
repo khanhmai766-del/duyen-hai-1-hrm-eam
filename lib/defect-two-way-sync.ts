@@ -96,3 +96,31 @@ export async function getDefectSyncTrafficMetrics() {
       : null,
   };
 }
+
+export async function getReusableCancelledDefectNumbers() {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const rows = await prisma.defect.findMany({
+    where: {
+      requestNumberReuseEligible: true,
+      cancelledAt: { not: null },
+      syncState: "CONFIRMED",
+      requestNumberReleasedAt: { not: null },
+      requestNumberReusedAt: null,
+      createdAt: { gte: cutoff, lte: now },
+    },
+    orderBy: [{ requestType: "asc" }, { requestNumber: "asc" }],
+    select: {
+      id: true,
+      requestNumber: true,
+      requestType: true,
+      sourceSheetName: true,
+      createdAt: true,
+      cancelledAt: true,
+      requestNumberReleasedAt: true,
+    },
+  });
+  return rows.filter(
+    (row) => row.cancelledAt && row.cancelledAt.getTime() <= row.createdAt.getTime() + 6 * 60 * 60 * 1000
+  );
+}

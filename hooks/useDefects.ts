@@ -26,6 +26,15 @@ export interface DefectSyncTrafficMetrics {
 
 export interface DefectTwoWaySyncStatus extends DefectSyncSetting {
   metrics: DefectSyncTrafficMetrics;
+  reusableRequestNumbers: Array<{
+    id: string;
+    requestNumber: string | null;
+    requestType: string | null;
+    sourceSheetName: string | null;
+    createdAt: string;
+    cancelledAt: string | null;
+    requestNumberReleasedAt: string | null;
+  }>;
 }
 
 export interface DefectSyncQueueItem {

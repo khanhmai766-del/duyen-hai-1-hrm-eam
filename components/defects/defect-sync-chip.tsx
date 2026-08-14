@@ -254,6 +254,7 @@ function TwoWaySyncRow() {
   const setEnabled = useSetDefectTwoWaySync();
   const [queueOpen, setQueueOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const [reusableNumbersOpen, setReusableNumbersOpen] = React.useState(false);
   type SettingKey = "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled";
   const [queueDecision, setQueueDecision] = React.useState<{
     key: SettingKey;
@@ -402,12 +403,31 @@ function TwoWaySyncRow() {
               </span>
             )}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 w-full bg-white"
+            onClick={() => setReusableNumbersOpen(true)}
+          >
+            <RefreshCw className="h-4 w-4 text-emerald-700" />
+            STT đã hủy còn trống
+            <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-emerald-800">
+              {setting.reusableRequestNumbers?.length ?? 0}
+            </span>
+          </Button>
         </div>
       )}
 
       <DefectSyncQueueDialog open={queueOpen} onOpenChange={setQueueOpen} />
 
       <SyncTroubleshootingDialog open={helpOpen} onOpenChange={setHelpOpen} />
+
+      <ReusableRequestNumbersDialog
+        open={reusableNumbersOpen}
+        onOpenChange={setReusableNumbersOpen}
+        items={setting?.reusableRequestNumbers ?? []}
+      />
 
       <Dialog
         open={queueDecision !== null}
@@ -460,6 +480,79 @@ function TwoWaySyncRow() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function ReusableRequestNumbersDialog({
+  open,
+  onOpenChange,
+  items,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  items: Array<{
+    id: string;
+    requestNumber: string | null;
+    requestType: string | null;
+    sourceSheetName: string | null;
+    requestNumberReleasedAt: string | null;
+  }>;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg overflow-hidden p-0">
+        <DialogHeader className="border-b border-emerald-100 bg-emerald-50/70 px-6 py-5">
+          <DialogTitle className="flex items-center gap-2 text-emerald-950">
+            <RefreshCw className="h-5 w-5 text-emerald-700" />
+            STT đã hủy còn trống
+          </DialogTitle>
+          <DialogDescription>
+            Các STT đã được Sheet xác nhận làm trống và còn đủ điều kiện cấp lại.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          {items.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/30 px-4 py-8 text-center">
+              <p className="text-sm font-semibold text-ink">Không có STT trống có thể cấp lại</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Phiếu vừa hủy chỉ xuất hiện sau khi n8n ghi và ACK việc làm trống dòng trên Sheet.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-white px-4 py-3 shadow-sm">
+                  <div className="min-w-0">
+                    <p className="font-bold tabular-nums text-ink">{item.requestNumber || "Chưa có STT"}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {item.requestType || "Chưa rõ loại"}
+                      {item.sourceSheetName ? ` · Sheet ${item.sourceSheetName}` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-800">Sẵn sàng cấp lại</span>
+                    {item.requestNumberReleasedAt && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Trả lúc {fullFmt.format(new Date(item.requestNumberReleasedAt))}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-amber-100 bg-amber-50/60 px-6 py-3 text-xs leading-relaxed text-amber-900">
+          Hệ thống tự ưu tiên STT trống nhỏ nhất khi tạo phiếu mới cùng loại, cùng năm và cùng Sheet.
+          Danh sách chỉ giữ STT đủ điều kiện trong cửa sổ 6 giờ.
+        </div>
+        <DialogFooter className="border-t border-border bg-slate-50/70 px-6 py-4">
+          <Button type="button" onClick={() => onOpenChange(false)}>Đóng</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
