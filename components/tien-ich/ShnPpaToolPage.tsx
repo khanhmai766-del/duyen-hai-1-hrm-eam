@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, BarChart3, CheckCircle2, Clock3, Eye, FileCode2, History, Loader2, RefreshCw, RotateCcw, Save, Trash2, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, Archive, BarChart3, CheckCircle2, Clock3, Eye, FileCode2, History, Loader2, RefreshCw, RotateCcw, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +51,7 @@ type ComparisonRow = {
 type ToolVersion = { id: string; fileName: string; contentHash: string; isActive: boolean; createdAt: string; uploadedBy: { name: string } };
 
 type BridgeMessage = {
-  type: "SHN_PPA_HEIGHT" | "SHN_PPA_SYNC_RESULT" | "SHN_PPA_SNAPSHOT" | "SHN_PPA_RESTORE_SUCCESS" | "SHN_PPA_RESTORE_ERROR";
+  type: "SHN_PPA_HEIGHT" | "SHN_PPA_SYNC_RESULT" | "SHN_PPA_SNAPSHOT" | "SHN_PPA_RESTORE_SUCCESS" | "SHN_PPA_RESTORE_ERROR" | "SHN_PPA_DIRTY_STATE";
   height?: number;
   days?: SyncDay[];
   result?: { results?: SyncRowResult[]; ok?: boolean; error?: string } | null;
@@ -66,6 +67,7 @@ type BridgeMessage = {
   filterFrom?: string;
   filterTo?: string;
   offsetTop?: number;
+  dirty?: boolean;
 };
 
 const STATUS = {
@@ -116,8 +118,10 @@ function comparisonRowsFromLegacy(record: HistoryRecord): ComparisonRow[] {
 }
 
 export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
+  const router = useRouter();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const unsavedRef = useRef(false);
   const [frameKey, setFrameKey] = useState(0);
   const [frameHeight, setFrameHeight] = useState(900);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
@@ -132,6 +136,8 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HistoryRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hasUnsavedData, setHasUnsavedData] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -148,6 +154,32 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
 
+  useEffect(() => { unsavedRef.current = hasUnsavedData; }, [hasUnsavedData]);
+
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!unsavedRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const interceptNavigation = (event: MouseEvent) => {
+      if (!unsavedRef.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!target || target.target === "_blank" || target.hasAttribute("download")) return;
+      const destination = new URL(target.href, window.location.href);
+      if (destination.href === window.location.href || (destination.pathname === window.location.pathname && destination.search === window.location.search && destination.hash)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingNavigation(destination.href);
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    document.addEventListener("click", interceptNavigation, true);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      document.removeEventListener("click", interceptNavigation, true);
+    };
+  }, []);
+
   useEffect(() => {
     const receive = async (event: MessageEvent<BridgeMessage>) => {
       if (event.source !== iframeRef.current?.contentWindow || !event.data) return;
@@ -155,8 +187,13 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
         setFrameHeight(Math.min(12000, Math.max(700, event.data.height)));
         return;
       }
+      if (event.data.type === "SHN_PPA_DIRTY_STATE" && typeof event.data.dirty === "boolean") {
+        setHasUnsavedData(event.data.dirty);
+        return;
+      }
       if (event.data.type === "SHN_PPA_RESTORE_SUCCESS") {
         setRestoringId(null);
+        setHasUnsavedData(false);
         toast.success("Đã mở lại biểu đồ từ kết quả đã lưu");
         const iframe = iframeRef.current;
         if (iframe) window.scrollTo({ top: window.scrollY + iframe.getBoundingClientRect().top + (event.data.offsetTop ?? 0) - 88, behavior: "smooth" });
@@ -180,6 +217,7 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
             syncMessage: "Chỉ lưu kết quả trên website", resultCount: event.data.days.length,
             snapshot: { days: event.data.days, result: null, comparisonRows: event.data.comparisonRows ?? [], warnings: event.data.warnings ?? [], inferredYear: event.data.inferredYear, filterFrom: event.data.filterFrom, filterTo: event.data.filterTo, savedAt: new Date().toISOString() },
           });
+          setHasUnsavedData(false);
           toast.success("Đã lưu kết quả trên website trong 30 ngày");
           await loadHistory();
         } catch (error) {
@@ -201,6 +239,7 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
           syncMessage: message, resultCount: event.data.days.length,
           snapshot: { days: event.data.days, result: event.data.result ?? { error: event.data.error }, comparisonRows: event.data.comparisonRows ?? [], warnings: event.data.warnings ?? [], inferredYear: event.data.inferredYear, filterFrom: event.data.filterFrom, filterTo: event.data.filterTo, savedAt: new Date().toISOString() },
         });
+        setHasUnsavedData(false);
         toast.success("Đã lưu kết quả trên website trong 30 ngày");
         await loadHistory();
       } catch (error) {
@@ -259,6 +298,16 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
     } finally { setDeletingId(null); }
   }
 
+  function leaveWithoutSaving() {
+    if (!pendingNavigation) return;
+    const destination = new URL(pendingNavigation);
+    unsavedRef.current = false;
+    setHasUnsavedData(false);
+    setPendingNavigation(null);
+    if (destination.origin === window.location.origin) router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+    else window.location.assign(destination.href);
+  }
+
   async function uploadHtml(file?: File) {
     if (!file) return;
     setUploading(true);
@@ -292,6 +341,7 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
 
   return <div className="space-y-6 pb-10">
     <PageHeader title="So sánh SHN theo PPA" description="Nạp dữ liệu, đồng bộ Google Sheet và lưu kết quả trên website trong 30 ngày.">
+      {hasUnsavedData && <div role="status" className="flex min-h-9 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-medium text-amber-800 shadow-sm dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle className="h-4 w-4" />Có kết quả chưa lưu</div>}
       <Button variant="soft" size="toolbar" onClick={requestWebsiteSave} disabled={savingWebsite}>{savingWebsite ? <Loader2 className="animate-spin" /> : <Save />}Lưu kết quả trên website</Button>
       {isAdmin && <Button variant="soft" size="toolbar" onClick={() => { setVersionsOpen(true); void loadVersions(); }}><FileCode2 />Cập nhật tiện ích</Button>}
     </PageHeader>
@@ -347,6 +397,16 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={Boolean(deletingId)}>Hủy</Button>
           <Button variant="destructive" onClick={() => void deleteSavedResult()} disabled={Boolean(deletingId)}>{deletingId ? <Loader2 className="animate-spin" /> : <Trash2 />}Xóa kết quả</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={Boolean(pendingNavigation)} onOpenChange={(open) => { if (!open) setPendingNavigation(null); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-600" />Kết quả chưa được lưu</DialogTitle><DialogDescription>Bạn đã nhập file Excel nhưng chưa lưu kết quả trên website. Nếu rời trang lúc này, dữ liệu vừa nhập và biểu đồ hiện tại sẽ bị mất.</DialogDescription></DialogHeader>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={() => setPendingNavigation(null)}>Ở lại trang</Button>
+          <Button variant="destructive" onClick={leaveWithoutSaving}>Rời trang, không lưu</Button>
         </div>
       </DialogContent>
     </Dialog>

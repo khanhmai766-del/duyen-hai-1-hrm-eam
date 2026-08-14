@@ -22,6 +22,17 @@ const BRIDGE = `<script>
       filterTo: (document.getElementById('cmpFilterTo')||{}).value || ''
     };
   }
+  function announceUnsaved(){
+    window.parent.postMessage({type:'SHN_PPA_DIRTY_STATE',dirty:true},'*');
+  }
+  document.addEventListener('change',function(event){
+    var target=event.target;
+    if(target && target.tagName==='INPUT' && target.type==='file' && target.files && target.files.length) announceUnsaved();
+    if(target && ['month','year','dayFrom','dayTo'].indexOf(target.id)>=0 && document.querySelector('.filelist .f')) announceUnsaved();
+  },true);
+  document.addEventListener('drop',function(event){
+    if(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) announceUnsaved();
+  },true);
   var nativeFetch = window.fetch.bind(window);
   window.fetch = async function(input, init){
     var method = String((init&&init.method)||'GET').toUpperCase();
@@ -76,6 +87,7 @@ const BRIDGE = `<script>
         setTimeout(function(){
           sendHeight();
           var card=document.getElementById('cmpCard');
+          window.parent.postMessage({type:'SHN_PPA_DIRTY_STATE',dirty:false},'*');
           window.parent.postMessage({type:'SHN_PPA_RESTORE_SUCCESS',offsetTop:card?card.offsetTop:0},'*');
         },80);
       }catch(error){
