@@ -221,9 +221,9 @@ export async function POST(req: NextRequest) {
       type = SINGLE_STEP_TICKET_TYPE;
       nextStatus = "HOAN_TAT";
     } else if (isChemicalWorkflowCategory(materialCategory)) {
-      // Luồng hóa chất 3 bước: bỏ bước Trưởng ca/Trưởng kíp, vào thẳng bước xác nhận đề xuất.
+      // Luồng hóa chất: giữ nguyên bước đầu là Trưởng ca/TK Lò máy/Trưởng kíp điện xác nhận
+      // bồn và thiết bị đủ điều kiện nhận hóa chất (nextStatus mặc định CHO_XAC_NHAN).
       type = CHEMICAL_TICKET_TYPE;
-      nextStatus = "CHO_THONG_KE";
     }
     const replacementPoints = await prisma.materialReplacement.findMany({
       where: { materialId: selectedMaterial.id },

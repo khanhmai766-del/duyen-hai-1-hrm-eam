@@ -851,6 +851,28 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // B1 — Trưởng Ca/Trưởng Kíp chọn luồng xử lý.
     if (action === "confirm") {
+      // LUỒNG HÓA CHẤT — bước 2: không chọn luồng, không đổi số lượng, chỉ xác nhận BỒN VÀ
+      // THIẾT BỊ ĐỦ ĐIỀU KIỆN nhận hóa chất. Để trống bước này là xe bồn đến nơi mới biết bồn
+      // chưa sẵn sàng.
+      if (t.type === CHEMICAL_TICKET_TYPE) {
+        if (t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước xác nhận bồn/thiết bị");
+        if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
+          return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+        const up = await prisma.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "CHO_THONG_KE",
+            confirmedById: user.id,
+            confirmedByName: user.name ?? "",
+            confirmedByPosition: user.position ?? null,
+            confirmedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
+        await audit(user.id, "MT_CONFIRM", "MaterialTicket", t.id,
+          `${materialTicketReference(t)}: Xác nhận bồn/thiết bị đủ điều kiện nhận hóa chất`);
+        return ok(up);
+      }
       if (!["DE_XUAT", "CHUA_CHON"].includes(t.type) || t.status !== "CHO_XAC_NHAN") return fail("Phiếu không ở bước Trưởng ca/Trưởng kíp xử lý");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);

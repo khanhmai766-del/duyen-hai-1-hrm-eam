@@ -265,6 +265,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
   } else if (t.type === CHEMICAL_TICKET_TYPE) {
     // Luồng hóa chất chỉ có hai lượt thao tác sau khi tạo phiếu.
+    // Xác nhận bồn/thiết bị đủ điều kiện: Trưởng ca / TK Lò máy / Trưởng kíp điện.
+    if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     // Xác nhận đề xuất: Thống kê (theo phân quyền bước) HOẶC Kỹ thuật viên.
     if (t.status === "CHO_THONG_KE" && (v.steps?.stats || v.isTechnician)) a.push("stats");
     // Xác nhận khối lượng lãnh: chính VHV được giao phiếu (hoặc cương vị được phân bước Nhận vật tư).
