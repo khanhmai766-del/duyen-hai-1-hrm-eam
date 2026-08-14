@@ -26,6 +26,7 @@ import {
   MonitorCog,
   Calculator,
   Zap,
+  Gauge,
 } from "lucide-react";
 import { effectiveUserPosition, type PositionCarrier } from "@/lib/current-position";
 
@@ -179,6 +180,12 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "TIỆN ÍCH",
     items: [
+      {
+        label: "So sánh SHN theo PPA",
+        href: "/tien-ich/so-sanh-shn-ppa",
+        icon: Gauge,
+        keywords: "so sanh shn ppa suat hao nhiet dong bo google sheet dh1",
+      },
       {
         label: "Kết quả phân tích dầu",
         href: "/tien-ich/phan-tich-dau",
