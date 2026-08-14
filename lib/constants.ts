@@ -295,6 +295,10 @@ export const MATERIAL_CATEGORIES = [
   // chung một danh mục thì hai lối theo dõi lẫn vào nhau.
   "Chai Khí",
   "Bi Nghiền Than",
+  "Văn phòng phẩm",
+  // "Khác" luôn đứng cuối: đây là chỗ chứa những thứ chưa có nhóm riêng, không phải một
+  // loại ngang hàng với các loại trên.
+  "Khác",
 ] as const;
 
 /** Nhãn hiển thị loại vật tư. Giữ nguyên giá trị lưu trữ để tương thích dữ liệu,

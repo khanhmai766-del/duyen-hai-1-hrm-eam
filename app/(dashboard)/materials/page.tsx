@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Paperclip, Boxes, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -55,6 +55,8 @@ const MATERIAL_CATEGORY_TABS: { key: (typeof MATERIAL_CATEGORIES)[number]; label
   { key: "Hóa Chất", label: "Hóa chất", icon: FlaskConical },
   { key: "Chai Khí", label: "Chai khí", icon: Cylinder },
   { key: "Bi Nghiền Than", label: "Bi Nghiền Than", icon: CircleDot },
+  { key: "Văn phòng phẩm", label: "Văn phòng phẩm", icon: Paperclip },
+  { key: "Khác", label: "Khác", icon: Boxes },
 ];
 
 // Form khiếm khuyết chỉ nạp khi thật sự mở panel "Ra SYC thay thế" — nó kéo theo
