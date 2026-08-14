@@ -91,7 +91,11 @@ function MaterialsPageContent() {
   const canManage = rbac.can("material-manage", ["manage", "full"]);
   // CƯƠNG VỊ ĐANG TRỰC của người xem — dùng để mở ô nhập "Hiện có" cho đúng người đang giữ
   // vật tư đó, xem `canEditStock`.
-  const viewerPosition = session?.user?.position ?? null;
+  //
+  // Phải lấy `currentPosition` chứ KHÔNG phải `position`: `position` là chức danh gốc trong hồ sơ
+  // (vd "Thải xỉ"), còn người dùng đang trực cương vị nào mới là thứ quyết định (vd "XLNT").
+  // Máy chủ xét theo cương vị đang trực, lấy sai trường ở đây là giao diện khoá ô trong khi API cho ghi.
+  const viewerPosition = session?.user?.currentPosition ?? session?.user?.position ?? null;
   const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
@@ -1977,10 +1981,10 @@ function InlineNumberCell({
           "inline-block rounded px-1.5 py-0.5 font-semibold tabular-nums text-ink",
           canEdit && "cursor-text transition-colors hover:bg-sky-50 hover:ring-1 hover:ring-sky-200"
         )}
-        title={canEdit ? "Nhấn đúp để sửa nhanh" : undefined}
-        onClick={(e) => canEdit && e.stopPropagation()}
-        onDoubleClick={(e) => {
+        title={canEdit ? "Nhấn để sửa" : undefined}
+        onClick={(e) => {
           if (!canEdit) return;
+          // Chặn lại để cú bấm không rơi xuống hàng (hàng đang bắt click để bung chi tiết).
           e.stopPropagation();
           setDraft(String(value));
           setEditing(true);
