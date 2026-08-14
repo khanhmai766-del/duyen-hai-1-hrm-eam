@@ -298,7 +298,7 @@ export async function GET(req: NextRequest) {
         // tư có ít nhất một thiết bị thuộc phạm vi Xem/Sửa của cương vị hiện tại.
         OR: [
           { replacements: { none: {} } },
-          { replacements: { some: materialAccess.declaration } },
+          { replacements: { some: materialAccess.replacement } },
         ],
       },
       orderBy: { code: "asc" },
@@ -335,7 +335,7 @@ export async function GET(req: NextRequest) {
       const replacements = material.replacements.filter((replacement) =>
         canViewMaterialReplacement(access, replacement, viewScope)
       );
-      return hadNoPoints || replacements.some((replacement) => !replacement.isActive)
+      return hadNoPoints || replacements.length > 0
         ? [{ ...material, replacements }]
         : [];
     });

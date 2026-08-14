@@ -8,16 +8,14 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { requireErpMaterialManage } from "@/lib/erp-material-access";
 
 export const dynamic = "force-dynamic";
 
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được sửa nhóm vật tư", 403);
-    }
+    await requireErpMaterialManage(user);
 
     const body = await req.json();
     const id = String(body?.id ?? "");
@@ -86,9 +84,7 @@ export async function PUT(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được tách mã khỏi nhóm", 403);
-    }
+    await requireErpMaterialManage(user);
 
     const body = await req.json().catch(() => ({}));
     const materialId = String(body?.materialId ?? "").trim();
@@ -136,9 +132,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được xoá nhóm vật tư", 403);
-    }
+    await requireErpMaterialManage(user);
 
     const id = req.nextUrl.searchParams.get("id") ?? "";
     if (!id) return fail("Thiếu id nhóm");

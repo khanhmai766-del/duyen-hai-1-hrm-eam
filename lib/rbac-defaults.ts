@@ -31,6 +31,7 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "defect-history-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "defect-two-way-sync": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "material-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
+  "erp-material-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "replacement-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "read", VIEWER: "read" },
   // Phạm vi XEM theo cương vị cho vật tư / lịch thay thế. Cùng lý do với `defect-view`:
   // phải tách khỏi `*-manage` vì các quyền đó đã mở mức "manage" cho gần hết vai trò.

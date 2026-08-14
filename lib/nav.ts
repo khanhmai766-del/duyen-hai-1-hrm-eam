@@ -148,6 +148,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Vật tư theo ERP",
         href: "/vat-tu/loai-dau",
         icon: Database,
+        permissionIds: ["erp-material-manage"],
         keywords: "ton kho theo nhom vat tu loai dau loc dau hoa chat chai khi bi nghien than gom nhom erp de xuat nhap nguong canh bao",
       },
       {

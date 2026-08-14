@@ -8,7 +8,6 @@
 // =====================================================================
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { AlertTriangle, Ban, Check, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Boxes, CloudDownload, Cpu, Cylinder, Droplet, ExternalLink, Filter, FlaskConical, History, Loader2, MoreHorizontal, Paperclip, Pencil, Plus, RotateCcw, Search, Trash2, Unlink, X, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -19,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { useRbacAccess } from "@/hooks/useRbacAccess";
 import {
   useOilStock,
   useOilSuggestions,
@@ -82,8 +81,8 @@ const categoryLabel = (category: GroupingCategory) =>
 export default function OilGroupingPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const { data: session } = useSession();
-  const canManage = canManageMaterialCatalog(session?.user ?? {});
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("erp-material-manage", ["manage", "full"]);
   const category: GroupingCategory = CATEGORY_BY_SLUG[params.get("loai") ?? ""] ?? "Dầu bôi trơn";
   const [tab, setTab] = useState<"stock" | "all" | "pending">("stock");
   const { data, isLoading, refetch } = useOilStock(category);
@@ -744,8 +743,8 @@ function StockBoard({
   loading: boolean;
   onReload: () => void;
 }) {
-  const { data: session } = useSession();
-  const canManage = canManageMaterialCatalog(session?.user ?? {});
+  const rbac = useRbacAccess();
+  const canManage = rbac.can("erp-material-manage", ["manage", "full"]);
   const updateGroup = useUpdateOilGroup();
   const deleteGroup = useDeleteOilGroup();
 

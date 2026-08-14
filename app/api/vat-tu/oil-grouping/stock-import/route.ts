@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { requireErpMaterialManage, requireErpMaterialView } from "@/lib/erp-material-access";
 import { parseErpNumber } from "@/lib/parse-number";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,8 @@ function syncCountsFromDetail(detail: string | null) {
 
 export async function GET() {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requireErpMaterialView(user);
     const runs = await prisma.auditLog.findMany({
       where: { action: "UPDATE_ERP_STOCK_FROM_QLVT", entity: "ErpMaterial" },
       orderBy: { createdAt: "desc" },
@@ -77,9 +78,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được cập nhật tồn kho ERP", 403);
-    }
+    await requireErpMaterialManage(user);
 
     const body = await req.json();
     const rows = Array.isArray(body?.rows) ? (body.rows as StockRow[]) : [];

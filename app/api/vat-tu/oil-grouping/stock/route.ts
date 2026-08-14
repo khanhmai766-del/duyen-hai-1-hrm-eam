@@ -5,6 +5,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
+import { requireErpMaterialView } from "@/lib/erp-material-access";
 import { parseErpCode } from "@/lib/oil-matching";
 import { isGroupableCategory, pendingCountByCategory, type GroupableCategory } from "@/lib/oil-grouping-sync";
 
@@ -12,7 +13,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
-    await requireUser();
+    const user = await requireUser();
+    await requireErpMaterialView(user);
 
     const raw = req.nextUrl.searchParams.get("category");
     const category: GroupableCategory = isGroupableCategory(raw) ? raw : "Dầu bôi trơn";

@@ -5,7 +5,7 @@
 // (hoặc gọi runOilGroupingSync trực tiếp sau nhập Excel).
 import type { NextRequest } from "next/server";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { requireErpMaterialManage } from "@/lib/erp-material-access";
 import { runOilGroupingSync, isGroupableCategory } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +13,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được quét gợi ý gom nhóm", 403);
-    }
+    await requireErpMaterialManage(user);
 
     const body = await req.json().catch(() => null);
     const category = isGroupableCategory(body?.category) ? body.category : undefined;

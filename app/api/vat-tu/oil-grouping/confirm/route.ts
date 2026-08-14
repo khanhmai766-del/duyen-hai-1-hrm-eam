@@ -11,7 +11,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { canManageMaterialCatalog } from "@/lib/constants";
+import { requireErpMaterialManage } from "@/lib/erp-material-access";
 import { isGroupableCategory, STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +19,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    if (!canManageMaterialCatalog(user)) {
-      return fail("Chỉ Quản đốc / Phó Quản đốc / Kỹ thuật viên / Quản trị được duyệt gom nhóm dầu", 403);
-    }
+    await requireErpMaterialManage(user);
 
     const body = await req.json();
     const { materialIds, action, oilTypeId, newOilType, conversionFactor } = body ?? {};
