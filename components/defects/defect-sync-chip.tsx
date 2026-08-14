@@ -14,6 +14,10 @@ import {
   ListChecks,
   Loader2,
   SkipForward,
+  CircleHelp,
+  ServerOff,
+  ShieldAlert,
+  TimerReset,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -249,6 +253,7 @@ function TwoWaySyncRow() {
   const query = useDefectTwoWaySync();
   const setEnabled = useSetDefectTwoWaySync();
   const [queueOpen, setQueueOpen] = React.useState(false);
+  const [helpOpen, setHelpOpen] = React.useState(false);
   type SettingKey = "twoWaySyncEnabled" | "operationUpdateEnabled" | "websiteCreateEnabled" | "websiteRemindEnabled";
   const [queueDecision, setQueueDecision] = React.useState<{
     key: SettingKey;
@@ -350,9 +355,19 @@ function TwoWaySyncRow() {
 
       {setting?.metrics && (
         <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            <Activity className="h-3.5 w-3.5" />
-            Lưu lượng ghi ngược hôm nay
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              <Activity className="h-3.5 w-3.5" />
+              Lưu lượng ghi ngược hôm nay
+            </div>
+            <button
+              type="button"
+              className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              onClick={() => setHelpOpen(true)}
+            >
+              <CircleHelp className="h-3.5 w-3.5" />
+              Khắc phục sự cố
+            </button>
           </div>
           <div className="grid grid-cols-4 gap-2 text-center">
             <TrafficStat label="Cập nhật" value={setting.metrics.todayUpdate} />
@@ -391,6 +406,8 @@ function TwoWaySyncRow() {
       )}
 
       <DefectSyncQueueDialog open={queueOpen} onOpenChange={setQueueOpen} />
+
+      <SyncTroubleshootingDialog open={helpOpen} onOpenChange={setHelpOpen} />
 
       <Dialog
         open={queueDecision !== null}
@@ -442,6 +459,93 @@ function TwoWaySyncRow() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SyncTroubleshootingDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl overflow-hidden p-0">
+        <DialogHeader className="border-b border-blue-100 bg-blue-50/70 px-6 py-5">
+          <DialogTitle className="flex items-center gap-2 text-blue-950">
+            <CircleHelp className="h-5 w-5 text-blue-700" />
+            Quy trình khắc phục đồng bộ Google Sheet
+          </DialogTitle>
+          <DialogDescription>
+            Kiểm tra theo thứ tự dưới đây để không ghi trùng hoặc bỏ sót phiếu.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[65vh] space-y-3 overflow-y-auto px-6 py-5 text-sm">
+          <TroubleshootingStep
+            icon={ServerOff}
+            title="Website vừa build, restart hoặc lỗi DNS"
+            tone="blue"
+          >
+            Chờ website hoạt động ổn định. Workflow tự thử lại tối đa khoảng 4 phút.
+            Trong thời gian này tuyệt đối không nhập lại phiếu trực tiếp trên Sheet.
+          </TroubleshootingStep>
+          <TroubleshootingStep
+            icon={TimerReset}
+            title="Hàng đợi còn Đang xử lý hoặc Đồng bộ lỗi"
+            tone="amber"
+          >
+            Nếu n8n không còn execution đang chạy: tắt đồng bộ, bật lại và chọn
+            <b> Tiếp tục gửi</b>. Hệ thống đưa PROCESSING và FAILED về PENDING để chạy ngay.
+          </TroubleshootingStep>
+          <TroubleshootingStep
+            icon={ShieldAlert}
+            title="Trước khi thu hồi hàng đợi"
+            tone="rose"
+          >
+            Vào n8n → Executions và dừng execution cũ nếu còn trạng thái Running.
+            Chỉ chọn <b>Bỏ hàng đợi cũ</b> khi chắc chắn không cần gửi các thay đổi từ website.
+          </TroubleshootingStep>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-xs leading-relaxed text-slate-700">
+            <b>Gợi ý đọc trạng thái:</b> PENDING là đang chờ; PROCESSING là n8n đang giữ;
+            FAILED sẽ được thử lại; SUCCESS là đã ghi và xác nhận; SKIPPED là đã chủ động bỏ qua.
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-border bg-slate-50/70 px-6 py-4">
+          <Button type="button" onClick={() => onOpenChange(false)}>Đã hiểu</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TroubleshootingStep({
+  icon: Icon,
+  title,
+  tone,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  tone: "blue" | "amber" | "rose";
+  children: React.ReactNode;
+}) {
+  const tones = {
+    blue: "border-blue-200 bg-blue-50/60 text-blue-800",
+    amber: "border-amber-200 bg-amber-50/60 text-amber-900",
+    rose: "border-rose-200 bg-rose-50/60 text-rose-900",
+  };
+  return (
+    <div className={cn("rounded-xl border px-3.5 py-3", tones[tone])}>
+      <div className="mb-1 flex items-center gap-2 font-semibold">
+        <Icon className="h-4 w-4 shrink-0" />
+        {title}
+      </div>
+      <p className="pl-6 text-xs leading-relaxed text-current/85">{children}</p>
     </div>
   );
 }
