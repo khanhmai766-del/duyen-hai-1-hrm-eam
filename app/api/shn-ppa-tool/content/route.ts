@@ -52,7 +52,41 @@ const BRIDGE = `<script>
       window.parent.postMessage({type:'SHN_PPA_SNAPSHOT',days:[],error:String(error&&error.message||error)},'*');
     }
   });
-  addEventListener('load',function(){sendHeight(); new ResizeObserver(sendHeight).observe(document.body);});
+  var causeTip=null;
+  function showCauseTip(event,cause){
+    if(!causeTip){
+      causeTip=document.createElement('div');
+      causeTip.style.cssText='position:fixed;z-index:9999;max-width:420px;padding:9px 11px;border-radius:7px;background:#153450;color:#fff;font:12px/1.55 Segoe UI,Arial,sans-serif;box-shadow:0 8px 26px rgba(0,0,0,.28);pointer-events:none;white-space:normal;';
+      document.body.appendChild(causeTip);
+    }
+    causeTip.textContent=cause; causeTip.style.display='block';
+    var left=Math.min(window.innerWidth-440,event.clientX+14); var top=Math.min(window.innerHeight-100,event.clientY+14);
+    causeTip.style.left=Math.max(8,left)+'px'; causeTip.style.top=Math.max(8,top)+'px';
+  }
+  function hideCauseTip(){if(causeTip) causeTip.style.display='none';}
+  function enhanceCauseCells(){
+    document.querySelectorAll('.cause-cell[data-cause]').forEach(function(cell){
+      if(cell.getAttribute('data-cause-ready')==='1') return;
+      var cause=''; try{cause=decodeURIComponent(cell.getAttribute('data-cause')||'');}catch(e){cause=cell.getAttribute('data-cause')||'';}
+      if(!cause) return;
+      cell.setAttribute('title',cause);
+      cell.setAttribute('aria-label','Nguyên nhân: '+cause+'. Bấm để xem đầy đủ.');
+      cell.setAttribute('tabindex','0');
+      cell.setAttribute('data-cause-ready','1');
+      cell.addEventListener('mouseenter',function(event){showCauseTip(event,cause);});
+      cell.addEventListener('mousemove',function(event){showCauseTip(event,cause);});
+      cell.addEventListener('mouseleave',hideCauseTip);
+      cell.addEventListener('blur',hideCauseTip);
+      cell.addEventListener('keydown',function(event){
+        if(event.key==='Enter'||event.key===' '){event.preventDefault();cell.click();}
+      });
+    });
+  }
+  addEventListener('load',function(){
+    sendHeight(); enhanceCauseCells();
+    new ResizeObserver(function(){sendHeight();enhanceCauseCells();}).observe(document.body);
+    new MutationObserver(enhanceCauseCells).observe(document.body,{childList:true,subtree:true});
+  });
 })();
 </script>`;
 
