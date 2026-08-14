@@ -8,9 +8,9 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
 import { assertSeqsInScope } from "@/lib/equipment-tree-scope";
 import { maybeUploadDataUrl } from "@/lib/s3";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasPermissionLevel, requirePermissionLevel } from "@/lib/rbac-guard";
 import { assignedPermissionLevel } from "@/lib/rbac-permissions";
-import { positionCodeOf } from "@/lib/position-catalog";
+import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import { canViewMaterialReplacement } from "@/lib/material-replacement-access";
 import { positionViewScopeMeta, resolvePositionViewScope } from "@/lib/position-data-scope";
 
@@ -439,12 +439,44 @@ export async function POST(req: NextRequest) {
   });
 }
 
+/**
+ * Sửa RIÊNG ô "Hiện có"? Thân yêu cầu chỉ có đúng `id` và `quantity`. Phân biệt được hai
+ * trường hợp này mới nới quyền cho cương vị giữ vật tư mà không mở luôn việc đổi tên, mã ERP,
+ * loại hay tổ máy của vật tư.
+ */
+function isStockOnlyUpdate(body: Record<string, unknown>) {
+  const keys = Object.keys(body).filter((key) => body[key] !== undefined);
+  return keys.length > 0 && keys.every((key) => key === "id" || key === "quantity") && keys.includes("quantity");
+}
+
+/** Cương vị đang trực có quản lý thiết bị nào đã khai báo vật tư này không? */
+async function keepsMaterialStock(materialId: string, position?: string | null) {
+  if (!position?.trim()) return false;
+  const points = await prisma.materialReplacement.findMany({
+    where: { materialId },
+    select: { managingPosition: true, managingPositionCode: true },
+  });
+  return points.some((point) => positionsMatch(point.managingPositionCode ?? point.managingPosition, position));
+}
+
 export async function PUT(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
     const body = await req.json();
     if (!body.id) return fail("Thiếu id");
+    // Ô "Hiện có" là số đếm thực tế tại kho, người đếm chính là cương vị đang giữ vật tư — họ
+    // được tự sửa ô này. Các ô còn lại của danh mục vẫn chỉ nhóm quản lý được đổi.
+    if (isStockOnlyUpdate(body)) {
+      await requirePermissionLevel(user, "material-manage", ["read", "personal", "manage", "full"], "Không đủ quyền cập nhật vật tư");
+      const allowed =
+        (await hasPermissionLevel(user, "material-manage", ["manage", "full"])) ||
+        (await keepsMaterialStock(String(body.id), user.position));
+      if (!allowed) {
+        return fail("Cương vị của bạn không quản lý thiết bị nào đã khai báo vật tư này", 403);
+      }
+    } else {
+      await requirePermissionLevel(user, "material-manage", ["manage", "full"], "Không đủ quyền cập nhật vật tư");
+    }
     const erpCodes = body.erpCodes !== undefined || body.code !== undefined ? parseErpCodes(body) : undefined;
     const primaryCode = erpCodes?.[0];
     if (erpCodes && !primaryCode) return fail("Vui lòng chọn ít nhất một mã vật tư ERP");

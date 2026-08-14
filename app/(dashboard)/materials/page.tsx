@@ -89,6 +89,9 @@ function MaterialsPageContent() {
   const rbac = useRbacAccess();
   const canCreate = rbac.can("material-manage", ["personal", "manage", "full"]);
   const canManage = rbac.can("material-manage", ["manage", "full"]);
+  // CƯƠNG VỊ ĐANG TRỰC của người xem — dùng để mở ô nhập "Hiện có" cho đúng người đang giữ
+  // vật tư đó, xem `canEditStock`.
+  const viewerPosition = session?.user?.position ?? null;
   const erpMaterialsQuery = useErpMaterials();
   const upsert = useUpsertMaterial();
   const del = useDeleteMaterial();
@@ -240,6 +243,21 @@ function MaterialsPageContent() {
   );
   // Danh sách cương vị lấy trực tiếp từ các dòng khai báo của tổ máy + loại vật tư
   // đang xem. Chuẩn hóa nhãn và gộp các bí danh để tránh lựa chọn trùng nhau.
+  /**
+   * Sửa ô "Hiện có" (số đếm thực tế tại kho của phân xưởng): ngoài nhóm quản lý danh mục,
+   * cương vị NÀO ĐANG QUẢN LÝ thiết bị đã khai báo vật tư này cũng sửa được — họ là người
+   * mở kho đếm thật, bắt họ báo cho quản trị gõ hộ thì số liệu luôn đi sau thực tế. Các ô khác
+   * của danh mục vẫn chỉ nhóm quản lý được sửa; máy chủ kiểm lại đúng luật này.
+   */
+  const canEditStock = React.useCallback(
+    (material: MaterialWithDevices) =>
+      canManage ||
+      (material.replacements ?? []).some((replacement) =>
+        positionsMatch(replacement.managingPosition, viewerPosition)
+      ),
+    [canManage, viewerPosition]
+  );
+
   const managingPositionOptions = React.useMemo(() => {
     const positions: string[] = [];
     for (const material of data?.data ?? []) {
@@ -882,7 +900,7 @@ function MaterialsPageContent() {
                         <StockBadge quantity={m.quantity} minStock={m.minStock} />
                         <InlineNumberCell
                           value={m.quantity}
-                          canEdit={canManage}
+                          canEdit={canEditStock(m)}
                           ariaLabel={`Sửa Hiện Có của ${m.code}`}
                           onSave={async (v) => {
                             await upsert.mutateAsync({ id: m.id, quantity: v });
