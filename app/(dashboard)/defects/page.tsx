@@ -661,21 +661,28 @@ export default function DefectsPage() {
         ) : shiftSummary.isError ? (
           <p className="text-sm font-medium text-red-600">Không tải được thống kê ca</p>
         ) : (
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="min-w-[82px] rounded-lg border border-sky-200 bg-white px-3 py-2">
-              <p className="text-xl font-extrabold tabular-nums text-sky-700">{shiftSummary.data?.data.issued ?? 0}</p>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Đã ra</p>
-            </div>
-            <div className="min-w-[82px] rounded-lg border border-emerald-200 bg-white px-3 py-2">
-              <p className="text-xl font-extrabold tabular-nums text-emerald-700">{shiftSummary.data?.data.active ?? 0}</p>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Còn hiệu lực</p>
-            </div>
-            <div className="min-w-[82px] rounded-lg border border-red-200 bg-white px-3 py-2">
-              <p className="flex items-center justify-center gap-1 text-xl font-extrabold tabular-nums text-red-600">
-                <Ban className="h-3.5 w-3.5" /> {shiftSummary.data?.data.cancelled ?? 0}
-              </p>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Đã hủy</p>
-            </div>
+          <div className={cn(
+            "grid gap-2 text-center",
+            section === "co" ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"
+          )}>
+            <ShiftSummaryCount
+              label="Đã ra"
+              value={shiftSummary.data?.data.issued ?? 0}
+              tone="sky"
+            />
+            {(shiftSummary.data?.data.byRequestType ?? []).map((item) => {
+              const label = item.requestType === "Môi Trường"
+                ? section === "co" ? "Môi trường Cơ" : "Môi trường Điện"
+                : item.requestType;
+              return (
+                <ShiftSummaryCount key={item.requestType} label={`Phiếu ${label}`} value={item.issued} tone="emerald" />
+              );
+            })}
+            <ShiftSummaryCount
+              label="Đã hủy"
+              value={shiftSummary.data?.data.cancelled ?? 0}
+              tone="red"
+            />
           </div>
         )}
       </div>
@@ -1484,6 +1491,28 @@ function SeverityUpgradeDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ShiftSummaryCount({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "sky" | "emerald" | "red";
+}) {
+  const styles = {
+    sky: "border-sky-200 text-sky-700",
+    emerald: "border-emerald-200 text-emerald-700",
+    red: "border-red-200 text-red-600",
+  }[tone];
+  return (
+    <div className={cn("min-w-[96px] rounded-lg border bg-white px-3 py-2", styles)}>
+      <p className="text-xl font-extrabold tabular-nums">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">{label}</p>
+    </div>
   );
 }
 

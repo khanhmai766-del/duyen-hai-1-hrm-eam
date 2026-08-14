@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         deviceSeq: true,
         device: true,
         system: true,
+        requestType: true,
         cancelledAt: true,
       },
     });
@@ -48,6 +49,17 @@ export async function GET(req: NextRequest) {
     );
 
     const cancelled = visible.filter((row) => row.cancelledAt !== null).length;
+    const byRequestType = config.requestTypes.map((requestType) => {
+      const requestRows = visible.filter((row) => row.requestType === requestType);
+      const requestCancelled = requestRows.filter((row) => row.cancelledAt !== null).length;
+      return {
+        requestType,
+        // Phiếu hủy tách thành một ô riêng, không cộng vào tổng của từng loại.
+        issued: requestRows.length - requestCancelled,
+        cancelled: requestCancelled,
+        active: requestRows.length - requestCancelled,
+      };
+    });
     return ok({
       section,
       shiftType: shift.shiftType,
@@ -55,9 +67,12 @@ export async function GET(req: NextRequest) {
       timeLabel: shift.timeLabel,
       start: shift.start.toISOString(),
       end: shift.end.toISOString(),
+      // "Đã ra" là toàn bộ phiếu đã lập trong ca, bao gồm cả phiếu đã hủy.
+      // Các ô từng loại phía trên đã loại phiếu hủy để tránh hiểu nhầm còn hiệu lực.
       issued: visible.length,
       cancelled,
       active: visible.length - cancelled,
+      byRequestType,
     });
   });
 }

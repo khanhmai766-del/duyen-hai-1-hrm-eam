@@ -130,6 +130,12 @@ export interface DefectShiftSummary {
   issued: number;
   cancelled: number;
   active: number;
+  byRequestType: Array<{
+    requestType: string;
+    issued: number;
+    cancelled: number;
+    active: number;
+  }>;
 }
 
 export function useDefectShiftSummary(section: "co" | "dien") {

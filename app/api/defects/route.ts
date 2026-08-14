@@ -367,9 +367,15 @@ export async function GET(req: NextRequest) {
     const kpi = {
       chuaXuLy: base.filter((item) => item.status === "CHUA_XU_LY").length,
       coPct: base.filter((item) => item.status === "CO_PCT").length,
-      choVatTu: base.filter((item) => item.status === "CHO_VAT_TU").length,
+      // Phiếu đã xử lý nhưng còn đánh dấu chờ vật tư được gom chung vào nhóm
+      // Chờ vật tư để người dùng tìm thấy theo đúng công việc đang vướng.
+      choVatTu: base.filter(
+        (item) => item.status === "CHO_VAT_TU" || item.postRepairAwaitingMaterial
+      ).length,
       choNgungMay: base.filter((item) => item.status === "CHO_NGUNG_MAY").length,
-      tonDong: base.filter((item) => item.status === "DA_XU_LY").length,
+      tonDong: base.filter(
+        (item) => item.status === "DA_XU_LY" && !item.postRepairAwaitingMaterial
+      ).length,
     };
 
     // Danh sách "KQ sửa chữa" dựng từ tập trước khi áp bộ lọc KQ sửa chữa, xếp theo số lượng.
@@ -394,9 +400,11 @@ export async function GET(req: NextRequest) {
           if (status === "SOURCE_MISSING") {
             if (!(item.sourceType === "GOOGLE_SHEETS" && item.syncState === "MISSING")) return false;
           } else if (status === "TON_DONG") {
-            if (item.status !== "DA_XU_LY") return false;
+            if (item.status !== "DA_XU_LY" || item.postRepairAwaitingMaterial) return false;
           } else if (status === "DA_XU_LY") {
             if (item.status !== "DA_XU_LY") return false;
+          } else if (status === "CHO_VAT_TU") {
+            if (item.status !== "CHO_VAT_TU" && !item.postRepairAwaitingMaterial) return false;
           } else if (item.status !== status) {
             return false;
           }
