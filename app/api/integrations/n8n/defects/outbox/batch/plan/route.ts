@@ -56,8 +56,35 @@ async function reassignConflictingCreate(
       where: { id: event.defectId },
       select: { id: true, requestNumber: true, websiteCreated: true, sourceKey: true, createdById: true },
     });
-    if (!defect?.websiteCreated || defect.sourceKey || defect.requestNumber !== oldNumber) {
-      throw new Error(`Phiếu ${oldNumber} không đủ điều kiện tự động cấp lại số`);
+    if (!defect) {
+      throw new Error(`Phiếu ${oldNumber} không còn tồn tại; hãy bỏ qua sự kiện CREATE mồ côi trên website`);
+    }
+    if (!defect.websiteCreated) {
+      throw new Error(`Phiếu ${oldNumber} không phải phiếu tạo từ website; hãy bỏ qua sự kiện CREATE sai nguồn`);
+    }
+    if (defect.sourceKey) {
+      throw new Error(`Phiếu ${oldNumber} đã liên kết với Google Sheet; hãy bỏ qua sự kiện CREATE trùng nguồn`);
+    }
+
+    // Một lượt lập kế hoạch trước có thể đã đổi STT trong DB nhưng n8n mất kết
+    // nối trước khi nhận response. Khi retry bằng event đã claim, payload cũ có
+    // thể vẫn được giữ trong bộ nhớ của workflow. Đồng bộ toàn bộ outbox theo STT
+    // hiện tại rồi dựng lại kế hoạch, thay vì để lô mắc kẹt với thông báo chung.
+    if (defect.requestNumber && defect.requestNumber !== oldNumber) {
+      const queued = await tx.defectSyncOutbox.findMany({
+        where: { defectId: defect.id, status: { in: ["PENDING", "PROCESSING", "FAILED"] } },
+        select: { id: true, payload: true },
+      });
+      for (const item of queued) {
+        await tx.defectSyncOutbox.update({
+          where: { id: item.id },
+          data: { payload: withRequestNumber(item.payload, defect.requestNumber) },
+        });
+      }
+      return { oldNumber, newNumber: defect.requestNumber };
+    }
+    if (!defect.requestNumber) {
+      throw new Error(`Phiếu ${oldNumber} hiện không có STT; cần điều chỉnh STT trên website trước khi đồng bộ lại`);
     }
     const alreadySent = await tx.defectSyncOutbox.count({
       where: { defectId: defect.id, eventType: "CREATE", status: "SUCCESS" },
