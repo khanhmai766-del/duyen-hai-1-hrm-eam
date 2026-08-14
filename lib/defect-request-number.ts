@@ -3,6 +3,17 @@ import { Prisma } from "@prisma/client";
 export type DefectRequestNumberAllocation = { requestNumber: string; reusedCancelledDefectId: string | null };
 export type DefectRequestNumberSheetScope = { spreadsheetId: string; sheetName: string };
 
+function equivalentSourceSheetNames(requestType: string, sheetName: string) {
+  const names = new Set([sheetName.trim()]);
+  // Workflow kéo Sheet dùng nhãn nguồn logic cho hai tab DH1 chính, trong khi
+  // phiếu website dùng tên tab thật. Cả hai cùng chỉ một tab trong đúng workbook.
+  if (sheetName.trim() === "DH1") {
+    if (requestType === "Cơ") names.add("CƠ_DH1");
+    if (requestType === "Điện" || requestType === "I&C") names.add("ĐIỆN_DH1");
+  }
+  return [...names];
+}
+
 /**
  * Cấp số yêu cầu nguyên tử theo năm phát hiện. Hàm phải chạy trong cùng
  * transaction tạo Defect để hai yêu cầu mới trên website không thể nhận cùng số.
@@ -77,6 +88,7 @@ export async function allocateDefectRequestNumber(
   const prefix = isEnvironment ? "^QT" : "^";
   const now = new Date();
   const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  const equivalentSheetNames = equivalentSourceSheetNames(sequenceType, sheetName);
   const rows = await tx.$queryRaw<Array<{ id: string; requestNumber: string }>>`
     SELECT "id", "requestNumber" FROM "Defect"
     WHERE "requestNumberReuseEligible" = true
@@ -85,7 +97,8 @@ export async function allocateDefectRequestNumber(
       AND "createdAt" >= ${cutoff} AND "createdAt" <= ${now}
       AND "cancelledAt" <= "createdAt" + INTERVAL '6 hours'
       AND "requestType" = ${sequenceType}
-      AND "sourceSpreadsheetId" = ${spreadsheetId} AND "sourceSheetName" = ${sheetName}
+      AND "sourceSpreadsheetId" = ${spreadsheetId}
+      AND "sourceSheetName" IN (${Prisma.join(equivalentSheetNames)})
       AND "requestNumber" ~* ${pattern} AND split_part("requestNumber", '/', 2)::int = ${year}
     ORDER BY regexp_replace(split_part("requestNumber", '/', 1), ${prefix}, '')::int ASC
     LIMIT 1 FOR UPDATE SKIP LOCKED
