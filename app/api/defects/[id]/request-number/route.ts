@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
+import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +127,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   return handle(async () => {
     const user = await requireUser();
     await requirePermissionLevel(user, "defect-two-way-sync", ["full"], "Không đủ quyền điều chỉnh STT phiếu");
+    if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
+      return fail("Hãy bật Cập nhật Vận hành trước khi điều chỉnh STT để đồng bộ vị trí dòng trên Sheet", 503);
+    }
     const body = await req.json().catch(() => ({}));
     const requestNumber = String(body?.requestNumber ?? "").trim().toUpperCase();
     if (!/^(?:QT)?\d+\/\d{4}$/.test(requestNumber)) {
@@ -145,6 +150,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const newYear = requestNumber.match(/\/(\d{4})$/)?.[1];
       if (!oldYear || newYear !== oldYear) throw fail(`STT điều chỉnh phải thuộc năm ${oldYear}`, 409);
       if (defect.requestNumber === requestNumber) throw fail("Phiếu đã mang STT này", 409);
+      const processing = await tx.defectSyncOutbox.count({
+        where: { defectId: defect.id, status: "PROCESSING" },
+      });
+      if (processing > 0) {
+        throw fail("Phiếu đang được n8n xử lý; hãy chờ hoặc thu hồi hàng đợi trước khi đổi STT", 409);
+      }
 
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`defect-request-renumber:${defect.sourceSpreadsheetId ?? ""}:${defect.sourceSheetName ?? ""}:${requestNumber}`}, 0))::text AS "lock"`;
       const occupied = await tx.defect.findMany({
@@ -190,17 +201,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           syncState: sheetCopy ? "ACTIVE" : defect.syncState,
         },
       });
-      const queued = await tx.defectSyncOutbox.findMany({
-        where: { defectId: defect.id, status: { in: ["PENDING", "FAILED"] } },
-        select: { id: true, payload: true },
+      await enqueueDefectSyncEvent(tx, {
+        defect: updated,
+        eventType: "UPDATE",
+        extra: { previousRequestNumber: defect.requestNumber ?? "" },
       });
-      for (const event of queued) {
-        if (!event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) continue;
-        await tx.defectSyncOutbox.update({
-          where: { id: event.id },
-          data: { payload: { ...event.payload, requestNumber } },
-        });
-      }
 
       // Nếu đây đúng là STT mới nhất vừa cấp và chưa có phiếu nào khác dùng số
       // cũ, hạ bộ đếm một nấc để lượt tạo kế tiếp nhận lại số vừa giải phóng.

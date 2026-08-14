@@ -27,6 +27,7 @@ type Payload = {
   writeScope?: string;
   cancellation?: boolean;
   replacesCancelledDefectId?: string;
+  previousRequestNumber?: string;
   repeatedRepair: string;
   fireSafetyImpact: string;
   environmentSafetyImpact: string;
@@ -244,14 +245,57 @@ export function buildDefectSheetWritePlan(
     return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
   }
 
+  const previousRequestNumber = text(payload.previousRequestNumber);
+  if (previousRequestNumber && previousRequestNumber !== requestNumber) {
+    const previousParsed = parseRequestNumber(previousRequestNumber);
+    const previousOriginals = rows
+      .map((row, index) => ({ row, sheetRow: START_ROW + index }))
+      .filter(({ row }) => {
+        if (row[4].startsWith(reminderPrefix(previousRequestNumber))) return false;
+        if (row[0] === previousRequestNumber) return true;
+        return row[0] === previousParsed.sequence && yearFromSheetDate(row[5]) === previousParsed.year;
+      });
+    if (previousOriginals.length > 1) {
+      throw new Error(`Sheet có ${previousOriginals.length} hàng gốc cùng số ${previousRequestNumber}`);
+    }
+    if (originals.length === 1) {
+      const targetIsPlaceholder = originals[0].row.slice(1).every((cell) => !cell);
+      if (!targetIsPlaceholder && !sameCreateIdentity(originals[0].row, current)) {
+        throw new DefectSheetRequestNumberConflictError(requestNumber);
+      }
+    }
+    const preparedTargets = rows
+      .map((row, index) => ({ row, sheetRow: START_ROW + index }))
+      .filter(({ row }) => row[0] === sequence && row.slice(1).every((cell) => !cell));
+    if (preparedTargets.length > 1) {
+      throw new Error(`Sheet có ${preparedTargets.length} dòng chờ cùng STT ${sequence}`);
+    }
+
+    // Chuyển nội dung sang đúng dòng giữ STT mới. Không chèn/xóa hàng để tránh
+    // dịch công thức: dòng STT cũ trở lại trạng thái chờ (giữ A, xóa B:O).
+    const targetRow = originals[0]?.sheetRow ?? preparedTargets[0]?.sheetRow ?? START_ROW + rows.length;
+    writes.push({ range: `A${targetRow}:O${targetRow}`, values: [current] });
+    const previous = previousOriginals[0];
+    if (previous && previous.sheetRow !== targetRow) {
+      writes.push({
+        range: `B${previous.sheetRow}:O${previous.sheetRow}`,
+        values: [Array.from({ length: COLUMN_COUNT - 1 }, () => "")],
+      });
+    }
+    return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+  }
+
   if (event.eventType === "CREATE") {
     if (originals.length === 1) {
       if (text(payload.replacesCancelledDefectId)) {
-        if (normalizedIdentityCell(originals[0].row[13]) !== normalizedIdentityCell(statusLabel("DA_XU_LY"))) {
+        const reusablePlaceholder = originals[0].row.slice(1).every((cell) => !cell);
+        const completedCancelledRow =
+          normalizedIdentityCell(originals[0].row[13]) === normalizedIdentityCell(statusLabel("DA_XU_LY"));
+        if (!reusablePlaceholder && !completedCancelledRow) {
           // Số đã hủy chỉ được ghi đè khi hàng cũ thật sự hoàn tất. Nếu trạng
-          // thái trên Sheet đã thay đổi hoặc chưa kịp đồng bộ, coi đây là một
-          // xung đột số để API tự cấp số mới; không để cùng sự kiện bị n8n thu
-          // hồi và thử lại vô hạn.
+          // thái trên Sheet đã thay đổi hoặc hàng chưa được xóa sạch, coi đây
+          // là xung đột số. Hàng đã hủy và ACK đúng chuẩn chỉ còn STT ở cột A,
+          // B:O trống hoàn toàn nên được phép nhận phiếu mới ngay tại dòng cũ.
           throw new DefectSheetRequestNumberConflictError(requestNumber);
         }
         writes.push({ range: `A${originals[0].sheetRow}:O${originals[0].sheetRow}`, values: [current] });
