@@ -182,8 +182,9 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         label: "So sánh SHN theo PPA",
-        href: "/tien-ich/so-sanh-shn-ppa",
+        href: "/tools/so-sanh-shn-ppa.html",
         icon: Gauge,
+        external: true,
         keywords: "so sanh shn ppa suat hao nhiet dong bo google sheet dh1",
       },
       {

@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Đồng bộ DH1 lên Google Sheet</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --blue:#2E75B6; --red:#C00000; --green:#2E7D32; --gray:#666; --amber:#BF8F00;
+    --bg:#f5f7fa; --card:#fff; --border:#e0e4ea;
+    --navy:#1F4E78; --navy-dark:#153450; --purple:#6A4C93; --text:#243142; --muted:#66758C;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);margin:0;padding:24px;color:#222;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .sub{color:var(--gray);font-size:13px;margin-bottom:20px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{font-size:15px;margin:0 0 12px;}
+  .drop{border:2px dashed #b9c2d0;border-radius:8px;padding:22px;text-align:center;color:var(--gray);cursor:pointer;transition:.15s;font-size:13px;}
+  .drop.drag{background:#eef4ff;border-color:var(--blue);}
+  .drop b{color:var(--blue);}
+  input[type=file]{display:none;}
+  .filelist{margin-top:10px;font-size:12.5px;}
+  .filelist .f{display:flex;justify-content:space-between;padding:4px 8px;background:#f0f3f8;border-radius:6px;margin-bottom:4px;}
+  .filelist .f .status{color:var(--green);font-weight:600;}
+  .filelist .f .status.err{color:var(--red);}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:4px;}
+  .field label{font-size:12px;color:var(--gray);}
+  .field input, .field select{padding:7px 9px;border:1px solid #cbd2dc;border-radius:6px;font-size:13px;min-width:110px;}
+  .field input[type=text].wide{min-width:340px;}
+  button.primary{background:var(--blue);color:#fff;border:none;padding:10px 20px;border-radius:7px;font-size:14px;font-weight:600;cursor:pointer;}
+  button.primary:disabled{background:#a9c4de;cursor:not-allowed;}
+  button.primary:hover:not(:disabled){background:#255f96;}
+  .linkbtn{background:#fff;color:var(--blue);border:1.5px solid var(--blue);padding:9px 18px;border-radius:7px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;}
+  .linkbtn:hover{background:#eef4ff;}
+  table{border-collapse:collapse;width:100%;font-size:12px;margin-top:12px;}
+  th,td{border:1px solid var(--border);padding:5px 7px;text-align:center;}
+  th{background:#eef1f6;font-weight:600;}
+  td.name{text-align:left;color:var(--gray);}
+  .tag{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;}
+  .tag.dat{background:#d9f2df;color:var(--green);}
+  .tag.vuot{background:#fbdada;color:var(--red);}
+  .tag.na{background:#eee;color:#999;}
+  .log{margin-top:14px;font-size:12.5px;max-height:220px;overflow:auto;background:#f7f8fa;border-radius:8px;padding:10px 12px;}
+  .log .ok{color:var(--green);}
+  .log .bad{color:var(--red);}
+  .note{font-size:12px;color:var(--gray);margin-top:6px;}
+  .checkbox-cell{text-align:center;}
+
+  /* ===== Mục 4 — So sánh trực quan (tích hợp từ So_sanh_SHN_ThucTe_PPA_DH1.html), scope dưới #cmpCard để không ảnh hưởng style các phần trên ===== */
+  #cmpCard .status{ font-size:13px; padding:10px 14px; border-radius:8px; margin-bottom:16px; display:none; }
+  #cmpCard .status.info{ display:block; background:#EAF2FB; color:var(--navy-dark); border:1px solid #C7DCF2; }
+  #cmpCard .status.error{ display:block; background:#FDECEA; color:var(--red); border:1px solid #F5C6C2; }
+
+  #cmpCard .controls{
+    display:none; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:0 0 12px; font-size:13px;
+  }
+  #cmpCard .controls .loaded-summary{ color:var(--muted); font-size:12.5px; }
+  #cmpCard .controls button{
+    margin-left:auto; background:var(--navy); color:#fff; border:none; padding:9px 16px;
+    border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  #cmpCard .controls button:hover{ background:var(--navy-dark); }
+
+  #cmpCard .filter-bar{
+    display:none; align-items:center; gap:10px; flex-wrap:wrap;
+    background:#f9fafc; border:1px solid var(--border); border-radius:10px;
+    padding:11px 16px; margin-bottom:18px; font-size:13px;
+  }
+  #cmpCard .filter-bar label{ color:var(--muted); font-weight:600; font-size:12.5px; }
+  #cmpCard .filter-bar select, #cmpCard .filter-bar input[type=date]{
+    padding:6px 8px; border-radius:6px; border:1px solid var(--border); font-size:13px; background:#fff;
+    font-family:Arial, "Segoe UI", sans-serif; color:var(--text);
+  }
+  #cmpCard .filter-bar .reset-filters{
+    background:none; border:1px solid var(--border); color:var(--muted); font-size:12px;
+    padding:6px 12px; border-radius:6px; cursor:pointer;
+  }
+  #cmpCard .filter-bar .reset-filters:hover{ color:var(--red); border-color:#F0C6C2; }
+
+  #cmpCard .summary-cards{
+    display:none; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px;
+  }
+  @media (max-width:900px){ #cmpCard .summary-cards{grid-template-columns:1fr;} }
+  #cmpCard .summary-group{ background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  #cmpCard .summary-group .sg-title{
+    padding:10px 14px; font-weight:700; font-size:12.5px; color:#fff;
+    text-transform:uppercase; letter-spacing:.02em;
+  }
+  #cmpCard .summary-group.s1 .sg-title{ background:var(--blue); }
+  #cmpCard .summary-group.s2 .sg-title{ background:var(--amber); }
+  #cmpCard .summary-group.tot .sg-title{ background:var(--purple); }
+  #cmpCard .summary-group .sg-metrics{ padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+  #cmpCard .metric .k{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px;}
+  #cmpCard .metric .v{font-size:19px;font-weight:700;color:var(--navy-dark);}
+  #cmpCard .metric .v.red{color:var(--red);} #cmpCard .metric .v.green{color:var(--green);}
+  #cmpCard .metric .sub{font-size:11px;color:var(--muted);margin-top:3px;}
+
+  #cmpCard #cmpChartWrap{ display:none; margin-bottom:20px; }
+  #cmpCard .charts-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  @media (max-width:760px){ #cmpCard .charts-grid{grid-template-columns:1fr;} }
+  #cmpCard .chart-card{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:14px 16px; height:290px; display:flex; flex-direction:column;
+  }
+  #cmpCard .chart-card.full{ height:320px; }
+  #cmpCard .chart-card h3{
+    margin:0 0 8px; font-size:12.5px; font-weight:700; color:var(--navy-dark);
+    text-transform:uppercase; letter-spacing:.02em;
+  }
+  #cmpCard .chart-card .chart-canvas-wrap{ position:relative; flex:1; min-height:0; }
+
+  #cmpCard #cmpTableWrap{ display:none; background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  #cmpCard #cmpTableWrap table{ width:100%; border-collapse:collapse; font-size:10.5px; table-layout:fixed; margin-top:0; }
+  #cmpCard #cmpTableWrap thead th{
+    background:var(--navy); color:#fff; padding:5px 3px; text-align:center; font-weight:700;
+    position:sticky; top:0; z-index:1; line-height:1.25; border:none;
+  }
+  #cmpCard #cmpTableWrap thead tr.grp th{ font-size:9.5px; padding:4px 3px; }
+  #cmpCard #cmpTableWrap thead th.side-s1{ background:var(--blue); }
+  #cmpCard #cmpTableWrap thead th.side-s2{ background:var(--amber); }
+  #cmpCard #cmpTableWrap thead th.side-tot{ background:var(--purple); }
+  #cmpCard #cmpTableWrap th.divider, #cmpCard #cmpTableWrap td.divider{ border-left:3px solid var(--navy-dark) !important; }
+  #cmpCard #cmpTableWrap tbody td{ padding:4px 3px; text-align:center; border:none; border-bottom:1px solid var(--border); overflow:hidden; text-overflow:ellipsis; }
+  #cmpCard #cmpTableWrap tbody tr:nth-child(even){ background:#FAFBFD; }
+  #cmpCard #cmpTableWrap td.day{ font-weight:700; color:var(--navy-dark); white-space:nowrap; width:46px; }
+  #cmpCard #cmpTableWrap td.status-vuot{ color:var(--red); font-weight:700; }
+  #cmpCard #cmpTableWrap td.status-dat{ color:var(--green); font-weight:700; }
+  #cmpCard #cmpTableWrap td.na{ color:#B7C0CC; }
+  #cmpCard #cmpTableWrap td.s1-cell{ background:#F5F9FD; }
+  #cmpCard #cmpTableWrap td.s2-cell{ background:#FEFAF0; }
+  #cmpCard #cmpTableWrap td.tot-cell{ background:#F4F0F9; }
+  #cmpCard #cmpTableWrap tr.month-row td{
+    background:var(--navy-dark); color:#fff; font-weight:700; text-align:left;
+    padding:5px 8px; position:sticky; top:26px; z-index:1; font-size:11px;
+  }
+  #cmpCard .cmp-table-scroll{ max-height:560px; overflow:auto; }
+
+  #cmpCard td.cause-cell{
+    cursor:pointer; font-size:10px; color:var(--navy-dark); text-decoration:underline dotted;
+    white-space:nowrap; max-width:1px;
+  }
+  #cmpCard td.cause-cell:hover{ background:#FFF3D6 !important; color:var(--navy-dark); }
+  #cmpCard td.cause-cell.na{ cursor:default; text-decoration:none; }
+
+  .cmp-modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(21,52,80,.45);
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .cmp-modal-box{
+    background:#fff; border-radius:10px; max-width:480px; width:100%;
+    box-shadow:0 10px 40px rgba(0,0,0,.25); overflow:hidden;
+  }
+  .cmp-modal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--navy); color:#fff; padding:12px 16px; font-size:13.5px; font-weight:700;
+  }
+  .cmp-modal-header button{
+    background:none; border:none; color:#fff; font-size:18px; cursor:pointer; line-height:1; padding:0 4px;
+  }
+  .cmp-modal-body{
+    padding:16px; font-size:13px; color:var(--text); line-height:1.7; white-space:pre-line;
+    max-height:60vh; overflow:auto;
+  }
+
+  #cmpCard .footer-note{ font-size:11.5px; color:var(--muted); margin-top:16px; line-height:1.6; }
+  #cmpCard #cmpWarningsPanel{ display:none; margin-top:14px; background:#FFF9EC; border:1px solid #F0DFAE; border-radius:8px; padding:6px 14px; }
+  #cmpCard #cmpWarningsPanel summary{ cursor:pointer; font-size:12.5px; font-weight:700; color:var(--amber); padding:8px 0; }
+  #cmpCard #cmpWarningsPanel ul{ margin:6px 0 0; padding-left:18px; font-size:12px; color:var(--text); line-height:1.7; }
+</style>
+</head>
+<body>
+
+<h1>Đồng bộ SHN DH1 → Google Sheet "Nội dung họp SHN hàng ngày"</h1>
+<div class="sub">Thả 2 file Excel vào đây, chọn khoảng ngày, rồi bấm Đồng bộ. Chỉ ghi các cột số liệu (Sản lượng, Công suất BQ, Suất hao than, Nhiệt trị, SHN thực tế/PPA, Chênh lệch, Đánh giá) — không đụng cột Tình hình vận hành / Công suất khả dụng / Chỉ đạo.</div>
+
+<div class="card">
+  <h2>1. Nạp dữ liệu</h2>
+  <div class="drop" id="drop">
+    <div>Kéo-thả hoặc <b>bấm để chọn file</b></div>
+    <div style="margin-top:4px;font-size:11.5px;">Cần cả 2 file: file "DH1- Tinh SHN PPA..." (đã có cột SHN thực tế/PPA/So sánh) và file "Bảng_theo_dõi_chỉ_tiêu_kinh_tế_và_vật_tư_PXVH1_hàng_ngày" (có Sản lượng, Công suất, Suất hao than, Nhiệt trị)</div>
+    <input type="file" id="fileInput" multiple accept=".xlsx,.xlsm">
+  </div>
+  <div class="filelist" id="fileList"></div>
+</div>
+
+<div class="card" id="rangeCard" style="display:none;">
+  <h2>2. Khoảng ngày &amp; đích đồng bộ</h2>
+  <div class="row">
+    <div class="field"><label>Tháng</label><input type="number" id="month" min="1" max="12"></div>
+    <div class="field"><label>Năm</label><input type="number" id="year" min="2020" max="2100"></div>
+    <div class="field"><label>Từ ngày</label><input type="number" id="dayFrom" min="1" max="31"></div>
+    <div class="field"><label>Đến ngày</label><input type="number" id="dayTo" min="1" max="31"></div>
+    <div class="field"><label>Apps Script URL (…/exec)</label><input type="text" class="wide" id="scriptUrl" placeholder="https://script.google.com/macros/s/XXXX/exec" value="https://script.google.com/macros/s/AKfycbwOKGa96Ha8cxeU2iU8gbjNydrMdhAv_4IHTWu9_38ZkBHcxDqUzMj1n3481XfLWFfC/exec"></div>
+    <div class="field"><label>Token</label><input type="text" id="token" value="DH1_SYNC_2026"></div>
+  </div>
+  <div class="note">URL và Token được lưu lại trên máy này cho lần sau (không gửi đi đâu khác).</div>
+</div>
+
+<div class="card" id="previewCard" style="display:none;">
+  <h2>3. Xem trước dữ liệu sẽ ghi</h2>
+  <div id="previewTable"></div>
+  <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+    <button class="primary" id="syncBtn">Đồng bộ lên Google Sheet</button>
+    <a class="linkbtn" href="https://docs.google.com/spreadsheets/d/1L0NtMse98j0QBR2kjcK4E1Iob2XLDdrfNM99pBDBcyo/edit?gid=501878917#gid=501878917" target="_blank" rel="noopener">Link Nội dung họp SHN hàng ngày PKTAT để kiểm tra</a>
+  </div>
+  <div class="log" id="log" style="display:none;"></div>
+</div>
+
+<div class="card" id="cmpCard" style="display:none;">
+  <h2>4. So sánh trực quan SHN Thực tế và PPA</h2>
+
+  <div id="cmpStatus" class="status"></div>
+
+  <div id="cmpControls" class="controls">
+    <span class="loaded-summary" id="cmpLoadedSummary"></span>
+    <button type="button" id="cmpExportBtn">⬇ Xuất kết quả (.xlsx)</button>
+  </div>
+
+  <div id="cmpFilterBar" class="filter-bar">
+    <label>Từ ngày:</label>
+    <input type="date" id="cmpFilterFrom">
+    <label>đến ngày:</label>
+    <input type="date" id="cmpFilterTo">
+    <button type="button" id="cmpResetToLast15" class="reset-filters">15 ngày gần nhất</button>
+    <button type="button" id="cmpResetToAll" class="reset-filters">Xem tất cả</button>
+  </div>
+
+  <div id="cmpSummary" class="summary-cards"></div>
+
+  <div id="cmpChartWrap">
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Tổ máy S1</h3>
+        <div class="chart-canvas-wrap"><canvas id="cmpChartS1"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Tổ máy S2</h3>
+        <div class="chart-canvas-wrap"><canvas id="cmpChartS2"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card full">
+      <h3>Chung 2 tổ (Tổng nhà máy)</h3>
+      <div class="chart-canvas-wrap"><canvas id="cmpChartTotal"></canvas></div>
+    </div>
+  </div>
+
+  <div id="cmpTableWrap">
+    <div class="cmp-table-scroll">
+      <table id="cmpResultTable">
+        <thead>
+          <tr class="grp">
+            <th rowspan="2">Ngày</th>
+            <th colspan="6" class="side-s1">TỔ MÁY S1</th>
+            <th colspan="6" class="side-s2 divider">TỔ MÁY S2</th>
+            <th colspan="5" class="side-tot divider">CHUNG 2 TỔ (TỔNG NHÀ MÁY)</th>
+          </tr>
+          <tr>
+            <th class="side-s1" title="SHN thực tế">Thực tế</th><th class="side-s1" title="SHN theo PPA">PPA</th><th class="side-s1" title="Chênh lệch (kJ/kWh)">CL<br>kJ/kWh</th><th class="side-s1" title="Chênh lệch (%)">CL %</th><th class="side-s1" title="Trạng thái">TT</th><th class="side-s1" title="Nguyên nhân">N.nhân</th>
+            <th class="side-s2 divider" title="SHN thực tế">Thực tế</th><th class="side-s2" title="SHN theo PPA">PPA</th><th class="side-s2" title="Chênh lệch (kJ/kWh)">CL<br>kJ/kWh</th><th class="side-s2" title="Chênh lệch (%)">CL %</th><th class="side-s2" title="Trạng thái">TT</th><th class="side-s2" title="Nguyên nhân">N.nhân</th>
+            <th class="side-tot divider" title="SHN thực tế">Thực tế</th><th class="side-tot" title="SHN theo PPA">PPA</th><th class="side-tot" title="Chênh lệch (kJ/kWh)">CL<br>kJ/kWh</th><th class="side-tot" title="Chênh lệch (%)">CL %</th><th class="side-tot" title="Trạng thái">TT</th>
+          </tr>
+        </thead>
+        <tbody id="cmpResultBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <details id="cmpWarningsPanel">
+    <summary>⚠ Xem các lưu ý khi quét dữ liệu</summary>
+    <ul id="cmpWarningsList"></ul>
+  </details>
+
+  <p class="footer-note" id="cmpFooterNote"></p>
+</div>
+
+<div id="cmpModal" class="cmp-modal-overlay">
+  <div class="cmp-modal-box">
+    <div class="cmp-modal-header">
+      <span id="cmpModalTitle">Nguyên nhân dẫn đến chênh lệch sơ bộ</span>
+      <button type="button" id="cmpModalClose">×</button>
+    </div>
+    <div class="cmp-modal-body" id="cmpModalBody"></div>
+  </div>
+</div>
+
+<script>
+let loadedFiles = []; // {name, wb, kind: 'dh1'|'ref'|null}
+let mergedByDay = {}; // day -> {ppa:{...}, thucte:{...}, ref:{...}}
+
+const dropEl = document.getElementById('drop');
+const fileInputEl = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+
+dropEl.addEventListener('click', () => fileInputEl.click());
+dropEl.addEventListener('dragover', e => { e.preventDefault(); dropEl.classList.add('drag'); });
+dropEl.addEventListener('dragleave', () => dropEl.classList.remove('drag'));
+dropEl.addEventListener('drop', e => {
+  e.preventDefault(); dropEl.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+fileInputEl.addEventListener('change', e => handleFiles(e.target.files));
+
+function normalize(s){
+  if (typeof s !== 'string') return '';
+  return s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/gi,'d').toLowerCase().trim();
+}
+
+function handleFiles(fileArr){
+  [...fileArr].forEach(f => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, {type:'array'});
+        const kind = classify(wb);
+        loadedFiles.push({name:f.name, wb, kind});
+        renderFileList();
+        tryBuildPreview();
+      } catch(err){
+        loadedFiles.push({name:f.name, wb:null, kind:'error', err: err.message});
+        renderFileList();
+      }
+    };
+    reader.readAsArrayBuffer(f);
+  });
+}
+
+function classify(wb){
+  const names = wb.SheetNames.map(normalize);
+  if (names.some(n => n === 'ca nha may dh1')) return 'dh1';
+  if (wb.SheetNames.some(n => /^T\d{2}$/.test(n))) return 'ref';
+  return 'unknown';
+}
+
+function renderFileList(){
+  fileListEl.innerHTML = loadedFiles.map(f => {
+    let label = f.kind === 'dh1' ? 'File SHN PPA/thực tế (DH1 workbook)'
+      : f.kind === 'ref' ? 'File theo dõi chỉ tiêu (PXVH1)'
+      : f.kind === 'error' ? 'Lỗi: ' + f.err
+      : 'Không nhận diện được loại file';
+    const cls = (f.kind === 'dh1' || f.kind === 'ref') ? 'status' : 'status err';
+    return `<div class="f"><span>${f.name}</span><span class="${cls}">${label}</span></div>`;
+  }).join('');
+}
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+// ---- parse "Ca nha may DH1" sheet (fixed 18-col layout, rows 3..33) ----
+function parseDH1Sheet(wb){
+  const sheetName = wb.SheetNames.find(n => normalize(n) === 'ca nha may dh1');
+  if (!sheetName) return null;
+  const ws = wb.Sheets[sheetName];
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const byDay = {};
+  // row index 2 == sheet row 3 == day 1 ... row index 32 == sheet row 33 == day 31
+  for (let i = 0; i < 31; i++){
+    const row = aoa[2+i];
+    if (!row) continue;
+    const day = i+1;
+    const num = v => (typeof v === 'number' ? v : (v===''||v==null ? null : Number(v)));
+    byDay[day] = {
+      ppaChung: num(row[1]), ppaS1: num(row[2]), ppaS2: num(row[3]),
+      ttChung: num(row[4]), ttS1: num(row[5]), ttS2: num(row[6]),
+      clChung: num(row[7]), clChungPct: num(row[8]), dgChung: row[9]||null,
+      clS1: num(row[10]), clS1Pct: num(row[11]), dgS1: row[12]||null,
+      clS2: num(row[13]), clS2Pct: num(row[14]), dgS2: row[15]||null,
+      nnS1: row[16]||null, nnS2: row[17]||null
+    };
+  }
+  return byDay;
+}
+
+// ---- parse reference tracking file's T<mm> sheet ----
+function parseRefSheet(wb, month){
+  const sheetName = 'T' + pad2(month);
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return null;
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const byDay = {};
+  // bounded to exactly 31 rows (day 1..31) -- do NOT scan to aoa.length, an
+  // unrelated mini-table further down the sheet also has small integers in
+  // column A (e.g. "1") that would otherwise be misread as day 1 and silently
+  // overwrite the real data.
+  for (let i = 0; i < 31; i++){
+    const r = 5 + i; // row index 5 == sheet row 6 == day 1
+    const row = aoa[r];
+    if (!row) continue;
+    const day = row[0];
+    if (typeof day !== 'number' || day !== i+1) break;
+    const num = v => (typeof v === 'number' ? v : null);
+    byDay[day] = {
+      genS1: num(row[2]), csbqS1: num(row[6]),
+      genS2: num(row[8]), csbqS2: num(row[12]),
+      genTong: num(row[14]), csbqTong: num(row[18]),
+      coalS1: num(row[32]), coalS2: num(row[33]), coalTong: num(row[34]),
+      nhietTri: num(row[35])
+    };
+  }
+  return byDay;
+}
+
+// ---- "Công suất khả dụng" = công suất bảng chào ở chu kỳ 48, đọc từ sheet
+// S1DH1 / S2DH1 của file theo dõi chỉ tiêu (cột D = Ngày, cột có tiêu đề
+// số 48 ở hàng 1 = chu kỳ 48) ----
+// Cột Ngày ở đây là serial ngày Excel (số nguyên, không có giờ). KHÔNG dùng
+// cellDates của SheetJS để đổi sang đối tượng Date -- test thực tế cho thấy
+// cách đó bị lệch mất 1 ngày (lỗi làm tròn/timezone trong thư viện). Thay vào
+// đó tự đổi serial -> {y,m,d} bằng Date.UTC + getUTC*, đã kiểm chứng khớp
+// chính xác với ngày thật trong file (vd serial 46242 = 08/08/2026).
+function excelSerialToYMD(serial){
+  const days = Math.round(serial);
+  const utcMs = Date.UTC(1899, 11, 30) + days * 86400000;
+  const dt = new Date(utcMs);
+  return {y: dt.getUTCFullYear(), m: dt.getUTCMonth()+1, d: dt.getUTCDate()};
+}
+
+function parseCapacitySheet(wb, sheetName, month, year){
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return {};
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const header = aoa[0] || [];
+  let col48 = -1;
+  for (let c = 5; c < 80; c++){
+    if (header[c] === 48){ col48 = c; break; }
+  }
+  if (col48 === -1) return {};
+  const byDay = {};
+  for (let r = 1; r < aoa.length; r++){
+    const row = aoa[r];
+    if (!row) continue;
+    const dCell = row[3]; // cột D = Ngày
+    if (typeof dCell !== 'number') continue;
+    const ymd = excelSerialToYMD(dCell);
+    if (ymd.y !== year || ymd.m !== month) continue;
+    const v = row[col48];
+    byDay[ymd.d] = (typeof v === 'number') ? v : null;
+  }
+  return byDay;
+}
+
+// ============================================================================
+// Mục 4 — So sánh trực quan SHN Thực tế và PPA
+// Port gần như nguyên bản logic của So_sanh_SHN_ThucTe_PPA_DH1.html, chỉ khác:
+// không có ô kéo-thả file riêng — dùng lại đúng 2 file đã nạp ở Mục 1
+// (loadedFiles), tự phân loại lại qua cmpClassifyFile() mỗi khi có file mới.
+// Toàn bộ tên hàm/biến/id đặt tiền tố "cmp" để không đụng vào code của Mục 1-3.
+// ============================================================================
+function cmpFmt1(n){ return (n===null||n===undefined||isNaN(n)) ? '' : n.toLocaleString('vi-VN',{maximumFractionDigits:1,minimumFractionDigits:1}); }
+function cmpFmtPct(n){ return (n===null||n===undefined||isNaN(n)) ? '' : (n*100).toLocaleString('vi-VN',{maximumFractionDigits:2,minimumFractionDigits:2})+'%'; }
+
+function cmpSetStatus(msg, type){
+  const el = document.getElementById('cmpStatus');
+  el.textContent = msg;
+  el.className = 'status ' + (type||'info');
+}
+function cmpClearStatus(){
+  document.getElementById('cmpStatus').className = 'status';
+}
+
+// ---- nhận diện loại dữ liệu trong 1 workbook (SHN thực tế / SHN theo PPA) ----
+function cmpFindActualHeaderCols(aoa){
+  for (let r=0; r<Math.min(aoa.length,15); r++){
+    const row = aoa[r] || [];
+    let colTotal=-1, colS1=-1, colS2=-1;
+    for (let c=0;c<row.length;c++){
+      const n = normalize(row[c]);
+      if (!n) continue;
+      if (colTotal===-1 && n.includes('suat hao nhiet tinh tong')) colTotal = c;
+      else if (colS1===-1 && n.includes('suat hao nhiet tinh s1')) colS1 = c;
+      else if (colS2===-1 && n.includes('suat hao nhiet tinh s2')) colS2 = c;
+    }
+    if (colTotal>=0 && colS1>=0 && colS2>=0){
+      return {headerRowIdx:r, colTotal, colS1, colS2};
+    }
+  }
+  return null;
+}
+
+function cmpFindPPASheetName(wb){
+  const exact = wb.SheetNames.find(n=>normalize(n)==='ca nha may dh1');
+  if (exact) return exact;
+  for (const name of wb.SheetNames){
+    const ws = wb.Sheets[name];
+    const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null}).slice(0,10);
+    for (const row of aoa){
+      const norm = (row||[]).map(normalize);
+      if (norm.includes('ngay') && norm.some(v=>v.includes('shn theo ppa'))) return name;
+    }
+  }
+  return null;
+}
+
+// Đọc thô bảng PPA tổng hợp: trả về {day, month, rawKey, total, s1, s2, causeS1, causeS2}
+function cmpParsePPASheetRaw(wb, sheetName){
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return {error:'Không tìm thấy sheet "'+sheetName+'".'};
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  let hdrRowIdx=-1, colDay=-1, colTotal=-1, colS1=-1, colS2=-1;
+  for (let r=0;r<Math.min(aoa.length,10);r++){
+    const row = aoa[r]||[];
+    for (let c=0;c<row.length;c++){
+      const n = normalize(row[c]);
+      if (n==='ngay') colDay=c;
+      else if (n.includes('shn theo ppa')) colTotal=c;
+      else if (colS1===-1 && String(row[c]).trim()==='S1' && c>colTotal) colS1=c;
+      else if (colS2===-1 && String(row[c]).trim()==='S2' && c>colTotal) colS2=c;
+    }
+    if (colDay>=0 && colTotal>=0){ hdrRowIdx=r; break; }
+    colDay=-1; colTotal=-1; colS1=-1; colS2=-1;
+  }
+  if (hdrRowIdx===-1) return {error:'Không tìm thấy cột "Ngày"/"SHN theo PPA" trong sheet "'+sheetName+'".'};
+  if (colS1<0) colS1 = colTotal+1;
+  if (colS2<0) colS2 = colTotal+2;
+
+  let colCauseS1=-1, colCauseS2=-1;
+  for (let r=Math.max(0,hdrRowIdx-2); r<=hdrRowIdx; r++){
+    const row = aoa[r]||[];
+    for (let c=colS2+1;c<row.length;c++){
+      if (normalize(row[c]).includes('nguyen nhan')){ colCauseS1=c; colCauseS2=c+1; }
+    }
+  }
+  if (colCauseS1===-1){
+    const row = aoa[hdrRowIdx]||[];
+    for (let c=colS2+1;c<row.length;c++){
+      if (colCauseS1===-1 && String(row[c]).trim()==='S1') colCauseS1=c;
+      else if (colCauseS1>=0 && colCauseS2===-1 && String(row[c]).trim()==='S2') colCauseS2=c;
+    }
+  }
+
+  const rows = [];
+  for (let r=hdrRowIdx+1; r<aoa.length; r++){
+    const row = aoa[r]||[];
+    let raw = row[colDay];
+    if (raw===null || raw===undefined) continue;
+    if (typeof raw==='number') raw = String(Math.round(raw)).padStart(4,'0');
+    raw = String(raw).trim();
+    const m = raw.match(/^(\d{2})(\d{2})$/);
+    if (!m) continue;
+    const day = parseInt(m[1],10), month = parseInt(m[2],10);
+    if (day<1||day>31||month<1||month>12) continue;
+    rows.push({
+      day, month, rawKey: raw,
+      total: Number(row[colTotal])||0,
+      s1: Number(row[colS1])||0,
+      s2: Number(row[colS2])||0,
+      causeS1: colCauseS1>=0 ? String(row[colCauseS1]||'').trim() : '',
+      causeS2: colCauseS2>=0 ? String(row[colCauseS2]||'').trim() : '',
+    });
+  }
+  if (rows.length===0) return {error:'Sheet "'+sheetName+'" không có dòng dữ liệu hợp lệ.'};
+  return {rows};
+}
+
+function cmpClassifyFile(wb, fileName){
+  const info = {fileName, wb, actualMonths:[], isPPA:false, ppaSheetName:null, ppaMonths:[]};
+  const monthSheets = wb.SheetNames.filter(n=>/^T\d{2}$/i.test(n.trim()));
+  monthSheets.forEach(sn=>{
+    const ws = wb.Sheets[sn];
+    const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+    const hdr = cmpFindActualHeaderCols(aoa);
+    if (hdr){
+      const month = parseInt(sn.replace(/[^\d]/g,''),10);
+      if (month>=1 && month<=12) info.actualMonths.push(month);
+    }
+  });
+  const ppaSheetName = cmpFindPPASheetName(wb);
+  if (ppaSheetName){
+    const parsed = cmpParsePPASheetRaw(wb, ppaSheetName);
+    if (!parsed.error){
+      info.isPPA = true;
+      info.ppaSheetName = ppaSheetName;
+      info.ppaMonths = [...new Set(parsed.rows.map(r=>r.month))].sort((a,b)=>a-b);
+    }
+  }
+  return info;
+}
+
+function cmpParseActualSheet(wb, sheetName){
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return {error:'Không tìm thấy sheet "'+sheetName+'".'};
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const hdr = cmpFindActualHeaderCols(aoa);
+  if (!hdr) return {error:'Không tìm thấy các cột "Suất hao nhiệt tinh tổng/S1/S2" trong sheet "'+sheetName+'".'};
+  const dataStart = hdr.headerRowIdx + 2;
+  const data = {};
+  for (let i=0; i<31; i++){
+    const r = dataStart + i;
+    const row = aoa[r] || [];
+    const day = row[0];
+    if (typeof day !== 'number' || day !== i+1) break;
+    data[day] = {
+      total: Number(row[hdr.colTotal])||0,
+      s1: Number(row[hdr.colS1])||0,
+      s2: Number(row[hdr.colS2])||0,
+    };
+  }
+  if (Object.keys(data).length===0) return {error:'Sheet "'+sheetName+'" không có dữ liệu theo ngày.'};
+  return {data};
+}
+
+function cmpExtractRealDate(ws){
+  const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const dateRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+  for (let r=0; r<Math.min(aoa.length,25); r++){
+    const row = aoa[r]||[];
+    for (let c=0;c<row.length;c++){
+      const v = row[c];
+      if (typeof v === 'string'){
+        const m = v.trim().match(dateRe);
+        if (m){
+          const day=parseInt(m[1],10), month=parseInt(m[2],10), year=parseInt(m[3],10);
+          if (day>=1&&day<=31&&month>=1&&month<=12&&year>2000&&year<2100) return {day,month,year};
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function cmpBuildActualIndex(files){
+  const byMonth = {};
+  const warnings = [];
+  files.forEach(lf=>{
+    lf.actualMonths.forEach(month=>{
+      const sheetName = 'T'+pad2(month);
+      if (byMonth[month] && byMonth[month].fileName !== lf.fileName){
+        warnings.push('Tháng '+pad2(month)+' (SHN thực tế) xuất hiện ở nhiều file ("'+byMonth[month].fileName+'" và "'+lf.fileName+'"). Đã lấy theo file nạp sau: "'+lf.fileName+'".');
+      }
+      byMonth[month] = {wb: lf.wb, sheetName, fileName: lf.fileName};
+    });
+  });
+  return {byMonth, warnings};
+}
+
+function cmpBuildPPAIndex(files){
+  const byMonth = {};
+  const warnings = [];
+  const ppaFiles = files.filter(lf=>lf.isPPA);
+  ppaFiles.forEach(lf=>{
+    const parsed = cmpParsePPASheetRaw(lf.wb, lf.ppaSheetName);
+    if (parsed.error){ warnings.push('File "'+lf.fileName+'": '+parsed.error); return; }
+    parsed.rows.forEach(row=>{
+      let {day, month, total, s1, s2, rawKey, causeS1, causeS2} = row;
+      let year = null;
+      const daySheet = lf.wb.Sheets[rawKey];
+      if (daySheet){
+        const real = cmpExtractRealDate(daySheet);
+        if (real){
+          if (real.day!==day || real.month!==month){
+            warnings.push('File "'+lf.fileName+'", dòng "'+rawKey+'": nhãn ngày trong bảng tổng hợp ('+pad2(day)+'/'+pad2(month)+
+              ') khác với ngày thực trong sheet chi tiết ('+pad2(real.day)+'/'+pad2(real.month)+'/'+real.year+'). Đã lấy theo sheet chi tiết (chính xác hơn).');
+          }
+          day = real.day; month = real.month; year = real.year;
+        }
+      }
+      if (!byMonth[month]) byMonth[month] = {};
+      const existing = byMonth[month][day];
+      if (existing && existing.total>0 && total>0 && Math.abs(existing.total-total) > 0.5 && existing.source!==lf.fileName){
+        warnings.push('Ngày '+pad2(day)+'/'+pad2(month)+' xuất hiện ở nhiều file PPA với giá trị khác nhau ('+
+          existing.total.toFixed(1)+' từ "'+existing.source+'" vs '+total.toFixed(1)+' từ "'+lf.fileName+'"). Đã lấy giá trị từ file nạp sau: "'+lf.fileName+'".');
+      }
+      byMonth[month][day] = {total, s1, s2, year, source: lf.fileName, causeS1, causeS2};
+    });
+  });
+  return {byMonth, warnings};
+}
+
+function cmpComputeMerge(actualData, ppaData, month){
+  const rows = [];
+  for (let d=1; d<=31; d++){
+    const a = (actualData && actualData[d]) || null;
+    const p = (ppaData && ppaData[d]) || null;
+    if (!a && !p) continue;
+    const hasTot = a && a.total>0 && p && p.total>0;
+    const hasS1 = a && a.s1>0 && p && p.s1>0;
+    const hasS2 = a && a.s2>0 && p && p.s2>0;
+    rows.push({
+      day:d, month, year: p ? p.year : null,
+      a, p,
+      diffTot: hasTot ? a.total-p.total : null,
+      diffTotPct: hasTot ? (a.total-p.total)/p.total : null,
+      diffS1: hasS1 ? a.s1-p.s1 : null,
+      diffS1Pct: hasS1 ? (a.s1-p.s1)/p.s1 : null,
+      diffS2: hasS2 ? a.s2-p.s2 : null,
+      diffS2Pct: hasS2 ? (a.s2-p.s2)/p.s2 : null,
+    });
+  }
+  return rows;
+}
+
+function cmpTd(val, cls){ return '<td class="'+(cls||'')+'">'+(val===null||val===undefined||val===''?'<span class="na">—</span>':val)+'</td>'; }
+function cmpEscapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function cmpCauseCell(cause, cls, title){
+  const text = (cause||'').trim();
+  if (!text) return '<td class="'+cls+' na">—</td>';
+  const short = text.length>18 ? text.slice(0,18)+'…' : text;
+  return '<td class="'+cls+' cause-cell" data-cause="'+encodeURIComponent(text)+'" data-title="'+encodeURIComponent(title)+'">📝 '+cmpEscapeHtml(short)+'</td>';
+}
+
+function cmpRenderTable(rows){
+  const body = document.getElementById('cmpResultBody');
+  let html = '';
+  let lastKey = null;
+  rows.forEach(r=>{
+    const key = r.month+'-'+(r.year||'');
+    if (key !== lastKey){
+      lastKey = key;
+      const yearLabel = r.year ? '/'+r.year : '';
+      html += '<tr class="month-row"><td colspan="18">Tháng '+pad2(r.month)+yearLabel+'</td></tr>';
+    }
+    const s1StatusCls = r.diffS1===null ? '' : (r.diffS1>0 ? 'status-vuot' : 'status-dat');
+    const s1StatusText = r.diffS1===null ? '' : (r.diffS1>0 ? 'Vượt PPA' : 'Đạt');
+    const s2StatusCls = r.diffS2===null ? '' : (r.diffS2>0 ? 'status-vuot' : 'status-dat');
+    const s2StatusText = r.diffS2===null ? '' : (r.diffS2>0 ? 'Vượt PPA' : 'Đạt');
+    const totStatusCls = r.diffTot===null ? '' : (r.diffTot>0 ? 'status-vuot' : 'status-dat');
+    const totStatusText = r.diffTot===null ? '' : (r.diffTot>0 ? 'Vượt PPA' : 'Đạt');
+    const dayLabel = pad2(r.day)+'/'+pad2(r.month)+(r.year?'/'+r.year:'');
+    html += '<tr>';
+    html += '<td class="day">'+pad2(r.day)+'/'+pad2(r.month)+'</td>';
+    html += cmpTd(r.a && r.a.s1 ? cmpFmt1(r.a.s1) : '', 's1-cell');
+    html += cmpTd(r.p && r.p.s1 ? cmpFmt1(r.p.s1) : '', 's1-cell');
+    html += cmpTd(cmpFmt1(r.diffS1), 's1-cell');
+    html += cmpTd(cmpFmtPct(r.diffS1Pct), 's1-cell');
+    html += cmpTd(s1StatusText, ('s1-cell '+s1StatusCls).trim());
+    html += cmpCauseCell(r.p && r.p.causeS1, 's1-cell', 'Tổ máy S1 — '+dayLabel);
+    html += cmpTd(r.a && r.a.s2 ? cmpFmt1(r.a.s2) : '', 's2-cell divider');
+    html += cmpTd(r.p && r.p.s2 ? cmpFmt1(r.p.s2) : '', 's2-cell');
+    html += cmpTd(cmpFmt1(r.diffS2), 's2-cell');
+    html += cmpTd(cmpFmtPct(r.diffS2Pct), 's2-cell');
+    html += cmpTd(s2StatusText, ('s2-cell '+s2StatusCls).trim());
+    html += cmpCauseCell(r.p && r.p.causeS2, 's2-cell', 'Tổ máy S2 — '+dayLabel);
+    html += cmpTd(r.a && r.a.total ? cmpFmt1(r.a.total) : '', 'tot-cell divider');
+    html += cmpTd(r.p && r.p.total ? cmpFmt1(r.p.total) : '', 'tot-cell');
+    html += cmpTd(cmpFmt1(r.diffTot), 'tot-cell');
+    html += cmpTd(cmpFmtPct(r.diffTotPct), 'tot-cell');
+    html += cmpTd(totStatusText, ('tot-cell '+totStatusCls).trim());
+    html += '</tr>';
+  });
+  body.innerHTML = html;
+}
+
+function cmpAvg(arr){ const v = arr.filter(x=>x!==null && x!==undefined && !isNaN(x)); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; }
+
+function cmpBuildMetricsFor(rows, key, diffKey){
+  const actualVals = rows.filter(r=>r.a && r.a[key]>0).map(r=>r.a[key]);
+  const ppaVals = rows.filter(r=>r.p && r.p[key]>0).map(r=>r.p[key]);
+  const diffs = rows.map(r=>r[diffKey]).filter(v=>v!==null);
+  return {
+    totActual: cmpAvg(actualVals),
+    totPPA: cmpAvg(ppaVals),
+    avgDiff: cmpAvg(diffs),
+    nVuot: diffs.filter(v=>v>0).length,
+    nDat: diffs.filter(v=>v<=0).length,
+    n: diffs.length,
+  };
+}
+
+function cmpMetricsHtml(m){
+  return `
+    <div class="metric"><div class="k">SHN thực tế TB (kJ/kWh)</div><div class="v">${cmpFmt1(m.totActual)}</div></div>
+    <div class="metric"><div class="k">SHN theo PPA TB (kJ/kWh)</div><div class="v">${cmpFmt1(m.totPPA)}</div></div>
+    <div class="metric"><div class="k">Chênh lệch TB (kJ/kWh)</div><div class="v ${m.avgDiff>0?'red':'green'}">${m.avgDiff>0?'+':''}${cmpFmt1(m.avgDiff)}</div>
+      <div class="sub">${m.avgDiff>0?'Thực tế cao hơn PPA':'Thực tế thấp hơn PPA'}</div></div>
+    <div class="metric"><div class="k">Số ngày Vượt / Đạt PPA</div><div class="v"><span class="red">${m.nVuot}</span> / <span class="green">${m.nDat}</span></div>
+      <div class="sub">trên ${m.n} ngày có đủ dữ liệu 2 nguồn</div></div>
+  `;
+}
+
+function cmpRenderSummary(rows){
+  const wrap = document.getElementById('cmpSummary');
+  wrap.style.display = 'grid';
+  const m1 = cmpBuildMetricsFor(rows, 's1', 'diffS1');
+  const m2 = cmpBuildMetricsFor(rows, 's2', 'diffS2');
+  const mt = cmpBuildMetricsFor(rows, 'total', 'diffTot');
+  wrap.innerHTML = `
+    <div class="summary-group s1"><div class="sg-title">Tổ máy S1</div><div class="sg-metrics">${cmpMetricsHtml(m1)}</div></div>
+    <div class="summary-group s2"><div class="sg-title">Tổ máy S2</div><div class="sg-metrics">${cmpMetricsHtml(m2)}</div></div>
+    <div class="summary-group tot"><div class="sg-title">Chung 2 tổ (Tổng nhà máy)</div><div class="sg-metrics">${cmpMetricsHtml(mt)}</div></div>
+  `;
+}
+
+let cmpChartInstances = {};
+
+function cmpRenderUnitChart(canvasId, rows, key, diffKey, diffLabel){
+  const labels = rows.map(r=>pad2(r.day)+'/'+pad2(r.month));
+  const actualVals = rows.map(r=> r.a && r.a[key] ? r.a[key] : null);
+  const ppaVals = rows.map(r=> r.p && r.p[key] ? r.p[key] : null);
+  const diffVals = rows.map(r=> r[diffKey]);
+  const diffColors = diffVals.map(v=> v===null ? 'rgba(0,0,0,0)' : (v>0 ? 'rgba(198,40,40,0.55)' : 'rgba(46,125,50,0.55)'));
+
+  if (cmpChartInstances[canvasId]) cmpChartInstances[canvasId].destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  cmpChartInstances[canvasId] = new Chart(ctx, {
+    data:{
+      labels,
+      datasets:[
+        { type:'bar', label:'Chênh lệch (kJ/kWh)', data:diffVals, backgroundColor:diffColors, yAxisID:'y1', order:2, borderRadius:3 },
+        { type:'line', label:'SHN thực tế', data:actualVals, borderColor:'#2E75B6', backgroundColor:'#2E75B6', spanGaps:false, tension:.25, yAxisID:'y', order:1, pointRadius:3 },
+        { type:'line', label:'SHN theo PPA', data:ppaVals, borderColor:'#BF8F00', backgroundColor:'#BF8F00', spanGaps:false, tension:.25, yAxisID:'y', order:1, pointRadius:3, borderDash:[5,3] },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{ position:'top', labels:{font:{family:'Arial', size:10.5}, boxWidth:14} } },
+      scales:{
+        y:{ title:{display:true, text:'SHN (kJ/kWh)', font:{family:'Arial', size:10.5}}, grid:{color:'#EEF1F6'} },
+        y1:{ position:'right', title:{display:true, text:diffLabel, font:{family:'Arial', size:10.5}}, grid:{drawOnChartArea:false} },
+        x:{ title:{display:true, text:'Ngày', font:{family:'Arial', size:10.5}} }
+      }
+    }
+  });
+}
+
+function cmpRenderCharts(rows){
+  document.getElementById('cmpChartWrap').style.display = 'block';
+  cmpRenderUnitChart('cmpChartS1', rows, 's1', 'diffS1', 'Chênh lệch S1 (kJ/kWh)');
+  cmpRenderUnitChart('cmpChartS2', rows, 's2', 'diffS2', 'Chênh lệch S2 (kJ/kWh)');
+  cmpRenderUnitChart('cmpChartTotal', rows, 'total', 'diffTot', 'Chênh lệch (kJ/kWh)');
+}
+
+function cmpRenderWarnings(warnings){
+  const panel = document.getElementById('cmpWarningsPanel');
+  const list = document.getElementById('cmpWarningsList');
+  if (!warnings.length){ panel.style.display = 'none'; list.innerHTML=''; return; }
+  panel.style.display = 'block';
+  list.innerHTML = warnings.map(w=>'<li>'+w+'</li>').join('');
+}
+
+let cmpFullMergeRows = [];
+let cmpCurrentMergeRows = [];
+let cmpAllWarningsGlobal = [];
+let cmpInferredYear = null;
+let cmpFiltersInitialized = false;
+
+function cmpHideResults(){
+  document.getElementById('cmpCard').style.display = 'none';
+  document.getElementById('cmpControls').style.display = 'none';
+  document.getElementById('cmpFilterBar').style.display = 'none';
+  document.getElementById('cmpSummary').style.display = 'none';
+  document.getElementById('cmpChartWrap').style.display = 'none';
+  document.getElementById('cmpTableWrap').style.display = 'none';
+  document.getElementById('cmpWarningsPanel').style.display = 'none';
+  document.getElementById('cmpFooterNote').textContent = '';
+  cmpFullMergeRows = [];
+  cmpCurrentMergeRows = [];
+  cmpAllWarningsGlobal = [];
+  cmpFiltersInitialized = false;
+}
+
+function cmpToISODate(y,m,d){ return y+'-'+pad2(m)+'-'+pad2(d); }
+
+function cmpSetDefaultLast15Days(){
+  const today = new Date();
+  const to = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const from = new Date(to);
+  from.setDate(from.getDate() - 14);
+  document.getElementById('cmpFilterFrom').value = cmpToISODate(from.getFullYear(), from.getMonth()+1, from.getDate());
+  document.getElementById('cmpFilterTo').value = cmpToISODate(to.getFullYear(), to.getMonth()+1, to.getDate());
+}
+
+function cmpApplyFilters(){
+  const fromVal = document.getElementById('cmpFilterFrom').value;
+  const toVal = document.getElementById('cmpFilterTo').value;
+  const fromTime = fromVal ? new Date(fromVal+'T00:00:00Z').getTime() : -Infinity;
+  const toTime = toVal ? new Date(toVal+'T23:59:59Z').getTime() : Infinity;
+
+  const rows = cmpFullMergeRows.filter(r=>{
+    const y = r.year || cmpInferredYear;
+    if (!y) return true;
+    const t = Date.UTC(y, r.month-1, r.day);
+    return t>=fromTime && t<=toTime;
+  });
+  cmpCurrentMergeRows = rows;
+
+  if (rows.length===0){
+    document.getElementById('cmpSummary').style.display = 'none';
+    document.getElementById('cmpChartWrap').style.display = 'none';
+    document.getElementById('cmpTableWrap').style.display = 'none';
+    document.getElementById('cmpFooterNote').textContent = 'Không có ngày nào khớp với khoảng ngày đã chọn — bấm "Xem tất cả" hoặc chọn lại khoảng ngày.';
+    return;
+  }
+
+  document.getElementById('cmpTableWrap').style.display = 'block';
+  cmpRenderSummary(rows);
+  cmpRenderCharts(rows);
+  cmpRenderTable(rows);
+
+  const withBoth = rows.filter(r=>r.diffTot!==null).length;
+  const filterActive = fromVal || toVal;
+  document.getElementById('cmpFooterNote').textContent =
+    (filterActive ? 'Đang hiển thị '+rows.length+' / '+cmpFullMergeRows.length+' ngày theo khoảng ngày đã chọn' : 'Tổng '+rows.length+' ngày có dữ liệu')+
+    ', '+withBoth+' ngày so sánh được đầy đủ cả 2 nguồn. '+
+    'Chênh lệch (+) = SHN thực tế cao hơn PPA (kém hiệu quả hơn cam kết PPA); (-) = thấp hơn PPA (hiệu quả hơn cam kết PPA). '+
+    'Ngày được đối chiếu ưu tiên theo sheet chi tiết từng ngày trong file PPA (chính xác hơn nhãn ngày ở bảng tổng hợp).';
+}
+
+// Dùng lại đúng các file đã nạp ở Mục 1 (loadedFiles: {name, wb, kind}), tự
+// phân loại lại qua cmpClassifyFile mỗi lần refresh (rẻ, chỉ 1-2 file).
+function cmpRefresh(){
+  const cmpFiles = loadedFiles.filter(f => f.wb).map(f => cmpClassifyFile(f.wb, f.name));
+  if (cmpFiles.length===0){ cmpHideResults(); return; }
+
+  const actualIndex = cmpBuildActualIndex(cmpFiles);
+  const ppaIndex = cmpBuildPPAIndex(cmpFiles);
+  const months = [...new Set([...Object.keys(actualIndex.byMonth).map(Number), ...Object.keys(ppaIndex.byMonth).map(Number)])].sort((a,b)=>a-b);
+
+  if (months.length===0){
+    document.getElementById('cmpCard').style.display = 'block';
+    cmpSetStatus('Chưa nhận diện được tháng nào từ các file đã nạp. Cần file SHN thực tế có sheet dạng "T01".."T12", và file SHN PPA có sheet "Cả nhà máy DH1".', 'error');
+    cmpHideResults();
+    document.getElementById('cmpCard').style.display = 'block';
+    document.getElementById('cmpStatus').className = 'status error';
+    return;
+  }
+
+  let allRows = [];
+  const monthNotes = [];
+  months.forEach(month=>{
+    let actualData = {};
+    const idx = actualIndex.byMonth[month];
+    if (idx){
+      const actual = cmpParseActualSheet(idx.wb, idx.sheetName);
+      if (actual.error) monthNotes.push('Tháng '+pad2(month)+' ('+idx.fileName+'): '+actual.error);
+      else actualData = actual.data;
+    } else {
+      monthNotes.push('Tháng '+pad2(month)+': chưa có file nào chứa dữ liệu SHN thực tế (sheet T'+pad2(month)+') — chỉ hiển thị được SHN theo PPA.');
+    }
+    const ppaData = ppaIndex.byMonth[month];
+    if (!ppaData){
+      monthNotes.push('Tháng '+pad2(month)+': chưa có file nào chứa dữ liệu SHN theo PPA — chỉ hiển thị được SHN thực tế.');
+    }
+    const rows = cmpComputeMerge(actualData, ppaData||{}, month);
+    allRows = allRows.concat(rows);
+  });
+
+  cmpFullMergeRows = allRows;
+  document.getElementById('cmpCard').style.display = 'block';
+  if (allRows.length===0){
+    cmpSetStatus('Không có ngày nào để so sánh.', 'error');
+    cmpHideResults();
+    document.getElementById('cmpCard').style.display = 'block';
+    return;
+  }
+
+  const yearCounts = {};
+  allRows.forEach(r=>{ if (r.year) yearCounts[r.year] = (yearCounts[r.year]||0)+1; });
+  cmpInferredYear = null;
+  let bestCount = 0;
+  for (const k in yearCounts){ if (yearCounts[k]>bestCount){ bestCount=yearCounts[k]; cmpInferredYear=parseInt(k,10);} }
+
+  cmpAllWarningsGlobal = [...actualIndex.warnings, ...ppaIndex.warnings, ...monthNotes];
+  if (cmpAllWarningsGlobal.length){
+    cmpSetStatus(cmpAllWarningsGlobal.length+' lưu ý khi quét dữ liệu — bấm mở bên dưới bảng để xem chi tiết.', 'info');
+  } else {
+    cmpClearStatus();
+  }
+
+  document.getElementById('cmpControls').style.display = 'flex';
+  document.getElementById('cmpFilterBar').style.display = 'flex';
+  const monthLabels = months.map(m=>pad2(m)).join(', ');
+  document.getElementById('cmpLoadedSummary').textContent =
+    'Đã nạp '+cmpFiles.length+' file, phát hiện '+months.length+' tháng ('+monthLabels+').';
+
+  if (!cmpFiltersInitialized){
+    cmpSetDefaultLast15Days();
+    cmpFiltersInitialized = true;
+  }
+  cmpRenderWarnings(cmpAllWarningsGlobal);
+  cmpApplyFilters();
+}
+
+// ---- modal xem nguyên nhân đầy đủ ----
+function cmpShowCauseModal(title, text){
+  document.getElementById('cmpModalTitle').textContent = title || 'Nguyên nhân dẫn đến chênh lệch sơ bộ';
+  document.getElementById('cmpModalBody').textContent = text;
+  document.getElementById('cmpModal').style.display = 'flex';
+}
+function cmpCloseCauseModal(){ document.getElementById('cmpModal').style.display = 'none'; }
+
+document.getElementById('cmpResultBody').addEventListener('click', e=>{
+  const cell = e.target.closest('.cause-cell');
+  if (!cell || cell.classList.contains('na')) return;
+  const cause = cell.dataset.cause ? decodeURIComponent(cell.dataset.cause) : '';
+  const title = cell.dataset.title ? decodeURIComponent(cell.dataset.title) : '';
+  if (!cause) return;
+  cmpShowCauseModal(title, cause);
+});
+document.getElementById('cmpModalClose').addEventListener('click', cmpCloseCauseModal);
+document.getElementById('cmpModal').addEventListener('click', e=>{
+  if (e.target.id === 'cmpModal') cmpCloseCauseModal();
+});
+document.addEventListener('keydown', e=>{
+  if (e.key === 'Escape') cmpCloseCauseModal();
+});
+
+document.getElementById('cmpFilterFrom').addEventListener('change', cmpApplyFilters);
+document.getElementById('cmpFilterTo').addEventListener('change', cmpApplyFilters);
+document.getElementById('cmpResetToLast15').addEventListener('click', ()=>{
+  cmpSetDefaultLast15Days();
+  cmpApplyFilters();
+});
+document.getElementById('cmpResetToAll').addEventListener('click', ()=>{
+  document.getElementById('cmpFilterFrom').value = '';
+  document.getElementById('cmpFilterTo').value = '';
+  cmpApplyFilters();
+});
+
+document.getElementById('cmpExportBtn').addEventListener('click', ()=>{
+  if (!cmpCurrentMergeRows.length) return;
+  const header = [
+    'Năm','Tháng','Ngày',
+    'S1 - SHN thực tế','S1 - SHN theo PPA','S1 - Chênh lệch (kJ/kWh)','S1 - Chênh lệch (%)','S1 - Trạng thái','S1 - Nguyên nhân',
+    'S2 - SHN thực tế','S2 - SHN theo PPA','S2 - Chênh lệch (kJ/kWh)','S2 - Chênh lệch (%)','S2 - Trạng thái','S2 - Nguyên nhân',
+    'Tổng NM - SHN thực tế','Tổng NM - SHN theo PPA','Tổng NM - Chênh lệch (kJ/kWh)','Tổng NM - Chênh lệch (%)','Tổng NM - Trạng thái'
+  ];
+  const aoa = [header];
+  cmpCurrentMergeRows.forEach(r=>{
+    aoa.push([
+      r.year||'', r.month, r.day,
+      r.a?r.a.s1:null, r.p?r.p.s1:null, r.diffS1, r.diffS1Pct, r.diffS1===null?'':(r.diffS1>0?'Vượt PPA':'Đạt'), (r.p&&r.p.causeS1)||'',
+      r.a?r.a.s2:null, r.p?r.p.s2:null, r.diffS2, r.diffS2Pct, r.diffS2===null?'':(r.diffS2>0?'Vượt PPA':'Đạt'), (r.p&&r.p.causeS2)||'',
+      r.a?r.a.total:null, r.p?r.p.total:null, r.diffTot, r.diffTotPct, r.diffTot===null?'':(r.diffTot>0?'Vượt PPA':'Đạt')
+    ]);
+  });
+  const wsOut = XLSX.utils.aoa_to_sheet(aoa);
+  const wbOut = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wbOut, wsOut, 'So sanh SHN');
+  const d = new Date();
+  const fname = 'So_sanh_SHN_ThucTe_PPA_'+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'.xlsx';
+  XLSX.writeFile(wbOut, fname);
+});
+
+// Mặc định khoảng ngày đồng bộ (Mục 2) = hôm qua (D-1), vì công cụ này thường
+// chạy mỗi sáng để đồng bộ số liệu ngày hôm trước. Người dùng vẫn sửa được
+// các ô Tháng/Năm/Từ ngày/Đến ngày sau đó.
+function inferDefaultRange(){
+  const now = new Date();
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  return {month: yesterday.getMonth()+1, year: yesterday.getFullYear(), day: yesterday.getDate()};
+}
+
+function tryBuildPreview(){
+  const dh1File = loadedFiles.find(f => f.kind === 'dh1');
+  const refFile = loadedFiles.find(f => f.kind === 'ref');
+  if (!dh1File) return;
+
+  document.getElementById('rangeCard').style.display = 'block';
+  const {month, year, day} = inferDefaultRange();
+  const monthEl = document.getElementById('month');
+  const yearEl = document.getElementById('year');
+  const dayFromEl = document.getElementById('dayFrom');
+  const dayToEl = document.getElementById('dayTo');
+  if (!monthEl.value) monthEl.value = month;
+  if (!yearEl.value) yearEl.value = year;
+  if (!dayFromEl.value) dayFromEl.value = day;
+  if (!dayToEl.value) dayToEl.value = day;
+
+  const savedUrl = localStorage.getItem('dh1_sync_url');
+  const savedToken = localStorage.getItem('dh1_sync_token');
+  if (savedUrl) document.getElementById('scriptUrl').value = savedUrl;
+  if (savedToken) document.getElementById('token').value = savedToken;
+
+  rebuildMergeAndPreview();
+  cmpRefresh();
+  ['month','year','dayFrom','dayTo'].forEach(id =>
+    document.getElementById(id).addEventListener('change', rebuildMergeAndPreview));
+}
+
+function rebuildMergeAndPreview(){
+  const dh1File = loadedFiles.find(f => f.kind === 'dh1');
+  const refFile = loadedFiles.find(f => f.kind === 'ref');
+  if (!dh1File) return;
+
+  const month = parseInt(document.getElementById('month').value, 10);
+  const year = parseInt(document.getElementById('year').value, 10);
+  const dayFrom = parseInt(document.getElementById('dayFrom').value, 10) || 1;
+  const dayTo = parseInt(document.getElementById('dayTo').value, 10) || 31;
+
+  const ppaData = parseDH1Sheet(dh1File.wb) || {};
+  const refData = refFile ? (parseRefSheet(refFile.wb, month) || {}) : {};
+  const capS1 = refFile ? parseCapacitySheet(refFile.wb, 'S1DH1', month, year) : {};
+  const capS2 = refFile ? parseCapacitySheet(refFile.wb, 'S2DH1', month, year) : {};
+
+  mergedByDay = {};
+  for (let d = dayFrom; d <= dayTo; d++){
+    const p = ppaData[d];
+    if (!p) continue;
+    // skip days with no actual data at all (nothing to sync)
+    if (p.ttChung == null && p.ttS1 == null && p.ttS2 == null) continue;
+    mergedByDay[d] = {
+      ppa: p, ref: refData[d] || {},
+      csKhaDungS1: (d in capS1) ? capS1[d] : null,
+      csKhaDungS2: (d in capS2) ? capS2[d] : null
+    };
+  }
+
+  document.getElementById('previewCard').style.display = 'block';
+  renderPreview(month, year);
+}
+
+function fmt(v, decimals){
+  if (v == null || isNaN(v)) return '';
+  return v.toLocaleString('vi-VN', {maximumFractionDigits: decimals ?? 0});
+}
+function dgTag(dg){
+  if (!dg) return '<span class="tag na">—</span>';
+  if (dg === 'Đạt') return '<span class="tag dat">Đạt</span>';
+  if (dg === 'Vượt PPA') return '<span class="tag vuot">Vượt PPA</span>';
+  return dg;
+}
+
+function renderPreview(month, year){
+  const days = Object.keys(mergedByDay).map(Number).sort((a,b)=>a-b);
+  if (days.length === 0){
+    document.getElementById('previewTable').innerHTML = '<div class="note">Không có ngày nào có dữ liệu SHN thực tế trong khoảng đã chọn.</div>';
+    return;
+  }
+  let html = `<table><thead><tr>
+    <th rowspan="2">Đồng bộ</th><th rowspan="2">Ngày</th>
+    <th colspan="5">S1</th><th colspan="5">S2</th><th colspan="4">Chung (NMNĐ)</th>
+    </tr><tr>
+    <th>SL phát</th><th>CS khả dụng</th><th>CS BQ</th><th>SHN TT</th><th>Đánh giá</th>
+    <th>SL phát</th><th>CS khả dụng</th><th>CS BQ</th><th>SHN TT</th><th>Đánh giá</th>
+    <th>SL phát</th><th>CS BQ</th><th>SHN TT</th><th>Đánh giá</th>
+    </tr></thead><tbody>`;
+  days.forEach(d => {
+    const m = mergedByDay[d];
+    const dateStr = `${month}/${d}/${year}`;
+    html += `<tr>
+      <td class="checkbox-cell"><input type="checkbox" class="day-check" data-day="${d}" checked></td>
+      <td class="name">${dateStr}</td>
+      <td>${fmt(m.ref.genS1,2)}</td><td>${fmt(m.csKhaDungS1,1)}</td><td>${fmt(m.ref.csbqS1)}</td><td>${fmt(m.ppa.ttS1)}</td><td>${dgTag(m.ppa.dgS1)}</td>
+      <td>${fmt(m.ref.genS2,2)}</td><td>${fmt(m.csKhaDungS2,1)}</td><td>${fmt(m.ref.csbqS2)}</td><td>${fmt(m.ppa.ttS2)}</td><td>${dgTag(m.ppa.dgS2)}</td>
+      <td>${fmt(m.ref.genTong,2)}</td><td>${fmt(m.ref.csbqTong)}</td><td>${fmt(m.ppa.ttChung)}</td><td>${dgTag(m.ppa.dgChung)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('previewTable').innerHTML = html;
+}
+
+// ---- doc truoc cot A tu Google Sheet, tu xac dinh hang khop voi tung ngay ----
+// Thay vi de Apps Script doan dinh dang ngay (de sai lech khi doi format hay
+// deploy chua cap nhat), file HTML tu tai cot A qua GET ?action=dates, roi
+// tu doi chieu -- co the thay ngay ket qua ngay tren man hinh de debug.
+function pad2js(n){ return String(n).padStart(2,'0'); }
+
+function parseDateCandidatesJS(s){
+  if (s == null) return [];
+  s = String(s).trim();
+  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m){
+    const a = parseInt(m[1],10), b = parseInt(m[2],10), y = parseInt(m[3],10);
+    const out = [{m:a, d:b, y}];
+    if (a !== b) out.push({m:b, d:a, y});
+    return out;
+  }
+  m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (m) return [{y:parseInt(m[1],10), m:parseInt(m[2],10), d:parseInt(m[3],10)}];
+  return [];
+}
+
+let sheetDateRows = null; // cache: [{row, display, isDate, iso}]
+
+async function fetchSheetDates(scriptUrl){
+  const sep = scriptUrl.includes('?') ? '&' : '?';
+  const resp = await fetch(scriptUrl + sep + 'action=dates', {method:'GET'});
+  const text = await resp.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e){
+    throw new Error('Không đọc được phản hồi từ Apps Script (có thể URL sai): ' + text.slice(0,200));
+  }
+  if (data && data.status && !('ok' in data)){
+    // doGet cũ (bản trước khi thêm action=dates) chỉ trả {status:...} —
+    // nghĩa là bản Deploy đang chạy CHƯA phải bản mới nhất.
+    throw new Error('Apps Script đang chạy bản CŨ (chưa hỗ trợ đọc cột Ngày). Vào Apps Script → Deploy → Manage deployments → bấm biểu tượng bút chì → Version: New version → Deploy, rồi thử lại.');
+  }
+  if (!data || !data.ok) throw new Error('Apps Script báo lỗi: ' + (data ? data.error : 'không có phản hồi'));
+  return data.rows;
+}
+
+function resolveRow(month, day, year, sheetRows){
+  const targetIso = `${year}-${pad2js(month)}-${pad2js(day)}`;
+  for (const r of sheetRows){
+    if (r.isDate){
+      if (r.iso === targetIso) return r.row;
+      continue;
+    }
+    const candidates = parseDateCandidatesJS(r.display);
+    if (candidates.some(c => c.m === month && c.d === day && c.y === year)) return r.row;
+  }
+  return null;
+}
+
+function buildPayload(month, year){
+  const days = [];
+  document.querySelectorAll('.day-check:checked').forEach(cb => {
+    const d = parseInt(cb.dataset.day, 10);
+    const m = mergedByDay[d];
+    if (!m) return;
+    const dateStr = `${month}/${d}/${year}`;
+    const row = sheetDateRows ? resolveRow(month, d, year, sheetDateRows) : null;
+
+    const chenhLechStr = (cl, pct) => (cl == null ? '' :
+      `${cl>=0?'+':''}${fmt(cl)} kJ/kWh (${pct==null?'':(pct>=0?'+':'')+ (pct*100).toFixed(2)+'%'})`);
+    const danhGiaStr = (dg, nn) => {
+      if (!dg) return '';
+      return nn ? `${dg} - ${nn}` : dg;
+    };
+
+    days.push({
+      date: dateStr,
+      row: row,
+      S1: {
+        sanLuong: m.ref.genS1, csKhaDung: m.csKhaDungS1, csBinhQuan: m.ref.csbqS1,
+        suatHaoThan: m.ref.coalS1, nhietTri: m.ref.nhietTri,
+        shnThucTe: m.ppa.ttS1, shnPPA: m.ppa.ppaS1,
+        chenhLech: chenhLechStr(m.ppa.clS1, m.ppa.clS1Pct),
+        danhGia: danhGiaStr(m.ppa.dgS1, m.ppa.nnS1)
+      },
+      S2: {
+        sanLuong: m.ref.genS2, csKhaDung: m.csKhaDungS2, csBinhQuan: m.ref.csbqS2,
+        suatHaoThan: m.ref.coalS2, nhietTri: m.ref.nhietTri,
+        shnThucTe: m.ppa.ttS2, shnPPA: m.ppa.ppaS2,
+        chenhLech: chenhLechStr(m.ppa.clS2, m.ppa.clS2Pct),
+        danhGia: danhGiaStr(m.ppa.dgS2, m.ppa.nnS2)
+      },
+      NMND: {
+        sanLuong: m.ref.genTong, csBinhQuan: m.ref.csbqTong,
+        suatHaoThan: m.ref.coalTong, nhietTri: m.ref.nhietTri,
+        shnThucTe: m.ppa.ttChung, shnPPA: m.ppa.ppaChung,
+        chenhLech: chenhLechStr(m.ppa.clChung, m.ppa.clChungPct),
+        danhGia: danhGiaStr(m.ppa.dgChung, null)
+      }
+    });
+  });
+  return days;
+}
+
+document.getElementById('syncBtn').addEventListener('click', async () => {
+  const scriptUrl = document.getElementById('scriptUrl').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const month = parseInt(document.getElementById('month').value, 10);
+  const year = parseInt(document.getElementById('year').value, 10);
+  const logEl = document.getElementById('log');
+  const btn = document.getElementById('syncBtn');
+
+  if (!scriptUrl){ alert('Cần nhập Apps Script URL trước.'); return; }
+  localStorage.setItem('dh1_sync_url', scriptUrl);
+  localStorage.setItem('dh1_sync_token', token);
+
+  btn.disabled = true; btn.textContent = 'Đang đọc cột Ngày trên Google Sheet...';
+  logEl.style.display = 'block';
+  logEl.innerHTML = 'Đang tải cột A từ Google Sheet để đối chiếu ngày...';
+
+  try {
+    sheetDateRows = await fetchSheetDates(scriptUrl);
+  } catch (err){
+    logEl.innerHTML = `<span class="bad">Không tải được cột Ngày: ${err.message}</span>`;
+    btn.disabled = false; btn.textContent = 'Đồng bộ lên Google Sheet';
+    return;
+  }
+
+  const days = buildPayload(month, year);
+  if (days.length === 0){ alert('Chưa chọn ngày nào để đồng bộ.'); btn.disabled = false; btn.textContent = 'Đồng bộ lên Google Sheet'; return; }
+
+  const notFound = days.filter(d => !d.row);
+  const toSend = days.filter(d => d.row);
+
+  if (notFound.length > 0){
+    const sample = sheetDateRows.slice(0, 8)
+      .map(r => `hàng ${r.row}: "${r.display}"`).join(' | ');
+    logEl.innerHTML = `<span class="bad">Không khớp được ${notFound.length} ngày với cột A: ${notFound.map(d=>d.date).join(', ')}</span>
+      <div class="note">Mẫu cột A hiện có trên Google Sheet (để so sánh định dạng): ${sample}</div>`;
+    if (toSend.length === 0){
+      btn.disabled = false; btn.textContent = 'Đồng bộ lên Google Sheet';
+      return;
+    }
+  }
+
+  btn.textContent = `Đang ghi ${toSend.length} ngày...`;
+
+  try {
+    const resp = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'}, // tránh CORS preflight với Apps Script
+      body: JSON.stringify({token, days: toSend})
+    });
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); } catch(e){ data = null; }
+
+    let resultHtml = '';
+    if (!data){
+      resultHtml = `<span class="bad">Không đọc được phản hồi từ Apps Script. Kiểm tra lại URL / trạng thái Deploy.</span><br>${text.slice(0,300)}`;
+    } else if (data.ok === false){
+      resultHtml = `<span class="bad">Lỗi: ${data.error}</span>`;
+    } else {
+      resultHtml = data.results.map(r =>
+        r.status === 'ok'
+          ? `<div class="ok">✓ ${r.date} — đã ghi (hàng ${r.row})</div>`
+          : `<div class="bad">✗ ${r.date} — ${r.status}</div>`
+      ).join('');
+    }
+    if (notFound.length > 0){
+      const sample = sheetDateRows.slice(0, 8).map(r => `hàng ${r.row}: "${r.display}"`).join(' | ');
+      resultHtml += `<div class="bad">✗ ${notFound.length} ngày không tìm được hàng trong cột A: ${notFound.map(d=>d.date).join(', ')}</div>
+        <div class="note">Mẫu cột A hiện có: ${sample}</div>`;
+    }
+    logEl.innerHTML = resultHtml;
+  } catch (err){
+    logEl.innerHTML = `<span class="bad">Lỗi kết nối: ${err.message}. Kiểm tra URL Apps Script đã Deploy đúng "Anyone" chưa.</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Đồng bộ lên Google Sheet';
+  }
+});
+</script>
+
+</body>
+</html>
