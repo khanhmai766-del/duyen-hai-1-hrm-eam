@@ -49,8 +49,8 @@
         80
       ],
       "retryOnFail": true,
-      "maxTries": 7,
-      "waitBetweenTries": 40000,
+      "maxTries": 5,
+      "waitBetweenTries": 60000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -116,8 +116,8 @@
         80
       ],
       "retryOnFail": true,
-      "maxTries": 7,
-      "waitBetweenTries": 40000,
+      "maxTries": 5,
+      "waitBetweenTries": 60000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -207,8 +207,8 @@
         80
       ],
       "retryOnFail": true,
-      "maxTries": 7,
-      "waitBetweenTries": 40000,
+      "maxTries": 5,
+      "waitBetweenTries": 60000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
