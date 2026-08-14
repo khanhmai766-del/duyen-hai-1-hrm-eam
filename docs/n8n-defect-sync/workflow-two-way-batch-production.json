@@ -48,6 +48,9 @@
         -660,
         80
       ],
+      "retryOnFail": true,
+      "maxTries": 7,
+      "waitBetweenTries": 40000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -83,6 +86,9 @@
         -180,
         80
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "9OMe30YPXIQR7cIl",
@@ -109,6 +115,9 @@
         60,
         80
       ],
+      "retryOnFail": true,
+      "maxTries": 7,
+      "waitBetweenTries": 40000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",
@@ -168,6 +177,9 @@
         540,
         0
       ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "9OMe30YPXIQR7cIl",
@@ -194,6 +206,9 @@
         780,
         80
       ],
+      "retryOnFail": true,
+      "maxTries": 7,
+      "waitBetweenTries": 40000,
       "credentials": {
         "httpHeaderAuth": {
           "id": "aqtXWwXwpZ58pFi7",

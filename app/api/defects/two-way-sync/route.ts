@@ -66,12 +66,12 @@ export async function PUT(req: Request) {
         }
         const reclaimed = body.pendingAction === "resume"
           ? await tx.defectSyncOutbox.updateMany({
-              where: { ...eventWhere, status: "PROCESSING" },
+              where: { ...eventWhere, status: { in: ["PROCESSING", "FAILED"] } },
               data: {
                 status: "PENDING",
                 claimedAt: null,
                 nextAttemptAt: new Date(),
-                lastError: "Quản trị viên thu hồi để tiếp tục gửi",
+                lastError: "Quản trị viên đưa về hàng chờ để tiếp tục gửi",
               },
             })
           : { count: 0 };
