@@ -55,18 +55,29 @@ export async function PUT(req: Request) {
           tx.defectSyncOutbox.count({ where: { ...eventWhere, status: "PROCESSING" } }),
           tx.defectSyncOutbox.count({ where: { ...eventWhere, status: { in: ["PENDING", "FAILED"] } } }),
         ]);
-        if (processing > 0) {
+        if (processing > 0 && !["resume", "discard"].includes(body?.pendingAction)) {
           throw fail(
-            `Còn ${processing} lô đang xử lý. Vui lòng chờ workflow kết thúc hoặc hết thời gian giữ khóa rồi bật lại`,
+            `Còn ${processing} lô đang xử lý; cần chọn thu hồi để gửi tiếp hoặc bỏ hàng đợi cũ`,
             409
           );
         }
-        if (queued > 0 && !["resume", "discard"].includes(body?.pendingAction)) {
+        if ((queued > 0 || processing > 0) && !["resume", "discard"].includes(body?.pendingAction)) {
           throw fail(`Còn ${queued} thay đổi cũ chưa gửi; cần chọn tiếp tục gửi hoặc bỏ hàng đợi cũ`, 409);
         }
+        const reclaimed = body.pendingAction === "resume"
+          ? await tx.defectSyncOutbox.updateMany({
+              where: { ...eventWhere, status: "PROCESSING" },
+              data: {
+                status: "PENDING",
+                claimedAt: null,
+                nextAttemptAt: new Date(),
+                lastError: "Quản trị viên thu hồi để tiếp tục gửi",
+              },
+            })
+          : { count: 0 };
         const deleted = body.pendingAction === "discard"
           ? await tx.defectSyncOutbox.deleteMany({
-              where: { ...eventWhere, status: { in: ["PENDING", "FAILED"] } },
+              where: { ...eventWhere, status: { in: ["PENDING", "FAILED", "PROCESSING"] } },
             })
           : { count: 0 };
         const updated = await tx.defectSyncSetting.upsert({
@@ -83,7 +94,7 @@ export async function PUT(req: Request) {
             updatedByName: user.name,
           },
         });
-        return { setting: updated, discardedCount: deleted.count };
+        return { setting: updated, discardedCount: deleted.count, reclaimedCount: reclaimed.count };
       });
       setting = result.setting;
       discardedCount = result.discardedCount;

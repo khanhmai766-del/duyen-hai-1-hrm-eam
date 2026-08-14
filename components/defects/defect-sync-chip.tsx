@@ -254,6 +254,7 @@ function TwoWaySyncRow() {
     key: SettingKey;
     label: string;
     count: number;
+    processing: number;
   } | null>(null);
   const setting = query.data?.data;
   const enabled = setting?.twoWaySyncEnabled ?? false;
@@ -287,12 +288,8 @@ function TwoWaySyncRow() {
     const [queuedKey, processingKey] = metricKeys[key];
     const queued = setting?.metrics[queuedKey] ?? 0;
     const processing = setting?.metrics[processingKey] ?? 0;
-    if (processing > 0) {
-      toast.error(`Còn ${processing} thay đổi đang xử lý, chưa thể bật lại`);
-      return;
-    }
-    if (queued > 0) {
-      setQueueDecision({ key, label, count: queued });
+    if (queued > 0 || processing > 0) {
+      setQueueDecision({ key, label, count: queued + processing, processing });
       return;
     }
     void toggle(key, false, label);
@@ -413,8 +410,13 @@ function TwoWaySyncRow() {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            {(queueDecision?.processing ?? 0) > 0 && (
+              <p className="mb-1 font-semibold">
+                Có {queueDecision?.processing} sự kiện đang giữ khóa. Hãy chắc chắn execution n8n cũ đã dừng trước khi tiếp tục.
+              </p>
+            )}
             Chọn “Bỏ hàng đợi cũ” để lấy Google Sheet làm nguồn chuẩn ở lần đồng bộ tiếp theo.
-            Chỉ chọn “Tiếp tục gửi” khi chắc chắn dữ liệu website mới là dữ liệu cần giữ.
+            Chọn “Tiếp tục gửi” sẽ thu hồi các khóa đang kẹt về trạng thái chờ và gửi lại từ website.
           </div>
           <DialogFooter className="gap-2 sm:space-x-0">
             <Button variant="outline" onClick={() => setQueueDecision(null)}>
