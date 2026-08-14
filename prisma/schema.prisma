@@ -54,10 +54,53 @@ model User {
   forumReplies            ForumReply[]             @relation("ForumReplyAuthor")
   forumPostLikes          ForumPostLike[]          @relation("ForumPostLikeUser")
   forumReplyLikes         ForumReplyLike[]         @relation("ForumReplyLikeUser")
+  shnPpaRecords           ShnPpaRecord[]
+  shnPpaToolVersions      ShnPpaToolVersion[]
 
   @@index([position])
   @@index([role])
   @@index([isActive])
+}
+
+// Ảnh chụp kết quả tiện ích SHN/PPA; không lưu file Excel gốc.
+// Mỗi bản ghi tự hết hạn sau 30 ngày để phục vụ tra cứu ngắn hạn.
+model ShnPpaRecord {
+  id          String   @id @default(cuid())
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  fileNames   String[]
+  month       Int?
+  year        Int?
+  dayFrom     Int?
+  dayTo       Int?
+  syncStatus  String   @default("UNKNOWN") // SUCCESS | PARTIAL | FAILED | SAVED | UNKNOWN
+  syncMessage String?
+  resultCount Int      @default(0)
+  snapshot    Json
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@index([createdById, createdAt])
+  @@map("shn_ppa_records")
+}
+
+// Các phiên bản HTML của tiện ích do ADMIN tải lên. Nội dung chạy trong iframe
+// sandbox; chỉ một phiên bản được đánh dấu active tại một thời điểm.
+model ShnPpaToolVersion {
+  id           String   @id @default(cuid())
+  fileName     String
+  content      String   @db.Text
+  contentHash  String   @unique
+  isActive     Boolean  @default(false)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([isActive, createdAt])
+  @@index([uploadedById, createdAt])
+  @@map("shn_ppa_tool_versions")
 }
 
 model WebAuthnCredential {

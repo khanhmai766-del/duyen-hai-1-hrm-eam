@@ -32,3 +32,10 @@ export async function apiDownload(url: string) {
   const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "download.xlsx";
   return { blob: await res.blob(), filename };
 }
+
+export async function apiUpload<T>(url: string, formData: FormData): Promise<T> {
+  const res = await fetch(url, { method: "POST", body: formData });
+  const json = (await res.json()) as ApiResponse<T>;
+  if (!res.ok || json.error) throw new Error(json.error || "Tải tệp thất bại");
+  return json.data as T;
+}
