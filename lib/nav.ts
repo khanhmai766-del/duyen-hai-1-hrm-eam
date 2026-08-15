@@ -50,7 +50,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const MODEL_CONTROL_URL = "http://demoduyenhai1.site/";
+export const MODEL_CONTROL_URL = "http://3dplus-twin.local/";
 export const MODEL_CONTROL_ALLOWED_POSITION_KEYWORDS = [
   "quản đốc",
   "phó quản đốc",
