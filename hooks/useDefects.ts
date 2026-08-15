@@ -375,6 +375,7 @@ export interface CompleteDefectInput {
   performedAt?: string | null;
   content?: string;
   result?: string;
+  note?: string;
   images?: string[];
   /** SYC thay thế vật tư: ghi lần thay và dời hạn cho các điểm thuộc phiếu. */
   recordReplacement?: boolean;

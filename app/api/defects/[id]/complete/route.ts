@@ -8,6 +8,7 @@ import { parseDateInput } from "@/lib/utils";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { recordMaterialRequestReplacements } from "@/lib/defect-material-request";
+import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 
 const HISTORY_PENDING_DAYS = 14;
 const HISTORY_COMPLETED_PENDING_DAYS = 4;
@@ -247,6 +248,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return fail("Cương vị của bạn không có quyền thao tác trên phiếu khiếm khuyết này", 403);
     }
     if (!body.performedAt) return fail("Vui lòng chọn ngày kết thúc");
+    const noteProvided = typeof body.note === "string";
+    const nextNote = noteProvided ? body.note.trim() : defect.note ?? "";
+    const noteChanged = noteProvided && nextNote !== (defect.note ?? "");
+    if (noteChanged && !(await isDefectSyncFeatureEnabled("UPDATE"))) {
+      return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa; chưa thể ghi cột 15", 503);
+    }
 
     const performedAt = parseDateInput(body.performedAt);
     // Sửa thông tin không khởi động lại chu kỳ chờ. Quy tắc rút 14
@@ -277,14 +284,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           confirmedByName: user.name,
         },
       });
-      await tx.defect.update({
+      const updatedDefect = await tx.defect.update({
         where: { id: defect.id },
         data: {
           createdById: user.id,
           confirmedById: user.id,
           confirmedByName: user.name,
+          ...(noteChanged ? { note: nextNote } : {}),
         },
       });
+      if (noteChanged) {
+        await enqueueDefectSyncEvent(tx, {
+          defect: updatedDefect,
+          eventType: "UPDATE",
+          extra: { writeScope: "NOTE_ONLY" },
+        });
+      }
       return updated;
     });
     if (!pending) return fail("Phiếu vừa được chốt lịch sử, không thể tiếp tục sửa", 409);

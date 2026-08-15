@@ -43,6 +43,7 @@ export function CompleteDefectDialog({
     performedAt: todayInput(),
     content: "",
     result: "",
+    note: "",
   });
   const sheetTracked = defect?.sourceType === "GOOGLE_SHEETS" || defect?.websiteCreated;
   const editingPending = Boolean(defect?.pendingHistory);
@@ -75,6 +76,7 @@ export function CompleteDefectDialog({
         result: defect.pendingHistory?.result
           ?? defect.repairResultRaw?.trim()
           ?? "",
+        note: defect.note ?? "",
       });
     }
   }, [defect]);
@@ -90,6 +92,7 @@ export function CompleteDefectDialog({
         performedAt: form.performedAt,
         content: form.content,
         result: form.result,
+        note: editingPending ? form.note : undefined,
         // Chỉ có tác dụng với SYC thay thế vật tư và chỉ khi hoàn thành lần đầu.
         recordReplacement: !editingPending && defect.isMaterialRequest ? recordReplacement : undefined,
       };
@@ -226,6 +229,19 @@ export function CompleteDefectDialog({
                 placeholder="Vận hành nhập kết quả thực hiện để ghi vào lịch sử…"
               />
             </Field>
+            {editingPending && (
+              <Field label="Ghi chú Vận hành (cột 15)">
+                <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
+                  Nội dung này được đưa vào hàng đợi đồng bộ và chỉ cập nhật cột O trên Google Sheet.
+                </div>
+                <Textarea
+                  value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  rows={3}
+                  placeholder="Nhập ghi chú Vận hành…"
+                />
+              </Field>
+            )}
           </div>
         )}
 
@@ -242,7 +258,7 @@ export function CompleteDefectDialog({
           >
             {(complete.isPending || updatePending.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
             {editingPending
-              ? "Lưu và tính lại hạn chốt"
+              ? "Lưu thông tin lịch sử"
               : sheetTracked
                 ? "Lưu lịch sử"
                 : "Hoàn thành"}
