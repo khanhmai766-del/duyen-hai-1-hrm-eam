@@ -6,6 +6,20 @@ import { DEFECT_SYNC_FEATURES } from "@/lib/defect-two-way-sync";
 export const DEFECT_SYNC_EVENT_TYPES = ["CREATE", "UPDATE", "REMIND"] as const;
 export type DefectSyncEventType = (typeof DEFECT_SYNC_EVENT_TYPES)[number];
 
+function mergedUpdateWriteScope(existing: string | undefined, incoming: string | undefined) {
+  if (!existing || !incoming) return undefined;
+  const hasCorrection = [existing, incoming].some((scope) =>
+    scope === "SOURCE_CORRECTION_ONLY" || scope === "SHEET_ORIGIN_WITH_CORRECTION"
+  );
+  const hasOperation = [existing, incoming].some((scope) =>
+    scope === "SHEET_ORIGIN_LIMITED" || scope === "SHEET_ORIGIN_WITH_CORRECTION"
+  );
+  if (hasCorrection && hasOperation) return "SHEET_ORIGIN_WITH_CORRECTION";
+  if (hasCorrection) return "SOURCE_CORRECTION_ONLY";
+  if (hasOperation) return "SHEET_ORIGIN_LIMITED";
+  return "NOTE_ONLY";
+}
+
 export function verifyDefectOutboxToken(authorization: string | null) {
   const expected = (
     process.env.N8N_DEFECT_TWO_WAY_SYNC_TOKEN
@@ -121,11 +135,16 @@ export async function enqueueDefectSyncEvent(
       // của sự kiện cũ để không làm mất cập nhật trạng thái; payload vẫn lấy dữ
       // liệu mới nhất nên cột O cũng được cập nhật đúng.
       let mergedExtra = params.extra;
-      if (incomingScope === "NOTE_ONLY" && pendingScope !== "NOTE_ONLY") {
-        const { writeScope: _noteOnlyScope, ...otherExtra } = params.extra ?? {};
-        mergedExtra = pending.eventType === "CREATE"
-          ? otherExtra
-          : { ...otherExtra, ...(pendingScope ? { writeScope: pendingScope } : {}) };
+      if (pending.eventType === "CREATE") {
+        const { writeScope: _incomingScope, ...otherExtra } = params.extra ?? {};
+        mergedExtra = otherExtra;
+      } else if (pendingScope || typeof incomingScope === "string") {
+        const { writeScope: _incomingScope, ...otherExtra } = params.extra ?? {};
+        const writeScope = mergedUpdateWriteScope(
+          pendingScope,
+          typeof incomingScope === "string" ? incomingScope : undefined
+        );
+        mergedExtra = { ...otherExtra, ...(writeScope ? { writeScope } : {}) };
       }
       return tx.defectSyncOutbox.update({
         where: { id: pending.id },

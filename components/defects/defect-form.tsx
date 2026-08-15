@@ -545,6 +545,11 @@ export function DefectForm({
           syncedPayload.severityCriteria = form.severityCriteria;
         }
         if (operationUpdateAvailable) syncedPayload.note = form.note;
+        if (operationUpdateAvailable) {
+          syncedPayload.sourceDeviceRaw = form.sourceDeviceRaw;
+          syncedPayload.content = form.content;
+          syncedPayload.repeatedRepairRaw = form.repeatedRepairRaw;
+        }
         // Phiếu đã xử lý vẫn được phép đổi KQ Vận hành để rút lại trường hợp
         // chuyển nhầm. Các trường Vận hành khác tiếp tục bị khóa như trước.
         if (operationUpdateAvailable) syncedPayload.status = form.status;
@@ -1041,6 +1046,53 @@ export function DefectForm({
                   </span>
                 </button>
               </Field>
+            )}
+
+            {isSynced && (
+              <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/45 p-4 sm:col-span-2">
+                <div className="flex items-baseline gap-3">
+                  <span className="whitespace-nowrap font-mono text-[10.5px] font-semibold uppercase tracking-[0.18em] text-emerald-800">
+                    Hiệu chỉnh dữ liệu gốc
+                  </span>
+                  <span className="h-px flex-1 bg-emerald-200" aria-hidden="true" />
+                </div>
+                <p className="text-[12px] leading-relaxed text-emerald-900/75">
+                  Chỉ ghi ngược ba trường được phép: cột 3, cột 5 và cột 9.
+                </p>
+                <div className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2">
+                <Field label="Thiết bị (cột 3)" required full>
+                  <Input
+                    value={form.sourceDeviceRaw}
+                    onChange={(e) => set("sourceDeviceRaw", e.target.value)}
+                    disabled={!operationUpdateAvailable}
+                    placeholder="Nhập tên thiết bị trên Google Sheet"
+                  />
+                </Field>
+                <Field label="Nội dung khiếm khuyết (cột 5)" required full>
+                  <Textarea
+                    value={form.content}
+                    onChange={(e) => set("content", e.target.value)}
+                    disabled={!operationUpdateAvailable}
+                    rows={3}
+                    placeholder="Nhập nội dung khiếm khuyết"
+                  />
+                </Field>
+                <Field label="Sửa chữa lặp lại (cột 9)" full>
+                  <Textarea
+                    value={form.repeatedRepairRaw}
+                    onChange={(e) => set("repeatedRepairRaw", e.target.value)}
+                    disabled={!operationUpdateAvailable}
+                    rows={2}
+                    placeholder="Để trống nếu không có"
+                  />
+                </Field>
+                {!operationUpdateAvailable && (
+                  <p className="text-xs leading-5 text-amber-700 sm:col-span-2">
+                    Hãy bật Cập nhật Vận hành để hiệu chỉnh dữ liệu và ghi ngược lên Google Sheet.
+                  </p>
+                )}
+                </div>
+              </div>
             )}
             </Section>
 

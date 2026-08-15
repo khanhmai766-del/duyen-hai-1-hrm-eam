@@ -337,6 +337,19 @@ export function buildDefectSheetWritePlan(
   const original = originals[0];
 
   if (event.eventType === "UPDATE") {
+    if (payload.writeScope === "SOURCE_CORRECTION_ONLY") {
+      writes.push({ range: `C${original.sheetRow}`, values: [[current[2]]] });
+      writes.push({ range: `E${original.sheetRow}`, values: [[current[4]]] });
+      writes.push({ range: `I${original.sheetRow}`, values: [[current[8]]] });
+      return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+    }
+    if (payload.writeScope === "SHEET_ORIGIN_WITH_CORRECTION") {
+      writes.push({ range: `C${original.sheetRow}`, values: [[current[2]]] });
+      writes.push({ range: `E${original.sheetRow}`, values: [[current[4]]] });
+      writes.push({ range: `I${original.sheetRow}`, values: [[current[8]]] });
+      writes.push({ range: `J${original.sheetRow}:O${original.sheetRow}`, values: [[...current.slice(9, 15)]] });
+      return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+    }
     if (payload.writeScope === "NOTE_ONLY") {
       writes.push({ range: `O${original.sheetRow}`, values: [[current[14]]] });
       return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
