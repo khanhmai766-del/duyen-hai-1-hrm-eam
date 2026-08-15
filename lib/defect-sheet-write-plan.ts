@@ -337,6 +337,10 @@ export function buildDefectSheetWritePlan(
   const original = originals[0];
 
   if (event.eventType === "UPDATE") {
+    if (payload.writeScope === "NOTE_ONLY") {
+      writes.push({ range: `O${original.sheetRow}`, values: [[current[14]]] });
+      return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+    }
     if (payload.writeScope === "SHEET_ORIGIN_LIMITED") {
       writes.push({ range: `J${original.sheetRow}:O${original.sheetRow}`, values: [[...current.slice(9, 15)]] });
       // Các hàng nhắc lại kiểu cũ vẫn nằm riêng trên Sheet. Chỉ đồng bộ hai

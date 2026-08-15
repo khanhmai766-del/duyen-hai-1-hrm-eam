@@ -109,10 +109,28 @@ export async function enqueueDefectSyncEvent(
       orderBy: { createdAt: "desc" },
     });
     if (pending) {
+      const pendingPayload = pending.payload && typeof pending.payload === "object" && !Array.isArray(pending.payload)
+        ? pending.payload as Prisma.JsonObject
+        : {};
+      const incomingScope = params.extra?.writeScope;
+      const pendingScope = typeof pendingPayload.writeScope === "string"
+        ? pendingPayload.writeScope
+        : undefined;
+      // Sửa riêng ghi chú có thể diễn ra ngay sau khi bấm Lưu lịch sử, lúc sự
+      // kiện UPDATE/CREATE trước vẫn chưa chạy. Khi gộp, giữ phạm vi rộng hơn
+      // của sự kiện cũ để không làm mất cập nhật trạng thái; payload vẫn lấy dữ
+      // liệu mới nhất nên cột O cũng được cập nhật đúng.
+      let mergedExtra = params.extra;
+      if (incomingScope === "NOTE_ONLY" && pendingScope !== "NOTE_ONLY") {
+        const { writeScope: _noteOnlyScope, ...otherExtra } = params.extra ?? {};
+        mergedExtra = pending.eventType === "CREATE"
+          ? otherExtra
+          : { ...otherExtra, ...(pendingScope ? { writeScope: pendingScope } : {}) };
+      }
       return tx.defectSyncOutbox.update({
         where: { id: pending.id },
         data: {
-          payload: defectSheetPayload(params.defect, params.extra),
+          payload: defectSheetPayload(params.defect, mergedExtra),
           status: "PENDING",
           nextAttemptAt: new Date(),
           claimedAt: null,

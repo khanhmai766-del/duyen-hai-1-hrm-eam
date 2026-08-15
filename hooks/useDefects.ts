@@ -225,6 +225,19 @@ export function useUpdateDefect() {
   });
 }
 
+export function useUpdatePendingDefectNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      apiMutate<{ id: string; note: string | null }>(`/api/defects/${id}/note`, "POST", { note }),
+    onSuccess: (updated) => {
+      void qc.invalidateQueries({ queryKey: ["defects"] });
+      void qc.invalidateQueries({ queryKey: ["defect", updated.id] });
+      void qc.invalidateQueries({ queryKey: ["defect-sync-queue"] });
+    },
+  });
+}
+
 export function useDeleteDefect() {
   const qc = useQueryClient();
   return useMutation({

@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, type LucideIcon } from "lucide-react";
+import { ShieldAlert, Wrench, CircleSlash, CircleDashed, CirclePause, Package, Plus, X, Pencil, CircleX, CheckCircle2, BellRing, CloudOff, FileClock, StickyNote, FileSpreadsheet, ExternalLink, Minus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Check, ArrowUp, Loader2, ClipboardList, Ban, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectShiftSummary, useDefectSyncStatus, useDefectTwoWaySync, useRemindDefect, useSyncDefects, useUpdateDefect, type DefectItem } from "@/hooks/useDefects";
+import { defectDetailQuery, useCancelDefect, useDefect, useDefects, useDefectShiftSummary, useDefectSyncStatus, useDefectTwoWaySync, useRemindDefect, useSyncDefects, useUpdateDefect, useUpdatePendingDefectNote, type DefectItem } from "@/hooks/useDefects";
 import { usePositions, useUsers } from "@/hooks/useUsers";
 import {
   DEFECT_STATUS,
@@ -551,6 +551,8 @@ export default function DefectsPage() {
   const [cancelTarget, setCancelTarget] = React.useState<DefectItem | null>(null);
   const [cancelNote, setCancelNote] = React.useState("Vận hành hủy phiếu");
   const [completeTarget, setCompleteTarget] = React.useState<DefectItem | null>(null);
+  const [noteTarget, setNoteTarget] = React.useState<DefectItem | null>(null);
+  const [pendingNote, setPendingNote] = React.useState("");
   const [remindTarget, setRemindTarget] = React.useState<DefectItem | null>(null);
   const [upgradeTarget, setUpgradeTarget] = React.useState<DefectItem | null>(null);
   const [remindShiftLeaderId, setRemindShiftLeaderId] = React.useState("");
@@ -1037,10 +1039,26 @@ export default function DefectsPage() {
                               <FileClock className="h-4 w-4" />
                             </Button>
                           )}
+                          {canManage && operationUpdateAvailable && d.pendingHistory && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Cập nhật ghi chú cột 15"
+                              aria-label="Cập nhật ghi chú cột 15"
+                              className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingNote(d.note ?? "");
+                                setNoteTarget(d);
+                              }}
+                            >
+                              <StickyNote className="h-4 w-4" />
+                            </Button>
+                          )}
                           {canManage && (
                             operationUpdateAvailable
                             || (d.sourceType === "GOOGLE_SHEETS" && !d.websiteCreated)
-                          ) && (
+                          ) && !d.pendingHistory && (
                             <Button
                               disabled={detailLoadingId === d.id}
                               variant="ghost"
@@ -1159,6 +1177,13 @@ export default function DefectsPage() {
       <CompleteDefectDialog defect={completeTarget} onClose={() => setCompleteTarget(null)} />
       <SeverityUpgradeDialog target={upgradeTarget} onClose={() => setUpgradeTarget(null)} />
 
+      <PendingDefectNoteDialog
+        target={noteTarget}
+        note={pendingNote}
+        onNoteChange={setPendingNote}
+        onClose={() => setNoteTarget(null)}
+      />
+
       <ConfirmDialog
         open={!!remindTarget}
         onOpenChange={(open) => !open && setRemindTarget(null)}
@@ -1258,6 +1283,70 @@ export default function DefectsPage() {
         </div>
       </ConfirmDialog>
     </div>
+  );
+}
+
+function PendingDefectNoteDialog({
+  target,
+  note,
+  onNoteChange,
+  onClose,
+}: {
+  target: DefectItem | null;
+  note: string;
+  onNoteChange: (value: string) => void;
+  onClose: () => void;
+}) {
+  const updateNote = useUpdatePendingDefectNote();
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Cập nhật ghi chú cột 15</DialogTitle>
+          <DialogDescription>
+            {target?.requestNumber
+              ? `Phiếu ${target.requestNumber} đang chờ chốt lịch sử.`
+              : "Phiếu đang chờ chốt lịch sử."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-950">
+            Luồng này chỉ cập nhật Ghi chú Vận hành ở cột O, không thay đổi thông tin sửa chữa hoặc thời gian chờ chốt.
+          </div>
+          <label htmlFor="pending-defect-note" className="text-sm font-medium">
+            Ghi chú Vận hành
+          </label>
+          <Textarea
+            id="pending-defect-note"
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            rows={4}
+            placeholder="Nhập ghi chú cần cập nhật lên Google Sheet…"
+            autoFocus
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={updateNote.isPending}>Hủy</Button>
+          <Button
+            disabled={!target || updateNote.isPending}
+            onClick={async () => {
+              if (!target) return;
+              try {
+                await updateNote.mutateAsync({ id: target.id, note: note.trim() });
+                toast.success("Đã đưa ghi chú cột 15 vào hàng đợi đồng bộ");
+                onClose();
+              } catch (error) {
+                toast.error((error as Error).message);
+              }
+            }}
+          >
+            {updateNote.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Lưu ghi chú
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
