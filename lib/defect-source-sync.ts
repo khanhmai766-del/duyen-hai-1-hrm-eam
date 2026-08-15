@@ -66,6 +66,15 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function sheetRequestIdentity(spreadsheetId: unknown, sheetName: unknown, requestNumber: unknown) {
+  return [text(spreadsheetId), text(sheetName), text(requestNumber).toUpperCase()].join("|");
+}
+
+function outboxWriteScope(payload: Prisma.JsonValue) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+  return text(payload.writeScope);
+}
+
 function parseSourceDate(value: unknown): Date | null {
   const raw = text(value);
   if (!raw) return null;
@@ -193,6 +202,8 @@ export async function upsertPreparedDefectRecords(params: {
           websiteCreated: true,
           commonSubUnit: true,
           content: true,
+          sourceDeviceRaw: true,
+          repeatedRepairRaw: true,
           status: true,
           severity: true,
           condition: true,
@@ -211,23 +222,23 @@ export async function upsertPreparedDefectRecords(params: {
   const existingFor = (item: PreparedDefectSourceRecord) =>
     existingByKey.get(item.sourceKey) ?? existingByKey.get(item.legacySourceKey);
 
-  // Phiếu MANUAL tạo qua website (chưa từng qua Sheet nên sourceKey = null) có thể
-  // đã được đẩy ra Sheet ở chiều ghi và giờ đọc lại đúng dòng đó. STT/năm là khóa
-  // duy nhất theo nghiệp vụ nên dùng nó để nhận diện, gắn sourceKey vào thay vì
-  // tạo một bản ghi Defect trùng.
+  // Khi sourceKey chưa có hoặc tạm lệch vì website vừa sửa Thiết bị cột 3 mà
+  // n8n chưa ghi xong, dùng khóa nghiệp vụ STT + workbook + tab để ghép đúng
+  // phiếu. STT chỉ duy nhất trong đúng một tab, không được ghép chéo Sheet.
   const unmatchedRequestNumbers = prepared
     .filter((item) => !existingFor(item))
     .map((item) => item.requestNumber);
-  const manualCandidateRows = unmatchedRequestNumbers.length > 0
+  const requestNumberCandidateRows = unmatchedRequestNumbers.length > 0
     ? await prisma.defect.findMany({
         where: {
-          sourceKey: null,
           cancelledAt: null,
           requestNumber: { in: unmatchedRequestNumbers },
         },
         select: {
           id: true,
           requestNumber: true,
+          sourceSpreadsheetId: true,
+          sourceSheetName: true,
           sourceKey: true,
           positionCode: true,
           sourceHash: true,
@@ -237,6 +248,8 @@ export async function upsertPreparedDefectRecords(params: {
           websiteCreated: true,
           commonSubUnit: true,
           content: true,
+          sourceDeviceRaw: true,
+          repeatedRepairRaw: true,
           status: true,
           severity: true,
           condition: true,
@@ -252,38 +265,60 @@ export async function upsertPreparedDefectRecords(params: {
       })
     : [];
   const existingByRequestNumber = new Map(
-    manualCandidateRows
-      .filter((row) => row.requestNumber)
-      .map((row) => [row.requestNumber!, row])
+    requestNumberCandidateRows
+      .filter((row) => row.requestNumber && row.sourceSpreadsheetId && row.sourceSheetName)
+      .map((row) => [
+        sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber),
+        row,
+      ])
   );
-  if (existingByRequestNumber.size !== manualCandidateRows.filter((row) => row.requestNumber).length) {
+  const keyedRequestNumberCandidates = requestNumberCandidateRows.filter(
+    (row) => row.requestNumber && row.sourceSpreadsheetId && row.sourceSheetName
+  );
+  if (existingByRequestNumber.size !== keyedRequestNumberCandidates.length) {
     const counts = new Map<string, number>();
-    for (const row of manualCandidateRows) {
-      if (row.requestNumber) counts.set(row.requestNumber, (counts.get(row.requestNumber) ?? 0) + 1);
+    for (const row of keyedRequestNumberCandidates) {
+      const key = sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([number]) => number);
+    const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key);
     throw new Error(`Không thể tự ghép phiếu do trùng số yêu cầu: ${duplicated.join(", ")}`);
+  }
+  // Tương thích phiếu website cũ chưa lưu workbook/tab: chỉ dùng STT khi đúng
+  // một ứng viên duy nhất; nhiều ứng viên thì dừng thay vì ghép đoán.
+  const legacyRequestCandidates = requestNumberCandidateRows.filter(
+    (row) => row.requestNumber && (!row.sourceSpreadsheetId || !row.sourceSheetName)
+  );
+  const legacyByRequestNumber = new Map(
+    legacyRequestCandidates.map((row) => [row.requestNumber!, row])
+  );
+  if (legacyByRequestNumber.size !== legacyRequestCandidates.length) {
+    throw new Error("Không thể tự ghép phiếu cũ do trùng số yêu cầu và thiếu thông tin Sheet");
   }
 
   // Chỉ giữ các trường Vận hành trên website khi thay đổi UPDATE
   // thực sự còn trong hàng đợi. Khi đã ACK thành công, Sheet lại được
   // phép cập nhật vòng về website ở lần pull tiếp theo.
   const existingDefectIds = Array.from(new Set(
-    [...existingRows, ...manualCandidateRows].map((row) => row.id)
+    [...existingRows, ...requestNumberCandidateRows].map((row) => row.id)
   ));
-  const pendingWebsiteUpdateRows = operationWriteEnabled && existingDefectIds.length > 0
+  const pendingWebsiteUpdateRows = existingDefectIds.length > 0
     ? await prisma.defectSyncOutbox.findMany({
         where: {
           defectId: { in: existingDefectIds },
           eventType: "UPDATE",
           status: { in: ["PENDING", "PROCESSING", "FAILED"] },
         },
-        select: { defectId: true },
-        distinct: ["defectId"],
+        select: { defectId: true, payload: true },
       })
     : [];
   const pendingWebsiteUpdateDefectIds = new Set(
     pendingWebsiteUpdateRows.map((row) => row.defectId)
+  );
+  const pendingSourceCorrectionDefectIds = new Set(
+    pendingWebsiteUpdateRows
+      .filter((row) => ["SOURCE_CORRECTION_ONLY", "SHEET_ORIGIN_WITH_CORRECTION"].includes(outboxWriteScope(row.payload)))
+      .map((row) => row.defectId)
   );
 
   const creates: Prisma.DefectCreateManyInput[] = [];
@@ -313,7 +348,11 @@ export async function upsertPreparedDefectRecords(params: {
       detachedCancelledIds.push(matchedByKeyCandidate.id);
     }
     const matchedByKey = reusedCancelledSource ? undefined : matchedByKeyCandidate;
-    const matchedByRequestNumber = matchedByKey ? undefined : existingByRequestNumber.get(item.requestNumber);
+    const matchedByRequestNumber = matchedByKey
+      ? undefined
+      : existingByRequestNumber.get(
+          sheetRequestIdentity(item.record.sourceSpreadsheetId, item.record.sourceSheet, item.requestNumber)
+        ) ?? legacyByRequestNumber.get(item.requestNumber);
     const existing = matchedByKey ?? matchedByRequestNumber;
     const repairStatus = defectResultStatusOf(item.record.repairResultRaw);
     const sourceData = {
@@ -359,6 +398,9 @@ export async function upsertPreparedDefectRecords(params: {
     };
     const keepWebsiteOperationData = Boolean(
       existing && operationWriteEnabled && pendingWebsiteUpdateDefectIds.has(existing.id)
+    );
+    const keepWebsiteSourceCorrection = Boolean(
+      existing && pendingSourceCorrectionDefectIds.has(existing.id)
     );
     const effectiveStatus = keepWebsiteOperationData && existing
       ? existing.status
@@ -493,6 +535,13 @@ export async function upsertPreparedDefectRecords(params: {
               }
             : {
                 ...sourceData,
+                ...(keepWebsiteSourceCorrection
+                  ? {
+                      sourceDeviceRaw: existing.sourceDeviceRaw,
+                      content: existing.content,
+                      repeatedRepairRaw: existing.repeatedRepairRaw,
+                    }
+                  : {}),
                 // UPDATE đang chờ thì website thắng; hết hàng đợi thì J:O
                 // được phép đồng bộ ngược từ Sheet về website.
                 ...(keepWebsiteOperationData
@@ -515,7 +564,7 @@ export async function upsertPreparedDefectRecords(params: {
         // Khi ghép phiếu website với dòng vừa ghi lên Sheet, chuyển sang chế độ
         // theo dõi Google Sheet nhưng giữ websiteCreated để không mất các thao
         // tác Nhắc lại/Hoàn thành.
-        ...(matchedByRequestNumber || existing.sourceKey !== item.sourceKey
+        ...(!keepWebsiteSourceCorrection && (matchedByRequestNumber || existing.sourceKey !== item.sourceKey)
           ? { sourceType: "GOOGLE_SHEETS" as const, sourceKey: item.sourceKey }
           : {}),
         syncState: "ACTIVE",
