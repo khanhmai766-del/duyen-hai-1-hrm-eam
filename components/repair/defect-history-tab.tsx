@@ -4,7 +4,6 @@ import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
@@ -48,7 +47,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatDate, initials, cn } from "@/lib/utils";
-import { normalizeText } from "@/lib/nav";
 
 type SortKey = "workOrderNumber" | "requestNumber" | "performedAt" | "unit" | "content" | "defectContent" | "system" | "device" | "createdBy" | "locked" | "requestType";
 type SortDir = "asc" | "desc";
@@ -87,13 +85,29 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     // Vẫn ưu tiên tham số URL để các liên kết mở sẵn S2/COMMON hoạt động như cũ.
     unit: ["S1", "S2", "COMMON"].includes(unitFromUrl) ? unitFromUrl : "S1",
   }));
-  // Mặc định Cơ theo thói quen tra cứu; "ALL" để xem tất cả loại yêu cầu.
-  const [requestTypeFilter, setRequestTypeFilter] = React.useState("Cơ");
+  // Mặc định xem tất cả để các phiếu Điện (đặc biệt cương vị I&C) không bị ẩn
+  // ngay khi mở trang. Người dùng vẫn có thể thu hẹp về từng loại yêu cầu.
+  const [requestTypeFilter, setRequestTypeFilter] = React.useState("ALL");
+  const [tableSearch, setTableSearch] = React.useState("");
+  const deferredSearch = React.useDeferredValue(tableSearch);
+  const [pageSize, setPageSize] = React.useState(10);
+  const [page, setPage] = React.useState(1);
+  const [statusFilter, setStatusFilter] = React.useState<HistoryStatusFilter>("PENDING");
+  const [sort, setSort] = React.useState<{ key: SortKey; dir: SortDir }>({ key: "performedAt", dir: "desc" });
   // "Yêu cầu" phải đi kèm lên server: lọc ở client thì trần HISTORY_TAKE đã cắt mất
   // dữ liệu trước khi client kịp lọc (S1 có 532 bản Cơ đã chốt, chỉ nhận về 300).
   const queryFilters = React.useMemo(
-    () => ({ ...filters, ...(requestTypeFilter !== "ALL" ? { requestType: requestTypeFilter } : {}) }),
-    [filters, requestTypeFilter]
+    () => ({
+      ...filters,
+      ...(requestTypeFilter !== "ALL" ? { requestType: requestTypeFilter } : {}),
+      status: statusFilter,
+      page: String(page),
+      pageSize: String(pageSize),
+      ...(deferredSearch.trim() ? { search: deferredSearch.trim() } : {}),
+      sortKey: sort.key,
+      sortDir: sort.dir,
+    }),
+    [filters, requestTypeFilter, statusFilter, page, pageSize, deferredSearch, sort]
   );
   const { data, isLoading } = useDefectHistory(queryFilters);
   const del = useDeleteDefectHistory();
@@ -109,13 +123,8 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const [delTarget, setDelTarget] = React.useState<DefectHistoryItem | null>(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editTarget, setEditTarget] = React.useState<DefectHistoryItem | null>(null);
-  const [tableSearch, setTableSearch] = React.useState("");
-  const [pageSize, setPageSize] = React.useState(10);
-  const [page, setPage] = React.useState(1);
-  const [statusFilter, setStatusFilter] = React.useState<HistoryStatusFilter>("PENDING");
   const [pendingEditDefectId, setPendingEditDefectId] = React.useState<string | null>(null);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [sort, setSort] = React.useState<{ key: SortKey; dir: SortDir }>({ key: "performedAt", dir: "desc" });
 
   function setFilter<K extends keyof DefectHistoryFilters>(k: K, v: string) {
     setFilters((f) => ({ ...f, [k]: v || undefined }));
@@ -133,7 +142,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       ...(f.includeDescendants ? { includeDescendants: f.includeDescendants } : {}),
       unit: "S1",
     }));
-    setRequestTypeFilter("Cơ");
+    setRequestTypeFilter("ALL");
     setTableSearch("");
   }
 
@@ -141,51 +150,20 @@ export function DefectHistoryTab({ role }: { role?: string }) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   }
 
-  const visibleRows = React.useMemo(() => {
-    // Chờ chốt và Đã chốt là hai nhóm tách bạch: bản nháp chờ chốt hiện chi tiết
-    // theo phiếu khiếm khuyết, bản đã chốt hiện chi tiết theo bản ghi lịch sử.
-    const byStatus = rows
-      .filter((r) => (statusFilter === "PENDING" ? r.historyStatus === "PENDING" : r.historyStatus !== "PENDING"))
-      .filter((r) => requestTypeFilter === "ALL" || (r.requestType ?? "") === requestTypeFilter);
-    const q = normalizeText(tableSearch);
-    const searched = q
-      ? byStatus.filter((r) =>
-          normalizeText(
-            [
-              r.workOrderNumber,
-              r.requestType,
-              r.requestNumber,
-              r.unit,
-              r.system,
-              r.device,
-              deviceNameByCode.get(r.device ?? ""),
-              r.result,
-              r.defectContent,
-              r.content,
-              r.createdBy?.name,
-              r.createdBy?.position,
-            ]
-              .filter(Boolean)
-              .join(" ")
-          ).includes(q)
-        )
-      : byStatus;
-
-    return [...searched].sort((a, b) => compareRows(a, b, sort.key, sort.dir, deviceNameByCode));
-  }, [rows, statusFilter, requestTypeFilter, tableSearch, sort, deviceNameByCode]);
-
-  const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+  const visibleRows = rows;
+  const totalRows = Number(data?.meta?.total ?? 0);
+  const totalPages = Math.max(1, Number(data?.meta?.totalPages ?? 1));
   React.useEffect(() => {
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
   React.useEffect(() => {
     setPage(1);
     setExpandedId(null);
-  }, [filters, statusFilter, requestTypeFilter, tableSearch, pageSize, sort]);
+  }, [filters, statusFilter, requestTypeFilter, deferredSearch, pageSize, sort]);
 
-  const pagedRows = visibleRows.slice((page - 1) * pageSize, page * pageSize);
-  const firstShown = visibleRows.length ? (page - 1) * pageSize + 1 : 0;
-  const lastShown = Math.min(page * pageSize, visibleRows.length);
+  const pagedRows = visibleRows;
+  const firstShown = totalRows ? (page - 1) * pageSize + 1 : 0;
+  const lastShown = Math.min(page * pageSize, totalRows);
   const actionCol = canManage || canDelete;
   // Mở rộng + Nội dung khiếm khuyết + Loại yêu cầu + Tổ máy + Cương vị
   // + Kết thúc + Người cập nhật + Chốt lịch sử (+ Thao tác)
@@ -199,7 +177,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
   const hasActiveFilters =
     Boolean(filters.position || filters.from || filters.to || filters.workOrderNumber || filters.device || filters.deviceSeq)
     || (filters.unit ?? "S1") !== "S1"
-    || requestTypeFilter !== "Cơ"
+    || requestTypeFilter !== "ALL"
     || tableSearch.trim().length > 0;
   const backupColumns = React.useMemo(
     () => [
@@ -310,17 +288,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
           Xoá bộ lọc
         </button>
       </Card>
-
-      {/* Chạm trần truy vấn: nói thẳng ra thay vì âm thầm trả thiếu dòng. */}
-      {data?.meta?.capped === true && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <span>
-            Kết quả đã chạm giới hạn truy vấn nên có thể chưa hiện đủ. Thu hẹp bằng
-            cương vị, khoảng ngày hoặc loại yêu cầu để xem chính xác.
-          </span>
-        </div>
-      )}
 
       {isLoading ? (
         <TableSkeleton rows={8} />
@@ -540,7 +507,7 @@ export function DefectHistoryTab({ role }: { role?: string }) {
               ) : (
                 <>
                   Hiển thị <b className="font-mono text-ink">{firstShown}</b>–<b className="font-mono text-ink">{lastShown}</b> trong tổng số{" "}
-                  <b className="font-mono text-ink">{visibleRows.length}</b> bản ghi
+                  <b className="font-mono text-ink">{totalRows}</b> bản ghi
                   {tableSearch.trim() && <span> sau lọc</span>}
                 </>
               )}
@@ -577,30 +544,6 @@ export function DefectHistoryTab({ role }: { role?: string }) {
       />
     </div>
   );
-}
-
-function compareRows(a: DefectHistoryItem, b: DefectHistoryItem, key: SortKey, dir: SortDir, deviceNameByCode: Map<string, string>) {
-  const av = sortValue(a, key, deviceNameByCode);
-  const bv = sortValue(b, key, deviceNameByCode);
-  const result = typeof av === "number" && typeof bv === "number"
-    ? av - bv
-    : String(av).localeCompare(String(bv), "vi", { numeric: true, sensitivity: "base" });
-  return dir === "asc" ? result : -result;
-}
-
-function sortValue(row: DefectHistoryItem, key: SortKey, deviceNameByCode: Map<string, string>): string | number {
-  if (key === "performedAt") return new Date(row.performedAt).getTime();
-  // Đã chốt xếp trước Chờ chốt khi sắp tăng dần.
-  if (key === "locked") return row.historyStatus === "PENDING" ? 1 : 0;
-  if (key === "createdBy") return row.createdBy?.name ?? "";
-  if (key === "workOrderNumber") return row.workOrderNumber ?? "";
-  if (key === "requestNumber") return row.requestNumber ?? "";
-  if (key === "requestType") return row.requestType ?? "";
-  if (key === "unit") return row.unit ?? "";
-  if (key === "content") return row.content ?? "";
-  if (key === "defectContent") return row.defectContent ?? "";
-  if (key === "system") return row.system ?? "";
-  return deviceNameByCode.get(row.device ?? "") ?? row.device ?? "";
 }
 
 function SortHeader({

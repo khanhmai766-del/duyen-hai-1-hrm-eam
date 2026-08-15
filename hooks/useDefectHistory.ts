@@ -34,6 +34,12 @@ export interface DefectHistoryFilters {
   limit?: string;
   from?: string;
   to?: string;
+  status?: "PENDING" | "FINALIZED";
+  page?: string;
+  pageSize?: string;
+  search?: string;
+  sortKey?: string;
+  sortDir?: "asc" | "desc";
 }
 
 export function useDefectHistory(filters: DefectHistoryFilters = {}) {

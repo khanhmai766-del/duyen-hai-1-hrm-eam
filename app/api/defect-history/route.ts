@@ -8,7 +8,7 @@ import { dateRange, parseDateInput } from "@/lib/utils";
 import { normalizeMappedUnit, validateMappedDevice } from "@/lib/defect-device-mapping";
 import { getCachedEquipmentNodeFull } from "@/lib/equipment-node-cache";
 import { getEquipmentSeqsWithinDepth } from "@/lib/equipment-tree";
-import { positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
+import { POSITION_CATALOG, positionCatalogItem, positionsMatch } from "@/lib/position-catalog";
 import { canViewPosition, resolvePositionViewScope } from "@/lib/position-data-scope";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +57,33 @@ function positionFilterValues(position: string) {
   return [...values];
 }
 
+function positionScopeFilterValues(codes: readonly string[]) {
+  return codes.flatMap((code) => {
+    const item = POSITION_CATALOG.find((candidate) => candidate.code === code);
+    return item ? positionFilterValues(item.label) : [];
+  });
+}
+
+function finalizedOrderBy(key: string, dir: "asc" | "desc") {
+  if (key === "createdBy") return { createdBy: { name: dir } };
+  if (key === "device") return { node: { name: dir } };
+  if (["workOrderNumber", "requestNumber", "performedAt", "unit", "content", "defectContent", "system", "requestType"].includes(key)) {
+    return { [key]: dir };
+  }
+  return { performedAt: "desc" as const };
+}
+
+function pendingOrderBy(key: string, dir: "asc" | "desc") {
+  if (key === "createdBy") return { defect: { createdBy: { name: dir } } };
+  if (key === "device") return { defect: { node: { name: dir } } };
+  if (key === "requestNumber") return { defect: { requestNumber: dir } };
+  if (key === "unit") return { defect: { unit: dir } };
+  if (key === "defectContent") return { defect: { content: dir } };
+  if (key === "system") return { defect: { system: dir } };
+  if (["workOrderNumber", "performedAt", "content", "requestType"].includes(key)) return { [key]: dir };
+  return { performedAt: "desc" as const };
+}
+
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
@@ -85,6 +112,13 @@ export async function GET(req: NextRequest) {
     // TRƯỚC khi client kịp lọc: S1 có 818 bản đã chốt, lấy 300 rồi mới lọc Cơ →
     // hiện chưa tới 300/532 dòng thật. Phải lọc ngay trong SQL.
     const requestType = searchParams.get("requestType")?.trim();
+    const historyStatus = searchParams.get("status");
+    const paginated = historyStatus === "PENDING" || historyStatus === "FINALIZED";
+    const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("pageSize") ?? "10", 10) || 10));
+    const search = searchParams.get("search")?.trim();
+    const sortKey = searchParams.get("sortKey")?.trim() || "performedAt";
+    const sortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
     const requestedLimit = Number.parseInt(searchParams.get("limit") ?? String(HISTORY_TAKE), 10);
     const queryTake = Math.min(HISTORY_TAKE, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : HISTORY_TAKE));
 
@@ -147,6 +181,28 @@ export async function GET(req: NextRequest) {
     // id SYC rồi NOT IN — tốn một seq scan trên Defect mỗi lần mở trang (9,7 ms với
     // 5.351 phiếu) và danh sách id sẽ phình theo từng chu kỳ thay thế.
     where.isMaterialRequest = false;
+    if (!viewScope.all) {
+      const scopedValues = positionScopeFilterValues(viewScope.codes);
+      where.system = {
+        in: position ? matchingPositionValues.filter((value) => scopedValues.some((allowed) => positionsMatch(value, allowed))) : scopedValues,
+        mode: "insensitive",
+      };
+    }
+    if (search) {
+      andConditions.push({
+        OR: [
+          { workOrderNumber: { contains: search, mode: "insensitive" } },
+          { requestNumber: { contains: search, mode: "insensitive" } },
+          { device: { contains: search, mode: "insensitive" } },
+          { system: { contains: search, mode: "insensitive" } },
+          { result: { contains: search, mode: "insensitive" } },
+          { defectContent: { contains: search, mode: "insensitive" } },
+          { content: { contains: search, mode: "insensitive" } },
+          { node: { name: { contains: search, mode: "insensitive" } } },
+          { createdBy: { name: { contains: search, mode: "insensitive" } } },
+        ],
+      });
+    }
     if (andConditions.length) where.AND = andConditions;
 
     // Điều kiện của nhánh CHỜ CHỐT, dựng riêng cho dễ đọc. Tất cả phải nằm trong SQL
@@ -160,6 +216,41 @@ export async function GET(req: NextRequest) {
       pendingDefectWhere.system = { in: matchingPositionValues, mode: "insensitive" };
     }
     if (unit) pendingDefectWhere.unit = unit;
+    if (!viewScope.all) {
+      const scopedValues = positionScopeFilterValues(viewScope.codes);
+      pendingDefectWhere.system = {
+        in: position ? matchingPositionValues.filter((value) => scopedValues.some((allowed) => positionsMatch(value, allowed))) : scopedValues,
+        mode: "insensitive",
+      };
+    }
+    if (device) pendingDefectWhere.device = { contains: device, mode: "insensitive" };
+    const pendingDefectAnd: Record<string, unknown>[] = [];
+    if (scopeWhere) pendingDefectAnd.push({ OR: [scopeWhere, { deviceSeq: null }] });
+    if (deviceSeq) {
+      pendingDefectAnd.push({
+        OR: [
+          {
+            deviceSeq: { in: deviceSeqs },
+            ...(mappedUnit ? { OR: [{ mappedDeviceUnit: mappedUnit }, { mappedDeviceUnit: null, unit: mappedUnit }] } : {}),
+          },
+          ...(mappedUnit
+            ? [
+                { relatedDevices: { some: { deviceSeq: { in: deviceSeqs }, mappedUnit } } },
+                { unit: mappedUnit, relatedDevices: { some: { deviceSeq: { in: deviceSeqs }, mappedUnit: null } } },
+              ]
+            : [{ relatedDevices: { some: { deviceSeq: { in: deviceSeqs } } } }]),
+        ],
+      });
+    } else if (mappedUnit && ["S1", "S2", "COMMON"].includes(mappedUnit)) {
+      pendingDefectAnd.push({
+        OR: [
+          { mappedDeviceUnit: mappedUnit },
+          { mappedDeviceUnit: null, unit: mappedUnit },
+          { relatedDevices: { some: { mappedUnit } } },
+        ],
+      });
+    }
+    if (pendingDefectAnd.length) pendingDefectWhere.AND = pendingDefectAnd;
 
     const pendingWhere: Record<string, unknown> = {};
     if (Object.keys(pendingDefectWhere).length) pendingWhere.defect = pendingDefectWhere;
@@ -178,6 +269,98 @@ export async function GET(req: NextRequest) {
         ...(from ? { gte: dateRange(from).start } : {}),
         ...(to ? { lte: dateRange(to).end } : {}),
       };
+    }
+    if (search) {
+      pendingWhere.AND = [{
+        OR: [
+          { workOrderNumber: { contains: search, mode: "insensitive" } },
+          { content: { contains: search, mode: "insensitive" } },
+          { result: { contains: search, mode: "insensitive" } },
+          { confirmedByName: { contains: search, mode: "insensitive" } },
+          { defect: { requestNumber: { contains: search, mode: "insensitive" } } },
+          { defect: { device: { contains: search, mode: "insensitive" } } },
+          { defect: { system: { contains: search, mode: "insensitive" } } },
+          { defect: { content: { contains: search, mode: "insensitive" } } },
+          { defect: { node: { name: { contains: search, mode: "insensitive" } } } },
+          { defect: { createdBy: { name: { contains: search, mode: "insensitive" } } } },
+        ],
+      }];
+    }
+
+    if (paginated && historyStatus === "FINALIZED") {
+      const [total, pageRows] = await Promise.all([
+        prisma.defectHistory.count({ where }),
+        prisma.defectHistory.findMany({
+          where,
+          orderBy: finalizedOrderBy(sortKey, sortDir),
+          include: INCLUDE,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+      return ok(pageRows.map((item) => ({
+        ...item,
+        historyStatus: "FINALIZED" as const,
+        finalizeAt: null,
+        pendingDefectId: null,
+        createdBy: publicUserRef(item.createdBy),
+      })), { total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
+    }
+
+    if (paginated && historyStatus === "PENDING") {
+      const pendingInclude = {
+        defect: {
+          include: {
+            createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
+            node: { select: { seq: true, name: true } },
+            relatedDevices: {
+              select: { deviceSeq: true, mappedUnit: true, device: { select: { seq: true, name: true } } },
+              orderBy: { createdAt: "asc" as const },
+            },
+          },
+        },
+      };
+      const [total, pageRows] = await Promise.all([
+        prisma.defectHistoryPending.count({ where: pendingWhere }),
+        prisma.defectHistoryPending.findMany({
+          where: pendingWhere,
+          include: pendingInclude,
+          orderBy: pendingOrderBy(sortKey, sortDir),
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+      const data = pageRows.map(({ defect, ...pending }) => ({
+        id: `pending:${pending.id}`,
+        defectId: defect.id,
+        unit: defect.unit,
+        deviceSeq: defect.deviceSeq,
+        mappedDeviceUnit: defect.mappedDeviceUnit,
+        device: defect.device,
+        system: defect.system,
+        requestType: pending.requestType || defect.requestType,
+        workOrderNumber: pending.workOrderNumber,
+        performedAt: pending.performedAt,
+        result: pending.result,
+        defectContent: defect.content,
+        content: pending.content || defect.repairPerformedContentRaw,
+        requestNumber: defect.requestNumber,
+        reminderCount: defect.reminderCount,
+        lastRemindedAt: defect.lastRemindedAt,
+        reminderRaw: defect.reminderRaw,
+        sourceKey: defect.sourceKey,
+        sourceSnapshot: null,
+        images: [] as string[],
+        createdById: defect.createdById,
+        createdAt: pending.updatedAt,
+        createdBy: publicUserRef(defect.createdBy),
+        node: defect.node,
+        relatedDevices: defect.relatedDevices,
+        historyStatus: "PENDING" as const,
+        finalizeAt: pending.finalizeAt,
+        pendingDefectId: defect.id,
+      }));
+      return ok(data, { total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) });
     }
 
     const [history, pendingRows] = await Promise.all([
