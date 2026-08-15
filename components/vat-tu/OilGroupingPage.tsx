@@ -43,7 +43,7 @@ import {
   type ErpStockUpdateInput,
   type QlvtSyncStatus,
 } from "@/hooks/useOilGrouping";
-import { STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
+import { displayErpCode, STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -234,7 +234,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
           {canManage && <th className="px-3 py-3 text-center">Thao tác</th>}
         </tr></thead>
         <tbody>{paginated.map((item) => <tr key={item.id} className="border-t border-slate-100 hover:bg-blue-50/30">
-          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{item.code}</td><td className="px-3 py-2.5">{item.name}</td>
+          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{displayErpCode(item.code) || <span className="italic text-slate-400">Chưa có mã</span>}</td><td className="px-3 py-2.5">{item.name}</td>
           <td className="px-3 py-2.5 text-slate-600">{item.unit}</td><td className="px-3 py-2.5 text-slate-600">{item.warehouse || "—"}</td>
           <td className="px-3 py-2.5 text-right font-semibold">{fmt(item.erpStock)}</td>
           <td className="px-3 py-2.5 text-slate-600">{item.oilType ? `${item.oilType.code.startsWith(STANDALONE_GROUP_PREFIX) ? "Nhóm riêng" : item.oilType.code} · ${item.oilType.name}` : "Chưa phân nhóm"}</td>
@@ -286,7 +286,7 @@ function AllMaterialsTab({ category, canManage }: { category: GroupingCategory; 
     <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}><DialogContent className="sm:max-w-xl">
       <DialogHeader><DialogTitle>Sửa vật tư ERP</DialogTitle></DialogHeader>
       {edit && <div className="grid grid-cols-2 gap-3">
-        <div><Label className="mb-1.5 block">Mã vật tư *</Label><Input value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value })} /></div>
+        <div><Label className="mb-1.5 block">Mã vật tư</Label><Input value={displayErpCode(edit.code)} onChange={(e) => setEdit({ ...edit, code: e.target.value })} placeholder="Để trống nếu chưa có mã" /></div>
         <div><Label className="mb-1.5 block">ĐVT *</Label><Input value={edit.unit} onChange={(e) => setEdit({ ...edit, unit: e.target.value })} /></div>
         <div className="col-span-2"><Label className="mb-1.5 block">Tên vật tư *</Label><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></div>
         <div><Label className="mb-1.5 block">Kho</Label><Input value={edit.warehouse ?? ""} onChange={(e) => setEdit({ ...edit, warehouse: e.target.value })} /></div>
@@ -583,7 +583,6 @@ function GroupedErpActions({
     const code = form.code.trim();
     const name = form.name.trim();
     const unit = form.unit.trim();
-    if (!code) return setFormError("Vui lòng nhập Mã vật tư.");
     if (!name) return setFormError("Vui lòng nhập Tên vật tư.");
     if (!unit) return setFormError("Vui lòng nhập ĐVT.");
 
@@ -621,8 +620,8 @@ function GroupedErpActions({
           {form && (
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 sm:col-span-1">
-                <Label className="mb-1.5 block">Mã vật tư *</Label>
-                <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+                <Label className="mb-1.5 block">Mã vật tư</Label>
+                <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Để trống nếu chưa có mã" />
               </div>
               <div className="col-span-2 sm:col-span-1">
                 <Label className="mb-1.5 block">ĐVT *</Label>
@@ -989,7 +988,7 @@ function GroupRows({
           <tr key={m.id} className="bg-slate-50/60 border-t border-slate-100">
             <td></td>
             <td className="px-2 py-2 pl-8">
-              <span className="font-mono text-xs text-slate-600">{m.erpCode}</span>
+              <span className="font-mono text-xs text-slate-600">{displayErpCode(m.erpCode) || <span className="italic text-slate-400">Chưa có mã</span>}</span>
               <span className="ml-3 text-slate-500 text-xs">{m.name}</span>
               {m.origin && (
                 <span className="ml-2 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">
@@ -1320,7 +1319,7 @@ function PendingTab({ category }: { category: GroupingCategory }) {
                         </td>
                         <td className="px-2 py-2.5">
                           <span className="font-mono text-xs bg-slate-100 rounded px-1.5 py-0.5 text-slate-600">
-                            {it.erpCode}
+                            {displayErpCode(it.erpCode) || <span className="italic text-slate-400">Chưa có mã</span>}
                           </span>
                         </td>
                         <td className="px-2 py-2.5 text-slate-800">{it.name}</td>

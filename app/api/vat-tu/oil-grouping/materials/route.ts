@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail, handle, ok, requireUser, audit } from "@/lib/api";
 import { requireErpMaterialManage, requireErpMaterialView } from "@/lib/erp-material-access";
-import { isGroupableCategory, runOilGroupingSync } from "@/lib/oil-grouping-sync";
+import { displayErpCode, isGroupableCategory, isPendingErpCode, PENDING_ERP_CODE_PREFIX, runOilGroupingSync } from "@/lib/oil-grouping-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -55,10 +56,15 @@ export async function PUT(req: NextRequest) {
     const data: { code?: string; name?: string; unit?: string; warehouse?: string | null; category?: string; erpStock?: number; isActive?: boolean; oilTypeId?: null; mappingStatus?: "UNMAPPED"; conversionFactor?: number; suggestedOilTypeId?: null; suggestedScore?: null; suggestedReason?: null } = {};
     if (Object.prototype.hasOwnProperty.call(body, "code")) {
       const code = cleanString(body.code);
-      if (!code) return fail("Mã vật tư không được để trống");
-      const duplicate = await prisma.erpMaterial.findFirst({ where: { code, id: { not: id } }, select: { id: true } });
-      if (duplicate) return fail("Mã vật tư ERP đã tồn tại");
-      data.code = code;
+      if (!code) {
+        // Xóa trắng ô mã = quay về "chưa có mã". Giữ nguyên mã tạm cũ nếu đã có để không
+        // làm đứt các liên kết đang trỏ tới nó; chưa có thì sinh mới.
+        data.code = isPendingErpCode(current.code) ? current.code : `${PENDING_ERP_CODE_PREFIX}${randomUUID()}`;
+      } else {
+        const duplicate = await prisma.erpMaterial.findFirst({ where: { code, id: { not: id } }, select: { id: true } });
+        if (duplicate) return fail("Mã vật tư ERP đã tồn tại");
+        data.code = code;
+      }
     }
     if (Object.prototype.hasOwnProperty.call(body, "name")) {
       const name = cleanString(body.name);
@@ -119,7 +125,7 @@ export async function PUT(req: NextRequest) {
       }
       return updated;
     });
-    await audit(user.id, changingActive ? (material.isActive ? "REACTIVATE_ERP_MATERIAL" : "DEACTIVATE_ERP_MATERIAL") : "UPDATE_ERP_MATERIAL", "ErpMaterial", id, `${current.code} → ${material.code}`);
+    await audit(user.id, changingActive ? (material.isActive ? "REACTIVATE_ERP_MATERIAL" : "DEACTIVATE_ERP_MATERIAL") : "UPDATE_ERP_MATERIAL", "ErpMaterial", id, `${displayErpCode(current.code) || "(chưa có mã)"} → ${displayErpCode(material.code) || "(chưa có mã)"}`);
     return ok(material);
   });
 }
@@ -134,15 +140,19 @@ export async function POST(req: NextRequest) {
     const name = cleanString(body.name);
     const unit = cleanString(body.unit);
     const category = cleanString(body.category);
-    if (!code || !name || !unit) return fail("Thiếu thông tin bắt buộc");
+    // Mã vật tư KHÔNG bắt buộc: nhiều vật tư được khai trước khi ERP cấp mã. Sinh mã tạm
+    // duy nhất để khoá `code` vẫn có giá trị; giao diện ẩn mã này đi.
+    if (!name || !unit) return fail("Thiếu thông tin bắt buộc");
     if (!isGroupableCategory(category)) return fail("Loại vật tư không thuộc module tồn kho theo nhóm");
 
-    const exists = await prisma.erpMaterial.findUnique({ where: { code }, select: { id: true } });
-    if (exists) return fail("Mã vật tư ERP đã tồn tại");
+    if (code) {
+      const exists = await prisma.erpMaterial.findUnique({ where: { code }, select: { id: true } });
+      if (exists) return fail("Mã vật tư ERP đã tồn tại");
+    }
 
     const material = await prisma.erpMaterial.create({
       data: {
-        code,
+        code: code || `${PENDING_ERP_CODE_PREFIX}${randomUUID()}`,
         name,
         unit,
         category,
@@ -152,7 +162,7 @@ export async function POST(req: NextRequest) {
     });
 
     await runOilGroupingSync(category).catch(() => null);
-    await audit(user.id, "CREATE_GROUPED_ERP_MATERIAL", "ErpMaterial", material.id, material.code);
+    await audit(user.id, "CREATE_GROUPED_ERP_MATERIAL", "ErpMaterial", material.id, displayErpCode(material.code) || `(chưa có mã) ${material.name}`);
     return ok(material);
   });
 }
