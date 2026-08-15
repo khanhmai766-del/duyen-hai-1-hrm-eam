@@ -613,9 +613,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
         const materialUserName = String(body.materialUserName || "").trim();
-        const recoveryRequired = body.recoveryRequired === true;
-        const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
-        const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
+        // Bước sử dụng đã BỎP câu hỏi "có vật tư thu hồi hay không", nên giao diện không còn gửi
+        // các trường này. Thiếu trường thì GIỮ NGUYÊN số liệu cũ: coi như "không" sẽ xoá
+        // trắng dữ liệu thu hồi của phiếu cũ, tệ hơn là phiếu đã có biên bản thu hồi sẽ bị chặn
+        // ngay ở rào bên dưới, không sửa được số lượng sử dụng nữa.
+        const hasRecoveryInput = Object.prototype.hasOwnProperty.call(body, "recoveryRequired");
+        const recoveryRequired = hasRecoveryInput ? body.recoveryRequired === true : t.recoveryRequired === true;
+        const recoveryQuantity = !recoveryRequired
+          ? null
+          : hasRecoveryInput
+            ? Math.trunc(Number(body.recoveryQuantity))
+            : t.recoveryQuantity;
+        const recoveryReturned = recoveryRequired
+          && (hasRecoveryInput ? body.recoveryReturned === true : Boolean(t.recoveryReturnedAt));
         if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
         if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
         if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");

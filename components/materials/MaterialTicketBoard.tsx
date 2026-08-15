@@ -1540,9 +1540,6 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [completionNote, setCompletionNote] = useState(t.completionNote ?? "");
   const [bbktNumber, setBbktNumber] = useState(t.bbktNumber ?? "");
   const [reason, setReason] = useState(t.proposalNote ?? "");
-  const [recoveryRequired, setRecoveryRequired] = useState(t.recoveryRequired === true);
-  const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? 1);
-  const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
   const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
   const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
   const [sccnRepresentative, setSccnRepresentative] = useState(t.sccnRepresentativeName ?? "");
@@ -1555,12 +1552,11 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (editStep === "confirm") Object.assign(payload, { note: reason.trim(), bbktNumber });
     if (editStep === "stats") Object.assign(payload, { proposalNumber, proposalReceiverName: proposalReceiverNameReview });
     if (editStep === "receive") Object.assign(payload, { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource });
+    // Không gửi các trường thu hồi nữa — bước này đã bỏ câu hỏi đó. Phiếu cũ đã khai thu hồi
+    // vẫn giữ nguyên số liệu và biên bản đã xuất.
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
       materialUserName: materialUserName.trim(),
-      recoveryRequired,
-      recoveryQuantity: recoveryRequired ? recoveryQuantity : null,
-      recoveryReturned: recoveryRequired && recoveryReturned,
     });
     if (editStep === "accept") Object.assign(payload, {
       pctNumber,
@@ -1622,17 +1618,6 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
             <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
           </div>
-          <div className="review-use-toggle">
-            <label>Có vật tư thu hồi hay không?</label>
-            <div className="seg2"><button type="button" disabled={!canEdit} className={!recoveryRequired ? "on" : ""} onClick={() => { setRecoveryRequired(false); setRecoveryReturned(false); }}>Không</button><button type="button" disabled={!canEdit} className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
-          </div>
-          {recoveryRequired && <>
-            <div className="review-recovery-grid">
-              <label>Số lượng vật tư thu hồi ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} /></label>
-              <label className="review-recovery-check"><input type="checkbox" disabled={!canEdit} checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} /><span>Xác nhận đã trả vật tư thu hồi</span></label>
-            </div>
-            {!recoveryReturned && <p className="recovery-review-warning"><AlertTriangle size={15} /> Bước này vẫn hiển thị màu vàng cho đến khi xác nhận đã trả vật tư.</p>}
-          </>}
         </>}
         {editStep === "accept" && <>
           <div className="review-accept-grid">
@@ -1708,11 +1693,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [erpCode, setErpCode] = useState(t.items[0]?.erpCode ?? "");
   const [sccnRepresentative, setSccnRepresentative] = useState(t.sccnRepresentativeName ?? "");
   const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
-  const [recoveryRequired, setRecoveryRequired] = useState(false);
-  const [recoveryReturned, setRecoveryReturned] = useState(false);
   const [bbntDoNumberInput, setBbntDoNumberInput] = useState(t.bbntDoNumber ?? "");
   const [settlementConfirmed, setSettlementConfirmed] = useState(false);
-  const [recoveryQuantityInput, setRecoveryQuantityInput] = useState("1");
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
   const confirmationMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
@@ -2404,37 +2386,20 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
 	          </label>
 	        </div>
-	        <div className="use-recovery-toggle-row">
-	          <label className="field recovery-toggle-field">Có vật tư thu hồi hay không?
-	            <div className="seg2"><button type="button" className={!recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(false)}>Không</button><button type="button" className={recoveryRequired ? "on" : ""} onClick={() => setRecoveryRequired(true)}>Có</button></div>
-	          </label>
-	          <p className="hint use-quantity-hint">
+	        <p className="hint use-quantity-hint">
 	            <span className="use-quantity-received">
 	              {t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>}
 	            </span>
 	            <span className="use-quantity-after">
 	              Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
 	            </span>
-	          </p>
-	        </div>
-		        {recoveryRequired && <>
-		          <div className="recovery-detail-grid">
-		            <label className="field">Số lượng vật tư thu hồi{unit ? ` (${unit})` : ""} *
-		              <input type="number" min={1} value={recoveryQuantityInput} onChange={(e) => setRecoveryQuantityInput(e.target.value)} />
-		            </label>
-		            <label className="recovery-return-check">
-		              <input type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
-		              <span>Xác nhận đã trả vật tư thu hồi</span>
-		            </label>
-		          </div>
-	          <div className="note"><FileText size={15}/> BBNT ký tay, BBNT D-Office và biên bản vật tư thu hồi sẽ được tạo cùng lúc khi xác nhận bước nghiệm thu.</div>
-		        </>}
+	        </p>
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
         )}
         {quantityExceedsReceived && <div className="warnbox"><AlertTriangle size={15} /> Số lượng sử dụng vượt số lượng đã nhận từ Hiện có ({received} {unit}).</div>}
-        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && Number(recoveryQuantityInput) <= 0) || act.isPending}
-          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, recoveryRequired, recoveryQuantity: recoveryRequired ? Number(recoveryQuantityInput) : undefined, recoveryReturned }, "Đã xác nhận sử dụng vật tư")}>
+        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || quantityExceedsStock || quantityExceedsReceived || act.isPending}
+          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
       </div>
@@ -2605,7 +2570,6 @@ const CSS = `
 .step-review:disabled{cursor:default;}
 .step-review:not(:disabled):hover{background:#f8fafc;border-radius:10px;}
 .step.recovery-pending{color:${C.warn};background:${C.warnBg};}
-.recovery-review-warning{display:flex;align-items:center;gap:8px;margin:0;color:${C.warn};font-size:13px;font-weight:650;}
 .step-review-dialog{width:min(680px,calc(100vw - 32px));max-height:86vh;overflow-x:hidden;overflow-y:auto;}
 .review-receive-row{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:12px;align-items:end;min-width:0;}
 .review-receive-row.single{grid-template-columns:minmax(0,1fr) minmax(170px,1fr);}
@@ -2615,9 +2579,7 @@ const CSS = `
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}
-.review-use-grid,.review-recovery-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
-.review-use-toggle{display:flex;flex-direction:column;gap:6px;min-width:0;}
-.review-use-toggle .seg2{grid-template-columns:repeat(2,minmax(0,1fr));}
+.review-use-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
 .review-recovery-check{display:flex;min-height:40px;align-items:center;gap:10px;border:1.5px solid ${C.line};border-radius:10px;background:#fff;padding:9px 12px;color:${C.navy};cursor:pointer;}
 .frm .review-recovery-check input{width:20px;height:20px;flex:0 0 20px;margin:0;padding:0;cursor:pointer;accent-color:${C.accent};}
 .review-recovery-check span{line-height:1.3;}
@@ -2989,19 +2951,10 @@ const CSS = `
 .use-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
-.use-recovery-toggle-row{display:grid;grid-template-columns:minmax(200px,.45fr) minmax(0,1.55fr);gap:10px;align-items:stretch;min-width:0;}
-.use-recovery-toggle-row .recovery-toggle-field{min-width:0;margin:0!important;}
 .use-quantity-hint{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:3px;min-width:0;margin:0!important;padding-top:17px;font-size:10px;line-height:1.35;letter-spacing:-.012em;}
 .use-quantity-hint>span{display:block;max-width:100%;white-space:nowrap;}
 .use-quantity-received{color:${C.soft};}
 .use-quantity-after{color:${C.soft};}
-.recovery-toggle-field .seg2{height:42px;margin-top:6px;grid-template-columns:repeat(2,minmax(0,1fr));background:#fff;border-color:${C.line};}
-.recovery-toggle-field .seg2 button{min-height:38px;}
-.recovery-detail-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(340px,1.08fr);gap:12px;align-items:end;}
-.recovery-detail-grid .field{min-width:0;margin:0!important;}
-.recovery-detail-grid .field input{height:42px;margin-top:6px;}
-.recovery-return-check{display:flex!important;min-height:42px;align-items:center;gap:9px;margin:0!important;border:1px solid ${C.line};border-radius:10px;background:#fff;padding:0 13px;font-size:12px;font-weight:700;color:${C.navy};box-shadow:0 1px 0 rgba(15,23,42,.03);}
-.recovery-return-check input{height:18px!important;width:18px!important;min-width:18px;margin:0;accent-color:${C.accent};}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}
@@ -3040,7 +2993,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.use-recovery-toggle-row,.recovery-detail-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;
