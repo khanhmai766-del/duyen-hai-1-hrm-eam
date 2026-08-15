@@ -749,6 +749,8 @@ export default function RolesPage() {
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [assignUserOpen, setAssignUserOpen] = React.useState(false);
   const [assignUserSearch, setAssignUserSearch] = React.useState("");
+  const [assignmentTarget, setAssignmentTarget] = React.useState<"USER" | "POSITION">("USER");
+  const [assignmentPosition, setAssignmentPosition] = React.useState("");
   const [newRole, setNewRole] = React.useState(EMPTY_NEW_ROLE);
   const [assignment, setAssignment] = React.useState({
     userId: "",
@@ -781,7 +783,7 @@ export default function RolesPage() {
     [permissions]
   );
 
-  const userList = users.data?.data ?? [];
+  const userList = React.useMemo(() => users.data?.data ?? [], [users.data?.data]);
   const permissionById = React.useMemo(() => new Map(permissions.map((item) => [item.id, item])), [permissions]);
   const selectedAssignmentUser = React.useMemo(
     () => userList.find((user) => user.id === assignment.userId),
@@ -809,6 +811,20 @@ export default function RolesPage() {
       ).includes(query)
     );
   }, [assignUserSearch, userList]);
+  const assignmentPositions = React.useMemo(
+    () => Array.from(new Set(
+      userList
+        .filter((user) => user.isActive && user.position?.trim())
+        .map((user) => user.position!.trim())
+    )).sort((left, right) => left.localeCompare(right, "vi")),
+    [userList]
+  );
+  const positionAssignmentUsers = React.useMemo(
+    () => userList.filter(
+      (user) => user.isActive && user.position?.trim() === assignmentPosition
+    ),
+    [assignmentPosition, userList]
+  );
 
   function saveCurrentConfig(nextPermissions = permissions, nextOverrides = userOverrides, nextRoles = customRoles) {
     saveRbac.mutate({ permissions: normalizeMergedRoleMatrix(nextPermissions), roles: nextRoles, userOverrides: nextOverrides });
@@ -859,8 +875,19 @@ export default function RolesPage() {
   }
 
   async function assignUserPermission() {
-    if (!assignment.userId) {
+    const targetUsers = assignmentTarget === "POSITION"
+      ? positionAssignmentUsers
+      : userList.filter((user) => user.id === assignment.userId);
+    if (assignmentTarget === "USER" && !assignment.userId) {
       toast.error("Vui lòng chọn user");
+      return;
+    }
+    if (assignmentTarget === "POSITION" && !assignmentPosition) {
+      toast.error("Vui lòng chọn cương vị");
+      return;
+    }
+    if (targetUsers.length === 0) {
+      toast.error("Cương vị này không có tài khoản đang hoạt động");
       return;
     }
     if (!assignment.role && !assignment.profileId && !assignment.permissionId) {
@@ -869,37 +896,51 @@ export default function RolesPage() {
     }
     try {
       if (assignment.role) {
-        await updateUser.mutateAsync({ id: assignment.userId, role: assignment.role });
+        for (const targetUser of targetUsers) {
+          await updateUser.mutateAsync({ id: targetUser.id, role: assignment.role });
+        }
       }
       const nextOverrides = assignment.permissionId || assignment.profileId
         ? [
             ...userOverrides.filter(
               (item) =>
-                !(
-                  item.userId === assignment.userId &&
+                !(targetUsers.some((targetUser) => targetUser.id === item.userId) &&
                   item.permissionId === (assignment.permissionId || "__ROLE_PROFILE__") &&
                   item.roleId === (assignment.profileId || undefined)
                 )
             ),
-            {
-              id: `override-${Date.now()}`,
-              userId: assignment.userId,
+            ...targetUsers.map((targetUser, index) => ({
+              id: `override-${Date.now()}-${index}`,
+              userId: targetUser.id,
               permissionId: assignment.permissionId || "__ROLE_PROFILE__",
               roleId: assignment.profileId || undefined,
               value: assignment.value,
-              note: assignment.note.trim() || undefined,
+              note: assignment.note.trim()
+                || (assignmentTarget === "POSITION" ? `Gán theo cương vị ${assignmentPosition}` : undefined),
               createdAt: new Date().toISOString(),
-            },
+            })),
           ]
         : userOverrides;
 
+      if (assignment.permissionId || assignment.profileId) {
+        await saveRbac.mutateAsync({
+          permissions: normalizeMergedRoleMatrix(permissions),
+          roles: customRoles,
+          userOverrides: nextOverrides,
+        });
+      }
       setUserOverrides(nextOverrides);
       setAssignOpen(false);
       setAssignUserOpen(false);
       setAssignUserSearch("");
+      setAssignmentTarget("USER");
+      setAssignmentPosition("");
       setAssignment({ userId: "", role: "", profileId: "", permissionId: "", value: "read", note: "" });
-      saveCurrentConfig(permissions, nextOverrides, customRoles);
-      toast.success("Đã cập nhật quyền user");
+      toast.success(
+        assignmentTarget === "POSITION"
+          ? `Đã cập nhật quyền cho ${targetUsers.length} tài khoản thuộc cương vị ${assignmentPosition}`
+          : "Đã cập nhật quyền user"
+      );
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -1170,12 +1211,43 @@ export default function RolesPage() {
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Gán quyền cho user</DialogTitle>
+            <DialogTitle>Gán quyền cho user hoặc cương vị</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+              <Button
+                type="button"
+                variant={assignmentTarget === "USER" ? "default" : "ghost"}
+                onClick={() => setAssignmentTarget("USER")}
+              >
+                Một user
+              </Button>
+              <Button
+                type="button"
+                variant={assignmentTarget === "POSITION" ? "default" : "ghost"}
+                onClick={() => setAssignmentTarget("POSITION")}
+              >
+                Toàn cương vị
+              </Button>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label>User *</Label>
+                <Label>{assignmentTarget === "USER" ? "User *" : "Cương vị *"}</Label>
+                {assignmentTarget === "POSITION" ? (
+                  <Select value={assignmentPosition || "NONE"} onValueChange={(value) => setAssignmentPosition(value === "NONE" ? "" : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn cương vị" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">Chọn cương vị</SelectItem>
+                      {assignmentPositions.map((position) => (
+                        <SelectItem key={position} value={position}>
+                          {position} · {userList.filter((user) => user.isActive && user.position?.trim() === position).length} người
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
                 <Popover
                   open={assignUserOpen}
                   onOpenChange={(open) => {
@@ -1262,6 +1334,7 @@ export default function RolesPage() {
                     </div>
                   </PopoverContent>
                 </Popover>
+                )}
               </div>
               <div className="grid gap-1.5">
                 <Label>Vai trò hệ thống</Label>
@@ -1280,6 +1353,11 @@ export default function RolesPage() {
                 </Select>
               </div>
             </div>
+            {assignmentTarget === "POSITION" && assignmentPosition && (
+              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-950">
+                Quyền sẽ được áp dụng cho <strong>{positionAssignmentUsers.length} tài khoản đang hoạt động</strong> có cương vị chính “{assignmentPosition}”.
+              </div>
+            )}
             <div className="grid gap-1.5">
               <Label>Phân quyền mở rộng</Label>
               <Select value={assignment.profileId || "NONE"} onValueChange={(value) => setAssignment((state) => ({ ...state, profileId: value === "NONE" ? "" : value }))}>
@@ -1332,7 +1410,7 @@ export default function RolesPage() {
               Hủy
             </Button>
             <Button type="button" onClick={assignUserPermission} disabled={saveRbac.isPending || updateUser.isPending}>
-              Lưu quyền user
+              {assignmentTarget === "POSITION" ? "Lưu quyền toàn cương vị" : "Lưu quyền user"}
             </Button>
           </DialogFooter>
         </DialogContent>
