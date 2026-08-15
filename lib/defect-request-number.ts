@@ -130,7 +130,7 @@ export async function allocateDefectRequestNumber(
   const now = new Date();
   const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
   const equivalentSheetNames = equivalentSourceSheetNames(sequenceType, sheetName);
-  const rows = await tx.$queryRaw<Array<{ id: string; requestNumber: string }>>`
+  const cancelledRows = await tx.$queryRaw<Array<{ id: string; requestNumber: string }>>`
     SELECT "id", "requestNumber" FROM "Defect"
     WHERE "requestNumberReuseEligible" = true
       AND "cancelledAt" IS NOT NULL AND "syncState" = 'CONFIRMED'
@@ -150,9 +150,43 @@ export async function allocateDefectRequestNumber(
           AND active."sourceSheetName" IN (${Prisma.join(equivalentSheetNames)})
       )
     ORDER BY regexp_replace(split_part("requestNumber", '/', 1), ${prefix}, '')::int ASC
-    LIMIT 1 FOR UPDATE SKIP LOCKED
+    FOR UPDATE SKIP LOCKED
   `;
-  const candidate = rows[0];
+  // Batch ACK của thao tác đổi STT chứng minh dòng mang số cũ đã được làm
+  // trống B:O. Dùng outbox SUCCESS làm kho số giải phóng, không cần tạo Defect giả.
+  const renumberedRows = await tx.$queryRaw<Array<{ requestNumber: string }>>`
+    SELECT DISTINCT event."payload"->>'previousRequestNumber' AS "requestNumber"
+    FROM "DefectSyncOutbox" AS event
+    WHERE event."status" = 'SUCCESS'
+      AND event."createdAt" >= ${cutoff} AND event."createdAt" <= ${now}
+      AND event."payload"->>'requestType' = ${sequenceType}
+      AND event."payload"->>'sourceSpreadsheetId' = ${spreadsheetId}
+      AND event."payload"->>'sourceSheetName' IN (${Prisma.join(equivalentSheetNames)})
+      AND event."payload"->>'previousRequestNumber' ~* ${pattern}
+      AND split_part(event."payload"->>'previousRequestNumber', '/', 2)::int = ${year}
+      AND NOT EXISTS (
+        SELECT 1 FROM "Defect" AS active
+        WHERE active."cancelledAt" IS NULL
+          AND active."requestNumber" = event."payload"->>'previousRequestNumber'
+          AND active."requestType" = ${sequenceType}
+          AND active."sourceSpreadsheetId" = ${spreadsheetId}
+          AND active."sourceSheetName" IN (${Prisma.join(equivalentSheetNames)})
+      )
+  `;
+  const cancelledByNumber = new Map(cancelledRows.map((row) => [row.requestNumber, row]));
+  const candidates = [...new Set([
+    ...cancelledRows.map((row) => row.requestNumber),
+    ...renumberedRows.map((row) => row.requestNumber),
+  ])].sort((left, right) => {
+    const leftNumber = Number(left.split("/")[0].replace(/^QT/i, ""));
+    const rightNumber = Number(right.split("/")[0].replace(/^QT/i, ""));
+    return leftNumber - rightNumber;
+  });
+  const requestNumber = candidates[0];
+  const candidate = requestNumber ? cancelledByNumber.get(requestNumber) : undefined;
+  if (requestNumber && !candidate) {
+    return { requestNumber, reusedCancelledDefectId: null };
+  }
   if (!candidate) {
     return { requestNumber: await nextDefectRequestNumber(tx, year, sequenceType), reusedCancelledDefectId: null };
   }

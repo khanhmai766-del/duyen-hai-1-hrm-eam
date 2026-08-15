@@ -411,7 +411,7 @@ function TwoWaySyncRow() {
             onClick={() => setReusableNumbersOpen(true)}
           >
             <RefreshCw className="h-4 w-4 text-emerald-700" />
-            STT đã hủy còn trống
+            STT còn trống
             <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-emerald-800">
               {setting.reusableRequestNumbers?.length ?? 0}
             </span>
@@ -504,10 +504,10 @@ function ReusableRequestNumbersDialog({
         <DialogHeader className="border-b border-emerald-100 bg-emerald-50/70 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-emerald-950">
             <RefreshCw className="h-5 w-5 text-emerald-700" />
-            STT đã hủy còn trống
+            STT còn trống
           </DialogTitle>
           <DialogDescription>
-            Các STT đã được Sheet xác nhận làm trống và còn đủ điều kiện cấp lại.
+            Các STT được giải phóng do hủy hoặc đổi số, đã được Sheet xác nhận làm trống.
           </DialogDescription>
         </DialogHeader>
 

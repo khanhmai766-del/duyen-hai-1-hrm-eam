@@ -287,6 +287,13 @@ export function buildDefectSheetWritePlan(
 
   if (event.eventType === "CREATE") {
     if (originals.length === 1) {
+      // Dòng chỉ giữ STT ở A và trống B:O có thể đến từ phiếu hủy hoặc STT cũ
+      // vừa được giải phóng sau thao tác đổi số. Snapshot Sheet là lớp xác nhận
+      // cuối cùng trước khi ghi nên có thể dùng an toàn cho cả hai nguồn.
+      if (originals[0].row.slice(1).every((cell) => !cell)) {
+        writes.push({ range: `A${originals[0].sheetRow}:O${originals[0].sheetRow}`, values: [current] });
+        return { eventId: event.id, eventType: event.eventType, requestNumber, writes };
+      }
       if (text(payload.replacesCancelledDefectId)) {
         const reusablePlaceholder = originals[0].row.slice(1).every((cell) => !cell);
         const completedCancelledRow =

@@ -101,27 +101,51 @@ export async function getDefectSyncTrafficMetrics() {
 export async function getReusableCancelledDefectNumbers() {
   const now = new Date();
   const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-  const rows = await prisma.defect.findMany({
-    where: {
-      requestNumberReuseEligible: true,
-      cancelledAt: { not: null },
-      syncState: "CONFIRMED",
-      requestNumberReleasedAt: { not: null },
-      requestNumberReusedAt: null,
-      createdAt: { gte: cutoff, lte: now },
-    },
-    orderBy: [{ requestType: "asc" }, { requestNumber: "asc" }],
-    select: {
-      id: true,
-      requestNumber: true,
-      requestType: true,
-      sourceSpreadsheetId: true,
-      sourceSheetName: true,
-      createdAt: true,
-      cancelledAt: true,
-      requestNumberReleasedAt: true,
-    },
+  const [cancelledRows, renumberEvents] = await Promise.all([
+    prisma.defect.findMany({
+      where: {
+        requestNumberReuseEligible: true,
+        cancelledAt: { not: null },
+        syncState: "CONFIRMED",
+        requestNumberReleasedAt: { not: null },
+        requestNumberReusedAt: null,
+        createdAt: { gte: cutoff, lte: now },
+      },
+      select: {
+        id: true,
+        requestNumber: true,
+        requestType: true,
+        sourceSpreadsheetId: true,
+        sourceSheetName: true,
+        createdAt: true,
+        cancelledAt: true,
+        requestNumberReleasedAt: true,
+      },
+    }),
+    prisma.defectSyncOutbox.findMany({
+      where: { status: "SUCCESS", createdAt: { gte: cutoff, lte: now } },
+      select: { id: true, payload: true, createdAt: true, completedAt: true },
+    }),
+  ]);
+  const renumberedRows = renumberEvents.flatMap((event) => {
+    if (!event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) return [];
+    const requestNumber = String(event.payload.previousRequestNumber ?? "").trim();
+    const requestType = String(event.payload.requestType ?? "").trim();
+    const sourceSpreadsheetId = String(event.payload.sourceSpreadsheetId ?? "").trim();
+    const sourceSheetName = String(event.payload.sourceSheetName ?? "").trim();
+    if (!requestNumber || !requestType || !sourceSpreadsheetId || !sourceSheetName) return [];
+    return [{
+      id: `renumber:${event.id}`,
+      requestNumber,
+      requestType,
+      sourceSpreadsheetId,
+      sourceSheetName,
+      createdAt: event.createdAt,
+      cancelledAt: null,
+      requestNumberReleasedAt: event.completedAt ?? event.createdAt,
+    }];
   });
+  const rows = [...cancelledRows, ...renumberedRows];
   const activeRows = rows.length
     ? await prisma.defect.findMany({
         where: {
@@ -136,8 +160,8 @@ export async function getReusableCancelledDefectNumbers() {
         },
       })
     : [];
-  return rows.filter((row) => {
-    if (!row.cancelledAt || row.cancelledAt.getTime() > row.createdAt.getTime() + 6 * 60 * 60 * 1000) return false;
+  const available = rows.filter((row) => {
+    if (row.cancelledAt && row.cancelledAt.getTime() > row.createdAt.getTime() + 6 * 60 * 60 * 1000) return false;
     const equivalentNames = equivalentSourceSheetNames(row.requestType ?? "", row.sourceSheetName ?? "");
     return !activeRows.some(
       (active) => active.requestNumber === row.requestNumber
@@ -145,5 +169,17 @@ export async function getReusableCancelledDefectNumbers() {
         && active.sourceSpreadsheetId === row.sourceSpreadsheetId
         && equivalentNames.includes(active.sourceSheetName ?? "")
     );
+  });
+  const unique = new Map<string, (typeof available)[number]>();
+  for (const row of available) {
+    const key = [row.requestType, row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber].join("|");
+    if (!unique.has(key)) unique.set(key, row);
+  }
+  return [...unique.values()].sort((left, right) => {
+    const typeOrder = String(left.requestType).localeCompare(String(right.requestType), "vi");
+    if (typeOrder) return typeOrder;
+    const leftNumber = Number(String(left.requestNumber).split("/")[0].replace(/^QT/i, ""));
+    const rightNumber = Number(String(right.requestNumber).split("/")[0].replace(/^QT/i, ""));
+    return leftNumber - rightNumber;
   });
 }
