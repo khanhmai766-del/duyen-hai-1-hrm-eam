@@ -376,6 +376,28 @@ export const SINGLE_STEP_TICKET_TYPE = "GHI_NHAN";
  */
 export const CHEMICAL_TICKET_TYPE = "HOA_CHAT";
 
+/**
+ * LÝ DO ĐỀ XUẤT — chọn từ danh sách, đặt ở đây vì MÁY CHỦ cũng phải biết: lý do quyết
+ * định phiếu có biên bản thu hồi vật tư hay không.
+ */
+export const TICKET_REASONS = ["Bổ sung", "Thay thế", "Nhập", "Khác"] as const;
+export const TICKET_REASON_OTHER = "Khác";
+export const TICKET_REASON_REPLACEMENT = "Thay thế";
+export const TICKET_REASON_RENEWAL = "Thay mới";
+
+/**
+ * Lý do "Thay thế" ⇒ LUÔN có biên bản thu hồi vật tư (BBTHVT): thay cái mới vào thì có
+ * cái cũ phải thu về. Các lý do còn lại (Bổ sung, Nhập, Khác) không sinh vật tư thu hồi.
+ *
+ * Suy từ lý do thay vì hỏi lại ở bước sử dụng: câu hỏi đó vừa thừa vừa dễ trả lời sai
+ * (đã bỏ ở commit 24b393a).
+ */
+export function reasonRequiresRecovery(proposalNote?: string | null): boolean {
+  const reason = normalizeText(proposalNote ?? "").trim();
+  return reason === normalizeText(TICKET_REASON_REPLACEMENT)
+    || reason === normalizeText(TICKET_REASON_RENEWAL);
+}
+
 /** Loại vật tư của PHIẾU đi theo luồng hóa chất 3 bước. */
 export function isChemicalWorkflowCategory(materialCategory: string | null | undefined): boolean {
   return materialCategory === "Hóa chất";

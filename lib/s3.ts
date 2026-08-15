@@ -26,8 +26,15 @@ const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const LOCAL_OBJECT_ROOT = path.join(process.cwd(), ".local-storage");
 
 function hasS3Config() {
+  // Cho phép môi trường dev ép dùng kho tệp local dù .env đang chứa bộ giá trị S3 mẫu.
+  // Production vẫn bị chặn ở uploadS3Object nếu thiếu S3 thật.
+  if (process.env.S3_LOCAL_STORAGE === "true") return false;
+  const endpoint = process.env.S3_ENDPOINT?.trim() ?? "";
+  // File .env mẫu dùng s3.example.com: coi đây là "chưa cấu hình" để npm run dev
+  // tự dùng .local-storage, thay vì chờ DNS rồi trả lỗi 500 khi xuất tài liệu.
+  if (/^https?:\/\/s3\.example\.com\/?$/i.test(endpoint)) return false;
   return Boolean(
-    process.env.S3_ENDPOINT &&
+    endpoint &&
     process.env.S3_ACCESS_KEY &&
     process.env.S3_SECRET_KEY &&
     process.env.S3_BUCKET

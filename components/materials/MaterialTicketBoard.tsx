@@ -13,7 +13,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, MATERIAL_CATEGORIES, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, MATERIAL_CATEGORIES, reasonRequiresRecovery, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -198,7 +198,7 @@ export default function MaterialTicketBoard({
         : filter === "MINE" ? myTurnIds.has(t.id)
         : filter === "RUNNING" ? !FINISHED_STATUSES.includes(t.status)
         // Tab "Thu hồi": các phiếu có vật tư thu hồi (đã xuất hoặc sẽ xuất biên bản thu hồi)
-        : filter === "RECOVERY" ? Boolean(t.recoveryRequired || t.recoveryDocUrl)
+        : filter === "RECOVERY" ? Boolean(reasonRequiresRecovery(t.proposalNote) || t.recoveryDocUrl)
         : t.status === filter;
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
       const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
@@ -317,7 +317,7 @@ export default function MaterialTicketBoard({
 		            : t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN"
 		            ? { label: "Chờ Thống kê xuất BBNT", c: "#0f766e" }
 		            : STATUS[t.status] ?? { label: t.status, c: C.soft };
-		          const recoveryPending = t.recoveryRequired && !t.recoveryReturnedAt;
+	          const recoveryPending = !!t.usedAt && reasonRequiresRecovery(t.proposalNote) && !t.recoveryReturnedAt;
 	          const mine = actionsFor(t, viewer).length > 0;
 	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
 	          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
@@ -1281,8 +1281,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
  * đề xuất. "Khác" mở ô nhập để nêu rõ, lưu dưới dạng "Khác: <nội dung>" nên phiếu cũ
  * (ghi chú gõ tay) vẫn đọc được bình thường.
  */
-const TICKET_REASONS = ["Bổ sung", "Thay thế", "Nhập", "Khác"] as const;
-const OTHER_REASON = "Khác";
+const OTHER_REASON = TICKET_REASON_OTHER;
 const OTHER_REASON_PREFIX = `${OTHER_REASON}: `;
 
 /** Tách chuỗi đã lưu thành (lựa chọn, nội dung nêu rõ). */
@@ -1364,7 +1363,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${receiptSourceLabel(t.receiptSource)} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
-    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: "Nghiệm thu, xuất BBNT ký tay" },
+    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: `Nghiệm thu, xuất BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và BBTHVT" : ""}` },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
@@ -1382,7 +1381,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const si = order.indexOf(s.key);
 	            const done = t.status === "HOAN_TAT" || si < idx;
 	            const cur = s.key === flowStatus;
-	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.recoveryRequired && !t.recoveryReturnedAt;
+	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && reasonRequiresRecovery(t.proposalNote) && !t.recoveryReturnedAt;
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const caption = t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
 	              ? "Thống kê · Chờ xuất BBNT D-Office"
@@ -1535,6 +1534,8 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [receiptSource, setReceiptSource] = useState<"ERP" | "EXISTING">(normalizeReceiptSource(t.receiptSource));
   const [usedQuantity, setUsedQuantity] = useState(t.usedQuantity ?? 1);
   const [materialUserName, setMaterialUserName] = useState(t.materialUserName ?? "");
+  const [recoveryQuantity, setRecoveryQuantity] = useState(t.recoveryQuantity ?? 1);
+  const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
   const [pctNumber, setPctNumber] = useState(t.pctNumber ?? "");
   const [chiHuyName, setChiHuyName] = useState(t.chiHuyName ?? "");
   const [completionNote, setCompletionNote] = useState(t.completionNote ?? "");
@@ -1552,11 +1553,10 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (editStep === "confirm") Object.assign(payload, { note: reason.trim(), bbktNumber });
     if (editStep === "stats") Object.assign(payload, { proposalNumber, proposalReceiverName: proposalReceiverNameReview });
     if (editStep === "receive") Object.assign(payload, { receivedQuantity, deliveryNoteNumber: receivedMethod, receiptSource });
-    // Không gửi các trường thu hồi nữa — bước này đã bỏ câu hỏi đó. Phiếu cũ đã khai thu hồi
-    // vẫn giữ nguyên số liệu và biên bản đã xuất.
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
       materialUserName: materialUserName.trim(),
+      ...(reasonRequiresRecovery(t.proposalNote) ? { recoveryQuantity, recoveryReturned } : {}),
     });
     if (editStep === "accept") Object.assign(payload, {
       pctNumber,
@@ -1618,6 +1618,17 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
             <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
           </div>
+          {reasonRequiresRecovery(t.proposalNote) && (
+            <div className="review-recovery-grid">
+              <label>Số lượng vật tư thu hồi ghi vào BBTHVT ({t.items[0]?.material.unit ?? ""}) *
+                <input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} />
+              </label>
+              <label className={`recovery-return-check ${recoveryReturned ? "checked" : ""}`}>
+                <input type="checkbox" disabled={!canEdit} checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
+                <span><b>VHV xác nhận đã trả vật tư thu hồi xong</b>{recoveryReturned && <small>Ngày trả: {fmtDay(t.recoveryReturnedAt ?? new Date().toISOString())}</small>}</span>
+              </label>
+            </div>
+          )}
         </>}
         {editStep === "accept" && <>
           <div className="review-accept-grid">
@@ -1695,6 +1706,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
   const [bbntDoNumberInput, setBbntDoNumberInput] = useState(t.bbntDoNumber ?? "");
   const [settlementConfirmed, setSettlementConfirmed] = useState(false);
+  const [recoveryQuantityInput, setRecoveryQuantityInput] = useState(() => String(t.recoveryQuantity ?? 1));
+  const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
   const confirmationMaterialOption = opts?.materials.find((material) => material.id === t.items[0]?.materialId);
@@ -2373,9 +2386,10 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const unit = t.items[0]?.material.unit ?? "";
     const stock = t.items[0]?.material.quantity ?? 0;
     const received = t.receivedQuantity ?? (t.type === "UNG" ? t.vhvReceivedQuantity ?? t.items[0]?.quantity ?? 0 : 0);
-    const remaining = received - qty;
     const quantityExceedsStock = qty > stock;
     const quantityExceedsReceived = t.type === "SU_DUNG_HIEN_CO" && qty > received;
+	    const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+	    const recoveryQuantity = Math.trunc(Number(recoveryQuantityInput));
 	            return (
 	              <div className="act">
 	        <div className="use-field-grid">
@@ -2386,20 +2400,26 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 	            <input type="number" min={1} max={stock} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
 	          </label>
 	        </div>
-	        <p className="hint use-quantity-hint">
-	            <span className="use-quantity-received">
-	              {t.type === "UNG" ? <>Số lượng ứng đã xác nhận: {received} {unit}</> : <>Đã lãnh: {received} {unit} đã cộng vào số lượng hiện có</>}
-	            </span>
-	            <span className="use-quantity-after">
-	              Sau khi xác nhận, hệ thống trừ <b>{qty} {unit}</b> khỏi số lượng hiện có. Còn lại theo phiếu: <b>{remaining} {unit}</b>.
-	            </span>
-	        </p>
+        {recoveryRequired && (
+          <div className="recovery-quantity-row">
+            <label className="field">Số lượng vật tư thu hồi ghi vào BBTHVT{unit ? ` (${unit})` : ""} *
+              <input type="number" min={1} value={recoveryQuantityInput} onChange={(e) => setRecoveryQuantityInput(e.target.value)} />
+            </label>
+            <label className={`recovery-return-check ${recoveryReturned ? "checked" : ""}`}>
+              <input type="checkbox" checked={recoveryReturned} onChange={(e) => setRecoveryReturned(e.target.checked)} />
+              <span>
+                <b>VHV xác nhận đã trả vật tư thu hồi xong</b>
+                {recoveryReturned && <small>Ngày trả: {fmtDay(t.recoveryReturnedAt ?? new Date().toISOString())}</small>}
+              </span>
+            </label>
+          </div>
+        )}
         {quantityExceedsStock && (
           <div className="warnbox"><AlertTriangle size={15} /> Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. Hiện còn {stock} {unit}; vui lòng nhập lại số lượng.</div>
         )}
         {quantityExceedsReceived && <div className="warnbox"><AlertTriangle size={15} /> Số lượng sử dụng vượt số lượng đã nhận từ Hiện có ({received} {unit}).</div>}
-        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || quantityExceedsStock || quantityExceedsReceived || act.isPending}
-          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty }, "Đã xác nhận sử dụng vật tư")}>
+        <button className="btn primary big" disabled={!materialUserNameInput.trim() || qty <= 0 || quantityExceedsStock || quantityExceedsReceived || (recoveryRequired && (!Number.isFinite(recoveryQuantity) || recoveryQuantity <= 0)) || act.isPending}
+          onClick={() => run({ action: "use", materialUserName: materialUserNameInput.trim(), usedQuantity: qty, ...(recoveryRequired ? { recoveryQuantity, recoveryReturned } : {}) }, "Đã xác nhận sử dụng vật tư")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận
         </button>
       </div>
@@ -2415,6 +2435,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
     const selectedErp = codeOptions.find((option) => option.code === erpCode);
+    const exportsRecoveryDocument = reasonRequiresRecovery(t.proposalNote);
     return (
       <div className="act">
           <>
@@ -2454,8 +2475,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </div>
           </>
         <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
-          onClick={() => run({ action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt }, t.type === "DE_XUAT" ? "Đã xuất BBNT ký tay, chuyển Thống kê xuất BBNT D-Office" : "Đã nghiệm thu và xuất các biên bản")}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {t.type === "DE_XUAT" ? "Xác nhận và xuất BBNT ký tay" : "Nghiệm thu và xuất biên bản"}
+          onClick={() => run(
+            { action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt },
+            t.type === "DE_XUAT"
+              ? `Đã xuất BBNT ký tay${exportsRecoveryDocument ? " và BBTHVT" : ""}, chuyển Thống kê xuất BBNT D-Office`
+              : `Đã nghiệm thu và xuất BBNT ký tay${exportsRecoveryDocument ? " cùng BBTHVT" : ""}`,
+          )}>
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />}
+          {exportsRecoveryDocument ? " Xác nhận và xuất BBNT ký tay + BBTHVT" : " Xác nhận và xuất BBNT ký tay"}
         </button>
       </div>
     );
@@ -2472,7 +2499,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const isProposalDocumentExport = t.type === "DE_XUAT";
     return (
       <div className="act">
-        <label className="lb">{isProposalDocumentExport ? "Thống kê xuất BBNT D-Office và biên bản thu hồi" : "Thống kê xác nhận mã vật tư"}</label>
+        <label className="lb">{isProposalDocumentExport ? "Thống kê xuất BBNT D-Office" : "Thống kê xác nhận mã vật tư"}</label>
         <label className="field">Mã vật tư *
           <select value={erpCode} disabled>
             <option value="">— Chọn mã vật tư ERP —</option>
@@ -2505,7 +2532,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         )}
         <p className="hint">
           {isProposalDocumentExport
-            ? `BBNT ký tay đã được xuất. Xác nhận để xuất BBNT D-Office${t.recoveryRequired ? " và Biên bản vật tư thu hồi" : ""}, sau đó chuyển sang bước Quyết toán.`
+            ? `BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và Biên bản vật tư thu hồi" : ""} đã được xuất. Xác nhận để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
             : "BBNT D-Office đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán."}
         </p>
         <button className="btn primary big" disabled={!erpCode || act.isPending || (isProposalDocumentExport && (!sccnRepresentative || !sccnPosition))}
@@ -2579,10 +2606,7 @@ const CSS = `
 .review-receive-toggle button{height:40px;min-width:0;padding:0 12px;font-size:12px;line-height:1.2;white-space:nowrap;}
 .review-delivery-field{gap:6px;min-width:0;}
 .review-delivery-field input{height:40px;margin:0;}
-.review-use-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
-.review-recovery-check{display:flex;min-height:40px;align-items:center;gap:10px;border:1.5px solid ${C.line};border-radius:10px;background:#fff;padding:9px 12px;color:${C.navy};cursor:pointer;}
-.frm .review-recovery-check input{width:20px;height:20px;flex:0 0 20px;margin:0;padding:0;cursor:pointer;accent-color:${C.accent};}
-.review-recovery-check span{line-height:1.3;}
+.review-use-grid,.review-recovery-grid,.review-accept-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
 .head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
 .head-l{display:flex;gap:13px;align-items:center;}
 .head-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,${C.navy},${C.accent});}
@@ -2951,10 +2975,16 @@ const CSS = `
 .use-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;}
 .use-field-grid .field{min-width:0;margin:0!important;}
 .use-field-grid .field input{height:42px;margin-top:6px;}
-.use-quantity-hint{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:3px;min-width:0;margin:0!important;padding-top:17px;font-size:10px;line-height:1.35;letter-spacing:-.012em;}
-.use-quantity-hint>span{display:block;max-width:100%;white-space:nowrap;}
-.use-quantity-received{color:${C.soft};}
-.use-quantity-after{color:${C.soft};}
+.recovery-quantity-row{display:grid;grid-template-columns:minmax(220px,.75fr) minmax(0,1.25fr);gap:12px;align-items:end;}
+.recovery-quantity-row .field{min-width:0;margin:0!important;}
+.recovery-quantity-row .field input{height:42px;margin-top:6px;}
+.recovery-return-check{display:flex!important;min-height:42px;align-items:center;gap:10px;margin:0!important;border:1px solid ${C.line};border-radius:10px;background:#fff;padding:8px 13px;color:${C.navy};cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s;}
+.recovery-return-check:hover{border-color:#86efac;background:#f7fff9;}
+.recovery-return-check.checked{border-color:#22c55e;background:#f0fdf4;box-shadow:0 0 0 2px rgba(34,197,94,.08);}
+.recovery-return-check input{width:19px!important;height:19px!important;min-width:19px;margin:0!important;padding:0!important;accent-color:#16a34a;cursor:pointer;}
+.recovery-return-check span{display:flex;min-width:0;flex-direction:column;gap:2px;line-height:1.25;}
+.recovery-return-check b{font-size:12px;color:${C.navy};}
+.recovery-return-check small{font-size:11px;font-weight:700;color:#15803d;}
 .act-field-row{display:grid;grid-template-columns:156px minmax(0,1fr);align-items:center;gap:10px;}
 .act-field-row label:not(.lb){margin-bottom:0;}
 .advance-item-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(150px,1fr) 130px auto;align-items:end;gap:6px;}
@@ -2993,7 +3023,7 @@ const CSS = `
 .logrow span{color:${C.soft};white-space:nowrap;}
 .logrow b{white-space:nowrap;}
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
-@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.use-quantity-hint{padding-top:0;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
+@media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

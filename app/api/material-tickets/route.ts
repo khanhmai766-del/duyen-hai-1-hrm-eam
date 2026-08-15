@@ -10,7 +10,7 @@ import {
   isTechnician,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, isChemicalWorkflowCategory, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, reasonRequiresRecovery, isChemicalWorkflowCategory, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -266,6 +266,8 @@ export async function POST(req: NextRequest) {
           status: nextStatus,
           bbktNumber: null,
           proposalNote,
+          // Lý do "Thay thế" ⇒ phiếu có biên bản thu hồi vật tư; bước Sử dụng sẽ hỏi số lượng thu hồi.
+          recoveryRequired: reasonRequiresRecovery(proposalNote),
           assignedPosition,
           materialCategory,
           createdById: user.id,

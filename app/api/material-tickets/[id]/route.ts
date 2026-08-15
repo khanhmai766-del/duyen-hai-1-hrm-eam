@@ -9,7 +9,7 @@ import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
 import { parseDateInput } from "@/lib/utils";
-import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, reasonRequiresRecovery, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
@@ -457,6 +457,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         materialCategory: string;
         bbktNumber: string | null;
         proposalNote?: string | null;
+        recoveryRequired?: boolean;
+        recoveryQuantity?: number | null;
+        recoveryReturnedAt?: Date | null;
       } = { unit, assignedPosition, materialCategory, bbktNumber: bbkt || null };
       let editedItemData: {
         materialId: string;
@@ -527,6 +530,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           deviceNameManual: replacementDeviceLabels.join(", "),
         };
         data.proposalNote = proposalNote;
+        // Đổi lý do là đổi luôn việc có thu hồi hay không. Hồ sơ đã phát hành BBTHVT
+        // không được phép đổi khỏi "Thay thế" vì sẽ làm lý do và biên bản mâu thuẫn.
+        const recoveryRequired = reasonRequiresRecovery(proposalNote);
+        if (!recoveryRequired && t.recoveryDocUrl) {
+          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi lý do khỏi Thay thế; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
+        }
+        data.recoveryRequired = recoveryRequired;
+        if (!recoveryRequired) {
+          data.recoveryQuantity = null;
+          data.recoveryReturnedAt = null;
+        }
       }
 
       const up = await prisma.$transaction(async (tx) => {
@@ -576,9 +590,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!reason) return fail("Lý do không được để trống");
         before = `Lý do: ${t.proposalNote || "—"}; Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`;
         after = `Lý do: ${reason}; Số biên bản kiểm tra: ${value || "—"}`;
+        const recoveryRequired = reasonRequiresRecovery(reason);
+        if (!recoveryRequired && t.recoveryDocUrl) {
+          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi lý do khỏi Thay thế; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
+        }
         up = await prisma.materialTicket.update({
           where: { id: t.id },
-          data: { proposalNote: reason, bbktNumber: value || null },
+          data: {
+            proposalNote: reason,
+            bbktNumber: value || null,
+            recoveryRequired,
+            ...(!recoveryRequired ? { recoveryQuantity: null, recoveryReturnedAt: null } : {}),
+          },
           include: ITEM_INCLUDE,
         });
       } else if (step === "stats") {
@@ -613,19 +636,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
         const materialUserName = String(body.materialUserName || "").trim();
-        // Bước sử dụng đã BỎP câu hỏi "có vật tư thu hồi hay không", nên giao diện không còn gửi
-        // các trường này. Thiếu trường thì GIỮ NGUYÊN số liệu cũ: coi như "không" sẽ xoá
-        // trắng dữ liệu thu hồi của phiếu cũ, tệ hơn là phiếu đã có biên bản thu hồi sẽ bị chặn
-        // ngay ở rào bên dưới, không sửa được số lượng sử dụng nữa.
-        const hasRecoveryInput = Object.prototype.hasOwnProperty.call(body, "recoveryRequired");
-        const recoveryRequired = hasRecoveryInput ? body.recoveryRequired === true : t.recoveryRequired === true;
-        const recoveryQuantity = !recoveryRequired
-          ? null
-          : hasRecoveryInput
+        // Có thu hồi hay không luôn suy từ lý do. Giao diện chỉ gửi số lượng để điền BBTHVT,
+        // không cho người dùng bật/tắt thu hồi độc lập với lựa chọn "Thay thế".
+        const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+        const hasRecoveryQuantity = Object.prototype.hasOwnProperty.call(body, "recoveryQuantity");
+        const recoveryQuantity = recoveryRequired
+          ? hasRecoveryQuantity
             ? Math.trunc(Number(body.recoveryQuantity))
-            : t.recoveryQuantity;
-        const recoveryReturned = recoveryRequired
-          && (hasRecoveryInput ? body.recoveryReturned === true : Boolean(t.recoveryReturnedAt));
+            : t.recoveryQuantity
+          : null;
+        const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
         if (value <= 0) return fail("Số lượng sử dụng phải lớn hơn 0");
         if (!materialUserName) return fail("Vui lòng nhập tên VHV sử dụng vật tư");
         if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
@@ -717,7 +737,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             })
           : null;
         // Đổi số PCT/LCT → xuất lại BBTHVT để cột Ghi chú đồng bộ số mới.
-        const recoveryDoc = t.recoveryRequired ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
+        const recoveryDoc = reasonRequiresRecovery(t.proposalNote) ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
         up = await prisma.materialTicket.update({
           where: { id: t.id },
           data: {
@@ -931,7 +951,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             type: workflowType,
             status: workflowType === "UNG" ? "VHV_LANH_VAT_TU" : workflowType === "SU_DUNG_HIEN_CO" ? "NHAN_TU_HIEN_CO" : "CHO_THONG_KE",
             bbktNumber: bbktNumber || null,
-            ...(proposalNote ? { proposalNote } : {}),
+            ...(proposalNote ? {
+              proposalNote,
+              recoveryRequired: reasonRequiresRecovery(proposalNote),
+            } : {}),
             confirmedById: user.id, confirmedByName: user.name ?? "",
             confirmedByPosition: user.position ?? null, confirmedAt: new Date(),
           },
@@ -1340,9 +1363,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
         return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      const recoveryRequired = body.recoveryRequired === true;
+      // Cờ thu hồi suy từ LÝ DO của phiếu (xem reasonRequiresRecovery), không hỏi lại ở bước này
+      // và không tin thân yêu cầu — gọi thẳng API cũng không bật/tắt được.
+      const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
       const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
-      const recoveryReturned = body.recoveryReturned === true;
+      const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
       const usedQuantity = Math.trunc(Number(body.usedQuantity));
       const materialUserName = String(body.materialUserName || "").trim();
       if (recoveryRequired && (!recoveryQuantity || recoveryQuantity <= 0)) return fail("Vui lòng nhập số lượng vật tư thu hồi");
@@ -1377,7 +1402,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           data: {
             status: "CHO_NGHIEM_THU",
             recoveryRequired, recoveryQuantity,
-            recoveryReturnedAt: recoveryRequired && recoveryReturned ? new Date() : null,
+            // VHV xác nhận trực tiếp việc đã trả vật tư thu hồi cho kho tại bước này.
+            recoveryReturnedAt: recoveryReturned ? new Date() : null,
             // Không xuất file tại bước xác nhận sử dụng; bước Nghiệm thu sẽ sinh đồng thời
             // BBNT ký tay và Biên bản vật tư thu hồi.
             recoveryDocUrl: null,
@@ -1408,11 +1434,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
+      const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
+      if (recoveryRequired && (!t.recoveryQuantity || t.recoveryQuantity <= 0)) {
+        return fail("Phiếu Thay thế chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi nghiệm thu.");
+      }
 
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -1449,8 +1479,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             deliveryNoteNumber: t.deliveryNoteNumber ?? t.receivedMethod ?? undefined,
             itemOverride,
           }),
-        // Luồng Đề xuất hoãn BBTHVT sang tác vụ Thống kê cùng BBNT D-Office.
-        recovery: t.type !== "DE_XUAT" && t.recoveryRequired
+        // Mọi luồng có lý do Thay thế/Thay mới đều xuất BBTHVT đồng thời với BBNT ký tay.
+        recovery: recoveryRequired
           ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride })
           : null,
       };
@@ -1471,6 +1501,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             bbktDocUrl: documents.bbkt.url,
             ...(documents.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
             ...(documents.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
+            recoveryRequired,
             workStartedAt, workEndedAt,
             ...(bbkt ? { bbktNumber: bbkt } : {}),
             completedById: user.id, completedByName: user.name ?? "",
@@ -1491,6 +1522,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail("Bạn không có quyền Thống kê xuất biên bản", 403);
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
+      const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+      if (recoveryRequired && (!t.recoveryQuantity || t.recoveryQuantity <= 0)) {
+        return fail("Phiếu Thay thế chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi xuất biên bản.");
+      }
       const erpCode = String(body.erpCode || "").trim();
       if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");
       const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
@@ -1524,14 +1559,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
                 position: sccnRepresentativePosition,
               },
             }),
-            recovery: t.recoveryRequired
-              ? await buildRecoveryDocument(t, { pctNumber: t.pctNumber ?? undefined, itemOverride })
-              : null,
           }
         : null;
 
-      // Đề xuất: Thống kê xuất BBNT D-Office và BB thu hồi sau BBNT ký tay.
-      // Sử dụng hiện có: giữ nguyên hành vi chỉ xác nhận mã ERP.
+      // BBTHVT đã được xuất đồng thời với BBNT ký tay ở bước Nghiệm thu.
+      // Đề xuất: Thống kê chỉ xuất BBNT D-Office; Sử dụng hiện có chỉ xác nhận mã ERP.
       const up = await prisma.$transaction(async (tx) => {
         await tx.materialTicketItem.update({ where: { id: item.id }, data: { erpCode, erpName: erpMaterial.name } });
         return tx.materialTicket.update({
@@ -1539,7 +1571,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           data: {
             status: "CHO_QUYET_TOAN",
             ...(documents?.bbntDo ? { docUrl: documents.bbntDo.url } : {}),
-            ...(documents?.recovery ? { recoveryDocUrl: documents.recovery.url } : {}),
+            recoveryRequired,
             ...(isProposalDocumentExport
               ? {
                   sccnRepresentativeName,
@@ -1556,7 +1588,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         "MaterialTicket",
         t.id,
         isProposalDocumentExport
-          ? `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất BBNT D-Office${documents?.recovery ? " và Biên bản vật tư thu hồi" : ""}, chuyển Quyết toán`
+          ? `${materialTicketReference(t)}: xác nhận mã ${erpCode}, xuất BBNT D-Office, chuyển Quyết toán`
           : `${materialTicketReference(t)}: xác nhận mã ${erpCode}, chuyển Quyết toán`,
       );
       return ok(up);
