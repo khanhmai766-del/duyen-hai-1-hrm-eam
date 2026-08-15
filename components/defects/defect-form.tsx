@@ -546,7 +546,6 @@ export function DefectForm({
         }
         if (operationUpdateAvailable) syncedPayload.note = form.note;
         if (operationUpdateAvailable) {
-          syncedPayload.sourceDeviceRaw = form.sourceDeviceRaw;
           syncedPayload.content = form.content;
           syncedPayload.repeatedRepairRaw = form.repeatedRepairRaw;
         }
@@ -1057,17 +1056,9 @@ export function DefectForm({
                   <span className="h-px flex-1 bg-emerald-200" aria-hidden="true" />
                 </div>
                 <p className="text-[12px] leading-relaxed text-emerald-900/75">
-                  Chỉ ghi ngược ba trường được phép: cột 3, cột 5 và cột 9.
+                  Chỉ ghi ngược hai trường được phép: cột 5 và cột 9. Tên thiết bị cột 3 được khóa để giữ ổn định nhận diện phiếu.
                 </p>
                 <div className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2">
-                <Field label="Thiết bị (cột 3)" required full>
-                  <Input
-                    value={form.sourceDeviceRaw}
-                    onChange={(e) => set("sourceDeviceRaw", e.target.value)}
-                    disabled={!operationUpdateAvailable}
-                    placeholder="Nhập tên thiết bị trên Google Sheet"
-                  />
-                </Field>
                 <Field label="Nội dung khiếm khuyết (cột 5)" required full>
                   <Textarea
                     value={form.content}

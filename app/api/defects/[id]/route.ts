@@ -20,15 +20,6 @@ import {
   type DefectDeviceMapping,
 } from "@/lib/defect-device-mapping";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
-import { normalizeText } from "@/lib/nav";
-
-function sourceKeyWithCorrectedDevice(sourceKey: string | null, sourceDeviceRaw: string) {
-  if (!sourceKey) return undefined;
-  const parts = sourceKey.split("|");
-  if (parts.length !== 8) return undefined;
-  parts[7] = normalizeText(sourceDeviceRaw);
-  return parts.join("|");
-}
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -104,7 +95,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       "images",
       "postRepairAwaitingMaterial",
       "content",
-      "sourceDeviceRaw",
       "repeatedRepairRaw",
     ];
     if (
@@ -190,6 +180,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (existingRelatedCount !== relatedDeviceSeqs.length) return fail("Có thiết bị liên quan không tồn tại");
     }
     if (existing.sourceType === "GOOGLE_SHEETS" && !existing.websiteCreated) {
+      if (body.sourceDeviceRaw !== undefined) {
+        return fail("Tên thiết bị cột 3 của phiếu nguồn Sheet không được phép sửa trên website", 409);
+      }
       const mappingRequested = mappingFieldsRequested;
       const requestedDeviceSeq = String(body.device ?? "").trim();
       const requestedSystemSeq = String(body.deviceSystemSeq ?? "").trim();
@@ -228,18 +221,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const environmentSafetyImpact =
         body.environmentSafetyImpact === undefined ? undefined : normalizeImpactValue(body.environmentSafetyImpact);
       const note = body.note === undefined ? undefined : String(body.note ?? "").trim();
-      const sourceDeviceRaw = body.sourceDeviceRaw === undefined
-        ? undefined
-        : String(body.sourceDeviceRaw ?? "").trim();
       const sourceContent = body.content === undefined
         ? undefined
         : String(body.content ?? "").trim();
       const repeatedRepairRaw = body.repeatedRepairRaw === undefined
         ? undefined
         : String(body.repeatedRepairRaw ?? "").trim();
-      if (sourceDeviceRaw !== undefined && !sourceDeviceRaw) {
-        return fail("Vui lòng nhập Thiết bị cột 3");
-      }
       if (sourceContent !== undefined && !sourceContent) {
         return fail("Vui lòng nhập Nội dung khiếm khuyết");
       }
@@ -312,8 +299,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         || (environmentSafetyImpact !== undefined && environmentSafetyImpact !== existing.environmentSafetyImpact)
         || (note !== undefined && note !== (existing.note ?? ""));
       const sourceCorrectionChanged =
-        (sourceDeviceRaw !== undefined && sourceDeviceRaw !== (existing.sourceDeviceRaw ?? ""))
-        || (sourceContent !== undefined && sourceContent !== (existing.content ?? ""))
+        (sourceContent !== undefined && sourceContent !== (existing.content ?? ""))
         || (repeatedRepairRaw !== undefined && repeatedRepairRaw !== (existing.repeatedRepairRaw ?? ""));
       const defect = await prisma.$transaction(async (tx) => {
         const updated = await tx.defect.update({
@@ -330,10 +316,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           fireSafetyImpact,
           environmentSafetyImpact,
           note,
-          sourceDeviceRaw: sourceDeviceRaw !== undefined ? sourceDeviceRaw : undefined,
-          sourceKey: sourceDeviceRaw !== undefined && sourceDeviceRaw !== (existing.sourceDeviceRaw ?? "")
-            ? sourceKeyWithCorrectedDevice(existing.sourceKey, sourceDeviceRaw)
-            : undefined,
           content: sourceContent !== undefined ? sourceContent : undefined,
           repeatedRepairRaw: repeatedRepairRaw !== undefined ? repeatedRepairRaw || null : undefined,
           completedAt:
