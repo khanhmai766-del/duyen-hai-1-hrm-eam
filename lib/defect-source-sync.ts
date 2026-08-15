@@ -5,6 +5,7 @@ import { normalizeText } from "@/lib/nav";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { positionCodeOf } from "@/lib/position-catalog";
 import { reminderSummaryOf } from "@/lib/defect-reminder";
+import { equivalentSourceSheetNames } from "@/lib/defect-request-number";
 
 export type DefectSourceRecord = {
   sourceSpreadsheetId: string;
@@ -66,8 +67,17 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function sheetRequestIdentity(spreadsheetId: unknown, sheetName: unknown, requestNumber: unknown) {
-  return [text(spreadsheetId), text(sheetName), text(requestNumber).toUpperCase()].join("|");
+function sheetRequestIdentity(
+  spreadsheetId: unknown,
+  sheetName: unknown,
+  requestNumber: unknown,
+  requestType: unknown
+) {
+  const canonicalSheet = equivalentSourceSheetNames(text(requestType), text(sheetName))
+    .map((name) => name.toUpperCase())
+    .sort()
+    .join("~");
+  return [text(spreadsheetId), canonicalSheet, text(requestNumber).toUpperCase()].join("|");
 }
 
 function outboxWriteScope(payload: Prisma.JsonValue) {
@@ -188,7 +198,7 @@ export async function upsertPreparedDefectRecords(params: {
   const keys = Array.from(new Set(
     prepared.flatMap((item) => [item.sourceKey, item.legacySourceKey])
   ));
-  const existingRows = keys.length > 0
+  let existingRows = keys.length > 0
     ? await prisma.defect.findMany({
         where: { sourceKey: { in: keys } },
         select: {
@@ -218,25 +228,20 @@ export async function upsertPreparedDefectRecords(params: {
         },
       })
     : [];
-  const existingByKey = new Map(existingRows.filter((row) => row.sourceKey).map((row) => [row.sourceKey!, row]));
-  const existingFor = (item: PreparedDefectSourceRecord) =>
-    existingByKey.get(item.sourceKey) ?? existingByKey.get(item.legacySourceKey);
-
   // Khi sourceKey chưa có hoặc tạm lệch vì website vừa sửa Thiết bị cột 3 mà
   // n8n chưa ghi xong, dùng khóa nghiệp vụ STT + workbook + tab để ghép đúng
   // phiếu. STT chỉ duy nhất trong đúng một tab, không được ghép chéo Sheet.
-  const unmatchedRequestNumbers = prepared
-    .filter((item) => !existingFor(item))
-    .map((item) => item.requestNumber);
-  const requestNumberCandidateRows = unmatchedRequestNumbers.length > 0
+  const requestNumbers = prepared.map((item) => item.requestNumber);
+  let requestNumberCandidateRows = requestNumbers.length > 0
     ? await prisma.defect.findMany({
         where: {
           cancelledAt: null,
-          requestNumber: { in: unmatchedRequestNumbers },
+          requestNumber: { in: requestNumbers },
         },
         select: {
           id: true,
           requestNumber: true,
+          requestType: true,
           sourceSpreadsheetId: true,
           sourceSheetName: true,
           sourceKey: true,
@@ -250,6 +255,8 @@ export async function upsertPreparedDefectRecords(params: {
           content: true,
           sourceDeviceRaw: true,
           repeatedRepairRaw: true,
+          deviceSeq: true,
+          createdAt: true,
           status: true,
           severity: true,
           condition: true,
@@ -261,14 +268,66 @@ export async function upsertPreparedDefectRecords(params: {
           reminderCount: true,
           lastRemindedAt: true,
           pendingHistory: { select: { id: true } },
+          _count: {
+            select: {
+              relatedDevices: true,
+              reminderLogs: true,
+              materialRequests: true,
+            },
+          },
         },
       })
     : [];
+
+  // Tự dọn đúng dạng bản trùng do alias tab: giữ bản đã có ánh xạ/dữ liệu,
+  // chỉ xóa bản Sheet mới hoàn toàn rỗng quan hệ và có cùng STT + nội dung.
+  const duplicateIdsToDelete: string[] = [];
+  const candidateGroups = new Map<string, typeof requestNumberCandidateRows>();
+  for (const row of requestNumberCandidateRows) {
+    if (!row.requestNumber || !row.sourceSpreadsheetId || !row.sourceSheetName) continue;
+    const key = sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber, row.requestType);
+    const group = candidateGroups.get(key) ?? [];
+    group.push(row);
+    candidateGroups.set(key, group);
+  }
+  for (const group of candidateGroups.values()) {
+    if (group.length < 2) continue;
+    const survivor = [...group].sort((left, right) => {
+      const score = (row: (typeof group)[number]) =>
+        (row.websiteCreated ? 100 : 0)
+        + (row.deviceSeq ? 50 : 0)
+        + (row.pendingHistory ? 25 : 0)
+        + row._count.relatedDevices + row._count.reminderLogs + row._count.materialRequests;
+      return score(right) - score(left) || left.createdAt.getTime() - right.createdAt.getTime();
+    })[0];
+    for (const candidate of group) {
+      if (candidate.id === survivor.id) continue;
+      const isEmptySheetDuplicate =
+        !candidate.websiteCreated
+        && !candidate.deviceSeq
+        && !candidate.pendingHistory
+        && candidate._count.relatedDevices === 0
+        && candidate._count.reminderLogs === 0
+        && candidate._count.materialRequests === 0
+        && normalizeText(candidate.content ?? "") === normalizeText(survivor.content ?? "");
+      if (isEmptySheetDuplicate) duplicateIdsToDelete.push(candidate.id);
+    }
+  }
+  if (duplicateIdsToDelete.length > 0) {
+    await prisma.defect.deleteMany({ where: { id: { in: duplicateIdsToDelete } } });
+    const deleted = new Set(duplicateIdsToDelete);
+    existingRows = existingRows.filter((row) => !deleted.has(row.id));
+    requestNumberCandidateRows = requestNumberCandidateRows.filter((row) => !deleted.has(row.id));
+  }
+
+  const existingByKey = new Map(existingRows.filter((row) => row.sourceKey).map((row) => [row.sourceKey!, row]));
+  const existingFor = (item: PreparedDefectSourceRecord) =>
+    existingByKey.get(item.sourceKey) ?? existingByKey.get(item.legacySourceKey);
   const existingByRequestNumber = new Map(
     requestNumberCandidateRows
       .filter((row) => row.requestNumber && row.sourceSpreadsheetId && row.sourceSheetName)
       .map((row) => [
-        sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber),
+        sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber, row.requestType),
         row,
       ])
   );
@@ -278,7 +337,7 @@ export async function upsertPreparedDefectRecords(params: {
   if (existingByRequestNumber.size !== keyedRequestNumberCandidates.length) {
     const counts = new Map<string, number>();
     for (const row of keyedRequestNumberCandidates) {
-      const key = sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber);
+      const key = sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber, row.requestType);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key);
@@ -351,7 +410,12 @@ export async function upsertPreparedDefectRecords(params: {
     const matchedByRequestNumber = matchedByKey
       ? undefined
       : existingByRequestNumber.get(
-          sheetRequestIdentity(item.record.sourceSpreadsheetId, item.record.sourceSheet, item.requestNumber)
+          sheetRequestIdentity(
+            item.record.sourceSpreadsheetId,
+            item.record.sourceSheet,
+            item.requestNumber,
+            item.record.requestType
+          )
         ) ?? legacyByRequestNumber.get(item.requestNumber);
     const existing = matchedByKey ?? matchedByRequestNumber;
     const repairStatus = defectResultStatusOf(item.record.repairResultRaw);
