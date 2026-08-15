@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
-import { requirePermissionLevel } from "@/lib/rbac-guard";
+import { hasPermissionLevel } from "@/lib/rbac-guard";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
@@ -9,12 +9,13 @@ import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(
-      user,
-      "defect-manage",
-      ["manage", "full"],
-      "Không đủ quyền cập nhật ghi chú khiếm khuyết"
-    );
+    const [canManage, canClose] = await Promise.all([
+      hasPermissionLevel(user, "defect-manage", ["manage", "full"]),
+      hasPermissionLevel(user, "defect-close", ["manage", "full"]),
+    ]);
+    if (!canManage && !canClose) {
+      return fail("Không đủ quyền cập nhật ghi chú khiếm khuyết", 403);
+    }
     if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
       return fail("Tính năng cập nhật Vận hành từ website đang tạm khóa", 503);
     }

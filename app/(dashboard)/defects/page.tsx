@@ -1039,13 +1039,12 @@ export default function DefectsPage() {
                               <FileClock className="h-4 w-4" />
                             </Button>
                           )}
-                          {canManage && operationUpdateAvailable && d.pendingHistory && (
+                          {(canManage || canClose) && operationUpdateAvailable && d.pendingHistory && (
                             <Button
                               variant="ghost"
-                              size="icon"
                               title="Cập nhật ghi chú cột 15"
                               aria-label="Cập nhật ghi chú cột 15"
-                              className="h-8 w-8 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                              className="h-8 gap-1 px-2 text-[10.5px] font-semibold text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setPendingNote(d.note ?? "");
@@ -1053,6 +1052,7 @@ export default function DefectsPage() {
                               }}
                             >
                               <StickyNote className="h-4 w-4" />
+                              <span>Ghi chú cột 15</span>
                             </Button>
                           )}
                           {canManage && (
