@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, requireRole, handle, audit, auditDetailWithPosition } from "@/lib/api";
-import { addMonths, DEFECT_UNITS } from "@/lib/constants";
+import { addMonths, DEFECT_UNITS, roundStock } from "@/lib/constants";
 import { EQUIPMENT_DEVICE_SELECT, equipmentNodeToDevice } from "@/lib/equipment-device";
 import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { materialCatalogAccessWhere } from "@/lib/material-catalog-access";
@@ -501,7 +501,7 @@ export async function PUT(req: NextRequest) {
         ...(primaryCode ? { code: primaryCode } : {}),
         ...(body.name != null ? { name: body.name } : {}),
         ...(body.unit != null ? { unit: body.unit } : {}),
-        ...(body.quantity != null ? { quantity: Number(body.quantity) } : {}),
+        ...(body.quantity != null ? { quantity: roundStock(body.quantity) } : {}),
         ...(body.minStock != null ? { minStock: Number(body.minStock) } : {}),
         ...(defaultSystem !== undefined ? { system: defaultSystem } : {}),
         ...(body.category !== undefined ? { category: body.category?.trim() || null } : {}),

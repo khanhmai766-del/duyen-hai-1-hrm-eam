@@ -400,6 +400,19 @@ export function canManageMaterialCatalog(user: PositionCarrier & { role?: string
 
 // ---- Tiện ích thời gian dùng chung ----
 
+/**
+ * LÀM TRÒN Ô "HIỆN CÓ" (số đếm thực tế tại kho): từ .5 trở lên lên, dưới .5 xuống.
+ * 4.5 → 5, 4.6 → 5, 4.4 → 4, 4.2 → 4.
+ *
+ * Kho đếm theo can, theo phýy chứ không đong lẻ từng phần lít, nên số lẻ chỉ sinh ra từ phép
+ * chia hoặc từ số gốc ERP. Cột lưu trong CSDL cũng là số nguyên, không làm tròn thì Prisma
+ * ném lỗi khi ghi 4.5 — người dùng chỉ thấy "lưu thất bại" mà không hiểu vì sao.
+ */
+export function roundStock(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+}
+
 /** Số ngày còn lại đến hạn (âm = đã quá hạn). */
 export function daysUntilDue(nextDueAt: Date | string, now: Date = new Date()): number {
   const due = new Date(nextDueAt);

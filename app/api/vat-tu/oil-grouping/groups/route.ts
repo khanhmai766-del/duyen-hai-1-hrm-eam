@@ -9,6 +9,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
 import { requireErpMaterialManage } from "@/lib/erp-material-access";
+import { roundStock } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,9 @@ export async function PUT(req: NextRequest) {
     if ("onHandQty" in body) {
       const qty = Number(body.onHandQty);
       if (!Number.isFinite(qty) || qty < 0) return fail("Giá trị Hiện có không hợp lệ");
-      data.onHandQty = qty;
+      // Làm tròn cùng luật với ô "Hiện có" bên Danh mục vật tư — hai nơi đếm cùng một kho,
+      // để lệch thì số lẻ ở đây chạy ngược sang bên kia.
+      data.onHandQty = roundStock(qty);
     }
     if ("note" in body) {
       data.note = body.note != null ? String(body.note).trim() || null : null;

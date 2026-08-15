@@ -33,7 +33,7 @@ import { ReplacementPointsEditor } from "@/components/materials/replacement-poin
 import { QlvtSyncAction } from "@/components/vat-tu/OilGroupingPage";
 import { useCreateReplacement } from "@/hooks/useReplacements";
 import { useRbacAccess } from "@/hooks/useRbacAccess";
-import { displayMaterialCategory, MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, addMonths, materialCategoryMatches } from "@/lib/constants";
+import { displayMaterialCategory, MATERIAL_CATEGORIES, DEFECT_UNITS, DEFECT_STATUS, addMonths, materialCategoryMatches, roundStock } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionLabelOf, positionsMatch } from "@/lib/position-catalog";
 import { parseScope, scopeCode } from "@/lib/equipment-units";
@@ -198,7 +198,8 @@ function MaterialsPageContent() {
         category: prev?.category || group.category || categoryFilter,
         name: isFirstSelection ? group.name : prev?.name,
         unit: isFirstSelection ? group.unit : prev?.unit,
-        quantity: isFirstSelection ? group.onHandQty : prev?.quantity,
+        // Số của nhóm ERP là số thập phân; ô "Hiện có" là số nguyên nên làm tròn ngay khi điền sẵn.
+        quantity: isFirstSelection ? roundStock(group.onHandQty) : prev?.quantity,
       };
     });
   }
@@ -509,6 +510,8 @@ function MaterialsPageContent() {
           name: String(edit.name ?? "").trim(),
           unit: String(edit.unit ?? "").trim(),
           minStock: erpStockByGroupedCodes(erpCodes),
+          // "Hiện có": từ .5 trở lên làm tròn lên, dưới .5 làm tròn xuống (4.5 → 5, 4.4 → 4).
+          ...(edit.quantity != null ? { quantity: roundStock(edit.quantity) } : {}),
           category: edit.category || categoryFilter,
           ...(isNew
             ? { machines: edit.machines ?? [machineTab], machine: (edit.machines ?? [machineTab])[0] ?? machineTab }
