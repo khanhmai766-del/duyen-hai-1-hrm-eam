@@ -280,8 +280,10 @@ export async function upsertPreparedDefectRecords(params: {
     : [];
 
   // Tự dọn đúng dạng bản trùng do alias tab: giữ bản đã có ánh xạ/dữ liệu,
-  // chỉ xóa bản Sheet mới hoàn toàn rỗng quan hệ và có cùng STT + nội dung.
+  // chỉ xóa bản Sheet mới trong 24 giờ gần nhất, hoàn toàn rỗng quan hệ và có
+  // cùng STT + nội dung. Dữ liệu lịch sử trùng STT được giữ nguyên.
   const duplicateIdsToDelete: string[] = [];
+  const recentDuplicateCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const candidateGroups = new Map<string, typeof requestNumberCandidateRows>();
   for (const row of requestNumberCandidateRows) {
     if (!row.requestNumber || !row.sourceSpreadsheetId || !row.sourceSheetName) continue;
@@ -304,6 +306,7 @@ export async function upsertPreparedDefectRecords(params: {
       if (candidate.id === survivor.id) continue;
       const isEmptySheetDuplicate =
         !candidate.websiteCreated
+        && candidate.createdAt >= recentDuplicateCutoff
         && !candidate.deviceSeq
         && !candidate.pendingHistory
         && candidate._count.relatedDevices === 0
@@ -323,37 +326,35 @@ export async function upsertPreparedDefectRecords(params: {
   const existingByKey = new Map(existingRows.filter((row) => row.sourceKey).map((row) => [row.sourceKey!, row]));
   const existingFor = (item: PreparedDefectSourceRecord) =>
     existingByKey.get(item.sourceKey) ?? existingByKey.get(item.legacySourceKey);
-  const existingByRequestNumber = new Map(
-    requestNumberCandidateRows
-      .filter((row) => row.requestNumber && row.sourceSpreadsheetId && row.sourceSheetName)
-      .map((row) => [
-        sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber, row.requestType),
-        row,
-      ])
-  );
   const keyedRequestNumberCandidates = requestNumberCandidateRows.filter(
     (row) => row.requestNumber && row.sourceSpreadsheetId && row.sourceSheetName
   );
-  if (existingByRequestNumber.size !== keyedRequestNumberCandidates.length) {
-    const counts = new Map<string, number>();
-    for (const row of keyedRequestNumberCandidates) {
-      const key = sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber, row.requestType);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    const duplicated = [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key);
-    throw new Error(`Không thể tự ghép phiếu do trùng số yêu cầu: ${duplicated.join(", ")}`);
+  const keyedCandidateGroups = new Map<string, typeof keyedRequestNumberCandidates>();
+  for (const row of keyedRequestNumberCandidates) {
+    const key = sheetRequestIdentity(row.sourceSpreadsheetId, row.sourceSheetName, row.requestNumber, row.requestType);
+    const group = keyedCandidateGroups.get(key) ?? [];
+    group.push(row);
+    keyedCandidateGroups.set(key, group);
   }
+  // Fallback theo STT chỉ được dùng khi duy nhất một ứng viên. Nhóm lịch sử
+  // trùng STT vẫn được xử lý bằng sourceKey gốc, không làm hỏng toàn bộ batch.
+  const existingByRequestNumber = new Map(
+    [...keyedCandidateGroups.entries()].flatMap(([key, group]) => group.length === 1 ? [[key, group[0]] as const] : [])
+  );
   // Tương thích phiếu website cũ chưa lưu workbook/tab: chỉ dùng STT khi đúng
   // một ứng viên duy nhất; nhiều ứng viên thì dừng thay vì ghép đoán.
   const legacyRequestCandidates = requestNumberCandidateRows.filter(
     (row) => row.requestNumber && (!row.sourceSpreadsheetId || !row.sourceSheetName)
   );
-  const legacyByRequestNumber = new Map(
-    legacyRequestCandidates.map((row) => [row.requestNumber!, row])
-  );
-  if (legacyByRequestNumber.size !== legacyRequestCandidates.length) {
-    throw new Error("Không thể tự ghép phiếu cũ do trùng số yêu cầu và thiếu thông tin Sheet");
+  const legacyGroups = new Map<string, typeof legacyRequestCandidates>();
+  for (const row of legacyRequestCandidates) {
+    const group = legacyGroups.get(row.requestNumber!) ?? [];
+    group.push(row);
+    legacyGroups.set(row.requestNumber!, group);
   }
+  const legacyByRequestNumber = new Map(
+    [...legacyGroups.entries()].flatMap(([key, group]) => group.length === 1 ? [[key, group[0]] as const] : [])
+  );
 
   // Chỉ giữ các trường Vận hành trên website khi thay đổi UPDATE
   // thực sự còn trong hàng đợi. Khi đã ACK thành công, Sheet lại được
