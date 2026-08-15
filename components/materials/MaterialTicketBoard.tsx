@@ -609,7 +609,9 @@ function DeviceMultiSelect({
 function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: string) => void }) {
   const [type, setType] = useState<"DE_XUAT" | "UNG" | null>("DE_XUAT");
   const [unit, setUnit] = useState("S1");
-  const [note, setNote] = useState("");
+  const [reasonChoice, setReasonChoice] = useState("");
+  const [reasonDetail, setReasonDetail] = useState("");
+  const note = joinReason(reasonChoice, reasonDetail);
   const [assigned, setAssigned] = useState("");
   const [category, setCategory] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
@@ -807,13 +809,16 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
 
             {type === "DE_XUAT" ? (
               <>
-                <div className="bbkt-grid"><div className="field">
-                    <label>Ghi chú lý do *</label>
-                    <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hao hụt / chất lượng dầu không đạt / thay định kỳ…" />
-                </div><div className="field qty-field">
+                <div className="reason-grid">
+                  <div className="field">
+                    <label>Lý do *</label>
+                    <ReasonPicker choice={reasonChoice} detail={reasonDetail} onChoice={setReasonChoice} onDetail={setReasonDetail} />
+                  </div>
+                  <div className="field qty-field">
                     <label>Số lượng đề xuất *</label>
                     <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
-                </div></div>
+                  </div>
+                </div>
                 <label>Thuộc hệ thống</label>
                 <SystemMultiSelect
                   options={replacementSystemOptions}
@@ -1045,7 +1050,10 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   const [selectedMaterialId, setSelectedMaterialId] = useState(t.items[0]?.materialId ?? "");
   const [selectedErpCode, setSelectedErpCode] = useState(t.items[0]?.erpCode ?? "");
   const [proposedQuantity, setProposedQuantity] = useState(t.items[0]?.quantity ?? 1);
-  const [note, setNote] = useState(t.proposalNote ?? "");
+  const initialReason = splitReason(t.proposalNote);
+  const [reasonChoice, setReasonChoice] = useState(initialReason.choice);
+  const [reasonDetail, setReasonDetail] = useState(initialReason.detail);
+  const note = joinReason(reasonChoice, reasonDetail);
   const [replacementDeviceSeqs, setReplacementDeviceSeqs] = useState<string[]>(() => {
     const storedKeys = t.items[0]?.replacementPointKeys ?? [];
     return storedKeys.length ? storedKeys : t.items[0]?.deviceSeq ? [t.items[0].deviceSeq] : [];
@@ -1233,9 +1241,9 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
 
           {["DE_XUAT", "UNG"].includes(t.type) ? (
             <div className="edit-field-grid">
-              <div className="field">
+              <div className="field reason-field-wide">
                 <label>Lý do *</label>
-                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: hao hụt / chất lượng dầu không đạt / thay định kỳ…" />
+                <ReasonPicker choice={reasonChoice} detail={reasonDetail} onChoice={setReasonChoice} onDetail={setReasonDetail} />
               </div>
               <div className="field">
                 <label>Số biên bản kiểm tra (nếu có)</label>
@@ -1264,6 +1272,59 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+/**
+ * LÝ DO ĐỀ XUẤT — chọn từ danh sách thay vì gõ tự do, để còn thống kê được vì sao phải
+ * đề xuất. "Khác" mở ô nhập để nêu rõ, lưu dưới dạng "Khác: <nội dung>" nên phiếu cũ
+ * (ghi chú gõ tay) vẫn đọc được bình thường.
+ */
+const TICKET_REASONS = ["Bổ sung", "Thay thế", "Nhập", "Khác"] as const;
+const OTHER_REASON = "Khác";
+const OTHER_REASON_PREFIX = `${OTHER_REASON}: `;
+
+/** Tách chuỗi đã lưu thành (lựa chọn, nội dung nêu rõ). */
+function splitReason(value?: string | null): { choice: string; detail: string } {
+  const raw = (value ?? "").trim();
+  if (!raw) return { choice: "", detail: "" };
+  if (raw.startsWith(OTHER_REASON_PREFIX)) return { choice: OTHER_REASON, detail: raw.slice(OTHER_REASON_PREFIX.length) };
+  const known = TICKET_REASONS.find((item) => item === raw);
+  // Phiếu cũ gõ tay: coi như "Khác" và giữ nguyên chữ đã nhập, không làm mất dữ liệu.
+  return known ? { choice: known, detail: "" } : { choice: OTHER_REASON, detail: raw };
+}
+
+/** Ghép ngược lại để gửi lên máy chủ. */
+function joinReason(choice: string, detail: string) {
+  if (!choice) return "";
+  if (choice !== OTHER_REASON) return choice;
+  // Chọn "Khác" mà chưa nêu rõ thì coi như CHƯA ĐIỀN — các nơi đang kiểm `note.trim()` tự
+  // khoá nút, không phải thêm điều kiện rời ở từng hộp thoại.
+  const value = detail.trim();
+  return value ? `${OTHER_REASON_PREFIX}${value}` : "";
+}
+
+/** Ô chọn lý do dùng chung cho hộp Tạo phiếu và hộp Sửa phiếu. */
+function ReasonPicker({
+  choice, detail, onChoice, onDetail,
+}: { choice: string; detail: string; onChoice: (v: string) => void; onDetail: (v: string) => void }) {
+  return (
+    <>
+      <div className="reason-chips">
+        {TICKET_REASONS.map((item) => (
+          <button key={item} type="button" className={choice === item ? "on" : ""} onClick={() => onChoice(item)}>{item}</button>
+        ))}
+      </div>
+      {choice === OTHER_REASON && (
+        <input
+          autoFocus
+          className="reason-detail"
+          value={detail}
+          onChange={(e) => onDetail(e.target.value)}
+          placeholder="Nêu rõ lý do đề xuất…"
+        />
+      )}
     </>
   );
 }
@@ -2676,12 +2737,25 @@ const CSS = `
 .card.dx svg{color:${C.accent};}
 .card.ung:hover{border-color:${C.ung};box-shadow:0 8px 22px ${C.ung}22;}
 .card.ung svg{color:${C.ung};}
-.frm{padding:18px;display:flex;flex-direction:column;gap:9px;}
+.frm{padding:16px;display:flex;flex-direction:column;gap:8px;}
 .frm-scroll{min-height:0;overflow-y:auto;padding-bottom:14px;}
 .frm label{font-size:12.5px;font-weight:600;color:${C.navy};}
-.field{display:flex;flex-direction:column;gap:7px;min-width:0;}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0;}
 .edit-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end;}
 .bbkt-grid{display:grid;grid-template-columns:minmax(0,1fr) 142px;gap:10px;align-items:end;}
+/* Hàng Lý do: 4 lựa chọn chiếm phần rộng, Số lượng bám bên phải — gộp hai trường vào một
+   hàng thay vì xếp dọc, ô "nêu rõ" chỉ hiện khi chọn Khác nên không chiếm chỗ trống. */
+.reason-grid{display:grid;grid-template-columns:minmax(0,1fr) 118px;gap:10px;align-items:start;}
+/* auto-fit chứ không chốt 4 cột: hộp Sửa phiếu đặt ô này ở nửa bề ngang, chốt cứng 4 cột
+   thì nhãn dài nhất ("Thay thế") bị cắt chữ; auto-fit thì nó tự xếp 2 hàng. */
+.reason-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(74px,1fr));gap:6px;}
+.reason-chips button{min-height:34px;padding:7px 6px;border-radius:8px;border:1.5px solid ${C.line};background:#fff;font-weight:600;font-size:12px;line-height:1.15;color:#64748b;cursor:pointer;white-space:nowrap;transition:border-color .15s ease,background-color .15s ease,color .15s ease;}
+.reason-chips button:hover{border-color:#94a3b8;background:#f8fafc;}
+.reason-chips button.on{border-color:${C.accent};background:${C.accent}10;color:${C.accent};}
+.reason-detail{margin-top:6px;}
+/* Hộp Sửa phiếu chia đôi bề ngang; để ô Lý do ăn trọn hàng để 4 lựa chọn nằm một dòng
+   thay vì gãy 3+1 trông như xếp hỏng. */
+.edit-field-grid .reason-field-wide{grid-column:1 / -1;}
 .qty-field input{text-align:center;font-weight:800;color:${C.navy};}
 .frm input,.frm select,.act input,.act select,.act textarea,.frm-item select,.frm-item input{border:1.5px solid ${C.line};border-radius:10px;padding:10px 12px;font-size:13px;outline:0;width:100%;background:#fff;}
 .cats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
@@ -2821,7 +2895,7 @@ const CSS = `
 /* flex-shrink:0 — hộp thoại ma trận phân quyền cho .frm làm flex column có vùng cuộn;
    thiếu dòng này hàng nút bị co lại khi bảng cao. Các hộp thoại khác không đổi. */
 .frm-f{display:flex;justify-content:flex-end;gap:8px;margin-top:6px;flex-shrink:0;}
-.frm-scroll .frm-f{position:sticky;bottom:-14px;z-index:2;margin:8px -18px -14px;padding:12px 18px;background:linear-gradient(180deg,rgba(255,255,255,.92),#fff 34%);border-top:1px solid ${C.line};}
+.frm-scroll .frm-f{position:sticky;bottom:-14px;z-index:2;margin:8px -16px -14px;padding:12px 16px;background:linear-gradient(180deg,rgba(255,255,255,.92),#fff 34%);border-top:1px solid ${C.line};}
 .panel{position:fixed;top:0;right:0;height:100%;width:460px;max-width:96vw;background:#fff;z-index:41;display:flex;flex-direction:column;box-shadow:-14px 0 44px rgba(15,23,42,.25);}
 .p-h{position:relative;padding:20px;color:#fff;display:flex;flex-direction:column;gap:8px;}
 .p-code{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:24px;}
