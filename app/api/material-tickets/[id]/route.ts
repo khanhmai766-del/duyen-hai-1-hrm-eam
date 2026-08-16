@@ -333,6 +333,7 @@ async function refreshExistingDocuments(
   if (previous.bbktDocUrl && !skip.has("bbktDocUrl")) {
     const bbnt = await generateBbntDoc({
       fileBaseName: materialTicketFileBase(updated),
+      materialCategory: updated.materialCategory,
       lyDo: updated.proposalNote,
       soBBKT: updated.bbktNumber,
       soPCT: updated.pctNumber,
@@ -710,6 +711,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         after = `${pct}; ${chiHuy}; ${workStartedAt.toISOString()} → ${workEndedAt.toISOString()}; ${sccnRepresentativeName} (${sccnRepresentativePosition})`;
         const { url } = await generateBbntDoc({
           fileBaseName: materialTicketFileBase(t),
+          materialCategory: t.materialCategory,
           lyDo: t.proposalNote,
           soBBKT: t.bbktNumber,
           soPCT: pct,
@@ -1463,7 +1465,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Luồng Ứng tiếp tục xuất BBNT D-Office cùng Phiếu ĐXVT.
       const documents = {
         bbkt: await generateBbntDoc({
-          fileBaseName: materialTicketFileBase(t), lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
+          fileBaseName: materialTicketFileBase(t), materialCategory: t.materialCategory, lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,

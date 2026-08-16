@@ -39,7 +39,21 @@ export interface BbntData {
   unit?: string | null;       // tổ máy S1 | S2 | COMMON
   usedByName?: string | null; // người sử dụng vật tư (mẫu mới); thiếu thì rơi về tenVHV
   usedByPosition?: string | null;
+  materialCategory?: string | null; // loại vật tư trên phiếu — chọn mẫu biên bản
   items: BbntItem[];
+}
+
+/**
+ * Mỗi loại vật tư một mẫu BBNT ký tay riêng vì phần RUỘT khác hẳn nhau: bi nghiền than ghi
+ * dòng điện trước/sau và số thùng bi theo từng máy nghiền A–F, kèm khung dán ảnh; các loại còn
+ * lại dùng mẫu chung (mã hạng mục, nội dung thực hiện, phụ lục danh mục vật tư).
+ *
+ * Cùng bộ token nên không phải điền khác đi — chỉ đổi tệp mẫu. Nhãn loại trên PHIẾU là
+ * "Bi nghiền", nhãn trong Danh mục vật tư là "Bi Nghiền Than" — nhận cả hai.
+ */
+function bbntTemplateFileName(materialCategory?: string | null) {
+  const value = (materialCategory ?? "").trim().toLowerCase();
+  return value === "bi nghiền" || value === "bi nghiền than" ? "bbnt-template-bi.docx" : "bbnt-template.docx";
 }
 
 function joinUniq(arr: Array<string | null | undefined>) {
@@ -48,7 +62,7 @@ function joinUniq(arr: Array<string | null | undefined>) {
 
 /** Sinh file Word BBNT, upload MinIO, trả về { key, url } */
 export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: string }> {
-  const tplPath = path.join(process.cwd(), "templates", "bbnt-template.docx");
+  const tplPath = path.join(process.cwd(), "templates", bbntTemplateFileName(d.materialCategory));
   const zip = new PizZip(readFileSync(tplPath));
   const doc = new Docxtemplater(zip, {
     delimiters: { start: "{{", end: "}}" },
