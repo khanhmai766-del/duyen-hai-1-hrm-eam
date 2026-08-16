@@ -5,8 +5,11 @@ import Link from "next/link";
 import {
   Plus, Minus, X, Check, FileText, Zap, FlaskConical, ClipboardList, Package, Clock, ChevronRight,
   AlertTriangle, Ban, Download, CircleCheck, Circle, CircleDot, Loader2, Pencil, Trash2, UserCog, CalendarDays,
+  Filter, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
   useWorkflowRoles, useSaveWorkflowRoles, actionsFor,
@@ -134,8 +137,6 @@ const materialCatalogHref = (ticket: MaterialTicket, code: string) => {
   if (category) qs.set("category", category);
   return `/materials?${qs.toString()}`;
 };
-const compactSelectWidth = (label: string, minCh: number, maxCh: number) =>
-  `${Math.min(maxCh, Math.max(minCh, label.length + 3))}ch`;
 const FINISHED_STATUSES = ["HOAN_TAT", "TU_CHOI"];
 /* Số ngày phiếu đứng ở bước hiện tại = hôm nay - mốc thao tác gần nhất trên phiếu */
 const waitDaysOf = (t: MaterialTicket) => {
@@ -197,6 +198,8 @@ export default function MaterialTicketBoard({
         filter === "ALL" ? true
         : filter === "MINE" ? myTurnIds.has(t.id)
         : filter === "RUNNING" ? !FINISHED_STATUSES.includes(t.status)
+        // Tab "Hóa chất": gom cả luồng hóa chất 3 bước và phiếu NH3 khai một bước.
+        : filter === "CHEMICAL" ? normalizeText(t.materialCategory ?? "") === normalizeText("Hóa chất")
         // Tab "Thu hồi": các phiếu có vật tư thu hồi (đã xuất hoặc sẽ xuất biên bản thu hồi)
         : filter === "RECOVERY" ? Boolean(reasonRequiresRecovery(t.proposalNote) || t.recoveryDocUrl)
         : t.status === filter;
@@ -218,8 +221,7 @@ export default function MaterialTicketBoard({
       || b.createdAt.localeCompare(a.createdAt)
     );
   }, [tickets, filter, myTurnIds, materialCategoryFilter, unitFilter, typeFilter, searchText]);
-  const selectedCategoryLabel = materialCategoryFilter === "ALL" ? "Tất cả loại" : displayMaterialCategory(materialCategoryFilter);
-  const selectedUnitLabel = unitFilter === "ALL" ? "Tất cả tổ máy" : unitFilter;
+  const activeFilterCount = Number(materialCategoryFilter !== "ALL") + Number(unitFilter !== "ALL");
 
   return (
     <div className="mtw">
@@ -231,7 +233,7 @@ export default function MaterialTicketBoard({
             <Zap size={13} /> Đến lượt bạn
             <span className="mine-count">{myTurn.length}</span>
           </button>
-          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["RECOVERY", "Thu hồi"]].map(([k, l]) => (
+          {[["ALL", "Tất cả"], ["RUNNING", "Đang thực hiện"], ["HOAN_TAT", "Hoàn tất"], ["CHEMICAL", "Hóa chất"], ["RECOVERY", "Thu hồi"]].map(([k, l]) => (
             <button key={k} className={filter === k ? "on" : ""} onClick={() => setFilter(k)}>{l}</button>
           ))}
         </div>
@@ -257,28 +259,74 @@ export default function MaterialTicketBoard({
             {selectedMonthCount}
           </span>
         </label>
-        <label className="unit-filter category-filter">
-          <select
-            value={materialCategoryFilter}
-            onChange={(e) => setMaterialCategoryFilter(e.target.value)}
-            aria-label="Lọc theo loại vật tư"
-            style={{ width: compactSelectWidth(selectedCategoryLabel, 10, 19) }}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="soft"
+              size="toolbar"
+              className={`group min-w-[112px] justify-between ${activeFilterCount > 0 ? "border-sky-200 bg-sky-50 text-sky-800" : ""}`}
+            >
+              <span className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-sky-600" />
+                Bộ lọc
+                {activeFilterCount > 0 && (
+                  <span className="grid h-5 min-w-5 place-items-center rounded-full bg-navy px-1.5 text-[10px] font-bold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            sideOffset={8}
+            className="w-[min(25rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border-slate-200/90 bg-white p-0 shadow-[0_22px_55px_rgba(15,23,42,0.18)]"
           >
-            <option value="ALL">Tất cả loại</option>
-            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{displayMaterialCategory(c)}</option>)}
-          </select>
-        </label>
-        <label className="unit-filter">
-          <select
-            value={unitFilter}
-            onChange={(e) => setUnitFilter(e.target.value)}
-            aria-label="Lọc theo tổ máy"
-            style={{ width: compactSelectWidth(selectedUnitLabel, 7, 13) }}
-          >
-            <option value="ALL">Tất cả tổ máy</option>
-            {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-        </label>
+            <div className="flex items-center justify-between border-b border-sky-100 bg-[linear-gradient(135deg,#f8fbff_0%,#edf7ff_58%,#f0fdfa_100%)] px-4 py-3.5">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">Lọc danh sách</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-900">Phiếu thay thế vật tư</p>
+              </div>
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setMaterialCategoryFilter("ALL"); setUnitFilter("ALL"); }}
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-sky-700 transition hover:bg-white hover:shadow-sm"
+                >
+                  Đặt lại
+                </button>
+              )}
+            </div>
+            <div className="grid gap-3 p-4 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+                Loại vật tư
+                <select
+                  value={materialCategoryFilter}
+                  onChange={(e) => setMaterialCategoryFilter(e.target.value)}
+                  aria-label="Lọc theo loại vật tư"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="ALL">Tất cả loại</option>
+                  {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{displayMaterialCategory(c)}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+                Tổ máy
+                <select
+                  value={unitFilter}
+                  onChange={(e) => setUnitFilter(e.target.value)}
+                  aria-label="Lọc theo tổ máy"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                >
+                  <option value="ALL">Tất cả tổ máy</option>
+                  {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </label>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="list">
@@ -1315,30 +1363,33 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
 
 /**
  * LÝ DO ĐỀ XUẤT — chọn từ danh sách thay vì gõ tự do, để còn thống kê được vì sao phải
- * đề xuất. "Khác" mở ô nhập để nêu rõ, lưu dưới dạng "Khác: <nội dung>" nên phiếu cũ
- * (ghi chú gõ tay) vẫn đọc được bình thường.
+ * đề xuất. Cả bốn lựa chọn đều mở ô nhập chi tiết và lưu dưới dạng
+ * "<Lựa chọn>: <nội dung>"; phiếu cũ chỉ lưu tên lựa chọn vẫn đọc được bình thường.
  */
 const OTHER_REASON = TICKET_REASON_OTHER;
-const OTHER_REASON_PREFIX = `${OTHER_REASON}: `;
+const REASON_DETAIL_SEPARATOR = ": ";
 
 /** Tách chuỗi đã lưu thành (lựa chọn, nội dung nêu rõ). */
 function splitReason(value?: string | null): { choice: string; detail: string } {
   const raw = (value ?? "").trim();
   if (!raw) return { choice: "", detail: "" };
-  if (raw.startsWith(OTHER_REASON_PREFIX)) return { choice: OTHER_REASON, detail: raw.slice(OTHER_REASON_PREFIX.length) };
-  const known = TICKET_REASONS.find((item) => item === raw);
+  for (const item of TICKET_REASONS) {
+    if (raw === item) return { choice: item, detail: "" };
+    const prefix = `${item}:`;
+    if (raw.startsWith(prefix)) return { choice: item, detail: raw.slice(prefix.length).trimStart() };
+  }
   // Phiếu cũ gõ tay: coi như "Khác" và giữ nguyên chữ đã nhập, không làm mất dữ liệu.
-  return known ? { choice: known, detail: "" } : { choice: OTHER_REASON, detail: raw };
+  return { choice: OTHER_REASON, detail: raw };
 }
 
 /** Ghép ngược lại để gửi lên máy chủ. */
 function joinReason(choice: string, detail: string) {
   if (!choice) return "";
-  if (choice !== OTHER_REASON) return choice;
-  // Chọn "Khác" mà chưa nêu rõ thì coi như CHƯA ĐIỀN — các nơi đang kiểm `note.trim()` tự
-  // khoá nút, không phải thêm điều kiện rời ở từng hộp thoại.
   const value = detail.trim();
-  return value ? `${OTHER_REASON_PREFIX}${value}` : "";
+  // Chọn "Khác" mà chưa nêu rõ thì coi như CHƯA ĐIỀN; ba lý do đã có nghĩa cụ thể vẫn
+  // hợp lệ khi chưa bổ sung diễn giải.
+  if (choice === OTHER_REASON && !value) return "";
+  return value ? `${choice}${REASON_DETAIL_SEPARATOR}${value}` : choice;
 }
 
 /** Ô chọn lý do dùng chung cho hộp Tạo phiếu và hộp Sửa phiếu. */
@@ -1349,16 +1400,27 @@ function ReasonPicker({
     <>
       <div className="reason-chips">
         {TICKET_REASONS.map((item) => (
-          <button key={item} type="button" className={choice === item ? "on" : ""} onClick={() => onChoice(item)}>{item}</button>
+          <button
+            key={item}
+            type="button"
+            className={choice === item ? "on" : ""}
+            onClick={() => {
+              if (choice !== item) onDetail("");
+              onChoice(item);
+            }}
+          >
+            {item}
+          </button>
         ))}
       </div>
-      {choice === OTHER_REASON && (
+      {choice && (
         <input
+          key={choice}
           autoFocus
           className="reason-detail"
           value={detail}
           onChange={(e) => onDetail(e.target.value)}
-          placeholder="Nêu rõ lý do đề xuất…"
+          placeholder={`Nhập nội dung chi tiết cho "${choice}"…`}
         />
       )}
     </>
@@ -2656,9 +2718,6 @@ const CSS = `
 .month-filter>svg{flex:0 0 auto;color:${C.accent};}
 .month-filter select{height:30px;min-width:114px;border:0;background:transparent;padding:0 18px 0 7px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;}
 .month-count{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;border-radius:8px;background:#e8f1ff;color:#1d4ed8;font-size:11.5px;font-weight:900;font-variant-numeric:tabular-nums;}
-.unit-filter{display:inline-flex;align-items:center;flex:0 0 auto;height:38px;border:1px solid ${C.line};background:#fff;border-radius:11px;padding:3px 5px;box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.unit-filter select{height:30px;min-width:0;border:0;background:#fff;padding:0 20px 0 6px;color:${C.navy};font-size:12.5px;font-weight:800;outline:0;cursor:pointer;box-sizing:content-box;}
-.category-filter select{min-width:0;}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
 .filters{display:flex;gap:5px;flex:0 0 auto;background:#fff;border:1px solid ${C.line};border-radius:11px;padding:3px;}
 .filters button{border:0;background:transparent;font-size:12.5px;font-weight:600;color:#64748b;padding:7px 12px;border-radius:8px;cursor:pointer;}
@@ -3062,5 +3121,5 @@ const CSS = `
 .logrow em{font-style:normal;color:${C.muted};white-space:nowrap;}
 @media(max-width:640px){.panel{width:100%;}.detail-inline{min-width:1040px;padding:10px 12px;}.row{min-width:1040px;grid-template-columns:64px minmax(108px,.9fr) minmax(108px,.86fr) minmax(188px,1.36fr) minmax(120px,.95fr) 82px minmax(168px,1fr) 66px 70px;padding:11px 12px;font-size:12.5px;}.tag{padding:4px 7px}.nophieu{padding:3px 6px}.st{padding:5px 8px}.material-cards{grid-template-columns:1fr;}.edit-field-grid,.bbkt-grid,.confirm-field-row,.stats-issue-grid,.accept-two-grid,.use-field-grid,.recovery-quantity-row,.receive-field-grid,.receive-field-grid.advance-receive-fields,.vhv-receive-grid,.review-receive-row,.review-use-grid,.review-recovery-grid,.review-accept-grid{grid-template-columns:1fr;gap:8px;}.erp-readonly-row{grid-template-columns:minmax(110px,.8fr) minmax(180px,1.5fr) minmax(110px,.7fr);}.review-receive-toggle{width:100%;}.review-receive-toggle button{flex:1;}.qty-field input{padding-left:8px;padding-right:8px;}}
 @media(max-width:640px){.ticket-unit-field{grid-template-columns:58px minmax(0,1fr);gap:8px;}.ticket-unit-options{max-width:none;}.ticket-unit-options button{padding-left:6px;padding-right:6px;}.ticket-category-options{grid-template-columns:repeat(3,minmax(0,1fr));}}
-@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter,.unit-filter{align-self:flex-start;max-width:100%;}.month-filter select,.unit-filter select,.category-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
+@media(max-width:760px){.top-tools{align-items:stretch;flex-direction:column;}.turn{max-width:100%;min-width:0;}.turn-spacer{display:none;}.month-filter{align-self:flex-start;max-width:100%;}.month-filter select{max-width:calc(100vw - 108px);}.filters{align-self:flex-start;max-width:100%;overflow-x:auto;}.filters button{white-space:nowrap;}.act-title-row{align-items:stretch;flex-direction:column;gap:8px;}.receive-location{width:100%;align-items:flex-start;flex-direction:column;gap:3px;}.flow-toggle,.receive-source-toggle{width:100%;}.flow-toggle button,.receive-source-toggle button{flex:1;min-width:0;padding:0 8px;}.act-field-row,.advance-item-row{grid-template-columns:1fr;gap:6px;}.replacement-entry-row{grid-template-columns:24px minmax(0,1fr) 120px 30px;}.activity-drawer{width:86%;}}
 `;

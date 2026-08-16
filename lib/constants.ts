@@ -394,8 +394,9 @@ export const TICKET_REASON_RENEWAL = "Thay mới";
  */
 export function reasonRequiresRecovery(proposalNote?: string | null): boolean {
   const reason = normalizeText(proposalNote ?? "").trim();
-  return reason === normalizeText(TICKET_REASON_REPLACEMENT)
-    || reason === normalizeText(TICKET_REASON_RENEWAL);
+  const replacementReasons = [TICKET_REASON_REPLACEMENT, TICKET_REASON_RENEWAL]
+    .map((item) => normalizeText(item));
+  return replacementReasons.some((item) => reason === item || reason.startsWith(`${item}:`));
 }
 
 /** Loại vật tư của PHIẾU đi theo luồng hóa chất 3 bước. */
