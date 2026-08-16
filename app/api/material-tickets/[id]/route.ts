@@ -463,14 +463,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       } = { unit, assignedPosition, materialCategory, bbktNumber: bbkt || null };
       let editedItemData: {
         materialId: string;
-        erpCode: string;
+        erpCode: string | null;
         quantity: number;
         deviceSeq: string | null;
         replacementPointKeys: string[];
         deviceNameManual: string | null;
       } | null = null;
 
-      if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
+      if (["CHUA_CHON", "DE_XUAT", "UNG", "SU_DUNG_HIEN_CO", CHEMICAL_TICKET_TYPE, "GHI_NHAN"].includes(t.type)) {
         const proposalNote = String(body.note || "").trim();
         const materialId = String(body.materialId || "").trim();
         const erpCode = String(body.erpCode || "").trim();
@@ -485,7 +485,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         ));
         if (!proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
         if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
-        if (!erpCode) return fail("Vui lòng chọn mã vật tư");
         if (!Number.isFinite(proposedQuantity) || proposedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
         if (!requestedReplacementKeys.length) return fail("Vui lòng chọn ít nhất một thiết bị thay thế");
         if (requestedReplacementKeys.length > 50) return fail("Mỗi phiếu được chọn tối đa 50 thiết bị thay thế");
@@ -498,7 +497,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const expectedCategory = TICKET_TO_MATERIAL_CATEGORY[materialCategory] ?? materialCategory;
         if (material.category !== expectedCategory) return fail("Vật tư không thuộc loại vật tư đã chọn");
         const allowedCodes = material.erpCodes.length ? material.erpCodes : [material.code];
-        if (!allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
+        if (erpCode && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         const replacementPoints = await prisma.materialReplacement.findMany({
           where: { materialId },
           select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
@@ -523,7 +522,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const primaryReplacementKey = requestedReplacementKeys[0];
         editedItemData = {
           materialId,
-          erpCode,
+          erpCode: erpCode || null,
           quantity: proposedQuantity,
           deviceSeq: primaryReplacementKey.startsWith("manual:") ? null : primaryReplacementPoint.deviceSeq,
           replacementPointKeys: requestedReplacementKeys,
@@ -548,7 +547,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           where: { id: t.id },
           data,
         });
-        if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
+        if (["CHUA_CHON", "DE_XUAT", "UNG", "SU_DUNG_HIEN_CO", CHEMICAL_TICKET_TYPE, "GHI_NHAN"].includes(t.type)) {
           if (!editedItemData) throw fail("Thiếu thông tin vật tư đề xuất");
           await tx.materialTicketItem.deleteMany({ where: { ticketId: t.id } });
           await tx.materialTicketItem.create({

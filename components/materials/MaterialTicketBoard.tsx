@@ -1043,6 +1043,8 @@ export function WorkflowRolesDialog({ onClose }: { onClose: () => void }) {
 
 /* ================= sửa thông tin phiếu ================= */
 function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) {
+  const canEditProposalDetails = ["CHUA_CHON", "DE_XUAT", "UNG", "SU_DUNG_HIEN_CO", CHEMICAL_TICKET_TYPE, SINGLE_STEP_TICKET_TYPE].includes(t.type);
+  const canEditErpCode = ["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type);
   const [unit, setUnit] = useState(t.unit);
   const [bbkt, setBbkt] = useState(t.bbktNumber ?? "");
   const [assigned, setAssigned] = useState(t.assignedPosition);
@@ -1058,6 +1060,8 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     const storedKeys = t.items[0]?.replacementPointKeys ?? [];
     return storedKeys.length ? storedKeys : t.items[0]?.deviceSeq ? [t.items[0].deviceSeq] : [];
   });
+  const [replacementSystems, setReplacementSystems] = useState<string[]>([]);
+  const initialSystemsApplied = React.useRef(false);
   const { data: opts } = useTicketOptions(true);
   const act = useTicketAction(t.id);
   const materialCategoryLabel = category ? TICKET_TO_MATERIAL_CATEGORY[category] ?? category : "";
@@ -1074,9 +1078,19 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     });
   }, [assigned, materialCategoryLabel, opts?.materials, unit]);
   const selectedMaterial = materialCards.find((m) => m.id === selectedMaterialId) ?? null;
-  const selectedDeviceOptions = useMemo(
+  const availableDeviceOptions = useMemo(
     () => (selectedMaterial?.devices ?? []).filter((device) => positionsMatch(device.managingPosition, assigned)),
     [assigned, selectedMaterial]
+  );
+  const replacementSystemOptions = useMemo(
+    () => Array.from(new Set(availableDeviceOptions.map((device) => device.system?.trim()).filter(Boolean) as string[])),
+    [availableDeviceOptions]
+  );
+  const selectedDeviceOptions = useMemo(
+    () => replacementSystems.length
+      ? availableDeviceOptions.filter((device) => replacementSystems.includes(device.system?.trim() ?? ""))
+      : availableDeviceOptions,
+    [availableDeviceOptions, replacementSystems]
   );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
@@ -1088,21 +1102,23 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
   );
 
   React.useEffect(() => {
-    if (!['DE_XUAT', 'UNG'].includes(t.type)) return;
+    if (!canEditProposalDetails || !opts) return;
     if (!materialCards.length) {
       if (selectedMaterialId) setSelectedMaterialId("");
       if (selectedErpCode) setSelectedErpCode("");
       if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
+      if (replacementSystems.length) setReplacementSystems([]);
       return;
     }
     if (!materialCards.some((m) => m.id === selectedMaterialId)) {
       setSelectedMaterialId(materialCards[0].id);
       setReplacementDeviceSeqs([]);
+      setReplacementSystems([]);
     }
-  }, [materialCards, selectedMaterialId, selectedErpCode, replacementDeviceSeqs.length, t.type]);
+  }, [canEditProposalDetails, materialCards, opts, replacementDeviceSeqs.length, replacementSystems.length, selectedErpCode, selectedMaterialId]);
 
   React.useEffect(() => {
-    if (!['DE_XUAT', 'UNG'].includes(t.type)) return;
+    if (!canEditErpCode || !opts) return;
     if (!selectedErpOptions.length) {
       if (selectedErpCode) setSelectedErpCode("");
       return;
@@ -1110,26 +1126,47 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
     if (!selectedErpOptions.some((item) => item.code === selectedErpCode)) {
       setSelectedErpCode(selectedErpOptions[0].code);
     }
-  }, [selectedErpCode, selectedErpOptions, t.type]);
+  }, [canEditErpCode, opts, selectedErpCode, selectedErpOptions]);
 
   React.useEffect(() => {
-    if (!["DE_XUAT", "UNG"].includes(t.type)) return;
+    if (initialSystemsApplied.current || !availableDeviceOptions.length) return;
+    initialSystemsApplied.current = true;
+    const selectedKeys = new Set(replacementDeviceSeqs);
+    setReplacementSystems(Array.from(new Set(
+      availableDeviceOptions
+        .filter((device) => selectedKeys.has(device.seq))
+        .map((device) => device.system?.trim())
+        .filter(Boolean) as string[]
+    )));
+  }, [availableDeviceOptions, replacementDeviceSeqs]);
+
+  React.useEffect(() => {
+    const validSystems = new Set(replacementSystemOptions);
+    setReplacementSystems((current) => {
+      const next = current.filter((system) => validSystems.has(system));
+      return next.length === current.length ? current : next;
+    });
+  }, [replacementSystemOptions]);
+
+  React.useEffect(() => {
+    if (!canEditProposalDetails || !opts) return;
     if (!selectedMaterial) {
       if (replacementDeviceSeqs.length) setReplacementDeviceSeqs([]);
       return;
     }
-    const validKeys = new Set(selectedDeviceOptions.map((device) => device.seq));
+    const validKeys = new Set(availableDeviceOptions.map((device) => device.seq));
     setReplacementDeviceSeqs((current) => {
       const next = current.filter((key) => validKeys.has(key));
       return next.length === current.length ? current : next;
     });
-  }, [replacementDeviceSeqs.length, selectedDeviceOptions, selectedMaterial, t.type]);
+  }, [availableDeviceOptions, canEditProposalDetails, opts, replacementDeviceSeqs.length, selectedMaterial]);
 
   function selectUnit(nextUnit: string) {
     setUnit(nextUnit);
     setSelectedMaterialId("");
     setSelectedErpCode("");
     setReplacementDeviceSeqs([]);
+    setReplacementSystems([]);
   }
 
   async function submit() {
@@ -1165,7 +1202,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           </div>
 
           <label>Cương vị được giao thực hiện *</label>
-          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}>
+          <select value={assigned} onChange={(e) => { setAssigned(e.target.value); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>
             <option value="">— Chọn cương vị (chỉ cương vị này thấy phiếu) —</option>
             {positionOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -1173,11 +1210,11 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
           <label>Loại vật tư *</label>
           <div className="cats ticket-category-options">
             {CATEGORIES.map((c) => (
-              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}>{displayMaterialCategory(c)}</button>
+              <button key={c} type="button" className={category === c ? "on" : ""} onClick={() => { setCategory(c); setSelectedMaterialId(""); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}>{displayMaterialCategory(c)}</button>
             ))}
           </div>
 
-          {["DE_XUAT", "UNG"].includes(t.type) && (
+          {canEditProposalDetails && (
             <>
               <label>Tên vật tư</label>
               <div className="material-cards">
@@ -1191,7 +1228,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                       key={m.id}
                       type="button"
                       className={selectedMaterialId === m.id ? "on" : ""}
-                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); }}
+                      onClick={() => { setSelectedMaterialId(m.id); setSelectedErpCode(""); setReplacementDeviceSeqs([]); setReplacementSystems([]); }}
                       title={`${m.code} - ${m.name}`}
                     >
                       <span>{m.name}</span>
@@ -1206,56 +1243,56 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 )}
                 </div>
 
-              <label>Mã vật tư *</label>
-              <select value={selectedErpCode} disabled={!selectedMaterialId} onChange={(e) => setSelectedErpCode(e.target.value)}>
-                <option value="">{selectedMaterialId ? "— Chọn mã vật tư —" : "— Chọn tên vật tư trước —"}</option>
-                {selectedErpOptions.map((item) => (
-                  <option key={item.code} value={item.code}>{item.code} · Số liệu ERP: {item.erpStock}</option>
-                ))}
-              </select>
+              {canEditErpCode && (
+                <>
+                  <label>Mã vật tư *</label>
+                  <select value={selectedErpCode} disabled={!selectedMaterialId} onChange={(e) => setSelectedErpCode(e.target.value)}>
+                    <option value="">{selectedMaterialId ? "— Chọn mã vật tư —" : "— Chọn tên vật tư trước —"}</option>
+                    {selectedErpOptions.map((item) => (
+                      <option key={item.code} value={item.code}>{item.code} · Số liệu ERP: {item.erpStock}</option>
+                    ))}
+                  </select>
+                </>
+              )}
 
-              <div className="edit-field-grid">
+              <div className="reason-grid">
                 <div className="field">
-                  <label>Số lượng đề xuất *</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={proposedQuantity}
-                    onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))}
-                  />
+                  <label>Lý do *</label>
+                  <ReasonPicker choice={reasonChoice} detail={reasonDetail} onChoice={setReasonChoice} onDetail={setReasonDetail} />
                 </div>
-                <div className="field">
-                  <label>Thiết bị thay thế *</label>
-                  <DeviceMultiSelect
-                    options={selectedDeviceOptions}
-                    allOptions={selectedDeviceOptions}
-                    value={replacementDeviceSeqs}
-                    onChange={setReplacementDeviceSeqs}
-                    disabled={!selectedMaterialId || !selectedDeviceOptions.length}
-                  />
+                <div className="field qty-field">
+                  <label>Số lượng đề xuất *</label>
+                  <input type="number" min={1} value={proposedQuantity} onChange={(e) => setProposedQuantity(Math.max(1, Number(e.target.value) || 1))} />
                 </div>
               </div>
+              <label>Thuộc hệ thống</label>
+              <SystemMultiSelect
+                options={replacementSystemOptions}
+                value={replacementSystems}
+                onChange={setReplacementSystems}
+                disabled={!selectedMaterialId || !replacementSystemOptions.length}
+                placeholder={!selectedMaterialId
+                  ? "— Chọn tên vật tư trước —"
+                  : replacementSystemOptions.length
+                    ? "— Chọn một hoặc nhiều hệ thống —"
+                    : "— Chưa khai báo hệ thống / thiết bị —"}
+              />
+              <label>Thiết bị thay thế *</label>
+              <DeviceMultiSelect
+                options={selectedDeviceOptions}
+                allOptions={availableDeviceOptions}
+                value={replacementDeviceSeqs}
+                onChange={setReplacementDeviceSeqs}
+                disabled={!selectedMaterialId || !availableDeviceOptions.length}
+              />
               {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
 
-          {["DE_XUAT", "UNG"].includes(t.type) ? (
-            <div className="edit-field-grid">
-              <div className="field reason-field-wide">
-                <label>Lý do *</label>
-                <ReasonPicker choice={reasonChoice} detail={reasonDetail} onChoice={setReasonChoice} onDetail={setReasonDetail} />
-              </div>
-              <div className="field">
-                <label>Số biên bản kiểm tra (nếu có)</label>
-                <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
-              </div>
-            </div>
-          ) : (
-            <div className="field">
-              <label>Số biên bản kiểm tra (nếu có)</label>
-              <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
-            </div>
-          )}
+          <div className="field">
+            <label>Số biên bản kiểm tra (nếu có)</label>
+            <input value={bbkt} onChange={(e) => setBbkt(e.target.value)} placeholder="Nhập số biên bản kiểm tra" />
+          </div>
 
           <div className="frm-f">
             <button className="btn ghost" onClick={onClose}>Hủy</button>
@@ -1264,7 +1301,7 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 act.isPending ||
                 !assigned ||
                 !category ||
-                (["DE_XUAT", "UNG"].includes(t.type) && (!selectedMaterialId || !selectedErpCode || proposedQuantity <= 0 || !note.trim() || replacementDeviceSeqs.length === 0))
+                (canEditProposalDetails && (!selectedMaterialId || (canEditErpCode && !selectedErpCode) || proposedQuantity <= 0 || !note.trim() || replacementDeviceSeqs.length === 0))
               }
               onClick={submit}>
               {act.isPending ? <Loader2 className="spin" size={14} /> : <Check size={14} />} Lưu thay đổi
