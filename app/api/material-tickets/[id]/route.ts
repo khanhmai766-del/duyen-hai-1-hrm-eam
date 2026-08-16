@@ -8,6 +8,7 @@ import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
+import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
 import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, reasonRequiresRecovery, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
@@ -158,7 +159,7 @@ async function buildBbntDoDocument(
     bbktNumber: t.bbktNumber,
     pctNumber: overrides?.pctNumber ?? t.pctNumber,
     proposalNumber: t.proposalNumber,
-    deliveryNoteNumber: overrides?.deliveryNoteNumber ?? t.deliveryNoteNumber,
+    deliveryNoteNumber: overrides?.deliveryNoteNumber ?? (await deliveryNoteForDocuments(t)) ?? t.deliveryNoteNumber,
     sccnRepresentativeName: selectedSccnRepresentative?.name ?? selectedSccnUser?.name ?? null,
     sccnRepresentativePosition: selectedSccnRepresentative?.position ?? selectedSccnUser?.position ?? null,
     quanDocName: defaultQuanDoc?.name ?? null,
@@ -266,6 +267,17 @@ async function buildProposalDocument(
 }
 
 /** Xuất Biên bản vật tư thu hồi (QLVT.06) đã điền dữ liệu — thay file trắng cũ. */
+/**
+ * Số phiếu giao hàng để in lên biên bản. Phần vật tư thực dùng có thể lấy từ NHIỀU lô (ví dụ
+ * dùng 7 lít = 5 lít phiếu cũ + 2 lít phiếu mới), nên in đủ cả hai kèm số lượng thay vì chỉ số
+ * phiếu trên đầu phiếu. Phiếu cũ chưa có sổ lô thì rơi về số phiếu đã lưu như trước.
+ */
+async function deliveryNoteForDocuments(t: FullTicket) {
+  const used = await usedLotsOfTicket(prisma, t.id);
+  const unit = t.items[0]?.material.unit ?? null;
+  return deliveryNoteSummary(used, unit) || t.deliveryNoteNumber || t.receivedMethod || undefined;
+}
+
 async function buildRecoveryDocument(
   t: FullTicket,
   overrides?: {
@@ -334,6 +346,7 @@ async function refreshExistingDocuments(
     const bbnt = await generateBbntDoc({
       fileBaseName: materialTicketFileBase(updated),
       materialCategory: updated.materialCategory,
+      soGiaoHang: await deliveryNoteForDocuments(updated),
       lyDo: updated.proposalNote,
       soBBKT: updated.bbktNumber,
       soPCT: updated.pctNumber,
@@ -628,7 +641,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (item.material.quantity + delta < 0 || erpRows[0].erpStock + erpDelta < 0) return fail("Không thể điều chỉnh vì số lượng hiện có hoặc ERP sẽ âm");
         before = `Nhận ${t.receivedQuantity}, phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}`; after = `Nhận ${value}, phiếu giao hàng ${method}`;
         up = await prisma.$transaction(async (tx) => {
-          if (delta) await tx.material.update({ where: { id: item.materialId }, data: { quantity: { increment: delta } } });
+          if (delta || method !== (t.deliveryNoteNumber ?? "")) {
+            try {
+              await receiveIntoLot(tx, {
+                materialCode: item.material.code, quantity: delta, ticketId: t.id,
+                deliveryNote: method, erpCode,
+              });
+            } catch (error) {
+              throw fail((error as Error).message);
+            }
+            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material));
+          }
           if (erpDelta) await tx.$executeRaw`UPDATE "ErpMaterial" SET "erpStock" = "erpStock" + ${erpDelta}, "updatedAt" = NOW() WHERE "code" = ${erpCode}`;
           return tx.materialTicket.update({ where: { id: t.id }, data: { receivedQuantity: value, receivedMethod: method || null, deliveryNoteNumber: method || null, receiptSource, remainingQuantity: value - (t.usedQuantity ?? 0) }, include: ITEM_INCLUDE });
         });
@@ -664,7 +687,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         before = `Dùng ${t.usedQuantity}; thu hồi ${t.recoveryRequired ? `${t.recoveryQuantity ?? 0}${t.recoveryReturnedAt ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         after = `Dùng ${value}; thu hồi ${recoveryRequired ? `${recoveryQuantity}${recoveryReturned ? " (đã trả)" : " (chưa trả)"}` : "không"}`;
         up = await prisma.$transaction(async (tx) => {
-          if (delta) await tx.material.update({ where: { id: item.materialId }, data: { quantity: { decrement: delta } } });
+          if (delta) {
+            // Chia lại từ đầu theo số dùng mới: trả hết phần cũ về lô rồi cấp lại, không cộng dồn.
+            try {
+              await consumeStock(tx, { materialCode: item.material.code, ticketId: t.id, quantity: value });
+            } catch (error) {
+              throw fail((error as Error).message);
+            }
+            await syncMaterialQuantity(tx, item.material.code, sharedCodesOf(item.material));
+          }
           return tx.materialTicket.update({
             where: { id: t.id },
             data: {
@@ -712,6 +743,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const { url } = await generateBbntDoc({
           fileBaseName: materialTicketFileBase(t),
           materialCategory: t.materialCategory,
+          soGiaoHang: await deliveryNoteForDocuments(t),
           lyDo: t.proposalNote,
           soBBKT: t.bbktNumber,
           soPCT: pct,
@@ -1023,11 +1055,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           },
         });
         if (claimed.count === 0) return null;
-        await tx.$executeRaw`
-          UPDATE "Material"
-          SET "quantity" = "quantity" + ${quantity}
-          WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
-        `;
+        // Lô của phiếu Ứng: tạo trước, số phiếu giao hàng điền sau ở bước Thống kê xác nhận.
+        await receiveIntoLot(tx, {
+          materialCode: item.material.code,
+          quantity,
+          ticketId: t.id,
+          erpCode: item.erpCode,
+        });
+        await syncMaterialQuantity(tx, item.material.code, sharedCodes);
         return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
@@ -1103,7 +1138,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             workStartedAt: t.workStartedAt ?? undefined,
             workEndedAt: t.workEndedAt ?? undefined,
             receivedQuantity: t.receivedQuantity ?? t.vhvReceivedQuantity ?? undefined,
-            deliveryNoteNumber: t.deliveryNoteNumber ?? t.receivedMethod ?? undefined,
+            deliveryNoteNumber: await deliveryNoteForDocuments(t),
             itemOverride,
             sccnRepresentative,
           })
@@ -1309,13 +1344,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         : receivedQuantity;
       if (before + materialIncrement < 0) return fail("Số lượng xác nhận làm Hiện có bị âm");
       const up = await prisma.$transaction(async (tx) => {
-        const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
-        const sharedQuantity = before + materialIncrement;
-        await tx.$executeRaw`
-          UPDATE "Material"
-          SET "quantity" = ${sharedQuantity}
-          WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
-        `;
+        const sharedCodes = sharedCodesOf(item.material);
+        // Vào lô mang SỐ PHIẾU GIAO HÀNG vừa nhập; luồng Ứng đã tạo lô ở bước VHV lãnh nên
+        // ở đây chỉ cộng phần chênh và điền số phiếu vào đúng lô đó.
+        await receiveIntoLot(tx, {
+          materialCode: item.material.code,
+          quantity: materialIncrement,
+          ticketId: t.id,
+          deliveryNote: receivedMethod,
+          erpCode,
+        });
+        await syncMaterialQuantity(tx, item.material.code, sharedCodes);
         if (receiptSource === "ERP") await tx.$executeRaw`
           UPDATE "ErpMaterial" SET "erpStock" = ${erpAfter}, "updatedAt" = NOW() WHERE "code" = ${erpCode}
         `;
@@ -1389,15 +1428,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail(`Số lượng vật tư sử dụng đã nhập vượt số lượng hiện có. ${mat.name} hiện còn ${mat.quantity}; vui lòng nhập lại số lượng.`);
       }
       const newQty = mat.quantity - usedQuantity;
+      // Người lập biên bản có thể tự chọn lấy bao nhiêu từ từng phiếu giao hàng; bỏ trống thì
+      // chia FIFO — dọn hết lô cũ trước rồi mới ăn sang lô mới.
+      const requestedAllocation = Array.isArray(body.lotAllocation)
+        ? (body.lotAllocation as Array<{ lotId?: unknown; quantity?: unknown }>)
+            .map((row) => ({ lotId: String(row?.lotId ?? ""), quantity: Math.trunc(Number(row?.quantity ?? 0)) }))
+            .filter((row) => row.lotId && row.quantity > 0)
+        : undefined;
       const up = await prisma.$transaction(async (tx) => {
-        if (newQty !== mat.quantity) {
-          const sharedCodes = mat.erpCodes.length ? mat.erpCodes : [mat.code];
-          await tx.$executeRaw`
-            UPDATE "Material"
-            SET "quantity" = ${newQty}
-            WHERE "code" = ANY(${sharedCodes}::text[]) OR "erpCodes" && ${sharedCodes}::text[]
-          `;
+        try {
+          await consumeStock(tx, {
+            materialCode: mat.code,
+            ticketId: t.id,
+            quantity: usedQuantity,
+            allocation: requestedAllocation,
+          });
+        } catch (error) {
+          throw fail((error as Error).message);
         }
+        await syncMaterialQuantity(tx, mat.code, sharedCodesOf(mat));
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
@@ -1465,7 +1514,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Luồng Ứng tiếp tục xuất BBNT D-Office cùng Phiếu ĐXVT.
       const documents = {
         bbkt: await generateBbntDoc({
-          fileBaseName: materialTicketFileBase(t), materialCategory: t.materialCategory, lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
+          fileBaseName: materialTicketFileBase(t), materialCategory: t.materialCategory, soGiaoHang: await deliveryNoteForDocuments(t), lyDo: t.proposalNote, soBBKT: bbkt || t.bbktNumber, soPCT: pct, noiDung: note,
           thoiGianBatDau: workStartedAt, thoiGianKetThuc: workEndedAt,
           tenChiHuy: chiHuy, tenTruongCa: user.name ?? "",
           tenVHV: t.proposedByName, chucVuVHV: t.proposedByPosition,
@@ -1477,7 +1526,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             workStartedAt,
             workEndedAt,
             receivedQuantity: t.receivedQuantity ?? t.vhvReceivedQuantity ?? undefined,
-            deliveryNoteNumber: t.deliveryNoteNumber ?? t.receivedMethod ?? undefined,
+            deliveryNoteNumber: await deliveryNoteForDocuments(t),
             itemOverride,
           }),
         // Mọi luồng có lý do Thay thế/Thay mới đều xuất BBTHVT đồng thời với BBNT ký tay.

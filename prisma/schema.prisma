@@ -1296,6 +1296,53 @@ model BgtsTurbineShutdownRow {
 }
 
 // Phiếu thay thế vật tư (2 luồng: Đề xuất chuẩn & Ứng xử lý gấp).
+// LÔ TỒN KHO THEO SỐ PHIẾU GIAO HÀNG.
+//
+// Trước đây "Hiện có" chỉ là MỘT CON SỐ trên Material: lãnh về thì cộng, dùng thì trừ, nên
+// không biết phần còn lại thuộc phiếu giao hàng nào — trong khi biên bản nghiệm thu phải dẫn
+// đúng số phiếu của lô đã dùng. Mỗi lần lãnh về nay là một lô; dùng thì trừ LÔ CŨ TRƯỚC
+// (FIFO) để dọn hết tồn của phiếu cũ rồi mới ăn sang phiếu mới.
+//
+// KHOÁ LÀ MÃ VẬT TƯ (`materialCode`), KHÔNG phải id: một mã có tới ba dòng Material (S1/S2/
+// COMMON) nhưng dùng CHUNG một kho — câu lệnh cộng/trừ tồn sẵn có cũng đang ghi đồng loạt theo
+// mã. Tách lô theo tổ máy sẽ chẻ đôi một kho có thật.
+//
+// `Material.quantity` GIỮ LẠI làm tổng các lô còn lại (tính lại sau mỗi lần ghi), để mọi màn hình
+// và báo cáo đang đọc cột đó không phải sửa.
+model MaterialStockLot {
+  id           String    @id @default(cuid())
+  materialCode String // = Material.code, kho dùng chung cho cả S1/S2/COMMON
+  deliveryNote String? // số phiếu giao hàng; null = tồn đầu kỳ chưa rõ phiếu
+  erpCode      String? // mã vật tư ERP đã lãnh, in kèm trên biên bản
+  // null = tồn đầu kỳ: xếp ĐẦU hàng đợi FIFO để dùng hết trước các lô có phiếu.
+  receivedAt   DateTime?
+  quantityIn   Int // số lãnh về ban đầu
+  quantityLeft Int // còn lại sau khi trừ các lần sử dụng
+  ticketId     String? // phiếu đã lãnh lô này về; mỗi phiếu một lô
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  usages MaterialLotUsage[]
+
+  @@index([materialCode, quantityLeft])
+  @@index([ticketId])
+}
+
+
+model MaterialLotUsage {
+  id        String   @id @default(cuid())
+  lotId     String
+  ticketId  String
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  lot MaterialStockLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([lotId])
+}
+
 model MaterialTicket {
   id             String @id @default(cuid())
   sequenceMonth  String // YYYY-MM theo giờ Việt Nam; mỗi tháng có dãy STT riêng

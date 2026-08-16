@@ -40,6 +40,7 @@ export interface BbntData {
   usedByName?: string | null; // người sử dụng vật tư (mẫu mới); thiếu thì rơi về tenVHV
   usedByPosition?: string | null;
   materialCategory?: string | null; // loại vật tư trên phiếu — chọn mẫu biên bản
+  soGiaoHang?: string | null; // số phiếu giao hàng của các lô đã dùng — token {{soGiaoHang}}
   items: BbntItem[];
 }
 
@@ -102,6 +103,8 @@ export async function generateBbntDoc(d: BbntData): Promise<{ key: string; url: 
     deviceNameManual: joinUniq(d.items.map((i) => i.deviceName)),
     usedByName: d.usedByName || d.tenVHV || "",
     usedByPosition: d.usedByPosition || d.chucVuVHV || "",
+    // Mẫu hiện chưa có ô này; điền sẵn để khi thêm {{soGiaoHang}} vào Word là chạy, không phải sửa mã.
+    soGiaoHang: d.soGiaoHang || "",
   });
 
   const buf = doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" }) as Buffer;

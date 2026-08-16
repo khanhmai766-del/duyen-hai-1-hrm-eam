@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Paperclip, Boxes, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Paperclip, Boxes, Layers, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -26,7 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
+import { useMaterials, useUpsertMaterial, useDeleteMaterial, useDeleteMaterials, useMaterialStockLots, type MaterialWithDevices, type MaterialReplacementInput } from "@/hooks/useMaterials";
 import { useErpMaterials } from "@/hooks/useErpMaterials";
 import { ReplacementDrawer } from "@/components/materials/replacement-drawer";
 import { ReplacementPointsEditor } from "@/components/materials/replacement-points-editor";
@@ -120,6 +120,7 @@ function MaterialsPageContent() {
   const [isNew, setIsNew] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = React.useState(false);
+  const [lotBoardOpen, setLotBoardOpen] = React.useState(false);
   const [replMaterial, setReplMaterial] = React.useState<Material | null>(null);
   const [trackingMaterial, setTrackingMaterial] = React.useState<MaterialWithDevices | null>(null);
   const [trackingRows, setTrackingRows] = React.useState<MaterialReplacementInput[]>([]);
@@ -808,6 +809,9 @@ function MaterialsPageContent() {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button variant="outline" size="toolbar" onClick={() => setLotBoardOpen(true)} title="Tồn hiện có tách theo số phiếu giao hàng">
+          <Layers className="h-4 w-4" /> Tồn theo phiếu giao hàng
+        </Button>
         <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <SearchBar value={q} onChange={setQ} placeholder="Tìm theo mã, tên, thiết bị..." className="w-full sm:w-72" />
           {canManage && <QlvtSyncAction />}
@@ -1241,6 +1245,8 @@ function MaterialsPageContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StockLotBoard open={lotBoardOpen} onOpenChange={setLotBoardOpen} category={categoryFilter} />
 
       <ConfirmDialog
         open={!!deleting}
@@ -2043,6 +2049,76 @@ function InlineNumberCell({
  * trong khi từấy vẫn dùng thoải mái — báo đỏ tràn lan thì không ai còn để ý cảnh báo thật.
  */
 const OIL_LOW_STOCK_LITRES = 10;
+
+/**
+ * BẢNG THEO DÕI TỒN THEO SỐ PHIẾU GIAO HÀNG.
+ *
+ * Cột "Hiện có" chỉ cho một con số tổng; bảng này trả lời câu hỏi thực sự cần: 32 lít đó là của
+ * phiếu giao hàng nào, còn bao nhiêu ở từng phiếu — để biết lô cũ còn phải dùng hết bao nhiêu.
+ */
+function StockLotBoard({ open, onOpenChange, category }: { open: boolean; onOpenChange: (v: boolean) => void; category: string }) {
+  const { data, isLoading } = useMaterialStockLots(category, open);
+  const rows = data?.data ?? [];
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Tồn hiện có theo số phiếu giao hàng</DialogTitle>
+        </DialogHeader>
+        <p className="-mt-1 text-xs text-muted-foreground">
+          {displayMaterialCategory(category)} · dùng đến đâu trừ lô cũ trước, nên lô đứng đầu là lô sẽ được dùng tiếp.
+        </p>
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Đang tải…</p>
+        ) : !rows.length ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Chưa có vật tư nào còn tồn ở loại này.</p>
+        ) : (
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <div key={row.code} className="rounded-lg border border-border">
+                <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-3 py-2">
+                  <span className="min-w-0 truncate text-sm font-semibold text-ink" title={`${row.code} · ${row.name}`}>{row.name}</span>
+                  <span className="shrink-0 text-sm font-semibold text-ink">{row.total} {row.unit}</span>
+                </div>
+                {row.lots.length ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <th className="px-3 py-1.5 text-left font-medium">Số phiếu giao hàng</th>
+                        <th className="px-3 py-1.5 text-left font-medium">Mã vật tư</th>
+                        <th className="px-3 py-1.5 text-center font-medium">Ngày lãnh</th>
+                        <th className="px-3 py-1.5 text-center font-medium">Lãnh về</th>
+                        <th className="px-3 py-1.5 text-center font-medium">Còn lại</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {row.lots.map((lot, index) => (
+                        <tr key={lot.id} className="border-t border-border/70">
+                          <td className="px-3 py-1.5 font-medium text-ink">
+                            {lot.label}
+                            {index === 0 && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">dùng tiếp</span>}
+                          </td>
+                          <td className="px-3 py-1.5 font-mono text-xs text-muted-foreground">{lot.erpCode || "—"}</td>
+                          <td className="px-3 py-1.5 text-center text-xs text-muted-foreground">{lot.receivedAt ? formatDate(lot.receivedAt) : "—"}</td>
+                          <td className="px-3 py-1.5 text-center tabular-nums text-muted-foreground">{lot.quantityIn}</td>
+                          <td className="px-3 py-1.5 text-center font-semibold tabular-nums text-ink">{lot.quantityLeft}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    Còn {row.quantity} {row.unit} nhưng chưa gắn lô nào — sẽ được ghi nhận khi lãnh về lần tới.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function StockBadge({ quantity, minStock, category }: { quantity: number; minStock: number; category?: string | null }) {
   if (quantity <= 0) {

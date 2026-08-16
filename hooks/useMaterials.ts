@@ -143,3 +143,34 @@ export function useDeleteMaterials() {
     onSuccess: () => invalidateMaterialCatalog(qc),
   });
 }
+
+/** Một lô tồn theo số phiếu giao hàng. */
+export interface StockLotRow {
+  id: string;
+  label: string;
+  deliveryNote: string | null;
+  erpCode: string | null;
+  receivedAt: string | null;
+  quantityIn: number;
+  quantityLeft: number;
+}
+
+export interface MaterialStockLots {
+  code: string;
+  name: string;
+  unit: string;
+  category: string | null;
+  total: number;
+  quantity: number;
+  lots: StockLotRow[];
+}
+
+/** Tồn hiện có tách theo số phiếu giao hàng — bảng theo dõi ở Danh mục vật tư. */
+export function useMaterialStockLots(category: string, enabled = true) {
+  return useQuery({
+    queryKey: ["material-stock-lots", category],
+    queryFn: () => apiGet<MaterialStockLots[]>(`/api/materials/stock-lots?category=${encodeURIComponent(category)}`),
+    enabled,
+    staleTime: 30_000,
+  });
+}
