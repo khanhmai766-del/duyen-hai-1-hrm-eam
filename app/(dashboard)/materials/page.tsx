@@ -906,7 +906,7 @@ function MaterialsPageContent() {
                     <TableCell className="text-center text-muted-foreground">{m.unit}</TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <StockBadge quantity={m.quantity} minStock={m.minStock} />
+                        <StockBadge quantity={m.quantity} minStock={m.minStock} category={m.category} />
                         <InlineNumberCell
                           value={m.quantity}
                           canEdit={canEditStock(m)}
@@ -2035,11 +2035,23 @@ function InlineNumberCell({
 }
 
 /** Cảnh báo tồn kho: "Hết hàng" khi =0, "Sắp hết" khi ≤ định mức tối thiểu. */
-function StockBadge({ quantity, minStock }: { quantity: number; minStock: number }) {
+/**
+ * NGƯỠNG "SẮP HẾT" CỦA DẦU BÔI TRƠN là MỘT CON SỐ CỐ ĐẮNH: từ 10 lít trở xuống.
+ *
+ * Các loại còn lại vẫn so với ngưỡng tối thiểu của từng vật tư (lấy theo số liệu ERP). Với
+ * dầu thì cách đó sai thực tế: kho ERP có 927 lít thì 103 lít trong phân xưởng bị báo "sắp hết"
+ * trong khi từấy vẫn dùng thoải mái — báo đỏ tràn lan thì không ai còn để ý cảnh báo thật.
+ */
+const OIL_LOW_STOCK_LITRES = 10;
+
+function StockBadge({ quantity, minStock, category }: { quantity: number; minStock: number; category?: string | null }) {
   if (quantity <= 0) {
     return <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-800">Hết hàng</span>;
   }
-  if (minStock > 0 && quantity <= minStock) {
+  const low = materialCategoryMatches(category, "Dầu bôi trơn")
+    ? quantity <= OIL_LOW_STOCK_LITRES
+    : minStock > 0 && quantity <= minStock;
+  if (low) {
     return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Sắp hết</span>;
   }
   return null;
