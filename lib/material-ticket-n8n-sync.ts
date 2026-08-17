@@ -199,6 +199,11 @@ function unitLabel(unit: string) {
   return unit;
 }
 
+function materialCategoryLabel(category: string | null) {
+  if (category === "Lọc dầu" || category === "Lõi lọc dầu") return "Lõi lọc";
+  return category;
+}
+
 function chemicalScheduledSummary(ticket: MaterialTicketForN8nSync, unit: string) {
   if (ticket.type !== "HOA_CHAT") return null;
   return joinText([
@@ -310,7 +315,7 @@ export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
         A: ticket.sequenceNumber,
         B: workflowTypeLabel(ticket.type),
         C: unitLabel(ticket.unit),
-        D: ticket.materialCategory,
+        D: materialCategoryLabel(ticket.materialCategory),
         E: quantityWithUnit(ticket.remainingQuantity, unit),
         F: ticket.proposalNumber,
         G: formatDate(proposedAt),
