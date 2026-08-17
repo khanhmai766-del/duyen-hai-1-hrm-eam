@@ -29,6 +29,8 @@ export type MaterialTicketForN8nSync = {
   id: string;
   sequenceMonth: string;
   sequenceNumber: number;
+  type: string;
+  unit: string;
   status: string;
   assignedPosition: string;
   materialCategory: string | null;
@@ -48,6 +50,9 @@ export type MaterialTicketForN8nSync = {
   proposedByName: string | null;
   proposedByPosition: string | null;
   proposedAt: Date | null;
+  confirmedByName: string | null;
+  deliveryScheduledAt: Date | null;
+  deliveryQuantity: number | null;
   vhvReceivedQuantity: number | null;
   vhvReceivedByName: string | null;
   vhvReceivedAt: Date | null;
@@ -177,6 +182,44 @@ function recoveryDocumentNumber(ticket: MaterialTicketForN8nSync) {
     : String(ticket.recoveryDocNo);
 }
 
+function workflowTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    CHUA_CHON: "Chưa chọn luồng",
+    DE_XUAT: "Đề xuất",
+    UNG: "Ứng",
+    SU_DUNG_HIEN_CO: "Sử dụng hiện có",
+    HOA_CHAT: "Hóa chất",
+    GHI_NHAN: "Ghi nhận một bước",
+  };
+  return labels[type] ?? type;
+}
+
+function unitLabel(unit: string) {
+  if (unit === "COMMON") return "Dùng chung";
+  return unit;
+}
+
+function chemicalScheduledSummary(ticket: MaterialTicketForN8nSync, unit: string) {
+  if (ticket.type !== "HOA_CHAT") return null;
+  return joinText([
+    ticket.deliveryQuantity != null
+      ? `Khối lượng: ${quantityWithUnit(ticket.deliveryQuantity, unit)}`
+      : null,
+    ticket.deliveryScheduledAt ? `Lịch giao: ${formatDate(ticket.deliveryScheduledAt)}` : null,
+  ]);
+}
+
+function chemicalReceivedSummary(ticket: MaterialTicketForN8nSync, unit: string) {
+  if (ticket.type !== "HOA_CHAT") return null;
+  return joinText([
+    ticket.receivedQuantity != null
+      ? `Khối lượng: ${quantityWithUnit(ticket.receivedQuantity, unit)}`
+      : null,
+    ticket.receivedByName ? `Người lãnh: ${ticket.receivedByName}` : null,
+    ticket.receivedAt ? `Ngày lãnh: ${formatDate(ticket.receivedAt)}` : null,
+  ]);
+}
+
 /**
  * Dữ liệu được trả theo ký tự cột để n8n map thủ công vào VT_DONGBO!A2:AJ.
  * AJ (SYNCED_AT) do n8n tự ghi tại thời điểm Google Sheets xác nhận thành công.
@@ -237,6 +280,73 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
         AG: syncKey,
         AH: formatDateTime(ticket.updatedAt),
         AI: ticket.status,
+      },
+    };
+  });
+}
+
+/**
+ * Bố cục V2 dành riêng cho VH1_VTDONGBO!A2:AO.
+ * Giữ nguyên mapper cũ để workflow VT_DONGBO đang chạy không bị thay đổi cột.
+ * AO (SYNCED_AT) do n8n ghi sau khi Google Sheets xác nhận thành công.
+ */
+export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
+  return ticket.items.map((item) => {
+    const syncKey = `${ticket.id}:${item.id}`;
+    const receivedAt = ticket.receivedAt ?? ticket.vhvReceivedAt;
+    const receivedQuantity = ticket.receivedQuantity ?? ticket.vhvReceivedQuantity;
+    const receivedByName = ticket.receivedByName ?? ticket.vhvReceivedByName;
+    const proposedAt = ticket.proposedAt ?? ticket.createdAt;
+    const proposedByName = ticket.proposedByName ?? ticket.createdByName;
+    const proposedByPosition = ticket.proposedByPosition ?? ticket.assignedPosition;
+    const materialUserName = ticket.materialUserName ?? ticket.usedByName;
+    const unit = item.material.unit;
+
+    return {
+      syncKey,
+      sourceUpdatedAt: ticket.updatedAt.toISOString(),
+      workflowStatus: ticket.status,
+      row: {
+        A: ticket.sequenceNumber,
+        B: workflowTypeLabel(ticket.type),
+        C: unitLabel(ticket.unit),
+        D: ticket.materialCategory,
+        E: quantityWithUnit(ticket.remainingQuantity, unit),
+        F: ticket.proposalNumber,
+        G: formatDate(proposedAt),
+        H: proposedByPosition,
+        I: proposedByName,
+        J: item.erpCode,
+        K: item.material.name,
+        L: quantityWithUnit(item.quantity, unit),
+        M: ticket.proposalNote,
+        N: null,
+        O: ticket.type === "HOA_CHAT" ? ticket.confirmedByName : null,
+        P: chemicalScheduledSummary(ticket, unit),
+        Q: chemicalReceivedSummary(ticket, unit),
+        R: formatDate(receivedAt),
+        S: quantityWithUnit(receivedQuantity, unit),
+        T: receivedByName,
+        U: joinUniqueText([ticket.receivedMethod, ticket.deliveryNoteNumber]),
+        V: null,
+        W: materialUserName,
+        X: formatDate(ticket.usedAt),
+        Y: ticket.completionNote,
+        Z: ticket.pctNumber,
+        AA: quantityWithUnit(ticket.usedQuantity, unit),
+        AB: quantityWithUnit(ticket.remainingQuantity, unit),
+        AC: null,
+        AD: recoverySummary(ticket, unit),
+        AE: null,
+        AF: joinText([formatDate(ticket.completedAt), ticket.completedByName]),
+        AG: ticket.completionNote,
+        AH: null,
+        AI: ticket.bbntDoNumber,
+        AJ: recoveryDocumentNumber(ticket),
+        AK: null,
+        AL: syncKey,
+        AM: formatDateTime(ticket.updatedAt),
+        AN: ticket.status,
       },
     };
   });

@@ -8,6 +8,27 @@
 - Dòng dữ liệu đầu tiên: `3`
 - Khóa upsert: cột `AG` (`SYNC_KEY`)
 
+## Bố cục V2 chạy song song
+
+- Sheet mới: `VH1_VTDONGBO`
+- Vùng tiêu đề/dữ liệu: `A2:AO`
+- Dòng dữ liệu đầu tiên: `3`
+- Khóa upsert: cột `AL` (`SYNC_KEY`)
+- API thêm query parameter `layout=vh1_v2`.
+- Workflow import: `workflow-vh1-v2.json`.
+
+Mapper mặc định vẫn dùng bố cục cũ để workflow `VT_DONGBO` tiếp tục hoạt động.
+Chỉ workflow V2 gửi `layout=vh1_v2` và dùng watermark riêng
+`materialV2UpdatedAfter`.
+
+Các cột bổ sung của V2:
+
+- B: Luồng thực hiện; C: Tổ máy.
+- O: Người xác nhận bồn/thiết bị đủ điều kiện.
+- P: Khối lượng giao hàng theo lịch và lịch giao.
+- Q: Khối lượng lãnh thực tế, người lãnh và ngày lãnh.
+- AL:AO: dữ liệu kỹ thuật hệ thống.
+
 ## API website
 
 ```http
