@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   useMaterialTickets, useTicketOptions, useCreateTicket, useTicketAction, useDeleteTicket,
   useWorkflowRoles, useSaveWorkflowRoles, actionsFor,
+  useTicketLots,
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
@@ -125,8 +126,15 @@ const datetimeLocalValue = (value?: string | null) => {
 };
 const normalizeReceiptSource = (source?: string | null): "ERP" | "EXISTING" =>
   source === "EXISTING" || source === "OUTSIDE" ? "EXISTING" : "ERP";
-const receiptSourceLabel = (source?: string | null) =>
-  normalizeReceiptSource(source) === "ERP" ? "Lãnh kho DH1" : "Lãnh ngoài";
+// Nguồn lãnh chỉ có HAI giá trị lưu trữ: ERP (lãnh kho công ty) và EXISTING. Nhưng EXISTING
+// mang hai nghĩa khác hẳn nhau tùy luồng nên nhãn phải đọc theo luồng:
+//   • luồng Ứng → "Lãnh ngoài" (VHV tự lãnh ngoài kho DH1)
+//   • luồng SỬ DỤNG HIỆN CÓ → vật tư lấy từ kho phân xưởng, không lãnh ở đâu cả.
+// Dùng chung một nhãn khiến phiếu "Sử dụng hiện có" hiện "Lãnh ngoài" — sai nghĩa.
+const receiptSourceLabel = (source?: string | null, ticketType?: string | null) => {
+  if (ticketType === "SU_DUNG_HIEN_CO") return "Lấy từ Hiện có";
+  return normalizeReceiptSource(source) === "ERP" ? "Lãnh kho DH1" : "Lãnh ngoài";
+};
 const bbntDownloadUrl = (url: string, deviceName: string) => {
   if (!deviceName || /[?&]filename=/.test(url)) return url;
   return `${url}${url.includes("?") ? "&" : "?"}deviceName=${encodeURIComponent(deviceName)}`;
@@ -1435,7 +1443,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
   const order = ORDER[t.type];
   const flowStatus = flowStatusKey(t.status, t.type);
   const idx = t.status === "TU_CHOI" ? 99 : t.status === "VAT_TU_KHONG_CO" ? 1 : order.indexOf(flowStatus);
-  const currentReceiptSourceLabel = receiptSourceLabel(t.receiptSource);
+  const currentReceiptSourceLabel = receiptSourceLabel(t.receiptSource, t.type);
   const replacementDeviceName = Array.from(new Set(t.items
     .map((item) => item.deviceNameManual || item.device?.name || "")
     .filter(Boolean)))
@@ -1460,7 +1468,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.repairRequestNumber ? ` · Số yêu cầu sửa chữa ${t.repairRequestNumber}` : ""}` },
     t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
-    t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""} · ${receiptSourceLabel(t.receiptSource)} · Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod ?? "—"}` },
+    t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: [
+      `Xác nhận vật tư lãnh: ${t.receivedQuantity ?? ""}`,
+      receiptSourceLabel(t.receiptSource, t.type),
+      // Luồng Sử dụng hiện có không có phiếu giao hàng — in "—" chỉ tố thêm nghi ngờ thiếu dữ liệu.
+      (t.deliveryNoteNumber ?? t.receivedMethod) ? `Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod}` : "",
+    ].filter(Boolean).join(" · ") },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
     t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: `Nghiệm thu, xuất BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và BBTHVT" : ""}` },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
@@ -1564,7 +1577,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                       <div className="meta-line received-summary">
                         <span>Vật tư lãnh: <b>{t.receivedQuantity} {t.items[0]?.material.unit ?? ""}</b></span>
                         <span>Nguồn lãnh: <b className="source-badge">{currentReceiptSourceLabel}</b></span>
-                        <em>đã cộng vào số lượng hiện có</em>
+                        <em>{t.type === "SU_DUNG_HIEN_CO" ? "lấy từ số đang có, kho trừ ở bước sử dụng" : "đã cộng vào số lượng hiện có"}</em>
                       </div>
                     )}
                     {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b></div>}
@@ -1642,8 +1655,6 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
   const [reason, setReason] = useState(t.proposalNote ?? "");
   const [workStartedAt, setWorkStartedAt] = useState(datetimeLocalValue(t.workStartedAt));
   const [workEndedAt, setWorkEndedAt] = useState(datetimeLocalValue(t.workEndedAt));
-  const [sccnRepresentative, setSccnRepresentative] = useState(t.sccnRepresentativeName ?? "");
-  const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
 
   const label = FLOW[t.type].find((step) => step.key === stepKey)?.label ?? "Chi tiết bước";
   async function save() {
@@ -1663,8 +1674,6 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
       completionNote,
       workStartedAt,
       workEndedAt,
-      sccnRepresentative,
-      sccnPosition,
     });
     try {
       await act.mutateAsync(payload);
@@ -1749,26 +1758,72 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
               <input type="datetime-local" value={workEndedAt} disabled={!canEdit} onChange={(e) => setWorkEndedAt(e.target.value)} />
             </label>
           </div>
-          <div className="review-accept-grid">
-            <label>Đại diện SCCN *
-              <select value={sccnRepresentative} disabled={!canEdit} onChange={(e) => setSccnRepresentative(e.target.value)}>
-                <option value="">— Chọn đại diện SCCN —</option>
-                {SCCN_REPRESENTATIVES.map((name) => <option key={name} value={name}>{name}</option>)}
-              </select>
-            </label>
-            <label>Chức vụ *
-              <select value={sccnPosition} disabled={!canEdit} onChange={(e) => setSccnPosition(e.target.value)}>
-                <option value="">— Chọn chức vụ —</option>
-                {SCCN_POSITIONS.map((position) => <option key={position} value={position}>{position}</option>)}
-              </select>
-            </label>
-          </div>
+          {/* Đại diện SCCN KHÔNG nằm ở bước này — Thống kê chọn ở bước xác nhận mã vật tư,
+              cùng lúc xuất BBNT D-Office mang tên người đó. */}
         </>}
         {permission && !canEdit && <p className="hint">Bạn có thể xem lại nhưng chưa được phân quyền chỉnh sửa bước này.</p>}
-        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt || !sccnRepresentative || !sccnPosition))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
+        <div className="frm-f"><button className="btn ghost" onClick={onClose}>Đóng</button>{canEdit && <button className="btn primary" disabled={act.isPending || (editStep === "confirm" && !reason.trim()) || (editStep === "accept" && (!pctNumber.trim() || !chiHuyName.trim() || !completionNote.trim() || !workStartedAt || !workEndedAt))} onClick={save}>{act.isPending ? <Loader2 className="spin" size={14} /> : <Pencil size={14} />} Lưu chỉnh sửa</button>}</div>
       </div>
     </div>
   </>;
+}
+
+/**
+ * CHỎN PHÂN BỔ THEO PHIẾU GIAO HÀNG Ở BƯỚC NGHIỆM THU.
+ *
+ * Số đã dùng được chia sẵn theo FIFO (lô cũ trước) từ bước Sử dụng. Ở đây người lập biên
+ * bản nhìn thấy lấy bao nhiêu từ phiếu nào và sửa được — vì biên bản phải khớp chứng từ thực
+ * tế, có khi lấy dầu từ phýy mới chứ không phải phýy cũ.
+ *
+ * TỔNG PHẢI BẰNG số đã sử dụng; lệch thì khoá nút và nói rõ còn thiếu/thừa bao nhiêu.
+ */
+function LotAllocationPicker({
+  ticketId, value, onChange,
+}: { ticketId: string; value: Record<string, number> | null; onChange: (next: Record<string, number>) => void }) {
+  const { data, isLoading } = useTicketLots(ticketId);
+  const info = data?.data;
+
+  React.useEffect(() => {
+    if (!info || value) return;
+    onChange(Object.fromEntries(info.lots.map((lot) => [lot.id, lot.taken])));
+  }, [info, value, onChange]);
+
+  if (isLoading) return <p className="hint">Đang tải tồn theo phiếu giao hàng…</p>;
+  if (!info || !info.lots.length) return null;
+
+  const current = value ?? Object.fromEntries(info.lots.map((lot) => [lot.id, lot.taken]));
+  const total = Object.values(current).reduce((sum, n) => sum + (Number(n) || 0), 0);
+  const diff = total - info.usedQuantity;
+
+  return (
+    <div className="lot-picker">
+      <label className="lb">Phân bổ theo phiếu giao hàng — đã dùng {info.usedQuantity} {info.unit}</label>
+      <table className="lot-table">
+        <thead>
+          <tr><th>Số phiếu giao hàng</th><th>Mã vật tư</th><th>Có thể lấy</th><th>Lấy</th></tr>
+        </thead>
+        <tbody>
+          {info.lots.map((lot) => (
+            <tr key={lot.id}>
+              <td>{lot.label}</td>
+              <td className="lot-code">{lot.erpCode || "—"}</td>
+              <td className="lot-num">{lot.available} {info.unit}</td>
+              <td className="lot-num">
+                <input
+                  type="number" min={0} max={lot.available}
+                  value={current[lot.id] ?? 0}
+                  onChange={(e) => onChange({ ...current, [lot.id]: Math.max(0, Math.min(lot.available, Math.trunc(Number(e.target.value) || 0))) })}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {diff !== 0 && (
+        <div className="warnbox"><AlertTriangle size={15} /> Tổng đang phân bổ {total} {info.unit}, {diff > 0 ? `thừa ${diff}` : `thiếu ${-diff}`} so với số đã sử dụng ({info.usedQuantity} {info.unit}).</div>
+      )}
+    </div>
+  );
 }
 
 /* ================= hành động theo lượt ================= */
@@ -1790,6 +1845,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [chiHuy, setChiHuy] = useState("");
   const [proposalReceiverName, setProposalReceiverName] = useState(t.proposalReceiverName ?? "");
   const [reason, setReason] = useState("");
+  const [lotAllocation, setLotAllocation] = useState<Record<string, number> | null>(null);
   // Luồng hóa chất: lịch giao + khối lượng giao (bước 2), khối lượng/ngày/người lãnh (bước 3).
   const [deliveryDate, setDeliveryDate] = useState(t.deliveryScheduledAt ? String(t.deliveryScheduledAt).slice(0, 10) : "");
   const [deliveryQty, setDeliveryQty] = useState(String(t.deliveryQuantity ?? t.items[0]?.quantity ?? ""));
@@ -2549,10 +2605,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
                 <input name={`bbkt-accept-${t.id}`} autoComplete="off" placeholder="Nhập số BBNT ký tay" value={bbktNumberInput} onChange={(e) => setBbktNumberInput(e.target.value)} />
               </label>
             </div>
+            <LotAllocationPicker ticketId={t.id} value={lotAllocation} onChange={setLotAllocation} />
             {selectedErp && (
               <p className="hint">
                 Tất cả biên bản Word sẽ sử dụng mã <b>{selectedErp.code}</b> và tên <b>{selectedErp.name || t.items[0]?.material.name}</b>.
-                {t.type === "UNG" && " BBNT D-Office sẽ được xuất cùng Phiếu ĐXVT ở bước Xác nhận ĐXVT."}
+                {t.type === "UNG"
+                  ? " BBNT D-Office sẽ được xuất cùng Phiếu ĐXVT ở bước Xác nhận ĐXVT."
+                  : " BBNT D-Office sẽ được Thống kê xuất ở bước sau, sau khi chọn đại diện SCCN."}
               </p>
             )}
             <div className="accept-two-grid">
@@ -2575,10 +2634,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           </>
         <button className="btn primary big" disabled={act.isPending || !erpCode || !note.trim() || !pct.trim() || !chiHuy.trim() || !startedAt || !endedAt}
           onClick={() => run(
-            { action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(), bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt },
-            t.type === "DE_XUAT"
-              ? `Đã xuất BBNT ký tay${exportsRecoveryDocument ? " và BBTHVT" : ""}, chuyển Thống kê xuất BBNT D-Office`
-              : `Đã nghiệm thu và xuất BBNT ký tay${exportsRecoveryDocument ? " cùng BBTHVT" : ""}`,
+            {
+              action: "accept", erpCode, completionNote: note.trim(), pctNumber: pct.trim(), chiHuyName: chiHuy.trim(),
+              bbktNumber: bbktNumberInput.trim() || undefined, workStartedAt: startedAt, workEndedAt: endedAt,
+              ...(lotAllocation ? { lotAllocation: Object.entries(lotAllocation).map(([lotId, quantity]) => ({ lotId, quantity })) } : {}),
+            },
+            t.type === "UNG"
+              ? `Đã nghiệm thu và xuất BBNT ký tay${exportsRecoveryDocument ? " cùng BBTHVT" : ""}`
+              : `Đã xuất BBNT ký tay${exportsRecoveryDocument ? " và BBTHVT" : ""}, chuyển Thống kê xuất BBNT D-Office`,
           )}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />}
           {exportsRecoveryDocument ? " Xác nhận và xuất BBNT ký tay + BBTHVT" : " Xác nhận và xuất BBNT ký tay"}
@@ -2595,10 +2658,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
     const selectedErp = codeOptions.find((option) => option.code === erpCode);
-    const isProposalDocumentExport = t.type === "DE_XUAT";
+    // Đề xuất và Sử dụng hiện có đều xuất BBNT D-Office tại đây — đây là chỗ duy nhất chọn
+    // đại diện SCCN, và biên bản phải mang tên người đó. Tên bước giữ theo từng luồng vì
+    // người dùng gọi quen như vậy.
+    const exportsBbntDo = t.type === "DE_XUAT" || t.type === "SU_DUNG_HIEN_CO";
+    const stepLabel = t.type === "DE_XUAT" ? "Thống kê xuất BBNT D-Office" : "Thống kê xác nhận mã vật tư";
     return (
       <div className="act">
-        <label className="lb">{isProposalDocumentExport ? "Thống kê xuất BBNT D-Office" : "Thống kê xác nhận mã vật tư"}</label>
+        <label className="lb">{stepLabel}</label>
         <label className="field">Mã vật tư *
           <select value={erpCode} disabled>
             <option value="">— Chọn mã vật tư ERP —</option>
@@ -2613,7 +2680,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             </div>
           </div>
         )}
-        {isProposalDocumentExport && (
+        {exportsBbntDo && (
           <div className="accept-two-grid">
             <label className="field">Đại diện SCCN *
               <select value={sccnRepresentative} onChange={(e) => setSccnRepresentative(e.target.value)}>
@@ -2630,21 +2697,21 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
           </div>
         )}
         <p className="hint">
-          {isProposalDocumentExport
-            ? `BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và Biên bản vật tư thu hồi" : ""} đã được xuất. Xác nhận để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
-            : "BBNT D-Office đã được xuất ở bước nghiệm thu. Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán."}
+          {exportsBbntDo
+            ? `BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và Biên bản vật tư thu hồi" : ""} đã được xuất ở bước Nghiệm thu. Chọn đại diện SCCN để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
+            : "Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán."}
         </p>
-        <button className="btn primary big" disabled={!erpCode || act.isPending || (isProposalDocumentExport && (!sccnRepresentative || !sccnPosition))}
+        <button className="btn primary big" disabled={!erpCode || act.isPending || (exportsBbntDo && (!sccnRepresentative || !sccnPosition))}
           onClick={() => run(
             {
               action: "statsExportDocuments",
               erpCode,
-              sccnRepresentative: isProposalDocumentExport ? sccnRepresentative : undefined,
-              sccnPosition: isProposalDocumentExport ? sccnPosition : undefined,
+              sccnRepresentative: exportsBbntDo ? sccnRepresentative : undefined,
+              sccnPosition: exportsBbntDo ? sccnPosition : undefined,
             },
-            isProposalDocumentExport ? "Đã xuất BBNT D-Office và chuyển bước Quyết toán" : "Đã xác nhận mã vật tư",
+            exportsBbntDo ? "Đã xuất BBNT D-Office và chuyển bước Quyết toán" : "Đã xác nhận mã vật tư",
           )}>
-          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {isProposalDocumentExport ? "Xác nhận và xuất biên bản" : "Xác nhận mã vật tư"}
+          {act.isPending ? <Loader2 className="spin" size={15} /> : <FileText size={15} />} {exportsBbntDo ? "Xác nhận và xuất BBNT D-Office" : "Xác nhận mã vật tư"}
         </button>
       </div>
     );
@@ -2752,6 +2819,13 @@ const CSS = `
 .tag.hoachat{background:#ede9fe;color:#5b21b6;}
 .note.ghinhan{background:#ecfeff;border-color:#a5f3fc;color:#155e75;}
 .chem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
+.lot-picker{display:flex;flex-direction:column;gap:6px;}
+.lot-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.lot-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;padding:4px 8px;font-weight:600;}
+.lot-table td{border-top:1px solid ${C.line};padding:5px 8px;}
+.lot-table .lot-code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#64748b;}
+.lot-table .lot-num{text-align:center;white-space:nowrap;}
+.lot-table input{width:84px;text-align:center;padding:6px 8px;}
 .row.mine:hover{background:#fef3c7;}
 .row.mine .d.cur{background:#f59e0b;box-shadow:0 0 0 3px #f59e0b30;animation:mtwpulse 1.3s ease-in-out infinite;}
 .pd{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;margin-right:5px;vertical-align:middle;animation:mtwpulse 1.3s ease-in-out infinite;}

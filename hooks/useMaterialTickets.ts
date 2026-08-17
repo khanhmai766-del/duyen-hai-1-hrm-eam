@@ -296,3 +296,19 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
   }
   return a;
 }
+
+/** Các lô có thể dùng cho một phiếu + phần phiếu đang chiếm (bước Nghiệm thu). */
+export interface TicketLotInfo {
+  unit: string;
+  materialName: string;
+  usedQuantity: number;
+  lots: Array<{ id: string; label: string; erpCode: string | null; receivedAt: string | null; available: number; taken: number }>;
+}
+
+export function useTicketLots(ticketId: string) {
+  return useQuery({
+    queryKey: ["ticket-lots", ticketId],
+    queryFn: () => apiGet<TicketLotInfo>(`/api/material-tickets/${ticketId}/lots`),
+    staleTime: 10_000,
+  });
+}
