@@ -8,7 +8,7 @@ import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
 import { generateDxvtDoc } from "@/lib/dxvt-doc";
 import { materialTicketFileBase, materialTicketReference } from "@/lib/material-ticket-sequence";
 import { normalizeText } from "@/lib/nav";
-import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
+import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
 import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, reasonRequiresRecovery, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
@@ -405,10 +405,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     }
     if (!(await canManageTicket(user, t)))
       return fail("Bạn không có quyền xóa phiếu (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+    const deletedMaterial = t.items[0]?.material;
     await prisma.$transaction(async (tx) => {
       // Chặn thao tác tạo/xóa đồng thời trong lúc dồn STT để không phát sinh
       // số trùng hoặc khoảng trống giữa các phiếu.
       await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
+      // HOÀN KHO TRƯỚC KHI XÓA: gỡ lô phiếu mang vào và trả lại phần nó đã dùng. Không làm
+      // thì phiếu tạo thử rồi xóa vẫn để lại số ma trong kho — đã gặp trên production: một phiếu
+      // lãnh 27 dùng 18 rồi bị xóa, kho dôi ra 9 không ai truy được vì phiếu không còn.
+      if (deletedMaterial) {
+        await reverseTicketStock(tx, { materialCode: deletedMaterial.code, ticketId: t.id });
+        await syncMaterialQuantity(tx, deletedMaterial.code, sharedCodesOf(deletedMaterial));
+      }
       await tx.materialTicket.delete({ where: { id: t.id } });
 
       // Chỉ dồn STT trong tháng của phiếu vừa xóa. Các tháng cũ giữ nguyên

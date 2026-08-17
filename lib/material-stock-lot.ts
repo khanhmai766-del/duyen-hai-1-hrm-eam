@@ -272,3 +272,55 @@ export function deliveryNoteSummary(used: Array<{ deliveryNote: string | null; u
     .map((item) => `${item.deliveryNote?.trim() || OPENING_LOT_LABEL} (${item.used}${unit ? ` ${unit}` : ""})`)
     .join(", ");
 }
+
+/**
+ * HOÀN KHO KHI XOÁ PHIẾU — gỡ sạch dấu vết của một phiếu khỏi sổ lô.
+ *
+ * Hai việc, đúng thứ tự:
+ *  1. Trả lại phần chính phiếu đó đã dùng.
+ *  2. Gỡ lô mà phiếu đó mang vào.
+ *
+ * Vướng ở bước 2: lô đó có thể ĐÃ BỊ PHIẾU KHÁC DÙNG MẤT một phần. Không thể gỡ phần đã đi
+ * mất, nên phải CHUYỂN các lần dùng của phiếu khác sang lô còn hàng (theo FIFO) rồi mới gỡ
+ * lô. Không đủ lô khác để chuyển thì gỡ tới đâu hay tới đó — thà tồn nhỉnh hơn thực tế còn
+ * hơn chặn không cho xoá phiếu hoặc đẩy kho xuống âm.
+ */
+export async function reverseTicketStock(
+  tx: Prisma.TransactionClient,
+  params: { materialCode: string; ticketId: string }
+) {
+  const { materialCode, ticketId } = params;
+  await releaseUsage(tx, ticketId);
+
+  const lot = await tx.materialStockLot.findFirst({
+    where: { materialCode, ticketId },
+    select: { id: true, quantityIn: true, quantityLeft: true },
+  });
+  if (!lot) return { removed: 0, moved: 0 };
+
+  let moved = 0;
+  const others = await tx.materialLotUsage.findMany({ where: { lotId: lot.id }, select: { id: true, ticketId: true, quantity: true } });
+  for (const usage of others) {
+    const targets = (await availableLots(tx, materialCode)).filter((item) => item.id !== lot.id);
+    const { allocation, shortfall } = planAllocation(targets, usage.quantity);
+    if (shortfall > 0) continue; // không đủ chỗ chuyển — giữ nguyên lần dùng này
+    await tx.materialLotUsage.delete({ where: { id: usage.id } });
+    for (const item of allocation) {
+      await tx.materialStockLot.update({ where: { id: item.lotId }, data: { quantityLeft: { decrement: item.quantity } } });
+      await tx.materialLotUsage.create({ data: { lotId: item.lotId, ticketId: usage.ticketId, quantity: item.quantity } });
+    }
+    await tx.materialStockLot.update({ where: { id: lot.id }, data: { quantityLeft: { increment: usage.quantity } } });
+    moved += usage.quantity;
+  }
+
+  const fresh = await tx.materialStockLot.findUnique({ where: { id: lot.id }, select: { quantityLeft: true } });
+  const removed = fresh?.quantityLeft ?? 0;
+  // Còn lần dùng của phiếu khác bám vào thì không xoá lô (sẽ mất dấu vết của họ), chỉ vét sạch.
+  const stillUsed = await tx.materialLotUsage.count({ where: { lotId: lot.id } });
+  if (stillUsed > 0) {
+    await tx.materialStockLot.update({ where: { id: lot.id }, data: { quantityLeft: 0, note: "Phiếu gốc đã xoá" } });
+  } else {
+    await tx.materialStockLot.delete({ where: { id: lot.id } });
+  }
+  return { removed, moved };
+}
