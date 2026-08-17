@@ -1583,8 +1583,12 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
                     {t.vhvReceivedQuantity != null && <div className="meta-line">VHV đã lãnh: <b>{t.vhvReceivedQuantity} {t.items[0]?.material.unit ?? ""}</b></div>}
                     {t.usedQuantity != null && (
                       <div className="meta-line">
-                        {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b> · Còn lại: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b>
-                        {" — số đã sử dụng đã trừ khỏi số lượng hiện có"}
+                        {/* "Còn lại" cũ đứng cạnh "Hiện có" nên bị đọc thành tồn kho còn bấy nhiêu. Đây là
+                            phần LẤY RA MÀ CHƯA DÙNG ĐẾN CỦA RIÊNG PHIẾU NÀY (lấy 9 dùng 9 thì dư 0), không
+                            liên quan tồn kho. Gọi đúng tên và nói rõ kho bị trừ bao nhiêu. */}
+                        {t.materialUserName && <>VHV sử dụng: <b>{t.materialUserName}</b> · </>}Đã sử dụng: <b>{t.usedQuantity} {t.items[0]?.material.unit ?? ""}</b>
+                        {(t.remainingQuantity ?? 0) !== 0 && <> · Lấy ra chưa dùng đến: <b>{t.remainingQuantity} {t.items[0]?.material.unit ?? ""}</b></>}
+                        {` — kho đã trừ ${t.usedQuantity} ${t.items[0]?.material.unit ?? ""}`}
                       </div>
                     )}
                   </div>
