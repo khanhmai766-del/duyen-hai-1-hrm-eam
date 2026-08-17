@@ -430,7 +430,8 @@ function QlvtSyncChip({
               <QlvtSyncStat label="Đổi kho" value={run.warehouseChanged} />
               <QlvtSyncStat label="Chưa có" value={run.notFound} flag />
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 px-3 py-2 text-center text-[11px] text-slate-600 ring-1 ring-slate-200">
+            <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg bg-slate-50 px-3 py-2 text-center text-[11px] text-slate-600 ring-1 ring-slate-200">
+              <span><b className="text-slate-800">{run.zeroedMissing ?? 0}</b> về 0</span>
               <span><b className="text-slate-800">{run.unitChanged ?? 0}</b> đổi ĐVT</span>
               <span><b className="text-slate-800">{run.inactiveSkipped ?? 0}</b> ngừng dùng</span>
               <span><b className="text-slate-800">{run.skipped ?? 0}</b> dòng lỗi</span>
@@ -568,7 +569,7 @@ function GroupedErpActions({
 
       setQlvtStage("updating");
       const result = await syncStocks.mutateAsync({ rows, sourceCount: extensionResult.sourceCount });
-      toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho, ${result.warehouseChanged} mã đổi Kho, ${result.unitChanged} mã đổi ĐVT; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
+      toast.success(`Đã đọc ${extensionResult.sourceCount ?? rows.length} dòng QLVT, xử lý ${result.updated} mã: ${result.changed} mã đổi tồn kho (${result.zeroedMissing} mã không còn trên QLVT đã đưa về 0), ${result.warehouseChanged} mã đổi Kho, ${result.unitChanged} mã đổi ĐVT; bỏ qua ${result.inactiveSkipped} mã ngừng sử dụng và ${result.notFound} mã chưa có trong hệ thống.`);
       if (result.errors.length) toast.warning(result.errors.slice(0, 3).join("; "));
     } catch (error) {
       toast.error((error as Error).message || "Không đồng bộ được tồn kho QLVT");

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { audit, auditDetailWithPosition, fail, handle, ok, requireUser } from "@/lib/api";
 import { requireErpMaterialManage, requireErpMaterialView } from "@/lib/erp-material-access";
+import { isPendingErpCode } from "@/lib/oil-grouping-sync";
 import { parseErpNumber } from "@/lib/parse-number";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,23 @@ export const dynamic = "force-dynamic";
 type StockRow = { code?: unknown; erpStock?: unknown; warehouse?: unknown; unit?: unknown };
 
 function syncCountsFromDetail(detail: string | null) {
+  const withMissingReset = detail?.match(
+    /Đọc (\d+) dòng QLVT, xử lý (\d+) mã \((\d+) mã đổi tồn, (\d+) mã không còn trên QLVT đưa về 0, (\d+) mã đổi kho, (\d+) mã đổi ĐVT\), bỏ qua (\d+) mã ngừng sử dụng, (\d+) mã không có trong hệ thống và (\d+) dòng không hợp lệ/
+  );
+  if (withMissingReset) {
+    return {
+      sourceCount: Number(withMissingReset[1]),
+      updated: Number(withMissingReset[2]),
+      changed: Number(withMissingReset[3]),
+      zeroedMissing: Number(withMissingReset[4]),
+      warehouseChanged: Number(withMissingReset[5]),
+      unitChanged: Number(withMissingReset[6]),
+      inactiveSkipped: Number(withMissingReset[7]),
+      notFound: Number(withMissingReset[8]),
+      skipped: Number(withMissingReset[9]),
+    };
+  }
+
   const current = detail?.match(
     /Đọc (\d+) dòng QLVT, xử lý (\d+) mã \((\d+) mã đổi tồn, (\d+) mã đổi kho, (\d+) mã đổi ĐVT\), bỏ qua (\d+) mã ngừng sử dụng, (\d+) mã không có trong hệ thống và (\d+) dòng không hợp lệ/
   );
@@ -90,6 +108,9 @@ export async function POST(req: NextRequest) {
 
     const existing = await prisma.erpMaterial.findMany({ select: { id: true, code: true, unit: true, erpStock: true, warehouse: true, isActive: true } });
     const existingByCode = new Map(existing.map((item) => [item.code, item]));
+    // Mã xuất hiện ở nguồn nhưng có số liệu lỗi vẫn được xem là "đã tìm thấy".
+    // Không đưa tồn về 0 chỉ vì riêng dòng đó không đọc được số lượng.
+    const sourceCodes = new Set<string>();
     const seen = new Set<string>();
     const updates: Array<{ id: string; code: string; before: number; after: number; warehouseBefore: string | null; warehouse?: string; unitBefore: string; unit?: string }> = [];
     const errors: string[] = [];
@@ -100,6 +121,7 @@ export async function POST(req: NextRequest) {
     for (const [index, row] of rows.entries()) {
       const line = index + 1;
       const code = String(row.code ?? "").trim();
+      if (code) sourceCodes.add(code);
       const parsedStock = parseErpNumber(row.erpStock);
       if (!code || !Number.isFinite(parsedStock) || parsedStock < 0) {
         skipped += 1;
@@ -131,26 +153,44 @@ export async function POST(req: NextRequest) {
       updates.push({ id: current.id, code, before: current.erpStock, after: parsedStock, warehouseBefore: current.warehouse, warehouse, unitBefore: current.unit, unit });
     }
 
-    if (updates.length) {
-      await prisma.$transaction(
-        updates.map((item) => prisma.$executeRaw(Prisma.sql`
+    // QLVT trả về một ảnh chụp toàn bộ tồn kho. Mã ERP thật đang hoạt động nhưng
+    // vắng khỏi ảnh chụp được hiểu là đã xuất hết, nên tồn cũ phải được xoá về 0.
+    // Mã tạm do người dùng khai tay không tồn tại trên ERP nên không áp dụng quy tắc này.
+    const missingWithStock = existing.filter((item) =>
+      item.isActive
+      && item.erpStock !== 0
+      && !isPendingErpCode(item.code)
+      && !sourceCodes.has(item.code)
+    );
+
+    const stockWrites = updates.map((item) => prisma.$executeRaw(Prisma.sql`
           UPDATE "ErpMaterial"
           SET "erpStock" = CAST(${item.after} AS DOUBLE PRECISION),
               "warehouse" = COALESCE(CAST(${item.warehouse || null} AS TEXT), "warehouse"),
               "unit" = COALESCE(CAST(${item.unit || null} AS TEXT), "unit"),
               "updatedAt" = NOW()
           WHERE "id" = ${item.id}
-        `))
-      );
+        `));
+    if (missingWithStock.length) {
+      stockWrites.push(prisma.$executeRaw(Prisma.sql`
+        UPDATE "ErpMaterial"
+        SET "erpStock" = CAST(0 AS DOUBLE PRECISION), "updatedAt" = NOW()
+        WHERE "id" IN (${Prisma.join(missingWithStock.map((item) => item.id))})
+      `));
+    }
+    if (stockWrites.length) {
+      await prisma.$transaction(stockWrites);
     }
 
-    const changed = updates.filter((item) => item.before !== item.after).length;
+    const zeroedMissing = missingWithStock.length;
+    const changed = updates.filter((item) => item.before !== item.after).length + zeroedMissing;
+    const updated = updates.length + zeroedMissing;
     const warehouseChanged = updates.filter((item) => item.warehouse && item.warehouseBefore !== item.warehouse).length;
     const unitChanged = updates.filter((item) => item.unit && item.unitBefore !== item.unit).length;
     const syncedAt = new Date();
     const detail = auditDetailWithPosition(
       user,
-      `Đọc ${sourceCount} dòng QLVT, xử lý ${updates.length} mã (${changed} mã đổi tồn, ${warehouseChanged} mã đổi kho, ${unitChanged} mã đổi ĐVT), bỏ qua ${inactiveSkipped} mã ngừng sử dụng, ${notFound} mã không có trong hệ thống và ${skipped} dòng không hợp lệ`
+      `Đọc ${sourceCount} dòng QLVT, xử lý ${updated} mã (${changed} mã đổi tồn, ${zeroedMissing} mã không còn trên QLVT đưa về 0, ${warehouseChanged} mã đổi kho, ${unitChanged} mã đổi ĐVT), bỏ qua ${inactiveSkipped} mã ngừng sử dụng, ${notFound} mã không có trong hệ thống và ${skipped} dòng không hợp lệ`
     );
     await audit(
       user.id,
@@ -161,8 +201,9 @@ export async function POST(req: NextRequest) {
     );
 
     return ok({
-      updated: updates.length,
+      updated,
       changed,
+      zeroedMissing,
       warehouseChanged,
       unitChanged,
       notFound,
@@ -176,8 +217,9 @@ export async function POST(req: NextRequest) {
         position: user.currentPosition ?? user.position ?? null,
         detail,
         sourceCount,
-        updated: updates.length,
+        updated,
         changed,
+        zeroedMissing,
         warehouseChanged,
         unitChanged,
         inactiveSkipped,

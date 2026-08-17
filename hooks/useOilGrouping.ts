@@ -111,6 +111,7 @@ export type ErpStockUpdateInput = {
 export type ErpStockUpdateResult = {
   updated: number;
   changed: number;
+  zeroedMissing: number;
   warehouseChanged: number;
   unitChanged: number;
   notFound: number;
@@ -129,6 +130,7 @@ export type QlvtSyncStatus = {
   sourceCount: number;
   updated: number;
   changed: number;
+  zeroedMissing?: number;
   warehouseChanged: number;
   unitChanged: number;
   inactiveSkipped: number;
