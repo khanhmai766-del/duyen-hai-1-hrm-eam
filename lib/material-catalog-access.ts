@@ -19,16 +19,24 @@ export type MaterialCatalogAccessWhere = {
  * chỉ bắt đầu từ node có cha — cấp 2 trở xuống.
  */
 export function materialCatalogAccessWhere(
-  access: EquipmentAccessContext
+  access: EquipmentAccessContext,
+  fullCatalogView = false
 ): MaterialCatalogAccessWhere {
-  const replacementSeq = equipmentSeqWhere(
-    access.branchFilter,
-    "deviceSeq"
-  ) as Prisma.MaterialReplacementWhereInput | null;
-  const usageSeq = equipmentSeqWhere(
-    access.branchFilter,
-    "deviceSeq"
-  ) as Prisma.EquipmentMaterialWhereInput | null;
+  // Quyền xem toàn bộ Danh mục (ADMIN, material-view mức manage/full hoặc cương vị
+  // hành chính như Thống kê) phải thắng bộ lọc cây thiết bị ở LUỒNG ĐỌC này. Quyền
+  // ghi vẫn được các route mutation kiểm tra riêng bằng access-context gốc.
+  const replacementSeq = fullCatalogView
+    ? null
+    : equipmentSeqWhere(
+        access.branchFilter,
+        "deviceSeq"
+      ) as Prisma.MaterialReplacementWhereInput | null;
+  const usageSeq = fullCatalogView
+    ? null
+    : equipmentSeqWhere(
+        access.branchFilter,
+        "deviceSeq"
+      ) as Prisma.EquipmentMaterialWhereInput | null;
 
   const linkedReplacement: Prisma.MaterialReplacementWhereInput = {
     deviceSeq: { not: null },

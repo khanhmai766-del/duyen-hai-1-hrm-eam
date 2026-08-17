@@ -12,6 +12,18 @@ function norm(s?: string | null) {
   return normalizeText(s || "").trim();
 }
 
+/**
+ * Cương vị hành chính/kỹ thuật vẫn có thể được giao phiếu vật tư dù không nằm
+ * trong danh mục cương vị vận hành (và vì vậy không bắt buộc có phạm vi cây
+ * thiết bị trong PositionSystemScope).
+ */
+export const MATERIAL_TICKET_EXTRA_ASSIGNED_POSITIONS = ["Kỹ thuật viên", "Thống kê"] as const;
+
+export function isMaterialTicketExtraAssignedPosition(position?: string | null) {
+  const value = norm(position);
+  return MATERIAL_TICKET_EXTRA_ASSIGNED_POSITIONS.some((item) => norm(item) === value);
+}
+
 /** Trưởng Ca / Trưởng Kíp / TK Lò máy / Trưởng Kíp Điện — nhóm duyệt, nghiệm thu, xuất file */
 export function isShiftLeader(position?: string | null) {
   const p = norm(position);

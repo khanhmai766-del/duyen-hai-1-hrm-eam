@@ -335,11 +335,21 @@ export const TICKET_TO_MATERIAL_CATEGORY: Record<string, string> = {
   "Hóa chất": "Hóa Chất",
   "Chai khí": "Chai Khí",
   "Bi nghiền": "Bi Nghiền Than",
+  "Văn phòng phẩm": "Văn phòng phẩm",
+  "Khác": "Khác",
 };
 
 /** Loại vật tư chọn được khi lập PHIẾU vật tư. Khác cách viết với `MATERIAL_CATEGORIES`
  *  (nhãn trên phiếu ngắn hơn) nên phải đi qua `TICKET_TO_MATERIAL_CATEGORY` để tra Danh mục. */
-export const TICKET_MATERIAL_CATEGORIES = ["Dầu bôi trơn", "Lọc dầu", "Hóa chất", "Chai khí", "Bi nghiền"] as const;
+export const TICKET_MATERIAL_CATEGORIES = [
+  "Dầu bôi trơn",
+  "Lọc dầu",
+  "Hóa chất",
+  "Chai khí",
+  "Bi nghiền",
+  "Văn phòng phẩm",
+  "Khác",
+] as const;
 
 /**
  * Phiếu đi theo LUỒNG HÓA CHẤT: luôn bắt đầu ở Đề xuất (không có Ứng / Sử dụng hiện có)

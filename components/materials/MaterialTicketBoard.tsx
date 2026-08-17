@@ -3002,9 +3002,8 @@ const CSS = `
 .ticket-unit-options button,.ticket-category-options button{min-height:34px;padding:7px 10px;border-radius:8px;font-size:12px;line-height:1.15;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:border-color .15s ease,background-color .15s ease,color .15s ease,box-shadow .15s ease;}
 .ticket-unit-options button:hover,.ticket-category-options button:hover{border-color:#94a3b8;background:#f8fafc;box-shadow:0 2px 5px rgba(15,23,42,.06);}
 .ticket-unit-options button.on:hover{border-color:${C.navy};background:${C.navy};}
-/* 5 loại vật tư trên MỘT dòng. Hộp thoại rộng 520px nên mỗi ô chỉ còn ~92px: bớt đệm ngang
-   và cấm xuống dòng để nhãn dài nhất ("Dầu bôi trơn") vẫn nằm gọn một hàng chữ. */
-.ticket-category-options{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
+/* Bảy loại vật tư chia 4 + 3 để các nhãn dài vẫn rõ ràng trong hộp thoại 520px. */
+.ticket-category-options{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}
 .ticket-category-options button{padding-left:6px;padding-right:6px;white-space:nowrap;}
 .ticket-category-options button.on:hover{border-color:${C.accent};background:${C.accent}10;}
 .seg3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}

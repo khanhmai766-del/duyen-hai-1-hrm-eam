@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ok, requireUser, handle } from "@/lib/api";
-import { getPositionScopes } from "@/lib/material-workflow";
+import { getPositionScopes, MATERIAL_TICKET_EXTRA_ASSIGNED_POSITIONS } from "@/lib/material-workflow";
 import { announcementShiftRosterPositionOptions } from "@/lib/positions";
 import { positionCodeOf, positionLabelOf } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
@@ -122,7 +122,10 @@ export async function GET() {
 
     // Dùng cùng nguồn cương vị cố định với Mệnh lệnh/Forum. Không trộn dữ liệu
     // user để tránh sinh bản sao chỉ khác kiểu viết hoa (Lò phó / Lò Phó...).
-    const positions = announcementShiftRosterPositionOptions();
+    const positions = [
+      ...announcementShiftRosterPositionOptions(),
+      ...MATERIAL_TICKET_EXTRA_ASSIGNED_POSITIONS,
+    ];
 
     return ok({ devices, materials, scopes, positions });
   });

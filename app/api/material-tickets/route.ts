@@ -7,6 +7,7 @@ import {
   getPositionScopes,
   getPositionScopeCount,
   getWorkflowRoleMap,
+  isMaterialTicketExtraAssignedPosition,
   isTechnician,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
@@ -179,7 +180,9 @@ export async function POST(req: NextRequest) {
         ? { OR: [{ positionCode: assignedPositionCode }, { position: assignedPosition }] }
         : { position: assignedPosition },
     });
-    if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+    if (totalScopeCount > 0 && scopeCount === 0 && !isMaterialTicketExtraAssignedPosition(assignedPosition)) {
+      return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+    }
 
     // Loại vật tư
     const materialCategory = String(body.materialCategory || "").trim();

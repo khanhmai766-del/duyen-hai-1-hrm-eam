@@ -278,7 +278,8 @@ export async function GET(req: NextRequest) {
     // Vật tư hiện khi có ít nhất một điểm thuộc phạm vi xem (vật tư chưa khai điểm nào
     // vẫn hiện để còn khai tiếp — giữ nguyên luật cũ).
     const viewScope = await resolvePositionViewScope(user, "material");
-    const materialAccess = materialCatalogAccessWhere(access);
+    const fullCatalogView = viewScope.all;
+    const materialAccess = materialCatalogAccessWhere(access, fullCatalogView);
 
     // MaterialReplacementLog giữ defectId/requestNumber dạng snapshot độc lập. Dùng
     // defectId để nhận diện SYC đã được xác nhận lưu lịch sử, nhưng không xóa liên kết
@@ -333,7 +334,7 @@ export async function GET(req: NextRequest) {
     const materials = materialRows.flatMap((material) => {
       const hadNoPoints = material.replacements.length === 0;
       const replacements = material.replacements.filter((replacement) =>
-        canViewMaterialReplacement(access, replacement, viewScope)
+        fullCatalogView || canViewMaterialReplacement(access, replacement, viewScope)
       );
       return hadNoPoints || replacements.length > 0
         ? [{ ...material, replacements }]
@@ -370,7 +371,7 @@ export async function GET(req: NextRequest) {
     }));
     return ok(data, {
       total: data.length,
-      equipmentScopeApplied: access.hasExplicitScopes,
+      equipmentScopeApplied: access.hasExplicitScopes && !fullCatalogView,
       positionScope: positionViewScopeMeta(viewScope),
     });
   });

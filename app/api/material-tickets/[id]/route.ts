@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isTechnician, getWorkflowRoleMap, stepAllowedWithMap } from "@/lib/material-workflow";
+import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
@@ -480,7 +480,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Không còn ràng buộc cương vị theo tổ máy (bỏ 2026-08-10) — xem POST /api/material-tickets.
       const totalScopeCount = await prisma.positionSystemScope.count();
       const scopeCount = await prisma.positionSystemScope.count({ where: { position: assignedPosition } });
-      if (totalScopeCount > 0 && scopeCount === 0) return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+      if (totalScopeCount > 0 && scopeCount === 0 && !isMaterialTicketExtraAssignedPosition(assignedPosition)) {
+        return fail(`Cương vị "${assignedPosition}" chưa được phân giao hệ thống thiết bị`);
+      }
       const materialCategory = String(body.materialCategory || "").trim();
       if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
       const bbkt = String(body.bbktNumber || "").trim(); // BBKT giờ là tuỳ chọn (bổ sung ở bước Nghiệm thu)
