@@ -6,6 +6,7 @@ import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { enqueueDefectSyncEvent } from "@/lib/defect-sync-outbox";
 import { publicUserRef } from "@/lib/s3";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
+import { defectAuditReference } from "@/lib/defect-audit";
 
 const INCLUDE = {
   createdBy: { select: { id: true, name: true, position: true, avatarUrl: true, avatarKey: true } },
@@ -105,7 +106,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       "CANCEL_DEFECT",
       "Defect",
       defect.id,
-      auditDetailWithPosition(user, note)
+      auditDetailWithPosition(
+        user,
+        [
+          defectAuditReference("Hủy phiếu", existing),
+          `Lý do: ${note}`,
+        ].join(" · ")
+      )
     );
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });

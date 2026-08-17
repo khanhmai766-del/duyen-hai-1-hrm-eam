@@ -37,6 +37,7 @@ import { daysSinceSecondReminder, isSeverity2UpgradeCandidate } from "@/lib/defe
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
 import { defectResultStatusOf } from "@/lib/defect-result-status";
 import { resolveMaterialRequest, type ResolvedMaterialRequest } from "@/lib/defect-material-request";
+import { defectAuditReference } from "@/lib/defect-audit";
 import { DEFECT_SECTIONS, type DefectSectionKey } from "@/lib/defect-section";
 import { N8N_DEFECT_SOURCE_SPREADSHEET_IDS } from "@/lib/defect-n8n-sync";
 
@@ -702,8 +703,11 @@ export async function POST(req: NextRequest) {
       "Defect",
       defect.id,
       materialRequest
-        ? `${auditDetailWithPosition(user)} · SYC thay thế ${materialRequest.rows.length} điểm`
-        : auditDetailWithPosition(user)
+        ? auditDetailWithPosition(
+            user,
+            `${defectAuditReference("Tạo phiếu", defect)} · SYC thay thế ${materialRequest.rows.length} điểm`
+          )
+        : auditDetailWithPosition(user, defectAuditReference("Tạo phiếu", defect))
     );
     return ok({ ...defect, createdBy: publicUserRef(defect.createdBy) });
   });

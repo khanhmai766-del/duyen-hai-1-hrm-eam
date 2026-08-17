@@ -20,6 +20,7 @@ import {
   type DefectDeviceMapping,
 } from "@/lib/defect-device-mapping";
 import { isDefectSyncFeatureEnabled } from "@/lib/defect-two-way-sync";
+import { defectAuditReference } from "@/lib/defect-audit";
 
 // Tầng 4: avatar trong payload đi qua publicUserRef (proxy theo key) — không chở base64.
 const INCLUDE = {
@@ -385,7 +386,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             .map((url) => deleteFromS3(url))
         );
       }
-      await audit(user.id, "UPDATE_SYNCED_DEFECT_LOCAL_DATA", "Defect", defect.id, auditDetailWithPosition(user));
+      await audit(
+        user.id,
+        "UPDATE_SYNCED_DEFECT_LOCAL_DATA",
+        "Defect",
+        defect.id,
+        auditDetailWithPosition(user, defectAuditReference("Cập nhật phiếu", defect))
+      );
       return ok({
       ...defect,
       createdBy: publicUserRef(defect.createdBy),
@@ -517,7 +524,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           .map((url) => deleteFromS3(url))
       );
     }
-    await audit(user.id, "UPDATE_DEFECT", "Defect", defect.id, auditDetailWithPosition(user));
+    await audit(
+      user.id,
+      "UPDATE_DEFECT",
+      "Defect",
+      defect.id,
+      auditDetailWithPosition(user, defectAuditReference("Cập nhật phiếu", defect))
+    );
     return ok({
       ...defect,
       createdBy: publicUserRef(defect.createdBy),
