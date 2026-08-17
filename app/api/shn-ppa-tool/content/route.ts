@@ -60,7 +60,7 @@ const BRIDGE = `<script>
     return response;
   };
   function sendHeight(){
-    window.parent.postMessage({type:'SHN_PPA_HEIGHT',height:Math.min(12000,Math.max(700,document.documentElement.scrollHeight))},'*');
+    window.parent.postMessage({type:'SHN_PPA_HEIGHT',height:Math.min(12000,Math.max(360,document.documentElement.scrollHeight))},'*');
   }
   addEventListener('message',function(event){
     if(event.source!==window.parent || !event.data) return;

@@ -123,7 +123,7 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const unsavedRef = useRef(false);
   const [frameKey, setFrameKey] = useState(0);
-  const [frameHeight, setFrameHeight] = useState(900);
+  const [frameHeight, setFrameHeight] = useState(360);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [detail, setDetail] = useState<HistoryRecord | null>(null);
@@ -184,7 +184,7 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
     const receive = async (event: MessageEvent<BridgeMessage>) => {
       if (event.source !== iframeRef.current?.contentWindow || !event.data) return;
       if (event.data.type === "SHN_PPA_HEIGHT" && typeof event.data.height === "number") {
-        setFrameHeight(Math.min(12000, Math.max(700, event.data.height)));
+        setFrameHeight(Math.min(12000, Math.max(360, event.data.height)));
         return;
       }
       if (event.data.type === "SHN_PPA_DIRTY_STATE" && typeof event.data.dirty === "boolean") {
