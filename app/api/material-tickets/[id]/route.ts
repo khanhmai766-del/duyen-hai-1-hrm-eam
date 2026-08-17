@@ -417,6 +417,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
         await reverseTicketStock(tx, { materialCode: deletedMaterial.code, ticketId: t.id });
         await syncMaterialQuantity(tx, deletedMaterial.code, sharedCodesOf(deletedMaterial));
       }
+      // Ghi tombstone trước khi cascade xóa các item. Workflow V2 dùng các khóa này
+      // để xóa đúng mọi dòng của phiếu khỏi VH1_VTDONGBO.
+      if (t.items.length > 0) {
+        await tx.materialTicketSyncDeletion.createMany({
+          data: t.items.map((item) => ({
+            ticketId: t.id,
+            syncKey: `${t.id}:${item.id}`,
+          })),
+          skipDuplicates: true,
+        });
+      }
       await tx.materialTicket.delete({ where: { id: t.id } });
 
       // Chỉ dồn STT trong tháng của phiếu vừa xóa. Các tháng cũ giữ nguyên

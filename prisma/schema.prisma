@@ -1482,6 +1482,18 @@ model MaterialTicketItem {
   @@index([deviceSeq])
 }
 
+// Tombstone phục vụ đồng bộ một chiều: phiếu đã xóa cứng không còn trong
+// MaterialTicket, nhưng n8n vẫn cần biết chính xác SYNC_KEY nào phải xóa khỏi Sheet.
+model MaterialTicketSyncDeletion {
+  id        String   @id @default(cuid())
+  ticketId  String
+  syncKey   String   @unique
+  deletedAt DateTime @default(now())
+
+  @@index([deletedAt, id])
+  @@index([ticketId])
+}
+
 // Lưu các mốc thời gian cho phần Vận hành an toàn (Safe Operation).
 // Các CHECK constraint và partial unique index cho "continuous" được áp bằng
 // prisma/add_safe_op_events.sql vì Prisma chưa biểu diễn được partial index.

@@ -29,6 +29,17 @@ Các cột bổ sung của V2:
 - Q: Khối lượng lãnh thực tế, người lãnh và ngày lãnh.
 - AL:AO: dữ liệu kỹ thuật hệ thống.
 
+### Đồng bộ thao tác xóa
+
+- Khi xóa phiếu, website ghi một tombstone cho từng `SYNC_KEY` trước khi cascade
+  xóa các item.
+- API V2 trả `meta.deletedSyncKeys`; mapper legacy không thay đổi.
+- Workflow V2 tìm khóa tại cột AL và gửi `deleteDimension` theo thứ tự dòng từ
+  dưới lên, sau đó upsert dữ liệu trong cùng một Google Sheets `batchUpdate`.
+- STT được đánh lại sau khi có dòng bị xóa.
+- Watermark chỉ được lưu khi toàn bộ thao tác Google Sheets thành công; chạy lại
+  vẫn an toàn nếu khóa đã không còn trên Sheet.
+
 ## API website
 
 ```http

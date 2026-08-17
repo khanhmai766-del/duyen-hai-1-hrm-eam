@@ -83,7 +83,7 @@
           "conditions": [
             {
               "id": "material-v2-has-rows-condition",
-              "leftValue": "={{ Array.isArray($json.data) && $json.data.length > 0 }}",
+              "leftValue": "={{ (Array.isArray($json.data) && $json.data.length > 0) || (Array.isArray($json.meta?.deletedSyncKeys) && $json.meta.deletedSyncKeys.length > 0) }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -104,15 +104,15 @@
     },
     {
       "parameters": {
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values/VH1_VTDONGBO!AL3:AL?majorDimension=ROWS",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA?fields=sheets.properties(sheetId%2Ctitle)",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleSheetsOAuth2Api",
         "options": {
           "timeout": 30000
         }
       },
-      "id": "material-v2-read-sync-keys",
-      "name": "Đọc SYNC_KEY V2",
+      "id": "material-v2-read-sheet-metadata",
+      "name": "Đọc metadata Sheet V2",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [-20, 0],
@@ -128,7 +128,31 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = $('Lấy phiếu vật tư V2').first().json;\nif (response.meta?.hasMore) {\n  throw new Error('API còn trang dữ liệu; chưa cập nhật watermark để tránh bỏ sót');\n}\nif (response.meta?.layout !== 'vh1_v2') {\n  throw new Error('API chưa trả đúng bố cục vh1_v2; hãy build website mới trước khi chạy');\n}\nconst changes = Array.isArray(response.data) ? response.data : [];\nconst keyRows = Array.isArray($json.values) ? $json.values : [];\nconst rowByKey = new Map();\nfor (let index = 0; index < keyRows.length; index++) {\n  const key = String(keyRows[index]?.[0] ?? '').trim();\n  if (key && !rowByKey.has(key)) rowByKey.set(key, index + 3);\n}\nlet nextRow = keyRows.length + 3;\nconst columns = [\n  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),\n  ...Array.from({ length: 15 }, (_, index) => `A${String.fromCharCode(65 + index)}`),\n];\nconst formatDateTime = (value) => new Intl.DateTimeFormat('en-GB', {\n  timeZone: 'Asia/Ho_Chi_Minh',\n  day: '2-digit', month: '2-digit', year: 'numeric',\n  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n}).format(value).replace(',', '');\nconst syncedAt = formatDateTime(new Date());\nconst writes = changes.map((change) => {\n  const key = String(change.syncKey ?? change.row?.AL ?? '').trim();\n  if (!key) throw new Error('Dòng vật tư thiếu SYNC_KEY');\n  let rowNumber = rowByKey.get(key);\n  if (!rowNumber) {\n    rowNumber = nextRow++;\n    rowByKey.set(key, rowNumber);\n  }\n  const values = columns.map((column) => {\n    if (column === 'A') return rowNumber - 2;\n    if (column === 'AO') return syncedAt;\n    const value = change.row?.[column];\n    return value === null || value === undefined ? '' : value;\n  });\n  return {\n    range: `VH1_VTDONGBO!A${rowNumber}:AO${rowNumber}`,\n    majorDimension: 'ROWS',\n    values: [values],\n  };\n});\nreturn [{ json: {\n  writes,\n  watermark: response.meta?.watermark,\n  rowCount: writes.length,\n} }];"
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values/VH1_VTDONGBO!AL3:AL?majorDimension=ROWS",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "material-v2-read-sync-keys",
+      "name": "Đọc SYNC_KEY V2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [200, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9OMe30YPXIQR7cIl",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $('Lấy phiếu vật tư V2').first().json;\nif (response.meta?.hasMore) {\n  throw new Error('API còn trang dữ liệu; chưa cập nhật watermark để tránh bỏ sót');\n}\nif (response.meta?.layout !== 'vh1_v2') {\n  throw new Error('API chưa trả đúng bố cục vh1_v2; hãy build website mới trước khi chạy');\n}\nconst changes = Array.isArray(response.data) ? response.data : [];\nconst deletedKeys = new Set(\n  (Array.isArray(response.meta?.deletedSyncKeys) ? response.meta.deletedSyncKeys : [])\n    .map((key) => String(key ?? '').trim())\n    .filter(Boolean)\n);\nconst keyRows = Array.isArray($json.values) ? $json.values : [];\nconst metadata = $('Đọc metadata Sheet V2').first().json;\nconst sheet = (Array.isArray(metadata.sheets) ? metadata.sheets : [])\n  .find((entry) => entry?.properties?.title === 'VH1_VTDONGBO');\nconst sheetId = sheet?.properties?.sheetId;\nif (!Number.isInteger(sheetId)) throw new Error('Không tìm thấy sheetId của VH1_VTDONGBO');\n\nconst originalRowByKey = new Map();\nfor (let index = 0; index < keyRows.length; index++) {\n  const key = String(keyRows[index]?.[0] ?? '').trim();\n  if (key && !originalRowByKey.has(key)) originalRowByKey.set(key, index + 3);\n}\nconst deletedRows = Array.from(deletedKeys)\n  .map((key) => originalRowByKey.get(key))\n  .filter((row) => Number.isInteger(row))\n  .sort((a, b) => b - a);\nconst deletedBefore = (rowNumber) => deletedRows.reduce(\n  (count, deletedRow) => count + Number(deletedRow < rowNumber),\n  0\n);\n\nconst rowByKey = new Map();\nfor (const [key, originalRow] of originalRowByKey.entries()) {\n  if (deletedKeys.has(key)) continue;\n  rowByKey.set(key, originalRow - deletedBefore(originalRow));\n}\nlet nextRow = keyRows.length + 3 - deletedRows.length;\nconst columns = [\n  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),\n  ...Array.from({ length: 15 }, (_, index) => `A${String.fromCharCode(65 + index)}`),\n];\nconst formatDateTime = (value) => new Intl.DateTimeFormat('en-GB', {\n  timeZone: 'Asia/Ho_Chi_Minh',\n  day: '2-digit', month: '2-digit', year: 'numeric',\n  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',\n}).format(value).replace(',', '');\nconst syncedAt = formatDateTime(new Date());\nconst requests = deletedRows.map((rowNumber) => ({\n  deleteDimension: {\n    range: {\n      sheetId,\n      dimension: 'ROWS',\n      startIndex: rowNumber - 1,\n      endIndex: rowNumber,\n    },\n  },\n}));\n\nfor (const change of changes) {\n  const key = String(change.syncKey ?? change.row?.AL ?? '').trim();\n  if (!key) throw new Error('Dòng vật tư thiếu SYNC_KEY');\n  if (deletedKeys.has(key)) continue;\n  let rowNumber = rowByKey.get(key);\n  if (!rowNumber) {\n    rowNumber = nextRow++;\n    rowByKey.set(key, rowNumber);\n  }\n  const values = columns.map((column) => {\n    if (column === 'A') return rowNumber - 2;\n    if (column === 'AO') return syncedAt;\n    const value = change.row?.[column];\n    return value === null || value === undefined ? '' : value;\n  });\n  requests.push({\n    updateCells: {\n      start: { sheetId, rowIndex: rowNumber - 1, columnIndex: 0 },\n      rows: [{\n        values: values.map((value) => ({\n          userEnteredValue: value === ''\n            ? {}\n            : typeof value === 'number'\n              ? { numberValue: value }\n              : typeof value === 'boolean'\n                ? { boolValue: value }\n                : { stringValue: String(value) },\n        })),\n      }],\n      fields: 'userEnteredValue',\n    },\n  });\n}\n\nif (deletedRows.length > 0) {\n  const finalRowCount = rowByKey.size;\n  for (let index = 0; index < finalRowCount; index++) {\n    requests.push({\n      updateCells: {\n        start: { sheetId, rowIndex: index + 2, columnIndex: 0 },\n        rows: [{ values: [{ userEnteredValue: { numberValue: index + 1 } }] }],\n        fields: 'userEnteredValue',\n      },\n    });\n  }\n}\n\nif (requests.length === 0) {\n  // Tombstone không còn dòng tương ứng (ví dụ phiếu bị xóa trước lần sync đầu).\n  // Ghi lại đúng tiêu đề AL2 như một no-op để batchUpdate vẫn thành công và được phép lưu watermark.\n  requests.push({\n    updateCells: {\n      start: { sheetId, rowIndex: 1, columnIndex: 37 },\n      rows: [{ values: [{ userEnteredValue: { stringValue: 'SYNC_KEY' } }] }],\n      fields: 'userEnteredValue',\n    },\n  });\n}\n\nreturn [{ json: {\n  requests,\n  watermark: response.meta?.watermark,\n  syncedRows: changes.length,\n  deletedRows: deletedRows.length,\n  missingDeletedKeys: deletedKeys.size - deletedRows.length,\n} }];"
       },
       "id": "material-v2-plan-writes",
       "name": "Lập kế hoạch upsert V2",
@@ -139,18 +163,18 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA/values:batchUpdate",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1jGwOsAc18N_aCLarHbGppuhcNM1RDkLDfgh4dmVBnoA:batchUpdate",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleSheetsOAuth2Api",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ valueInputOption: 'USER_ENTERED', data: $json.writes }) }}",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.requests }) }}",
         "options": {
           "timeout": 30000
         }
       },
       "id": "material-v2-write-batch",
-      "name": "Ghi batch vào VH1_VTDONGBO",
+      "name": "Áp dụng xóa và upsert V2",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [460, 0],
@@ -166,7 +190,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const plan = $('Lập kế hoạch upsert V2').first().json;\nif (!plan.watermark) throw new Error('Thiếu watermark sau khi ghi Sheet V2');\nconst state = $getWorkflowStaticData('global');\nstate.materialV2UpdatedAfter = plan.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: plan.rowCount,\n  watermark: plan.watermark,\n  targetSheet: 'VH1_VTDONGBO',\n} }];"
+        "jsCode": "const plan = $('Lập kế hoạch upsert V2').first().json;\nif (!plan.watermark) throw new Error('Thiếu watermark sau khi ghi Sheet V2');\nconst state = $getWorkflowStaticData('global');\nstate.materialV2UpdatedAfter = plan.watermark;\nreturn [{ json: {\n  success: true,\n  syncedRows: plan.syncedRows,\n  deletedRows: plan.deletedRows,\n  missingDeletedKeys: plan.missingDeletedKeys,\n  watermark: plan.watermark,\n  targetSheet: 'VH1_VTDONGBO',\n} }];"
       },
       "id": "material-v2-save-watermark-after-write",
       "name": "Lưu watermark V2 sau khi ghi",
@@ -200,17 +224,20 @@
     },
     "Có dòng cần đồng bộ V2?": {
       "main": [
-        [{"node": "Đọc SYNC_KEY V2", "type": "main", "index": 0}],
+        [{"node": "Đọc metadata Sheet V2", "type": "main", "index": 0}],
         [{"node": "Lưu watermark V2 khi không có dòng", "type": "main", "index": 0}]
       ]
+    },
+    "Đọc metadata Sheet V2": {
+      "main": [[{"node": "Đọc SYNC_KEY V2", "type": "main", "index": 0}]]
     },
     "Đọc SYNC_KEY V2": {
       "main": [[{"node": "Lập kế hoạch upsert V2", "type": "main", "index": 0}]]
     },
     "Lập kế hoạch upsert V2": {
-      "main": [[{"node": "Ghi batch vào VH1_VTDONGBO", "type": "main", "index": 0}]]
+      "main": [[{"node": "Áp dụng xóa và upsert V2", "type": "main", "index": 0}]]
     },
-    "Ghi batch vào VH1_VTDONGBO": {
+    "Áp dụng xóa và upsert V2": {
       "main": [[{"node": "Lưu watermark V2 sau khi ghi", "type": "main", "index": 0}]]
     }
   },

@@ -65,6 +65,17 @@ export async function GET(req: NextRequest) {
       const rows = layout === "vh1_v2"
         ? page.flatMap(materialTicketRowsForN8nV2)
         : page.flatMap(materialTicketRowsForN8n);
+      const deletionRows = layout === "vh1_v2" && !cursor
+        ? await prisma.materialTicketSyncDeletion.findMany({
+            where: { deletedAt: { gt: updatedAfter!, lte: boundary } },
+            select: { syncKey: true },
+            orderBy: [{ deletedAt: "asc" }, { id: "asc" }],
+            take: 1001,
+          })
+        : [];
+      if (deletionRows.length > 1000) {
+        throw new Error("Có quá nhiều phiếu đã xóa trong một lượt đồng bộ; chưa cập nhật watermark");
+      }
 
       return ok(rows, {
         hasMore,
@@ -73,6 +84,8 @@ export async function GET(req: NextRequest) {
         serverTime: new Date().toISOString(),
         ticketCount: page.length,
         rowCount: rows.length,
+        deletedSyncKeys: deletionRows.map((row) => row.syncKey),
+        deletedRowCount: deletionRows.length,
         layout,
       });
     } catch (error) {
