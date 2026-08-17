@@ -1088,6 +1088,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const quantity = Math.trunc(Number(body.quantity));
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng vật tư đã lãnh phải lớn hơn 0");
       const repairRequestNumber = String(body.repairRequestNumber || "").trim();
+      // Tên VHV lãnh: chai khí bắt buộc khai (người lãnh thường không phải người bấm máy);
+      // các loại khác giữ nguyên nếp cũ là lấy tên người đăng nhập.
+      const vhvReceivedByName = String(body.vhvReceivedByName || "").trim();
+      if (isGasCylinderTicket(t.materialCategory) && !vhvReceivedByName) return fail("Vui lòng nhập tên VHV lãnh");
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const sharedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
@@ -1099,7 +1103,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             status: isGasCylinderTicket(t.materialCategory) ? "NHAN_VAT_TU" : "SU_DUNG_VAT_TU",
             vhvReceivedQuantity: quantity,
             repairRequestNumber: repairRequestNumber || null,
-            vhvReceivedByName: user.name ?? "",
+            vhvReceivedByName: vhvReceivedByName || user.name || "",
             vhvReceivedByPosition: user.position ?? null,
             vhvReceivedAt: new Date(),
           },
@@ -1116,7 +1120,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.findUnique({ where: { id: t.id }, include: ITEM_INCLUDE });
       });
       if (!up) return fail("Bước VHV lãnh vật tư đã được xác nhận trước đó");
-      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${repairRequestNumber ? `; số yêu cầu sửa chữa ${repairRequestNumber}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
+      await audit(user.id, "MT_VHV_RECEIVE", "MaterialTicket", t.id, `${materialTicketReference(t)}: VHV lãnh ${quantity}${vhvReceivedByName ? ` — ${vhvReceivedByName}` : ""}${repairRequestNumber ? `; số yêu cầu sửa chữa ${repairRequestNumber}` : ""}; Hiện có ${item.material.quantity} → ${item.material.quantity + quantity}; ERP không đổi`);
       return ok(up);
     }
 
@@ -1411,11 +1415,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            // Chai khí không có quyết toán và không khai số yêu cầu sửa chữa (chai khí là
-            // vật tư tiêu hao, không gắn với một công việc sửa chữa) — cả hai luồng đều đi
-            // thẳng sang bước Sử dụng vật tư.
+            // Chai khí bỏ cả quyết toán, số yêu cầu sửa chữa lẫn bước Sử dụng vật tư —
+            // lãnh xong là tới thẳng bước Xác nhận trả (bước này mới trừ kho).
             status: isGasCylinderTicket(t.materialCategory)
-              ? "SU_DUNG_VAT_TU"
+              ? GAS_RETURN_STATUS
               : t.type === "UNG" ? "CHO_QUYET_TOAN" : "CHO_PHIEU_YCSC",
             receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
             // Ứng: bước gộp kiêm luôn Thống kê xác nhận ĐXVT — lưu số phiếu + dấu vết Thống kê.
@@ -1540,24 +1543,62 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (Number.isNaN(returnedAt.getTime())) return fail("Ngày trả không hợp lệ");
       const returnedByName = String(body.returnedByName || "").trim();
       if (!returnedByName) return fail("Vui lòng nhập tên người trả");
-      const unitLabel = t.items[0]?.material.unit ?? "";
-      const up = await prisma.materialTicket.update({
-        where: { id: t.id },
-        data: {
-          status: "HOAN_TAT",
-          // Dùng lại đúng hai cột của nghiệp vụ thu hồi: chai khí không có BBTHVT nên hai cột
-          // này bỏ trống, và ý nghĩa "vật tư trả về kho" thì trùng khớp.
-          recoveryQuantity: returnedQuantity,
-          recoveryReturnedAt: returnedAt,
-          completedById: user.id,
-          completedByName: returnedByName,
-          completedByPosition: user.position ?? null,
-          completedAt: new Date(),
-        },
-        include: ITEM_INCLUDE,
+      const item = t.items[0];
+      if (!item) return fail("Phiếu chưa có vật tư");
+      const unitLabel = item.material.unit;
+      const received = t.receivedQuantity ?? t.vhvReceivedQuantity ?? 0;
+      if (received > 0 && returnedQuantity > received) {
+        return fail(`Số chai trả (${returnedQuantity}) vượt số đã lãnh (${received} ${unitLabel})`);
+      }
+      const mat = await prisma.material.findUnique({
+        where: { id: item.materialId },
+        select: { id: true, code: true, erpCodes: true, name: true, quantity: true },
+      });
+      if (!mat) return fail("Không tìm thấy vật tư trong Danh mục", 404);
+      // Phiếu cũ đã đi qua bước Sử dụng (bước nay đã bỏ) thì phần nó đang giữ đã bị trừ khỏi
+      // Hiện có. `consumeStock` trả phần đó về lô trước khi cấp lại, nên phải cộng lại khi so
+      // sánh — không thì phiếu tự chặn chính số nó đang giữ.
+      const heldByTicket = (await usedLotsOfTicket(prisma, t.id)).reduce((sum, lot) => sum + lot.used, 0);
+      if (returnedQuantity > mat.quantity + heldByTicket) {
+        return fail(`Số chai trả vượt số lượng hiện có. ${mat.name} hiện còn ${mat.quantity + heldByTicket} ${unitLabel}.`);
+      }
+      const up = await prisma.$transaction(async (tx) => {
+        // Chai khí không còn bước Sử dụng vật tư, nên chính bước TRẢ là lúc trừ kho: trả vỏ
+        // nghĩa là số chai đó đã dùng hết. Không trừ ở đây thì lượng lãnh về nằm lại trong
+        // Hiện có vĩnh viễn — đúng loại tồn ảo đã phải đi dọn hôm 17/08.
+        try {
+          await consumeStock(tx, { materialCode: mat.code, ticketId: t.id, quantity: returnedQuantity });
+        } catch (error) {
+          throw fail((error as Error).message);
+        }
+        await syncMaterialQuantity(tx, mat.code, sharedCodesOf(mat));
+        return tx.materialTicket.update({
+          where: { id: t.id },
+          data: {
+            status: "HOAN_TAT",
+            // Dùng lại đúng hai cột của nghiệp vụ thu hồi: chai khí không có BBTHVT nên hai
+            // cột này bỏ trống, và ý nghĩa "vật tư trả về kho" thì trùng khớp.
+            recoveryQuantity: returnedQuantity,
+            recoveryReturnedAt: returnedAt,
+            // Ghi luôn dấu vết sử dụng: bước Sử dụng đã bỏ nhưng số liệu tiêu hao vẫn phải có
+            // để các bảng thống kê và lịch sử thay thế đọc được.
+            usedQuantity: returnedQuantity,
+            remainingQuantity: received - returnedQuantity,
+            materialUserName: returnedByName,
+            usedById: user.id,
+            usedByName: returnedByName,
+            usedByPosition: user.position ?? null,
+            usedAt: returnedAt,
+            completedById: user.id,
+            completedByName: returnedByName,
+            completedByPosition: user.position ?? null,
+            completedAt: new Date(),
+          },
+          include: ITEM_INCLUDE,
+        });
       });
       await audit(user.id, "MT_RETURN", "MaterialTicket", t.id,
-        `${materialTicketReference(t)}: Xác nhận trả ${returnedQuantity} ${unitLabel} ngày ${returnedAt.toLocaleDateString("vi-VN")} — ${returnedByName}; hoàn tất phiếu`);
+        `${materialTicketReference(t)}: Xác nhận trả ${returnedQuantity} ${unitLabel} ngày ${returnedAt.toLocaleDateString("vi-VN")} — ${returnedByName}; Hiện có ${mat.code}: ${mat.quantity} → ${mat.quantity - returnedQuantity}; hoàn tất phiếu`);
       return ok(up);
     }
 

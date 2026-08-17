@@ -115,20 +115,19 @@ const GAS_FLOW: Record<string, { key: string; label: string; who: string }[]> = 
     { key: "CHO_THONG_KE", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "CHO_PHIEU__XUAT_KHO", label: "Thống Kê xác nhận ĐXVT", who: "Theo phân quyền quy trình" },
     { key: "NHAN_VAT_TU", label: "Xác nhận vật tư lãnh", who: "Theo phân quyền quy trình" },
-    { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: GAS_RETURN_STATUS, label: "Xác nhận trả", who: "Theo phân quyền quy trình" },
   ],
   UNG: [
     { key: "B0", label: "VHV tạo đề xuất", who: "VHV" },
+    { key: "CHO_XAC_NHAN", label: "Trưởng ca/Trưởng kíp xác nhận", who: "Trưởng ca/Trưởng kíp" },
     { key: "VHV_LANH_VAT_TU", label: "Xác nhận vật tư lãnh", who: "VHV được giao thực hiện" },
     { key: "NHAN_VAT_TU", label: "Thống Kê xác nhận ĐXVT", who: "Thống kê" },
-    { key: "SU_DUNG_VAT_TU", label: "Xác nhận vật tư sử dụng", who: "Theo phân quyền quy trình" },
     { key: GAS_RETURN_STATUS, label: "Xác nhận trả", who: "Theo phân quyền quy trình" },
   ],
 };
 const GAS_ORDER: Record<string, string[]> = {
-  DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", GAS_RETURN_STATUS, "HOAN_TAT"],
-  UNG: ["B0", "VHV_LANH_VAT_TU", "NHAN_VAT_TU", "SU_DUNG_VAT_TU", GAS_RETURN_STATUS, "HOAN_TAT"],
+  DE_XUAT: ["B0", "CHO_THONG_KE", "CHO_PHIEU__XUAT_KHO", "NHAN_VAT_TU", GAS_RETURN_STATUS, "HOAN_TAT"],
+  UNG: ["B0", "CHO_XAC_NHAN", "VHV_LANH_VAT_TU", "NHAN_VAT_TU", GAS_RETURN_STATUS, "HOAN_TAT"],
 };
 const isGasTicketFlow = (t: { type: string; materialCategory: string | null }) =>
   isGasCylinderTicket(t.materialCategory) && !!GAS_FLOW[t.type];
@@ -1533,7 +1532,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
     t.createdAt && { at: t.createdAt, who: t.createdByName, what: "Tạo phiếu" },
     t.proposedAt && { at: t.proposedAt, who: t.proposedByName, pos: t.proposedByPosition, what: t.type === "UNG" ? "Nhập liệu thay thế" : "Đề xuất vật tư" },
     t.confirmedAt && { at: t.confirmedAt, who: t.confirmedByName, pos: t.confirmedByPosition, what: "Xác nhận — kho đủ" },
-    t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.repairRequestNumber ? ` · Số yêu cầu sửa chữa ${t.repairRequestNumber}` : ""}` },
+    t.vhvReceivedAt && { at: t.vhvReceivedAt, who: t.vhvReceivedByName, pos: t.vhvReceivedByPosition, what: `VHV lãnh ${t.vhvReceivedQuantity ?? ""}${t.vhvReceivedByName ? ` — VHV: ${t.vhvReceivedByName}` : ""}${t.repairRequestNumber ? ` · Số yêu cầu sửa chữa ${t.repairRequestNumber}` : ""}` },
     t.statsAt && { at: t.statsAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT: ${t.proposalNumber ?? ""}${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.proposalIssuedAt && !t.statsAt && { at: t.proposalIssuedAt, who: t.statsByName, pos: t.statsByPosition, what: `Xác nhận ĐXVT${t.proposalReceiverName ? ` · VHV nhận: ${t.proposalReceiverName}` : ""}` },
     t.receivedAt && { at: t.receivedAt, who: t.receivedByName, pos: t.receivedByPosition, what: [
@@ -1710,7 +1709,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 
 function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; viewer: TicketViewer | null; stepKey: string; onClose: () => void }) {
   const act = useTicketAction(t.id);
-  const permission: keyof NonNullable<TicketViewer["steps"]> | null = ({ CHO_THONG_KE: "confirm", CHO_PHIEU__XUAT_KHO: "stats", CHO_XAC_NHAN_PHAT: "stats", NHAN_VAT_TU: "receive", SU_DUNG_VAT_TU: "use", CHO_NGHIEM_THU: "accept" } as const)[stepKey as "CHO_THONG_KE" | "CHO_PHIEU__XUAT_KHO" | "CHO_XAC_NHAN_PHAT" | "NHAN_VAT_TU" | "SU_DUNG_VAT_TU" | "CHO_NGHIEM_THU"] ?? null;
+  const permission: keyof NonNullable<TicketViewer["steps"]> | null = ({ CHO_XAC_NHAN: "confirm", CHO_THONG_KE: "confirm", CHO_PHIEU__XUAT_KHO: "stats", CHO_XAC_NHAN_PHAT: "stats", NHAN_VAT_TU: "receive", SU_DUNG_VAT_TU: "use", CHO_NGHIEM_THU: "accept" } as const)[stepKey as "CHO_XAC_NHAN" | "CHO_THONG_KE" | "CHO_PHIEU__XUAT_KHO" | "CHO_XAC_NHAN_PHAT" | "NHAN_VAT_TU" | "SU_DUNG_VAT_TU" | "CHO_NGHIEM_THU"] ?? null;
   const canEdit = !!permission && !!viewer?.steps?.[permission];
   const editStep = permission;
   const [proposalNumber, setProposalNumber] = useState(t.proposalNumber ?? "");
@@ -1935,7 +1934,8 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   const [sccnPosition, setSccnPosition] = useState(t.sccnRepresentativePosition ?? "");
   const [bbntDoNumberInput, setBbntDoNumberInput] = useState(t.bbntDoNumber ?? "");
   const [settlementConfirmed, setSettlementConfirmed] = useState(false);
-  const [recoveryQuantityInput, setRecoveryQuantityInput] = useState(() => String(t.recoveryQuantity ?? 1));
+  const [recoveryQuantityInput, setRecoveryQuantityInput] = useState(() =>
+    String(t.recoveryQuantity ?? (isGasCylinderTicket(t.materialCategory) ? (t.receivedQuantity ?? t.vhvReceivedQuantity ?? 1) : 1)));
   const [recoveryReturned, setRecoveryReturned] = useState(!!t.recoveryReturnedAt);
   const [startedAt, setStartedAt] = useState("");
   const [endedAt, setEndedAt] = useState("");
@@ -2476,10 +2476,15 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
   if (acts.includes("vhvReceive")) {
     const unit = t.items[0]?.material.unit ?? "";
     return <div className="act">
-      <div className={`vhv-receive-grid ${isGasTicket ? "single" : ""}`}>
+      <div className="vhv-receive-grid">
         <label className="field">Số lượng vật tư đã lãnh{unit ? ` (${unit})` : ""} *
           <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.trunc(Number(e.target.value)) || 1))} />
         </label>
+        {isGasTicket && (
+          <label className="field">VHV lãnh *
+            <input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} placeholder="Họ tên người lãnh" />
+          </label>
+        )}
         {/* Chai khí không gắn với công việc sửa chữa nào nên bỏ hẳn ô số YCSC ở cả hai luồng. */}
         {!isGasTicket && (
           <label className="field">Số yêu cầu sửa chữa (nếu có)
@@ -2488,7 +2493,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         )}
       </div>
       <p className="hint">Sau khi xác nhận, số lượng đã lãnh được cộng vào Hiện có để sử dụng ở bước sau. Số lượng ERP không thay đổi.</p>
-      <button className="btn primary big" disabled={qty <= 0 || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, repairRequestNumber: repairRequestNumber.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
+      <button className="btn primary big" disabled={qty <= 0 || (isGasTicket && !receiverName.trim()) || act.isPending} onClick={() => run({ action: "vhvReceive", quantity: qty, repairRequestNumber: repairRequestNumber.trim() || undefined, vhvReceivedByName: receiverName.trim() || undefined }, "Đã ghi nhận VHV lãnh vật tư")}><Check size={15} /> Xác nhận</button>
     </div>;
   }
 
@@ -2664,12 +2669,13 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
 
   if (acts.includes("returnItems")) {
     const unit = t.items[0]?.material.unit ?? "";
-    const used = t.usedQuantity ?? 0;
+    const received = t.receivedQuantity ?? t.vhvReceivedQuantity ?? 0;
     const returned = Math.trunc(Number(recoveryQuantityInput));
+    const stock = t.items[0]?.material.quantity ?? 0;
     return (
       <div className="act">
         <label className="lb">Xác nhận trả</label>
-        <div className="note"><Check size={14} /><span>Đã dùng <b>{used} {unit}</b>. Xác nhận số vỏ chai đã trả về kho để hoàn tất phiếu — luồng chai khí không có nghiệm thu và quyết toán.</span></div>
+        <div className="note"><Check size={14} /><span>Đã lãnh <b>{received} {unit}</b>. Xác nhận số vỏ chai đã trả về kho để hoàn tất phiếu; số chai trả sẽ được <b>trừ khỏi Hiện có</b> (đang là {stock} {unit}).</span></div>
         <div className="chem-grid">
           <div>
             <label className="lb">Số lượng trả *{unit ? ` (${unit})` : ""}</label>
@@ -2684,11 +2690,14 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
             <input value={receiverName} onChange={(e) => setReceiverName(e.target.value)} placeholder="Họ tên người trả" />
           </div>
         </div>
-        {returned > used && used > 0 && (
-          <div className="warnbox"><AlertTriangle size={15} /> Số lượng trả ({returned}) nhiều hơn số đã dùng ({used}) — kiểm tra lại nếu không phải trả gộp vỏ của lần trước.</div>
+        {returned > received && received > 0 && (
+          <div className="warnbox"><AlertTriangle size={15} /> Số chai trả ({returned}) nhiều hơn số đã lãnh ({received} {unit}).</div>
+        )}
+        {returned > stock && (
+          <div className="warnbox"><AlertTriangle size={15} /> Số chai trả vượt số lượng hiện có ({stock} {unit}).</div>
         )}
         <button className="btn primary big"
-          disabled={act.isPending || !Number.isFinite(returned) || returned <= 0 || !receivedDate || !receiverName.trim()}
+          disabled={act.isPending || !Number.isFinite(returned) || returned <= 0 || returned > stock || (received > 0 && returned > received) || !receivedDate || !receiverName.trim()}
           onClick={() => run({ action: "returnItems", returnedQuantity: returned, returnedAt: receivedDate, returnedByName: receiverName.trim() }, "Đã xác nhận trả, phiếu hoàn tất")}>
           {act.isPending ? <Loader2 className="spin" size={15} /> : <Check size={15} />} Xác nhận trả và hoàn tất
         </button>
@@ -3142,7 +3151,6 @@ const CSS = `
 .receive-field-grid .field{min-width:0;margin:0!important;}
 .receive-field-grid .field input,.receive-field-grid .field select{width:100%;margin-top:6px;}
 .vhv-receive-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;}
-.vhv-receive-grid.single{grid-template-columns:minmax(0,1fr);}
 .vhv-receive-grid .field{min-width:0;margin:0!important;}
 .vhv-receive-grid .field input{width:100%;margin-top:6px;}
 .confirm-field-row{display:grid;grid-template-columns:minmax(280px,1.45fr) minmax(150px,.65fr) minmax(220px,1fr);gap:10px;align-items:end;}
