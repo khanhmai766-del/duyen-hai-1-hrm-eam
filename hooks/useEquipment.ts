@@ -11,6 +11,8 @@ export interface EquipmentNode {
   drawing: string | null;
   depth: number;
   deviceId?: string | null;
+  /** Chỉ có khi gọi với `foldersOnly`: số thiết bị lá nằm trực tiếp dưới thư mục này. */
+  leafCount?: number;
 }
 
 /**
@@ -163,15 +165,18 @@ export function useEquipmentTree(options?: {
   permissionScope?: EquipmentPermissionScope;
   adminTree?: boolean;
   scope?: TreeScope;
+  /** Chỉ lấy node thư mục (kèm `leafCount`) — payload nhẹ hơn ~11 lần. */
+  foldersOnly?: boolean;
 }) {
   const permissionScope = options?.permissionScope;
   const params = new URLSearchParams();
   if (permissionScope) params.set("permissionScope", permissionScope);
   if (options?.adminTree) params.set("adminTree", "1");
   if (options?.scope) params.set("scope", options.scope);
+  if (options?.foldersOnly) params.set("foldersOnly", "1");
   const query = params.toString();
   return useQuery({
-    queryKey: ["equipment-tree", permissionScope ?? (options?.adminTree ? "admin-tree" : "position-scope"), options?.scope ?? "ALL"],
+    queryKey: ["equipment-tree", permissionScope ?? (options?.adminTree ? "admin-tree" : "position-scope"), options?.scope ?? "ALL", options?.foldersOnly ? "folders" : "all"],
     queryFn: () =>
       apiGet<EquipmentNode[]>(
         `/api/equipment-tree${query ? `?${query}` : ""}`

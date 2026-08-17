@@ -33,6 +33,30 @@ export async function GET(req: NextRequest) {
       : await filterEquipmentNodesForUser(user, normalizedNodes);
     const scopedNodes = scope ? visibleNodes.filter((node) => seqInScope(node.seq, scope)) : visibleNodes;
     const overrideOf = scope ? await getProfileOverrides(scope) : () => undefined;
+
+    // ?foldersOnly=1 — màn Phân quyền hệ thống chỉ gán quyền ở node THƯ MỤC, thiết bị lá chỉ
+    // được ĐẾM. Trả riêng thư mục kèm `leafCount` cắt payload S1 từ 16.312 node / 2.789 KB
+    // xuống 1.614 node / 244 KB (đo 17/08/2026), giữ nguyên con số tổng kết trên giao diện.
+    if (req.nextUrl.searchParams.get("foldersOnly") === "1") {
+      const leafCountOf = new Map<string, number>();
+      const isFolder = new Set(scopedNodes.map((node) => node.parentSeq).filter(Boolean) as string[]);
+      for (const node of scopedNodes) {
+        if (isFolder.has(node.seq) || !node.parentSeq) continue;
+        leafCountOf.set(node.parentSeq, (leafCountOf.get(node.parentSeq) ?? 0) + 1);
+      }
+      return ok(scopedNodes
+        .filter((node) => isFolder.has(node.seq))
+        .map((node) => ({
+          seq: node.seq,
+          parentSeq: node.parentSeq,
+          name: overrideOf(node.seq)?.name ?? node.name,
+          drawing: node.drawing,
+          depth: node.depth,
+          deviceId: node.deviceId ?? null,
+          leafCount: leafCountOf.get(node.seq) ?? 0,
+        })));
+    }
+
     return ok(scopedNodes.map((node) => ({
       seq: node.seq,
       parentSeq: node.parentSeq,

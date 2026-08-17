@@ -53,7 +53,9 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   );
   const [treeScope, setTreeScope] = React.useState<TreeScope>("S1");
   // Màn cấu hình RBAC phải đọc toàn bộ cây, độc lập với cương vị hiện tại của admin.
-  const treeQuery = useEquipmentTree({ adminTree: true, scope: treeScope });
+  // Chỉ tải node THƯ MỤC: quyền chỉ gán được ở thư mục, thiết bị lá chỉ vào phần đếm và
+  // đã có `leafCount` kèm theo. Payload S1 giảm 2.789 KB → 244 KB.
+  const treeQuery = useEquipmentTree({ adminTree: true, scope: treeScope, foldersOnly: true });
   const scopesQuery = usePositionSystemScopes();
   const updateScopes = useUpdatePositionSystemScope();
   const equipmentNodes = React.useMemo(() => treeQuery.data?.data ?? [], [treeQuery.data]);
@@ -74,7 +76,7 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
   });
   const conflictReport = conflictsQuery.data?.data;
 
-  const { roots, childrenOf, parentOf, allChildrenOf } = React.useMemo(() => {
+  const { roots, childrenOf, parentOf } = React.useMemo(() => {
     // Dựng đúng theo parentSeq như cây thiết bị lazy. Không đoán cha bằng tiền tố mã,
     // vì fallback đó từng làm màn phân quyền khác cấu trúc cây chính.
     const bySeq = new Map(equipmentNodes.map((node) => [node.seq, node]));
@@ -89,12 +91,9 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
     }
     for (const children of directChildren.values()) children.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
 
-    // Chỉ phân quyền ở node thư mục (hệ thống) — node có con.
-    const folderChildren = new Map<string, EquipmentNode[]>();
-    for (const [seq, children] of directChildren) {
-      const folders = children.filter((child) => (directChildren.get(child.seq) ?? []).length > 0);
-      if (folders.length) folderChildren.set(seq, folders.sort((a, b) => compareEquipmentSeq(a.seq, b.seq)));
-    }
+    // Chỉ phân quyền ở node thư mục (hệ thống). API `foldersOnly` đã lọc sẵn nên mọi node
+    // nhận về đều là thư mục — không cần suy lại "có con hay không" từ chính danh sách.
+    const folderChildren = directChildren;
     // Giống API roots: ẩn gốc nhà máy DH1.S1 và đưa các nhánh 1..7 lên cấp đầu.
     // Node mồ côi nằm sâu không được tự nâng thành root.
     const scopeRoots = rawRoots.flatMap((root) =>
@@ -104,10 +103,8 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
           ? [root]
           : []
     );
-    const folderRoots = scopeRoots
-      .filter((root) => (directChildren.get(root.seq) ?? []).length > 0)
-      .sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
-    return { roots: folderRoots, childrenOf: folderChildren, parentOf: strictParentOf, allChildrenOf: directChildren };
+    const folderRoots = scopeRoots.sort((a, b) => compareEquipmentSeq(a.seq, b.seq));
+    return { roots: folderRoots, childrenOf: folderChildren, parentOf: strictParentOf };
   }, [equipmentNodes]);
 
   React.useEffect(() => setExpanded(new Set()), [treeScope]);
@@ -221,12 +218,21 @@ export function PositionSystemScopeCard({ isAdmin }: { isAdmin: boolean }) {
       explicit: { none: 0, view: 0, edit: 0 },
     };
     for (const access of grants.values()) result.explicit[access] += 1;
+    const folderSeqs = new Set(equipmentNodes.map((node) => node.seq));
     for (const node of equipmentNodes) {
-      const bucket = (allChildrenOf.get(node.seq) ?? []).length > 0 ? result.systems : result.devices;
-      bucket[effectiveAccess(node.seq)] += 1;
+      const access = effectiveAccess(node.seq);
+      result.systems[access] += 1;
+      // Thiết bị lá không nằm trong payload nữa: chúng luôn kế thừa quyền của thư mục cha,
+      // nên cộng theo `leafCount` cho ra đúng con số cũ mà không phải tải 16k node.
+      result.devices[access] += node.leafCount ?? 0;
+    }
+    // Trường hợp hiếm: quyền được gán thẳng vào MỘT thiết bị lá (dữ liệu cũ). Lá đó không
+    // có trong payload nên phải đếm riêng, nếu không tổng sẽ hụt đúng bằng số bản ghi đó.
+    for (const [seq, access] of grants) {
+      if (!folderSeqs.has(seq)) result.devices[access] += 1;
     }
     return result;
-  }, [allChildrenOf, effectiveAccess, equipmentNodes, grants]);
+  }, [effectiveAccess, equipmentNodes, grants]);
 
   function hasPreviewVisible(node: EquipmentNode): boolean {
     if (effectiveAccess(node.seq) !== "none") return true;

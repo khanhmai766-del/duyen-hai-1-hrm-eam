@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getOrSetDefectListCache } from "@/lib/defect-list-cache";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { assertSeqEditable, equipmentSeqWhere, resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { normalizeImpactValue } from "@/lib/defect-impact-fields";
@@ -312,7 +313,17 @@ export async function GET(req: NextRequest) {
     // Lấy tập trường nhẹ để có thể xếp số yêu cầu theo giá trị số (năm giảm dần,
     // STT giảm dần). PostgreSQL không thể xếp đúng "999/2026" và "1000/2026"
     // bằng thứ tự chuỗi thông thường; quan hệ đầy đủ vẫn chỉ tải cho trang hiện tại.
-    const [candidates, scopeRows] = await Promise.all([
+    // Bước này tải TOÀN BỘ phiếu khớp SQL rồi mới lọc trong JS (xem ghi chú trên), đo được
+    // 485 ms / 2,9 MB cho 5.597 phiếu. Trạng thái, mức độ, từ khoá và cương vị đều lọc SAU,
+    // nên khoá cache chỉ gồm phần đi vào SQL: gõ tìm kiếm hay đổi bộ lọc dùng lại cùng một
+    // lần tải thay vì quét lại bảng mỗi lần bấm.
+    const listCacheKey = JSON.stringify({
+      where,
+      scopeWhere,
+      viewAll: viewScope.all,
+      viewCodes: viewScope.all ? null : [...viewScope.codes].sort(),
+    });
+    const [candidates, scopeRows] = await getOrSetDefectListCache(listCacheKey, () => Promise.all([
       prisma.defect.findMany({
         where,
         select: LIST_SELECT,
@@ -339,7 +350,7 @@ export async function GET(req: NextRequest) {
             },
             select: { system: true },
           }),
-    ]);
+    ] as const));
     const scopeTotal = typeof scopeRows === "number"
       ? scopeRows
       : scopeRows.filter((row) => canViewPosition(row.system, viewScope)).length;
