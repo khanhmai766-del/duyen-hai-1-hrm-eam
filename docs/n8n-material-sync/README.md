@@ -28,6 +28,9 @@ Các cột bổ sung của V2:
 - P: Khối lượng giao hàng theo lịch và lịch giao.
 - Q: Khối lượng lãnh thực tế, người lãnh và ngày lãnh.
 - AL:AO: dữ liệu kỹ thuật hệ thống.
+- Lần đồng bộ V2 từ đầu trả các phiếu theo tháng cấp STT rồi STT website tăng
+  dần; các lượt tăng dần sau đó upsert đúng dòng theo `SYNC_KEY` và không làm
+  đảo các dòng cũ.
 
 ### Đồng bộ thao tác xóa
 
@@ -36,7 +39,8 @@ Các cột bổ sung của V2:
 - API V2 trả `meta.deletedSyncKeys`; mapper legacy không thay đổi.
 - Workflow V2 tìm khóa tại cột AL và gửi `deleteDimension` theo thứ tự dòng từ
   dưới lên, sau đó upsert dữ liệu trong cùng một Google Sheets `batchUpdate`.
-- STT được đánh lại sau khi có dòng bị xóa.
+- STT lấy trực tiếp từ phiếu trên website; khi xóa dòng, workflow không tự đánh
+  lại STT theo vị trí trên Sheet.
 - Watermark chỉ được lưu khi toàn bộ thao tác Google Sheets thành công; chạy lại
   vẫn an toàn nếu khóa đã không còn trên Sheet.
 
@@ -70,7 +74,7 @@ Quy ước dữ liệu nghiệp vụ:
   bị khi bước sử dụng chưa nhập nội dung.
 - Ngày nghiệp vụ hiển thị `dd/MM/yyyy`; cột kỹ thuật AH/AJ hiển thị
   `dd/MM/yyyy HH:mm:ss` theo múi giờ Việt Nam.
-- STT cột A do workflow tính theo vị trí dòng thực tế trên Sheet.
+- STT cột A lấy từ `sequenceNumber` của phiếu trên website.
 
 ## Lịch production
 

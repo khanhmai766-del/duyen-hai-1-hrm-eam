@@ -62,9 +62,20 @@ export async function GET(req: NextRequest) {
       const hasMore = tickets.length > limit;
       const page = hasMore ? tickets.slice(0, limit) : tickets;
       const lastTicket = page.at(-1);
+      // Truy vấn vẫn phải theo updatedAt để cursor/watermark không bỏ sót dữ liệu.
+      // Riêng bố cục V2, sắp lại kết quả trước khi map để lần đồng bộ đầu tiên
+      // ghi các phiếu lên Sheet đúng thứ tự STT của website. sequenceMonth đứng
+      // trước để STT 1 của tháng mới không chen lên trên dữ liệu tháng cũ.
+      const outputPage = layout === "vh1_v2"
+        ? [...page].sort((left, right) => {
+            return left.sequenceMonth.localeCompare(right.sequenceMonth)
+              || left.sequenceNumber - right.sequenceNumber
+              || left.id.localeCompare(right.id);
+          })
+        : page;
       const rows = layout === "vh1_v2"
-        ? page.flatMap(materialTicketRowsForN8nV2)
-        : page.flatMap(materialTicketRowsForN8n);
+        ? outputPage.flatMap(materialTicketRowsForN8nV2)
+        : outputPage.flatMap(materialTicketRowsForN8n);
       const deletionRows = layout === "vh1_v2" && !cursor
         ? await prisma.materialTicketSyncDeletion.findMany({
             where: { deletedAt: { gt: updatedAfter!, lte: boundary } },
