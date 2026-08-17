@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, handle, requireUser } from "@/lib/api";
-import { assertSeqViewable, equipmentSeqWhere, resolveEquipmentTreeAccess } from "@/lib/server-access";
+import { resolveEquipmentAccessForUser } from "@/lib/server-access";
 import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScopeParam, seqInScope } from "@/lib/equipment-units";
 import { TREE_SELECT, toTreeNode } from "@/lib/equipment-tree-lazy";
@@ -32,18 +32,23 @@ export async function GET(req: NextRequest) {
       : requestedTreeUser;
     // Chặn bung nhánh của phạm vi khác (vd mở nhánh dùng chung từ cây tổ máy S2).
     if (scope && !seqInScope(parentSeq, scope)) return fail("Thiết bị không thuộc phạm vi cây đang xem");
-    if (!canAccessAllNodes) await assertSeqViewable(treeUser, parentSeq);
-
-    const { filter } = canAccessAllNodes
-      ? { filter: { kind: "all" as const } }
-      : await resolveEquipmentTreeAccess(treeUser);
-    const seqWhere = equipmentSeqWhere(filter, "seq");
-    const where = seqWhere ? { AND: [{ parentSeq }, seqWhere] } : { parentSeq };
+    // Phải dùng `visibleSeqs`, không dùng branchFilter: visibleSeqs chứa cả các
+    // thư mục tổ tiên làm đường dẫn tới một nhánh con được cấp quyền. branchFilter
+    // chỉ chứa node có quyền dữ liệu thực tế nên sẽ làm đứt cây tại thư mục cha
+    // có quyền none. Số con trực tiếp của một node nhỏ, vì vậy đọc theo parentSeq
+    // rồi lọc bằng Set trong bộ access đã cache vừa đúng quyền vừa tránh câu IN lớn.
+    const access = canAccessAllNodes ? null : await resolveEquipmentAccessForUser(treeUser);
+    if (access && !access.visibleSeqs.has(parentSeq)) {
+      return fail("Cương vị của bạn không có quyền mở nhánh thiết bị này", 403);
+    }
 
     const [nodes, overrideOf] = await Promise.all([
-      prisma.equipmentNode.findMany({ where, select: TREE_SELECT, orderBy: { sort: "asc" } }),
+      prisma.equipmentNode.findMany({ where: { parentSeq }, select: TREE_SELECT, orderBy: { sort: "asc" } }),
       getProfileOverrides(scope ?? "S1"),
     ]);
-    return ok(nodes.map((n) => toTreeNode(n, scope ?? "S1", overrideOf(n.seq))));
+    const visibleNodes = access
+      ? nodes.filter((node) => access.visibleSeqs.has(node.seq))
+      : nodes;
+    return ok(visibleNodes.map((n) => toTreeNode(n, scope ?? "S1", overrideOf(n.seq))));
   });
 }

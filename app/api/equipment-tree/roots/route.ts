@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, handle, requireUser } from "@/lib/api";
-import { resolveEquipmentTreeAccess } from "@/lib/server-access";
+import { resolveEquipmentAccessForUser, resolveEquipmentTreeAccess } from "@/lib/server-access";
 import { resolveScopeRootWhere } from "@/lib/equipment-tree-scope";
 import { getProfileOverrides } from "@/lib/equipment-profile-cache";
 import { parseScopeParam } from "@/lib/equipment-units";
@@ -31,19 +31,26 @@ export async function GET(req: NextRequest) {
     const treeUser = canAccessAllNodes
       ? { ...requestedTreeUser, role: "ADMIN" }
       : requestedTreeUser;
-    const [where, overrideOf] = await Promise.all([
+    const [where, overrideOf, access] = await Promise.all([
       scope
         ? resolveScopeRootWhere(treeUser, scope)
         : resolveEquipmentTreeAccess(treeUser).then(({ rootSeqs }) =>
             rootSeqs === null ? { parentSeq: null } : { seq: { in: rootSeqs } }
           ),
       getProfileOverrides(scope ?? "S1"),
+      canAccessAllNodes ? null : resolveEquipmentAccessForUser(treeUser),
     ]);
     const nodes = await prisma.equipmentNode.findMany({
       where,
       select: TREE_SELECT,
       orderBy: { sort: "asc" },
     });
-    return ok(nodes.map((n) => toTreeNode(n, scope ?? "S1", overrideOf(n.seq))));
+    // resolveScopeRootWhere có thể bung gốc nhà máy thành các nhánh trực tiếp.
+    // Chỉ giữ nhánh nằm trong visibleSeqs; tập này bao gồm cả tổ tiên cần thiết
+    // để người dùng đi tới thư mục con được cấp quyền sửa.
+    const visibleNodes = access
+      ? nodes.filter((node) => access.visibleSeqs.has(node.seq))
+      : nodes;
+    return ok(visibleNodes.map((n) => toTreeNode(n, scope ?? "S1", overrideOf(n.seq))));
   });
 }

@@ -299,8 +299,8 @@ export function useSyncDefects() {
   });
 }
 
-// Cờ dự phòng cho giai đoạn đồng bộ hai chiều (ghi ngược) sau này; hiện chưa có tác vụ
-// nào phụ thuộc vào cờ này, chỉ lưu trạng thái bật/tắt cho quản trị/người được phân quyền.
+// Trạng thái các luồng đồng bộ hai chiều. Mọi người dùng trang khiếm khuyết cần đọc
+// các cờ để giao diện áp đúng nghiệp vụ; chỉ người có quyền riêng mới được thay đổi.
 export function useDefectTwoWaySync(enabled = true) {
   return useQuery({
     queryKey: ["defect-two-way-sync"],

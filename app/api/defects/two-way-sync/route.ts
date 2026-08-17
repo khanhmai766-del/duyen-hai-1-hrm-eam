@@ -26,7 +26,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-two-way-sync", ["full"], "Không đủ quyền bật/tắt đồng bộ hai chiều");
+    await requirePermissionLevel(user, "defect-two-way-sync", ["manage", "full"], "Không đủ quyền bật/tắt đồng bộ hai chiều");
 
     const body = await req.json().catch(() => ({}));
     if (typeof body?.enabled !== "boolean") return fail("Thiếu trạng thái bật/tắt");

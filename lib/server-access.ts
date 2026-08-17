@@ -261,7 +261,12 @@ async function buildEquipmentAccessContext(
     : { kind: "branches", include: includeRoots, exclude: excludeRoots };
 
   const visibleNodes = allNodes.filter((node) => visibleSeqs.has(node.seq));
-  const visibleSystemNames = new Set(visibleNodes.map((node) => normalizeText(node.name)).filter(Boolean));
+  const visibleSystemNames = new Set(
+    allNodes
+      .filter((node) => recordSeqs.has(node.seq))
+      .map((node) => normalizeText(node.name))
+      .filter(Boolean)
+  );
   const editableSystemNames = new Set(
     allNodes
       .filter((node) => editableSeqs.has(node.seq))
@@ -278,10 +283,13 @@ async function buildEquipmentAccessContext(
     visibleSystemNames,
     editableSystemNames,
     branchFilter,
-    canViewSeq: (seq?: string | null) => !!seq && visibleSeqs.has(seq),
+    // Tổ tiên trong visibleSeqs chỉ dùng để vẽ đường dẫn trên cây. Quyền xem dữ
+    // liệu phải dựa trên recordSeqs để một thư mục cha access=none không vô tình
+    // được nâng thành quyền xem chỉ vì có nhánh con được cấp lại quyền.
+    canViewSeq: (seq?: string | null) => !!seq && recordSeqs.has(seq),
     canEditSeq: (seq?: string | null) => !!seq && editableSeqs.has(seq),
     canViewDeviceLike: (device: { device?: string | null; system?: string | null }) => {
-      if (device.device) return visibleSeqs.has(device.device);
+      if (device.device) return recordSeqs.has(device.device);
       if (device.system) return visibleSystemNames.has(normalizeText(device.system));
       return false;
     },

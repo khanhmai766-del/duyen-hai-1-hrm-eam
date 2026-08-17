@@ -12,7 +12,7 @@ export async function GET() {
     await requirePermissionLevel(
       user,
       "defect-two-way-sync",
-      ["full"],
+      ["manage", "full"],
       "Không đủ quyền xem hàng đợi đồng bộ"
     );
 
@@ -44,7 +44,7 @@ export async function DELETE(req: Request) {
     await requirePermissionLevel(
       user,
       "defect-two-way-sync",
-      ["full"],
+      ["manage", "full"],
       "Không đủ quyền bỏ qua đồng bộ"
     );
 

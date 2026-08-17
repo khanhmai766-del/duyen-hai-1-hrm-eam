@@ -119,7 +119,7 @@ async function controlData(id: string) {
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-two-way-sync", ["full"], "Không đủ quyền đối chiếu STT phiếu");
+    await requirePermissionLevel(user, "defect-two-way-sync", ["manage", "full"], "Không đủ quyền đối chiếu STT phiếu");
     return ok(await controlData(params.id));
   });
 }
@@ -127,7 +127,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-two-way-sync", ["full"], "Không đủ quyền điều chỉnh STT phiếu");
+    await requirePermissionLevel(user, "defect-two-way-sync", ["manage", "full"], "Không đủ quyền điều chỉnh STT phiếu");
     if (!(await isDefectSyncFeatureEnabled("UPDATE"))) {
       return fail("Hãy bật Cập nhật Vận hành trước khi điều chỉnh STT để đồng bộ vị trí dòng trên Sheet", 503);
     }

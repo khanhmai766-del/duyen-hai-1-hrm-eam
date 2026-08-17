@@ -29,6 +29,9 @@ export const DEFAULT_RBAC_MATRIX: Record<string, Partial<Record<string, RbacLeve
   "defect-close": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "manage", TECHNICIAN: "none", VIEWER: "none" },
   "defect-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "defect-history-delete": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
+  // Tách quyền vận hành n8n khỏi quyền sửa phiếu. `read` chỉ xem trạng thái/lịch sử;
+  // `manage` hoặc `full` mới được chủ động chạy đồng bộ từ website.
+  "defect-manual-sync": { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "none", VIEWER: "none" },
   "defect-two-way-sync": { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   "material-manage": { ADMIN: "full", MANAGER: "full", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },
   "erp-material-manage": { ADMIN: "full", MANAGER: "manage", SUPERVISOR: "read", TECHNICIAN: "read", VIEWER: "read" },

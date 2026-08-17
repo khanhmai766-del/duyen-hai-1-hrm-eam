@@ -7,7 +7,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-manage", ["manage", "full"], "Không đủ quyền xem trạng thái đồng bộ");
+    await requirePermissionLevel(
+      user,
+      "defect-manual-sync",
+      ["read", "personal", "manage", "full"],
+      "Không đủ quyền xem trạng thái đồng bộ n8n"
+    );
     const runs = await prisma.defectSyncRun.findMany({
       orderBy: { startedAt: "desc" },
       take: 5,
@@ -19,7 +24,12 @@ export async function GET() {
 export async function POST() {
   return handle(async () => {
     const user = await requireUser();
-    await requirePermissionLevel(user, "defect-manage", ["full"], "Chỉ người có toàn quyền khiếm khuyết được chạy đồng bộ");
+    await requirePermissionLevel(
+      user,
+      "defect-manual-sync",
+      ["manage", "full"],
+      "Không đủ quyền chạy đồng bộ n8n thủ công"
+    );
 
     const recent = await prisma.defectSyncRun.findFirst({
       where: {

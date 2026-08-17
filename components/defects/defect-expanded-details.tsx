@@ -160,7 +160,7 @@ export function DefectExpandedDetails({ defect }: { defect: DefectItem }) {
 
 function RequestNumberControl({ defect }: { defect: DefectItem }) {
   const rbac = useRbacAccess();
-  const canControl = defect.websiteCreated && rbac.can("defect-two-way-sync", ["full"]);
+  const canControl = defect.websiteCreated && rbac.can("defect-two-way-sync", ["manage", "full"]);
   const control = useDefectRequestNumberControl(defect.id, canControl);
   const setNumber = useSetDefectRequestNumber();
   const [editing, setEditing] = React.useState(false);

@@ -185,6 +185,7 @@ function managerDefaultValue(row: PermissionRow): PermissionValue {
       "defect-two-way-sync",
       "defect-delete",
       "defect-history-delete",
+      "defect-manual-sync",
     ].includes(row.id)
   ) {
     return "none";
@@ -370,10 +371,17 @@ const DEFAULT_PERMISSIONS: PermissionRow[] = [
     matrix: { ADMIN: "full", MANAGER: "none", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {
+    id: "defect-manual-sync",
+    group: "Khiếm khuyết",
+    feature: "Đồng bộ n8n thủ công trên website",
+    note: "Quyền Đọc/Cá nhân chỉ xem trạng thái và lịch sử đồng bộ. Quyền Quản lý/Toàn quyền được bấm Đồng bộ ngay để kéo dữ liệu Google Sheet về website.",
+    matrix: { ADMIN: "full", MANAGER: "read", SUPERVISOR: "read", TECHNICIAN: "none", VIEWER: "none" },
+  },
+  {
     id: "defect-two-way-sync",
     group: "Khiếm khuyết",
     feature: "Bật/tắt đồng bộ hai chiều khiếm khuyết (n8n)",
-    note: "Cờ dự phòng cho giai đoạn phát triển sau, mặc định tắt. Hiện tại đồng bộ chỉ một chiều Google Sheet → DH1; chưa có tác vụ ghi ngược nào phụ thuộc vào cờ này.",
+    note: "Quyền Quản lý/Toàn quyền được bật/tắt toàn bộ luồng ghi ngược website → Google Sheet, từng loại sự kiện (cập nhật, tạo mới, nhắc xử lý), quản lý hàng đợi và đối chiếu STT. Mặc định chỉ Quản trị viên.",
     matrix: { ADMIN: "full", SUPERVISOR: "none", TECHNICIAN: "none", VIEWER: "none" },
   },
   {

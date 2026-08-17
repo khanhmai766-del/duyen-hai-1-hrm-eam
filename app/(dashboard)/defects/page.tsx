@@ -324,9 +324,9 @@ export default function DefectsPage() {
     [usersQuery.data?.data]
   );
   const sync = useSyncDefects();
-  const canRunSync = rbac.can("defect-manage", ["full"]);
-  const canViewSync = rbac.can("defect-manage", ["manage", "full"]);
-  const canManageTwoWaySync = rbac.can("defect-two-way-sync", ["full"]);
+  const canRunSync = rbac.can("defect-manual-sync", ["manage", "full"]);
+  const canViewSync = rbac.can("defect-manual-sync", ["read", "personal", "manage", "full"]);
+  const canManageTwoWaySync = rbac.can("defect-two-way-sync", ["manage", "full"]);
   const twoWaySync = useDefectTwoWaySync();
   const syncFeatures = twoWaySync.data?.data;
   const operationUpdateAvailable = Boolean(
