@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
-import { CHEMICAL_TICKET_TYPE } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS } from "@/lib/constants";
 
 export interface TicketItem {
   id: string;
@@ -110,6 +110,8 @@ export interface ViewerSteps {
   receive: boolean;
   use: boolean;
   accept: boolean;
+  /** Xác nhận trả vỏ chai (bước cuối luồng chai khí); chưa cấu hình thì theo quyền bước Sử dụng. */
+  return: boolean;
   stats: boolean;
   statsHandover: boolean;
   settle: boolean;
@@ -133,7 +135,7 @@ export interface TicketViewer {
 
 export type WorkflowRoleMap = {
   create: string[]; confirm: string[]; vhvReceive: string[]; stats: string[]; statsHandover: string[];
-  receive: string[]; use: string[]; accept: string[]; settle: string[]; manage: string[];
+  receive: string[]; use: string[]; accept: string[]; return: string[]; settle: string[]; manage: string[];
 };
 
 const samePosition = (a?: string | null, b?: string | null) => {
@@ -288,6 +290,8 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_PHIEU_YCSC" && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
     if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
+    // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.
+    if (t.status === GAS_RETURN_STATUS && (v.steps?.return ?? v.steps?.use ?? v.isShiftLeader)) a.push("returnItems");
     if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");
     if (t.status === "CHO_QUYET_TOAN" && v.steps?.settle) a.push("settle");
   } else {

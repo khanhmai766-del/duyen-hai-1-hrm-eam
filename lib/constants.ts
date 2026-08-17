@@ -352,14 +352,36 @@ export const TICKET_MATERIAL_CATEGORIES = [
 ] as const;
 
 /**
- * Phiếu đi theo LUỒNG HÓA CHẤT: luôn bắt đầu ở Đề xuất (không có Ứng / Sử dụng hiện có)
- * và số lượng đề xuất không bị chặn bởi tồn ERP — vì đây là vật tư tiêu hao mua theo lô,
- * kho thường về 0 giữa hai lần nhập. Chai khí theo dõi khác hóa chất nhưng cùng đặc điểm
- * mua sắm này nên dùng chung luồng.
+ * Vật tư MUA THEO LÔ (hóa chất, chai khí): số lượng đề xuất KHÔNG bị chặn bởi tồn ERP,
+ * và không bao giờ đi luồng "Sử dụng hiện có" — kho thường về 0 giữa hai lần nhập nên
+ * chặn theo tồn chỉ khoá phiếu lại chứ không phản ánh thực tế.
+ *
+ * Đây thuần tuý là quy tắc về TỒN KHO; các bước đi qua thì mỗi loại một khác:
+ * hóa chất xem `CHEMICAL_TICKET_TYPE`, chai khí xem `isGasCylinderTicket`.
  */
 export function isChemicalFlowTicket(materialCategory: string | null | undefined): boolean {
   return materialCategory === "Hóa chất" || materialCategory === "Chai khí";
 }
+
+/**
+ * LUỒNG CHAI KHÍ (chốt 2026-08-17) — vẫn chọn Đề xuất hoặc Ứng như vật tư thường,
+ * nhưng BỎ nghiệm thu (không có BBNT) và BỎ quyết toán, thay bằng bước cuối XÁC NHẬN TRẢ:
+ * chai khí lãnh về là đổi vỏ, dùng xong phải trả vỏ rỗng về kho.
+ *
+ *   Đề xuất: tạo → TC/TK xác nhận → Thống kê xác nhận ĐXVT → xác nhận lãnh
+ *            → xác nhận sử dụng → xác nhận trả
+ *   Ứng:     tạo → TC/TK xác nhận → xác nhận lãnh → Thống kê xác nhận ĐXVT
+ *            → xác nhận sử dụng → xác nhận trả
+ *
+ * `MaterialTicket.type` vẫn là DE_XUAT / UNG — luồng chai khí là BIẾN THỂ của hai luồng đó,
+ * không phải loại phiếu thứ ba; tách type riêng sẽ phải sửa lại mọi nơi đang lọc theo type.
+ */
+export function isGasCylinderTicket(materialCategory: string | null | undefined): boolean {
+  return materialCategory === "Chai khí";
+}
+
+/** Trạng thái bước cuối của luồng chai khí: chờ VHV xác nhận đã trả vỏ chai về kho. */
+export const GAS_RETURN_STATUS = "CHO_TRA_VO";
 
 /**
  * VẬT TƯ KHAI MỘT BƯỚC: lập phiếu xong là hết, không đi tiếp lãnh — sử dụng — nghiệm thu —
@@ -392,6 +414,32 @@ export const CHEMICAL_TICKET_TYPE = "HOA_CHAT";
  */
 export const TICKET_REASONS = ["Bổ sung", "Thay thế", "Nhập", "Khác"] as const;
 export const TICKET_REASON_OTHER = "Khác";
+
+/**
+ * Hóa chất và chai khí mua theo lô về kho rồi dùng dần, không gắn với một điểm thay thế
+ * cụ thể trên thiết bị — "Bổ sung" và "Thay thế" không có nghĩa ở đây (và "Thay thế" còn
+ * kéo theo biên bản thu hồi vật tư mà hai loại này không dùng). Lý do chỉ còn Nhập / Khác.
+ */
+export const BULK_TICKET_REASONS = ["Nhập", "Khác"] as const;
+
+/** Danh sách lý do chọn được theo loại vật tư của phiếu. */
+export function ticketReasonsFor(materialCategory: string | null | undefined): readonly string[] {
+  return isChemicalFlowTicket(materialCategory) ? BULK_TICKET_REASONS : TICKET_REASONS;
+}
+
+/** Lý do đã nhập có hợp lệ với loại vật tư không — dùng chung cho giao diện và máy chủ. */
+export function ticketReasonAllowed(
+  materialCategory: string | null | undefined,
+  proposalNote: string | null | undefined,
+): boolean {
+  const raw = (proposalNote ?? "").trim();
+  if (!raw) return true; // chỗ khác đã bắt buộc nhập; ở đây chỉ xét lý do có bị cấm không
+  const allowed = ticketReasonsFor(materialCategory);
+  if (allowed === TICKET_REASONS) return true;
+  // Phiếu cũ gõ tay không khớp lựa chọn nào thì coi như "Khác" — không chặn dữ liệu cũ.
+  const choice = TICKET_REASONS.find((item) => raw === item || raw.startsWith(`${item}:`));
+  return !choice || (allowed as readonly string[]).includes(choice);
+}
 export const TICKET_REASON_REPLACEMENT = "Thay thế";
 export const TICKET_REASON_RENEWAL = "Thay mới";
 
@@ -424,11 +472,15 @@ export function recoveryRequiredForReason(
     || (recoveryOnSupplement && isSupplementReason(proposalNote));
 }
 
-/** Dùng snapshot trên phiếu; chỉ suy từ lý do cho dữ liệu cũ chưa có snapshot. */
+/** Dùng snapshot trên phiếu; chỉ suy từ lý do cho dữ liệu cũ chưa có snapshot.
+ *  Chai khí luôn KHÔNG có BBTHVT: việc trả vỏ đã thành một bước riêng trong luồng
+ *  (xem `isGasCylinderTicket`), hỏi thêm ở bước Sử dụng là bắt khai hai lần. */
 export function materialTicketRequiresRecovery(ticket: {
   recoveryRequired?: boolean | null;
   proposalNote?: string | null;
+  materialCategory?: string | null;
 }): boolean {
+  if (isGasCylinderTicket(ticket.materialCategory)) return false;
   return ticket.recoveryRequired ?? reasonRequiresRecovery(ticket.proposalNote);
 }
 

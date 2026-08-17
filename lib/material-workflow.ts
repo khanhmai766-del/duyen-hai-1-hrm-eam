@@ -62,7 +62,7 @@ export function canCreateTicket(user: { role?: string | null; position?: string 
 /* ---------- Phân quyền các bước quy trình (admin cấu hình, bảng MaterialWorkflowRole) ---------- */
 
 export const WORKFLOW_STEPS = [
-  "create", "confirm", "vhvReceive", "stats", "statsHandover", "receive", "use", "accept", "settle", "manage",
+  "create", "confirm", "vhvReceive", "stats", "statsHandover", "receive", "use", "accept", "return", "settle", "manage",
 ] as const;
 export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
 
@@ -75,6 +75,7 @@ export const WORKFLOW_STEP_LABELS: Record<WorkflowStep, string> = {
   receive: "Nhận vật tư",
   use: "Sử dụng vật tư",
   accept: "Nghiệm thu + xuất BBNT",
+  return: "Xác nhận trả (chai khí)",
   settle: "Quyết toán vật tư",
   manage: "Sửa / Xoá phiếu",
 };
@@ -102,7 +103,7 @@ export async function getWorkflowRoleMap(): Promise<Record<WorkflowStep, string[
   const rows = await prisma.materialWorkflowRole.findMany({ select: { step: true, position: true } });
   const map: Record<WorkflowStep, string[]> = {
     create: [], confirm: [], vhvReceive: [], stats: [], statsHandover: [],
-    receive: [], use: [], accept: [], settle: [], manage: [],
+    receive: [], use: [], accept: [], return: [], settle: [], manage: [],
   };
   for (const r of rows) {
     if ((WORKFLOW_STEPS as readonly string[]).includes(r.step)) map[r.step as WorkflowStep].push(r.position);
@@ -143,6 +144,19 @@ export function stepAllowedWithMap(
   const configured = map[step];
   if (configured.length > 0) return positionInList(user.position, configured);
   return defaultStepAllowed(step, user);
+}
+
+/**
+ * Bước "Xác nhận trả" (chai khí) mới có từ 2026-08, chưa cương vị nào được gán.
+ * Khi Quản trị chưa cấu hình riêng thì DÙNG LUÔN quyền của bước Sử dụng vật tư — người
+ * mang chai đi dùng cũng là người mang vỏ đi trả; mặc định theo `isShiftLeader` như các
+ * bước khác sẽ giao nhầm việc này cho Trưởng ca.
+ */
+export function returnStepAllowed(
+  map: Record<WorkflowStep, string[]>,
+  user: { role?: string | null; position?: string | null }
+) {
+  return stepAllowedWithMap(map, map.return.length > 0 ? "return" : "use", user);
 }
 
 export async function canDoStep(step: WorkflowStep, user: { role?: string | null; position?: string | null }) {

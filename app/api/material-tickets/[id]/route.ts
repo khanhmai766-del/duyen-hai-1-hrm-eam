@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit } from "@/lib/api";
-import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, stepAllowedWithMap } from "@/lib/material-workflow";
+import { isShiftLeader, isTechnician, getWorkflowRoleMap, isMaterialTicketExtraAssignedPosition, returnStepAllowed, stepAllowedWithMap } from "@/lib/material-workflow";
 import { generateBbntDoc, type BbntItem } from "@/lib/bbnt-doc";
 import { generateBbntDoDoc, resolveSignatureBuffer, type BbntDoItem } from "@/lib/bbnt-do-doc";
 import { generateBbthvtDoc } from "@/lib/bbthvt-doc";
@@ -10,7 +10,7 @@ import { materialTicketFileBase, materialTicketReference } from "@/lib/material-
 import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
-import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, materialTicketRequiresRecovery, recoveryRequiredForReason, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, GAS_RETURN_STATUS, isChemicalFlowTicket, isGasCylinderTicket, materialTicketRequiresRecovery, recoveryRequiredForReason, ticketReasonAllowed, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
@@ -535,6 +535,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             .filter(Boolean)
         ));
         if (!proposalNote) return fail("Vui lòng nhập Ghi chú cho phiếu đề xuất");
+        if (!ticketReasonAllowed(materialCategory, proposalNote)) {
+          return fail(`Loại vật tư "${materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
+        }
         if (!materialId) return fail("Vui lòng chọn tên vật tư đề xuất");
         if (!Number.isFinite(proposedQuantity) || proposedQuantity <= 0) return fail("Số lượng đề xuất phải lớn hơn 0");
         if (!requestedReplacementKeys.length) return fail("Vui lòng chọn ít nhất một thiết bị thay thế");
@@ -641,6 +644,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const value = String(body.bbktNumber || "").trim();
         const reason = String(body.note || "").trim();
         if (!reason) return fail("Lý do không được để trống");
+        if (!ticketReasonAllowed(t.materialCategory, reason)) {
+          return fail(`Loại vật tư "${t.materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
+        }
         before = `Lý do: ${t.proposalNote || "—"}; Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`;
         after = `Lý do: ${reason}; Số biên bản kiểm tra: ${value || "—"}`;
         const recoveryRequired = await recoveryRequiredForTicketReason(t, reason);
@@ -743,8 +749,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
               remainingQuantity: (t.receivedQuantity ?? 0) - value,
               materialUserName,
               recoveryRequired,
-              recoveryQuantity,
-              recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
+              // Chai khí không có BBTHVT, nhưng recoveryQuantity/recoveryReturnedAt lại là nơi
+              // lưu số vỏ đã trả — sửa lại bước Sử dụng thì không được xoá dấu vết bước Trả.
+              ...(isGasCylinderTicket(t.materialCategory) ? {} : {
+                recoveryQuantity,
+                recoveryReturnedAt: recoveryReturned ? (t.recoveryReturnedAt ?? new Date()) : null,
+              }),
               // Biên bản thu hồi chỉ được sinh cùng BBNT ký tay ở bước Nghiệm thu.
               // Khi chỉnh sửa sau nghiệm thu, bổ sung tài liệu còn thiếu ngay trong lần lưu.
               recoveryDocUrl: recoveryRequired && t.completedAt
@@ -972,14 +982,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "confirm", user))
         return fail("Bạn không có quyền xác nhận (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
       const isChemicalTicket = isChemicalFlowTicket(t.materialCategory);
+      const isGasTicket = isGasCylinderTicket(t.materialCategory);
       const requestedWorkflowType = body.workflowType === "UNG" ? "UNG" : body.workflowType === "SU_DUNG_HIEN_CO" ? "SU_DUNG_HIEN_CO" : body.workflowType === "DE_XUAT" ? "DE_XUAT" : t.type;
-      // Quy tắc nghiệp vụ: Hóa chất chỉ được đi theo luồng Đề xuất.
-      const workflowType = isChemicalTicket ? "DE_XUAT" : requestedWorkflowType;
+      // Quy tắc nghiệp vụ: Hóa chất chỉ đi luồng Đề xuất. Chai khí chọn được Đề xuất hoặc
+      // Ứng nhưng KHÔNG có Sử dụng hiện có — chai khí lãnh về là dùng ngay, không tồn sẵn.
+      const workflowType = isGasTicket
+        ? (requestedWorkflowType === "UNG" ? "UNG" : "DE_XUAT")
+        : isChemicalTicket ? "DE_XUAT" : requestedWorkflowType;
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
       const quantity = Math.trunc(Number(body.proposedQuantity || item.quantity));
       const bbktNumber = String(body.bbktNumber || "").trim();
       const proposalNote = String(body.proposalNote || "").trim(); // Lý do — hiện ở "Ghi chú lý do" trên phiếu
+      if (!ticketReasonAllowed(t.materialCategory, proposalNote)) {
+        return fail(`Loại vật tư "${t.materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
+      }
       if (!Number.isFinite(quantity) || quantity <= 0) return fail("Số lượng xác nhận phải lớn hơn 0");
       if (!isChemicalTicket && t.type === "CHUA_CHON" && workflowType === "DE_XUAT") {
         const allowedCodes = item.material.erpCodes.length ? item.material.erpCodes : [item.material.code];
@@ -1078,7 +1095,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         const claimed = await tx.materialTicket.updateMany({
           where: { id: t.id, status: "VHV_LANH_VAT_TU", vhvReceivedAt: null },
           data: {
-            status: "SU_DUNG_VAT_TU",
+            // Chai khí Ứng: lãnh xong mới tới Thống kê xác nhận ĐXVT rồi mới sử dụng.
+            status: isGasCylinderTicket(t.materialCategory) ? "NHAN_VAT_TU" : "SU_DUNG_VAT_TU",
             vhvReceivedQuantity: quantity,
             repairRequestNumber: repairRequestNumber || null,
             vhvReceivedByName: user.name ?? "",
@@ -1164,7 +1182,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const proposalDoc = await buildProposalDocument(t, user, itemOverride, sccnRepresentative);
       // Riêng luồng Ứng: BBNT D-Office được xuất cùng Phiếu ĐXVT tại bước này,
       // thay vì xuất sớm ở bước Nghiệm thu.
-      const bbntDo = t.type === "UNG" && !t.docUrl
+      const bbntDo = t.type === "UNG" && !t.docUrl && !isGasCylinderTicket(t.materialCategory)
         ? await buildBbntDoDocument(t, {
             pctNumber: t.pctNumber ?? undefined,
             workStartedAt: t.workStartedAt ?? undefined,
@@ -1393,7 +1411,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         await tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: t.type === "UNG" ? "CHO_QUYET_TOAN" : "CHO_PHIEU_YCSC",
+            // Chai khí không có quyết toán và không khai số yêu cầu sửa chữa (chai khí là
+            // vật tư tiêu hao, không gắn với một công việc sửa chữa) — cả hai luồng đều đi
+            // thẳng sang bước Sử dụng vật tư.
+            status: isGasCylinderTicket(t.materialCategory)
+              ? "SU_DUNG_VAT_TU"
+              : t.type === "UNG" ? "CHO_QUYET_TOAN" : "CHO_PHIEU_YCSC",
             receivedQuantity, receivedMethod: receivedMethod || null, deliveryNoteNumber: receivedMethod || null, receiptSource,
             // Ứng: bước gộp kiêm luôn Thống kê xác nhận ĐXVT — lưu số phiếu + dấu vết Thống kê.
             ...(t.type === "UNG" ? {
@@ -1482,7 +1505,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return tx.materialTicket.update({
           where: { id: t.id },
           data: {
-            status: "CHO_NGHIEM_THU",
+            // Chai khí bỏ nghiệm thu và quyết toán — dùng xong là tới bước trả vỏ chai.
+            status: isGasCylinderTicket(t.materialCategory) ? GAS_RETURN_STATUS : "CHO_NGHIEM_THU",
             recoveryRequired, recoveryQuantity,
             // VHV xác nhận trực tiếp việc đã trả vật tư thu hồi cho kho tại bước này.
             recoveryReturnedAt: recoveryReturned ? new Date() : null,
@@ -1500,6 +1524,40 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         user.id, "MT_USE", "MaterialTicket", t.id,
         `${materialTicketReference(t)}: VHV sử dụng ${materialUserName}; lãnh ${received}, dùng ${usedQuantity}, còn lại ${remaining} — tồn kho ${mat.code}: ${mat.quantity} → ${newQty}`
       );
+      return ok(up);
+    }
+
+    // BƯỚC CUỐI CỦA LUỒNG CHAI KHÍ — xác nhận đã trả vỏ chai về kho → HOÀN TẤT.
+    // Không sinh biên bản: chai khí không có BBNT lẫn BBTHVT, chỉ ghi nhận số vỏ + ngày trả.
+    if (action === "returnItems") {
+      if (!isGasCylinderTicket(t.materialCategory)) return fail("Bước Xác nhận trả chỉ áp dụng cho phiếu Chai khí");
+      if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== GAS_RETURN_STATUS) return fail("Phiếu không ở bước Xác nhận trả");
+      if (!returnStepAllowed(await getWorkflowRoleMap(), user))
+        return fail("Bạn không có quyền ở bước Xác nhận trả (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      const returnedQuantity = Math.trunc(Number(body.returnedQuantity));
+      if (!Number.isFinite(returnedQuantity) || returnedQuantity <= 0) return fail("Số lượng vỏ chai trả phải lớn hơn 0");
+      const returnedAt = body.returnedAt ? parseDateInput(body.returnedAt) : new Date();
+      if (Number.isNaN(returnedAt.getTime())) return fail("Ngày trả không hợp lệ");
+      const returnedByName = String(body.returnedByName || "").trim();
+      if (!returnedByName) return fail("Vui lòng nhập tên người trả");
+      const unitLabel = t.items[0]?.material.unit ?? "";
+      const up = await prisma.materialTicket.update({
+        where: { id: t.id },
+        data: {
+          status: "HOAN_TAT",
+          // Dùng lại đúng hai cột của nghiệp vụ thu hồi: chai khí không có BBTHVT nên hai cột
+          // này bỏ trống, và ý nghĩa "vật tư trả về kho" thì trùng khớp.
+          recoveryQuantity: returnedQuantity,
+          recoveryReturnedAt: returnedAt,
+          completedById: user.id,
+          completedByName: returnedByName,
+          completedByPosition: user.position ?? null,
+          completedAt: new Date(),
+        },
+        include: ITEM_INCLUDE,
+      });
+      await audit(user.id, "MT_RETURN", "MaterialTicket", t.id,
+        `${materialTicketReference(t)}: Xác nhận trả ${returnedQuantity} ${unitLabel} ngày ${returnedAt.toLocaleDateString("vi-VN")} — ${returnedByName}; hoàn tất phiếu`);
       return ok(up);
     }
 

@@ -9,9 +9,10 @@ import {
   getWorkflowRoleMap,
   isMaterialTicketExtraAssignedPosition,
   isTechnician,
+  returnStepAllowed,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, isGasCylinderTicket, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, ticketReasonAllowed, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -141,6 +142,8 @@ export async function GET(req: NextRequest) {
           receive: stepAllowedWithMap(wfMap, "receive", user),
           use: stepAllowedWithMap(wfMap, "use", user),
           accept: stepAllowedWithMap(wfMap, "accept", user),
+          // Bước Xác nhận trả (chai khí): chưa cấu hình riêng thì theo quyền bước Sử dụng.
+          return: returnStepAllowed(wfMap, user),
           settle: stepAllowedWithMap(wfMap, "settle", user),
           manage: stepAllowedWithMap(wfMap, "manage", user),
           manageConfigured: wfMap.manage.length > 0,
@@ -187,9 +190,14 @@ export async function POST(req: NextRequest) {
     // Loại vật tư
     const materialCategory = String(body.materialCategory || "").trim();
     if (!(TICKET_MATERIAL_CATEGORIES as readonly string[]).includes(materialCategory)) return fail("Vui lòng chọn loại vật tư");
-    // Hóa chất và chai khí luôn đi theo luồng Đề xuất. Không để phiếu ở trạng thái chờ
-    // chọn luồng vì nghiệp vụ này không áp dụng Ứng hoặc Sử dụng hiện có.
-    let type = isChemicalFlowTicket(materialCategory) ? "DE_XUAT" : "CHUA_CHON";
+    // Hóa chất luôn đi thẳng luồng Đề xuất — nghiệp vụ này không có Ứng lẫn Sử dụng hiện có
+    // nên không để phiếu dừng ở trạng thái chờ chọn luồng. Chai khí thì VẪN chọn luồng
+    // (Đề xuất hoặc Ứng) ở bước Trưởng ca/Trưởng kíp, chỉ bỏ Sử dụng hiện có.
+    // Hóa chất / chai khí chỉ nhận lý do Nhập hoặc Khác (xem `ticketReasonsFor`).
+    if (!ticketReasonAllowed(materialCategory, proposalNote)) {
+      return fail(`Loại vật tư "${materialCategory}" chỉ chọn lý do Nhập hoặc Khác`);
+    }
+    let type = isChemicalWorkflowCategory(materialCategory) ? "DE_XUAT" : "CHUA_CHON";
 
     let selectedMaterial: { id: string; code: string; erpCodes: string[]; name: string; quantity: number; category: string | null; machine: string } | null = null;
     let nextStatus = "CHO_XAC_NHAN";
@@ -270,10 +278,13 @@ export async function POST(req: NextRequest) {
           bbktNumber: null,
           proposalNote,
           // Lý do "Thay thế" ⇒ phiếu có biên bản thu hồi vật tư; bước Sử dụng sẽ hỏi số lượng thu hồi.
-          recoveryRequired: recoveryRequiredForReason(
-            proposalNote,
-            validReplacementPoints.some((point) => point.recoveryOnSupplement),
-          ),
+          // Chai khí không dùng BBTHVT — việc trả vỏ là một bước riêng ở cuối luồng.
+          recoveryRequired: isGasCylinderTicket(materialCategory)
+            ? false
+            : recoveryRequiredForReason(
+                proposalNote,
+                validReplacementPoints.some((point) => point.recoveryOnSupplement),
+              ),
           assignedPosition,
           materialCategory,
           createdById: user.id,
