@@ -409,6 +409,29 @@ export function reasonRequiresRecovery(proposalNote?: string | null): boolean {
   return replacementReasons.some((item) => reason === item || reason.startsWith(`${item}:`));
 }
 
+/** Một số điểm dùng vật tư vẫn phải thu hồi khi châm/bổ sung (ví dụ dầu EA máy nghiền). */
+export function isSupplementReason(proposalNote?: string | null): boolean {
+  const reason = normalizeText(proposalNote ?? "").trim();
+  const supplement = normalizeText(TICKET_REASONS[0]);
+  return reason === supplement || reason.startsWith(`${supplement}:`);
+}
+
+export function recoveryRequiredForReason(
+  proposalNote?: string | null,
+  recoveryOnSupplement = false,
+): boolean {
+  return reasonRequiresRecovery(proposalNote)
+    || (recoveryOnSupplement && isSupplementReason(proposalNote));
+}
+
+/** Dùng snapshot trên phiếu; chỉ suy từ lý do cho dữ liệu cũ chưa có snapshot. */
+export function materialTicketRequiresRecovery(ticket: {
+  recoveryRequired?: boolean | null;
+  proposalNote?: string | null;
+}): boolean {
+  return ticket.recoveryRequired ?? reasonRequiresRecovery(ticket.proposalNote);
+}
+
 /** Loại vật tư của PHIẾU đi theo luồng hóa chất 3 bước. */
 export function isChemicalWorkflowCategory(materialCategory: string | null | undefined): boolean {
   return materialCategory === "Hóa chất";

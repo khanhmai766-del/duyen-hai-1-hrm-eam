@@ -40,7 +40,7 @@ export function ReplacementPointsEditor({
   const positions = React.useMemo(() => allPositions.filter(isSelectableManagingPosition), [allPositions]);
   const update = (index: number, patch: Partial<MaterialReplacementInput>) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  const add = () => onChange([...rows, { deviceSeq: null, system: null, intervalMonths: 6, quantity: 1 }]);
+  const add = () => onChange([...rows, { deviceSeq: null, system: null, intervalMonths: 6, quantity: 1, recoveryOnSupplement: false }]);
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
 
   return (
@@ -123,6 +123,18 @@ export function ReplacementPointsEditor({
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-950">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-amber-600"
+              checked={row.recoveryOnSupplement === true}
+              onChange={(e) => update(i, { recoveryOnSupplement: e.target.checked })}
+            />
+            <span>
+              <b className="block">Bổ sung vẫn xuất BBVT thu hồi</b>
+              Bật cho điểm dùng vật tư cần thu hồi dầu/vật tư cũ ngay cả khi lý do đề xuất là “Bổ sung”.
+            </span>
+          </label>
         </div>
       ))}
       <Button type="button" variant="outline" size="sm" onClick={add}>

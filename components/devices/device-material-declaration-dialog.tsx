@@ -32,6 +32,7 @@ type EditableMaterialDeclaration = {
   intervalMonths: number;
   intervalNote?: string | null;
   note?: string | null;
+  recoveryOnSupplement?: boolean;
   material: { id: string; name: string; unit: string; machine: string; category?: string | null };
 };
 
@@ -99,6 +100,7 @@ export function DeviceMaterialDeclarationDialog({
     positionLabelOf(device.managingPosition)
   );
   const [note, setNote] = React.useState("");
+  const [recoveryOnSupplement, setRecoveryOnSupplement] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
@@ -118,6 +120,7 @@ export function DeviceMaterialDeclarationDialog({
     setLastReplacedAt("");
     setManagingPosition(positionLabelOf(declaration?.managingPosition ?? device.managingPosition));
     setNote(declaration?.note ?? "");
+    setRecoveryOnSupplement(declaration?.recoveryOnSupplement === true);
   }, [open, declaration, device.managingPosition, machine]);
 
   React.useEffect(() => {
@@ -157,6 +160,7 @@ export function DeviceMaterialDeclarationDialog({
           intervalMonths: Math.max(0, Number(intervalMonths) || 0),
           intervalNote: intervalNote || null,
           note: note || null,
+          recoveryOnSupplement,
         });
         toast.success("Đã cập nhật thông tin vật tư khai báo");
       } else {
@@ -174,6 +178,7 @@ export function DeviceMaterialDeclarationDialog({
           intervalNote: intervalNote || null,
           lastReplacedAt: lastReplacedAt || null,
           note: note || null,
+          recoveryOnSupplement,
         });
         toast.success(selectedMachines.length === 2 ? "Đã khai báo vật tư cho cả S1 và S2" : "Đã khai báo vật tư cho thiết bị");
       }
@@ -306,6 +311,18 @@ export function DeviceMaterialDeclarationDialog({
                 </Select>
               </Field>
             </div>
+            <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-950">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-amber-600"
+                checked={recoveryOnSupplement}
+                onChange={(event) => setRecoveryOnSupplement(event.target.checked)}
+              />
+              <span>
+                <b className="block">Bổ sung vẫn xuất BBVT thu hồi</b>
+                Phiếu chọn lý do “Bổ sung” tại điểm này sẽ yêu cầu nhập lượng thu hồi và xuất biên bản thu hồi.
+              </span>
+            </label>
             <Field label="Ghi chú">
               <Textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Thông tin vị trí lắp đặt hoặc lưu ý khi thay..." />
             </Field>

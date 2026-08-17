@@ -173,6 +173,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         // Cho phép đổi nhóm sau khi tạo: điểm khai báo nhầm là thay thế định kỳ
         // có thể chuyển sang chỉ lấy mẫu mà không phải xoá rồi tạo lại.
         samplingOnly: body.samplingOnly !== undefined ? body.samplingOnly === true : undefined,
+        recoveryOnSupplement: body.recoveryOnSupplement !== undefined
+          ? body.recoveryOnSupplement === true
+          : undefined,
         lastReplacedAt: body.lastReplacedAt ? parseDateInput(body.lastReplacedAt) : undefined,
         nextDueAt: body.nextDueAt ? parseDateInput(body.nextDueAt) : undefined,
         note: body.note !== undefined ? body.note?.trim() || null : undefined,

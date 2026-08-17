@@ -205,7 +205,7 @@ export function useTicketOptions(enabled: boolean) {
           machine: string;
           erpCodes: { code: string; name: string; erpStock: number }[];
           managingPositions: string[];
-          devices: { seq: string; label: string; system: string | null; managingPosition: string | null }[];
+          devices: { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean }[];
         }[];
         positions: string[];
       }>("/api/material-tickets/options");

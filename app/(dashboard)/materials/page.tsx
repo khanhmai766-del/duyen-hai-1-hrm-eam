@@ -540,6 +540,7 @@ function MaterialsPageContent() {
         intervalMonths: r.intervalMonths,
         intervalNote: r.intervalNote,
         lastReplacedAt: typeof r.lastReplacedAt === "string" ? r.lastReplacedAt : null,
+        recoveryOnSupplement: r.recoveryOnSupplement === true,
       }));
   }
 

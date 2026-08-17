@@ -45,6 +45,7 @@ export type DeviceMaterialDeclarationInput = {
   intervalNote?: string | null;
   lastReplacedAt?: string | null;
   note?: string | null;
+  recoveryOnSupplement?: boolean;
 };
 
 export function useCreateDeviceMaterialDeclaration() {
@@ -75,6 +76,7 @@ export type DeviceMaterialDeclarationUpdateInput = {
   intervalMonths: number;
   intervalNote?: string | null;
   note?: string | null;
+  recoveryOnSupplement?: boolean;
 };
 
 export function useUpdateDeviceMaterialDeclaration() {

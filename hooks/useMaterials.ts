@@ -21,6 +21,7 @@ export interface MaterialReplacementPoint {
   intervalNote: string | null;
   /** Theo O&M chỉ lấy mẫu/theo dõi/châm bổ sung, không thay thế định kỳ. */
   samplingOnly?: boolean;
+  recoveryOnSupplement?: boolean;
   lastReplacedAt: string | Date | null;
   nextDueAt: string | Date;
   note: string | null;
@@ -100,6 +101,7 @@ export type MaterialReplacementInput = {
   intervalMonths?: number;
   intervalNote?: string | null;
   lastReplacedAt?: string | null;
+  recoveryOnSupplement?: boolean;
 };
 
 export type MaterialInput = Partial<Material> & {

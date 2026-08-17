@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
           logs: { none: {} },
         },
         orderBy: { createdAt: "asc" },
-        select: { id: true, deviceCount: true },
+        select: { id: true, deviceCount: true, recoveryOnSupplement: true },
       });
       if (!declaration) {
         throw fail(
@@ -240,6 +240,7 @@ export async function POST(req: NextRequest) {
           intervalNote: String(body.intervalNote ?? "").trim() || null,
           // Điểm chỉ lấy mẫu/theo dõi theo O&M, không phải thay thế định kỳ.
           samplingOnly: body.samplingOnly === true,
+          recoveryOnSupplement: declaration.recoveryOnSupplement,
           lastReplacedAt,
           nextDueAt,
           note: String(body.note ?? "").trim() || null,

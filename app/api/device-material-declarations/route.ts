@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
       intervalMonths,
       intervalNote: String(body.intervalNote ?? "").trim() || null,
       note: String(body.note ?? "").trim() || null,
+      recoveryOnSupplement: body.recoveryOnSupplement === true,
     };
 
     const points = await prisma.$transaction(async (tx) => {

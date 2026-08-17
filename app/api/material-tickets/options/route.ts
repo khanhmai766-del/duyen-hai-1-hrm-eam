@@ -44,6 +44,7 @@ export async function GET() {
             system: true,
             managingPosition: true,
             managingPositionCode: true,
+            recoveryOnSupplement: true,
             device: { select: { name: true, parentSeq: true } },
           },
           // Bản ghi khai báo (không theo dõi) đứng trước bản ghi lịch trùng điểm,
@@ -80,7 +81,7 @@ export async function GET() {
     const materials = materialsRaw.map((m) => {
       const seen = new Set<string>();
       const positions = new Set<string>();
-      const mdevices: { seq: string; label: string; system: string | null; managingPosition: string | null }[] = [];
+      const mdevices: { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean }[] = [];
       for (const r of m.replacements) {
         const managingPosition = positionLabelOf(r.managingPositionCode ?? r.managingPosition);
         if (managingPosition) positions.add(managingPosition);
@@ -103,6 +104,7 @@ export async function GET() {
             ? deviceNameBySeq.get(r.device.parentSeq) ?? r.system
             : r.system,
           managingPosition: managingPosition || null,
+          recoveryOnSupplement: r.recoveryOnSupplement,
         });
       }
       const codes = (m.erpCodes?.length ? m.erpCodes : [m.code]).filter((code) => Boolean(code) && activeErpCodes.has(code));

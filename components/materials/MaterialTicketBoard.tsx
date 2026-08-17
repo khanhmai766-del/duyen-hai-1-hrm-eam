@@ -17,7 +17,7 @@ import {
   type MaterialTicket, type TicketViewer, type WorkflowRoleMap,
 } from "@/hooks/useMaterialTickets";
 import { usePositions } from "@/hooks/useUsers";
-import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, MATERIAL_CATEGORIES, reasonRequiresRecovery, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { displayMaterialCategory, isChemicalFlowTicket, isSingleStepTicketMaterial, CHEMICAL_TICKET_TYPE, isSupplementReason, MATERIAL_CATEGORIES, materialTicketRequiresRecovery, TICKET_REASONS, TICKET_REASON_OTHER, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { normalizeText } from "@/lib/nav";
 import { positionsMatch } from "@/lib/position-catalog";
 import {
@@ -209,7 +209,7 @@ export default function MaterialTicketBoard({
         // Tab "Hóa chất": gom cả luồng hóa chất 3 bước và phiếu NH3 khai một bước.
         : filter === "CHEMICAL" ? normalizeText(t.materialCategory ?? "") === normalizeText("Hóa chất")
         // Tab "Thu hồi": các phiếu có vật tư thu hồi (đã xuất hoặc sẽ xuất biên bản thu hồi)
-        : filter === "RECOVERY" ? Boolean(reasonRequiresRecovery(t.proposalNote) || t.recoveryDocUrl)
+        : filter === "RECOVERY" ? Boolean(materialTicketRequiresRecovery(t) || t.recoveryDocUrl)
         : t.status === filter;
       const ticketCategory = t.materialCategory ? TICKET_TO_MATERIAL_CATEGORY[t.materialCategory] ?? t.materialCategory : "";
       const matchesMaterialCategory = materialCategoryFilter === "ALL" || ticketCategory === materialCategoryFilter;
@@ -373,7 +373,7 @@ export default function MaterialTicketBoard({
 		            : t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN"
 		            ? { label: "Chờ Thống kê xuất BBNT", c: "#0f766e" }
 		            : STATUS[t.status] ?? { label: t.status, c: C.soft };
-	          const recoveryPending = !!t.usedAt && reasonRequiresRecovery(t.proposalNote) && !t.recoveryReturnedAt;
+	          const recoveryPending = !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
 	          const mine = actionsFor(t, viewer).length > 0;
 	          // Sửa/Xoá: Admin hoặc cương vị được phân quyền bước "Sửa/Xoá phiếu";
 	          // khi admin CHƯA cấu hình bước này → người tạo phiếu (mặc định cũ).
@@ -512,7 +512,7 @@ const CATEGORIES = TICKET_MATERIAL_CATEGORIES;
 const UNITS = ["S1", "S2", "COMMON"];
 const SCCN_REPRESENTATIVES = ["Võ Văn Chiến", "Lê Văn Khánh", "Nguyễn Thanh Toàn"] as const;
 const SCCN_POSITIONS = ["Quản Đốc", "Phó Quản Đốc"] as const;
-type TicketDeviceOption = { seq: string; label: string; system: string | null; managingPosition: string | null };
+type TicketDeviceOption = { seq: string; label: string; system: string | null; managingPosition: string | null; recoveryOnSupplement: boolean };
 const totalMaterialErpStock = (material: { erpCodes: { erpStock: number }[] }) =>
   material.erpCodes.reduce((total, item) => total + Number(item.erpStock || 0), 0);
 
@@ -640,7 +640,11 @@ function DeviceMultiSelect({
                 <label key={`${option.seq}:${option.managingPosition ?? ""}`} className={checked ? "checked" : ""}>
                   <input type="checkbox" checked={checked} onChange={() => toggle(option.seq)} />
                   <span className="device-check"><Check size={12} /></span>
-                  <span><b>{option.label}</b>{option.system && <small>{option.system}</small>}</span>
+                  <span>
+                    <b>{option.label}</b>
+                    {option.system && <small>{option.system}</small>}
+                    {option.recoveryOnSupplement && <small className="text-amber-700">Bổ sung có BBVT thu hồi</small>}
+                  </span>
                 </label>
               );
             })}
@@ -705,6 +709,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
       ? availableDeviceOptions.filter((device) => replacementSystems.includes(device.system?.trim() ?? ""))
       : availableDeviceOptions,
     [availableDeviceOptions, replacementSystems]
+  );
+  const supplementRecoverySelected = isSupplementReason(note) && availableDeviceOptions.some(
+    (device) => replacementDeviceSeqs.includes(device.seq) && device.recoveryOnSupplement,
   );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
@@ -895,6 +902,9 @@ function CreateDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (id: s
                   onChange={setReplacementDeviceSeqs}
                   disabled={!selectedMaterialId || !availableDeviceOptions.length}
                 />
+                {supplementRecoverySelected && (
+                  <p className="note ung"><Package size={13} /> Điểm đã chọn được cấu hình: lý do <b>Bổ sung</b> vẫn yêu cầu nhập lượng thu hồi và xuất BBVT thu hồi.</p>
+                )}
                 {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
               </>
             ) : (
@@ -1148,6 +1158,9 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
       : availableDeviceOptions,
     [availableDeviceOptions, replacementSystems]
   );
+  const supplementRecoverySelected = isSupplementReason(note) && availableDeviceOptions.some(
+    (device) => replacementDeviceSeqs.includes(device.seq) && device.recoveryOnSupplement,
+  );
   const selectedErpOptions = useMemo(
     () => selectedMaterial?.erpCodes?.length
       ? selectedMaterial.erpCodes
@@ -1341,6 +1354,9 @@ function EditDialog({ t, onClose }: { t: MaterialTicket; onClose: () => void }) 
                 onChange={setReplacementDeviceSeqs}
                 disabled={!selectedMaterialId || !availableDeviceOptions.length}
               />
+              {supplementRecoverySelected && (
+                <p className="note ung"><Package size={13} /> Điểm đã chọn được cấu hình: lý do <b>Bổ sung</b> vẫn yêu cầu nhập lượng thu hồi và xuất BBVT thu hồi.</p>
+              )}
               {selectedMaterialId && !selectedDeviceOptions.length && <p className="hint">Vật tư này chưa có thiết bị thuộc cương vị đã chọn trong Chi tiết điểm thay thế. Vui lòng khai báo tại Danh mục vận hành 1 trước.</p>}
             </>
           )}
@@ -1475,7 +1491,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
       (t.deliveryNoteNumber ?? t.receivedMethod) ? `Phiếu giao hàng ${t.deliveryNoteNumber ?? t.receivedMethod}` : "",
     ].filter(Boolean).join(" · ") },
     t.usedAt && { at: t.usedAt, who: t.usedByName, pos: t.usedByPosition, what: `Sử dụng vật tư${t.materialUserName ? ` — VHV: ${t.materialUserName}` : ""}: dùng ${t.usedQuantity ?? ""}, còn lại ${t.remainingQuantity ?? ""}` },
-    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: `Nghiệm thu, xuất BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và BBTHVT" : ""}` },
+    t.completedAt && { at: t.completedAt, who: t.completedByName, pos: t.completedByPosition, what: `Nghiệm thu, xuất BBNT ký tay${materialTicketRequiresRecovery(t) ? " và BBTHVT" : ""}` },
     t.settledAt && { at: t.settledAt, who: t.settledByName, what: `Quyết toán vật tư · Số BBNT DO ${t.bbntDoNumber ?? "—"}` },
     ...(t.activityLogs ?? []).filter((log) => log.action === "MT_EDIT_STEP").map((log) => ({
       at: log.createdAt, who: log.user.name, pos: log.user.position, what: log.detail ?? "Chỉnh sửa nội dung bước",
@@ -1493,7 +1509,7 @@ function Detail({ t, viewer, onClose }: { t: MaterialTicket; viewer: TicketViewe
 	            const si = order.indexOf(s.key);
 	            const done = t.status === "HOAN_TAT" || si < idx;
 	            const cur = s.key === flowStatus;
-	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && reasonRequiresRecovery(t.proposalNote) && !t.recoveryReturnedAt;
+	            const recoveryPending = s.key === "SU_DUNG_VAT_TU" && !!t.usedAt && materialTicketRequiresRecovery(t) && !t.recoveryReturnedAt;
 	            const reviewable = done || (t.type === "UNG" && s.key === "CHO_HOAN_THIEN" && !!t.bbktNumber);
 	            const caption = t.type === "DE_XUAT" && t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && s.key === "CHO_NGHIEM_THU"
 	              ? "Thống kê · Chờ xuất BBNT D-Office"
@@ -1670,7 +1686,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
     if (editStep === "use") Object.assign(payload, {
       usedQuantity,
       materialUserName: materialUserName.trim(),
-      ...(reasonRequiresRecovery(t.proposalNote) ? { recoveryQuantity, recoveryReturned } : {}),
+      ...(materialTicketRequiresRecovery(t) ? { recoveryQuantity, recoveryReturned } : {}),
     });
     if (editStep === "accept") Object.assign(payload, {
       pctNumber,
@@ -1730,7 +1746,7 @@ function StepReviewDialog({ t, viewer, stepKey, onClose }: { t: MaterialTicket; 
             <label>Tên VHV sử dụng vật tư<input value={materialUserName} disabled={!canEdit} onChange={(e) => setMaterialUserName(e.target.value)} placeholder="Nhập tên VHV sử dụng vật tư" /></label>
             <label>Số lượng sử dụng ({t.items[0]?.material.unit ?? ""})<input type="number" min={1} value={usedQuantity} disabled={!canEdit} onChange={(e) => setUsedQuantity(Number(e.target.value))} /></label>
           </div>
-          {reasonRequiresRecovery(t.proposalNote) && (
+          {materialTicketRequiresRecovery(t) && (
             <div className="review-recovery-grid">
               <label>Số lượng vật tư thu hồi ghi vào BBTHVT ({t.items[0]?.material.unit ?? ""}) *
                 <input type="number" min={1} value={recoveryQuantity} disabled={!canEdit} onChange={(e) => setRecoveryQuantity(Number(e.target.value))} />
@@ -2547,7 +2563,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
     const received = t.receivedQuantity ?? (t.type === "UNG" ? t.vhvReceivedQuantity ?? t.items[0]?.quantity ?? 0 : 0);
     const quantityExceedsStock = qty > stock;
     const quantityExceedsReceived = t.type === "SU_DUNG_HIEN_CO" && qty > received;
-	    const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+	    const recoveryRequired = materialTicketRequiresRecovery(t);
 	    const recoveryQuantity = Math.trunc(Number(recoveryQuantityInput));
 	            return (
 	              <div className="act">
@@ -2594,7 +2610,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
       : (t.items[0]?.material.erpCodes?.length ? t.items[0].material.erpCodes : [t.items[0]?.material.code].filter(Boolean) as string[])
           .map((code) => ({ code, name: t.items[0]?.material.name ?? "", erpStock: 0 }));
     const selectedErp = codeOptions.find((option) => option.code === erpCode);
-    const exportsRecoveryDocument = reasonRequiresRecovery(t.proposalNote);
+    const exportsRecoveryDocument = materialTicketRequiresRecovery(t);
     return (
       <div className="act">
           <>
@@ -2702,7 +2718,7 @@ function ActionArea({ t, viewer }: { t: MaterialTicket; viewer: TicketViewer | n
         )}
         <p className="hint">
           {exportsBbntDo
-            ? `BBNT ký tay${reasonRequiresRecovery(t.proposalNote) ? " và Biên bản vật tư thu hồi" : ""} đã được xuất ở bước Nghiệm thu. Chọn đại diện SCCN để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
+            ? `BBNT ký tay${materialTicketRequiresRecovery(t) ? " và Biên bản vật tư thu hồi" : ""} đã được xuất ở bước Nghiệm thu. Chọn đại diện SCCN để xuất BBNT D-Office, sau đó chuyển sang bước Quyết toán.`
             : "Bước này chỉ xác nhận mã vật tư trước khi chuyển quyết toán."}
         </p>
         <button className="btn primary big" disabled={!erpCode || act.isPending || (exportsBbntDo && (!sccnRepresentative || !sccnPosition))}

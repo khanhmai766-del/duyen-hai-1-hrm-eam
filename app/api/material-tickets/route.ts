@@ -11,7 +11,7 @@ import {
   isTechnician,
   stepAllowedWithMap,
 } from "@/lib/material-workflow";
-import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, reasonRequiresRecovery, isChemicalWorkflowCategory, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, recoveryRequiredForReason, isChemicalWorkflowCategory, isSingleStepTicketMaterial, SINGLE_STEP_TICKET_TYPE, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
     }
     const replacementPoints = await prisma.materialReplacement.findMany({
       where: { materialId: selectedMaterial.id },
-      select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+      select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, device: { select: { name: true } } },
     });
     const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
     for (const point of replacementPoints) {
@@ -270,7 +270,10 @@ export async function POST(req: NextRequest) {
           bbktNumber: null,
           proposalNote,
           // Lý do "Thay thế" ⇒ phiếu có biên bản thu hồi vật tư; bước Sử dụng sẽ hỏi số lượng thu hồi.
-          recoveryRequired: reasonRequiresRecovery(proposalNote),
+          recoveryRequired: recoveryRequiredForReason(
+            proposalNote,
+            validReplacementPoints.some((point) => point.recoveryOnSupplement),
+          ),
           assignedPosition,
           materialCategory,
           createdById: user.id,

@@ -10,7 +10,7 @@ import { materialTicketFileBase, materialTicketReference } from "@/lib/material-
 import { normalizeText } from "@/lib/nav";
 import { consumeStock, deliveryNoteSummary, receiveIntoLot, releaseUsage, reverseTicketStock, sharedCodesOf, syncMaterialQuantity, usedLotsOfTicket } from "@/lib/material-stock-lot";
 import { parseDateInput } from "@/lib/utils";
-import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, reasonRequiresRecovery, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
+import { CHEMICAL_TICKET_TYPE, isChemicalFlowTicket, materialTicketRequiresRecovery, recoveryRequiredForReason, TICKET_MATERIAL_CATEGORIES, TICKET_TO_MATERIAL_CATEGORY } from "@/lib/constants";
 import { positionsMatch } from "@/lib/position-catalog";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
 
@@ -32,6 +32,22 @@ type FullTicket = NonNullable<Awaited<ReturnType<typeof getTicket>>>;
 
 async function getTicket(id: string) {
   return prisma.materialTicket.findUnique({ where: { id }, include: ITEM_INCLUDE });
+}
+
+async function recoveryRequiredForTicketReason(t: FullTicket, proposalNote: string) {
+  const item = t.items[0];
+  const selectedKeys = new Set(item?.replacementPointKeys ?? []);
+  if (!item || selectedKeys.size === 0) return recoveryRequiredForReason(proposalNote);
+  const points = await prisma.materialReplacement.findMany({
+    where: { materialId: item.materialId },
+    select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true },
+  });
+  const recoveryOnSupplement = points.some(
+    (point) => point.recoveryOnSupplement
+      && positionsMatch(point.managingPosition, t.assignedPosition)
+      && selectedKeys.has(replacementPointSelectionKey(point)),
+  );
+  return recoveryRequiredForReason(proposalNote, recoveryOnSupplement);
 }
 
 const normalizeReceiptSource = (source: unknown): "ERP" | "EXISTING" =>
@@ -535,7 +551,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (erpCode && !allowedCodes.includes(erpCode)) return fail("Mã vật tư không thuộc tên vật tư đã chọn");
         const replacementPoints = await prisma.materialReplacement.findMany({
           where: { materialId },
-          select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, device: { select: { name: true } } },
+          select: { id: true, deviceSeq: true, location: true, system: true, managingPosition: true, recoveryOnSupplement: true, device: { select: { name: true } } },
         });
         const assignedPointByKey = new Map<string, (typeof replacementPoints)[number]>();
         for (const point of replacementPoints) {
@@ -564,11 +580,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           deviceNameManual: replacementDeviceLabels.join(", "),
         };
         data.proposalNote = proposalNote;
-        // Đổi lý do là đổi luôn việc có thu hồi hay không. Hồ sơ đã phát hành BBTHVT
-        // không được phép đổi khỏi "Thay thế" vì sẽ làm lý do và biên bản mâu thuẫn.
-        const recoveryRequired = reasonRequiresRecovery(proposalNote);
+        // Đổi lý do hoặc điểm dùng có thể đổi yêu cầu thu hồi. Hồ sơ đã phát hành BBTHVT
+        // không được phép chuyển sang trạng thái không thu hồi vì sẽ làm hồ sơ mâu thuẫn.
+        const recoveryRequired = recoveryRequiredForReason(
+          proposalNote,
+          validReplacementPoints.some((point) => point.recoveryOnSupplement),
+        );
         if (!recoveryRequired && t.recoveryDocUrl) {
-          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi lý do khỏi Thay thế; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
+          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi phiếu sang trạng thái không thu hồi; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
         }
         data.recoveryRequired = recoveryRequired;
         if (!recoveryRequired) {
@@ -624,9 +643,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!reason) return fail("Lý do không được để trống");
         before = `Lý do: ${t.proposalNote || "—"}; Số biên bản kiểm tra: ${t.bbktNumber ?? "—"}`;
         after = `Lý do: ${reason}; Số biên bản kiểm tra: ${value || "—"}`;
-        const recoveryRequired = reasonRequiresRecovery(reason);
+        const recoveryRequired = await recoveryRequiredForTicketReason(t, reason);
         if (!recoveryRequired && t.recoveryDocUrl) {
-          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi lý do khỏi Thay thế; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
+          return fail("Biên bản vật tư thu hồi đã được cấp. Không thể đổi phiếu sang trạng thái không thu hồi; vui lòng liên hệ Quản trị để xử lý hồ sơ.");
         }
         up = await prisma.materialTicket.update({
           where: { id: t.id },
@@ -680,9 +699,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (!t.usedAt || t.usedQuantity == null) return fail("Bước sử dụng vật tư chưa hoàn thành");
         const value = Math.trunc(Number(body.usedQuantity));
         const materialUserName = String(body.materialUserName || "").trim();
-        // Có thu hồi hay không luôn suy từ lý do. Giao diện chỉ gửi số lượng để điền BBTHVT,
-        // không cho người dùng bật/tắt thu hồi độc lập với lựa chọn "Thay thế".
-        const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+        // Có thu hồi hay không dùng snapshot đã chốt từ lý do và cấu hình điểm dùng vật tư.
+        // Giao diện chỉ gửi số lượng để điền BBTHVT, không cho bật/tắt thu hồi tại bước này.
+        const recoveryRequired = materialTicketRequiresRecovery(t);
         const hasRecoveryQuantity = Object.prototype.hasOwnProperty.call(body, "recoveryQuantity");
         const recoveryQuantity = recoveryRequired
           ? hasRecoveryQuantity
@@ -785,7 +804,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             })
           : null;
         // Đổi số PCT/LCT → xuất lại BBTHVT để cột Ghi chú đồng bộ số mới.
-        const recoveryDoc = reasonRequiresRecovery(t.proposalNote) ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
+        const recoveryDoc = materialTicketRequiresRecovery(t) ? await buildRecoveryDocument(t, { pctNumber: pct }) : null;
         up = await prisma.materialTicket.update({
           where: { id: t.id },
           data: {
@@ -999,7 +1018,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             bbktNumber: bbktNumber || null,
             ...(proposalNote ? {
               proposalNote,
-              recoveryRequired: reasonRequiresRecovery(proposalNote),
+              recoveryRequired: await recoveryRequiredForTicketReason(t, proposalNote),
             } : {}),
             confirmedById: user.id, confirmedByName: user.name ?? "",
             confirmedByPosition: user.position ?? null, confirmedAt: new Date(),
@@ -1416,9 +1435,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
         return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
-      // Cờ thu hồi suy từ LÝ DO của phiếu (xem reasonRequiresRecovery), không hỏi lại ở bước này
+      // Cờ thu hồi đã được chụp trên phiếu từ lý do và cấu hình điểm dùng vật tư.
       // và không tin thân yêu cầu — gọi thẳng API cũng không bật/tắt được.
-      const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+      const recoveryRequired = materialTicketRequiresRecovery(t);
       const recoveryQuantity = recoveryRequired ? Math.trunc(Number(body.recoveryQuantity)) : null;
       const recoveryReturned = recoveryRequired && body.recoveryReturned === true;
       const usedQuantity = Math.trunc(Number(body.usedQuantity));
@@ -1497,14 +1516,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const workStartedAt = new Date(String(body.workStartedAt || ""));
       const workEndedAt = new Date(String(body.workEndedAt || ""));
       const bbkt = String(body.bbktNumber || "").trim(); // Số BBNT ký tay bổ sung ở bước này (nếu có)
-      const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+      const recoveryRequired = materialTicketRequiresRecovery(t);
       if (!note) return fail("Vui lòng nhập thông tin xác nhận thay thế xong");
       if (!pct) return fail("Vui lòng nhập số PCT/LCT");
       if (!chiHuy) return fail("Vui lòng nhập tên chỉ huy trực tiếp (SCCN)");
       if (Number.isNaN(workStartedAt.getTime()) || Number.isNaN(workEndedAt.getTime())) return fail("Vui lòng chọn thời gian bắt đầu và kết thúc");
       if (workEndedAt <= workStartedAt) return fail("Thời gian kết thúc nghiệm thu phải sau thời gian bắt đầu nghiệm thu");
       if (recoveryRequired && (!t.recoveryQuantity || t.recoveryQuantity <= 0)) {
-        return fail("Phiếu Thay thế chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi nghiệm thu.");
+        return fail("Phiếu có thu hồi chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi nghiệm thu.");
       }
 
       const item = t.items[0];
@@ -1566,7 +1585,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           unit: t.unit, usedByName: t.materialUserName || t.usedByName, usedByPosition: t.usedByPosition,
           items: bbntItems,
         }),
-        // Mọi luồng có lý do Thay thế/Thay mới đều xuất BBTHVT đồng thời với BBNT ký tay.
+        // Mọi phiếu đã chốt yêu cầu thu hồi đều xuất BBTHVT đồng thời với BBNT ký tay.
         recovery: recoveryRequired
           ? await buildRecoveryDocument(t, { pctNumber: pct, itemOverride })
           : null,
@@ -1608,9 +1627,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         return fail("Bạn không có quyền Thống kê xuất biên bản", 403);
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
-      const recoveryRequired = reasonRequiresRecovery(t.proposalNote);
+      const recoveryRequired = materialTicketRequiresRecovery(t);
       if (recoveryRequired && (!t.recoveryQuantity || t.recoveryQuantity <= 0)) {
-        return fail("Phiếu Thay thế chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi xuất biên bản.");
+        return fail("Phiếu có thu hồi chưa có số lượng vật tư thu hồi. Vui lòng chỉnh sửa bước Sử dụng vật tư trước khi xuất biên bản.");
       }
       const erpCode = String(body.erpCode || "").trim();
       if (!erpCode) return fail("Vui lòng chọn mã vật tư ERP");

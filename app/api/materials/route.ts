@@ -163,6 +163,7 @@ type ReplacementInput = {
   intervalNote?: string | null;
   quantity?: unknown;
   lastReplacedAt?: string | null;
+  recoveryOnSupplement?: unknown;
 };
 
 /** Dựng dữ liệu tạo một điểm thay thế từ payload form (kèm tính ngày đến hạn). */
@@ -186,6 +187,7 @@ function buildReplacementCreate(entry: ReplacementInput, userId: string, default
     quantity,
     intervalMonths,
     intervalNote: entry.intervalNote?.trim() || null,
+    recoveryOnSupplement: entry.recoveryOnSupplement === true,
     lastReplacedAt,
     nextDueAt: addMonths(lastReplacedAt ?? new Date(), intervalMonths),
     createdById: userId,
