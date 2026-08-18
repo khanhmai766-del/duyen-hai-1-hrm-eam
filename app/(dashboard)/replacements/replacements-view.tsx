@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Repeat, Eye, Pencil, Trash2, Cpu, History, CalendarCheck, Activity, ChevronDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Upload, FileClock, Search, Plus, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
@@ -255,13 +256,18 @@ function replacementHistoryStatus(log: ReplacementLogItem): "PENDING" | "FINALIZ
  * vật tư, khoảng tháng, tìm kiếm) và nút xuất backup đều dùng chung, không nhân bản mã.
  */
 export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const requestedPointId = searchParams.get("pointId")?.trim() || null;
   const { data: session } = useSession();
   const role = session?.user?.role;
   const rbac = useRbacAccess();
   const canCreate = rbac.can("replacement-manage", ["personal", "manage", "full"]);
   const canManage = rbac.can("replacement-manage", ["manage", "full"]);
   const canDelete = rbac.can("replacement-manage", ["manage", "full"]);
-  const [tabState, setTab] = React.useState<TabKey>(only ?? "schedule");
+  const [tabState, setTab] = React.useState<TabKey>(() =>
+    only ?? (requestedTab === "status" ? "status" : "schedule")
+  );
   const tab: TabKey = only ?? tabState;
   // Bộ lọc tháng/năm dùng chung cho cả 2 tab (mặc định tháng hiện tại).
   const [month, setMonth] = React.useState(() => ym(new Date()));
@@ -291,7 +297,8 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   const logs = React.useMemo(() => history.data?.data ?? [], [history.data?.data]);
   const del = useDeleteReplacement();
   const delLog = useDeleteReplacementLog();
-  const all = data?.data ?? [];
+  const all = React.useMemo(() => data?.data ?? [], [data?.data]);
+  const configuredFocusPointRef = React.useRef<string | null>(null);
   const linkedDeviceOf = (p: { device: ReplacementDevice | null; material: { deviceMaterials?: Array<{ device: ReplacementDevice }> } }) =>
     p.device ?? p.material.deviceMaterials?.[0]?.device ?? null;
   // Lọc theo tổ máy của vật tư (vật tư nằm ở tab S1/S2/COMMON nào trong Danh mục).
@@ -330,6 +337,22 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
   // Lọc theo loại vật tư (khớp cả tên biến thể cũ, như tab Danh mục vật tư).
   const matchCategory = (category: string | null | undefined) =>
     replacementCategoryMatches(category, categoryFilter);
+  React.useEffect(() => {
+    if (only || !requestedPointId || configuredFocusPointRef.current === requestedPointId) return;
+    const point = all.find((candidate) => candidate.id === requestedPointId);
+    if (!point) return;
+
+    const matchedCategory = CATEGORY_FILTERS.find((candidate) =>
+      replacementCategoryMatches(point.material.category, candidate)
+    );
+    configuredFocusPointRef.current = requestedPointId;
+    setTab("status");
+    setMachineFilter(point.material.machine ?? point.machine ?? "COMMON");
+    setPositionFilter("ALL");
+    setCategoryFilter(matchedCategory ?? "ALL");
+    setSearchQ("");
+    setDebouncedSearchQ("");
+  }, [all, only, requestedPointId]);
   const byCategory = byPosition.filter((p) => matchCategory(p.material.category));
   const actualStatusPoints: ReplacementStatusPoint[] = byCategory.map((point) => {
     const device = linkedDeviceOf(point);
@@ -1019,7 +1042,11 @@ export function ReplacementsPageContent({ only }: { only?: TabKey } = {}) {
           )}
         </div>
       ) : tab === "status" ? (
-        <ReplacementStatusDashboard points={statusPoints} isLoading={isLoading} />
+        <ReplacementStatusDashboard
+          points={statusPoints}
+          isLoading={isLoading}
+          focusPointId={requestedPointId}
+        />
       ) : (
         <div className="space-y-6">
           {history.isLoading ? (

@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Paperclip, Boxes, Layers, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, type LucideIcon } from "lucide-react";
+import { Plus, Minus, Package, Pencil, Trash2, Upload, X, Loader2, ImageIcon, Repeat, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Check, FileText, Link2, ExternalLink, Droplet, Filter, Cpu, FlaskConical, Cylinder, CircleDot, Paperclip, Boxes, Layers, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Activity, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -2198,6 +2198,23 @@ function MaterialExpandedDetails({
       })
     );
   }, [m.replacements, points]);
+  const activePointByDeclaration = React.useMemo(() => {
+    const allPoints = m.replacements ?? [];
+    return new Map(
+      points.flatMap((declaration) => {
+        const activePoint = allPoints.find((candidate) => {
+          if (!candidate.isActive) return false;
+          if (declaration.deviceSeq) return candidate.deviceSeq === declaration.deviceSeq;
+          return (
+            !candidate.deviceSeq &&
+            (candidate.system?.trim() || null) === (declaration.system?.trim() || null) &&
+            (candidate.location?.trim() || null) === (declaration.location?.trim() || null)
+          );
+        });
+        return activePoint ? [[declaration.id, activePoint] as const] : [];
+      })
+    );
+  }, [m.replacements, points]);
   const createPoint = useCreateReplacement();
 
   type PanelPoint = NonNullable<MaterialWithDevices["replacements"]>[number];
@@ -2344,6 +2361,7 @@ function MaterialExpandedDetails({
           <tbody>
             {points.map((p) => {
               const activeCount = activeCountByDeclaration.get(p.id) ?? 0;
+              const activePoint = activePointByDeclaration.get(p.id);
               const deviceLimit = Math.max(1, p.deviceCount ?? 1);
               const capacityReached = activeCount >= deviceLimit;
               const trackingLabel =
@@ -2360,7 +2378,7 @@ function MaterialExpandedDetails({
                 p.intervalMonths === 0
                   ? "Chu kỳ 0 không theo dõi lịch thay thế"
                   : capacityReached
-                    ? "Chỉ được thêm lại sau khi điểm đang theo dõi bị xoá hoặc được ghi nhận vào lịch sử thay thế"
+                    ? "Xem điểm này đang quá hạn, sắp đến hạn hay còn hạn"
                     : "Thêm điểm theo dõi thời gian thay thế cho thiết bị này";
               const selectable = canSelect(p);
               const checked = selectedIds.includes(p.id);
@@ -2409,15 +2427,26 @@ function MaterialExpandedDetails({
                     <ReplacementRequestChips requests={p.defectRequests} />
                   </td>
                   <td className="px-2 py-2.5 text-center">
-                    <button
-                      type="button"
-                      disabled={createPoint.isPending || p.intervalMonths === 0 || capacityReached}
-                      onClick={() => openTracking(p)}
-                      title={trackingTitle}
-                      className="inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
-                    >
-                      <Plus className="h-3.5 w-3.5" /> {trackingLabel}
-                    </button>
+                    {capacityReached && activePoint ? (
+                      <Link
+                        href={`/replacements?tab=status&pointId=${encodeURIComponent(activePoint.id)}`}
+                        title={trackingTitle}
+                        aria-label={`Xem trạng thái theo dõi của ${p.device?.name || p.location || p.system || m.name}`}
+                        className="inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                      >
+                        <Activity className="h-3.5 w-3.5" /> {trackingLabel}
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={createPoint.isPending || p.intervalMonths === 0}
+                        onClick={() => openTracking(p)}
+                        title={trackingTitle}
+                        className="inline-flex max-w-full items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-accent px-2 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-accent/90 disabled:opacity-50"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> {trackingLabel}
+                      </button>
+                    )}
                   </td>
                 </tr>
               );

@@ -84,9 +84,11 @@ function dueLabel(point: ReplacementStatusPoint) {
 export function ReplacementStatusDashboard({
   points,
   isLoading,
+  focusPointId,
 }: {
   points: ReplacementStatusPoint[];
   isLoading?: boolean;
+  focusPointId?: string | null;
 }) {
   const [filter, setFilter] = React.useState<StatusFilter>("ALL");
   const counts = React.useMemo(() => {
@@ -104,6 +106,16 @@ export function ReplacementStatusDashboard({
   const total = points.length;
   const safeRate = total ? Math.round((counts.OK / total) * 100) : 0;
   const demoCount = points.filter((point) => point.isDemo).length;
+  React.useEffect(() => {
+    if (!focusPointId || isLoading || !filtered.some((point) => point.id === focusPointId)) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`replacement-status-${focusPointId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [filtered, focusPointId, isLoading]);
 
   if (isLoading) {
     return (
@@ -253,9 +265,12 @@ export function ReplacementStatusDashboard({
               return (
                 <div
                   key={point.id}
+                  id={`replacement-status-${point.id}`}
+                  aria-current={point.id === focusPointId ? "true" : undefined}
                   className={cn(
-                    "grid gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-slate-50/70 xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,1fr)_165px_165px_165px_130px] xl:items-center",
-                    style.row
+                    "scroll-mt-24 grid gap-3 border-l-4 px-4 py-3 transition-all hover:bg-slate-50/70 xl:grid-cols-[minmax(220px,1.2fr)_minmax(180px,1fr)_165px_165px_165px_130px] xl:items-center",
+                    style.row,
+                    point.id === focusPointId && "relative z-[1] bg-sky-50/80 ring-2 ring-inset ring-sky-500 shadow-[0_10px_30px_rgba(2,132,199,0.16)]"
                   )}
                 >
                   <div className="min-w-0">
@@ -264,6 +279,11 @@ export function ReplacementStatusDashboard({
                       {point.isDemo && (
                         <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700">
                           Minh họa
+                        </span>
+                      )}
+                      {point.id === focusPointId && (
+                        <span className="rounded-full bg-sky-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          Điểm vừa chọn
                         </span>
                       )}
                     </div>

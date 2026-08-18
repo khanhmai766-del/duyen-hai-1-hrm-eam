@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { RbacProtectedRoute } from "@/components/shared/rbac-protected-route";
 import { ReplacementsPageContent } from "@/app/(dashboard)/replacements/replacements-view";
 
@@ -14,7 +15,9 @@ import { ReplacementsPageContent } from "@/app/(dashboard)/replacements/replacem
 export default function ReplacementHistoryPage() {
   return (
     <RbacProtectedRoute permissionId="replacement-manage" featureLabel="Lịch sử thay thế vật tư">
-      <ReplacementsPageContent only="history" />
+      <Suspense fallback={null}>
+        <ReplacementsPageContent only="history" />
+      </Suspense>
     </RbacProtectedRoute>
   );
 }
