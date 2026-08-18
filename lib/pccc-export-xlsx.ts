@@ -9,6 +9,7 @@
  * trên web — hai thứ tự này khác nhau và không được lẫn.
  */
 import ExcelJS from "exceljs";
+import { hoseReelLabelDisplay } from "@/lib/pccc-status";
 
 const ARGB = (hex: string) => "FF" + hex;
 
@@ -26,15 +27,24 @@ const thin = { style: "thin" as const, color: { argb: ARGB("BFBFBF") } };
 const BORDER = { top: thin, left: thin, right: thin, bottom: thin };
 const HEADER_FILL = "1E3A5F";
 
-export type ExportSheet = "BCC" | "TCC" | "FCD";
+export type ExportSheet = "BCC" | "TCC" | "FCD" | "NNBC" | "VAN" | "DEN" | "CVCC";
+
+/** Một ô tích trong sheet hai tầng. */
+export type ComponentCell = { groupLabel: string; status: string; checked: boolean; groupOrder: number; statusOrder: number };
 
 export type ExportInput = {
   periodLabel: string;
   extinguishers: Record<string, unknown>[];
   cabinets: (Record<string, unknown> & {
-    components: { groupLabel: string; status: string; checked: boolean; groupOrder: number; statusOrder: number }[];
+    components: ComponentCell[];
   })[];
   bulks: Record<string, unknown>[];
+  // --- Bốn nhóm bổ sung đợt 2. Để TUỲ CHỌN để mọi nơi gọi cũ (bản lưu trữ hằng tháng,
+  // script đối chiếu) không phải sửa cùng lúc; thiếu thì sheet đó không được sinh ra.
+  alarmButtons?: (Record<string, unknown> & { components: ComponentCell[] })[];
+  valves?: Record<string, unknown>[];
+  emergencyLights?: Record<string, unknown>[];
+  hoseReels?: (Record<string, unknown> & { components: ComponentCell[] })[];
   panels: {
     title: string;
     binhLabels: string[];
@@ -379,5 +389,211 @@ export async function buildPcccWorkbook(input: ExportInput, sheets: ExportSheet[
   if (sheets.includes("BCC")) writeBcc(wb, input, imageIds);
   if (sheets.includes("TCC")) writeTcc(wb, input, imageIds);
   if (sheets.includes("FCD")) writeFcd(wb, input, imageIds);
+  if (sheets.includes("NNBC")) writeAlarmButtons(wb, input, imageIds);
+  if (sheets.includes("VAN")) writeValves(wb, input, imageIds);
+  if (sheets.includes("DEN")) writeEmergencyLights(wb, input, imageIds);
+  if (sheets.includes("CVCC")) writeHoseReels(wb, input, imageIds);
   return wb.xlsx.writeBuffer();
+}
+
+// ===========================================================================
+// BỐN NHÓM THIẾT BỊ ĐỢT 2
+//
+// Hai kiểu sheet, đúng hai kiểu bảng trên web:
+//   - Sheet PHẲNG (van, đèn EXIT, đèn chiếu sáng sự cố): đầu bảng một tầng.
+//   - Sheet HAI TẦNG (nút nhấn, cuộn vòi): nhóm × trạng thái như tủ chữa cháy.
+//
+// Ba cột cuối "Người ký / Thời điểm ký / Chữ ký" giống hệt các sheet cũ — người
+// nhận file mở sheet nào cũng thấy cùng một chỗ để đối chiếu chữ ký.
+// ===========================================================================
+
+type SignedRow = Record<string, unknown> & {
+  signature?: { signerName?: string; signedAt?: Date; signatureKey?: string | null } | null;
+};
+
+const SIGN_HEADERS = ["Người ký", "Thời điểm ký", "Chữ ký"];
+
+/**
+ * Sheet phẳng dùng chung. Gom lại vì ba sheet mới chỉ khác nhau ở TÊN SHEET, danh sách
+ * cột và cột tô màu theo tình trạng — chép `writeBcc` thêm ba lần thì mỗi lần sửa bố
+ * cục chữ ký lại phải sửa bốn chỗ.
+ *
+ * `statusCol` là số thứ tự (1-based) của cột tình trạng cần tô nền theo màu trạng thái;
+ * bỏ trống nếu sheet không có cột nào như vậy.
+ */
+function writeFlatSheet(
+  wb: ExcelJS.Workbook,
+  input: ExportInput,
+  imageIds: Map<string, number>,
+  spec: { name: string; headers: string[]; fields: string[]; rows: SignedRow[]; statusCol?: number; freezeCols?: number }
+) {
+  const ws = wb.addWorksheet(spec.name, {
+    views: [{ state: "frozen", xSplit: spec.freezeCols ?? 2, ySplit: 1 }],
+  });
+  const headers = [...spec.headers, ...SIGN_HEADERS];
+  const rows = spec.rows.map((r) => [
+    ...spec.fields.map((f) => (r[f] ?? null) as unknown),
+    r.signature?.signerName ?? "",
+    r.signature?.signedAt ?? "",
+    "", // cột "Chữ ký": để trống, ảnh được neo đè lên ô
+  ]);
+  headerRow(ws, 1, headers);
+  writeBody(ws, 2, rows, spec.statusCol);
+  autoWidths(ws, headers, rows);
+  const signCol = headers.length;
+  ws.getColumn(signCol).width = 18;
+  spec.rows.forEach((r, i) => attachSignature(wb, ws, input.signatureImages, imageIds, 2 + i, signCol, r.signature?.signatureKey));
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+}
+
+/**
+ * Sheet hai tầng dùng chung cho nút nhấn và cuộn vòi — cùng khuôn với `writeTcc`
+ * (nhóm merge ở hàng 1, trạng thái ở hàng 2, ô tích ghi ☑/☐).
+ */
+function writeTieredSheet(
+  wb: ExcelJS.Workbook,
+  input: ExportInput,
+  imageIds: Map<string, number>,
+  spec: {
+    name: string;
+    identity: string[];
+    trailing: string[];
+    rows: (SignedRow & { components: ComponentCell[] })[];
+    /** Giá trị các cột định danh và cột đuôi của một dòng, theo đúng thứ tự header. */
+    identityValues: (row: SignedRow & { components: ComponentCell[] }) => unknown[];
+    trailingValues: (row: SignedRow & { components: ComponentCell[] }) => unknown[];
+    /** Đổi CHỮ hiển thị của trạng thái (cuộn vòi ghi "Đạt"/"Không đạt"). */
+    statusLabel?: (status: string) => string;
+  }
+) {
+  const ws = wb.addWorksheet(spec.name, { views: [{ state: "frozen", xSplit: 2, ySplit: 2 }] });
+
+  // Khung nhóm × trạng thái lấy từ chính dữ liệu (giữ thứ tự cột gốc)
+  const groups: { label: string; statuses: string[] }[] = [];
+  for (const c of spec.rows[0]?.components ?? []) {
+    const g = groups.find((x) => x.label === c.groupLabel);
+    if (g) g.statuses.push(c.status);
+    else groups.push({ label: c.groupLabel, statuses: [c.status] });
+  }
+
+  const trailing = [...spec.trailing, ...SIGN_HEADERS];
+  const componentCount = groups.reduce((n, g) => n + g.statuses.length, 0);
+  const totalCols = spec.identity.length + componentCount + trailing.length;
+
+  headerRow(ws, 1, Array(totalCols).fill(""));
+  headerRow(ws, 2, Array(totalCols).fill(""));
+  spec.identity.forEach((label, i) => {
+    ws.mergeCells(1, i + 1, 2, i + 1);
+    ws.getCell(1, i + 1).value = label;
+  });
+  let col = spec.identity.length + 1;
+  for (const g of groups) {
+    if (g.statuses.length > 1) ws.mergeCells(1, col, 1, col + g.statuses.length - 1);
+    ws.getCell(1, col).value = g.label;
+    g.statuses.forEach((s, i) => (ws.getCell(2, col + i).value = spec.statusLabel ? spec.statusLabel(s) : s));
+    col += g.statuses.length;
+  }
+  trailing.forEach((label, i) => {
+    ws.mergeCells(1, col + i, 2, col + i);
+    ws.getCell(1, col + i).value = label;
+  });
+
+  const rows = spec.rows.map((r) => {
+    const tick = (groupLabel: string, status: string) =>
+      r.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ? "☑" : "☐";
+    return [
+      ...spec.identityValues(r),
+      ...groups.flatMap((g) => g.statuses.map((s) => tick(g.label, s))),
+      ...spec.trailingValues(r),
+      r.signature?.signerName ?? "",
+      r.signature?.signedAt ?? "",
+      "", // cột "Chữ ký": ảnh neo đè lên ô
+    ] as unknown[];
+  });
+
+  writeBody(ws, 3, rows, spec.identity.length + componentCount + 1);
+  spec.rows.forEach((r, i) => attachSignature(wb, ws, input.signatureImages, imageIds, 3 + i, totalCols, r.signature?.signatureKey));
+  for (let c = 1; c <= spec.identity.length; c++) ws.getColumn(c).width = c === 3 ? 34 : 14;
+  for (let c = spec.identity.length + 1; c <= spec.identity.length + componentCount; c++) ws.getColumn(c).width = 5;
+  for (let c = spec.identity.length + componentCount + 1; c <= totalCols; c++) ws.getColumn(c).width = c === totalCols ? 18 : 16;
+}
+
+// ------------------------------------------------------------------ NNBC
+function writeAlarmButtons(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
+  writeTieredSheet(wb, input, imageIds, {
+    name: `NÚT NHẤN BÁO CHÁY - ${input.periodLabel}`,
+    identity: ["STT", "Mã KKS", "Tên khu vực Layout", "Vị trí cụ thể", "Cương vị quản lý", "Tổ máy", "Người giám sát"],
+    // KHÔNG có "Số YCSC" — sheet nguồn của nút nhấn không có cột này.
+    trailing: ["Tình trạng tổng thể", "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác"],
+    rows: input.alarmButtons ?? [],
+    identityValues: (r) => [r.stt ?? null, r.maKks ?? null, r.tenKhuVuc ?? null, r.viTri ?? null, r.cuongVi ?? null, r.machine ?? null, r.nguoiGiamSat ?? null],
+    trailingValues: (r) => [r.tinhTrangTongThe ?? null, r.ngayKiemTra ?? null, r.nguoiKiemTra ?? null, r.khac ?? null],
+  });
+}
+
+// ------------------------------------------------------------------ CVCC
+function writeHoseReels(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
+  writeTieredSheet(wb, input, imageIds, {
+    name: `CUỘN VÒI CHỮA CHÁY - ${input.periodLabel}`,
+    identity: ["STT", "Mã cuộn vòi", "Tên", "Thuộc tủ chữa cháy", "Vị trí lắp đặt", "Cương vị quản lý", "Tổ máy"],
+    trailing: ["Tình trạng tổng thể", "Số YCSC", "Ngày kiểm tra gần nhất", "Người kiểm tra", "Ghi chú khác"],
+    rows: input.hoseReels ?? [],
+    identityValues: (r) => [r.stt ?? null, r.ma ?? null, r.ten ?? null, r.cabinetMa ?? null, r.viTri ?? null, r.cuongVi ?? null, r.machine ?? null],
+    trailingValues: (r) => [r.tinhTrangTongThe ?? null, r.soYcsc ?? null, r.ngayKiemTra ?? null, r.nguoiKiemTra ?? null, r.ghiChu ?? null],
+    // Trên web hai ô đầu/cuối hiện là "Đạt"/"Không đạt"; file xuất phải ghi giống hệt,
+    // nếu không người đối chiếu sẽ tưởng là hai bảng khác nhau.
+    statusLabel: hoseReelLabelDisplay,
+  });
+}
+
+// ------------------------------------------------------------------- VAN
+const VAN_HEADERS = [
+  "STT", "Mã KKS van", "Tên van", "Loại van", "Cương vị quản lý", "Tổ máy", "Người giám sát", "Vị trí",
+  "Tình trạng", "Mô tả", "Số YCSC", "Ngày kiểm tra gần nhất", "Người kiểm tra",
+];
+const VAN_FIELDS = [
+  "stt", "maKks", "tenVan", "loaiVan", "cuongVi", "machine", "nguoiGiamSat", "viTri",
+  "tinhTrang", "moTa", "soYcsc", "ngayKiemTra", "nguoiKiemTra",
+];
+
+function writeValves(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
+  writeFlatSheet(wb, input, imageIds, {
+    name: `VAN CHỮA CHÁY - ${input.periodLabel}`,
+    headers: VAN_HEADERS,
+    fields: VAN_FIELDS,
+    rows: input.valves ?? [],
+    statusCol: 9, // "Tình trạng"
+  });
+}
+
+// ------------------------------------------------------------------- ĐÈN
+const DEN_HEADERS = [
+  "STT", "Mã KKS", "Tên khu vực Layout", "Mã bảng vẽ", "Số lượng khu vực", "Cương vị quản lý", "Tổ máy",
+  "Người giám sát", "Tình trạng", "Kết quả test gần nhất", "Ghi chú", "Ngày kiểm tra gần nhất", "Người kiểm tra",
+];
+const DEN_FIELDS = [
+  "stt", "maKks", "tenKhuVuc", "maBanVe", "soLuongKhuVuc", "cuongVi", "machine",
+  "nguoiGiamSat", "tinhTrang", "ketQuaTest", "ghiChu", "ngayKiemTra", "nguoiKiemTra",
+];
+
+/**
+ * Hai loại đèn ra HAI SHEET riêng dù trong DB chung một bảng — bám đúng file Excel nguồn
+ * và mẫu báo cáo, người nhận file không phải tự lọc cột "loại".
+ */
+function writeEmergencyLights(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string, number>) {
+  const all = input.emergencyLights ?? [];
+  for (const [loai, name] of [
+    ["EXIT", "ĐÈN EXIT"],
+    ["CSSC", "ĐÈN CHIẾU SÁNG SỰ CỐ"],
+  ] as const) {
+    const rows = all.filter((r) => r.loai === loai);
+    if (rows.length === 0) continue;
+    writeFlatSheet(wb, input, imageIds, {
+      name: `${name} - ${input.periodLabel}`,
+      headers: DEN_HEADERS,
+      fields: DEN_FIELDS,
+      rows,
+      statusCol: 9, // "Tình trạng"
+    });
+  }
 }

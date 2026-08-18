@@ -1037,7 +1037,18 @@ export default function PcccPage() {
     if (!effectiveLabel) return;
     setDownloading(true);
     try {
-      const sheets = tab === "BCC" ? "BCC" : tab === "TCC" ? "TCC" : tab === "FCD" ? "FCD" : "BCC,TCC,FCD";
+      // Đứng ở tab nào thì xuất sheet của tab đó; ở Tổng quan thì xuất TẤT CẢ.
+      // Tab Tủ chữa cháy xuất kèm CUỘN VÒI vì cuộn vòi là bảng con nằm cùng tab —
+      // xuất tủ mà thiếu cuộn vòi thì người nhận file tưởng chưa khai báo.
+      const SHEETS_BY_TAB: Partial<Record<TabKey, string>> = {
+        BCC: "BCC",
+        TCC: "TCC,CVCC",
+        FCD: "FCD",
+        NNBC: "NNBC",
+        VAN: "VAN",
+        DEN: "DEN",
+      };
+      const sheets = SHEETS_BY_TAB[tab] ?? "BCC,TCC,FCD,NNBC,VAN,DEN,CVCC";
       const { blob, filename } = await apiDownload(
         `/api/pccc/export?period=${encodeURIComponent(effectiveLabel)}&sheets=${sheets}` +
           `&cuongVi=${encodeURIComponent(cuongVi)}&machine=${encodeURIComponent(machine)}`

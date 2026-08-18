@@ -18,7 +18,7 @@ import { loadSignatureImages } from "@/lib/pccc-archive";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "FCD"];
+const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "FCD", "NNBC", "VAN", "DEN", "CVCC"];
 
 // GET /api/pccc/export?period=T08.2026&sheets=BCC,TCC,FCD&cuongVi=TBTH
 export async function GET(req: NextRequest) {
@@ -40,7 +40,23 @@ export async function GET(req: NextRequest) {
     // Foam/CO2/Diesel/FM200 la tai san dung chung -> moi cuong vi deu xuat duoc.
     const scopeFcd = scopeWhere(sp.get("cuongVi"), sp.get("machine"), pcccBulkViewScope(viewScope));
 
-    const [extinguishers, cabinets, bulks, panels, sigBcc, sigTcc, sigBulk] = await Promise.all([
+    const [
+      extinguishers,
+      cabinets,
+      bulks,
+      panels,
+      alarmButtons,
+      valves,
+      lights,
+      hoseReels,
+      sigBcc,
+      sigTcc,
+      sigBulk,
+      sigNnbc,
+      sigVan,
+      sigDen,
+      sigCvcc,
+    ] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
         where: { periodId: period.id, ...scopeBcc },
         orderBy: [{ stt: "asc" }, { ma: "asc" }],
@@ -52,9 +68,36 @@ export async function GET(req: NextRequest) {
       }),
       prisma.pcccBulk.findMany({ where: { periodId: period.id, ...scopeFcd }, orderBy: [{ stt: "asc" }, { ten: "asc" }] }),
       prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scopeFcd }, orderBy: { panelKey: "asc" } }),
+      // Ba bảng dưới CÓ cột Người giám sát nên dùng chung phạm vi với bình chữa cháy;
+      // cuộn vòi là danh mục con của tủ nên đi theo phạm vi của tủ.
+      prisma.pcccAlarmButton.findMany({
+        where: { periodId: period.id, ...scopeBcc },
+        orderBy: [{ stt: "asc" }, { rowKey: "asc" }],
+        include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
+      }),
+      prisma.pcccValve.findMany({
+        where: { periodId: period.id, ...scopeBcc },
+        orderBy: [{ stt: "asc" }, { rowKey: "asc" }],
+      }),
+      prisma.pcccEmergencyLight.findMany({
+        where: { periodId: period.id, ...scopeBcc },
+        orderBy: [{ loai: "asc" }, { stt: "asc" }, { rowKey: "asc" }],
+      }),
+      prisma.pcccHoseReel.findMany({
+        where: { periodId: period.id, ...scopeTcc },
+        orderBy: [{ stt: "asc" }, { ma: "asc" }],
+        include: {
+          components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] },
+          cabinet: { select: { ma: true } },
+        },
+      }),
       signaturesOf(period.id, "EXTINGUISHER"),
       signaturesOf(period.id, "CABINET"),
       signaturesOf(period.id, "BULK"),
+      signaturesOf(period.id, "ALARM_BUTTON"),
+      signaturesOf(period.id, "VALVE"),
+      signaturesOf(period.id, "EMERGENCY_LIGHT"),
+      signaturesOf(period.id, "HOSE_REEL"),
     ]);
 
     // Ảnh chữ ký số của người ký, tải một lần theo key duy nhất (xem lib/pccc-archive.ts).
@@ -62,6 +105,10 @@ export async function GET(req: NextRequest) {
       ...[...sigBcc.values()].map((s) => s.signatureKey),
       ...[...sigTcc.values()].map((s) => s.signatureKey),
       ...[...sigBulk.values()].map((s) => s.signatureKey),
+      ...[...sigNnbc.values()].map((s) => s.signatureKey),
+      ...[...sigVan.values()].map((s) => s.signatureKey),
+      ...[...sigDen.values()].map((s) => s.signatureKey),
+      ...[...sigCvcc.values()].map((s) => s.signatureKey),
     ]);
 
     const buffer = await buildPcccWorkbook(
@@ -71,6 +118,11 @@ export async function GET(req: NextRequest) {
         extinguishers: extinguishers.map((r) => ({ ...r, signature: sigBcc.get(r.id) ?? null })),
         cabinets: cabinets.map((r) => ({ ...r, signature: sigTcc.get(r.id) ?? null })),
         bulks: bulks.map((r) => ({ ...r, signature: sigBulk.get(r.id) ?? null })),
+        alarmButtons: alarmButtons.map((r) => ({ ...r, signature: sigNnbc.get(r.id) ?? null })),
+        valves: valves.map((r) => ({ ...r, signature: sigVan.get(r.id) ?? null })),
+        emergencyLights: lights.map((r) => ({ ...r, signature: sigDen.get(r.id) ?? null })),
+        // Mã tủ cha làm phẳng vào một cột để sheet đọc thẳng, khỏi lồng object.
+        hoseReels: hoseReels.map(({ cabinet, ...r }) => ({ ...r, cabinetMa: cabinet.ma, signature: sigCvcc.get(r.id) ?? null })),
         panels: panels.map((p) => ({
           ...p,
           mucValues: (p.mucValues ?? {}) as Record<string, number | null>,

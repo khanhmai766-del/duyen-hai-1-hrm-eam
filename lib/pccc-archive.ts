@@ -15,7 +15,9 @@ import { getS3ObjectBuffer, listS3Objects, uploadS3Object } from "@/lib/s3";
 import { buildPcccWorkbook, type ExportSheet, type SignatureImages } from "@/lib/pccc-export-xlsx";
 import { signaturesOf } from "@/lib/pccc-service";
 
-const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "FCD"];
+// Bản lưu trữ hằng tháng phải có ĐỦ mọi nhóm: DB chỉ giữ 6 kỳ gần nhất, file trên S3
+// mới là bản ghi dài hạn — thiếu sheet nào ở đây là mất hẳn dữ liệu nhóm đó.
+const ALL_SHEETS: ExportSheet[] = ["BCC", "TCC", "FCD", "NNBC", "VAN", "DEN", "CVCC"];
 
 export const PCCC_ARCHIVE_PREFIX = (process.env.PCCC_ARCHIVE_S3_PREFIX || "pccc/archive").replace(/^\/+|\/+$/g, "");
 
@@ -78,7 +80,23 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
   const period = await prisma.pcccPeriod.findUnique({ where: { id: periodId } });
   if (!period) throw new Error("Không tìm thấy kỳ để xuất");
 
-  const [extinguishers, cabinets, bulks, panels, sigBcc, sigTcc, sigBulk] = await Promise.all([
+  const [
+    extinguishers,
+    cabinets,
+    bulks,
+    panels,
+    alarmButtons,
+    valves,
+    lights,
+    hoseReels,
+    sigBcc,
+    sigTcc,
+    sigBulk,
+    sigNnbc,
+    sigVan,
+    sigDen,
+    sigCvcc,
+  ] = await Promise.all([
     prisma.pcccExtinguisher.findMany({ where: { periodId }, orderBy: [{ stt: "asc" }, { ma: "asc" }] }),
     prisma.pcccCabinet.findMany({
       where: { periodId },
@@ -87,15 +105,38 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
     }),
     prisma.pcccBulk.findMany({ where: { periodId }, orderBy: [{ stt: "asc" }, { ten: "asc" }] }),
     prisma.pcccFm200Panel.findMany({ where: { periodId }, orderBy: { panelKey: "asc" } }),
+    prisma.pcccAlarmButton.findMany({
+      where: { periodId },
+      orderBy: [{ stt: "asc" }, { rowKey: "asc" }],
+      include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
+    }),
+    prisma.pcccValve.findMany({ where: { periodId }, orderBy: [{ stt: "asc" }, { rowKey: "asc" }] }),
+    prisma.pcccEmergencyLight.findMany({ where: { periodId }, orderBy: [{ loai: "asc" }, { stt: "asc" }, { rowKey: "asc" }] }),
+    prisma.pcccHoseReel.findMany({
+      where: { periodId },
+      orderBy: [{ stt: "asc" }, { ma: "asc" }],
+      include: {
+        components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] },
+        cabinet: { select: { ma: true } },
+      },
+    }),
     signaturesOf(periodId, "EXTINGUISHER"),
     signaturesOf(periodId, "CABINET"),
     signaturesOf(periodId, "BULK"),
+    signaturesOf(periodId, "ALARM_BUTTON"),
+    signaturesOf(periodId, "VALVE"),
+    signaturesOf(periodId, "EMERGENCY_LIGHT"),
+    signaturesOf(periodId, "HOSE_REEL"),
   ]);
 
   const signatureImages = await loadSignatureImages([
     ...[...sigBcc.values()].map((s) => s.signatureKey),
     ...[...sigTcc.values()].map((s) => s.signatureKey),
     ...[...sigBulk.values()].map((s) => s.signatureKey),
+    ...[...sigNnbc.values()].map((s) => s.signatureKey),
+    ...[...sigVan.values()].map((s) => s.signatureKey),
+    ...[...sigDen.values()].map((s) => s.signatureKey),
+    ...[...sigCvcc.values()].map((s) => s.signatureKey),
   ]);
 
   return buildPcccWorkbook(
@@ -105,6 +146,10 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
       extinguishers: extinguishers.map((r) => ({ ...r, signature: sigBcc.get(r.id) ?? null })),
       cabinets: cabinets.map((r) => ({ ...r, signature: sigTcc.get(r.id) ?? null })),
       bulks: bulks.map((r) => ({ ...r, signature: sigBulk.get(r.id) ?? null })),
+      alarmButtons: alarmButtons.map((r) => ({ ...r, signature: sigNnbc.get(r.id) ?? null })),
+      valves: valves.map((r) => ({ ...r, signature: sigVan.get(r.id) ?? null })),
+      emergencyLights: lights.map((r) => ({ ...r, signature: sigDen.get(r.id) ?? null })),
+      hoseReels: hoseReels.map(({ cabinet, ...r }) => ({ ...r, cabinetMa: cabinet.ma, signature: sigCvcc.get(r.id) ?? null })),
       panels: panels.map((p) => ({
         ...p,
         mucValues: (p.mucValues ?? {}) as Record<string, number | null>,
@@ -116,7 +161,8 @@ export async function buildPeriodWorkbook(periodId: string, closing?: { closedAt
         soTu: cabinets.length,
         soBon: bulks.length,
         soBangFm200: panels.length,
-        soChuKy: sigBcc.size + sigTcc.size + sigBulk.size,
+        soChuKy:
+          sigBcc.size + sigTcc.size + sigBulk.size + sigNnbc.size + sigVan.size + sigDen.size + sigCvcc.size,
       },
     },
     ALL_SHEETS
