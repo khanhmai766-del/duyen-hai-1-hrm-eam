@@ -565,8 +565,8 @@ export function usePcccSign() {
 export interface PcccBookStatus {
   positionCode: string | null;
   positionLabel: string | null;
-  bcc: { total: number; signed: number };
-  tcc: { total: number; signed: number };
+  /** Đếm theo từng nhóm thiết bị của sổ — thay cho hai trường cứng bcc/tcc trước đây. */
+  groups: { key: string; label: string; total: number; signed: number }[];
   ready: boolean;
   /** Câu giải thích vì sao chưa xuất được — hiện thẳng cho người dùng. */
   reason: string | null;

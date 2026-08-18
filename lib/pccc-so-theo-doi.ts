@@ -12,7 +12,7 @@
  */
 import { prisma } from "@/lib/prisma";
 import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
-import { toneOf } from "@/lib/pccc-status";
+import { round2ToneOf } from "@/lib/pccc-status";
 import { signaturesOf } from "@/lib/pccc-service";
 
 /** Thư mục gốc trên S3. Tách khỏi `pccc/archive` vì vòng đời khác nhau hoàn toàn. */
@@ -61,11 +61,29 @@ export function bookPositionOf(
   return scope.codes[0] as PositionCode;
 }
 
+/**
+ * Nhóm thiết bị trong sổ. Số thứ tự vẫn chạy LIÊN TỤC xuyên các nhóm — nhóm chỉ để
+ * đếm và để nói câu "còn N cái chưa ký".
+ *
+ * Thứ tự ở đây là thứ tự in ra sổ, bám mẫu "BẢNG II": bình chữa cháy → thiết bị thuộc
+ * hệ thống chữa cháy → đèn/phương tiện chiếu sáng sự cố, chỉ dẫn thoát nạn.
+ */
+export const BOOK_GROUPS = [
+  { key: "BCC", label: "bình chữa cháy" },
+  { key: "TCC", label: "tủ chữa cháy" },
+  { key: "CVCC", label: "cuộn vòi chữa cháy" },
+  { key: "VAN", label: "van chữa cháy" },
+  { key: "NNBC", label: "nút nhấn báo cháy" },
+  { key: "DEN", label: "đèn sự cố" },
+] as const;
+
+export type BookGroupKey = (typeof BOOK_GROUPS)[number]["key"];
+
 export type BookRow = {
-  /** BCC hay TCC — chỉ dùng để gom nhóm, số thứ tự vẫn chạy liên tục xuyên hai bảng. */
-  table: "BCC" | "TCC";
+  /** Chỉ dùng để gom nhóm; số thứ tự vẫn chạy liên tục xuyên các nhóm. */
+  table: BookGroupKey;
   ma: string;
-  /** Cột "Tên phương tiện" = chủng loại (BCC) / tên tủ (TCC). */
+  /** Cột "Tên phương tiện" = chủng loại (BCC) / tên tủ (TCC) / tên van… */
   ten: string;
   dvt: string;
   sl: number | null;
@@ -79,27 +97,34 @@ export type BookRow = {
 
 /**
  * Cột 8 "Ghi chú" của Mẫu số 01 — CHỈ ghi cho thiết bị KHÔNG còn khả dụng (bất khả dụng
- * / cần theo dõi). Sổ nộp cho công tác PCCC cần nói rõ thiết bị hỏng thì hỏng ở đâu;
- * còn thiết bị tốt mà cũng điền thì cột này đầy chữ vô ích, che mất mấy dòng đáng chú ý.
+ * / cần theo dõi / không đạt). Sổ nộp cho công tác PCCC cần nói rõ thiết bị hỏng thì
+ * hỏng ở đâu; còn thiết bị tốt mà cũng điền thì cột này đầy chữ vô ích, che mất mấy
+ * dòng đáng chú ý.
  *
  * Nguồn chữ khác nhau theo bảng, đúng như nghiệp vụ chốt 2026-08-13:
  *  - Bình chữa cháy → cột "Áp suất / KL" (hết áp, 2/4 mức đỏ, KL hao hụt…), vì đó chính
  *    là lý do bình bị đánh giá không khả dụng.
- *  - Tủ chữa cháy  → cột "Ghi chú" của bảng (mô tả linh kiện hỏng).
+ *  - Tủ chữa cháy / cuộn vòi → cột "Ghi chú" của bảng (mô tả linh kiện hỏng).
+ *  - Van → cột "Mô tả"; nút nhấn → cột "Ghi chú khác"; đèn → "Kết quả test gần nhất".
  *
- * Xét theo MÀU của tình trạng (`toneOf`) chứ không so chuỗi: danh mục tình trạng còn
- * đổi chữ, nhưng "ok / cần theo dõi / hỏng" thì đã có bảng tra dùng chung.
+ * Xét theo MÀU của tình trạng (`round2ToneOf`) chứ không so chuỗi: mỗi bảng một vốn từ
+ * riêng, nhưng "ok / cần theo dõi / hỏng" thì đã có bảng tra dùng chung.
+ *
+ * "Không có đèn" có màu trung tính (không phải "ok") nên VẪN được ghi chú — đúng ý:
+ * sổ cần nói rõ vị trí đó không lắp đèn, đó là thông tin, không phải lỗi.
  */
 function noteOf(tinhTrang: string | null, source: string | null): string {
-  if (toneOf(tinhTrang) === "ok") return "";
+  if (round2ToneOf(tinhTrang) === "ok") return "";
   return source ?? "";
 }
+
+export type BookGroupCount = { key: BookGroupKey; label: string; total: number; signed: number };
 
 export type BookStatus = {
   positionCode: string | null;
   positionLabel: string | null;
-  bcc: { total: number; signed: number };
-  tcc: { total: number; signed: number };
+  /** Đếm theo từng nhóm — thay cho hai trường cứng bcc/tcc của bản trước. */
+  groups: BookGroupCount[];
   /** Đủ điều kiện hiện nút xuất PDF chưa. */
   ready: boolean;
   /** Vì sao chưa xuất được — hiện thẳng lên tooltip/toast cho người dùng. */
@@ -108,40 +133,64 @@ export type BookStatus = {
 
 /** Dòng của cương vị trong kỳ, kèm chữ ký — dùng chung cho cả đếm và dựng PDF. */
 export async function loadBookData(periodId: string, positionCode: string) {
-  const [extinguishers, cabinets, sigBcc, sigTcc] = await Promise.all([
+  const where = { periodId, cuongViCode: positionCode };
+  const [
+    extinguishers,
+    cabinets,
+    hoseReels,
+    valves,
+    alarmButtons,
+    lights,
+    sigBcc,
+    sigTcc,
+    sigCvcc,
+    sigVan,
+    sigNnbc,
+    sigDen,
+  ] = await Promise.all([
     prisma.pcccExtinguisher.findMany({
-      where: { periodId, cuongViCode: positionCode },
+      where,
       orderBy: [{ stt: "asc" }, { ma: "asc" }],
-      select: {
-        id: true,
-        ma: true,
-        chungLoai: true,
-        dvt: true,
-        sl: true,
-        ngayKiemTra: true,
-        tinhTrang: true,
-        apSuat: true,
-        nguoiKiemTra: true,
-      },
+      select: { id: true, ma: true, chungLoai: true, dvt: true, sl: true, ngayKiemTra: true, tinhTrang: true, apSuat: true, nguoiKiemTra: true },
     }),
     prisma.pcccCabinet.findMany({
-      where: { periodId, cuongViCode: positionCode },
+      where,
       orderBy: [{ stt: "asc" }, { ma: "asc" }],
-      select: {
-        id: true,
-        ma: true,
-        ten: true,
-        dvt: true,
-        sl: true,
-        ngayKiemTra: true,
-        tinhTrangTongThe: true,
-        ghiChu: true,
-        nguoiKiemTra: true,
-      },
+      select: { id: true, ma: true, ten: true, dvt: true, sl: true, ngayKiemTra: true, tinhTrangTongThe: true, ghiChu: true, nguoiKiemTra: true },
+    }),
+    prisma.pcccHoseReel.findMany({
+      where,
+      orderBy: [{ stt: "asc" }, { ma: "asc" }],
+      select: { id: true, ma: true, ten: true, ngayKiemTra: true, tinhTrangTongThe: true, ghiChu: true, nguoiKiemTra: true },
+    }),
+    prisma.pcccValve.findMany({
+      where,
+      orderBy: [{ stt: "asc" }, { rowKey: "asc" }],
+      select: { id: true, maKks: true, tenVan: true, loaiVan: true, ngayKiemTra: true, tinhTrang: true, moTa: true, nguoiKiemTra: true },
+    }),
+    prisma.pcccAlarmButton.findMany({
+      where,
+      orderBy: [{ stt: "asc" }, { rowKey: "asc" }],
+      select: { id: true, maKks: true, viTri: true, ngayKiemTra: true, tinhTrangTongThe: true, khac: true, nguoiKiemTra: true },
+    }),
+    prisma.pcccEmergencyLight.findMany({
+      where,
+      orderBy: [{ loai: "asc" }, { stt: "asc" }, { rowKey: "asc" }],
+      select: { id: true, loai: true, maKks: true, tenKhuVuc: true, ngayKiemTra: true, tinhTrang: true, ketQuaTest: true, nguoiKiemTra: true },
     }),
     signaturesOf(periodId, "EXTINGUISHER"),
     signaturesOf(periodId, "CABINET"),
+    signaturesOf(periodId, "HOSE_REEL"),
+    signaturesOf(periodId, "VALVE"),
+    signaturesOf(periodId, "ALARM_BUTTON"),
+    signaturesOf(periodId, "EMERGENCY_LIGHT"),
   ]);
+
+  /** Cột 7 ghi người ĐÃ KÝ, không phải ô `nguoiKiemTra` gõ tay — ký mới là bằng chứng. */
+  const signer = (sig: Map<string, { signerName: string; signatureKey: string | null }>, id: string, fallback: string | null) => ({
+    nguoiKiemTra: sig.get(id)?.signerName ?? fallback ?? "",
+    signatureKey: sig.get(id)?.signatureKey ?? null,
+  });
 
   const rows: BookRow[] = [
     ...extinguishers.map((r) => ({
@@ -153,9 +202,7 @@ export async function loadBookData(periodId: string, positionCode: string) {
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrang ?? "",
       ghiChu: noteOf(r.tinhTrang, r.apSuat),
-      // Cột 7 ghi người ĐÃ KÝ, không phải ô `nguoiKiemTra` gõ tay — ký mới là bằng chứng.
-      nguoiKiemTra: sigBcc.get(r.id)?.signerName ?? r.nguoiKiemTra ?? "",
-      signatureKey: sigBcc.get(r.id)?.signatureKey ?? null,
+      ...signer(sigBcc, r.id, r.nguoiKiemTra),
     })),
     ...cabinets.map((r) => ({
       table: "TCC" as const,
@@ -166,64 +213,111 @@ export async function loadBookData(periodId: string, positionCode: string) {
       ngayKiemTra: r.ngayKiemTra,
       tinhTrang: r.tinhTrangTongThe ?? "",
       ghiChu: noteOf(r.tinhTrangTongThe, r.ghiChu),
-      nguoiKiemTra: sigTcc.get(r.id)?.signerName ?? r.nguoiKiemTra ?? "",
-      signatureKey: sigTcc.get(r.id)?.signatureKey ?? null,
+      ...signer(sigTcc, r.id, r.nguoiKiemTra),
+    })),
+    ...hoseReels.map((r) => ({
+      table: "CVCC" as const,
+      ma: r.ma,
+      ten: r.ten ?? "Cuộn vòi chữa cháy",
+      dvt: "Cuộn",
+      sl: 1,
+      ngayKiemTra: r.ngayKiemTra,
+      tinhTrang: r.tinhTrangTongThe ?? "",
+      ghiChu: noteOf(r.tinhTrangTongThe, r.ghiChu),
+      ...signer(sigCvcc, r.id, r.nguoiKiemTra),
+    })),
+    ...valves.map((r) => ({
+      table: "VAN" as const,
+      ma: r.maKks,
+      ten: r.tenVan || `Van ${r.loaiVan}`,
+      dvt: "Van",
+      sl: 1,
+      ngayKiemTra: r.ngayKiemTra,
+      tinhTrang: r.tinhTrang ?? "",
+      ghiChu: noteOf(r.tinhTrang, r.moTa),
+      ...signer(sigVan, r.id, r.nguoiKiemTra),
+    })),
+    ...alarmButtons.map((r) => ({
+      table: "NNBC" as const,
+      ma: r.maKks,
+      // Nút nhấn không có cột "tên" riêng — lấy vị trí cụ thể làm tên phương tiện,
+      // vì trên hiện trường người ta gọi nhau bằng vị trí chứ không bằng mã KKS.
+      ten: r.viTri ? `Nút nhấn báo cháy — ${r.viTri}` : "Nút nhấn báo cháy",
+      dvt: "Nút",
+      sl: 1,
+      ngayKiemTra: r.ngayKiemTra,
+      tinhTrang: r.tinhTrangTongThe ?? "",
+      ghiChu: noteOf(r.tinhTrangTongThe, r.khac),
+      ...signer(sigNnbc, r.id, r.nguoiKiemTra),
+    })),
+    ...lights.map((r) => ({
+      table: "DEN" as const,
+      ma: r.maKks,
+      ten: `${r.loai === "EXIT" ? "Đèn EXIT" : "Đèn chiếu sáng sự cố"}${r.tenKhuVuc ? ` — ${r.tenKhuVuc}` : ""}`,
+      dvt: "Bộ",
+      sl: 1,
+      ngayKiemTra: r.ngayKiemTra,
+      tinhTrang: r.tinhTrang ?? "",
+      ghiChu: noteOf(r.tinhTrang, r.ketQuaTest),
+      ...signer(sigDen, r.id, r.nguoiKiemTra),
     })),
   ];
 
-  const signedBcc = extinguishers.filter((r) => sigBcc.has(r.id)).length;
-  const signedTcc = cabinets.filter((r) => sigTcc.has(r.id)).length;
-  return {
-    rows,
-    counts: {
-      bcc: { total: extinguishers.length, signed: signedBcc },
-      tcc: { total: cabinets.length, signed: signedTcc },
-    },
+  const counted: Record<BookGroupKey, { rows: { id: string }[]; sig: Map<string, unknown> }> = {
+    BCC: { rows: extinguishers, sig: sigBcc },
+    TCC: { rows: cabinets, sig: sigTcc },
+    CVCC: { rows: hoseReels, sig: sigCvcc },
+    VAN: { rows: valves, sig: sigVan },
+    NNBC: { rows: alarmButtons, sig: sigNnbc },
+    DEN: { rows: lights, sig: sigDen },
   };
+  const groups: BookGroupCount[] = BOOK_GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    total: counted[g.key].rows.length,
+    signed: counted[g.key].rows.filter((r) => counted[g.key].sig.has(r.id)).length,
+  }));
+
+  return { rows, groups };
 }
 
 /** Trạng thái để client quyết định có hiện nút hay không. */
 export async function bookStatusOf(periodId: string, positionCode: string | null): Promise<BookStatus> {
+  const empty = BOOK_GROUPS.map((g) => ({ key: g.key, label: g.label, total: 0, signed: 0 }));
   if (!positionCode) {
     return {
       positionCode: null,
       positionLabel: null,
-      bcc: { total: 0, signed: 0 },
-      tcc: { total: 0, signed: 0 },
+      groups: empty,
       ready: false,
       reason: "Chọn một cương vị ở bộ lọc để xuất sổ theo dõi của cương vị đó",
     };
   }
-  const { counts } = await loadBookData(periodId, positionCode);
+  const { groups } = await loadBookData(periodId, positionCode);
   const label = positionLabelOf(positionCode);
-  const missingBcc = counts.bcc.total - counts.bcc.signed;
-  const missingTcc = counts.tcc.total - counts.tcc.signed;
 
   // Cương vị không có thiết bị nào thì không có sổ để in — nói thẳng, đừng hiện nút
   // rồi xuất ra một quyển sổ rỗng.
-  if (counts.bcc.total === 0 && counts.tcc.total === 0) {
+  if (groups.every((g) => g.total === 0)) {
     return {
       positionCode,
       positionLabel: label,
-      ...counts,
+      groups,
       ready: false,
       reason: `Cương vị ${label} không có thiết bị PCCC nào trong kỳ này`,
     };
   }
-  // Bảng KHÔNG có thiết bị của cương vị này thì coi như xong bảng đó (0/0), chứ không
+  // Nhóm KHÔNG có thiết bị của cương vị này thì coi như xong nhóm đó (0/0), chứ không
   // chặn mãi: nhiều cương vị chỉ có bình, không có tủ.
-  if (missingBcc > 0 || missingTcc > 0) {
-    const parts = [
-      missingBcc > 0 ? `${missingBcc} bình chữa cháy` : null,
-      missingTcc > 0 ? `${missingTcc} tủ chữa cháy` : null,
-    ].filter(Boolean);
+  const missing = groups.filter((g) => g.total > g.signed);
+  if (missing.length > 0) {
     return {
       positionCode,
       positionLabel: label,
-      ...counts,
+      groups,
       ready: false,
-      reason: `Còn ${parts.join(" và ")} chưa ký xác nhận`,
+      reason: `Còn ${missing.map((g) => `${g.total - g.signed} ${g.label}`).join(", ")} chưa ký xác nhận`,
     };
   }
-  return { positionCode, positionLabel: label, ...counts, ready: true, reason: null };
+  return { positionCode, positionLabel: label, groups, ready: true, reason: null };
 }
