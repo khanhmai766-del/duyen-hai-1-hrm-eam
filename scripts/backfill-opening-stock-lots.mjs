@@ -19,7 +19,22 @@
  *   node scripts/backfill-opening-stock-lots.mjs --apply   # ghi thật
  */
 import { PrismaClient } from "@prisma/client";
-import { pathToFileURL } from "node:url";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+// TỰ ĐỌC .env. Prisma Client (khác Prisma CLI và khác Next) KHÔNG nạp .env, nên chạy
+// thẳng bằng `node` trên máy chủ là DATABASE_URL rỗng. Nạp ở đây để lệnh chạy gọn một
+// dòng, không phải `set -a && . ./.env` — kiểu đó vừa dễ quên vừa hay bị chặn.
+const envFile = join(dirname(dirname(fileURLToPath(import.meta.url))), ".env");
+if (existsSync(envFile)) {
+  for (const line of readFileSync(envFile, "utf8").split(/\r?\n/)) {
+    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!match || line.trim().startsWith("#")) continue;
+    const value = match[2].replace(/^["']|["']$/g, "");
+    if (process.env[match[1]] === undefined) process.env[match[1]] = value;
+  }
+}
 
 /** @param {PrismaClient} prisma */
 export async function planOpeningLots(prisma) {
