@@ -254,3 +254,128 @@ export function hanThayTheTone(denHan: string | Date | null | undefined): PcccTo
   if (d.getTime() <= now + HAN_THAY_THE_SOON_DAYS * 86_400_000) return "watch";
   return "none";
 }
+
+// ===========================================================================
+// BỐN NHÓM THIẾT BỊ ĐỢT 2 — vốn từ tình trạng riêng của từng bảng
+//
+// Mỗi bảng có BỘ TỪ RIÊNG, cố ý không gộp: văn bản nghiệp vụ đặt tên khác nhau
+// cho từng loại thiết bị, gộp lại thì báo cáo in ra sai chữ so với biểu mẫu.
+//   - Van chữa cháy: 3 mức riêng (mức giữa là cả một câu dài, đúng nguyên văn).
+//   - Đèn EXIT / chiếu sáng sự cố: Đạt / Không đạt / Không có đèn.
+//   - Cuộn vòi: Đạt / Không đạt (TB 5100/TB-NĐDH ngày 14/8/2026).
+//   - Nút nhấn báo cháy: DÙNG LẠI vốn từ 3 mức của tủ chữa cháy, vì tình trạng
+//     tổng thể cũng suy ra từ ô tích theo đúng một quy tắc.
+// ===========================================================================
+
+export const VALVE_TINH_TRANG_OPTIONS = [
+  "Khả dụng",
+  "Có suy giảm chức năng nhưng vẫn sử dụng được khi có sự cố",
+  "Không khả dụng",
+] as const;
+
+export const VALVE_LOAI_OPTIONS = ["DELUGE", "ALARM"] as const;
+
+/** "Không có đèn" = vị trí thực tế không lắp đèn, KHÔNG phải lỗi thiết bị. */
+export const LIGHT_KHONG_CO_DEN = "Không có đèn";
+export const LIGHT_TINH_TRANG_OPTIONS = ["Đạt", "Không đạt", LIGHT_KHONG_CO_DEN] as const;
+
+export const LIGHT_LOAI = { EXIT: "EXIT", CSSC: "CSSC" } as const;
+export type PcccLightLoai = (typeof LIGHT_LOAI)[keyof typeof LIGHT_LOAI];
+
+export const LIGHT_LOAI_LABEL: Record<PcccLightLoai, string> = {
+  EXIT: "Đèn EXIT",
+  CSSC: "Đèn chiếu sáng sự cố",
+};
+
+export function isPcccLightLoai(value: unknown): value is PcccLightLoai {
+  return value === "EXIT" || value === "CSSC";
+}
+
+export const HOSE_REEL_TINH_TRANG_OPTIONS = ["Đạt", "Không đạt"] as const;
+
+/**
+ * Nhóm ô tích của bảng NNBC. Giữ đúng thứ tự cột nguồn — thứ tự QUYẾT ĐỊNH mức
+ * nặng/nhẹ (xem componentLevelOf): cột đầu là bình thường, cột cuối là hỏng hẳn.
+ */
+export const ALARM_BUTTON_GROUPS = [
+  { label: "TEST NÚT NHẤN", statuses: ["Bình thường", "Có tác động nhưng không reset được", "Không tác động"] },
+  { label: "CHUÔNG", statuses: ["Có tác động", "Không tác động"] },
+  { label: "ĐÈN", statuses: ["Có tác động", "Không tác động"] },
+] as const;
+
+/**
+ * Nhóm ô tích của bảng CVCC. Nhãn lấy ĐÚNG NGUYÊN VĂN hai nhóm cùng tên của tủ
+ * chữa cháy (đọc từ pccc_cabinet_components của dữ liệu thật) vì cuộn vòi được
+ * sao trạng thái từ tủ cha — lệch một chữ là phần sao chép trượt hết.
+ *
+ * CHÚ Ý: bản demo tĩnh GỠ hai nhóm này khỏi bảng TCC sau khi tách CVCC. Ở đây cố
+ * ý CHƯA gỡ: bảng TCC của app đang chạy thật, và khối "Ron chữa cháy" ở Tổng quan
+ * đọc thẳng LĂNG PHUN + NGÀM (xem RON_WEIGHTS). Gỡ là một quyết định nghiệp vụ
+ * riêng, làm sau khi đối chiếu số liệu.
+ */
+export const HOSE_REEL_GROUPS = [
+  { label: "CUỘN ỐNG", statuses: ["Khả dụng", "Bị lủng, dùng tạm", "Thiếu ron", "Hư hỏng nặng, cần thay mới"] },
+  { label: "LĂNG PHUN", statuses: ["Khả dụng", "Thiếu ron", "Bất khả dụng"] },
+] as const;
+
+/**
+ * Nhãn HIỂN THỊ của ô đầu/ô cuối trong mỗi nhóm CVCC. KEY lưu trong DB vẫn là vốn
+ * từ gốc của tủ chữa cháy vì dữ liệu được sao từ tủ cha — đổi key sẽ làm sai phần
+ * sao chép. Chỉ đổi chữ trên header/tooltip, và CHỈ trong bảng CVCC ("Hư hỏng
+ * nặng, cần thay mới" ở nhóm THÂN TỦ/CHÂN ĐẾ của TCC vẫn giữ nguyên chữ).
+ */
+export const HOSE_REEL_LABEL_DISPLAY: Record<string, string> = {
+  "Khả dụng": "Đạt",
+  "Bất khả dụng": "Không đạt",
+  "Hư hỏng nặng, cần thay mới": "Không đạt",
+};
+
+export function hoseReelLabelDisplay(status: string): string {
+  return HOSE_REEL_LABEL_DISPLAY[status] ?? status;
+}
+
+/**
+ * Tình trạng tổng thể của một cuộn vòi — DẪN XUẤT, hai mức.
+ *
+ * KHÁC deriveCabinetStatus (tủ vẫn ba mức): theo TB 5100/TB-NĐDH ngày 14/8/2026
+ * cuộn vòi chỉ còn Đạt / Không đạt. Có khiếm khuyết NẶNG (ô cuối của bất kỳ nhóm
+ * nào) → "Không đạt"; còn lại — kể cả khiếm khuyết nhẹ, kể cả chưa tích ô nào —
+ * → "Đạt".
+ */
+export function deriveHoseReelStatus(components: TccComponent[]): string {
+  const counts = statusCountByGroup(components);
+  for (const c of components) {
+    if (!c.checked) continue;
+    if (componentLevelOf(c.statusOrder, counts.get(c.groupLabel) ?? 1) === "huHongHoanToan") return "Không đạt";
+  }
+  return "Đạt";
+}
+
+/**
+ * Màu cho các nhãn CHỈ xuất hiện ở bốn bảng mới. Tách khỏi TONE_BY_VALUE ở trên
+ * để không phải đụng vào bảng màu đã đối chiếu của BCC/TCC/FCD.
+ *
+ * "Không có đèn" cố ý là "none" (xám trung tính): đó là ghi nhận hiện trạng lắp
+ * đặt, không phải hỏng hóc — tô đỏ sẽ thổi phồng tỉ lệ lỗi trên dashboard.
+ */
+const ROUND2_TONE_BY_VALUE: Record<string, PcccTone> = {
+  Đạt: "ok",
+  "Không đạt": "bad",
+  [LIGHT_KHONG_CO_DEN]: "none",
+  "Có suy giảm chức năng nhưng vẫn sử dụng được khi có sự cố": "watch",
+  "Không khả dụng": "bad",
+  "Bình thường": "ok",
+  "Có tác động": "ok",
+  "Có tác động nhưng không reset được": "watch",
+  "Không tác động": "bad",
+  "Rò rỉ": "watch",
+  "Rách/mục": "watch",
+};
+
+/**
+ * Màu của một nhãn ở bốn bảng mới. Tra bảng riêng trước rồi mới rơi về `toneOf`
+ * dùng chung ("Khả dụng"/"Bất khả dụng"/"Thiếu ron"… vẫn lấy đúng màu cũ).
+ */
+export function round2ToneOf(value: string | null | undefined): PcccTone {
+  return ROUND2_TONE_BY_VALUE[value ?? ""] ?? toneOf(value);
+}

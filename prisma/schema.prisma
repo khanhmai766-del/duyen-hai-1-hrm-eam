@@ -1628,11 +1628,15 @@ model PcccPeriod {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  extinguishers PcccExtinguisher[]
-  cabinets      PcccCabinet[]
-  bulks         PcccBulk[]
-  fm200Panels   PcccFm200Panel[]
-  signatures    PcccSignature[]
+  extinguishers   PcccExtinguisher[]
+  cabinets        PcccCabinet[]
+  bulks           PcccBulk[]
+  fm200Panels     PcccFm200Panel[]
+  alarmButtons    PcccAlarmButton[]
+  valves          PcccValve[]
+  emergencyLights PcccEmergencyLight[]
+  hoseReels       PcccHoseReel[]
+  signatures      PcccSignature[]
 
   @@unique([year, monthNo])
   @@index([isClosed])
@@ -1724,6 +1728,8 @@ model PcccCabinet {
   updatedAt DateTime @updatedAt
 
   components PcccCabinetComponent[]
+  // Cuộn vòi chữa cháy là danh mục CON của tủ — xoá tủ thì cuộn vòi đi theo.
+  hoseReels  PcccHoseReel[]
 
   @@unique([periodId, ma])
   @@index([periodId, cuongViCode])
@@ -1834,6 +1840,7 @@ model PcccSignature {
   period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   // Mục tiêu ký: "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL"
+  //             | "ALARM_BUTTON" | "VALVE" | "EMERGENCY_LIGHT" | "HOSE_REEL"
   targetType String
   targetId   String // id bản ghi tương ứng (không FK: 1 cột trỏ nhiều bảng)
 
@@ -1849,4 +1856,248 @@ model PcccSignature {
   @@index([periodId, targetType])
   @@index([userId])
   @@map("pccc_signatures")
+}
+
+// ============================================================================
+// BỐN NHÓM THIẾT BỊ BỔ SUNG (đợt 2) — nút nhấn báo cháy, van chữa cháy, đèn
+// EXIT / đèn chiếu sáng sự cố, cuộn vòi chữa cháy.
+//
+// Chia làm hai KIỂU, mỗi kiểu dùng lại đúng khuôn đã có ở trên:
+//   - Kiểu "ô tích nhiều mức" (như PcccCabinet): PcccAlarmButton, PcccHoseReel.
+//   - Kiểu "một ô tình trạng chọn đơn" (như PcccExtinguisher): PcccValve,
+//     PcccEmergencyLight.
+//
+// KHOÁ NGHIỆP VỤ `rowKey`: khác BCC/TCC, các nguồn Excel mới KHÔNG có mã duy
+// nhất — đo trên dữ liệu thật T07+T08.2026: NNBC có 6 cặp dòng trùng hệt nhau
+// (cùng mã KKS, cùng vị trí, cùng cả STT), đèn EXIT có mã KKS lặp ở nhiều khu
+// vực. Vì vậy mỗi dòng mang một khoá ổn định sinh lúc nhập liệu (mã + số thứ tự
+// lần xuất hiện), để nhập lại nhiều lần không nhân bản và để chuyển kỳ ghép được
+// dòng tháng trước với tháng sau.
+// ============================================================================
+
+// NÚT NHẤN BÁO CHÁY (NNBC) — 6 cột định danh + 3 nhóm ô tích (TEST NÚT NHẤN 3
+// mức, CHUÔNG 2 mức, ĐÈN 2 mức) + 3 cột cuối. Nguồn Excel KHÔNG có cột "Số YCSC".
+model PcccAlarmButton {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  rowKey String // khoá nghiệp vụ ổn định — xem ghi chú đầu khối
+  stt    Float?
+
+  maKks     String
+  tenKhuVuc String? // "Tên khu vực Layout"
+  viTri     String? // "Vị trí cụ thể"
+
+  cuongVi     String? // nhãn chuẩn hoá, xem ghi chú ở PcccExtinguisher.cuongVi
+  cuongViCode String?
+  machine     String  @default("COMMON") // S1 | S2 | COMMON
+
+  nguoiGiamSat     String?
+  nguoiGiamSatCode String?
+
+  // Cột "Ghi chú khác" của sheet gốc: nhật ký kiểm tra nhiều đợt, giữ NGUYÊN VĂN
+  // (có số PCT, ngày kiểm tra các đợt trước) — không tách, không cắt.
+  khac         String?
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+
+  // DẪN XUẤT từ các ô tích, cùng quy tắc với PcccCabinet.tinhTrangTongThe.
+  tinhTrangTongThe String?
+
+  deviceSeq String? // xem ghi chú ở PcccExtinguisher.deviceSeq
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  components PcccAlarmButtonComponent[]
+
+  @@unique([periodId, rowKey])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@index([periodId, tinhTrangTongThe])
+  @@index([periodId, maKks])
+  @@index([deviceSeq])
+  @@map("pccc_alarm_buttons")
+}
+
+// Một ô tích của bảng NNBC — cùng hình dạng và cùng quy tắc với
+// PcccCabinetComponent (cho phép nhiều mức cùng tích trong một nhóm).
+model PcccAlarmButtonComponent {
+  id       String          @id @default(cuid())
+  buttonId String
+  button   PcccAlarmButton @relation(fields: [buttonId], references: [id], onDelete: Cascade)
+
+  groupLabel  String // "TEST NÚT NHẤN" | "CHUÔNG" | "ĐÈN"
+  status      String // "Bình thường" | "Có tác động" | "Không tác động" | …
+  checked     Boolean @default(false)
+  groupOrder  Int
+  statusOrder Int
+
+  @@unique([buttonId, groupLabel, status])
+  @@index([buttonId])
+  @@map("pccc_alarm_button_components")
+}
+
+// VAN CHỮA CHÁY — gồm cả van Deluge lẫn van Alarm, phân biệt qua `loaiVan`.
+// `tinhTrang` có BỘ GIÁ TRỊ RIÊNG 3 mức (xem VALVE_TINH_TRANG_OPTIONS trong
+// lib/pccc-status.ts): không dùng chung vốn từ của BCC hay TCC.
+model PcccValve {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  rowKey  String
+  stt     Float?
+  tenVan  String
+  loaiVan String // "DELUGE" | "ALARM"
+  maKks   String
+
+  cuongVi     String?
+  cuongViCode String?
+  machine     String  @default("COMMON")
+
+  nguoiGiamSat     String?
+  nguoiGiamSatCode String?
+
+  viTri     String?
+  tinhTrang String? // "Khả dụng" | "Có suy giảm chức năng…" | "Không khả dụng"
+  moTa      String?
+  soYcsc    String?
+
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+
+  deviceSeq String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, rowKey])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@index([periodId, tinhTrang])
+  @@index([periodId, loaiVan])
+  @@index([deviceSeq])
+  @@map("pccc_valves")
+}
+
+// ĐÈN EXIT + ĐÈN CHIẾU SÁNG SỰ CỐ — MỘT bảng, phân biệt qua `loai`: hai sheet
+// nguồn có hình dạng dữ liệu giống hệt nhau, tách bảng chỉ nhân đôi code.
+//
+// `tenKhuVuc`/`maBanVe`/`soLuongKhuVuc` là dữ liệu ở CẤP KHU VỰC (nhiều đèn dùng
+// chung một bản vẽ Layout, trong Excel là ô merge) — đã được "trải" xuống từng
+// dòng đèn lúc nhập liệu, đúng cách bản demo làm.
+//
+// `ketQuaTest` giữ NGUYÊN VĂN ô "Tháng MM/YYYY" mới nhất của sheet nguồn (chứa
+// cả số phiếu YCSC); `tinhTrang` là bậc suy ra từ văn bản đó, có mức thứ ba
+// "Không có đèn" — nghĩa là vị trí thực tế không lắp đèn, KHÔNG phải lỗi thiết
+// bị, nên tô xám trung tính và không đếm vào tỉ lệ hỏng.
+model PcccEmergencyLight {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  loai   String // "EXIT" | "CSSC"
+  rowKey String
+  stt    Float?
+
+  maKks         String
+  tenKhuVuc     String?
+  maBanVe       String?
+  soLuongKhuVuc Float?
+
+  cuongVi     String?
+  cuongViCode String?
+  machine     String  @default("COMMON")
+
+  nguoiGiamSat     String?
+  nguoiGiamSatCode String?
+
+  tinhTrang  String? // "Đạt" | "Không đạt" | "Không có đèn"
+  ketQuaTest String? // nguyên văn ô tháng gần nhất
+  ghiChu     String?
+
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+
+  deviceSeq String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([periodId, loai, rowKey])
+  @@index([periodId, loai, cuongViCode])
+  @@index([periodId, loai, machine])
+  @@index([periodId, loai, tinhTrang])
+  @@index([periodId, maKks])
+  @@index([deviceSeq])
+  @@map("pccc_emergency_lights")
+}
+
+// CUỘN VÒI CHỮA CHÁY (CVCC) — danh mục CON của tủ chữa cháy.
+//
+// KHÔNG có trong Excel gốc: bản demo tự sinh từ TCC lúc chạy (tủ INDOOR → 1
+// cuộn, OUTDOOR → 2 cuộn). Ở đây LƯU THẬT vào DB, vì người dùng còn thêm/xoá tay
+// và còn phải ký từng dòng — thứ bản demo không giữ được qua các lần tải trang.
+// Sinh lần đầu bằng scripts/import-pccc-web-demo.ts; từ đó trở đi là dữ liệu thật.
+//
+// `cabinetId` thay cho cặp chuỗi `tuMa`/`tuTen` của bản demo: đổi mã tủ cha không
+// làm mồ côi cuộn vòi. Xoá tủ thì cuộn vòi của nó đi theo.
+model PcccHoseReel {
+  id       String     @id @default(cuid())
+  periodId String
+  period   PcccPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  cabinetId String
+  cabinet   PcccCabinet @relation(fields: [cabinetId], references: [id], onDelete: Cascade)
+
+  stt   Float?
+  ma    String // mã tự sinh từ mã tủ cha: đoạn "TCC" đổi thành "CVCC"
+  ten   String? // "Cuộn vòi chữa cháy" | "Cuộn vòi chữa cháy #1" | "#2"
+  viTri String?
+
+  cuongVi     String?
+  cuongViCode String?
+  machine     String  @default("COMMON")
+
+  soYcsc       String?
+  ngayKiemTra  DateTime?
+  nguoiKiemTra String?
+  ghiChu       String?
+
+  // DẪN XUẤT: chỉ 2 mức "Đạt"/"Không đạt" theo TB 5100/TB-NĐDH ngày 14/8/2026 —
+  // KHÁC tủ chữa cháy (vẫn 3 mức vì văn bản không đề cập tới tủ). Xem
+  // deriveHoseReelStatus() trong lib/pccc-status.ts.
+  tinhTrangTongThe String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  components PcccHoseReelComponent[]
+
+  @@unique([periodId, ma])
+  @@index([periodId, cuongViCode])
+  @@index([periodId, machine])
+  @@index([cabinetId])
+  @@map("pccc_hose_reels")
+}
+
+// Một ô tích của bảng CVCC — 2 nhóm "CUỘN ỐNG" (4 mức) và "LĂNG PHUN" (3 mức).
+// Key lưu vẫn là vốn từ gốc của tủ chữa cháy ("Khả dụng"/"Bất khả dụng"…) vì dữ
+// liệu được sao từ tủ cha; chỉ NHÃN HIỂN THỊ đổi thành "Đạt"/"Không đạt".
+model PcccHoseReelComponent {
+  id     String       @id @default(cuid())
+  reelId String
+  reel   PcccHoseReel @relation(fields: [reelId], references: [id], onDelete: Cascade)
+
+  groupLabel  String // "CUỘN ỐNG" | "LĂNG PHUN"
+  status      String
+  checked     Boolean @default(false)
+  groupOrder  Int
+  statusOrder Int
+
+  @@unique([reelId, groupLabel, status])
+  @@index([reelId])
+  @@map("pccc_hose_reel_components")
 }
