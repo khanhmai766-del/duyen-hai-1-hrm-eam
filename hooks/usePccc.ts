@@ -191,6 +191,52 @@ export interface PcccSummary {
       ap: { value: number | null; phanTram: number | null; tinhTrang: string };
     }[];
   }[];
+  // --- Bốn nhóm bổ sung đợt 2 ---
+  nnbc: {
+    tongSo: number;
+    khaDung: number;
+    canTheoDoi: number;
+    batKhaDung: number;
+    theoNhom: ComponentBreakdownRow[];
+  };
+  van: {
+    rows: ValveSummaryRow[];
+    total: ValveSummaryRow;
+  };
+  den: LightSummaryRow[];
+  cvcc: {
+    tongSo: number;
+    dat: number;
+    khongDat: number;
+    theoNhom: ComponentBreakdownRow[];
+  };
+}
+
+/** Đếm ô đã tích theo ba mức nặng/nhẹ, gom theo nhóm linh kiện (nút nhấn, cuộn vòi). */
+export interface ComponentBreakdownRow {
+  groupLabel: string;
+  binhThuong: number;
+  huHong1Phan: number;
+  huHongHoanToan: number;
+}
+
+export interface ValveSummaryRow {
+  loaiVan: string;
+  tongSo: number;
+  khaDung: number;
+  suyGiam: number;
+  khongKhaDung: number;
+  chuaCapNhat: number;
+}
+
+export interface LightSummaryRow {
+  loai: string;
+  tongSo: number;
+  dat: number;
+  khongDat: number;
+  /** Vị trí thực tế không lắp đèn — KHÔNG phải lỗi thiết bị, nên đếm riêng. */
+  khongCoDen: number;
+  chuaCapNhat: number;
 }
 
 export interface ExtinguisherSummaryRow {

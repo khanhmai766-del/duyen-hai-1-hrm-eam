@@ -47,7 +47,12 @@ function SectionTitle({ index, title, note }: { index: string; title: string; no
  * "có bao nhiêu", người dùng luôn hỏi tiếp "những cái nào" — đây là đường đi thẳng
  * tới câu trả lời, khỏi phải tự dò lại bộ lọc.
  */
-export type PcccOverviewDrill = "BCC_KHA_DUNG" | "BCC_BAT_KHA_DUNG" | "BCC_QUA_HAN" | "TCC_HONG_NANG";
+export type PcccOverviewDrill =
+  | "BCC_KHA_DUNG"
+  | "BCC_BAT_KHA_DUNG"
+  | "BCC_QUA_HAN"
+  | "TCC_HONG_NANG"
+  | "NNBC_BAT_KHA_DUNG";
 
 export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDrill?: (target: PcccOverviewDrill) => void }) {
   const bccTotal = summary.bcc.total;
@@ -405,6 +410,136 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
             );
           })}
         </div>
+      </section>
+
+      {/* IV. NÚT NHẤN BÁO CHÁY */}
+      <section>
+        <SectionTitle index="IV" title="Nút nhấn báo cháy (NNBC)" note="đếm theo ô đã tích, một nhóm có thể có nhiều lỗi" />
+        <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <StatCard
+              label="Khả dụng"
+              value={summary.nnbc.khaDung}
+              hint={`trên ${summary.nnbc.tongSo} nút nhấn`}
+              tone="ok"
+              icon={ShieldCheck}
+            />
+            <StatCard label="Cần theo dõi" value={summary.nnbc.canTheoDoi} tone="watch" icon={AlertTriangle} />
+            <StatCard
+              label="Bất khả dụng"
+              value={summary.nnbc.batKhaDung}
+              tone="bad"
+              icon={AlertTriangle}
+              onClick={drill("NNBC_BAT_KHA_DUNG")}
+            />
+          </div>
+          <TableShell fill>
+            <thead>
+              <tr>
+                <th className={TH_CLASS}>Hạng mục</th>
+                <th className={`${TH_CLASS} text-right`}>Bình thường</th>
+                <th className={`${TH_CLASS} text-right`}>Hư hỏng 1 phần</th>
+                <th className={`${TH_CLASS} text-right`}>Hư hỏng hoàn toàn</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.nnbc.theoNhom.length === 0 && (
+                <tr>
+                  <td className={`${TD_CLASS} text-muted-foreground`} colSpan={4}>
+                    Chưa có ô nào được tích trong kỳ này.
+                  </td>
+                </tr>
+              )}
+              {summary.nnbc.theoNhom.map((g) => (
+                <tr key={g.groupLabel}>
+                  <td className={`${TD_CLASS} font-medium`}>{g.groupLabel}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{g.binhThuong || ""}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums text-amber-700`}>{g.huHong1Phan || ""}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums font-semibold text-rose-700`}>{g.huHongHoanToan || ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </TableShell>
+        </div>
+      </section>
+
+      {/* V. VAN CHỮA CHÁY */}
+      <section>
+        <SectionTitle index="V" title="Van chữa cháy" note="tách theo loại van (Deluge / Alarm)" />
+        <TableShell>
+          <thead>
+            <tr>
+              <th className={TH_CLASS}>Loại van</th>
+              <th className={`${TH_CLASS} text-right`}>Tổng số</th>
+              <th className={`${TH_CLASS} text-right`}>Khả dụng</th>
+              <th className={`${TH_CLASS} text-right`}>Suy giảm, vẫn dùng được</th>
+              <th className={`${TH_CLASS} text-right`}>Không khả dụng</th>
+              <th className={`${TH_CLASS} text-right`}>Chưa cập nhật</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.van.rows.map((r) => (
+              <tr key={r.loaiVan}>
+                <td className={`${TD_CLASS} font-medium`}>{r.loaiVan}</td>
+                <td className={`${TD_CLASS} text-right tabular-nums`}>{r.tongSo}</td>
+                <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{r.khaDung || ""}</td>
+                <td className={`${TD_CLASS} text-right tabular-nums text-amber-700`}>{r.suyGiam || ""}</td>
+                <td className={`${TD_CLASS} text-right tabular-nums font-semibold text-rose-700`}>{r.khongKhaDung || ""}</td>
+                <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{r.chuaCapNhat || ""}</td>
+              </tr>
+            ))}
+            <tr className="bg-slate-50 font-semibold">
+              <td className={TD_CLASS}>TỔNG CỘNG</td>
+              <td className={`${TD_CLASS} text-right tabular-nums`}>{summary.van.total.tongSo}</td>
+              <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{summary.van.total.khaDung || ""}</td>
+              <td className={`${TD_CLASS} text-right tabular-nums text-amber-700`}>{summary.van.total.suyGiam || ""}</td>
+              <td className={`${TD_CLASS} text-right tabular-nums text-rose-700`}>{summary.van.total.khongKhaDung || ""}</td>
+              <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{summary.van.total.chuaCapNhat || ""}</td>
+            </tr>
+          </tbody>
+        </TableShell>
+      </section>
+
+      {/* VI. ĐÈN SỰ CỐ */}
+      <section>
+        <SectionTitle
+          index="VI"
+          title="Đèn EXIT · Đèn chiếu sáng sự cố"
+          note="“Không có đèn” là vị trí không lắp đèn, không tính là lỗi"
+        />
+        <TableShell>
+          <thead>
+            <tr>
+              <th className={TH_CLASS}>Loại đèn</th>
+              <th className={`${TH_CLASS} text-right`}>Tổng số</th>
+              <th className={`${TH_CLASS} text-right`}>Đạt</th>
+              <th className={`${TH_CLASS} text-right`}>Không đạt</th>
+              <th className={`${TH_CLASS} text-right`}>Không có đèn</th>
+              <th className={`${TH_CLASS} text-right`}>Chưa cập nhật</th>
+              <th className={`${TH_CLASS} text-right`}>% đạt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.den.map((r) => {
+              {/* Mẫu số BỎ QUA "không có đèn": vị trí không lắp đèn thì không phải đối
+                  tượng kiểm tra, để nó trong mẫu số là tự dìm tỉ lệ đạt của cả bảng. */}
+              const denominator = r.tongSo - r.khongCoDen;
+              return (
+                <tr key={r.loai}>
+                  <td className={`${TD_CLASS} font-medium`}>{r.loai === "EXIT" ? "Đèn EXIT" : "Đèn chiếu sáng sự cố"}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums`}>{r.tongSo}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{r.dat || ""}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums font-semibold text-rose-700`}>{r.khongDat || ""}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums text-slate-500`}>{r.khongCoDen || ""}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{r.chuaCapNhat || ""}</td>
+                  <td className={`${TD_CLASS} text-right tabular-nums font-semibold`}>
+                    {denominator > 0 ? fmtPercent(r.dat / denominator, 0) : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </TableShell>
       </section>
     </div>
   );

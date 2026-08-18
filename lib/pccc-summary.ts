@@ -15,6 +15,8 @@ import {
   RON_STATUS_MISSING,
   RON_STATUS_OK,
   RON_WEIGHTS,
+  LIGHT_KHONG_CO_DEN,
+  VALVE_TINH_TRANG_OPTIONS,
   componentLevelOf,
 } from "@/lib/pccc-status";
 
@@ -314,4 +316,156 @@ export function periodEndDate(label: string): Date {
   const m = label.match(/^T(\d{2})\.(\d{4})$/);
   if (!m) throw new Error(`Nhãn kỳ không hợp lệ: ${label}`);
   return new Date(Date.UTC(Number(m[2]), Number(m[1]), 0, 23, 59, 59));
+}
+
+// ===========================================================================
+// BỐN NHÓM THIẾT BỊ ĐỢT 2 — số liệu cho tab Tổng quan
+//
+// Hai kiểu tổng hợp, bám đúng hai kiểu dữ liệu:
+//   - Bảng có ô tích (nút nhấn, cuộn vòi): đếm ô ĐÃ TÍCH theo ba mức nặng/nhẹ như
+//     tủ chữa cháy, cộng thêm phân bố tình trạng tổng thể.
+//   - Bảng một ô tình trạng (van, đèn): chỉ đếm phân bố tình trạng, tách theo loại.
+//
+// Cố ý KHÔNG gộp tất cả vào một hàm chung: mỗi bảng có vốn từ tình trạng riêng, gộp
+// lại thì bảng nào cũng phải mang theo một bộ nhãn không phải của nó.
+// ===========================================================================
+
+export type ComponentBreakdownRow = {
+  groupLabel: string;
+  binhThuong: number;
+  huHong1Phan: number;
+  huHongHoanToan: number;
+};
+
+/** Đếm ô ĐÃ TÍCH theo ba mức, gom theo nhóm linh kiện. Dùng chung cho NNBC và CVCC. */
+function breakdownByGroup(rows: { components: CabinetComponentRow[] }[]): ComponentBreakdownRow[] {
+  const statusCount = new Map<string, number>();
+  const groupOrder = new Map<string, number>();
+  for (const r of rows) {
+    for (const c of r.components) {
+      statusCount.set(c.groupLabel, Math.max(statusCount.get(c.groupLabel) ?? 0, c.statusOrder + 1));
+      groupOrder.set(c.groupLabel, c.groupOrder);
+    }
+  }
+  const acc = new Map<string, ComponentBreakdownRow>();
+  for (const r of rows) {
+    for (const c of r.components) {
+      if (!c.checked) continue;
+      const cur = acc.get(c.groupLabel) ?? { groupLabel: c.groupLabel, binhThuong: 0, huHong1Phan: 0, huHongHoanToan: 0 };
+      const level = componentLevelOf(c.statusOrder, statusCount.get(c.groupLabel) ?? 1);
+      if (level === "binhThuong") cur.binhThuong += 1;
+      else if (level === "huHong1Phan") cur.huHong1Phan += 1;
+      else cur.huHongHoanToan += 1;
+      acc.set(c.groupLabel, cur);
+    }
+  }
+  return [...acc.values()].sort((a, b) => (groupOrder.get(a.groupLabel) ?? 0) - (groupOrder.get(b.groupLabel) ?? 0));
+}
+
+export type AlarmButtonSummary = {
+  tongSo: number;
+  khaDung: number;
+  canTheoDoi: number;
+  batKhaDung: number;
+  theoNhom: ComponentBreakdownRow[];
+};
+
+export function summarizeAlarmButtons(
+  rows: { tinhTrangTongThe: string | null; components: CabinetComponentRow[] }[]
+): AlarmButtonSummary {
+  return {
+    tongSo: rows.length,
+    khaDung: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.OK).length,
+    canTheoDoi: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.WATCH).length,
+    batKhaDung: rows.filter((r) => r.tinhTrangTongThe === TINH_TRANG.BAD).length,
+    theoNhom: breakdownByGroup(rows),
+  };
+}
+
+export type HoseReelSummary = {
+  tongSo: number;
+  dat: number;
+  khongDat: number;
+  theoNhom: ComponentBreakdownRow[];
+};
+
+export function summarizeHoseReels(
+  rows: { tinhTrangTongThe: string | null; components: CabinetComponentRow[] }[]
+): HoseReelSummary {
+  return {
+    tongSo: rows.length,
+    dat: rows.filter((r) => r.tinhTrangTongThe === "Đạt").length,
+    khongDat: rows.filter((r) => r.tinhTrangTongThe === "Không đạt").length,
+    theoNhom: breakdownByGroup(rows),
+  };
+}
+
+export type ValveSummaryRow = {
+  loaiVan: string;
+  tongSo: number;
+  khaDung: number;
+  suyGiam: number;
+  khongKhaDung: number;
+  chuaCapNhat: number;
+};
+
+/**
+ * Van: tách theo loại (Deluge / Alarm) vì hai loại làm hai việc khác nhau, gộp lại thì
+ * không biết hỏng nằm ở nhánh nào.
+ */
+export function summarizeValves(rows: { loaiVan: string; tinhTrang: string | null }[]) {
+  const [khaDung, suyGiam, khongKhaDung] = VALVE_TINH_TRANG_OPTIONS;
+  const acc = new Map<string, ValveSummaryRow>();
+  for (const r of rows) {
+    const cur =
+      acc.get(r.loaiVan) ?? { loaiVan: r.loaiVan, tongSo: 0, khaDung: 0, suyGiam: 0, khongKhaDung: 0, chuaCapNhat: 0 };
+    cur.tongSo += 1;
+    if (r.tinhTrang === khaDung) cur.khaDung += 1;
+    else if (r.tinhTrang === suyGiam) cur.suyGiam += 1;
+    else if (r.tinhTrang === khongKhaDung) cur.khongKhaDung += 1;
+    else cur.chuaCapNhat += 1;
+    acc.set(r.loaiVan, cur);
+  }
+  const rowsOut = [...acc.values()].sort((a, b) => a.loaiVan.localeCompare(b.loaiVan));
+  const total = rowsOut.reduce<ValveSummaryRow>(
+    (t, r) => ({
+      loaiVan: "TỔNG CỘNG",
+      tongSo: t.tongSo + r.tongSo,
+      khaDung: t.khaDung + r.khaDung,
+      suyGiam: t.suyGiam + r.suyGiam,
+      khongKhaDung: t.khongKhaDung + r.khongKhaDung,
+      chuaCapNhat: t.chuaCapNhat + r.chuaCapNhat,
+    }),
+    { loaiVan: "TỔNG CỘNG", tongSo: 0, khaDung: 0, suyGiam: 0, khongKhaDung: 0, chuaCapNhat: 0 }
+  );
+  return { rows: rowsOut, total };
+}
+
+export type LightSummaryRow = {
+  loai: string;
+  tongSo: number;
+  dat: number;
+  khongDat: number;
+  khongCoDen: number;
+  chuaCapNhat: number;
+};
+
+/**
+ * Đèn: "Không có đèn" đếm thành CỘT RIÊNG, không nhập vào "Không đạt" — đó là ghi nhận
+ * vị trí thực tế không lắp đèn, gộp vào lỗi sẽ thổi phồng tỉ lệ hỏng của cả phân xưởng.
+ */
+export function summarizeEmergencyLights(rows: { loai: string; tinhTrang: string | null }[]) {
+  const acc = new Map<string, LightSummaryRow>();
+  for (const r of rows) {
+    const cur = acc.get(r.loai) ?? { loai: r.loai, tongSo: 0, dat: 0, khongDat: 0, khongCoDen: 0, chuaCapNhat: 0 };
+    cur.tongSo += 1;
+    if (r.tinhTrang === "Đạt") cur.dat += 1;
+    else if (r.tinhTrang === "Không đạt") cur.khongDat += 1;
+    else if (r.tinhTrang === LIGHT_KHONG_CO_DEN) cur.khongCoDen += 1;
+    else cur.chuaCapNhat += 1;
+    acc.set(r.loai, cur);
+  }
+  // EXIT trước, CSSC sau — đúng thứ tự hai tab và thứ tự trong mẫu báo cáo Bảng II.
+  const order = ["EXIT", "CSSC"];
+  return [...acc.values()].sort((a, b) => order.indexOf(a.loai) - order.indexOf(b.loai));
 }

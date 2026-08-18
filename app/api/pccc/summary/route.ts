@@ -18,6 +18,10 @@ import {
   summarizeCabinets,
   summarizeExtinguishers,
   summarizeFm200,
+  summarizeAlarmButtons,
+  summarizeValves,
+  summarizeEmergencyLights,
+  summarizeHoseReels,
 } from "@/lib/pccc-summary";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +46,18 @@ export async function GET(req: NextRequest) {
     // Foam/CO2/Diesel/FM200 la tai san dung chung -> moi cuong vi deu xem het.
     const scopeFcd = scopeWhere(cuongVi, machine, pcccBulkViewScope(viewScope));
 
-    const [extinguishers, cabinets, bulks, panels, cuongViList, signatureCount] = await Promise.all([
+    const [
+      extinguishers,
+      cabinets,
+      bulks,
+      panels,
+      alarmButtons,
+      valves,
+      lights,
+      hoseReels,
+      cuongViList,
+      signatureCount,
+    ] = await Promise.all([
       prisma.pcccExtinguisher.findMany({
         where: { periodId: period.id, ...scopeBcc },
         select: { chungLoai: true, tinhTrang: true, tinhTrangNgoai: true, denHanThayThe: true },
@@ -56,6 +71,24 @@ export async function GET(req: NextRequest) {
         select: { ten: true, phanTramConLai: true },
       }),
       prisma.pcccFm200Panel.findMany({ where: { periodId: period.id, ...scopeFcd } }),
+      // Ba bảng dưới đây CÓ cột Người giám sát nên dùng chung phạm vi với bình chữa cháy.
+      prisma.pcccAlarmButton.findMany({
+        where: { periodId: period.id, ...scopeBcc },
+        select: { tinhTrangTongThe: true, components: true },
+      }),
+      prisma.pcccValve.findMany({
+        where: { periodId: period.id, ...scopeBcc },
+        select: { loaiVan: true, tinhTrang: true },
+      }),
+      prisma.pcccEmergencyLight.findMany({
+        where: { periodId: period.id, ...scopeBcc },
+        select: { loai: true, tinhTrang: true },
+      }),
+      // Cuộn vòi là danh mục con của tủ nên đi theo ĐÚNG phạm vi của tủ.
+      prisma.pcccHoseReel.findMany({
+        where: { periodId: period.id, ...scopeTcc },
+        select: { tinhTrangTongThe: true, components: true },
+      }),
       cuongViListOf(period.id, viewScope),
       prisma.pcccSignature.count({ where: { periodId: period.id } }),
     ]);
@@ -77,6 +110,10 @@ export async function GET(req: NextRequest) {
             apValues: (p.apValues ?? {}) as Record<string, number | null>,
           }))
         ),
+        nnbc: summarizeAlarmButtons(alarmButtons),
+        van: summarizeValves(valves),
+        den: summarizeEmergencyLights(lights),
+        cvcc: summarizeHoseReels(hoseReels),
       },
       {
         period,

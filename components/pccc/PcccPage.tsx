@@ -928,7 +928,9 @@ export default function PcccPage() {
    * các bộ lọc trạng thái thì đặt lại hết để hai lần bấm không chồng điều kiện lên nhau.
    */
   function drillFromOverview(target: PcccOverviewDrill) {
-    if (!switchTab(target === "TCC_HONG_NANG" ? "TCC" : "BCC")) return;
+    const targetTab: TabKey =
+      target === "TCC_HONG_NANG" ? "TCC" : target === "NNBC_BAT_KHA_DUNG" ? "NNBC" : "BCC";
+    if (!switchTab(targetTab)) return;
     setTinhTrang("ALL");
     setQuaHan(false);
     setChungLoai("ALL");
@@ -947,6 +949,9 @@ export default function PcccPage() {
     } else if (target === "BCC_QUA_HAN") {
       setQuaHan(true);
       toast.success(`Đang lọc ${summaryQuery.data?.data.bcc.total.quaHanThayThe ?? ""} bình quá hạn thay thế`);
+    } else if (target === "NNBC_BAT_KHA_DUNG") {
+      setTinhTrang("Bất khả dụng");
+      toast.success(`Đang lọc ${summaryQuery.data?.data.nnbc.batKhaDung ?? ""} nút nhấn bất khả dụng`);
     } else {
       // Thẻ đếm Ô LINH KIỆN hỏng nặng, còn bảng thì mỗi dòng là một TỦ — nên lọc theo
       // tình trạng tổng thể "Bất khả dụng", tức đúng những tủ sinh ra các ô hỏng nặng đó.
