@@ -257,7 +257,21 @@ export function useDeleteTicket() {
   });
 }
 
-/* Hành động đang mở cho người xem trên 1 phiếu -> hiển thị "Đến lượt bạn" + nút */
+/* Hành động đang mở cho người xem trên 1 phiếu -> hiển thị "Đến lượt bạn" + nút.
+ *
+ * HAI RÀO GIAO NHAU (nghiệp vụ chốt 2026-08-18):
+ *   1. Phân quyền BƯỚC (MaterialWorkflowRole) — cương vị nào được làm bước nào;
+ *   2. Cương vị của PHIẾU — chỉ áp cho các bước do VHV được giao phiếu thực hiện.
+ *
+ * Trước đây chỉ có rào 1, mà rào 1 lại có phạm vi toàn phân xưởng: gán "Thải xỉ" vào
+ * bước Nhận vật tư nghĩa là Thải xỉ nhận vật tư cho MỌI phiếu, nên tài khoản Thải xỉ
+ * thấy "Đến lượt bạn" ở cả phiếu của Máy nghiền / Máy phó / XLN hỗn hợp.
+ *
+ * Bước của VHV (bắt buộc trùng cương vị phiếu): propose, vhvReceive, receiveExisting,
+ * receive (trừ luồng Ứng), repairRequest, use, returnItems.
+ * Bước điều hành (giữ phạm vi toàn phân xưởng, vì là việc chung của cả ca): confirm,
+ * stats, statsHandover, accept, settle, statsExportDocuments, reject.
+ */
 export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] {
   if (!v) return [];
   const a: string[] = [];
@@ -271,8 +285,10 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     if (t.status === "CHO_XAC_NHAN" && (v.steps?.confirm ?? v.isShiftLeader)) a.push("confirm");
     // Xác nhận đề xuất: Thống kê (theo phân quyền bước) HOẶC Kỹ thuật viên.
     if (t.status === "CHO_THONG_KE" && (v.steps?.stats || v.isTechnician)) a.push("stats");
-    // Xác nhận khối lượng lãnh: chính VHV được giao phiếu (hoặc cương vị được phân bước Nhận vật tư).
-    if (t.status === "NHAN_VAT_TU" && (canOperateAssigned || v.steps?.receive)) a.push("receive");
+    // Xác nhận khối lượng lãnh: CHỈ chính VHV được giao phiếu. Trước đây còn nhánh
+    // "hoặc có bước Nhận vật tư", nhưng bước đó có phạm vi toàn phân xưởng nên cương vị
+    // được phân bước lại thấy "đến lượt" ở phiếu hóa chất của mọi cương vị khác.
+    if (t.status === "NHAN_VAT_TU" && canOperateAssigned) a.push("receive");
     if (t.status === "VAT_TU_KHONG_CO" && (v.isShiftLeader || v.isAdmin || v.id === t.createdById)) a.push("reject");
   } else if (["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type)) {
     if (t.status === "CHO_DE_XUAT" && isAssigned && v.hasScope) a.push("propose");
@@ -284,19 +300,19 @@ export function actionsFor(t: MaterialTicket, v: TicketViewer | null): string[] 
     // được cho cương vị khác ngoài Thống kê.
     if (t.status === "CHO_XAC_NHAN_PHAT" && (v.steps?.statsHandover ?? v.steps?.stats)) a.push("stats");
     if (t.status === "VHV_LANH_VAT_TU" && (v.steps?.vhvReceiveConfigured ? v.steps.vhvReceive : canOperateAssigned)) a.push("vhvReceive");
-    if (t.status === "NHAN_TU_HIEN_CO" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
+    if (t.status === "NHAN_TU_HIEN_CO" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receiveExisting");
     // Ứng: bước gộp "Xác nhận ĐXVT" — chỉ Thống kê; luồng khác giữ quyền Nhận vật tư.
-    if (t.status === "NHAN_VAT_TU" && (t.type === "UNG" ? v.steps?.stats : (v.steps?.receive ?? v.isShiftLeader))) a.push("receive");
-    if (t.status === "CHO_PHIEU_YCSC" && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
-    if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
+    if (t.status === "NHAN_VAT_TU" && (t.type === "UNG" ? v.steps?.stats : (canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)))) a.push("receive");
+    if (t.status === "CHO_PHIEU_YCSC" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("repairRequest");
+    if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
     if (t.status === "CHO_NGHIEM_THU" && (v.steps?.accept ?? v.isShiftLeader)) a.push("accept");
     // Chai khí: bước cuối là xác nhận trả vỏ chai, không nghiệm thu và không quyết toán.
-    if (t.status === GAS_RETURN_STATUS && (v.steps?.return ?? v.steps?.use ?? v.isShiftLeader)) a.push("returnItems");
+    if (t.status === GAS_RETURN_STATUS && canOperateAssigned && (v.steps?.return ?? v.steps?.use ?? v.isShiftLeader)) a.push("returnItems");
     if (t.status === "CHO_THONG_KE_XUAT_BIEN_BAN" && v.steps?.stats) a.push("statsExportDocuments");
     if (t.status === "CHO_QUYET_TOAN" && v.steps?.settle) a.push("settle");
   } else {
-    if (t.status === "NHAN_VAT_TU" && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
-    if (t.status === "SU_DUNG_VAT_TU" && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
+    if (t.status === "NHAN_VAT_TU" && canOperateAssigned && (v.steps?.receive ?? v.isShiftLeader)) a.push("receive");
+    if (t.status === "SU_DUNG_VAT_TU" && canOperateAssigned && (v.steps?.use ?? v.isShiftLeader)) a.push("use");
   }
   return a;
 }

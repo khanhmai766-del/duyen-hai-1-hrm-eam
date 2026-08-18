@@ -1051,6 +1051,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type !== "SU_DUNG_HIEN_CO" || t.status !== "NHAN_TU_HIEN_CO") return fail("Phiếu không ở bước Nhận vật tư từ Hiện có");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user))
         return fail("Bạn không có quyền ở bước Nhận vật tư từ Hiện có (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      // Bước của VHV: quyền bước có phạm vi toàn phân xưởng nên phải giao thêm với cương vị phiếu.
+      { const err = assignedPositionError(user, t); if (err) return err; }
       const quantity = Math.trunc(Number(body.quantity));
       const item = t.items[0];
       if (!item) return fail("Phiếu chưa có vật tư");
@@ -1325,7 +1327,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (t.type === CHEMICAL_TICKET_TYPE) {
         if (t.status !== "NHAN_VAT_TU") return fail("Phiếu không ở bước xác nhận khối lượng lãnh");
         const assigned = samePosition(user.position, t.assignedPosition);
-        if (!assigned && user.role !== "ADMIN" && !stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) {
+        if (!assigned && user.role !== "ADMIN") {
           return fail("Chỉ VHV được giao phiếu mới xác nhận khối lượng lãnh", 403);
         }
         const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
@@ -1358,6 +1360,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const requiredStep = t.type === "UNG" ? "stats" : "receive";
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), requiredStep, user))
         return fail(t.type === "UNG" ? "Bạn không có quyền Thống Kê xác nhận ĐXVT (Quản trị phân quyền ở mục Phân quyền quy trình)" : "Bạn không có quyền ở bước Xác nhận vật tư lãnh (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      // Luồng Ứng: bước này là của Thống kê (việc chung cả ca) nên KHÔNG rào theo cương vị phiếu.
+      if (t.type !== "UNG") { const err = assignedPositionError(user, t); if (err) return err; }
       const receivedQuantity = Math.trunc(Number(body.receivedQuantity));
       if (!Number.isFinite(receivedQuantity) || receivedQuantity <= 0) return fail("Khối lượng vật tư lãnh phải lớn hơn 0");
       if (t.type === "UNG" && !t.proposalDocUrl)
@@ -1447,6 +1451,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "repairRequest") {
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== "CHO_PHIEU_YCSC") return fail("Phiếu không ở bước Xác nhận vật tư lãnh");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "receive", user)) return fail("Bạn không có quyền ở bước Xác nhận vật tư lãnh", 403);
+      { const err = assignedPositionError(user, t); if (err) return err; }
       const value = String(body.repairRequestNumber || "").trim();
       if (!value) return fail("Vui lòng nhập số yêu cầu sửa chữa");
       if (sameTicketNumber(value, t.proposalNumber)) return fail("Số yêu cầu sửa chữa phải nhập mới, không được trùng với số phiếu ĐXVT");
@@ -1461,6 +1466,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "UNG", "SU_DUNG_HIEN_CO"].includes(t.type) || t.status !== "SU_DUNG_VAT_TU") return fail("Phiếu không ở bước Sử dụng vật tư");
       if (!stepAllowedWithMap(await getWorkflowRoleMap(), "use", user))
         return fail("Bạn không có quyền ở bước Sử dụng vật tư (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      { const err = assignedPositionError(user, t); if (err) return err; }
       // Cờ thu hồi đã được chụp trên phiếu từ lý do và cấu hình điểm dùng vật tư.
       // và không tin thân yêu cầu — gọi thẳng API cũng không bật/tắt được.
       const recoveryRequired = materialTicketRequiresRecovery(t);
@@ -1537,6 +1543,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       if (!["DE_XUAT", "UNG"].includes(t.type) || t.status !== GAS_RETURN_STATUS) return fail("Phiếu không ở bước Xác nhận trả");
       if (!returnStepAllowed(await getWorkflowRoleMap(), user))
         return fail("Bạn không có quyền ở bước Xác nhận trả (Quản trị phân quyền ở mục Phân quyền quy trình)", 403);
+      { const err = assignedPositionError(user, t); if (err) return err; }
       const returnedQuantity = Math.trunc(Number(body.returnedQuantity));
       if (!Number.isFinite(returnedQuantity) || returnedQuantity <= 0) return fail("Số lượng vỏ chai trả phải lớn hơn 0");
       const returnedAt = body.returnedAt ? parseDateInput(body.returnedAt) : new Date();
