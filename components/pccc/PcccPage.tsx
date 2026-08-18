@@ -926,6 +926,7 @@ export default function PcccPage() {
     tab === "BCC" && quaHan,
     tab === "TCC" && loaiTu !== "ALL",
     (tab === "NNBC" || tab === "VAN" || tab === "DEN") && tinhTrang !== "ALL",
+    (tab === "NNBC" || tab === "VAN" || tab === "DEN") && giamSat !== "ALL",
     tab === "VAN" && loaiVan !== "ALL",
   ].filter(Boolean).length;
 
@@ -1058,7 +1059,16 @@ export default function PcccPage() {
     bccQuery.data?.meta?.cuongViList ??
     tccQuery.data?.meta?.cuongViList ??
     [];
-  const giamSatList: PositionOption[] = bccQuery.data?.meta?.giamSatList ?? [];
+  // Bốn bảng có cột Người giám sát; lấy THEO TAB vì danh sách đã cắt theo phạm vi xem
+  // của chính bảng đó — lấy của tab khác là bày ra cấp giám sát không có trong bảng.
+  const giamSatList: PositionOption[] =
+    (tab === "NNBC"
+      ? nnbcQuery.data?.meta?.giamSatList
+      : tab === "VAN"
+        ? vanQuery.data?.meta?.giamSatList
+        : tab === "DEN"
+          ? denQuery.data?.meta?.giamSatList
+          : undefined) ?? bccQuery.data?.meta?.giamSatList ?? [];
 
   /**
    * Phạm vi GHI theo cương vị (bước E). Đây chỉ để KHOÁ Ô cho khỏi sửa hụt công — server
@@ -1553,6 +1563,18 @@ export default function PcccPage() {
                           />
                         </div>
                       )}
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Cấp giám sát</Label>
+                        <SelectBox
+                          value={giamSat}
+                          onChange={(v) => {
+                            setGiamSat(v);
+                            setPage(1);
+                          }}
+                          options={giamSatList.map((o) => ({ value: o.code, label: o.label }))}
+                          allLabel="Tất cả cấp giám sát"
+                        />
+                      </div>
                       <div className="grid gap-1.5">
                         <Label className="text-xs font-semibold text-slate-600">Tình trạng</Label>
                         {/* Mỗi bảng một vốn từ riêng — xem ghi chú ở VAN_TINH_TRANG_FILTERS. */}

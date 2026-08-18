@@ -197,7 +197,10 @@ export function pickFields(body: Record<string, unknown>, spec: FieldSpec) {
  * thì chỉ khiến người dùng tưởng mất dữ liệu.
  */
 export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC_VIEW_ALL) {
-  const [bcc, tcc, fcd] = await Promise.all([
+  const CV = { distinct: ["cuongViCode" as const], select: { cuongViCode: true, cuongVi: true } };
+  // Gộp ĐỦ mọi bảng có cột cương vị. Bỏ sót bảng nào thì cương vị chỉ xuất hiện ở bảng
+  // đó sẽ vắng mặt trong ô lọc — người dùng không lọc nổi chính dữ liệu đang nhìn thấy.
+  const [bcc, tcc, fcd, nnbc, van, den, cvcc] = await Promise.all([
     prisma.pcccExtinguisher.findMany({
       where: { periodId },
       distinct: ["cuongViCode"],
@@ -208,14 +211,14 @@ export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC
       distinct: ["cuongViCode"],
       select: { cuongViCode: true, cuongVi: true },
     }),
-    prisma.pcccBulk.findMany({
-      where: { periodId },
-      distinct: ["cuongViCode"],
-      select: { cuongViCode: true, cuongVi: true },
-    }),
+    prisma.pcccBulk.findMany({ where: { periodId }, ...CV }),
+    prisma.pcccAlarmButton.findMany({ where: { periodId }, ...CV }),
+    prisma.pcccValve.findMany({ where: { periodId }, ...CV }),
+    prisma.pcccEmergencyLight.findMany({ where: { periodId }, ...CV }),
+    prisma.pcccHoseReel.findMany({ where: { periodId }, ...CV }),
   ]);
   const byCode = new Map<string, string>();
-  for (const r of [...bcc, ...tcc, ...fcd]) {
+  for (const r of [...bcc, ...tcc, ...fcd, ...nnbc, ...van, ...den, ...cvcc]) {
     if (!r.cuongViCode || !r.cuongVi) continue;
     if (!view.all && !view.codes.includes(r.cuongViCode as PositionCode)) continue;
     byCode.set(r.cuongViCode, r.cuongVi);
@@ -225,16 +228,27 @@ export async function cuongViListOf(periodId: string, view: PcccViewScope = PCCC
     .sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
-/** Danh sách cấp giám sát có trong kỳ (chỉ BCC có cột này), cắt theo phạm vi XEM. */
+/**
+ * Danh sách cấp giám sát có trong kỳ, cắt theo phạm vi XEM.
+ *
+ * BỐN bảng có cột Người giám sát: bình chữa cháy, nút nhấn báo cháy, van chữa cháy,
+ * đèn sự cố. Tủ chữa cháy / cuộn vòi / Foam-CO2-FM200 không có cột này.
+ */
 export async function giamSatListOf(periodId: string, view: PcccViewScope = PCCC_VIEW_ALL) {
-  const rows = await prisma.pcccExtinguisher.findMany({
-    where: { periodId, ...(view.all ? {} : { cuongViCode: { in: view.codes } }) },
-    distinct: ["nguoiGiamSatCode"],
-    select: { nguoiGiamSatCode: true, nguoiGiamSat: true },
-  });
-  return rows
-    .filter((r) => r.nguoiGiamSatCode && r.nguoiGiamSat)
-    .map((r) => ({ code: r.nguoiGiamSatCode as string, label: r.nguoiGiamSat as string }))
+  const where = { periodId, ...(view.all ? {} : { cuongViCode: { in: view.codes } }) };
+  const GS = { distinct: ["nguoiGiamSatCode" as const], select: { nguoiGiamSatCode: true, nguoiGiamSat: true } };
+  const [bcc, nnbc, van, den] = await Promise.all([
+    prisma.pcccExtinguisher.findMany({ where, ...GS }),
+    prisma.pcccAlarmButton.findMany({ where, ...GS }),
+    prisma.pcccValve.findMany({ where, ...GS }),
+    prisma.pcccEmergencyLight.findMany({ where, ...GS }),
+  ]);
+  const byCode = new Map<string, string>();
+  for (const r of [...bcc, ...nnbc, ...van, ...den]) {
+    if (r.nguoiGiamSatCode && r.nguoiGiamSat) byCode.set(r.nguoiGiamSatCode, r.nguoiGiamSat);
+  }
+  return [...byCode.entries()]
+    .map(([code, label]) => ({ code, label }))
     .sort((a, b) => a.label.localeCompare(b.label, "vi"));
 }
 
@@ -303,7 +317,9 @@ export type PcccWriteScope = { all: boolean; codes: PositionCode[] };
 /**
  * Phạm vi XEM có thêm một chiều mà phạm vi GHI không có: CẤP GIÁM SÁT.
  * - `codes`          — cương vị QUẢN LÝ trực tiếp (cột "Cương vị quản lý").
- * - `superviseCodes` — cấp giám sát (cột "Người giám sát", CHỈ bảng Bình chữa cháy).
+ * - `superviseCodes` — cấp giám sát (cột "Người giám sát"). BỐN bảng có cột này: bình
+ *   chữa cháy, nút nhấn báo cháy, van chữa cháy, đèn sự cố. Tủ chữa cháy, cuộn vòi và
+ *   Foam/CO2/Diesel/FM200 KHÔNG có, nên ở đó giám sát chỉ thấy phần mình trực tiếp quản lý.
  *   Giám sát được XEM mọi bình mình giám sát nhưng KHÔNG sửa; muốn sửa thì dòng đó
  *   phải thuộc chính cương vị quản lý của mình.
  */

@@ -3,7 +3,7 @@
 // TÍNH TỪ DỮ LIỆU CHI TIẾT (sheet gốc là bảng nhập tay). Xem docs/pccc.md mục 3.
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, CalendarClock, CircleGauge, Droplets, FlameKindling, Layers, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CalendarClock, CircleGauge, Droplets, FlameKindling, Layers, Lightbulb, ShieldCheck } from "lucide-react";
 import { PercentBar, StatCard, StatusBadge, TD_CLASS, TH_CLASS, TableShell, fmtPercent } from "@/components/pccc/pccc-shared";
 import type { PcccSummary } from "@/hooks/usePccc";
 
@@ -336,6 +336,57 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
           </ul>
         </div>
         </div>
+
+        {/* CUỘN VÒI — danh mục CON của tủ, nên nằm trong chính mục này thay vì có số
+            La Mã riêng (giữ đúng bảy mục của sheet TỔNG QUAN gốc). Từ 2026-08-18 hai
+            nhóm CUỘN ỐNG / LĂNG PHUN đã chuyển hẳn xuống đây, nên số liệu tủ phía trên
+            KHÔNG còn tính hai nhóm đó nữa — xem TCC_ABSORBED_GROUPS. */}
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="mb-2.5 flex items-baseline gap-2">
+            <h4 className="text-[13px] font-bold uppercase tracking-wide text-navy">Cuộn vòi chữa cháy (CVCC)</h4>
+            <span className="text-[11px] text-muted-foreground">danh mục con của tủ · cuộn ống + lăng phun</span>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <StatCard
+                label="Đạt"
+                value={summary.cvcc.dat}
+                hint={`trên ${summary.cvcc.tongSo} cuộn vòi`}
+                tone="ok"
+                icon={ShieldCheck}
+              />
+              {/* Cuộn vòi chỉ HAI mức theo TB 5100/TB-NĐDH, khác tủ vẫn ba mức. */}
+              <StatCard label="Không đạt" value={summary.cvcc.khongDat} hint="cần xử lý" tone="bad" icon={AlertTriangle} />
+            </div>
+            <TableShell fill>
+              <thead>
+                <tr>
+                  <th className={TH_CLASS}>Hạng mục</th>
+                  <th className={`${TH_CLASS} text-right`}>Bình thường</th>
+                  <th className={`${TH_CLASS} text-right`}>Hư hỏng 1 phần</th>
+                  <th className={`${TH_CLASS} text-right`}>Hư hỏng hoàn toàn</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.cvcc.theoNhom.length === 0 && (
+                  <tr>
+                    <td className={`${TD_CLASS} text-muted-foreground`} colSpan={4}>
+                      Chưa có ô nào được tích trong kỳ này.
+                    </td>
+                  </tr>
+                )}
+                {summary.cvcc.theoNhom.map((g) => (
+                  <tr key={g.groupLabel}>
+                    <td className={`${TD_CLASS} font-medium`}>{g.groupLabel}</td>
+                    <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{g.binhThuong || ""}</td>
+                    <td className={`${TD_CLASS} text-right tabular-nums text-amber-700`}>{g.huHong1Phan || ""}</td>
+                    <td className={`${TD_CLASS} text-right tabular-nums font-semibold text-rose-700`}>{g.huHongHoanToan || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableShell>
+          </div>
+        </div>
       </section>
 
       {/* III. FCD + FM200 */}
@@ -500,47 +551,63 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
         </TableShell>
       </section>
 
-      {/* VI. ĐÈN SỰ CỐ */}
-      <section>
-        <SectionTitle
-          index="VI"
-          title="Đèn EXIT · Đèn chiếu sáng sự cố"
-          note="“Không có đèn” là vị trí không lắp đèn, không tính là lỗi"
-        />
-        <TableShell>
-          <thead>
-            <tr>
-              <th className={TH_CLASS}>Loại đèn</th>
-              <th className={`${TH_CLASS} text-right`}>Tổng số</th>
-              <th className={`${TH_CLASS} text-right`}>Đạt</th>
-              <th className={`${TH_CLASS} text-right`}>Không đạt</th>
-              <th className={`${TH_CLASS} text-right`}>Không có đèn</th>
-              <th className={`${TH_CLASS} text-right`}>Chưa cập nhật</th>
-              <th className={`${TH_CLASS} text-right`}>% đạt</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summary.den.map((r) => {
-              {/* Mẫu số BỎ QUA "không có đèn": vị trí không lắp đèn thì không phải đối
-                  tượng kiểm tra, để nó trong mẫu số là tự dìm tỉ lệ đạt của cả bảng. */}
-              const denominator = r.tongSo - r.khongCoDen;
-              return (
-                <tr key={r.loai}>
-                  <td className={`${TD_CLASS} font-medium`}>{r.loai === "EXIT" ? "Đèn EXIT" : "Đèn chiếu sáng sự cố"}</td>
-                  <td className={`${TD_CLASS} text-right tabular-nums`}>{r.tongSo}</td>
-                  <td className={`${TD_CLASS} text-right tabular-nums text-emerald-700`}>{r.dat || ""}</td>
-                  <td className={`${TD_CLASS} text-right tabular-nums font-semibold text-rose-700`}>{r.khongDat || ""}</td>
-                  <td className={`${TD_CLASS} text-right tabular-nums text-slate-500`}>{r.khongCoDen || ""}</td>
-                  <td className={`${TD_CLASS} text-right tabular-nums text-muted-foreground`}>{r.chuaCapNhat || ""}</td>
-                  <td className={`${TD_CLASS} text-right tabular-nums font-semibold`}>
-                    {denominator > 0 ? fmtPercent(r.dat / denominator, 0) : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </TableShell>
-      </section>
+      {/* VI + VII. HAI LOẠI ĐÈN — tách thành hai mục riêng, đúng như sheet TỔNG QUAN của
+          bản gốc (VI. ĐÈN EXIT, VII. ĐÈN CHIẾU SÁNG SỰ CỐ). Hai loại đèn phục vụ hai việc
+          khác nhau (chỉ dẫn thoát nạn / chiếu sáng khi mất điện) nên người đọc báo cáo cần
+          thấy tách bạch, dù trên trang danh sách chúng dùng chung một tab. */}
+      {(["EXIT", "CSSC"] as const).map((loai, i) => {
+        const r = summary.den.find((x) => x.loai === loai);
+        // Mẫu số BỎ QUA "không có đèn": vị trí không lắp đèn thì không phải đối tượng
+        // kiểm tra, để nó trong mẫu số là tự dìm tỉ lệ đạt của cả bảng.
+        const denominator = (r?.tongSo ?? 0) - (r?.khongCoDen ?? 0);
+        const tiLeDat = denominator > 0 ? (r?.dat ?? 0) / denominator : null;
+        return (
+          <section key={loai}>
+            <SectionTitle
+              index={i === 0 ? "VI" : "VII"}
+              title={loai === "EXIT" ? "Đèn EXIT" : "Đèn chiếu sáng sự cố"}
+              note={loai === "EXIT" ? "đèn chỉ dẫn thoát nạn" : undefined}
+            />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Đạt"
+                value={r?.dat ?? 0}
+                hint={tiLeDat === null ? `trên ${r?.tongSo ?? 0} vị trí` : `${fmtPercent(tiLeDat, 0)} số đèn đã lắp`}
+                tone="ok"
+                icon={Lightbulb}
+              />
+              <StatCard label="Không đạt" value={r?.khongDat ?? 0} hint="cần xử lý" tone="bad" icon={AlertTriangle} />
+              {/* Tô XÁM, không phải đỏ: đây là ghi nhận hiện trạng lắp đặt chứ không phải
+                  hỏng hóc — tô đỏ sẽ thổi phồng tỉ lệ lỗi của cả phân xưởng. */}
+              <StatCard
+                label="Không có đèn"
+                value={r?.khongCoDen ?? 0}
+                hint="vị trí chưa lắp đèn"
+                tone="none"
+                icon={Layers}
+              />
+              <StatCard
+                label="Chưa cập nhật"
+                value={r?.chuaCapNhat ?? 0}
+                hint={`tổng ${r?.tongSo ?? 0} vị trí`}
+                tone={r?.chuaCapNhat ? "watch" : "none"}
+                icon={CalendarClock}
+              />
+            </div>
+            {tiLeDat !== null && (
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3.5">
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <p className="text-[12px] font-semibold text-ink">Tỉ lệ đạt trên số đèn đã lắp</p>
+                  <span className="text-[11px] text-muted-foreground">
+                    {r?.dat ?? 0}/{denominator} vị trí
+                  </span>
+                </div>
+                <PercentBar value={tiLeDat} />
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   cuongViListOf,
+  giamSatListOf,
   pcccViewScopeMeta,
   pcccWriteScopeOf,
   resolvePcccViewScope,
@@ -46,12 +47,15 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const tinhTrang = sp.get("tinhTrang");
+    // Bảng này có cột Người giám sát nên lọc được theo CẤP GIÁM SÁT, y như bình chữa cháy.
+    const giamSat = sp.get("giamSat");
 
     const where: Prisma.PcccAlarmButtonWhereInput = {
       periodId: period.id,
       // Bảng này CÓ cột "Người giám sát" như bình chữa cháy, nên cấp giám sát xem được
       // phần mình giám sát (vẫn không sửa được — phạm vi ghi tính riêng).
       ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true }),
+      ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
       ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrangTongThe: tinhTrang } : {}),
       ...(q
         ? {
@@ -65,7 +69,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, writeScope] = await Promise.all([
+    const [total, rows, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
       prisma.pcccAlarmButton.count({ where }),
       prisma.pcccAlarmButton.findMany({
         where,
@@ -76,6 +80,7 @@ export async function GET(req: NextRequest) {
       }),
       signaturesOf(period.id, "ALARM_BUTTON"),
       cuongViListOf(period.id, viewScope),
+      giamSatListOf(period.id, viewScope),
       pcccWriteScopeOf(user, "ALARM_BUTTON"),
     ]);
 
@@ -96,6 +101,7 @@ export async function GET(req: NextRequest) {
         pageSize,
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
         cuongViList,
+        giamSatList,
         groups,
         writeScope,
         viewScope: pcccViewScopeMeta(viewScope),

@@ -6,6 +6,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   cuongViListOf,
+  giamSatListOf,
   pcccViewScopeMeta,
   pcccWriteScopeOf,
   resolvePcccViewScope,
@@ -49,12 +50,15 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const tinhTrang = sp.get("tinhTrang");
+    // Bảng này có cột Người giám sát nên lọc được theo CẤP GIÁM SÁT, y như bình chữa cháy.
+    const giamSat = sp.get("giamSat");
 
     const where: Prisma.PcccEmergencyLightWhereInput = {
       periodId: period.id,
       loai,
       // Bảng đèn CÓ cột "Người giám sát" nên cấp giám sát xem được phần mình giám sát.
       ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true }),
+      ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
       ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrang } : {}),
       ...(q
         ? {
@@ -69,7 +73,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, writeScope] = await Promise.all([
+    const [total, rows, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
       prisma.pcccEmergencyLight.count({ where }),
       prisma.pcccEmergencyLight.findMany({
         where,
@@ -79,6 +83,7 @@ export async function GET(req: NextRequest) {
       }),
       signaturesOf(period.id, "EMERGENCY_LIGHT"),
       cuongViListOf(period.id, viewScope),
+      giamSatListOf(period.id, viewScope),
       pcccWriteScopeOf(user, "EMERGENCY_LIGHT"),
     ]);
 
@@ -92,6 +97,7 @@ export async function GET(req: NextRequest) {
         pageSize,
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
         cuongViList,
+        giamSatList,
         tinhTrangList: [...LIGHT_TINH_TRANG_OPTIONS],
         writeScope,
         viewScope: pcccViewScopeMeta(viewScope),

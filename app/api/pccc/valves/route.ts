@@ -6,6 +6,7 @@ import { requirePermissionLevel } from "@/lib/rbac-guard";
 import {
   PCCC_PERMISSION,
   cuongViListOf,
+  giamSatListOf,
   pcccViewScopeMeta,
   pcccWriteScopeOf,
   resolvePcccViewScope,
@@ -43,12 +44,15 @@ export async function GET(req: NextRequest) {
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(sp.get("pageSize") ?? DEFAULT_PAGE_SIZE)));
     const q = sp.get("q")?.trim();
     const tinhTrang = sp.get("tinhTrang");
+    // Bảng này có cột Người giám sát nên lọc được theo CẤP GIÁM SÁT, y như bình chữa cháy.
+    const giamSat = sp.get("giamSat");
     const loaiVan = sp.get("loaiVan");
 
     const where: Prisma.PcccValveWhereInput = {
       periodId: period.id,
       // Bảng van CÓ cột "Người giám sát" nên cấp giám sát xem được phần mình giám sát.
       ...scopeWhere(sp.get("cuongVi"), sp.get("machine"), viewScope, { withSupervisor: true }),
+      ...(giamSat && giamSat !== "ALL" ? { nguoiGiamSatCode: giamSat } : {}),
       ...(tinhTrang && tinhTrang !== "ALL" ? { tinhTrang } : {}),
       ...((VALVE_LOAI_OPTIONS as readonly string[]).includes(loaiVan ?? "") ? { loaiVan: loaiVan as string } : {}),
       ...(q
@@ -64,7 +68,7 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, rows, signatures, cuongViList, writeScope] = await Promise.all([
+    const [total, rows, signatures, cuongViList, giamSatList, writeScope] = await Promise.all([
       prisma.pcccValve.count({ where }),
       prisma.pcccValve.findMany({
         where,
@@ -74,6 +78,7 @@ export async function GET(req: NextRequest) {
       }),
       signaturesOf(period.id, "VALVE"),
       cuongViListOf(period.id, viewScope),
+      giamSatListOf(period.id, viewScope),
       pcccWriteScopeOf(user, "VALVE"),
     ]);
 
@@ -86,6 +91,7 @@ export async function GET(req: NextRequest) {
         pageSize,
         pageCount: Math.max(1, Math.ceil(total / pageSize)),
         cuongViList,
+        giamSatList,
         loaiVanList: [...VALVE_LOAI_OPTIONS],
         writeScope,
         viewScope: pcccViewScopeMeta(viewScope),
