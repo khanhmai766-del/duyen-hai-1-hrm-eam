@@ -40,6 +40,7 @@ import {
   useDeleteReplacement,
   useDeleteReplacementLog,
   useUpdateReplacementLog,
+  useReplacementDeviceOptions,
   type ReplacementItem,
   type ReplacementDevice,
   type ReplacementLogItem,
@@ -1354,6 +1355,29 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
   const [deviceSeq, setDeviceSeq] = React.useState("");
   const [deviceName, setDeviceName] = React.useState("");
   const positions = usePositions().filter(isSelectableManagingPosition);
+  /**
+   * Ô Thiết bị chỉ bày những thiết bị đã KHAI BÁO trong Danh mục vật tư cho đúng cặp
+   * (Tên vật tư, Cương vị) đang chọn ngay trên hộp thoại này — sửa một trong hai thẻ đó
+   * là danh sách đổi theo. Duyệt cả cây thiết bị như trước thì gắn nhầm quá dễ: cùng một
+   * tên bồn/thùng lặp lại ở nhiều hệ thống, mà chỉ vài điểm trong số đó có khai báo vật tư.
+   */
+  const { data: deviceOptions, isFetching: deviceOptionsLoading } = useReplacementDeviceOptions(
+    { machine, position, materialName, category },
+    { enabled: archive && !!log }
+  );
+  const deviceScope = deviceOptions?.data?.scope ?? "none";
+  const declaredDevices = React.useMemo(() => {
+    const list = deviceOptions?.data?.options ?? [];
+    // Thiết bị đang gắn phải luôn còn trong danh sách, kể cả khi nó không nằm trong khai
+    // báo (dòng cũ gắn tay trên cây) — nếu không, mở hộp thoại ra là mất thiết bị đã gắn.
+    if (deviceSeq && !list.some((d) => d.deviceSeq === deviceSeq)) {
+      return [
+        ...list,
+        { deviceSeq, deviceName: deviceName || deviceSeq, systemName: "ngoài khai báo", materialId: "", materialCode: "", materialName: "", machine: machine || "" },
+      ];
+    }
+    return list;
+  }, [deviceOptions?.data?.options, deviceSeq, deviceName, machine]);
 
   React.useEffect(() => {
     if (!log) return;
@@ -1473,20 +1497,64 @@ function ReplacementLogEditDialog({ log, onClose }: { log: ReplacementLogItem | 
                 </div>
                 <div>
                   <Label className="mb-1.5 block">Thiết bị</Label>
-                  <EquipmentTreePicker
-                    value={deviceSeq}
-                    scope={(machine || undefined) as "S1" | "S2" | "COMMON" | undefined}
-                    position={position || null}
-                    accessFilter="edit"
-                    includeLeaves
-                    leafOnly
-                    placeholder="Chọn thiết bị trên cây (để trống nếu chưa xác định)"
-                    selectionLabel={deviceName || undefined}
-                    onChange={(node) => {
-                      setDeviceSeq(node?.seq ?? "");
-                      setDeviceName(node?.name ?? "");
-                    }}
-                  />
+                  {declaredDevices.length > 0 ? (
+                    <>
+                      <Select
+                        value={deviceSeq || "NONE"}
+                        onValueChange={(v) => {
+                          if (v === "NONE") { setDeviceSeq(""); setDeviceName(""); return; }
+                          const picked = declaredDevices.find((d) => d.deviceSeq === v);
+                          setDeviceSeq(v);
+                          setDeviceName(picked?.deviceName ?? "");
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Chọn thiết bị đã khai báo" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NONE">Chưa xác định</SelectItem>
+                          {declaredDevices.map((d) => (
+                            <SelectItem key={d.deviceSeq} value={d.deviceSeq}>
+                              {d.deviceName}{d.systemName ? ` · ${d.systemName}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {deviceScope === "category" ? (
+                        <p className="mt-1.5 text-xs text-amber-700">
+                          Danh mục vật tư chưa có điểm nào khai báo đúng tên <b>{materialName}</b>. Đang tham khảo
+                          theo loại <b>{displayMaterialCategory(category)}</b> của cương vị <b>{position}</b> — hãy đối chiếu trước khi gắn.
+                        </p>
+                      ) : (
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          Thiết bị khai báo trong Danh mục vật tư cho <b>{materialName || "vật tư này"}</b>
+                          {position ? <> · cương vị <b>{position}</b></> : null}.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <EquipmentTreePicker
+                        value={deviceSeq}
+                        scope={(machine || undefined) as "S1" | "S2" | "COMMON" | undefined}
+                        position={position || null}
+                        accessFilter="edit"
+                        includeLeaves
+                        leafOnly
+                        placeholder="Chọn thiết bị trên cây (để trống nếu chưa xác định)"
+                        selectionLabel={deviceName || undefined}
+                        onChange={(node) => {
+                          setDeviceSeq(node?.seq ?? "");
+                          setDeviceName(node?.name ?? "");
+                        }}
+                      />
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        {deviceOptionsLoading
+                          ? "Đang tìm thiết bị đã khai báo…"
+                          : !position || !materialName
+                            ? "Chọn Cương vị và nhập Tên vật tư để lọc theo thiết bị đã khai báo."
+                            : "Danh mục vật tư chưa khai báo thiết bị nào cho vật tư, loại vật tư và cương vị này — chọn tạm trên cây."}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>

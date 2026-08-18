@@ -112,6 +112,49 @@ export interface ReplacementPointOption {
   openRequestNumber: string | null;
 }
 
+export interface ReplacementDeviceOption {
+  deviceSeq: string;
+  deviceName: string;
+  systemName: string;
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  machine: string;
+}
+
+/**
+ * `scope` cho biết danh sách đang khớp ở mức nào — giao diện phải nói ra, vì "khai báo của
+ * đúng vật tư này" và "tham khảo cả loại vật tư" là hai độ tin cậy khác hẳn nhau.
+ */
+export interface ReplacementDeviceOptions {
+  scope: "name" | "category" | "none";
+  options: ReplacementDeviceOption[];
+}
+
+/**
+ * Thiết bị đã khai báo trong Danh mục vật tư cho một VẬT TƯ + CƯƠNG VỊ — dùng cho ô
+ * chọn thiết bị của dòng lịch sử thay thế lưu trữ. Thiếu cương vị hoặc thiếu vật tư thì
+ * không gọi API: server cũng trả rỗng.
+ */
+export function useReplacementDeviceOptions(
+  filters: { machine?: string; position?: string; materialId?: string; materialName?: string; category?: string },
+  options?: { enabled?: boolean }
+) {
+  const ready = Boolean(filters.position && (filters.materialId || filters.materialName || filters.category));
+  const qs = new URLSearchParams();
+  if (filters.machine) qs.set("machine", filters.machine);
+  if (filters.position) qs.set("position", filters.position);
+  if (filters.materialId) qs.set("materialId", filters.materialId);
+  if (filters.materialName) qs.set("materialName", filters.materialName);
+  if (filters.category) qs.set("category", filters.category);
+  return useQuery({
+    queryKey: ["replacement-device-options", filters],
+    queryFn: () => apiGet<ReplacementDeviceOptions>(`/api/material-replacements/device-options?${qs.toString()}`),
+    enabled: ready && (options?.enabled ?? true),
+    staleTime: 60_000,
+  });
+}
+
 /**
  * Điểm khai báo lọc theo tổ máy + cương vị đang chọn ở form khiếm khuyết.
  * Không đủ hai tham số thì không gọi API — server cũng trả rỗng.
