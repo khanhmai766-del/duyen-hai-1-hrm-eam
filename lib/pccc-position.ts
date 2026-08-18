@@ -32,13 +32,31 @@ export function isPcccMachine(value: unknown): value is PcccMachine {
   return typeof value === "string" && (PCCC_MACHINES as readonly string[]).includes(value);
 }
 
-/** Tách hậu tố tổ máy khỏi chuỗi cương vị: "LÒ PHÓ S1" → { base: "LÒ PHÓ", machine: "S1" } */
-export function splitMachineSuffix(raw: string): { base: string; machine: PcccMachine } {
+/**
+ * Hậu tố "cả hai tổ máy": "ESP S1/S2", "ESP S1 & S2", "ESP S1, S2", "ESP S1-2"…
+ * Có thật trong dữ liệu: nhà điều khiển ESP dùng chung cho cả hai tổ máy.
+ *
+ * Quy về COMMON chứ KHÔNG chọn bừa một tổ máy — theo quy ước 2/3 ở đầu file, tổ máy là
+ * chiều LỌC XEM chứ không phải một phần của nhãn cương vị. Muốn tách S1/S2 thì dùng bộ
+ * lọc Tổ máy trên trang.
+ */
+const BOTH_UNITS_SUFFIX = /[\s-]+S\s*1\s*[/&,+-]\s*(?:S\s*)?2\s*$/i;
+
+/**
+ * Tách hậu tố tổ máy khỏi chuỗi cương vị: "LÒ PHÓ S1" → { base: "LÒ PHÓ", machine: "S1" }.
+ *
+ * `explicit` = chuỗi CÓ nói rõ tổ máy hay không. Phân biệt "không có hậu tố" (giữ tổ máy
+ * đang lưu trong DB) với "ghi rõ là dùng chung cả hai" (ép về COMMON) — thiếu cờ này thì
+ * dòng ghi rõ S1/S2 lại bị kéo về tổ máy cũ đang lưu.
+ */
+export function splitMachineSuffix(raw: string): { base: string; machine: PcccMachine; explicit: boolean } {
   const value = raw.trim();
+  const both = value.match(BOTH_UNITS_SUFFIX);
+  if (both) return { base: value.slice(0, both.index).trim(), machine: "COMMON", explicit: true };
   const m = value.match(/[\s-]+(S\s*[12])\s*$/i);
-  if (!m) return { base: value, machine: "COMMON" };
+  if (!m) return { base: value, machine: "COMMON", explicit: false };
   const machine = m[1].replace(/\s+/g, "").toUpperCase() as PcccMachine;
-  return { base: value.slice(0, m.index).trim(), machine };
+  return { base: value.slice(0, m.index).trim(), machine, explicit: true };
 }
 
 export type NormalizedPosition = {
@@ -69,7 +87,9 @@ export function normalizePosition(
 
   const split = splitMachineSuffix(value);
   const base = split.base;
-  const machine = split.machine === "COMMON" ? fallback : split.machine;
+  // Chuỗi có nói rõ tổ máy thì hậu tố THẮNG (kể cả khi nói rõ là dùng chung cả hai);
+  // không nói gì thì giữ tổ máy đang lưu trong DB.
+  const machine = split.explicit ? split.machine : fallback;
   // positionCodeOf tự bỏ hậu tố S1/S2 khi so khớp, nên tra bằng chuỗi gốc vẫn đúng.
   const item = positionCatalogItem(value) ?? positionCatalogItem(base);
   if (!item) return { label: base || value, code: null, machine, unmatched: true };

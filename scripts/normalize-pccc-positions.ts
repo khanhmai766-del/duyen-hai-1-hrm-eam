@@ -91,6 +91,74 @@ async function main() {
     if (patch && APPLY) await prisma.pcccFm200Panel.update({ where: { id: r.id }, data: patch });
   }
 
+  // ---- NNBC: cương vị + cấp giám sát
+  const alarmButtons = await prisma.pcccAlarmButton.findMany({
+    select: { id: true, maKks: true, cuongVi: true, cuongViCode: true, machine: true, nguoiGiamSat: true, nguoiGiamSatCode: true },
+  });
+  for (const r of alarmButtons) {
+    const cv = normalizePosition(r.cuongVi, r.machine);
+    const gs = normalizePosition(r.nguoiGiamSat);
+    track(r.cuongVi, cv);
+    track(r.nguoiGiamSat, gs);
+    const patch = plan("NNBC", r.id, r.maKks, r, {
+      cuongVi: cv.label,
+      cuongViCode: cv.code,
+      machine: cv.machine satisfies PcccMachine,
+      nguoiGiamSat: gs.label,
+      nguoiGiamSatCode: gs.code,
+    });
+    if (patch && APPLY) await prisma.pcccAlarmButton.update({ where: { id: r.id }, data: patch });
+  }
+
+  // ---- VAN
+  const valves = await prisma.pcccValve.findMany({
+    select: { id: true, maKks: true, cuongVi: true, cuongViCode: true, machine: true, nguoiGiamSat: true, nguoiGiamSatCode: true },
+  });
+  for (const r of valves) {
+    const cv = normalizePosition(r.cuongVi, r.machine);
+    const gs = normalizePosition(r.nguoiGiamSat);
+    track(r.cuongVi, cv);
+    track(r.nguoiGiamSat, gs);
+    const patch = plan("VAN", r.id, r.maKks, r, {
+      cuongVi: cv.label,
+      cuongViCode: cv.code,
+      machine: cv.machine satisfies PcccMachine,
+      nguoiGiamSat: gs.label,
+      nguoiGiamSatCode: gs.code,
+    });
+    if (patch && APPLY) await prisma.pcccValve.update({ where: { id: r.id }, data: patch });
+  }
+
+  // ---- ĐÈN EXIT + ĐÈN CHIẾU SÁNG SỰ CỐ (chung một bảng)
+  const lights = await prisma.pcccEmergencyLight.findMany({
+    select: { id: true, loai: true, maKks: true, cuongVi: true, cuongViCode: true, machine: true, nguoiGiamSat: true, nguoiGiamSatCode: true },
+  });
+  for (const r of lights) {
+    const cv = normalizePosition(r.cuongVi, r.machine);
+    const gs = normalizePosition(r.nguoiGiamSat);
+    track(r.cuongVi, cv);
+    track(r.nguoiGiamSat, gs);
+    const patch = plan("ĐÈN", r.id, `${r.loai} · ${r.maKks}`, r, {
+      cuongVi: cv.label,
+      cuongViCode: cv.code,
+      machine: cv.machine satisfies PcccMachine,
+      nguoiGiamSat: gs.label,
+      nguoiGiamSatCode: gs.code,
+    });
+    if (patch && APPLY) await prisma.pcccEmergencyLight.update({ where: { id: r.id }, data: patch });
+  }
+
+  // ---- CVCC (cuộn vòi): không có cột giám sát, cương vị kế thừa từ tủ cha
+  const hoseReels = await prisma.pcccHoseReel.findMany({
+    select: { id: true, ma: true, cuongVi: true, cuongViCode: true, machine: true },
+  });
+  for (const r of hoseReels) {
+    const cv = normalizePosition(r.cuongVi, r.machine);
+    track(r.cuongVi, cv);
+    const patch = plan("CVCC", r.id, r.ma, r, { cuongVi: cv.label, cuongViCode: cv.code, machine: cv.machine });
+    if (patch && APPLY) await prisma.pcccHoseReel.update({ where: { id: r.id }, data: patch });
+  }
+
   // ---- Báo cáo: gộp theo cùng một phép đổi để đọc được, thay vì in 2000 dòng
   const grouped = new Map<string, { table: string; from: string; to: string; n: number; sample: string }>();
   for (const c of changes) {
