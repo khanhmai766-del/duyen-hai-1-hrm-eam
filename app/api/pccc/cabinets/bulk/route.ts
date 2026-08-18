@@ -12,7 +12,7 @@ import {
   resolvePcccWriteScope,
   type FieldSpec,
 } from "@/lib/pccc-service";
-import { applyTccToggle, deriveCabinetStatus } from "@/lib/pccc-status";
+import { applyTccToggle, cabinetComponentsForTcc, deriveCabinetStatus } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -145,7 +145,8 @@ export async function POST(req: NextRequest) {
         if (before && before.checked !== c.checked) changed.push(`${c.groupLabel}/${c.status}=${c.checked ? "☑" : "☐"}`);
       }
 
-      const derived = deriveCabinetStatus(sim);
+      // Xem ghi chú cùng chỗ ở route sửa một tủ.
+      const derived = deriveCabinetStatus(cabinetComponentsForTcc(sim));
       if (derived !== current.tinhTrangTongThe) data.tinhTrangTongThe = derived;
 
       if (changed.length === 0 && cellUpdates.length === 0 && !("tinhTrangTongThe" in data)) continue;

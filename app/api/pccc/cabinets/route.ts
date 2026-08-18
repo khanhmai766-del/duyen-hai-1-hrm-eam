@@ -14,6 +14,7 @@ import {
   scopeWhere,
   signaturesOf,
 } from "@/lib/pccc-service";
+import { cabinetComponentsForTcc } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -81,15 +82,18 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Khung header 2 tầng (nhóm × trạng thái) lấy từ chính dữ liệu, giữ thứ tự cột gốc
+    // Hai nhóm CUỘN ỐNG / LĂNG PHUN đã chuyển hẳn xuống bảng cuộn vòi — lọc ở ĐÂY,
+    // trước khi dựng khung header và trước khi trả về, để bảng tủ không còn dấu vết.
+    const visibleRows = rows.map((r) => ({ ...r, components: cabinetComponentsForTcc(r.components) }));
     const groups: { label: string; statuses: string[] }[] = [];
-    for (const c of rows[0]?.components ?? []) {
+    for (const c of visibleRows[0]?.components ?? []) {
       const g = groups.find((x) => x.label === c.groupLabel);
       if (g) g.statuses.push(c.status);
       else groups.push({ label: c.groupLabel, statuses: [c.status] });
     }
 
     return ok(
-      rows.map((r) => ({ ...r, signature: signatures.get(r.id) ?? null })),
+      visibleRows.map((r) => ({ ...r, signature: signatures.get(r.id) ?? null })),
       {
         period,
         total,

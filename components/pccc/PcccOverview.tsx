@@ -192,7 +192,7 @@ export function PcccOverview({ summary, onDrill }: { summary: PcccSummary; onDri
                   <StatusBadge status={r.thieuRon === 0 ? "Khả dụng" : "Cần theo dõi"} />
                 </div>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {r.loaiTu} · {r.soTu} tủ × 3 ron (lăng phun 2 + ngàm 1) = {r.tongRon} ron
+                  {r.loaiTu} · {r.soTu} tủ (ngàm 1) + {r.soCuonVoi} cuộn vòi (lăng phun 2) = {r.tongRon} ron
                 </p>
                 <div className="mt-2">
                   <PercentBar value={r.tongRon === 0 ? null : r.dayDu / r.tongRon} />

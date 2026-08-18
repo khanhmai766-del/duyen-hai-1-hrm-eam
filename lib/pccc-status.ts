@@ -238,7 +238,8 @@ export function tccPolarityViolations(components: TccComponent[]) {
  * 4 thiếu, OUTDOOR 106 / 4.
  */
 export const RON_WEIGHTS: Record<string, number> = { "LĂNG PHUN": 2, "NGÀM": 1 };
-export const RON_PER_CABINET = Object.values(RON_WEIGHTS).reduce((a, b) => a + b, 0); // 3
+// Số ron mỗi tủ KHÔNG còn là hằng số từ 2026-08-18: lăng phun đã chuyển xuống bảng
+// cuộn vòi, mà tủ ngoài trời có hai cuộn — xem summarizeRon trong lib/pccc-summary.ts.
 export const RON_STATUS_OK = "Khả dụng";
 export const RON_STATUS_MISSING = "Thiếu ron";
 
@@ -378,4 +379,58 @@ const ROUND2_TONE_BY_VALUE: Record<string, PcccTone> = {
  */
 export function round2ToneOf(value: string | null | undefined): PcccTone {
   return ROUND2_TONE_BY_VALUE[value ?? ""] ?? toneOf(value);
+}
+
+/**
+ * Mã cuộn vòi suy từ mã tủ cha — chép đúng `deriveCvccMa()` của bản demo: đổi đoạn
+ * "TCC" thành "CVCC"; tủ có nhiều cuộn thì chèn thêm "01"/"02" ngay TRƯỚC hai đoạn cuối.
+ *
+ * Để ở đây (không để riêng trong script nhập liệu) vì cả ba nơi cần đúng một công thức:
+ * script sinh lần đầu, hộp thoại "Thêm cuộn vòi" gợi ý mã, và người đối chiếu số liệu.
+ */
+export function deriveHoseReelMa(cabinetMa: string, seqNum: number | null) {
+  const parts = String(cabinetMa || "").split("/");
+  const idx = parts.indexOf("TCC");
+  if (idx !== -1) parts[idx] = "CVCC";
+  if (seqNum) {
+    const tail = parts.length >= 2 ? parts.splice(parts.length - 2, 2) : [];
+    parts.push(String(seqNum).padStart(2, "0"), ...tail);
+  }
+  return parts.join("/");
+}
+
+/**
+ * Mã gợi ý cho cuộn vòi THÊM TAY vào một tủ: tủ chưa có cuộn nào thì dùng mã không số
+ * thứ tự, đã có rồi thì đánh số tiếp. Người dùng vẫn sửa được trước khi lưu — đây chỉ
+ * là gợi ý, mã thật do hiện trường quyết định.
+ */
+export function suggestHoseReelMa(cabinetMa: string, existingCount: number) {
+  return existingCount === 0 ? deriveHoseReelMa(cabinetMa, null) : deriveHoseReelMa(cabinetMa, existingCount + 1);
+}
+
+/**
+ * Hai nhóm ô tích ĐÃ CHUYỂN HẲN xuống bảng cuộn vòi chữa cháy (CVCC).
+ *
+ * Nghiệp vụ chốt 2026-08-18: cuộn ống và lăng phun giờ theo dõi ĐỘC LẬP ở CVCC, nên
+ * bảng tủ chữa cháy không hiển thị, không tính tình trạng và không xuất hai nhóm này
+ * nữa — để lại là cùng một khiếm khuyết bị đếm hai lần ở hai bảng.
+ *
+ * Dữ liệu trong `pccc_cabinet_components` được GIỮ NGUYÊN, không xoá:
+ *  - kỳ đã chốt (T07.2026) phải bất biến, gồm cả phần đã ký;
+ *  - dòng cuộn vòi mới thêm còn sao trạng thái ban đầu từ tủ cha;
+ *  - đổi ý thì chỉ cần bỏ lọc, không phải nhập lại dữ liệu.
+ */
+export const TCC_ABSORBED_GROUPS = ["CUỘN ỐNG", "LĂNG PHUN"] as const;
+
+export function isAbsorbedByHoseReel(groupLabel: string) {
+  return (TCC_ABSORBED_GROUPS as readonly string[]).includes(groupLabel);
+}
+
+/**
+ * Lọc ô tích của tủ về đúng phần CÒN THUỘC bảng tủ. Gọi ở MỌI nơi đọc linh kiện tủ cho
+ * mục đích hiển thị / tính tình trạng / xuất file — bỏ sót một chỗ là chỗ đó lại đếm
+ * lẫn phần của cuộn vòi.
+ */
+export function cabinetComponentsForTcc<T extends { groupLabel: string }>(components: T[]): T[] {
+  return components.filter((c) => !isAbsorbedByHoseReel(c.groupLabel));
 }

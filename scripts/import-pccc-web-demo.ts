@@ -29,6 +29,7 @@ import {
   ALARM_BUTTON_GROUPS,
   HOSE_REEL_GROUPS,
   deriveCabinetStatus,
+  deriveHoseReelMa,
   deriveHoseReelStatus,
   type TccComponent,
 } from "../lib/pccc-status";
@@ -326,20 +327,6 @@ async function importLights(data: DemoData, label: string, periodId: string, loa
 }
 
 // ========================================================= CUỘN VÒI CHỮA CHÁY
-/**
- * Mã cuộn vòi suy từ mã tủ cha — chép đúng deriveCvccMa() của bản demo: đổi đoạn
- * "TCC" thành "CVCC"; tủ ngoài trời chèn thêm "01"/"02" ngay TRƯỚC hai đoạn cuối.
- */
-function deriveHoseReelMa(cabinetMa: string, seqNum: number | null) {
-  const parts = String(cabinetMa || "").split("/");
-  const idx = parts.indexOf("TCC");
-  if (idx !== -1) parts[idx] = "CVCC";
-  if (seqNum) {
-    const tail = parts.length >= 2 ? parts.splice(parts.length - 2, 2) : [];
-    parts.push(String(seqNum).padStart(2, "0"), ...tail);
-  }
-  return parts.join("/");
-}
 
 /**
  * Sinh cuộn vòi từ tủ chữa cháy CỦA CHÍNH KỲ ĐÓ. Tủ INDOOR → 1 cuộn, OUTDOOR → 2.

@@ -31,6 +31,7 @@ import {
   ExternalLink,
   Lock,
   PenLine,
+  Plus,
   Pencil,
   Save,
   ShieldCheck,
@@ -102,6 +103,7 @@ import {
   VALVE_TINH_TRANG_OPTIONS,
   applyTccToggle,
   resolveTinhTrang,
+  suggestHoseReelMa,
 } from "@/lib/pccc-status";
 
 // Bảy tab: hai loại đèn cố ý GỘP làm một ("Đèn sự cố", đổi loại bằng nút gạt trong
@@ -131,6 +133,16 @@ const TABS: { key: TabKey; label: string; icon: typeof FlameKindling }[] = [
 ];
 
 const TINH_TRANG_FILTERS = ["Khả dụng", "Cần theo dõi", "Bất khả dụng"];
+
+/** Nhãn bảng cho hộp thoại ký — sáu mục tiêu thì ternary lồng đã hết đọc nổi. */
+const SIGN_TARGET_LABEL: Record<PcccBulkSignTarget, string> = {
+  EXTINGUISHER: "bình chữa cháy",
+  CABINET: "tủ chữa cháy",
+  ALARM_BUTTON: "nút nhấn báo cháy",
+  VALVE: "van chữa cháy",
+  EMERGENCY_LIGHT: "đèn sự cố",
+  HOSE_REEL: "cuộn vòi chữa cháy",
+};
 
 /**
  * Bộ lọc tình trạng của bốn bảng đợt 2 — mỗi bảng một VỐN TỪ RIÊNG, cố ý không gộp:
@@ -248,6 +260,10 @@ export default function PcccPage() {
   const [chungLoai, setChungLoai] = useState("ALL");
   const [loaiTu, setLoaiTu] = useState("ALL");
   const [loaiVan, setLoaiVan] = useState("ALL");
+  // Hộp thoại "Thêm cuộn vòi": chọn tủ cha rồi sửa mã gợi ý trước khi lưu.
+  const [cvccAddOpen, setCvccAddOpen] = useState(false);
+  const [cvccAddCabinetId, setCvccAddCabinetId] = useState("");
+  const [cvccAddMa, setCvccAddMa] = useState("");
   const [quaHan, setQuaHan] = useState(false);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -340,6 +356,11 @@ export default function PcccPage() {
     tab === "DEN" ? { ...listFilters, loai: lightLoai } : { ...baseFilters, page: 0, loai: lightLoai }
   );
   // Cuộn vòi tải cùng lúc với tủ chữa cháy (bảng con của cùng một tab).
+  // Danh sách tủ để chọn cha: lấy RỜI với bảng đang hiển thị vì bảng chỉ có 25 dòng
+  // mỗi trang, mà tủ cần thêm cuộn vòi thường không nằm ở trang đang mở.
+  const cvccCabinetsQuery = usePcccCabinets(
+    cvccAddOpen ? { ...baseFilters, pageSize: 500, page: 1, sort: "ma", dir: "asc" } : { ...baseFilters, page: 0 }
+  );
   const cvccQuery = usePcccHoseReels(tab === "TCC" ? { ...listFilters, pageSize: 200 } : { ...baseFilters, page: 0 });
 
   /**
@@ -958,6 +979,39 @@ export default function PcccPage() {
       setTinhTrang("Bất khả dụng");
       toast.success("Đang lọc các tủ bất khả dụng (có linh kiện hỏng nặng)");
     }
+  }
+
+  /**
+   * Chọn tủ cha → gợi ý mã theo đúng công thức của bản demo, dựa trên SỐ CUỘN VÒI ĐÃ CÓ
+   * của tủ đó. Người dùng vẫn sửa được: mã thật do hiện trường quyết định.
+   */
+  function pickCvccCabinet(cabinetId: string) {
+    setCvccAddCabinetId(cabinetId);
+    const cab = (cvccCabinetsQuery.data?.data ?? []).find((c) => c.id === cabinetId);
+    if (!cab) {
+      setCvccAddMa("");
+      return;
+    }
+    const existing = (cvccQuery.data?.data ?? []).filter((r) => r.cabinet.id === cabinetId).length;
+    setCvccAddMa(suggestHoseReelMa(cab.ma, existing));
+  }
+
+  function submitCvccAdd() {
+    const ma = cvccAddMa.trim();
+    if (!cvccAddCabinetId || !ma) {
+      toast.error("Chọn tủ chữa cháy cha và nhập mã cuộn vòi");
+      return;
+    }
+    createHoseReel.mutate(
+      { cabinetId: cvccAddCabinetId, ma },
+      {
+        onSuccess: (row) => {
+          setCvccAddOpen(false);
+          toast.success(`Đã thêm cuộn vòi ${row.ma}`);
+        },
+        onError: (e: Error) => toast.error(e.message),
+      }
+    );
   }
 
   function clearFilters() {
@@ -1622,12 +1676,66 @@ export default function PcccPage() {
 
       {/* Hộp thoại XÁC NHẬN KÝ — số liệu lấy từ server (preview), không đoán ở client:
           người bấm phải thấy đúng bao nhiêu dòng sắp bị ghi tên mình vào. */}
+      {/* Thêm cuộn vòi — bảng DUY NHẤT của module cho thêm dòng bằng tay: cuộn vòi
+          không có trong Excel gốc nên số lượng thực tế mỗi tủ chỉ hiện trường mới biết. */}
+      <Dialog open={cvccAddOpen} onOpenChange={(open) => !open && setCvccAddOpen(false)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="size-5 text-emerald-600" />
+              Thêm cuộn vòi chữa cháy
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-1">
+            <p className="text-[12.5px] text-muted-foreground">
+              Chọn tủ chữa cháy cha — mã cuộn vòi được gợi ý theo mã tủ, sửa lại được trước khi lưu.
+            </p>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-semibold text-slate-600">Tủ chữa cháy cha</Label>
+              <select
+                value={cvccAddCabinetId}
+                onChange={(e) => pickCvccCabinet(e.target.value)}
+                className="h-10 w-full rounded-xl border border-input bg-white px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-accent/20"
+              >
+                <option value="">— Chọn tủ —</option>
+                {(cvccCabinetsQuery.data?.data ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.ma}
+                    {c.viTri ? ` · ${c.viTri}` : ""}
+                  </option>
+                ))}
+              </select>
+              {cvccCabinetsQuery.isFetching && (
+                <span className="text-[11px] text-muted-foreground">Đang tải danh sách tủ…</span>
+              )}
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-semibold text-slate-600">Mã cuộn vòi</Label>
+              <input
+                value={cvccAddMa}
+                onChange={(e) => setCvccAddMa(e.target.value)}
+                placeholder="VH1/CVCC/…"
+                className="h-10 w-full rounded-xl border border-input bg-white px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-accent/20"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button size="sm" variant="outline" onClick={() => setCvccAddOpen(false)}>
+              Huỷ
+            </Button>
+            <Button size="sm" onClick={submitCvccAdd} disabled={createHoseReel.isPending}>
+              {createHoseReel.isPending ? "Đang thêm…" : "Thêm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={signOpen} onOpenChange={(open) => !open && setSignOpen(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PenLine className="size-5 text-emerald-600" />
-              Ký xác nhận {signTarget === "CABINET" ? "tủ chữa cháy" : "bình chữa cháy"}
+              Ký xác nhận {signingTarget ? SIGN_TARGET_LABEL[signingTarget] : ""}
             </DialogTitle>
           </DialogHeader>
           {signPreview.isPending || !signInfo ? (
@@ -1876,6 +1984,11 @@ export default function PcccPage() {
               draft={drafts.CVCC}
               onDraftChange={draftChanger("CVCC")}
               onToggleComponent={componentToggler("CVCC")}
+              onAdd={() => {
+                setCvccAddCabinetId("");
+                setCvccAddMa("");
+                setCvccAddOpen(true);
+              }}
               toolbarExtra={
                 !readOnly ? (
                   // Nút ký RIÊNG của bảng con: nút "Ký tên" ở menu trên cùng ký TỦ, gộp

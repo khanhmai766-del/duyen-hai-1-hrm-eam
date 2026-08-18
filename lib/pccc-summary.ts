@@ -11,13 +11,13 @@
 
 import {
   CHUNG_LOAI_OPTIONS,
-  RON_PER_CABINET,
   RON_STATUS_MISSING,
   RON_STATUS_OK,
   RON_WEIGHTS,
   LIGHT_KHONG_CO_DEN,
   VALVE_TINH_TRANG_OPTIONS,
   componentLevelOf,
+  cabinetComponentsForTcc,
 } from "@/lib/pccc-status";
 
 // ---------------------------------------------------------------- kiểu dữ liệu
@@ -170,7 +170,14 @@ export function cabinetKind(ten: string | null): CabinetKind {
   return /INDOOR/i.test(ten ?? "") ? "INDOOR" : "OUTDOOR";
 }
 
-export function summarizeCabinets(cabinets: CabinetRow[]) {
+/**
+ * `hoseReels` cần cho phần RON: từ 2026-08-18 ron lăng phun đọc ở bảng cuộn vòi chứ
+ * không còn ở bảng tủ (xem summarizeRon). Để mặc định rỗng nên nơi gọi nào chỉ cần số
+ * liệu tủ vẫn gọi được như cũ — khi đó phần ron lăng phun ra 0.
+ */
+export function summarizeCabinets(input: CabinetRow[], hoseReels: HoseReelRonRow[] = []) {
+  // Bỏ hai nhóm đã chuyển hẳn xuống bảng cuộn vòi — xem TCC_ABSORBED_GROUPS.
+  const cabinets = input.map((c) => ({ ...c, components: cabinetComponentsForTcc(c.components) }));
   // số trạng thái của mỗi nhóm (để biết cột nào là cột cuối)
   const statusCount = new Map<string, number>();
   for (const cab of cabinets) {
@@ -209,63 +216,82 @@ export function summarizeCabinets(cabinets: CabinetRow[]) {
     { binhThuong: 0, huHong1Phan: 0, huHongHoanToan: 0 }
   );
 
-  return { rows, total, ron: summarizeRon(cabinets) };
+  return { rows, total, ron: summarizeRon(cabinets, hoseReels) };
 }
 
 // -------------------------------------------------------------------- Ron
 /**
  * RON CHỮA CHÁY — hai dòng "Ron chữa cháy DN50/DN65" của sheet TỔNG QUAN.
  *
- * Mỗi tủ có 3 ron, phân bổ theo đúng `ronCount()` của bản web demo:
- * **lăng phun 2 ron, ngàm 1 ron**; cuộn ống KHÔNG tính vào ron (sheet có dòng riêng
- * "Cuộn ống chữa cháy DN50/DN65"). `DN50 ↔ tủ INDOOR`, `DN65 ↔ tủ OUTDOOR`.
+ * **Lăng phun 2 ron, ngàm 1 ron**; cuộn ống KHÔNG tính vào ron (sheet có dòng riêng
+ * "Cuộn ống chữa cháy DN50/DN65"). DN50 ứng với tủ INDOOR, DN65 ứng với tủ OUTDOOR.
  *
- * Công thức này tái tạo ĐÚNG số của sheet: INDOOR 619 khả dụng / 4 thiếu,
- * OUTDOOR 106 / 4 — nên hai dòng đó KHÔNG phải số nhập tay như từng kết luận.
+ * ĐỔI NGUỒN ĐỌC (2026-08-18): lăng phun đã chuyển hẳn xuống bảng CUỘN VÒI nên phần ron
+ * lăng phun đọc từ đó; ngàm vẫn ở bảng tủ nên vẫn đọc từ tủ.
+ *
+ * KÉO THEO MỘT THAY ĐỔI SỐ HỌC, có chủ đích: trước đây mỗi tủ tính đúng 3 ron vì lăng
+ * phun bị coi là một ô duy nhất trên tủ. Nay tủ ngoài trời có HAI cuộn vòi nên có hai
+ * lăng phun thật → 1 (ngàm) + 2×2 (lăng phun) = 5 ron/tủ. Con số mới bám hiện trường
+ * hơn, nhưng KHÔNG còn khớp hai dòng ron của sheet gốc (INDOOR 619/4, OUTDOOR 106/4) —
+ * sheet gốc đếm theo tủ, không theo cuộn.
  */
 export type RonSummaryRow = {
   loaiRon: "DN50" | "DN65";
   loaiTu: CabinetKind;
   soTu: number;
-  /** Số vị trí ron phải có = 3 × số tủ (lăng phun 2 + ngàm 1). */
+  /** Số cuộn vòi của các tủ thuộc loại này — mỗi cuộn một lăng phun. */
+  soCuonVoi: number;
+  /** Số vị trí ron phải có = ngàm (1×số tủ) + lăng phun (2×số cuộn vòi). */
   tongRon: number;
-  /** Ron ở tủ có linh kiện "Khả dụng" — khớp cột "BÌNH THƯỜNG" của sheet. */
+  /** Ron ở vị trí có tích "Khả dụng" — khớp cột "BÌNH THƯỜNG" của sheet. */
   dayDu: number;
-  /** Ron ở tủ có tích "Thiếu ron" — khớp cột "HƯ HỎNG 1 PHẦN" của sheet. */
+  /** Ron ở vị trí có tích "Thiếu ron" — khớp cột "HƯ HỎNG 1 PHẦN" của sheet. */
   thieuRon: number;
   /** Chi tiết theo nhóm linh kiện (đã nhân trọng số), để soi nhanh chỗ nào hụt. */
   thieuRonTheoNhom: Record<string, number>;
 };
 
-export function summarizeRon(cabinets: CabinetRow[]): RonSummaryRow[] {
+/** Cuộn vòi kèm tên tủ cha — cần tên tủ để biết cuộn thuộc nhánh INDOOR hay OUTDOOR. */
+export type HoseReelRonRow = {
+  cabinetTen: string | null;
+  components: CabinetComponentRow[];
+};
+
+export function summarizeRon(cabinets: CabinetRow[], hoseReels: HoseReelRonRow[]): RonSummaryRow[] {
   const spec: { loaiRon: "DN50" | "DN65"; loaiTu: CabinetKind }[] = [
     { loaiRon: "DN50", loaiTu: "INDOOR" },
     { loaiRon: "DN65", loaiTu: "OUTDOOR" },
   ];
-  const groups = Object.keys(RON_WEIGHTS);
+  const ticked = (components: CabinetComponentRow[], groupLabel: string, status: string) =>
+    components.some((c) => c.checked && c.groupLabel === groupLabel && c.status === status);
 
   return spec.map(({ loaiRon, loaiTu }) => {
-    const list = cabinets.filter((c) => cabinetKind(c.ten) === loaiTu);
-    const ticked = (cab: CabinetRow, groupLabel: string, status: string) =>
-      cab.components.some((c) => c.checked && c.groupLabel === groupLabel && c.status === status);
-
+    const tuList = cabinets.filter((c) => cabinetKind(c.ten) === loaiTu);
+    const cuonList = hoseReels.filter((r) => cabinetKind(r.cabinetTen) === loaiTu);
+    const thieuRonTheoNhom: Record<string, number> = { "LĂNG PHUN": 0, "NGÀM": 0 };
     let dayDu = 0;
-    const thieuRonTheoNhom: Record<string, number> = Object.fromEntries(groups.map((g) => [g, 0]));
-    for (const cab of list) {
-      for (const g of groups) {
-        const w = RON_WEIGHTS[g];
-        if (ticked(cab, g, RON_STATUS_OK)) dayDu += w;
-        if (ticked(cab, g, RON_STATUS_MISSING)) thieuRonTheoNhom[g] += w;
-      }
+
+    // NGÀM — vẫn nằm ở bảng tủ.
+    for (const cab of tuList) {
+      const w = RON_WEIGHTS["NGÀM"];
+      if (ticked(cab.components, "NGÀM", RON_STATUS_OK)) dayDu += w;
+      if (ticked(cab.components, "NGÀM", RON_STATUS_MISSING)) thieuRonTheoNhom["NGÀM"] += w;
     }
-    const thieuRon = Object.values(thieuRonTheoNhom).reduce((a, b) => a + b, 0);
+    // LĂNG PHUN — đã chuyển xuống bảng cuộn vòi.
+    for (const reel of cuonList) {
+      const w = RON_WEIGHTS["LĂNG PHUN"];
+      if (ticked(reel.components, "LĂNG PHUN", RON_STATUS_OK)) dayDu += w;
+      if (ticked(reel.components, "LĂNG PHUN", RON_STATUS_MISSING)) thieuRonTheoNhom["LĂNG PHUN"] += w;
+    }
+
     return {
       loaiRon,
       loaiTu,
-      soTu: list.length,
-      tongRon: list.length * RON_PER_CABINET,
+      soTu: tuList.length,
+      soCuonVoi: cuonList.length,
+      tongRon: tuList.length * RON_WEIGHTS["NGÀM"] + cuonList.length * RON_WEIGHTS["LĂNG PHUN"],
       dayDu,
-      thieuRon,
+      thieuRon: thieuRonTheoNhom["LĂNG PHUN"] + thieuRonTheoNhom["NGÀM"],
       thieuRonTheoNhom,
     };
   });

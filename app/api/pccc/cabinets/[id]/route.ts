@@ -12,7 +12,7 @@ import {
   pickFields,
   type FieldSpec,
 } from "@/lib/pccc-service";
-import { applyTccToggle, deriveCabinetStatus } from "@/lib/pccc-status";
+import { applyTccToggle, cabinetComponentsForTcc, deriveCabinetStatus } from "@/lib/pccc-status";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +76,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (changed.length > 0) clearInspectionStamp("CABINET", data);
     const updated = await prisma.pcccCabinet.update({
       where: { id: current.id },
-      data: { ...data, tinhTrangTongThe: deriveCabinetStatus(current.components) },
+      // CHỈ tính trên phần còn thuộc bảng tủ: lỗi cuộn ống / lăng phun giờ do bảng
+      // cuộn vòi chịu trách nhiệm, để lại đây là một khiếm khuyết kéo tụt hai bảng.
+      data: { ...data, tinhTrangTongThe: deriveCabinetStatus(cabinetComponentsForTcc(current.components)) },
       include: { components: { orderBy: [{ groupOrder: "asc" }, { statusOrder: "asc" }] } },
     });
     if (changed.length > 0) await clearSignature("CABINET", current.id);

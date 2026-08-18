@@ -87,7 +87,8 @@ export async function GET(req: NextRequest) {
       // Cuộn vòi là danh mục con của tủ nên đi theo ĐÚNG phạm vi của tủ.
       prisma.pcccHoseReel.findMany({
         where: { periodId: period.id, ...scopeTcc },
-        select: { tinhTrangTongThe: true, components: true },
+        // Tên tủ cha cần cho phần RON: phải biết cuộn vòi thuộc nhánh INDOOR hay OUTDOOR.
+        select: { tinhTrangTongThe: true, components: true, cabinet: { select: { ten: true } } },
       }),
       cuongViListOf(period.id, viewScope),
       prisma.pcccSignature.count({ where: { periodId: period.id } }),
@@ -96,7 +97,11 @@ export async function GET(req: NextRequest) {
     return ok(
       {
         bcc: summarizeExtinguishers(extinguishers, periodEndDate(period.label)),
-        tcc: summarizeCabinets(cabinets),
+        // Ron lăng phun đọc ở bảng cuộn vòi từ 2026-08-18 — xem summarizeRon.
+        tcc: summarizeCabinets(
+          cabinets,
+          hoseReels.map((r) => ({ cabinetTen: r.cabinet.ten, components: r.components }))
+        ),
         fcd: summarizeBulks(bulks),
         fm200: summarizeFm200(
           panels.map((p) => ({

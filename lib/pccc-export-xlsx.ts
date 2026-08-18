@@ -9,7 +9,7 @@
  * trên web — hai thứ tự này khác nhau và không được lẫn.
  */
 import ExcelJS from "exceljs";
-import { hoseReelLabelDisplay } from "@/lib/pccc-status";
+import { cabinetComponentsForTcc, hoseReelLabelDisplay } from "@/lib/pccc-status";
 
 const ARGB = (hex: string) => "FF" + hex;
 
@@ -216,9 +216,14 @@ function writeTcc(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string
     views: [{ state: "frozen", xSplit: 2, ySplit: 2 }],
   });
 
-  // Khung nhóm × trạng thái lấy từ chính dữ liệu (giữ thứ tự cột gốc)
+  // Hai nhóm CUỘN ỐNG / LĂNG PHUN đã chuyển hẳn sang sheet CUỘN VÒI CHỮA CHÁY —
+  // lọc ở đây để file xuất khớp với bảng trên web, không đếm một khiếm khuyết hai lần.
+  const cabinets: ExportInput["cabinets"] = input.cabinets.map((c) => ({
+    ...c,
+    components: cabinetComponentsForTcc(c.components),
+  }));
   const groups: { label: string; statuses: string[] }[] = [];
-  for (const c of input.cabinets[0]?.components ?? []) {
+  for (const c of cabinets[0]?.components ?? []) {
     const g = groups.find((x) => x.label === c.groupLabel);
     if (g) g.statuses.push(c.status);
     else groups.push({ label: c.groupLabel, statuses: [c.status] });
@@ -248,7 +253,7 @@ function writeTcc(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string
     ws.getCell(1, col + i).value = label;
   });
 
-  const rows = input.cabinets.map((cab) => {
+  const rows = cabinets.map((cab) => {
     const tick = (groupLabel: string, status: string) =>
       cab.components.find((c) => c.groupLabel === groupLabel && c.status === status)?.checked ? "☑" : "☐";
     return [
@@ -273,7 +278,7 @@ function writeTcc(wb: ExcelJS.Workbook, input: ExportInput, imageIds: Map<string
   });
 
   writeBody(ws, 3, rows, identity.length + componentCount + 1);
-  input.cabinets.forEach((cab, i) => {
+  cabinets.forEach((cab, i) => {
     const sig = cab.signature as { signatureKey?: string | null } | null;
     attachSignature(wb, ws, input.signatureImages, imageIds, 3 + i, totalCols, sig?.signatureKey);
   });
