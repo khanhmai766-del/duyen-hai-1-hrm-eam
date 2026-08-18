@@ -12,6 +12,7 @@ import {
   type PcccWriteScope,
 } from "@/lib/pccc-service";
 import { positionLabelOf } from "@/lib/position-catalog";
+import { isPcccLightLoai } from "@/lib/pccc-status";
 import { s3ProxyUrl } from "@/lib/s3";
 
 export const dynamic = "force-dynamic";
@@ -32,16 +33,80 @@ export const dynamic = "force-dynamic";
  * PHẠM VI ký = phạm vi GHI (`resolvePcccWriteScope`) giao với bộ lọc cương vị/tổ máy
  * đang đặt trên màn hình. Người mức `personal` chỉ ký được cương vị của mình; người
  * mức quản lý ký được mọi cương vị nhưng vẫn nên lọc trước — vì vậy có `preview`.
+ *
+ * KHÔNG có ở đây: bồn Foam/CO2/Diesel và hai bảng FM200. Hai thứ đó chỉ vài dòng và ký
+ * từng mục ngay trong tab của chúng, không cần ký gộp theo cương vị.
  */
 
-type Target = "EXTINGUISHER" | "CABINET";
+type BulkTarget = "EXTINGUISHER" | "CABINET" | "ALARM_BUTTON" | "VALVE" | "EMERGENCY_LIGHT" | "HOSE_REEL";
 
-function whereOf(periodId: string, scope: PcccWriteScope, cuongVi?: string | null, machine?: string | null) {
+type StampData = { nguoiKiemTra: string; ngayKiemTra: Date };
+
+/**
+ * Sáu bảng ký gộp được. Bảng tra thay cho chuỗi if/else: mỗi bảng chỉ khác nhau ở
+ * delegate Prisma và nhãn ghi vào nhật ký, phần còn lại của luồng ký là một.
+ */
+const BULK_TARGETS: Record<
+  BulkTarget,
+  {
+    label: string;
+    findIds: (where: Record<string, unknown>) => Promise<{ id: string }[]>;
+    stamp: (ids: string[], data: StampData) => Prisma.PrismaPromise<unknown>;
+  }
+> = {
+  EXTINGUISHER: {
+    label: "bình chữa cháy",
+    findIds: (where) => prisma.pcccExtinguisher.findMany({ where: where as Prisma.PcccExtinguisherWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccExtinguisher.updateMany({ where: { id: { in: ids } }, data }),
+  },
+  CABINET: {
+    label: "tủ chữa cháy",
+    findIds: (where) => prisma.pcccCabinet.findMany({ where: where as Prisma.PcccCabinetWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccCabinet.updateMany({ where: { id: { in: ids } }, data }),
+  },
+  ALARM_BUTTON: {
+    label: "nút nhấn báo cháy",
+    findIds: (where) => prisma.pcccAlarmButton.findMany({ where: where as Prisma.PcccAlarmButtonWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccAlarmButton.updateMany({ where: { id: { in: ids } }, data }),
+  },
+  VALVE: {
+    label: "van chữa cháy",
+    findIds: (where) => prisma.pcccValve.findMany({ where: where as Prisma.PcccValveWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccValve.updateMany({ where: { id: { in: ids } }, data }),
+  },
+  EMERGENCY_LIGHT: {
+    label: "đèn sự cố",
+    findIds: (where) => prisma.pcccEmergencyLight.findMany({ where: where as Prisma.PcccEmergencyLightWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccEmergencyLight.updateMany({ where: { id: { in: ids } }, data }),
+  },
+  HOSE_REEL: {
+    label: "cuộn vòi chữa cháy",
+    findIds: (where) => prisma.pcccHoseReel.findMany({ where: where as Prisma.PcccHoseReelWhereInput, select: { id: true } }),
+    stamp: (ids, data) => prisma.pcccHoseReel.updateMany({ where: { id: { in: ids } }, data }),
+  },
+};
+
+function isBulkTarget(value: unknown): value is BulkTarget {
+  return typeof value === "string" && value in BULK_TARGETS;
+}
+
+function whereOf(
+  periodId: string,
+  scope: PcccWriteScope,
+  cuongVi?: string | null,
+  machine?: string | null,
+  loai?: string | null
+): Record<string, unknown> {
   // Phạm vi GHI đóng luôn vai trò phạm vi lọc: `scopeWhere` GIAO bộ lọc đang đặt trên
   // màn hình với phạm vi, nên người mức `personal` gửi lên cương vị của người khác thì
   // ra tập rỗng — chứ không phải bị bỏ qua bộ lọc rồi ký cả phần của mình.
-  const where: Prisma.PcccExtinguisherWhereInput = { periodId, ...scopeWhere(cuongVi, machine, scope) };
-  return where;
+  return {
+    periodId,
+    ...scopeWhere(cuongVi, machine, scope),
+    // Hai loại đèn nằm chung một bảng: thiếu `loai` thì ký đèn EXIT sẽ ký luôn cả đèn
+    // chiếu sáng sự cố — người dùng chỉ vừa đi kiểm tra một trong hai.
+    ...(loai ? { loai } : {}),
+  };
 }
 
 /** Nhãn cương vị của tập dòng sắp ký — để hộp thoại xác nhận nói rõ đang ký cho ai. */
@@ -51,35 +116,42 @@ function describeScope(scope: PcccWriteScope, cuongVi?: string | null) {
   return "tất cả cương vị";
 }
 
-// POST /api/pccc/signatures/bulk { targetType, period?, cuongVi?, machine?, preview? }
+// POST /api/pccc/signatures/bulk { targetType, period?, cuongVi?, machine?, loai?, preview? }
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser();
 
     const body = (await req.json().catch(() => ({}))) as {
-      targetType?: Target;
+      targetType?: string;
       period?: string;
       cuongVi?: string;
       machine?: string;
+      /** Chỉ dùng cho EMERGENCY_LIGHT: "EXIT" | "CSSC". */
+      loai?: string;
       preview?: boolean;
     };
-    if (body.targetType !== "EXTINGUISHER" && body.targetType !== "CABINET") {
-      return fail("targetType phải là EXTINGUISHER hoặc CABINET");
+    if (!isBulkTarget(body.targetType)) {
+      return fail(`targetType phải là một trong: ${Object.keys(BULK_TARGETS).join(", ")}`);
     }
     const targetType = body.targetType;
-    // Đọc body TRƯỚC khi tính phạm vi: bảng Tủ chữa cháy có cương vị được giao trọn
-    // bảng (xem lib/pccc-service.ts), nên phạm vi ký khác nhau theo `targetType`.
+    const target = BULK_TARGETS[targetType];
+
+    // Bảng đèn BẮT BUỘC nói rõ loại — xem ghi chú trong whereOf.
+    if (targetType === "EMERGENCY_LIGHT" && !isPcccLightLoai(body.loai)) {
+      return fail("Ký đèn sự cố phải nói rõ loại (EXIT hoặc CSSC)");
+    }
+    const loai = targetType === "EMERGENCY_LIGHT" ? (body.loai as string) : null;
+
+    // Đọc body TRƯỚC khi tính phạm vi: bảng Tủ chữa cháy (và cuộn vòi đi theo nó) có
+    // cương vị được giao trọn bảng — xem lib/pccc-service.ts — nên phạm vi ký khác nhau
+    // theo `targetType`.
     const scope = await resolvePcccWriteScope(user, "Không đủ quyền ký", targetType);
 
     const period = await resolvePeriod(body.period);
     assertPeriodWritable(period);
 
-    const where = whereOf(period.id, scope, body.cuongVi, body.machine);
-    const rows =
-      targetType === "EXTINGUISHER"
-        ? await prisma.pcccExtinguisher.findMany({ where, select: { id: true } })
-        : await prisma.pcccCabinet.findMany({ where: where as Prisma.PcccCabinetWhereInput, select: { id: true } });
-    const ids = rows.map((r) => r.id);
+    const where = whereOf(period.id, scope, body.cuongVi, body.machine, loai);
+    const ids = (await target.findIds(where)).map((r) => r.id);
 
     const [alreadySigned, signatureKey] = await Promise.all([
       prisma.pcccSignature.count({ where: { periodId: period.id, targetType, targetId: { in: ids } } }),
@@ -119,15 +191,7 @@ export async function POST(req: NextRequest) {
     await prisma.$transaction([
       // Ghi người/ngày kiểm tra TRƯỚC, chữ ký sau — trong cùng transaction nên không có
       // khoảnh khắc nào dòng đã ký mà chưa có người kiểm tra.
-      targetType === "EXTINGUISHER"
-        ? prisma.pcccExtinguisher.updateMany({
-            where: { id: { in: ids } },
-            data: { nguoiKiemTra: signerName, ngayKiemTra: signedAt },
-          })
-        : prisma.pcccCabinet.updateMany({
-            where: { id: { in: ids } },
-            data: { nguoiKiemTra: signerName, ngayKiemTra: signedAt },
-          }),
+      target.stamp(ids, { nguoiKiemTra: signerName, ngayKiemTra: signedAt }),
       // Ký lại dòng đã ký = cập nhật chữ ký cũ, không đẻ bản ghi thứ hai.
       prisma.pcccSignature.deleteMany({ where: { targetType, targetId: { in: ids } } }),
       prisma.pcccSignature.createMany({
@@ -151,7 +215,7 @@ export async function POST(req: NextRequest) {
       period.id,
       auditDetailWithPosition(
         user,
-        `Ký ${ids.length} dòng ${targetType === "EXTINGUISHER" ? "bình chữa cháy" : "tủ chữa cháy"} · ` +
+        `Ký ${ids.length} dòng ${target.label}${loai ? ` (${loai})` : ""} · ` +
           `${period.label} · ${describeScope(scope, body.cuongVi)}`
       ),
       { saveToAuditLog: true }

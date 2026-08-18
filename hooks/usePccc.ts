@@ -457,11 +457,22 @@ export interface PcccBulkSignResult {
   periodLabel: string;
 }
 
+/** Sáu bảng ký gộp được. Bồn Foam/CO2/Diesel và FM200 ký từng mục trong tab của chúng. */
+export type PcccBulkSignTarget =
+  | "EXTINGUISHER"
+  | "CABINET"
+  | "ALARM_BUTTON"
+  | "VALVE"
+  | "EMERGENCY_LIGHT"
+  | "HOSE_REEL";
+
 export interface PcccBulkSignInput {
-  targetType: "EXTINGUISHER" | "CABINET";
+  targetType: PcccBulkSignTarget;
   period?: string;
   cuongVi?: string;
   machine?: string;
+  /** BẮT BUỘC khi targetType = EMERGENCY_LIGHT: hai loại đèn chung một bảng. */
+  loai?: "EXIT" | "CSSC";
   preview?: boolean;
 }
 

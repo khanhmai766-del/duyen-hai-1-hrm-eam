@@ -79,6 +79,7 @@ import {
   type CabinetRow,
   type PcccClockMeta,
   type PcccBulkSignPreview,
+  type PcccBulkSignTarget,
   type ExtinguisherRow,
   type PcccViewScopeMeta,
   type PcccWriteScopeMeta,
@@ -748,17 +749,50 @@ export default function PcccPage() {
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const signPreview = usePcccBulkSignPreview();
   const bulkSign = usePcccBulkSign();
-  /** Bảng đang mở quyết định ký cái gì — tác vụ ký nằm trong tab nào thì ký tab đó. */
-  const signTarget: "EXTINGUISHER" | "CABINET" = editableTab === "TCC" ? "CABINET" : "EXTINGUISHER";
+  /**
+   * Bảng đang mở quyết định ký cái gì — tác vụ ký nằm trong tab nào thì ký tab đó.
+   *
+   * Tab Foam·CO2·Diesel·FM200 KHÔNG có ở đây: mỗi bảng chỉ vài dòng và ký từng mục ngay
+   * trong tab, không cần ký gộp theo cương vị.
+   *
+   * Tab Tủ chữa cháy ký TỦ; cuộn vòi là bảng con nên có nút ký riêng bên dưới nó —
+   * gộp chung một nút thì người dùng không biết mình vừa ký cái nào.
+   */
+  const signTarget: PcccBulkSignTarget | null =
+    tab === "BCC"
+      ? "EXTINGUISHER"
+      : tab === "TCC"
+        ? "CABINET"
+        : tab === "NNBC"
+          ? "ALARM_BUTTON"
+          : tab === "VAN"
+            ? "VALVE"
+            : tab === "DEN"
+              ? "EMERGENCY_LIGHT"
+              : null;
+  /** Tham số ký dùng chung cho cả xem trước lẫn ký thật — hai chỗ phải khớp từng chữ. */
+  function signInput(target: PcccBulkSignTarget) {
+    return {
+      targetType: target,
+      period: effectiveLabel,
+      cuongVi,
+      machine: machine === "ALL" ? undefined : machine,
+      // Chỉ bảng đèn cần: hai loại đèn chung một bảng, thiếu tham số này là ký lây sang loại kia.
+      ...(target === "EMERGENCY_LIGHT" ? { loai: lightLoai } : {}),
+    } as const;
+  }
+  /** Bảng đang được ký — đặt lúc mở hộp thoại để nút xác nhận ký đúng cái vừa bấm. */
+  const [signingTarget, setSigningTarget] = useState<PcccBulkSignTarget | null>(null);
 
-  function openSignDialog() {
+  function openSignDialog(target: PcccBulkSignTarget) {
     setSignInfo(null);
+    setSigningTarget(target);
     // HOÃN một nhịp mới mở hộp thoại. Menu của Radix khi đóng sẽ trả lại tiêu điểm, và
     // chính cú trả tiêu điểm đó bị hộp thoại hiểu là "bấm ra ngoài" nên đóng luôn hộp
     // thoại vừa mở — mở ở nhịp sau thì sự kiện kia đã xử lý xong.
     setTimeout(() => setSignOpen(true), 0);
     signPreview.mutate(
-      { targetType: signTarget, period: effectiveLabel, cuongVi, machine: machine === "ALL" ? undefined : machine },
+      signInput(target),
       {
         onSuccess: setSignInfo,
         onError: (e: Error) => {
@@ -770,8 +804,9 @@ export default function PcccPage() {
   }
 
   function confirmSign() {
+    if (!signingTarget) return;
     bulkSign.mutate(
-      { targetType: signTarget, period: effectiveLabel, cuongVi, machine: machine === "ALL" ? undefined : machine },
+      signInput(signingTarget),
       {
         onSuccess: (res) => {
           setSignOpen(false);
@@ -1547,11 +1582,12 @@ export default function PcccPage() {
                       <span className="block text-[11px] text-muted-foreground">Mở khoá ô để sửa, lưu một lượt</span>
                     </span>
                   </DropdownMenuItem>
-                  {/* Tab Foam·CO2·Diesel·FM200 KHÔNG có mục này: ở đó ký từng bồn / từng
-                      bảng bằng nút "Ký" ngay trên dòng, không ký theo cương vị. Để lọt
-                      mục này vào đó là bấm một cái ký nhầm sang bảng bình chữa cháy. */}
-                  {editableTab !== "FCD" && (
-                  <DropdownMenuItem onSelect={openSignDialog} className="gap-2">
+                  {/* Tab Foam·CO2·Diesel·FM200 KHÔNG có mục này (signTarget = null): ở đó ký
+                      từng bồn / từng bảng bằng nút "Ký" ngay trên dòng, không ký theo cương
+                      vị. Để lọt mục này vào đó là bấm một cái ký nhầm sang bảng khác. Cuộn
+                      vòi cũng không dùng nút này — nó có nút ký riêng ngay trên bảng con. */}
+                  {signTarget && (
+                  <DropdownMenuItem onSelect={() => openSignDialog(signTarget)} className="gap-2">
                     <PenLine className="size-4 text-emerald-600" />
                     <span className="min-w-0">
                       <span className="block font-medium">Ký tên</span>
@@ -1715,7 +1751,9 @@ export default function PcccPage() {
                 size="sm"
                 onClick={() => {
                   setResultDialog(null);
-                  openSignDialog();
+                  // Ký lại đúng bảng vừa lưu; tab Tổng quan/FCD không ký gộp nên nút này
+                  // không hiện ở đó (resultDialog.resign chỉ bật sau khi lưu bảng ký gộp được).
+                  if (signTarget) openSignDialog(signTarget);
                 }}
               >
                 <PenLine className="mr-1.5 size-4" />
@@ -1822,6 +1860,19 @@ export default function PcccPage() {
               draft={drafts.CVCC}
               onDraftChange={draftChanger("CVCC")}
               onToggleComponent={componentToggler("CVCC")}
+              toolbarExtra={
+                !readOnly ? (
+                  // Nút ký RIÊNG của bảng con: nút "Ký tên" ở menu trên cùng ký TỦ, gộp
+                  // chung thì người dùng không biết mình vừa ký cái nào.
+                  <button
+                    type="button"
+                    onClick={() => openSignDialog("HOSE_REEL")}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-2.5 text-[12.5px] font-medium text-emerald-700 transition hover:bg-emerald-50"
+                  >
+                    <PenLine className="size-3.5" /> Ký cuộn vòi
+                  </button>
+                ) : null
+              }
               onDelete={(row: HoseReelRow) => {
                 // Xoá ghi NGAY, không chờ bấm Lưu: đây là thay đổi CẤU TRÚC chứ không
                 // phải sửa một ô — nên hỏi lại rồi làm dứt điểm.
