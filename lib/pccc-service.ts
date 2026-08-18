@@ -19,7 +19,16 @@ import { s3ProxyUrl } from "@/lib/s3";
 import { positionLabelOf, type PositionCode } from "@/lib/position-catalog";
 import { isUnrestrictedEquipmentPosition } from "@/lib/position-system-scopes";
 
-export type PcccTargetType = "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL";
+export type PcccTargetType =
+  | "EXTINGUISHER"
+  | "CABINET"
+  | "BULK"
+  | "FM200_PANEL"
+  // Bốn nhóm bổ sung đợt 2 — xem khối cuối prisma/schema.prisma.
+  | "ALARM_BUTTON"
+  | "VALVE"
+  | "EMERGENCY_LIGHT"
+  | "HOSE_REEL";
 
 export const PCCC_PERMISSION = {
   view: "pccc-view",
@@ -84,6 +93,10 @@ const INSPECTION_STAMP: Record<PcccTargetType, readonly [string, string]> = {
   CABINET: ["ngayKiemTra", "nguoiKiemTra"],
   BULK: ["ngayChot", "nguoiChot"],
   FM200_PANEL: ["ngayKiemTra", "nguoiKiemTra"],
+  ALARM_BUTTON: ["ngayKiemTra", "nguoiKiemTra"],
+  VALVE: ["ngayKiemTra", "nguoiKiemTra"],
+  EMERGENCY_LIGHT: ["ngayKiemTra", "nguoiKiemTra"],
+  HOSE_REEL: ["ngayKiemTra", "nguoiKiemTra"],
 };
 
 /**
@@ -381,7 +394,17 @@ export function pcccCabinetViewScope(view: PcccViewScope, user: PcccPositionCarr
 }
 
 /** Bảng đang thao tác — quyết định có nới phạm vi theo khối trên hay không. */
-export type PcccScopeTable = "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL";
+export type PcccScopeTable =
+  | "EXTINGUISHER"
+  | "CABINET"
+  | "BULK"
+  | "FM200_PANEL"
+  | "ALARM_BUTTON"
+  | "VALVE"
+  | "EMERGENCY_LIGHT"
+  // Cuộn vòi là danh mục CON của tủ chữa cháy nên đi theo ĐÚNG phạm vi của tủ:
+  // cương vị được giao trọn bảng tủ thì cũng thao tác được trọn bảng cuộn vòi.
+  | "HOSE_REEL";
 
 /** null = không có quyền ghi. Tách riêng để bản ném và bản không ném dùng chung một luật. */
 async function computePcccWriteScope(
@@ -398,7 +421,7 @@ async function computePcccWriteScope(
   // Mức manage/full giờ chỉ còn nghĩa "được ghi", phạm vi vẫn bó theo cương vị.
   if (!(await hasPermissionLevel(user, PCCC_PERMISSION.manage, ["personal"]))) return null;
   // Cương vị được giao trọn bảng Tủ chữa cháy (xem khối trên) — chỉ nới đúng bảng đó.
-  if (table === "CABINET" && hasPcccCabinetFullScope(user)) return PCCC_SCOPE_ALL;
+  if ((table === "CABINET" || table === "HOSE_REEL") && hasPcccCabinetFullScope(user)) return PCCC_SCOPE_ALL;
   // Cấp giám sát KHÔNG được thêm quyền sửa ở đây: chỉ sửa được dòng thuộc đúng cương vị
   // quản lý của mình, còn phần mình giám sát thì chỉ xem.
   return { all: false, codes: pcccPositionCodesOf(user) };
@@ -590,11 +613,15 @@ export async function createNextPeriodFrom(sourceLabel: string) {
   const label = `T${String(nextMonth).padStart(2, "0")}.${nextYear}`;
   if (await prisma.pcccPeriod.findUnique({ where: { label } })) throw fail(`Kỳ ${label} đã tồn tại`, 409);
 
-  const [extinguishers, cabinets, bulks, panels] = await Promise.all([
+  const [extinguishers, cabinets, bulks, panels, alarmButtons, valves, lights, hoseReels] = await Promise.all([
     prisma.pcccExtinguisher.findMany({ where: { periodId: source.id } }),
     prisma.pcccCabinet.findMany({ where: { periodId: source.id }, include: { components: true } }),
     prisma.pcccBulk.findMany({ where: { periodId: source.id } }),
     prisma.pcccFm200Panel.findMany({ where: { periodId: source.id } }),
+    prisma.pcccAlarmButton.findMany({ where: { periodId: source.id }, include: { components: true } }),
+    prisma.pcccValve.findMany({ where: { periodId: source.id } }),
+    prisma.pcccEmergencyLight.findMany({ where: { periodId: source.id } }),
+    prisma.pcccHoseReel.findMany({ where: { periodId: source.id }, include: { components: true } }),
   ]);
 
   return prisma.$transaction(async (tx) => {
@@ -609,11 +636,14 @@ export async function createNextPeriodFrom(sourceLabel: string) {
       })),
     });
 
+    // Cuộn vòi trỏ tới tủ cha bằng khoá ngoại, nên phải nhớ tủ CŨ nào thành tủ MỚI nào.
+    const cabinetIdMap = new Map<string, string>();
     for (const cab of cabinets) {
       const { id, periodId, createdAt, updatedAt, components, ngayKiemTra, nguoiKiemTra, ...rest } = cab;
       const created = await tx.pcccCabinet.create({
         data: { ...rest, periodId: period.id, ngayKiemTra: null, nguoiKiemTra: null },
       });
+      cabinetIdMap.set(id, created.id);
       await tx.pcccCabinetComponent.createMany({
         data: components.map(({ id: _cid, cabinetId, ...c }) => ({ ...c, cabinetId: created.id })),
       });
@@ -638,6 +668,48 @@ export async function createNextPeriodFrom(sourceLabel: string) {
         nguoiKiemTra: null,
       })),
     });
+
+    for (const btn of alarmButtons) {
+      const { id, periodId, createdAt, updatedAt, components, ngayKiemTra, nguoiKiemTra, ...rest } = btn;
+      const created = await tx.pcccAlarmButton.create({
+        data: { ...rest, periodId: period.id, ngayKiemTra: null, nguoiKiemTra: null },
+      });
+      await tx.pcccAlarmButtonComponent.createMany({
+        data: components.map(({ id: _cid, buttonId, ...c }) => ({ ...c, buttonId: created.id })),
+      });
+    }
+
+    await tx.pcccValve.createMany({
+      data: valves.map(({ id, periodId, createdAt, updatedAt, ngayKiemTra, nguoiKiemTra, ...rest }) => ({
+        ...rest,
+        periodId: period.id,
+        ngayKiemTra: null,
+        nguoiKiemTra: null,
+      })),
+    });
+
+    await tx.pcccEmergencyLight.createMany({
+      data: lights.map(({ id, periodId, createdAt, updatedAt, ngayKiemTra, nguoiKiemTra, ...rest }) => ({
+        ...rest,
+        periodId: period.id,
+        ngayKiemTra: null,
+        nguoiKiemTra: null,
+      })),
+    });
+
+    // Cuộn vòi nào có tủ cha không chuyển được sang kỳ mới thì BỎ QUA chứ không
+    // gán bừa sang tủ khác — thà thiếu một dòng còn hơn treo nó nhầm tủ.
+    for (const reel of hoseReels) {
+      const { id, periodId, createdAt, updatedAt, components, cabinetId, ngayKiemTra, nguoiKiemTra, ...rest } = reel;
+      const nextCabinetId = cabinetIdMap.get(cabinetId);
+      if (!nextCabinetId) continue;
+      const created = await tx.pcccHoseReel.create({
+        data: { ...rest, periodId: period.id, cabinetId: nextCabinetId, ngayKiemTra: null, nguoiKiemTra: null },
+      });
+      await tx.pcccHoseReelComponent.createMany({
+        data: components.map(({ id: _cid, reelId, ...c }) => ({ ...c, reelId: created.id })),
+      });
+    }
 
     return period;
   });

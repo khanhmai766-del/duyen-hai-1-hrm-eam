@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail, requireUser, handle, audit, auditDetailWithPosition } from "@/lib/api";
 import { requirePermissionLevel } from "@/lib/rbac-guard";
@@ -15,7 +16,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TARGETS: PcccTargetType[] = ["EXTINGUISHER", "CABINET", "BULK", "FM200_PANEL"];
+const TARGETS: PcccTargetType[] = [
+  "EXTINGUISHER", "CABINET", "BULK", "FM200_PANEL",
+  "ALARM_BUTTON", "VALVE", "EMERGENCY_LIGHT", "HOSE_REEL",
+];
 
 /** Trả về (kỳ, cương vị của mục tiêu, nhãn để ghi audit). Cương vị dùng để chặn ký ngoài phạm vi. */
 async function locateTarget(targetType: PcccTargetType, targetId: string) {
@@ -31,9 +35,45 @@ async function locateTarget(targetType: PcccTargetType, targetId: string) {
     const r = await prisma.pcccBulk.findUnique({ where: { id: targetId }, include: { period: true } });
     return r && { period: r.period, label: r.ten, cuongViCode: r.cuongViCode };
   }
+  if (targetType === "ALARM_BUTTON") {
+    const r = await prisma.pcccAlarmButton.findUnique({ where: { id: targetId }, include: { period: true } });
+    return r && { period: r.period, label: r.maKks, cuongViCode: r.cuongViCode };
+  }
+  if (targetType === "VALVE") {
+    const r = await prisma.pcccValve.findUnique({ where: { id: targetId }, include: { period: true } });
+    return r && { period: r.period, label: r.maKks, cuongViCode: r.cuongViCode };
+  }
+  if (targetType === "EMERGENCY_LIGHT") {
+    const r = await prisma.pcccEmergencyLight.findUnique({ where: { id: targetId }, include: { period: true } });
+    return r && { period: r.period, label: `${r.loai} · ${r.maKks}`, cuongViCode: r.cuongViCode };
+  }
+  if (targetType === "HOSE_REEL") {
+    const r = await prisma.pcccHoseReel.findUnique({ where: { id: targetId }, include: { period: true } });
+    return r && { period: r.period, label: r.ma, cuongViCode: r.cuongViCode };
+  }
   const r = await prisma.pcccFm200Panel.findUnique({ where: { id: targetId }, include: { period: true } });
   return r && { period: r.period, label: r.title, cuongViCode: r.cuongViCode };
 }
+
+/**
+ * Ghi "Người / Ngày kiểm tra" lên đúng bảng của mục tiêu vừa ký. Ký mà không ghi hai
+ * cột đó thì tháng sau không ai biết ai đi kiểm tra và kiểm tra hôm nào.
+ *
+ * BULK không nằm ở đây vì nó gọi hai cột là "Ngày chốt / Người chốt" — xử lý riêng
+ * tại chỗ dùng.
+ */
+const INSPECTION_STAMP_UPDATERS: Record<
+  Exclude<PcccTargetType, "BULK">,
+  (id: string, nguoiKiemTra: string, ngayKiemTra: Date) => Prisma.PrismaPromise<unknown>
+> = {
+  EXTINGUISHER: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccExtinguisher.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  CABINET: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccCabinet.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  FM200_PANEL: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccFm200Panel.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  ALARM_BUTTON: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccAlarmButton.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  VALVE: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccValve.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  EMERGENCY_LIGHT: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccEmergencyLight.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+  HOSE_REEL: (id, nguoiKiemTra, ngayKiemTra) => prisma.pcccHoseReel.update({ where: { id }, data: { nguoiKiemTra, ngayKiemTra } }),
+};
 
 function parseBody(body: unknown) {
   const { targetType, targetId } = (body ?? {}) as { targetType?: string; targetId?: string };
@@ -70,14 +110,13 @@ export async function POST(req: NextRequest) {
     // Ký kéo theo NGƯỜI và NGÀY kiểm tra, y như ký hàng loạt — ký mà không ghi hai cột
     // đó thì tháng sau không ai biết ai đi kiểm tra và kiểm tra hôm nào. Bảng bồn
     // Foam/CO2/Diesel gọi hai cột này là "Ngày chốt / Người chốt".
+    // Bảng tra thay cho chuỗi ternary lồng: tám mục tiêu ký thì chuỗi ternary vừa
+    // khó đọc vừa dễ nối nhầm nhánh. Bồn Foam/CO2/Diesel gọi hai cột này là
+    // "Ngày chốt / Người chốt", còn lại đều là "Ngày / Người kiểm tra".
     const stampInspector =
       targetType === "BULK"
         ? prisma.pcccBulk.update({ where: { id: targetId }, data: { nguoiChot: signerName, ngayChot: signedAt } })
-        : targetType === "FM200_PANEL"
-          ? prisma.pcccFm200Panel.update({ where: { id: targetId }, data: { nguoiKiemTra: signerName, ngayKiemTra: signedAt } })
-          : targetType === "CABINET"
-            ? prisma.pcccCabinet.update({ where: { id: targetId }, data: { nguoiKiemTra: signerName, ngayKiemTra: signedAt } })
-            : prisma.pcccExtinguisher.update({ where: { id: targetId }, data: { nguoiKiemTra: signerName, ngayKiemTra: signedAt } });
+        : INSPECTION_STAMP_UPDATERS[targetType](targetId, signerName, signedAt);
 
     const [, signature] = await prisma.$transaction([
       stampInspector,
