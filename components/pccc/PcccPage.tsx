@@ -94,7 +94,14 @@ import { PcccEmergencyLights } from "@/components/pccc/PcccEmergencyLights";
 import { PcccHoseReels } from "@/components/pccc/PcccHoseReels";
 import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 import { type SortState } from "@/components/pccc/pccc-table-card";
-import { CHUNG_LOAI_OPTIONS, applyTccToggle, resolveTinhTrang } from "@/lib/pccc-status";
+import {
+  CHUNG_LOAI_OPTIONS,
+  LIGHT_TINH_TRANG_OPTIONS,
+  VALVE_LOAI_OPTIONS,
+  VALVE_TINH_TRANG_OPTIONS,
+  applyTccToggle,
+  resolveTinhTrang,
+} from "@/lib/pccc-status";
 
 // Bảy tab: hai loại đèn cố ý GỘP làm một ("Đèn sự cố", đổi loại bằng nút gạt trong
 // tab) vì hình dạng dữ liệu giống hệt nhau — tách đôi chỉ làm thanh tab tràn trên
@@ -123,6 +130,14 @@ const TABS: { key: TabKey; label: string; icon: typeof FlameKindling }[] = [
 ];
 
 const TINH_TRANG_FILTERS = ["Khả dụng", "Cần theo dõi", "Bất khả dụng"];
+
+/**
+ * Bộ lọc tình trạng của bốn bảng đợt 2 — mỗi bảng một VỐN TỪ RIÊNG, cố ý không gộp:
+ * văn bản nghiệp vụ đặt tên khác nhau cho từng loại thiết bị (xem lib/pccc-status.ts).
+ * Nút nhấn dùng lại ba mức của tủ chữa cháy vì tình trạng cũng suy từ ô tích.
+ */
+const VAN_TINH_TRANG_FILTERS = [...VALVE_TINH_TRANG_OPTIONS];
+const DEN_TINH_TRANG_FILTERS = [...LIGHT_TINH_TRANG_OPTIONS];
 
 /** Nội dung hộp thoại kết quả — dùng chung cho "lưu sửa đổi" và "ký tên". */
 type ResultDialog = {
@@ -231,6 +246,7 @@ export default function PcccPage() {
   const [tinhTrang, setTinhTrang] = useState("ALL");
   const [chungLoai, setChungLoai] = useState("ALL");
   const [loaiTu, setLoaiTu] = useState("ALL");
+  const [loaiVan, setLoaiVan] = useState("ALL");
   const [quaHan, setQuaHan] = useState(false);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -316,7 +332,9 @@ export default function PcccPage() {
   const tccQuery = usePcccCabinets(tab === "TCC" ? listFilters : { ...baseFilters, page: 0 });
   const fcdQuery = usePcccBulks(tab === "FCD" ? baseFilters : { ...baseFilters, page: 0 });
   const nnbcQuery = usePcccAlarmButtons(tab === "NNBC" ? listFilters : { ...baseFilters, page: 0 });
-  const vanQuery = usePcccValves(tab === "VAN" ? listFilters : { ...baseFilters, page: 0 });
+  const vanQuery = usePcccValves(
+    tab === "VAN" ? { ...listFilters, loaiVan: loaiVan === "ALL" ? undefined : loaiVan } : { ...baseFilters, page: 0 }
+  );
   const denQuery = usePcccEmergencyLights(
     tab === "DEN" ? { ...listFilters, loai: lightLoai } : { ...baseFilters, page: 0, loai: lightLoai }
   );
@@ -851,6 +869,8 @@ export default function PcccPage() {
     tab === "BCC" && giamSat !== "ALL",
     tab === "BCC" && quaHan,
     tab === "TCC" && loaiTu !== "ALL",
+    (tab === "NNBC" || tab === "VAN" || tab === "DEN") && tinhTrang !== "ALL",
+    tab === "VAN" && loaiVan !== "ALL",
   ].filter(Boolean).length;
 
   /**
@@ -878,6 +898,7 @@ export default function PcccPage() {
     setQuaHan(false);
     setChungLoai("ALL");
     setLoaiTu("ALL");
+    setLoaiVan("ALL");
     setGiamSat("ALL");
     setQ("");
     setPage(1);
@@ -906,6 +927,7 @@ export default function PcccPage() {
     setTinhTrang("ALL");
     setGiamSat("ALL");
     setLoaiTu("ALL");
+    setLoaiVan("ALL");
     setQuaHan(false);
     setPage(1);
   }
@@ -931,7 +953,13 @@ export default function PcccPage() {
       ? bccQuery.data?.meta?.cuongViList
       : tab === "TCC"
         ? tccQuery.data?.meta?.cuongViList
-        : undefined) ??
+        : tab === "NNBC"
+          ? nnbcQuery.data?.meta?.cuongViList
+          : tab === "VAN"
+            ? vanQuery.data?.meta?.cuongViList
+            : tab === "DEN"
+              ? denQuery.data?.meta?.cuongViList
+              : undefined) ??
     summaryQuery.data?.meta?.cuongViList ??
     bccQuery.data?.meta?.cuongViList ??
     tccQuery.data?.meta?.cuongViList ??
@@ -953,7 +981,13 @@ export default function PcccPage() {
         ? tccQuery.data?.meta?.writeScope
         : tab === "FCD"
           ? fcdQuery.data?.meta?.writeScope
-          : undefined) ??
+          : tab === "NNBC"
+            ? nnbcQuery.data?.meta?.writeScope
+            : tab === "VAN"
+              ? vanQuery.data?.meta?.writeScope
+              : tab === "DEN"
+                ? denQuery.data?.meta?.writeScope
+                : undefined) ??
     bccQuery.data?.meta?.writeScope ??
     tccQuery.data?.meta?.writeScope ??
     fcdQuery.data?.meta?.writeScope;
@@ -1395,6 +1429,40 @@ export default function PcccPage() {
                         />
                         Chỉ quá hạn thay thế
                       </label>
+                    </>
+                  )}
+
+                  {(tab === "NNBC" || tab === "VAN" || tab === "DEN") && (
+                    <>
+                      {tab === "VAN" && (
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs font-semibold text-slate-600">Loại van</Label>
+                          <SelectBox
+                            value={loaiVan}
+                            onChange={(v) => {
+                              setLoaiVan(v);
+                              setPage(1);
+                            }}
+                            options={[...VALVE_LOAI_OPTIONS]}
+                            allLabel="Tất cả loại van"
+                          />
+                        </div>
+                      )}
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs font-semibold text-slate-600">Tình trạng</Label>
+                        {/* Mỗi bảng một vốn từ riêng — xem ghi chú ở VAN_TINH_TRANG_FILTERS. */}
+                        <SelectBox
+                          value={tinhTrang}
+                          onChange={(v) => {
+                            setTinhTrang(v);
+                            setPage(1);
+                          }}
+                          options={
+                            tab === "VAN" ? VAN_TINH_TRANG_FILTERS : tab === "DEN" ? DEN_TINH_TRANG_FILTERS : TINH_TRANG_FILTERS
+                          }
+                          allLabel="Tất cả tình trạng"
+                        />
+                      </div>
                     </>
                   )}
 

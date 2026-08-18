@@ -105,9 +105,35 @@ function makeRowKeyer() {
   };
 }
 
+/**
+ * SỬA TAY theo chốt nghiệp vụ, áp TRƯỚC khi chuẩn hoá — dành cho các ô mà nguồn Excel
+ * ghi sai/thiếu và sẽ còn ghi sai ở những lần xuất sau.
+ *
+ * Không có bảng này thì mỗi lần chạy lại script là một lần xoá mất phần đã sửa trên web:
+ * import ghi đè trọn cột cương vị theo nguồn.
+ *
+ * Khoá là giá trị NGUYÊN VĂN của nguồn; chỉ áp cho đúng mã thiết bị đã liệt kê, không
+ * đổi đại trà — "PX Hóa" ở chỗ khác (nếu sau này có) vẫn phải được xem xét riêng.
+ */
+const CUONG_VI_OVERRIDES: { maKks: string; from: string; to: string; note: string }[] = [
+  {
+    maKks: "α1N8L12",
+    from: "PX Hóa",
+    to: "ESP S1",
+    note: "Đèn EXIT ở nhà điều khiển ESP — Phân xưởng Hóa không phải cương vị của Vận hành 1 (chốt 2026-08-18)",
+  },
+];
+
+function applyOverride(row: DemoRow): string | null {
+  const raw = str(row.cuongVi);
+  const maKks = str(row.maKks);
+  const hit = CUONG_VI_OVERRIDES.find((o) => o.maKks === maKks && o.from === raw);
+  return hit ? hit.to : raw;
+}
+
 /** Chuẩn hoá cặp cương vị + cấp giám sát về danh mục chức danh chung. */
 function positions(row: DemoRow) {
-  const cv = normalizePosition(str(row.cuongVi));
+  const cv = normalizePosition(applyOverride(row));
   const gs = normalizePosition(str(row.nguoiGiamSat));
   return {
     cuongVi: cv.label,
@@ -115,7 +141,7 @@ function positions(row: DemoRow) {
     machine: cv.machine,
     nguoiGiamSat: gs.label,
     nguoiGiamSatCode: gs.code,
-    unmatched: cv.unmatched ? str(row.cuongVi) : null,
+    unmatched: cv.unmatched ? applyOverride(row) : null,
   };
 }
 
