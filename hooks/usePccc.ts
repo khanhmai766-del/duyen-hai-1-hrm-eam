@@ -3,7 +3,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutate } from "@/lib/fetcher";
 
-export type PcccTargetType = "EXTINGUISHER" | "CABINET" | "BULK" | "FM200_PANEL";
+export type PcccTargetType =
+  | "EXTINGUISHER"
+  | "CABINET"
+  | "BULK"
+  | "FM200_PANEL"
+  | "ALARM_BUTTON"
+  | "VALVE"
+  | "EMERGENCY_LIGHT"
+  | "HOSE_REEL";
 
 export interface PcccSignature {
   targetId?: string;
@@ -350,7 +358,11 @@ function useInvalidatePccc() {
   return () => {
     // "pccc-book-status" phải nằm trong danh sách: ký/bỏ ký xong là điều kiện xuất sổ
     // đổi ngay, không đợi người dùng tải lại trang mới thấy nút.
-    for (const key of ["pccc-summary", "pccc-extinguishers", "pccc-cabinets", "pccc-bulks", "pccc-periods", "pccc-book-status"]) {
+    const keys = [
+      "pccc-summary", "pccc-extinguishers", "pccc-cabinets", "pccc-bulks", "pccc-periods", "pccc-book-status",
+      "pccc-alarm-buttons", "pccc-valves", "pccc-emergency-lights", "pccc-hose-reels",
+    ];
+    for (const key of keys) {
       qc.invalidateQueries({ queryKey: [key] });
     }
   };
@@ -361,6 +373,10 @@ const PATCH_URL: Record<PcccTargetType, string> = {
   CABINET: "/api/pccc/cabinets",
   BULK: "/api/pccc/bulks",
   FM200_PANEL: "/api/pccc/fm200",
+  ALARM_BUTTON: "/api/pccc/alarm-buttons",
+  VALVE: "/api/pccc/valves",
+  EMERGENCY_LIGHT: "/api/pccc/emergency-lights",
+  HOSE_REEL: "/api/pccc/hose-reels",
 };
 
 export function usePcccUpdate(targetType: PcccTargetType) {
@@ -546,6 +562,155 @@ export function usePcccTogglePeriodClose() {
   const invalidate = useInvalidatePccc();
   return useMutation({
     mutationFn: (id: string) => apiMutate<PcccPeriod>(`/api/pccc/periods/${id}/close`, "POST"),
+    onSuccess: invalidate,
+  });
+}
+
+// ===========================================================================
+// BỐN NHÓM THIẾT BỊ ĐỢT 2 — nút nhấn báo cháy, van chữa cháy, đèn EXIT / đèn
+// chiếu sáng sự cố, cuộn vòi chữa cháy.
+//
+// Hai kiểu dữ liệu, dùng lại đúng hai khuôn đã có ở trên:
+//   - `AlarmButtonRow`/`HoseReelRow` mang `components` như `CabinetRow`;
+//   - `ValveRow`/`EmergencyLightRow` chỉ một ô tình trạng như `ExtinguisherRow`.
+// ===========================================================================
+
+export interface AlarmButtonRow {
+  id: string;
+  stt: number | null;
+  rowKey: string;
+  maKks: string;
+  tenKhuVuc: string | null;
+  viTri: string | null;
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
+  nguoiGiamSat: string | null;
+  nguoiGiamSatCode: string | null;
+  /** Cột "Ghi chú khác" — nhật ký kiểm tra nhiều đợt, giữ nguyên văn, thường rất dài. */
+  khac: string | null;
+  ngayKiemTra: string | null;
+  nguoiKiemTra: string | null;
+  tinhTrangTongThe: string | null;
+  components: CabinetComponent[];
+  updatedAt: string;
+  signature: PcccSignature | null;
+}
+
+export interface ValveRow {
+  id: string;
+  stt: number | null;
+  rowKey: string;
+  tenVan: string;
+  loaiVan: string;
+  maKks: string;
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
+  nguoiGiamSat: string | null;
+  nguoiGiamSatCode: string | null;
+  viTri: string | null;
+  tinhTrang: string | null;
+  moTa: string | null;
+  soYcsc: string | null;
+  ngayKiemTra: string | null;
+  nguoiKiemTra: string | null;
+  updatedAt: string;
+  signature: PcccSignature | null;
+}
+
+export interface EmergencyLightRow {
+  id: string;
+  loai: string;
+  stt: number | null;
+  rowKey: string;
+  maKks: string;
+  /** Ba cột cấp KHU VỰC — dùng chung cho nhiều đèn, không sửa lẻ từng dòng. */
+  tenKhuVuc: string | null;
+  maBanVe: string | null;
+  soLuongKhuVuc: number | null;
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
+  nguoiGiamSat: string | null;
+  nguoiGiamSatCode: string | null;
+  tinhTrang: string | null;
+  /** Nguyên văn ô "Tháng MM/YYYY" mới nhất của sheet nguồn, có cả số phiếu YCSC. */
+  ketQuaTest: string | null;
+  ghiChu: string | null;
+  ngayKiemTra: string | null;
+  nguoiKiemTra: string | null;
+  updatedAt: string;
+  signature: PcccSignature | null;
+}
+
+export interface HoseReelRow {
+  id: string;
+  stt: number | null;
+  ma: string;
+  ten: string | null;
+  viTri: string | null;
+  cuongVi: string | null;
+  cuongViCode: string | null;
+  machine: string;
+  soYcsc: string | null;
+  ngayKiemTra: string | null;
+  nguoiKiemTra: string | null;
+  ghiChu: string | null;
+  tinhTrangTongThe: string | null;
+  components: CabinetComponent[];
+  /** Tủ chữa cháy cha — hiển thị để biết cuộn vòi thuộc tủ nào. */
+  cabinet: { id: string; ma: string; ten: string | null };
+  updatedAt: string;
+  signature: PcccSignature | null;
+}
+
+export function usePcccAlarmButtons(filters: PcccFilters) {
+  return useQuery({
+    queryKey: ["pccc-alarm-buttons", filters],
+    queryFn: () => apiGet<AlarmButtonRow[]>(`/api/pccc/alarm-buttons${qs(filters)}`),
+  });
+}
+
+export function usePcccValves(filters: PcccFilters & { loaiVan?: string }) {
+  return useQuery({
+    queryKey: ["pccc-valves", filters],
+    queryFn: () => apiGet<ValveRow[]>(`/api/pccc/valves${qs(filters)}`),
+  });
+}
+
+/**
+ * `loai` BẮT BUỘC (EXIT | CSSC): hai loại đèn nằm chung một bảng, thiếu tham số này
+ * thì server trả lỗi chứ không âm thầm trộn hai danh sách.
+ */
+export function usePcccEmergencyLights(filters: PcccFilters & { loai: "EXIT" | "CSSC" }) {
+  return useQuery({
+    queryKey: ["pccc-emergency-lights", filters],
+    queryFn: () => apiGet<EmergencyLightRow[]>(`/api/pccc/emergency-lights${qs(filters)}`),
+  });
+}
+
+export function usePcccHoseReels(filters: PcccFilters & { cabinetId?: string }) {
+  return useQuery({
+    queryKey: ["pccc-hose-reels", filters],
+    queryFn: () => apiGet<HoseReelRow[]>(`/api/pccc/hose-reels${qs(filters)}`),
+  });
+}
+
+/** Thêm một cuộn vòi vào tủ đã có. Bảng duy nhất của module cho thêm dòng bằng tay. */
+export function usePcccCreateHoseReel() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (body: { cabinetId: string; ma: string; ten?: string }) =>
+      apiMutate<HoseReelRow>("/api/pccc/hose-reels", "POST", body),
+    onSuccess: invalidate,
+  });
+}
+
+export function usePcccDeleteHoseReel() {
+  const invalidate = useInvalidatePccc();
+  return useMutation({
+    mutationFn: (id: string) => apiMutate<{ id: string }>(`/api/pccc/hose-reels/${id}`, "DELETE"),
     onSuccess: invalidate,
   });
 }

@@ -14,7 +14,10 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Archive,
+  BellRing,
   CalendarCheck,
+  Gauge,
+  Lightbulb,
   Download,
   Factory,
   FileSpreadsheet,
@@ -65,6 +68,14 @@ import {
   usePcccBulkSaveExtinguishers,
   usePcccBulkSaveCabinets,
   usePcccUpdate,
+  usePcccAlarmButtons,
+  usePcccValves,
+  usePcccEmergencyLights,
+  usePcccHoseReels,
+  usePcccCreateHoseReel,
+  usePcccDeleteHoseReel,
+  type AlarmButtonRow,
+  type HoseReelRow,
   type CabinetRow,
   type PcccClockMeta,
   type PcccBulkSignPreview,
@@ -77,11 +88,19 @@ import { PcccBulks } from "@/components/pccc/PcccBulks";
 import { PcccCabinets } from "@/components/pccc/PcccCabinets";
 import { PcccExtinguishers } from "@/components/pccc/PcccExtinguishers";
 import { PcccOverview, type PcccOverviewDrill } from "@/components/pccc/PcccOverview";
+import { PcccAlarmButtons } from "@/components/pccc/PcccAlarmButtons";
+import { PcccValves } from "@/components/pccc/PcccValves";
+import { PcccEmergencyLights } from "@/components/pccc/PcccEmergencyLights";
+import { PcccHoseReels } from "@/components/pccc/PcccHoseReels";
 import { MACHINE_OPTIONS } from "@/components/pccc/pccc-shared";
 import { type SortState } from "@/components/pccc/pccc-table-card";
 import { CHUNG_LOAI_OPTIONS, applyTccToggle, resolveTinhTrang } from "@/lib/pccc-status";
 
-type TabKey = "OVERVIEW" | "BCC" | "TCC" | "FCD";
+// Bảy tab: hai loại đèn cố ý GỘP làm một ("Đèn sự cố", đổi loại bằng nút gạt trong
+// tab) vì hình dạng dữ liệu giống hệt nhau — tách đôi chỉ làm thanh tab tràn trên
+// màn hình hẹp. Cuộn vòi không có tab riêng: nó là bảng CON nằm dưới tab Tủ chữa cháy,
+// đúng như bản demo.
+type TabKey = "OVERVIEW" | "BCC" | "TCC" | "FCD" | "NNBC" | "VAN" | "DEN";
 
 /**
  * Kỳ của tháng CHƯA TỚI, so theo mốc ngày của server. So bằng chuỗi `<năm><tháng>` cho
@@ -98,6 +117,9 @@ const TABS: { key: TabKey; label: string; icon: typeof FlameKindling }[] = [
   { key: "BCC", label: "Bình chữa cháy", icon: FlameKindling },
   { key: "TCC", label: "Tủ chữa cháy", icon: Warehouse },
   { key: "FCD", label: "Foam · CO2 · Diesel · FM200", icon: FileSpreadsheet },
+  { key: "NNBC", label: "Nút nhấn báo cháy", icon: BellRing },
+  { key: "VAN", label: "Van chữa cháy", icon: Gauge },
+  { key: "DEN", label: "Đèn sự cố", icon: Lightbulb },
 ];
 
 const TINH_TRANG_FILTERS = ["Khả dụng", "Cần theo dõi", "Bất khả dụng"];
@@ -229,15 +251,25 @@ export default function PcccPage() {
   // gộp chung một bản nháp thì đổi tab là gửi sai bảng.
   type Draft = Record<string, Record<string, unknown>>;
   const [editing, setEditing] = useState(false);
-  const [drafts, setDrafts] = useState<{ BCC: Draft; TCC: Draft; FCD: Draft }>({ BCC: {}, TCC: {}, FCD: {} });
+  // CVCC có ô nháp RIÊNG dù không có tab riêng: tab Tủ chữa cháy hiện hai bảng, gộp
+  // chung một ô nháp thì lưu sẽ gửi dòng cuộn vòi sang endpoint của tủ.
+  type DraftKey = "BCC" | "TCC" | "FCD" | "NNBC" | "VAN" | "DEN" | "CVCC";
+  const [drafts, setDrafts] = useState<Record<DraftKey, Draft>>({
+    BCC: {}, TCC: {}, FCD: {}, NNBC: {}, VAN: {}, DEN: {}, CVCC: {},
+  });
   const [baselines, setBaselines] = useState<{ BCC: Record<string, string>; TCC: Record<string, string> }>({
     BCC: {},
     TCC: {},
   });
+  /** Loại đèn đang xem trong tab "Đèn sự cố". */
+  const [lightLoai, setLightLoai] = useState<"EXIT" | "CSSC">("EXIT");
   /** Tab đang có thể bật chế độ sửa. Chỉ tab Tổng quan là không sửa được. */
-  const editableTab = tab === "BCC" || tab === "TCC" || tab === "FCD" ? tab : null;
+  const editableTab =
+    tab === "BCC" || tab === "TCC" || tab === "FCD" || tab === "NNBC" || tab === "VAN" || tab === "DEN" ? tab : null;
   const draft = editableTab ? drafts[editableTab] : {};
-  const dirtyCount = Object.keys(draft).length;
+  // Tab Tủ chữa cháy đếm cả sửa đổi của bảng con cuộn vòi — nếu không, bấm Lưu khi
+  // chỉ sửa cuộn vòi sẽ bị coi là "không có gì thay đổi".
+  const dirtyCount = Object.keys(draft).length + (tab === "TCC" ? Object.keys(drafts.CVCC).length : 0);
 
   const periodsQuery = usePcccPeriods();
   const periods = periodsQuery.data?.data ?? [];
@@ -283,6 +315,13 @@ export default function PcccPage() {
   const bccQuery = usePcccExtinguishers(tab === "BCC" ? listFilters : { ...baseFilters, page: 0 });
   const tccQuery = usePcccCabinets(tab === "TCC" ? listFilters : { ...baseFilters, page: 0 });
   const fcdQuery = usePcccBulks(tab === "FCD" ? baseFilters : { ...baseFilters, page: 0 });
+  const nnbcQuery = usePcccAlarmButtons(tab === "NNBC" ? listFilters : { ...baseFilters, page: 0 });
+  const vanQuery = usePcccValves(tab === "VAN" ? listFilters : { ...baseFilters, page: 0 });
+  const denQuery = usePcccEmergencyLights(
+    tab === "DEN" ? { ...listFilters, loai: lightLoai } : { ...baseFilters, page: 0, loai: lightLoai }
+  );
+  // Cuộn vòi tải cùng lúc với tủ chữa cháy (bảng con của cùng một tab).
+  const cvccQuery = usePcccHoseReels(tab === "TCC" ? { ...listFilters, pageSize: 200 } : { ...baseFilters, page: 0 });
 
   /**
    * Phạm vi XEM (quy tắc 4 — xem lib/pccc-service.ts). SERVER đã cắt dữ liệu rồi; cái
@@ -301,7 +340,13 @@ export default function PcccPage() {
         ? tccQuery.data?.meta?.viewScope
         : tab === "FCD"
           ? fcdQuery.data?.meta?.viewScope
-          : undefined) ??
+          : tab === "NNBC"
+            ? nnbcQuery.data?.meta?.viewScope
+            : tab === "VAN"
+              ? vanQuery.data?.meta?.viewScope
+              : tab === "DEN"
+                ? denQuery.data?.meta?.viewScope
+                : undefined) ??
     summaryQuery.data?.meta?.viewScope ??
     bccQuery.data?.meta?.viewScope ??
     tccQuery.data?.meta?.viewScope ??
@@ -313,6 +358,15 @@ export default function PcccPage() {
   // Tab FCD dùng lại hai route PATCH từng mục (xem saveFcdEdits).
   const updateBulk = usePcccUpdate("BULK");
   const updatePanel = usePcccUpdate("FM200_PANEL");
+  // Bốn bảng đợt 2 chưa có route lưu-một-lượt riêng nên lưu TỪNG DÒNG bằng route
+  // PATCH sẵn có, giống cách tab Foam·CO2·Diesel·FM200 vẫn làm. Số dòng sửa mỗi lượt
+  // thực tế chỉ vài chục nên chưa cần thêm endpoint bulk.
+  const updateAlarmButton = usePcccUpdate("ALARM_BUTTON");
+  const updateValve = usePcccUpdate("VALVE");
+  const updateLight = usePcccUpdate("EMERGENCY_LIGHT");
+  const updateHoseReel = usePcccUpdate("HOSE_REEL");
+  const createHoseReel = usePcccCreateHoseReel();
+  const deleteHoseReel = usePcccDeleteHoseReel();
 
   // Gom sửa đổi trong bộ nhớ nên PHẢI cảnh báo trước khi mất: đóng tab / tải lại trang.
   useEffect(() => {
@@ -334,10 +388,17 @@ export default function PcccPage() {
       setEditing(true);
       return;
     }
+    // Bốn bảng đợt 2 lưu TỪNG DÒNG nên không cần mốc updatedAt (mốc đó chỉ dùng cho
+    // route lưu-một-lượt, để phát hiện người khác vừa sửa cùng dòng).
+    if (editableTab === "NNBC" || editableTab === "VAN" || editableTab === "DEN") {
+      setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
+      setEditing(true);
+      return;
+    }
     const rows: { id: string; updatedAt: string }[] =
       editableTab === "BCC" ? (bccQuery.data?.data ?? []) : (tccQuery.data?.data ?? []);
     setBaselines((prev) => ({ ...prev, [editableTab]: Object.fromEntries(rows.map((r) => [r.id, r.updatedAt])) }));
-    setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
+    setDrafts((prev) => ({ ...prev, [editableTab]: {}, ...(editableTab === "TCC" ? { CVCC: {} } : {}) }));
     setEditing(true);
   }
 
@@ -347,7 +408,7 @@ export default function PcccPage() {
     setEditing(false);
   }
 
-  function patchDraft(tabKey: "BCC" | "TCC", rowId: string, apply: (rowDraft: Record<string, unknown>) => void) {
+  function patchDraft(tabKey: DraftKey, rowId: string, apply: (rowDraft: Record<string, unknown>) => void) {
     setDrafts((prev) => {
       const rowDraft = { ...(prev[tabKey][rowId] ?? {}) };
       apply(rowDraft);
@@ -371,6 +432,32 @@ export default function PcccPage() {
   /** Ghi 1 ô của tab FCD vào bản nháp. `key` là `bulk:<id>` hoặc `panel:<id>`. */
   function onFcdDraftChange(key: string, field: string, value: unknown) {
     setDrafts((prev) => ({ ...prev, FCD: { ...prev.FCD, [key]: { ...(prev.FCD[key] ?? {}), [field]: value } } }));
+  }
+
+  /** Ghi một ô vào bản nháp của bảng bất kỳ trong bốn bảng đợt 2. */
+  function draftChanger(key: DraftKey) {
+    return (rowId: string, field: string, value: unknown) =>
+      patchDraft(key, rowId, (rowDraft) => {
+        rowDraft[field] = value;
+      });
+  }
+
+  /**
+   * Bấm một ô tích của bảng có nhóm linh kiện (nút nhấn, cuộn vòi). Áp quy tắc
+   * "ô đầu ↔ ô cuối loại trừ nhau" NGAY trong bản nháp để người dùng thấy ô đối lập
+   * tự bỏ tích, không phải chờ lưu — y như tủ chữa cháy.
+   */
+  function componentToggler(key: DraftKey) {
+    return (row: { id: string; components: CabinetRow["components"] }, groupLabel: string, status: string, nextChecked: boolean) =>
+      patchDraft(key, row.id, (rowDraft) => {
+        const effective = row.components.map((c) => {
+          const k = `comp:${c.groupLabel}|${c.status}`;
+          return { ...c, checked: k in rowDraft ? Boolean(rowDraft[k]) : c.checked };
+        });
+        for (const change of applyTccToggle(effective, groupLabel, status, nextChecked)) {
+          rowDraft[`comp:${change.groupLabel}|${change.status}`] = change.checked;
+        }
+      });
   }
 
   function onTccDraftChange(rowId: string, field: string, value: unknown) {
@@ -452,6 +539,62 @@ export default function PcccPage() {
     setEditing(false);
   }
 
+  /**
+   * Lưu bản nháp của các bảng KHÔNG có route lưu-một-lượt: gọi PATCH lần lượt từng
+   * dòng. Chạy TUẦN TỰ chứ không Promise.all — mỗi PATCH đều đọc lại dòng, tính lại
+   * tình trạng tổng thể và xoá chữ ký, bắn song song vài chục request vào cùng một kỳ
+   * chỉ tổ làm server tranh nhau ghi.
+   *
+   * Lỗi ở dòng nào thì DỪNG và giữ nguyên phần chưa lưu trong bản nháp, để người dùng
+   * sửa rồi bấm lại — không âm thầm bỏ qua dòng hỏng.
+   */
+  async function saveRowByRow(
+    key: DraftKey,
+    mutate: (vars: { id: string; patch: Record<string, unknown> }) => Promise<unknown>,
+    label: string
+  ) {
+    const entries = Object.entries(drafts[key]);
+    if (entries.length === 0) return true;
+    const saved: string[] = [];
+    for (const [id, rowDraft] of entries) {
+      const patch: Record<string, unknown> = {};
+      const components: { groupLabel: string; status: string; checked: boolean }[] = [];
+      for (const [field, value] of Object.entries(rowDraft)) {
+        if (field.startsWith("comp:")) {
+          const [groupLabel, status] = field.slice(5).split("|");
+          components.push({ groupLabel, status, checked: Boolean(value) });
+        } else {
+          patch[field] = value;
+        }
+      }
+      try {
+        await mutate({ id, patch: components.length ? { ...patch, components } : patch });
+        saved.push(id);
+      } catch (e) {
+        // Bỏ các dòng đã lưu xong khỏi bản nháp, giữ lại phần còn lại.
+        setDrafts((prev) => {
+          const rest = { ...prev[key] };
+          for (const okId of saved) delete rest[okId];
+          return { ...prev, [key]: rest };
+        });
+        toast.error(
+          `Đã lưu ${saved.length}/${entries.length} dòng ${label} thì gặp lỗi: ${(e as Error).message}`,
+          { duration: 10_000 }
+        );
+        return false;
+      }
+    }
+    setDrafts((prev) => ({ ...prev, [key]: {} }));
+    return true;
+  }
+
+  /** Ba bảng đợt 2 có tab riêng — cùng một luồng lưu, chỉ khác route và nhãn. */
+  const ROW_BY_ROW_TABS = {
+    NNBC: { label: "nút nhấn báo cháy", table: "Nút nhấn báo cháy" },
+    VAN: { label: "van chữa cháy", table: "Van chữa cháy" },
+    DEN: { label: "đèn sự cố", table: "Đèn sự cố" },
+  } as const;
+
   function saveEdits() {
     setSaveConfirmOpen(false);
     if (!editableTab) return;
@@ -463,6 +606,33 @@ export default function PcccPage() {
       void saveFcdEdits();
       return;
     }
+
+    if (editableTab === "NNBC" || editableTab === "VAN" || editableTab === "DEN") {
+      const meta = ROW_BY_ROW_TABS[editableTab];
+      const mutate =
+        editableTab === "NNBC"
+          ? updateAlarmButton.mutateAsync
+          : editableTab === "VAN"
+            ? updateValve.mutateAsync
+            : updateLight.mutateAsync;
+      const count = Object.keys(drafts[editableTab]).length;
+      void saveRowByRow(editableTab, mutate, meta.label).then((okAll) => {
+        if (!okAll) return;
+        setResultDialog({
+          title: "Đã lưu thay đổi",
+          rows: [
+            { label: "Bảng", value: meta.table },
+            { label: "Kỳ kiểm tra", value: period.label },
+            { label: "Số dòng đã lưu", value: `${count} dòng`, strong: true },
+          ],
+          note: "Chữ ký và dấu kiểm tra của các dòng vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
+          resign: true,
+        });
+        setEditing(false);
+      });
+      return;
+    }
+
     const baseline = baselines[editableTab];
 
     if (editableTab === "TCC") {
@@ -503,6 +673,8 @@ export default function PcccPage() {
             resign: true,
           });
           setDrafts((prev) => ({ ...prev, TCC: {} }));
+          // Bảng con cuộn vòi có endpoint riêng nên lưu tiếp ở đây, sau khi tủ đã lưu xong.
+          void saveRowByRow("CVCC", updateHoseReel.mutateAsync, "cuộn vòi");
           setEditing(false);
         },
         onError: (e: Error) => toast.error(e.message),
@@ -1560,7 +1732,177 @@ export default function PcccPage() {
               setPage(1);
             }}
           />
+
+          {/* Danh mục CON: cuộn vòi chữa cháy. Dùng chung bộ lọc của bảng tủ phía trên
+              (đúng như bản demo) nên không có thanh lọc riêng — chỉ hiện cuộn vòi của
+              những tủ đang lọc thấy. */}
+          <div className="mt-5">
+            <div className="mb-2 flex items-baseline gap-2">
+              <h3 className="text-[13px] font-semibold uppercase tracking-wide text-[#1E3A5F]">
+                Danh mục con: Cuộn vòi chữa cháy
+              </h3>
+              <span className="text-[12px] text-slate-500">{cvccQuery.data?.meta?.total ?? 0} cuộn vòi</span>
+            </div>
+            <PcccHoseReels
+              rows={cvccQuery.data?.data ?? []}
+              groups={cvccQuery.data?.meta?.groups ?? []}
+              cuongViList={cuongViList}
+              canManage={!readOnly}
+              writeScope={cvccQuery.data?.meta?.writeScope}
+              loading={cvccQuery.isFetching}
+              editing={editing}
+              draft={drafts.CVCC}
+              onDraftChange={draftChanger("CVCC")}
+              onToggleComponent={componentToggler("CVCC")}
+              onDelete={(row: HoseReelRow) => {
+                // Xoá ghi NGAY, không chờ bấm Lưu: đây là thay đổi CẤU TRÚC chứ không
+                // phải sửa một ô — nên hỏi lại rồi làm dứt điểm.
+                if (!window.confirm(`Xoá cuộn vòi ${row.ma}? Thao tác này không hoàn tác được.`)) return;
+                deleteHoseReel.mutate(row.id, {
+                  onSuccess: () => toast.success(`Đã xoá cuộn vòi ${row.ma}`),
+                  onError: (e: Error) => toast.error(e.message),
+                });
+              }}
+              sort={sort}
+              onSort={toggleSort}
+              page={cvccQuery.data?.meta?.page ?? 1}
+              pageCount={cvccQuery.data?.meta?.pageCount ?? 1}
+              pageSize={200}
+              total={cvccQuery.data?.meta?.total ?? 0}
+              filtered={hasActiveFilter}
+              search={q}
+              onPageChange={setPage}
+              onPageSizeChange={() => {}}
+              onSearchChange={(v) => {
+                setQ(v);
+                setPage(1);
+              }}
+            />
+          </div>
         </>
+      )}
+
+      {tab === "NNBC" && (
+        <PcccAlarmButtons
+          rows={nnbcQuery.data?.data ?? []}
+          groups={nnbcQuery.data?.meta?.groups ?? []}
+          draft={drafts.NNBC}
+          onDraftChange={draftChanger("NNBC")}
+          onToggleComponent={componentToggler("NNBC")}
+          toolbarExtra={scopeStatus}
+          cuongViList={cuongViList}
+          canManage={!readOnly}
+          writeScope={writeScope}
+          loading={nnbcQuery.isFetching}
+          editing={editing}
+          sort={sort}
+          onSort={toggleSort}
+          page={nnbcQuery.data?.meta?.page ?? 1}
+          pageCount={nnbcQuery.data?.meta?.pageCount ?? 1}
+          pageSize={pageSize}
+          total={nnbcQuery.data?.meta?.total ?? 0}
+          filtered={hasActiveFilter}
+          search={q}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+          onSearchChange={(v) => {
+            setQ(v);
+            setPage(1);
+          }}
+        />
+      )}
+
+      {tab === "VAN" && (
+        <PcccValves
+          rows={vanQuery.data?.data ?? []}
+          draft={drafts.VAN}
+          onDraftChange={draftChanger("VAN")}
+          toolbarExtra={scopeStatus}
+          cuongViList={cuongViList}
+          canManage={!readOnly}
+          writeScope={writeScope}
+          loading={vanQuery.isFetching}
+          editing={editing}
+          sort={sort}
+          onSort={toggleSort}
+          page={vanQuery.data?.meta?.page ?? 1}
+          pageCount={vanQuery.data?.meta?.pageCount ?? 1}
+          pageSize={pageSize}
+          total={vanQuery.data?.meta?.total ?? 0}
+          filtered={hasActiveFilter}
+          search={q}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+          onSearchChange={(v) => {
+            setQ(v);
+            setPage(1);
+          }}
+        />
+      )}
+
+      {tab === "DEN" && (
+        <PcccEmergencyLights
+          rows={denQuery.data?.data ?? []}
+          draft={drafts.DEN}
+          onDraftChange={draftChanger("DEN")}
+          toolbarExtra={
+            <>
+              {/* Hai loại đèn dùng chung một bảng — đổi loại ngay tại đây thay vì tách
+                  thành hai tab, xem ghi chú ở TabKey. */}
+              <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+                {([
+                  ["EXIT", "Đèn EXIT"],
+                  ["CSSC", "Đèn chiếu sáng sự cố"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      if (value === lightLoai) return;
+                      setLightLoai(value);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      "h-8 px-3 text-[12.5px] font-medium transition",
+                      value === lightLoai ? "bg-[#1E3A5F] text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {scopeStatus}
+            </>
+          }
+          cuongViList={cuongViList}
+          canManage={!readOnly}
+          writeScope={writeScope}
+          loading={denQuery.isFetching}
+          editing={editing}
+          sort={sort}
+          onSort={toggleSort}
+          page={denQuery.data?.meta?.page ?? 1}
+          pageCount={denQuery.data?.meta?.pageCount ?? 1}
+          pageSize={pageSize}
+          total={denQuery.data?.meta?.total ?? 0}
+          filtered={hasActiveFilter}
+          search={q}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+          onSearchChange={(v) => {
+            setQ(v);
+            setPage(1);
+          }}
+        />
       )}
 
       {tab === "FCD" &&

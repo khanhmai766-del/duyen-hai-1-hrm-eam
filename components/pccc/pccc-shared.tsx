@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, PenLine, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { toneOf, type PcccTone } from "@/lib/pccc-status";
+import { round2ToneOf, type PcccTone } from "@/lib/pccc-status";
 
 /**
  * Ô bị khoá theo phân quyền cương vị: bấm vào thì HIỆN POPUP nói rõ lý do. Trước đây ô
@@ -42,7 +42,9 @@ export function fmtPercent(value: number | null | undefined, digits = 1) {
  * tái xuất cho gọn khi import trong components.
  */
 export type StatusTone = PcccTone;
-export const statusTone = toneOf;
+// Dùng bản MỞ RỘNG: nó tra bảng màu riêng của bốn nhóm đợt 2 trước, không khớp thì
+// rơi về bảng màu gốc — nên mọi nhãn cũ của BCC/TCC/FCD giữ nguyên màu như trước.
+export const statusTone = round2ToneOf;
 
 const TONE_CLASS: Record<StatusTone, string> = {
   ok: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -335,7 +337,7 @@ export function ToneSelectCell({
   lockedReason?: string;
   onChange: (next: string) => void;
 }) {
-  const tone = toneOf(value);
+  const tone = statusTone(value);
   const box: Record<StatusTone, string> = {
     ok: "border-emerald-300 bg-emerald-50 text-emerald-800",
     watch: "border-amber-300 bg-amber-50 text-amber-800",
