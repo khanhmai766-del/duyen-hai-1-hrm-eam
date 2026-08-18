@@ -43,7 +43,7 @@ import {
   type ErpStockUpdateInput,
   type QlvtSyncStatus,
 } from "@/hooks/useOilGrouping";
-import { displayErpCode, STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-sync";
+import { displayErpCode, STANDALONE_GROUP_PREFIX } from "@/lib/oil-grouping-shared";
 import { normalizeText } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
