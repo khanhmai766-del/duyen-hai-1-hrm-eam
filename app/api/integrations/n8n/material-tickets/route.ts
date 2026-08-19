@@ -65,10 +65,13 @@ export async function GET(req: NextRequest) {
       // Truy vấn vẫn phải theo updatedAt để cursor/watermark không bỏ sót dữ liệu.
       // Riêng bố cục V2, sắp lại kết quả trước khi map để lần đồng bộ đầu tiên
       // ghi các phiếu lên Sheet đúng thứ tự STT của website. sequenceMonth đứng
-      // trước để STT 1 của tháng mới không chen lên trên dữ liệu tháng cũ.
+      // trước để STT 1 của tháng mới không chen lên trên dữ liệu tháng cũ, rồi tới
+      // sequenceScope vì mỗi tháng có HAI dãy song song — thiếu nó thì VT-1 và HC-1
+      // xen kẽ nhau, đọc trên Sheet không ra dãy nào cả.
       const outputPage = layout === "vh1_v2"
         ? [...page].sort((left, right) => {
             return left.sequenceMonth.localeCompare(right.sequenceMonth)
+              || left.sequenceScope.localeCompare(right.sequenceScope)
               || left.sequenceNumber - right.sequenceNumber
               || left.id.localeCompare(right.id);
           })

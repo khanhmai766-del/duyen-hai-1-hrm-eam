@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "crypto";
+import { materialTicketNumber } from "@/lib/material-ticket-sequence";
 
 export const MATERIAL_TICKET_SYNC_DEFAULT_LIMIT = 100;
 export const MATERIAL_TICKET_SYNC_MAX_LIMIT = 200;
@@ -29,6 +30,7 @@ export type MaterialTicketForN8nSync = {
   id: string;
   sequenceMonth: string;
   sequenceNumber: number;
+  sequenceScope: string;
   type: string;
   unit: string;
   status: string;
@@ -246,7 +248,7 @@ export function materialTicketRowsForN8n(ticket: MaterialTicketForN8nSync) {
       sourceUpdatedAt: ticket.updatedAt.toISOString(),
       workflowStatus: ticket.status,
       row: {
-        A: ticket.sequenceNumber,
+        A: materialTicketNumber(ticket),
         B: ticket.materialCategory,
         C: quantityWithUnit(ticket.remainingQuantity, unit),
         D: ticket.proposalNumber,
@@ -312,7 +314,7 @@ export function materialTicketRowsForN8nV2(ticket: MaterialTicketForN8nSync) {
       sourceUpdatedAt: ticket.updatedAt.toISOString(),
       workflowStatus: ticket.status,
       row: {
-        A: ticket.sequenceNumber,
+        A: materialTicketNumber(ticket),
         B: workflowTypeLabel(ticket.type),
         C: unitLabel(ticket.unit),
         D: materialCategoryLabel(ticket.materialCategory),

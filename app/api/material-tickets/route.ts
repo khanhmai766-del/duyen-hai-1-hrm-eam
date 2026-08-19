@@ -17,6 +17,7 @@ import { positionCodeOf, positionsMatch } from "@/lib/position-catalog";
 import {
   isMaterialTicketMonthKey,
   materialTicketMonthKey,
+  sequenceScopeOfType,
   materialTicketReference,
 } from "@/lib/material-ticket-sequence";
 import { replacementPointDisplayLabel, replacementPointSelectionKey } from "@/lib/material-replacement-display";
@@ -54,7 +55,14 @@ export async function GET(req: NextRequest) {
       prisma.materialTicket.findMany({
         where,
         include: ITEM_INCLUDE,
-        orderBy: [{ sequenceMonth: "desc" }, { sequenceNumber: "desc" }, { createdAt: "desc" }],
+        // sequenceScope xen giữa vì mỗi tháng có HAI dãy song song: thiếu nó thì VT-3
+        // và HC-3 nằm cạnh nhau, danh sách trông như số bị lặp.
+        orderBy: [
+          { sequenceMonth: "desc" },
+          { sequenceScope: "asc" },
+          { sequenceNumber: "desc" },
+          { createdAt: "desc" },
+        ],
         take: 500,
       }),
       prisma.materialTicket.groupBy({
@@ -263,14 +271,18 @@ export async function POST(req: NextRequest) {
     const ticket = await prisma.$transaction(async (tx) => {
       // Tuần tự hóa thao tác tạo/xóa để STT trong tháng luôn duy nhất và liên tục.
       await tx.$executeRaw`LOCK TABLE "MaterialTicket" IN EXCLUSIVE MODE`;
+      // Hai dãy song song trong cùng một tháng: hóa chất đánh số riêng, vật tư thường
+      // đánh số riêng. Lấy max theo ĐÚNG dãy của phiếu đang tạo.
+      const sequenceScope = sequenceScopeOfType(type);
       const latestSequence = await tx.materialTicket.aggregate({
-        where: { sequenceMonth },
+        where: { sequenceMonth, sequenceScope },
         _max: { sequenceNumber: true },
       });
       const sequenceNumber = (latestSequence._max.sequenceNumber ?? 0) + 1;
       const ticket = await tx.materialTicket.create({
         data: {
           sequenceMonth,
+          sequenceScope,
           sequenceNumber,
           type,
           unit,

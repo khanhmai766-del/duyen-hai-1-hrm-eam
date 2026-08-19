@@ -446,12 +446,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       }
       await tx.materialTicket.delete({ where: { id: t.id } });
 
-      // Chỉ dồn STT trong tháng của phiếu vừa xóa. Các tháng cũ giữ nguyên
-      // dãy số riêng để tra cứu lịch sử.
+      // Chỉ dồn STT trong tháng VÀ trong dãy của phiếu vừa xóa. Các tháng cũ giữ
+      // nguyên dãy số riêng để tra cứu lịch sử; và xóa một phiếu hóa chất KHÔNG được
+      // làm xê dịch số của phiếu vật tư thường, vì hai bên là hai quyển sổ khác nhau.
       await tx.$executeRaw`
         UPDATE "MaterialTicket"
         SET "sequenceNumber" = -"sequenceNumber"
-        WHERE "sequenceMonth" = ${t.sequenceMonth}
+        WHERE "sequenceMonth" = ${t.sequenceMonth} AND "sequenceScope" = ${t.sequenceScope}
       `;
       await tx.$executeRaw`
         WITH ranked AS (
@@ -461,7 +462,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
               ORDER BY "sequenceNumber" DESC, "createdAt" ASC, id ASC
             )::INTEGER AS "nextSequenceNumber"
           FROM "MaterialTicket"
-          WHERE "sequenceMonth" = ${t.sequenceMonth}
+          WHERE "sequenceMonth" = ${t.sequenceMonth} AND "sequenceScope" = ${t.sequenceScope}
         )
         UPDATE "MaterialTicket" AS ticket
         SET "sequenceNumber" = ranked."nextSequenceNumber"

@@ -1348,6 +1348,9 @@ model MaterialTicket {
   id             String @id @default(cuid())
   sequenceMonth  String // YYYY-MM theo giờ Việt Nam; mỗi tháng có dãy STT riêng
   sequenceNumber Int // STT cố định trong tháng, tăng liên tục theo thứ tự tạo phiếu
+  // Dãy STT: MATERIAL (vật tư thường) | CHEMICAL (hóa chất + NH3 khai một bước).
+  // Suy từ `type` ngay lúc tạo và KHÔNG đổi về sau — xem sequenceScopeOfType().
+  sequenceScope  String @default("MATERIAL")
   type           String // "DE_XUAT" | "UNG"
   unit           String // Tổ máy: S1 | S2 | COMMON
   status         String // máy trạng thái theo type
@@ -1435,7 +1438,8 @@ model MaterialTicket {
 
   items MaterialTicketItem[]
 
-  @@unique([sequenceMonth, sequenceNumber])
+  @@unique([sequenceMonth, sequenceScope, sequenceNumber])
+  @@index([sequenceMonth, sequenceScope])
   @@index([status])
   @@index([unit, status])
   @@index([type])
