@@ -230,7 +230,7 @@ export default function OilAnalysisPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Kết quả phân tích dầu"
+        title="KẾT QUẢ PHÂN TÍCH DẦU"
         description={`Mẫu dầu Không Đạt của ${TARGET_DON_VI}, đọc một chiều từ LIMS. Ý kiến QLVH vẫn nhập trực tiếp trên LIMS.`}
       >
         <LimsSyncChip stage={stage} syncing={syncing || importFromLims.isPending} canSync={canSync} onSync={requestSync} />

@@ -340,7 +340,7 @@ export default function ShnPpaToolPage({ isAdmin }: { isAdmin: boolean }) {
   }
 
   return <div className="space-y-6 pb-10">
-    <PageHeader title="So sánh SHN theo PPA" description="Nạp dữ liệu, đồng bộ Google Sheet và lưu kết quả trên website trong 30 ngày.">
+    <PageHeader title="SO SÁNH SHN THEO PPA" description="Nạp dữ liệu, đồng bộ Google Sheet và lưu kết quả trên website trong 30 ngày.">
       {hasUnsavedData && <div role="status" className="flex min-h-9 items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-medium text-amber-800 shadow-sm dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><AlertTriangle className="h-4 w-4" />Có kết quả chưa lưu</div>}
       <Button variant="soft" size="toolbar" onClick={requestWebsiteSave} disabled={savingWebsite}>{savingWebsite ? <Loader2 className="animate-spin" /> : <Save />}Lưu kết quả trên website</Button>
       {isAdmin && <Button variant="soft" size="toolbar" onClick={() => { setVersionsOpen(true); void loadVersions(); }}><FileCode2 />Cập nhật tiện ích</Button>}

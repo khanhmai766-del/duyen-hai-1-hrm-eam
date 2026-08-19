@@ -176,7 +176,7 @@ type ResultDialog = {
    * đừng bắt người dùng tự mò lại vào menu Chỉnh sửa. Không có chỗ ký theo lượt (tab
    * Foam·CO2·Diesel·FM200 ký từng bồn/từng bảng) thì để trống.
    */
-  resign?: boolean;
+  resignTargets?: PcccBulkSignTarget[];
 };
 
 /**
@@ -462,7 +462,13 @@ export default function PcccPage() {
 
   function cancelEdit() {
     if (dirtyCount > 0 && !window.confirm(`Bỏ ${dirtyCount} dòng đang sửa chưa lưu?`)) return;
-    if (editableTab) setDrafts((prev) => ({ ...prev, [editableTab]: {} }));
+    if (editableTab) {
+      setDrafts((prev) => ({
+        ...prev,
+        [editableTab]: {},
+        ...(editableTab === "TCC" ? { CVCC: {} } : {}),
+      }));
+    }
     setEditing(false);
   }
 
@@ -647,9 +653,9 @@ export default function PcccPage() {
 
   /** Ba bảng đợt 2 có tab riêng — cùng một luồng lưu, chỉ khác route và nhãn. */
   const ROW_BY_ROW_TABS = {
-    NNBC: { label: "nút nhấn báo cháy", table: "Nút nhấn báo cháy" },
-    VAN: { label: "van chữa cháy", table: "Van chữa cháy" },
-    DEN: { label: "đèn sự cố", table: "Đèn sự cố" },
+    NNBC: { label: "nút nhấn báo cháy", table: "Nút nhấn báo cháy", target: "ALARM_BUTTON" },
+    VAN: { label: "van chữa cháy", table: "Van chữa cháy", target: "VALVE" },
+    DEN: { label: "đèn sự cố", table: "Đèn sự cố", target: "EMERGENCY_LIGHT" },
   } as const;
 
   function saveEdits() {
@@ -683,7 +689,7 @@ export default function PcccPage() {
             { label: "Số dòng đã lưu", value: `${count} dòng`, strong: true },
           ],
           note: "Chữ ký và dấu kiểm tra của các dòng vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
-          resign: true,
+          resignTargets: [meta.target],
         });
         setEditing(false);
       });
@@ -707,35 +713,47 @@ export default function PcccPage() {
         }
         return { id, updatedAt: baseline[id], patch, components };
       });
-      bulkSaveCabinets.mutate(items, {
-        onSuccess: (res) => {
-          if (res.errors.length > 0) {
-            toast.error(
-              `Chưa lưu: ${res.errors.length} dòng có vấn đề. ${res.errors
-                .slice(0, 3)
-                .map((e) => `${e.ma ?? e.id}: ${e.message}`)
-                .join(" · ")}${res.errors.length > 3 ? " …" : ""}`,
-              { duration: 10_000 }
-            );
-            return;
+      const hoseCount = Object.keys(drafts.CVCC).length;
+      void (async () => {
+        try {
+          let cabinetSaved = 0;
+          if (items.length > 0) {
+            const res = await bulkSaveCabinets.mutateAsync(items);
+            if (res.errors.length > 0) {
+              toast.error(
+                `Chưa lưu: ${res.errors.length} dòng có vấn đề. ${res.errors
+                  .slice(0, 3)
+                  .map((e) => `${e.ma ?? e.id}: ${e.message}`)
+                  .join(" · ")}${res.errors.length > 3 ? " …" : ""}`,
+                { duration: 10_000 }
+              );
+              return;
+            }
+            cabinetSaved = res.saved;
+            setDrafts((prev) => ({ ...prev, TCC: {} }));
           }
+
+          // Bảng con có endpoint riêng: chỉ kết thúc chế độ sửa sau khi cả hai bảng đã
+          // lưu xong, tránh báo thành công trong khi cuộn vòi vẫn đang ghi dở.
+          const hoseSaved = await saveRowByRow("CVCC", updateHoseReel.mutateAsync, "cuộn vòi");
+          if (!hoseSaved) return;
+
           setResultDialog({
             title: "Đã lưu thay đổi",
             rows: [
-              { label: "Bảng", value: "Tủ chữa cháy" },
+              { label: "Bảng", value: "Tủ chữa cháy và cuộn vòi" },
               { label: "Kỳ kiểm tra", value: period.label },
-              { label: "Số tủ đã lưu", value: `${res.saved} tủ`, strong: true },
+              { label: "Số tủ đã lưu", value: `${cabinetSaved} tủ`, strong: cabinetSaved > 0 },
+              { label: "Số cuộn vòi đã lưu", value: `${hoseCount} cuộn`, strong: hoseCount > 0 },
             ],
-            note: "Chữ ký và dấu kiểm tra của các tủ vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
-            resign: true,
+            note: "Chữ ký của các dòng vừa sửa đã bị xoá — có thể ký lại từng bảng ngay bên dưới.",
+            resignTargets: ["CABINET", "HOSE_REEL"],
           });
-          setDrafts((prev) => ({ ...prev, TCC: {} }));
-          // Bảng con cuộn vòi có endpoint riêng nên lưu tiếp ở đây, sau khi tủ đã lưu xong.
-          void saveRowByRow("CVCC", updateHoseReel.mutateAsync, "cuộn vòi");
           setEditing(false);
-        },
-        onError: (e: Error) => toast.error(e.message),
-      });
+        } catch (e) {
+          toast.error((e as Error).message);
+        }
+      })();
       return;
     }
 
@@ -768,7 +786,7 @@ export default function PcccPage() {
               ? "Các dòng nâng mức là do quy tắc áp suất: bình HẾT ÁP thì luôn là \"Không đạt\". "
               : "") +
             "Chữ ký và dấu kiểm tra của các dòng vừa sửa đã bị xoá — ký lại sẽ điền lại ngày kiểm tra theo ngày ký.",
-          resign: true,
+          resignTargets: ["EXTINGUISHER"],
         });
         setDrafts((prev) => ({ ...prev, BCC: {} }));
         setEditing(false);
@@ -777,7 +795,8 @@ export default function PcccPage() {
     });
   }
 
-  const saving = bulkSave.isPending || bulkSaveCabinets.isPending || updateBulk.isPending || updatePanel.isPending;
+  const saving =
+    bulkSave.isPending || bulkSaveCabinets.isPending || updateBulk.isPending || updatePanel.isPending || updateHoseReel.isPending;
 
   // ---- Ký tên hàng loạt + hộp thoại kết quả
   const [signOpen, setSignOpen] = useState(false);
@@ -795,8 +814,8 @@ export default function PcccPage() {
    * Tab Foam·CO2·Diesel·FM200 KHÔNG có ở đây: mỗi bảng chỉ vài dòng và ký từng mục ngay
    * trong tab, không cần ký gộp theo cương vị.
    *
-   * Tab Tủ chữa cháy ký TỦ; cuộn vòi là bảng con nên có nút ký riêng bên dưới nó —
-   * gộp chung một nút thì người dùng không biết mình vừa ký cái nào.
+   * Tab Tủ chữa cháy có hai bảng nên menu Chỉnh sửa hiển thị hai lựa chọn ký riêng,
+   * giúp người dùng biết rõ bảng nào sắp được xác nhận.
    */
   const signTarget: PcccBulkSignTarget | null =
     tab === "BCC"
@@ -1286,7 +1305,7 @@ export default function PcccPage() {
   if (!period) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Quản lý thiết bị PCCC" description="Phân xưởng Vận hành 1" />
+        <PageHeader title="QUẢN LÝ THIẾT BỊ PCCC" description="Phân xưởng Vận hành 1" />
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm font-medium text-ink">Chưa có kỳ dữ liệu PCCC nào</p>
           <p className="mt-1 text-[13px] text-muted-foreground">
@@ -1331,46 +1350,7 @@ export default function PcccPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Quản lý thiết bị PCCC" description="Phân xưởng Vận hành 1">
-        {/* Chọn KỲ đứng cùng hàng với các nút hành động: nó quyết định dữ liệu của cả 4
-            tab, không phải một bộ lọc trong tab như các ô ở dải bên dưới. */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kỳ</span>
-          {/* Kỳ là lựa chọn BẮT BUỘC — không có mục "tất cả", nên dùng select thuần
-              thay cho SelectBox (SelectBox luôn thêm 1 mục ALL, sẽ lặp kỳ hiện tại). */}
-          <select
-            value={period.label}
-            disabled={dirtyCount > 0}
-            title={dirtyCount > 0 ? "Lưu hoặc huỷ các thay đổi trước khi đổi kỳ" : undefined}
-            onChange={(e) => {
-              setPeriodLabel(e.target.value);
-              setPage(1);
-            }}
-            className="h-9 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
-          >
-            {periods.map((p) => (
-              <option key={p.id} value={p.label}>
-                {p.label}
-                {p.isClosed ? " (đã chốt)" : isFuturePeriodLabel(p, clock) ? " (chưa tới kỳ)" : ""}
-              </option>
-            ))}
-          </select>
-          {period.isClosed && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-              <Lock className="size-3" /> Đã chốt — chỉ đọc
-            </span>
-          )}
-          {/* Kỳ sinh sớm còn sót từ dữ liệu cũ: nói rõ vì sao không sửa được, thay vì để
-              người dùng bấm mãi mà ô không mở. */}
-          {periodNotStarted && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-              title={`Tháng này chưa bắt đầu. Kỳ đang làm việc là ${clock?.currentLabel ?? ""}.`}
-            >
-              <CalendarClock className="size-3" /> Chưa tới kỳ — chỉ đọc
-            </span>
-          )}
-        </div>
+      <PageHeader title="QUẢN LÝ THIẾT BỊ PCCC" description="Phân xưởng Vận hành 1">
         {/*
           SỔ THEO DÕI (Mẫu số 01) — chỉ hiện khi cương vị đã ký ĐỦ cả bảng Bình chữa cháy
           lẫn Tủ chữa cháy của kỳ. Không hiện dạng "nút xám bấm không được": người dùng
@@ -1540,11 +1520,51 @@ export default function PcccPage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Kỳ quyết định dữ liệu của tất cả các bảng, đặt trước nhóm công cụ lọc/chỉnh sửa
+            để người dùng chọn ngữ cảnh làm việc rồi mới thao tác trên bảng. */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kỳ</span>
+          {/* Kỳ là lựa chọn BẮT BUỘC — không có mục "tất cả", nên dùng select thuần
+              thay cho SelectBox (SelectBox luôn thêm 1 mục ALL, sẽ lặp kỳ hiện tại). */}
+          <select
+            value={period.label}
+            disabled={dirtyCount > 0}
+            title={dirtyCount > 0 ? "Lưu hoặc huỷ các thay đổi trước khi đổi kỳ" : undefined}
+            onChange={(e) => {
+              setPeriodLabel(e.target.value);
+              setPage(1);
+            }}
+            className="h-9 rounded-md border border-input bg-white px-2 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-accent/20"
+          >
+            {periods.map((p) => (
+              <option key={p.id} value={p.label}>
+                {p.label}
+                {p.isClosed ? " (đã chốt)" : isFuturePeriodLabel(p, clock) ? " (chưa tới kỳ)" : ""}
+              </option>
+            ))}
+          </select>
+          {period.isClosed && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+              <Lock className="size-3" /> Đã chốt — chỉ đọc
+            </span>
+          )}
+          {/* Kỳ sinh sớm còn sót từ dữ liệu cũ: nói rõ vì sao không sửa được, thay vì để
+              người dùng bấm mãi mà ô không mở. */}
+          {periodNotStarted && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+              title={`Tháng này chưa bắt đầu. Kỳ đang làm việc là ${clock?.currentLabel ?? ""}.`}
+            >
+              <CalendarClock className="size-3" /> Chưa tới kỳ — chỉ đọc
+            </span>
+          )}
+        </div>
+
         {/* Bộ lọc gom vào MỘT nút, bấm mới sổ bảng chọn — cùng khuôn với các trang
             Danh mục vật tư / Mệnh lệnh sản xuất. Tab Foam·CO2·Diesel·FM200 không có gì
             để lọc nên không hiện nút. */}
         {tab !== "FCD" && (
-          <div className="ml-auto">
+          <div>
             <Popover>
               <PopoverTrigger asChild>
                 <Button type="button" variant="soft" size="toolbar" className="group min-w-[112px] justify-between">
@@ -1755,10 +1775,7 @@ export default function PcccPage() {
         )}
 
         {editableTab && can("pccc-manage", ["personal", "manage", "full"]) && !period.isClosed && (
-          /* Đẩy sang mép phải. Ba tab kia đã có nút "Bộ lọc" mang `ml-auto` kéo cả cụm
-             sang phải; tab Foam·CO2·Diesel·FM200 không có bộ lọc nên phải tự đẩy, không
-             thì nút dính ngay sau dải tab. */
-          <div className={cn("flex items-center gap-2", tab === "FCD" && "ml-auto")}>
+          <div className="flex items-center gap-2">
             {dirtyCount > 0 && (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                 {dirtyCount} dòng chưa lưu
@@ -1791,30 +1808,53 @@ export default function PcccPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[260px]">
                   <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                    {editableTab === "BCC" ? "Bình chữa cháy" : editableTab === "TCC" ? "Tủ chữa cháy" : "Foam · CO2 · Diesel · FM200"} · {period.label}
+                    {editableTab === "BCC"
+                      ? "Bình chữa cháy"
+                      : editableTab === "TCC"
+                        ? "Tủ chữa cháy & cuộn vòi"
+                        : "Foam · CO2 · Diesel · FM200"} · {period.label}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={beginEdit} className="gap-2">
                     <Pencil className="size-4 text-sky-600" />
                     <span className="min-w-0">
                       <span className="block font-medium">Sửa bảng</span>
-                      <span className="block text-[11px] text-muted-foreground">Mở khoá ô để sửa, lưu một lượt</span>
-                    </span>
-                  </DropdownMenuItem>
-                  {/* Tab Foam·CO2·Diesel·FM200 KHÔNG có mục này (signTarget = null): ở đó ký
-                      từng bồn / từng bảng bằng nút "Ký" ngay trên dòng, không ký theo cương
-                      vị. Để lọt mục này vào đó là bấm một cái ký nhầm sang bảng khác. Cuộn
-                      vòi cũng không dùng nút này — nó có nút ký riêng ngay trên bảng con. */}
-                  {signTarget && (
-                  <DropdownMenuItem onSelect={() => openSignDialog(signTarget)} className="gap-2">
-                    <PenLine className="size-4 text-emerald-600" />
-                    <span className="min-w-0">
-                      <span className="block font-medium">Ký tên</span>
                       <span className="block text-[11px] text-muted-foreground">
-                        Ký xác nhận toàn bộ dòng thuộc cương vị của bạn
+                        {editableTab === "TCC" ? "Mở khoá cả 2 bảng, lưu một lượt" : "Mở khoá ô để sửa, lưu một lượt"}
                       </span>
                     </span>
                   </DropdownMenuItem>
+                  {/* Tủ chữa cháy có hai bảng và hai endpoint ký độc lập. Đặt cả hai trong
+                      cùng menu Chỉnh sửa, thay cho nút "Ký cuộn vòi" rời ở bảng con. */}
+                  {tab === "TCC" ? (
+                    <>
+                      <DropdownMenuItem onSelect={() => openSignDialog("CABINET")} className="gap-2">
+                        <PenLine className="size-4 text-emerald-600" />
+                        <span className="min-w-0">
+                          <span className="block font-medium">Ký tủ chữa cháy</span>
+                          <span className="block text-[11px] text-muted-foreground">Ký các tủ thuộc cương vị của bạn</span>
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openSignDialog("HOSE_REEL")} className="gap-2">
+                        <PenLine className="size-4 text-emerald-600" />
+                        <span className="min-w-0">
+                          <span className="block font-medium">Ký cuộn vòi chữa cháy</span>
+                          <span className="block text-[11px] text-muted-foreground">Ký các cuộn vòi thuộc cương vị của bạn</span>
+                        </span>
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    signTarget && (
+                      <DropdownMenuItem onSelect={() => openSignDialog(signTarget)} className="gap-2">
+                        <PenLine className="size-4 text-emerald-600" />
+                        <span className="min-w-0">
+                          <span className="block font-medium">Ký tên</span>
+                          <span className="block text-[11px] text-muted-foreground">
+                            Ký xác nhận toàn bộ dòng thuộc cương vị của bạn
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    )
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -2004,7 +2044,13 @@ export default function PcccPage() {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <Row
                 label="Bảng"
-                value={editableTab === "BCC" ? "Bình chữa cháy" : editableTab === "TCC" ? "Tủ chữa cháy" : "Foam · CO2 · Diesel · FM200"}
+                value={
+                  editableTab === "BCC"
+                    ? "Bình chữa cháy"
+                    : editableTab === "TCC"
+                      ? "Tủ chữa cháy và cuộn vòi"
+                      : "Foam · CO2 · Diesel · FM200"
+                }
               />
               <Row label="Kỳ kiểm tra" value={period.label} />
               <Row label="Tổ máy" value={machineLabelOf(machine)} />
@@ -2051,23 +2097,26 @@ export default function PcccPage() {
             {resultDialog?.note && <p className="text-[12px] text-muted-foreground">{resultDialog.note}</p>}
           </div>
           <DialogFooter>
-            <Button variant={resultDialog?.resign ? "ghost" : "default"} size="sm" onClick={() => setResultDialog(null)}>
+            <Button
+              variant={resultDialog?.resignTargets?.length ? "ghost" : "default"}
+              size="sm"
+              onClick={() => setResultDialog(null)}
+            >
               Đóng
             </Button>
-            {resultDialog?.resign && (
+            {resultDialog?.resignTargets?.map((target) => (
               <Button
+                key={target}
                 size="sm"
                 onClick={() => {
                   setResultDialog(null);
-                  // Ký lại đúng bảng vừa lưu; tab Tổng quan/FCD không ký gộp nên nút này
-                  // không hiện ở đó (resultDialog.resign chỉ bật sau khi lưu bảng ký gộp được).
-                  if (signTarget) openSignDialog(signTarget);
+                  openSignDialog(target);
                 }}
               >
                 <PenLine className="mr-1.5 size-4" />
-                Ký lại ngay
+                {resultDialog.resignTargets?.length === 1 ? "Ký lại ngay" : `Ký lại ${SIGN_TARGET_LABEL[target]}`}
               </Button>
-            )}
+            ))}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2173,19 +2222,6 @@ export default function PcccPage() {
                 setCvccAddMa("");
                 setCvccAddOpen(true);
               }}
-              toolbarExtra={
-                !readOnly ? (
-                  // Nút ký RIÊNG của bảng con: nút "Ký tên" ở menu trên cùng ký TỦ, gộp
-                  // chung thì người dùng không biết mình vừa ký cái nào.
-                  <button
-                    type="button"
-                    onClick={() => openSignDialog("HOSE_REEL")}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-2.5 text-[12.5px] font-medium text-emerald-700 transition hover:bg-emerald-50"
-                  >
-                    <PenLine className="size-3.5" /> Ký cuộn vòi
-                  </button>
-                ) : null
-              }
               onDelete={(row: HoseReelRow) => {
                 // Xoá ghi NGAY, không chờ bấm Lưu: đây là thay đổi CẤU TRÚC chứ không
                 // phải sửa một ô — nên hỏi lại rồi làm dứt điểm.

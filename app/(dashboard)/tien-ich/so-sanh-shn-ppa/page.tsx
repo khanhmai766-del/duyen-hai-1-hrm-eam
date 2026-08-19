@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import ShnPpaToolPage from "@/components/tien-ich/ShnPpaToolPage";
 
-export const metadata = { title: "So sánh SHN theo PPA" };
+export const metadata = { title: "SO SÁNH SHN THEO PPA" };
 
 export default async function Page() {
   const session = await auth();

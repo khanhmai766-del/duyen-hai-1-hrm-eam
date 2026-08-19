@@ -1,6 +1,6 @@
 import OilAnalysisPage from "@/components/tien-ich/OilAnalysisPage";
 
-export const metadata = { title: "Kết quả phân tích dầu" };
+export const metadata = { title: "KẾT QUẢ PHÂN TÍCH DẦU" };
 
 export default function Page() {
   return <OilAnalysisPage />;
